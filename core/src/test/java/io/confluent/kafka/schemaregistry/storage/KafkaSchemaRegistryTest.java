@@ -18,6 +18,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -29,6 +30,8 @@ import java.util.*;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
+import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
@@ -316,21 +319,21 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
   public void testSetMode() throws SchemaRegistryException {
     KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
-    kafkaSchemaRegistry.setMode("subject1", Mode.IMPORT);
-    assertEquals(Mode.IMPORT, kafkaSchemaRegistry.getMode("subject1"));
-    assertEquals(Mode.IMPORT, kafkaSchemaRegistry.getModeInScope("subject1"));
+    kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(IMPORT.name()));
+    assertEquals(IMPORT, kafkaSchemaRegistry.getMode("subject1"));
+    assertEquals(IMPORT, kafkaSchemaRegistry.getModeInScope("subject1"));
     assertNull(kafkaSchemaRegistry.getMode("subject2"));
 
-    kafkaSchemaRegistry.setModeOrForward("subject1", Mode.READONLY, true, new HashMap<String, String>());
-    assertEquals(Mode.READONLY, kafkaSchemaRegistry.getMode("subject1"));
+    kafkaSchemaRegistry.setModeOrForward("subject1", new ModeUpdateRequest(READONLY.name()), true, new HashMap<String, String>());
+    assertEquals(READONLY, kafkaSchemaRegistry.getMode("subject1"));
   }
 
   @Test
   public void testDeleteMode() throws SchemaRegistryException {
     KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
-    kafkaSchemaRegistry.setMode("subject1", Mode.READONLY);
-    assertEquals(Mode.READONLY, kafkaSchemaRegistry.getMode("subject1"));
+    kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READONLY.name()));
+    assertEquals(READONLY, kafkaSchemaRegistry.getMode("subject1"));
 
     kafkaSchemaRegistry.deleteSubjectMode("subject1");
     assertNull(kafkaSchemaRegistry.getMode("subject1"));

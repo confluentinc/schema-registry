@@ -100,6 +100,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -1469,17 +1470,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  private void forwardUpdateConfigRequestToLeader(
-      String subject, Config config,
+  private Config forwardUpdateConfigRequestToLeader(
+      String subject, ConfigUpdateRequest configUpdateRequest,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest(config);
     log.debug(String.format("Forwarding update config request %s to %s",
                             configUpdateRequest, baseUrl));
     try {
-      leaderRestService.updateConfig(headerProperties, configUpdateRequest, subject);
+      return new Config(
+          leaderRestService.updateConfig(headerProperties, configUpdateRequest, subject)
+      );
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update config request %s to %s",
@@ -1553,13 +1554,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   private void forwardSetModeRequestToLeader(
-      String subject, Mode mode, boolean force,
+      String subject, ModeUpdateRequest modeUpdateRequest, boolean force,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(mode.name());
     log.debug(String.format("Forwarding update mode request %s to %s",
         modeUpdateRequest, baseUrl));
     try {
@@ -2261,7 +2259,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     metadataEncoder.close();
   }
 
-  public void updateConfig(String subject, Config config)
+  public Config updateConfig(String subject, ConfigUpdateRequest config)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (isReadOnlyMode(subject)) {
       throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
@@ -2270,27 +2268,28 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       ConfigValue oldConfig = (ConfigValue) kafkaStore.get(configKey);
-      ConfigValue newConfig = new ConfigValue(subject, config, ruleSetHandler);
-      kafkaStore.put(configKey, ConfigValue.update(oldConfig, newConfig));
+      ConfigValue newConfig = ConfigValue.update(subject, oldConfig, config, ruleSetHandler);
+      kafkaStore.put(configKey, newConfig);
       log.debug("Wrote new config: {} to the Kafka data store with key {}", config, configKey);
+      return newConfig.toConfigEntity();
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store",
                                              e);
     }
   }
 
-  public void updateConfigOrForward(String subject, Config newConfig,
-                                    Map<String, String> headerProperties)
+  public Config updateConfigOrForward(String subject, ConfigUpdateRequest newConfig,
+                                      Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       UnknownLeaderException, OperationNotPermittedException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        updateConfig(subject, newConfig);
+        return updateConfig(subject, newConfig);
       } else {
         // forward update config request to the leader
         if (leaderIdentity != null) {
-          forwardUpdateConfigRequestToLeader(subject, newConfig, headerProperties);
+          return forwardUpdateConfigRequestToLeader(subject, newConfig, headerProperties);
         } else {
           throw new UnknownLeaderException("Update config request failed since leader is "
                                            + "unknown");
@@ -2511,14 +2510,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public void setMode(String subject, Mode mode) throws SchemaRegistryException {
+  public void setMode(String subject, ModeUpdateRequest mode) throws SchemaRegistryException {
     setMode(subject, mode, false);
   }
 
-  public void setMode(String subject, Mode mode, boolean force)
+  public void setMode(String subject, ModeUpdateRequest request, boolean force)
       throws SchemaRegistryException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
+    }
+    Mode mode = null;
+    if (request.getOptionalMode().isPresent()) {
+      mode = Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
+          request.getMode().toUpperCase(Locale.ROOT));
     }
     ModeKey modeKey = new ModeKey(subject);
     try {
@@ -2550,8 +2554,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         // Write an event to clear deleted schemas from the caches.
         kafkaStore.put(new ClearSubjectKey(subject), new ClearSubjectValue(subject));
       }
-      kafkaStore.put(modeKey, new ModeValue(subject, mode));
-      log.debug("Wrote new mode: {} to the Kafka data store with key {}", mode.name(), modeKey);
+      kafkaStore.put(modeKey, mode != null ? new ModeValue(subject, mode) : null);
+      log.debug("Wrote new mode: {} to the Kafka data store with key {}", mode, modeKey);
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
@@ -2559,7 +2563,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public void setModeOrForward(String subject, Mode mode, boolean force,
+  public void setModeOrForward(String subject, ModeUpdateRequest mode, boolean force,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {

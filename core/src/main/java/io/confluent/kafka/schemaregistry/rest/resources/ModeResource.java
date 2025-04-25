@@ -119,10 +119,11 @@ public class ModeResource {
       subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
     }
 
-    io.confluent.kafka.schemaregistry.storage.Mode mode;
     try {
-      mode = Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
-          request.getMode().toUpperCase(Locale.ROOT));
+      if (request.getOptionalMode().isPresent()) {
+        Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
+            request.getMode().toUpperCase(Locale.ROOT));
+      }
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
@@ -137,7 +138,7 @@ public class ModeResource {
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.setModeOrForward(subject, mode, force, headerProperties);
+      schemaRegistry.setModeOrForward(subject, request, force, headerProperties);
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
