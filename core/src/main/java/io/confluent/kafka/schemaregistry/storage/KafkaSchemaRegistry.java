@@ -727,7 +727,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Config config = getConfigInScope(subject);
       Mode mode = getModeInScope(subject);
 
-      if (mode.isImportOrForwardMode()) {
+      if (!mode.isImportOrForwardMode()) {
         maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
@@ -774,7 +774,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (mode.isImportOrForwardMode()) {
+      if (!mode.isImportOrForwardMode()) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
@@ -798,7 +798,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
         } else if (newVersion != schema.getVersion()
-                && mode.isImportOrForwardMode()) {
+                && !mode.isImportOrForwardMode()) {
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
