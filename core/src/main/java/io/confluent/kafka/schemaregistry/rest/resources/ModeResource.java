@@ -128,11 +128,9 @@ public class ModeResource {
       throw new RestInvalidModeException();
     }
 
-    if (request.getMode()
-            .equals(io.confluent.kafka.schemaregistry.storage.Mode.FORWARD.toString())) {
-      if (subject != null) {
+    if (io.confluent.kafka.schemaregistry.storage.Mode.FORWARD.toString()
+            .equals(request.getMode())  && subject != null) {
         throw new RestInvalidModeException("Forward mode only supported on global level");
-      }
     }
 
 
