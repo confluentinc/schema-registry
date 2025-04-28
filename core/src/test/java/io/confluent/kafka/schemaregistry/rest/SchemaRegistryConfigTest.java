@@ -22,7 +22,6 @@ import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
 import kafka.Kafka;
-import kafka.cluster.Broker;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
@@ -115,51 +114,6 @@ public class SchemaRegistryConfigTest {
         SchemaRegistryConfig
             .endpointsToBootstrapServers(noprotocolEndpointsList, SecurityProtocol.PLAINTEXT.toString())
     );
-  }
-
-  @Test
-  public void testBrokersToEndpoints() {
-    List<Broker> brokersList = new ArrayList<Broker>(4);
-    brokersList
-        .add(new Broker(0, "localhost", 1, new ListenerName("CLIENT"), SecurityProtocol.PLAINTEXT));
-    brokersList.add(new Broker(1,
-        "localhost1",
-        12,
-        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-        SecurityProtocol.PLAINTEXT
-    ));
-    brokersList.add(new Broker(2,
-        "localhost2",
-        123,
-        new ListenerName("SECURE_REPLICATION"),
-        SecurityProtocol.SASL_PLAINTEXT
-    ));
-    brokersList.add(new Broker(2,
-        "localhost2",
-        123,
-        ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT),
-        SecurityProtocol.SASL_PLAINTEXT
-    ));
-    brokersList.add(new Broker(3,
-        "localhost3",
-        1234,
-        ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
-        SecurityProtocol.SSL
-    ));
-    List<String> endpointsList = SchemaRegistryConfig.brokersToEndpoints((brokersList));
-
-    List<String> expected = new ArrayList<String>(4);
-    expected.add("PLAINTEXT://localhost:1");
-    expected.add("PLAINTEXT://localhost1:12");
-    expected.add("SASL_PLAINTEXT://localhost2:123");
-    expected.add("SASL_PLAINTEXT://localhost2:123");
-    expected.add("SSL://localhost3:1234");
-
-    assertEquals("Expected the same size list.", expected.size(), endpointsList.size());
-
-    for (int i = 0; i < endpointsList.size(); i++) {
-      assertEquals("Expected a different endpoint", expected.get(i), endpointsList.get(i));
-    }
   }
 
   @Test
