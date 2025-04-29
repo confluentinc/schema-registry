@@ -43,7 +43,7 @@ public class SetCompatibilityMojoTest extends SchemaRegistryTest {
 
         assert (this.mojo.getConfig(keySubject).equals("FULL"));
 
-        // Checking for Global Compatibility
+        // Checking for global compatibility
         this.mojo.compatibilityLevels.put("__GLOBAL", "BACKWARD_TRANSITIVE");
         this.mojo.execute();
         assert (this.mojo.getConfig(null).equals("BACKWARD_TRANSITIVE"));
