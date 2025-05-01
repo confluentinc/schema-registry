@@ -29,9 +29,6 @@ public class PrefixSchemaIdSerializer implements SchemaIdSerializer {
   public byte[] serialize(
       String topic, boolean isKey, Headers headers, byte[] payload, SchemaId schemaId)
       throws SerializationException {
-    if (schemaId.getId() == null) {
-      throw new SerializationException("Schema ID is null");
-    }
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
       baos.write(schemaId.idToBytes());
       baos.write(payload);
