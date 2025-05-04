@@ -236,6 +236,25 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterFollowedByLookupWillSkipCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25))
+        .once();
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, ID_25))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
+    assertEquals(ID_25, client.getIdWithResponse(SUBJECT_0, SCHEMA_WITH_DECIMAL, false).getId());
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterOverCapacity() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         anyString(), anyBoolean()))

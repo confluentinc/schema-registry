@@ -786,13 +786,21 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
     RegisterSchemaResponse cachedResponse = schemaResponseMap.get(schema);
     if (cachedResponse != null) {
-      return cachedResponse;
+      // Allow the schema to be looked up again if version is not valid
+      // This is for backward compatibility with versions before CP 8.0
+      if (cachedResponse.getVersion() != null && cachedResponse.getVersion() > 0) {
+        return cachedResponse;
+      }
     }
 
     synchronized (this) {
       cachedResponse = schemaResponseMap.get(schema);
       if (cachedResponse != null) {
-        return cachedResponse;
+        // Allow the schema to be looked up again if version is not valid
+        // This is for backward compatibility with versions before CP 8.0
+        if (cachedResponse.getVersion() != null && cachedResponse.getVersion() > 0) {
+          return cachedResponse;
+        }
       }
 
       final RegisterSchemaResponse retrievedResponse =
