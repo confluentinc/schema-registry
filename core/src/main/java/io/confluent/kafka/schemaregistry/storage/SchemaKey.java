@@ -40,6 +40,7 @@ public class SchemaKey extends SubjectKey {
     this.magicByte = MAGIC_BYTE;
     this.version = version;
   }
+  
 
   @JsonProperty("version")
   public int getVersion() {
