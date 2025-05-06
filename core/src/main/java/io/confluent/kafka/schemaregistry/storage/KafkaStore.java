@@ -95,6 +95,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     int port = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(),
         config.interInstanceProtocol()).getUri().getPort();
+
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
                    ? String.format("schema-registry-%s-%d",
                         config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG), port)

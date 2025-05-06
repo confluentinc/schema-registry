@@ -16,12 +16,12 @@ Optionally include implementation strategy.
 Checklist
 ------------------
 Please answer the questions with Y, N or N/A if not applicable.
-- \[ ] Contains customer facing changes? Including API/behavior changes <!-- This can help identify if it has introduced any breaking changes -->
-- \[ ] Is this change gated behind config(s)?
+Contains customer facing changes? Including API/behavior changes <!-- This can help identify if it has introduced any breaking changes -->
+Is this change gated behind config(s)?
     - List the config(s) needed to be set to enable this change
-- \[ ] Did you add sufficient unit test and/or integration test coverage for this PR?
+Did you add sufficient unit test and/or integration test coverage for this PR?
     - If not, please explain why it is not required
-- \[ ] Does this change require modifying existing system tests or adding new system tests? <!-- Primarily for changes that could impact CCloud integrations -->
+Does this change require modifying existing system tests or adding new system tests? <!-- Primarily for changes that could impact CCloud integrations -->
     - If so, include tracking information for the system test changes
 
 References
