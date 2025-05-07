@@ -20,6 +20,7 @@ package io.confluent.kafka.schemaregistry.cflt.types;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -106,6 +107,8 @@ import org.slf4j.LoggerFactory;
  * property.
  * </ul>
  */
+@JsonInclude(Include.NON_EMPTY)
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = As.EXISTING_PROPERTY,
@@ -156,7 +159,29 @@ public abstract class Schema extends JsonProperties {
     private final String name;
 
     Type() {
-      this.name = this.name().toLowerCase(Locale.ENGLISH);
+      switch (this) {
+        case INT8:
+          this.name = "byte";
+          break;
+        case INT16:
+          this.name = "short";
+          break;
+        case INT32:
+          this.name = "int";
+          break;
+        case INT64:
+          this.name = "long";
+          break;
+        case FLOAT32:
+          this.name = "float";
+          break;
+        case FLOAT64:
+          this.name = "double";
+          break;
+        default:
+          this.name = this.name().toLowerCase(Locale.ENGLISH);
+          break;
+      }
     }
 
     public String getName() {
@@ -176,6 +201,10 @@ public abstract class Schema extends JsonProperties {
    */
   public static Schema create(Type type) {
     switch (type) {
+      case STRING:
+        return new StringSchema();
+      case BYTES:
+        return new BytesSchema();
       case INT8:
         return new ByteSchema();
       case INT16:
@@ -297,8 +326,17 @@ public abstract class Schema extends JsonProperties {
   /**
    * Return the type of this schema.
    */
+  @JsonIgnore
   public Type getType() {
     return type;
+  }
+
+  /**
+   * Return the type name of this schema.
+   */
+  @JsonProperty("type")
+  public String getTypeName() {
+    return type.getName();
   }
 
   /**
@@ -314,6 +352,7 @@ public abstract class Schema extends JsonProperties {
    * If this is a struct, returns the fields in it. The returned list is in the order of their
    * positions.
    */
+  @JsonIgnore
   public List<Field> getFields() {
     throw new SchemaRuntimeException("Not a struct: " + this);
   }
@@ -321,6 +360,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a struct, returns whether the fields have been set.
    */
+  @JsonIgnore
   public boolean hasFields() {
     throw new SchemaRuntimeException("Not a struct: " + this);
   }
@@ -328,6 +368,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a struct, set its fields. The fields can be set only once in a schema.
    */
+  @JsonIgnore
   public void setFields(List<Field> fields) {
     throw new SchemaRuntimeException("Not a struct: " + this);
   }
@@ -335,6 +376,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is an enum, return its symbols.
    */
+  @JsonIgnore
   public List<String> getEnumSymbols() {
     throw new SchemaRuntimeException("Not an enum: " + this);
   }
@@ -342,6 +384,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is an enum, return its default value.
    */
+  @JsonIgnore
   public String getEnumDefault() {
     throw new SchemaRuntimeException("Not an enum: " + this);
   }
@@ -363,6 +406,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a struct or enum, returns its name, otherwise the name of the primitive type.
    */
+  @JsonIgnore
   public String getName() {
     return type.name;
   }
@@ -370,6 +414,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a struct or enum, returns its docstring, if available. Otherwise, returns null.
    */
+  @JsonIgnore
   public String getDoc() {
     return null;
   }
@@ -377,6 +422,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a struct or enum, returns its namespace, if any.
    */
+  @JsonIgnore
   public String getNamespace() {
     throw new SchemaRuntimeException("Not a named type: " + this);
   }
@@ -385,6 +431,7 @@ public abstract class Schema extends JsonProperties {
    * If this is a struct or enum, returns its namespace-qualified name, otherwise returns the name
    * of the primitive type.
    */
+  @JsonIgnore
   public String getFullName() {
     return getName();
   }
@@ -406,6 +453,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a struct or enum, return its aliases, if any.
    */
+  @JsonIgnore
   public Set<String> getAliases() {
     throw new SchemaRuntimeException("Not a named type: " + this);
   }
@@ -413,6 +461,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * Returns true if this struct is an error type.
    */
+  @JsonIgnore
   public boolean isError() {
     throw new SchemaRuntimeException("Not a struct: " + this);
   }
@@ -420,6 +469,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is an array, returns its element type.
    */
+  @JsonIgnore
   public Schema getElementType() {
     throw new SchemaRuntimeException("Not an array: " + this);
   }
@@ -427,6 +477,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a map, returns its key type.
    */
+  @JsonIgnore
   public Schema getKeyType() {
     throw new SchemaRuntimeException("Not a map: " + this);
   }
@@ -434,6 +485,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a map, returns its value type.
    */
+  @JsonIgnore
   public Schema getValueType() {
     throw new SchemaRuntimeException("Not a map: " + this);
   }
@@ -441,6 +493,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is a union, returns its types.
    */
+  @JsonIgnore
   public List<Schema> getTypes() {
     throw new SchemaRuntimeException("Not a union: " + this);
   }
@@ -455,6 +508,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * If this is fixed, returns its size.
    */
+  @JsonIgnore
   public int getFixedSize() {
     throw new SchemaRuntimeException("Not fixed: " + this);
   }
@@ -555,6 +609,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * Returns true if this struct is a union type.
    */
+  @JsonIgnore
   public boolean isUnion() {
     return this instanceof UnionSchema;
   }
@@ -562,6 +617,7 @@ public abstract class Schema extends JsonProperties {
   /**
    * Returns true if this struct is a union type containing null.
    */
+  @JsonIgnore
   public boolean isNullable() {
     if (!isUnion()) {
       return getType().equals(Type.NULL);
@@ -579,6 +635,8 @@ public abstract class Schema extends JsonProperties {
   /**
    * A field within a struct.
    */
+  @JsonInclude(Include.NON_EMPTY)
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class Field extends JsonProperties {
 
     static {
@@ -689,6 +747,7 @@ public abstract class Schema extends JsonProperties {
           Objects.requireNonNull(order));
     }
 
+    @JsonProperty("name")
     public String name() {
       return name;
     }
@@ -696,6 +755,7 @@ public abstract class Schema extends JsonProperties {
     /**
      * The position of this field within the struct.
      */
+    @JsonIgnore
     public int pos() {
       return position;
     }
@@ -703,6 +763,7 @@ public abstract class Schema extends JsonProperties {
     /**
      * This field's {@link Schema}.
      */
+    @JsonProperty("type")
     public Schema schema() {
       return schema;
     }
@@ -710,6 +771,7 @@ public abstract class Schema extends JsonProperties {
     /**
      * Field's documentation within the struct, if set. May return null.
      */
+    @JsonProperty("doc")
     public String doc() {
       return doc;
     }
@@ -718,10 +780,12 @@ public abstract class Schema extends JsonProperties {
      * @return true if this Field has a default value set. Can be used to determine if a "null"
      * return from defaultVal() is due to that being the default value or just not set.
      */
+    @JsonIgnore
     public boolean hasDefaultValue() {
       return defaultValue != null;
     }
 
+    @JsonIgnore
     JsonNode defaultValue() {
       return defaultValue;
     }
@@ -730,10 +794,12 @@ public abstract class Schema extends JsonProperties {
      * @return the default value for this field specified using the mapping in
      * {@link JsonProperties}
      */
+    @JsonProperty("default")
     public Object defaultVal() {
       return JacksonUtils.toObject(defaultValue, schema);
     }
 
+    @JsonIgnore
     public Order order() {
       return order;
     }
@@ -748,6 +814,7 @@ public abstract class Schema extends JsonProperties {
     /**
      * Return the defined aliases as an unmodifiable Set.
      */
+    @JsonProperty("aliases")
     public Set<String> aliases() {
       if (aliases == null) {
         return Collections.emptySet();
@@ -897,18 +964,21 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("name")
     public String getName() {
       return name.name;
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("doc")
     public String getDoc() {
       return doc;
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("namespace")
     public String getNamespace() {
       return name.space;
@@ -937,6 +1007,7 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("aliases")
     public Set<String> getAliases() {
       Set<String> result = new LinkedHashSet<>();
@@ -1046,7 +1117,6 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
-    @JsonIgnore
     public Field getField(String fieldName) {
       if (fieldMap == null) {
         throw new SchemaRuntimeException("Schema fields not set yet");
@@ -1055,6 +1125,7 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("fields")
     public List<Field> getFields() {
       if (fields == null) {
@@ -1172,19 +1243,18 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("symbols")
     public List<String> getEnumSymbols() {
       return symbols;
     }
 
     @Override
-    @JsonIgnore
     public boolean hasEnumSymbol(String symbol) {
       return ordinals.containsKey(symbol);
     }
 
     @Override
-    @JsonIgnore
     public int getEnumOrdinal(String symbol) {
       Integer ordinal = ordinals.get(symbol);
       if (ordinal == null) {
@@ -1208,6 +1278,7 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("default")
     public String getEnumDefault() {
       return enumDefault;
@@ -1229,6 +1300,7 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("items")
     public Schema getElementType() {
       return elementType;
@@ -1264,12 +1336,14 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("keys")
     public Schema getKeyType() {
       return valueType;
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("values")
     public Schema getValueType() {
       return valueType;
@@ -1323,19 +1397,18 @@ public abstract class Schema extends JsonProperties {
      * @param jsonValue a value to check against the schema
      * @return true if the value is valid according to this schema
      */
-    @JsonIgnore
     public boolean isValidDefault(JsonNode jsonValue) {
       return this.types.stream().anyMatch((Schema s) -> s.isValidDefault(jsonValue));
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("types")
     public List<Schema> getTypes() {
       return types;
     }
 
     @Override
-    @JsonIgnore
     public Integer getIndexNamed(String name) {
       return indexByName.get(name);
     }
@@ -1386,6 +1459,7 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("size")
     public int getFixedSize() {
       return size;
@@ -1420,6 +1494,7 @@ public abstract class Schema extends JsonProperties {
     }
 
     @Override
+    @JsonIgnore(false)
     @JsonProperty("size")
     public int getFixedSize() {
       return size;

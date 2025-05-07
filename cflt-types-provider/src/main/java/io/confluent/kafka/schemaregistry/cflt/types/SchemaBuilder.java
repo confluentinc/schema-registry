@@ -52,7 +52,7 @@ import org.apache.avro.generic.GenericRecord;
  *
  * <pre>
  * {
- *   "type": "record",
+ *   "type": "struct",
  *   "name": "HandshakeRequest", "namespace":"org.apache.avro.ipc",
  *   "fields": [
  *     {"name": "clientHash",
@@ -65,10 +65,10 @@ import org.apache.avro.generic.GenericRecord;
  * </pre>
  *
  * <pre>
- * Schema schema = SchemaBuilder.record("HandshakeRequest").namespace("org.apache.avro.ipc").fields().name("clientHash")
+ * Schema schema = SchemaBuilder.struct("HandshakeRequest").namespace("org.apache.avro.ipc").fields().name("clientHash")
  *     .type().binary("MD5").size(16).noDefault().name("clientProtocol").type().nullable().stringType().noDefault()
  *     .name("serverHash").type("MD5").noDefault().name("meta").type().nullable().map().values().bytesType().noDefault()
- *     .endRecord();
+ *     .endStruct();
  * </pre>
  * <p/>
  *
@@ -122,7 +122,7 @@ import org.apache.avro.generic.GenericRecord;
  * Each named type completes configuration of the optional properties with its
  * own method:
  * <li>{@link EnumBuilder#symbols(String...)}</li>
- * <li>{@link RecordBuilder#fields()}</li> Example use of a named type with all
+ * <li>{@link StructBuilder#fields()}</li> Example use of a named type with all
  * optional parameters:
  *
  * <pre>
@@ -151,8 +151,8 @@ import org.apache.avro.generic.GenericRecord;
  * selects its nested type with {@link ArrayBuilder#items()} and
  * {@link MapBuilder#values()}, respectively.
  *
- * <h6>Fields</h6> {@link RecordBuilder#fields()} returns a
- * {@link FieldAssembler} for defining the fields of the record and completing
+ * <h6>Fields</h6> {@link StructBuilder#fields()} returns a
+ * {@link FieldAssembler} for defining the fields of the struct and completing
  * it. Each field must have a name, specified via
  * {@link FieldAssembler#name(String)}, which returns a {@link FieldBuilder} for
  * defining aliases, custom properties, and documentation of the field. After
@@ -250,17 +250,17 @@ public class SchemaBuilder {
   }
 
   /**
-   * Create a builder for an Avro record with the specified name. This is
+   * Create a builder for an Avro struct with the specified name. This is
    * equivalent to:
    *
    * <pre>
-   * builder().record(name);
+   * builder().struct(name);
    * </pre>
    *
-   * @param name the record name
+   * @param name the struct name
    */
-  public static RecordBuilder<Schema> record(String name) {
-    return builder().record(name);
+  public static StructBuilder<Schema> struct(String name) {
+    return builder().struct(name);
   }
 
   /**
@@ -410,7 +410,7 @@ public class SchemaBuilder {
 
   /**
    * An abstract type that provides builder methods for configuring the name, doc,
-   * and aliases of all Avro types that have names (fields, Record, and
+   * and aliases of all Avro types that have names (fields, Struct, and
    * Enum).
    * <p/>
    * All Avro named types and fields have 'doc', 'aliases', and 'name' components.
@@ -473,7 +473,7 @@ public class SchemaBuilder {
 
   /**
    * An abstract type that provides builder methods for configuring the namespace
-   * for all Avro types that have namespaces (Record, and Enum).
+   * for all Avro types that have namespaces (Struct, and Enum).
    */
   public static abstract class NamespacedBuilder<R, S extends NamespacedBuilder<R, S>> extends NamedBuilder<S> {
     private final Completion<R> context;
@@ -1405,17 +1405,17 @@ public class SchemaBuilder {
     }
 
     /**
-     * Build an Avro record type. Example usage:
+     * Build an Avro struct type. Example usage:
      *
      * <pre>
-     * record("com.foo.Foo").fields().name("field1").typeInt().intDefault(1).name("field2").typeString().noDefault()
-     *     .name("field3").optional().typeBinary("FooFixed").size(4).endRecord()
+     * struct("com.foo.Foo").fields().name("field1").typeInt().intDefault(1).name("field2").typeString().noDefault()
+     *     .name("field3").optional().typeBinary("FooFixed").size(4).endStruct()
      * </pre>
      *
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
-     * {"type":"record", "name":"com.foo.Foo", "fields": [
+     * {"type":"struct", "name":"com.foo.Foo", "fields": [
      *   {"name":"field1", "type":"int", "default":1},
      *   {"name":"field2", "type":"string"},
      *   {"name":"field3", "type":[
@@ -1424,8 +1424,8 @@ public class SchemaBuilder {
      *   ]}
      * </pre>
      **/
-    public final RecordBuilder<R> record(String name) {
-      return RecordBuilder.create(context, names, name);
+    public final StructBuilder<R> struct(String name) {
+      return StructBuilder.create(context, names, name);
     }
 
     /**
@@ -1493,12 +1493,12 @@ public class SchemaBuilder {
   }
 
   /**
-   * A special Builder for Record fields. The API is very similar to
+   * A special Builder for Struct fields. The API is very similar to
    * {@link BaseTypeBuilder}. However, fields have their own names, properties,
    * and default values.
    * <p/>
    * The methods on this class create builder instances that return their control
-   * to the {@link FieldAssembler} of the enclosing record context after
+   * to the {@link FieldAssembler} of the enclosing struct context after
    * configuring a default for the field.
    * <p/>
    * For example, an int field with default value 1:
@@ -1739,9 +1739,9 @@ public class SchemaBuilder {
       return EnumBuilder.create(wrap(new EnumDefault<>(bldr)), names, name);
     }
 
-    /** Build an Avro record type. **/
-    public final RecordBuilder<RecordDefault<R>> record(String name) {
-      return RecordBuilder.create(wrap(new RecordDefault<>(bldr)), names, name);
+    /** Build an Avro struct type. **/
+    public final StructBuilder<StructDefault<R>> struct(String name) {
+      return StructBuilder.create(wrap(new StructDefault<>(bldr)), names, name);
     }
 
     private <C> Completion<C> wrap(Completion<C> completion) {
@@ -2030,9 +2030,9 @@ public class SchemaBuilder {
       return EnumBuilder.create(completion(new EnumDefault<>(bldr)), names, name);
     }
 
-    /** Build an Avro record type. **/
-    public RecordBuilder<UnionAccumulator<RecordDefault<R>>> record(String name) {
-      return RecordBuilder.create(completion(new RecordDefault<>(bldr)), names, name);
+    /** Build an Avro struct type. **/
+    public StructBuilder<UnionAccumulator<StructDefault<R>>> struct(String name) {
+      return StructBuilder.create(completion(new StructDefault<>(bldr)), names, name);
     }
 
     private <C> UnionCompletion<C> completion(Completion<C> context) {
@@ -2040,25 +2040,25 @@ public class SchemaBuilder {
     }
   }
 
-  public final static class RecordBuilder<R> extends NamespacedBuilder<R, RecordBuilder<R>> {
-    private RecordBuilder(Completion<R> context, NameContext names, String name) {
+  public final static class StructBuilder<R> extends NamespacedBuilder<R, StructBuilder<R>> {
+    private StructBuilder(Completion<R> context, NameContext names, String name) {
       super(context, names, name);
     }
 
-    private static <R> RecordBuilder<R> create(Completion<R> context, NameContext names, String name) {
-      return new RecordBuilder<>(context, names, name);
+    private static <R> StructBuilder<R> create(Completion<R> context, NameContext names, String name) {
+      return new StructBuilder<>(context, names, name);
     }
 
     @Override
-    protected RecordBuilder<R> self() {
+    protected StructBuilder<R> self() {
       return this;
     }
 
     public FieldAssembler<R> fields() {
-      Schema record = Schema.createStruct(name(), doc(), space(), false);
-      // place the record in the name context, fields yet to be set.
-      completeSchema(record);
-      return new FieldAssembler<>(context(), names().namespace(record.getNamespace()), record);
+      Schema struct = Schema.createStruct(name(), doc(), space(), false);
+      // place the struct in the name context, fields yet to be set.
+      completeSchema(struct);
+      return new FieldAssembler<>(context(), names().namespace(struct.getNamespace()), struct);
     }
   }
 
@@ -2066,12 +2066,12 @@ public class SchemaBuilder {
     private final List<Field> fields = new ArrayList<>();
     private final Completion<R> context;
     private final NameContext names;
-    private final Schema record;
+    private final Schema struct;
 
-    private FieldAssembler(Completion<R> context, NameContext names, Schema record) {
+    private FieldAssembler(Completion<R> context, NameContext names, Schema struct) {
       this.context = context;
       this.names = names;
-      this.record = record;
+      this.struct = struct;
     }
 
     /**
@@ -2453,12 +2453,12 @@ public class SchemaBuilder {
     }
 
     /**
-     * End adding fields to this record, returning control to the context that this
-     * record builder was created in.
+     * End adding fields to this struct, returning control to the context that this
+     * struct builder was created in.
      */
-    public R endRecord() {
-      record.setFields(fields);
-      return context.complete(record);
+    public R endStruct() {
+      struct.setFields(fields);
+      return context.complete(struct);
     }
 
     private FieldAssembler<R> addField(Field field) {
@@ -2894,18 +2894,18 @@ public class SchemaBuilder {
   }
 
   /** Choose whether to use a default value for the field or not. **/
-  public static class RecordDefault<R> extends FieldDefault<R, RecordDefault<R>> {
-    private RecordDefault(FieldBuilder<R> field) {
+  public static class StructDefault<R> extends FieldDefault<R, StructDefault<R>> {
+    private StructDefault(FieldBuilder<R> field) {
       super(field);
     }
 
     /** Completes this field with the default value provided, cannot be null **/
-    public final FieldAssembler<R> recordDefault(GenericRecord defaultVal) {
+    public final FieldAssembler<R> structDefault(GenericRecord defaultVal) {
       return super.usingDefault(defaultVal);
     }
 
     @Override
-    final RecordDefault<R> self() {
+    final StructDefault<R> self() {
       return this;
     }
   }
@@ -3107,5 +3107,19 @@ public class SchemaBuilder {
     } catch (IOException e) {
       throw new SchemaBuilderException(e);
     }
+  }
+
+  public static void main(String[] args) throws Exception {
+    // Example usage of the SchemaBuilder
+    SchemaBuilder builder = new SchemaBuilder();
+    Schema schema = builder.struct("ExampleStruct")
+        .namespace("com.example")
+        .fields().name("field1").type().stringType().stringDefault("hi")
+        .name("field2").type().intType().intDefault(42)
+        .endStruct();
+
+    ObjectMapper mapper = new ObjectMapper();
+    String s = mapper.writeValueAsString(schema);
+    System.out.println(s);
   }
 }

@@ -17,6 +17,7 @@
  */
 package io.confluent.kafka.schemaregistry.cflt.types;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -311,6 +312,7 @@ public abstract class JsonProperties {
   /**
    * Return the defined properties as an unmodifiable Map.
    */
+  @JsonIgnore
   public Map<String, Object> getObjectProps() {
     Map<String, Object> result = new LinkedHashMap<>();
     for (Entry<String, JsonNode> e : props.entrySet()) {
@@ -344,6 +346,7 @@ public abstract class JsonProperties {
     return Objects.equals(props, np.props);
   }
 
+  @JsonIgnore
   public boolean hasProps() {
     return !props.isEmpty();
   }
