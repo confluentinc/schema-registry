@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.cflt.types;
+package io.confluent.kafka.schemaregistry.builtin;
 
 import org.slf4j.LoggerFactory;
 

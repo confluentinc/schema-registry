@@ -16,18 +16,18 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.cflt.types;
+package io.confluent.kafka.schemaregistry.builtin;
 
 /**
- * Thrown when an illegal type is used.
+ * Thrown for errors parsing schemas and protocols.
  */
-public class SchemaTypeException extends SchemaRuntimeException {
+public class SchemaParseException extends SchemaRuntimeException {
 
-  public SchemaTypeException(String message) {
-    super(message);
+  public SchemaParseException(Throwable cause) {
+    super(cause);
   }
 
-  public SchemaTypeException(String message, Throwable cause) {
-    super(message, cause);
+  public SchemaParseException(String message) {
+    super(message);
   }
 }

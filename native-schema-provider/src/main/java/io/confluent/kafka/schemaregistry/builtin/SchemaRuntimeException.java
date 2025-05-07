@@ -16,18 +16,22 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.cflt.types;
+package io.confluent.kafka.schemaregistry.builtin;
 
 /**
- * Thrown for errors parsing schemas and protocols.
+ * Base Avro exception.
  */
-public class SchemaParseException extends SchemaRuntimeException {
+public class SchemaRuntimeException extends RuntimeException {
 
-  public SchemaParseException(Throwable cause) {
+  public SchemaRuntimeException(Throwable cause) {
     super(cause);
   }
 
-  public SchemaParseException(String message) {
+  public SchemaRuntimeException(String message) {
     super(message);
+  }
+
+  public SchemaRuntimeException(String message, Throwable cause) {
+    super(message, cause);
   }
 }

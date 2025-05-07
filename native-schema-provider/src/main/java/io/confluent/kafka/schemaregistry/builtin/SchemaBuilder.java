@@ -15,15 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.cflt.types;
+package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.Field;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.JacksonUtils;
+import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.JacksonUtils;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;

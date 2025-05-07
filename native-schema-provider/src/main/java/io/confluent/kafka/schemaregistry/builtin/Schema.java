@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.cflt.types;
+package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -28,29 +28,32 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.node.NullNode;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.ArraySchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.BooleanSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.ByteSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.BytesSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.DoubleSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.EnumSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.FixedBinarySchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.FixedCharSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.FloatSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.IntSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.LongSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.MapSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.NullSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.ShortSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.StringSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.StructSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.UnionSchema;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.Accessor;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.Accessor.FieldAccessor;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.JacksonUtils;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import io.confluent.kafka.schemaregistry.builtin.Schema.ArraySchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.BooleanSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.ByteSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.BytesSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.DoubleSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.EnumSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.FixedBinarySchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.FixedCharSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.FloatSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.IntSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.LongSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.MapSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.NullSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.ShortSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.StringSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.StructSchema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.UnionSchema;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor.FieldAccessor;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.JacksonUtils;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -2032,6 +2035,23 @@ public abstract class Schema extends JsonProperties {
     public void clear() {
       ensureUnlocked();
       super.clear();
+    }
+  }
+
+  public static class SchemaSerializer extends StdSerializer<Schema> {
+
+    public SchemaSerializer() {
+      this(null);
+    }
+
+    public SchemaSerializer(Class<Schema> t) {
+      super(t);
+    }
+
+    @Override
+    public void serialize(
+        Schema value, JsonGenerator jgen, SerializerProvider provider)
+        throws IOException, JsonProcessingException {
     }
   }
 }

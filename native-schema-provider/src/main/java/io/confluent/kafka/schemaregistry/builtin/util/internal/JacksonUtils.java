@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.cflt.types.util.internal;
+package io.confluent.kafka.schemaregistry.builtin.util.internal;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -23,10 +23,10 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
-import io.confluent.kafka.schemaregistry.cflt.types.JsonProperties;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.Type;
-import io.confluent.kafka.schemaregistry.cflt.types.SchemaRuntimeException;
+import io.confluent.kafka.schemaregistry.builtin.JsonProperties;
+import io.confluent.kafka.schemaregistry.builtin.Schema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.Type;
+import io.confluent.kafka.schemaregistry.builtin.SchemaRuntimeException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;

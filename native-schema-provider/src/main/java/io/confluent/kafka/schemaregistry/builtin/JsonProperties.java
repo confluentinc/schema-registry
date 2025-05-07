@@ -15,15 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.confluent.kafka.schemaregistry.cflt.types;
+package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.Accessor;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.Accessor.JsonPropertiesAccessor;
-import io.confluent.kafka.schemaregistry.cflt.types.util.internal.JacksonUtils;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor.JsonPropertiesAccessor;
+import io.confluent.kafka.schemaregistry.builtin.util.internal.JacksonUtils;
 import java.io.IOException;
 import java.util.AbstractSet;
 import java.util.Collections;

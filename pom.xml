@@ -69,7 +69,7 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
-        <module>cflt-types-provider</module>
+        <module>native-schema-provider</module>
         <module>client-encryption-tink</module>
         <module>dek-registry-client</module>
         <module>dek-registry</module>

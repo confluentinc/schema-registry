@@ -12,14 +12,14 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.confluent.kafka.schemaregistry.cflt.types.util.internal;
+package io.confluent.kafka.schemaregistry.builtin.util.internal;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.confluent.kafka.schemaregistry.cflt.types.JsonProperties;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.Field;
-import io.confluent.kafka.schemaregistry.cflt.types.Schema.Field.Order;
+import io.confluent.kafka.schemaregistry.builtin.JsonProperties;
+import io.confluent.kafka.schemaregistry.builtin.Schema;
+import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
+import io.confluent.kafka.schemaregistry.builtin.Schema.Field.Order;
 import java.io.IOException;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;

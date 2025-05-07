@@ -21,9 +21,9 @@
         </license>
     </licenses>
 
-    <artifactId>kafka-cflt-types-provider</artifactId>
+    <artifactId>kafka-native-schema-provider</artifactId>
     <packaging>jar</packaging>
-    <name>kafka-cflt-types-provider</name>
+    <name>kafka-native-schema-provider</name>
 
     <properties>
         <java.version>11</java.version>
