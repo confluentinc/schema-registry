@@ -69,6 +69,7 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
+        <module>cflt-types-provider</module>
         <module>client-encryption-tink</module>
         <module>dek-registry-client</module>
         <module>dek-registry</module>
@@ -476,6 +477,11 @@
             <dependency>
                 <groupId>io.confluent</groupId>
                 <artifactId>kafka-json-schema-serializer</artifactId>
+                <version>${io.confluent.schema-registry.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
+                <artifactId>kafka-cflt-types-provider</artifactId>
                 <version>${io.confluent.schema-registry.version}</version>
             </dependency>
             <dependency>
