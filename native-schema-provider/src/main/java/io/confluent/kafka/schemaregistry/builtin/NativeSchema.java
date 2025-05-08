@@ -178,7 +178,8 @@ public class NativeSchema implements ParsedSchema {
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-    modifySchemaTags(original, tagsToAdd, tagsToRemove);
+    // TODO RAY
+    //modifySchemaTags(original, tagsToAdd, tagsToRemove);
     return new NativeSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
@@ -791,14 +792,14 @@ public class NativeSchema implements ParsedSchema {
     return tags;
   }
 
+  // TODO RAY
+  /*
   private void modifySchemaTags(JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
                                 Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
-    // TODO RAY
-    /*
     for (SchemaEntity entity : entityToModify) {
       JsonNode nodePtr = AvroSchemaUtils.findMatchingEntity(node, entity);
       Set<String> allTags = getInlineTags(nodePtr);
@@ -819,8 +820,8 @@ public class NativeSchema implements ParsedSchema {
         ((ObjectNode) nodePtr).replace(TAGS, jsonMapper.valueToTree(allTags));
       }
     }
-    */
   }
+  */
 
   static class IdentityPair<K, V> {
     private final K key;

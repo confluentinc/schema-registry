@@ -47,6 +47,7 @@
     <modules>
         <module>core</module>
         <module>client</module>
+        <module>native-schema-provider</module>
         <module>schema-serializer</module>
         <module>schema-rules</module>
         <module>avro-serializer</module>
@@ -69,7 +70,6 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
-        <module>native-schema-provider</module>
         <module>client-encryption-tink</module>
         <module>dek-registry-client</module>
         <module>dek-registry</module>

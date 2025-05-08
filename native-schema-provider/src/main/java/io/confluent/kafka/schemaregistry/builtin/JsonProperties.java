@@ -198,6 +198,16 @@ public abstract class JsonProperties {
         }
       };
     }
+
+    @Override
+    public boolean equals(Object o) {
+      return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+      return super.hashCode();
+    }
   };
 
   private Set<String> reserved;
@@ -352,22 +362,5 @@ public abstract class JsonProperties {
   @JsonIgnore
   public boolean hasProps() {
     return !props.isEmpty();
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof JsonProperties)) {
-      return false;
-    }
-    JsonProperties that = (JsonProperties) o;
-    return propsEqual(that);
-  }
-
-  @Override
-  public int hashCode() {
-    return propsHashCode();
   }
 }
