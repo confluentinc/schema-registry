@@ -1,4 +1,6 @@
 /*
+ * Copyright 2025 Confluent Inc.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,6 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.core.io.JsonStringEncoder;
@@ -65,9 +68,12 @@ import org.apache.avro.generic.GenericRecord;
  * </pre>
  *
  * <pre>
- * Schema schema = SchemaBuilder.struct("HandshakeRequest").namespace("org.apache.avro.ipc").fields().name("clientHash")
- *     .type().binary("MD5").size(16).noDefault().name("clientProtocol").type().nullable().stringType().noDefault()
- *     .name("serverHash").type("MD5").noDefault().name("meta").type().nullable().map().values().bytesType().noDefault()
+ * Schema schema = SchemaBuilder.struct("HandshakeRequest").namespace("org.apache.avro.ipc")
+ *     .fields().name("clientHash")
+ *     .type().binary("MD5").size(16).noDefault().name("clientProtocol").type().nullable()
+ *     .stringType().noDefault()
+ *     .name("serverHash").type("MD5").noDefault().name("meta").type().nullable().map()
+ *     .values().bytesType().noDefault()
  *     .endStruct();
  * </pre>
  * <p/>
@@ -84,6 +90,7 @@ import org.apache.avro.generic.GenericRecord;
  * "type":
  * </pre>
  *
+ * <p/>
  * is a {@link TypeBuilder}, {@link FieldTypeBuilder}, or
  * {@link UnionFieldTypeBuilder}, depending on the context. These types all
  * share a similar API for selecting and building types.
@@ -98,6 +105,7 @@ import org.apache.avro.generic.GenericRecord;
  * {"type":{"name":"int", "customProp":"val"}}
  * </pre>
  *
+ * <p/>
  * The analogous code form for the above three JSON lines are the below three
  * lines:
  *
@@ -107,6 +115,7 @@ import org.apache.avro.generic.GenericRecord;
  *  .intBuilder().prop("customProp", "val").endInt()
  * </pre>
  *
+ * <p/>
  * Every primitive type has a shortcut to create the trivial type, and a builder
  * when custom properties are required. The first line above is a shortcut for
  * the second, analogous to the JSON case.
@@ -133,6 +142,7 @@ import org.apache.avro.generic.GenericRecord;
  *   .symbols("SPADES", "HEARTS", "DIAMONDS", "CLUBS")
  * </pre>
  *
+ * <p/>
  * Which is equivalent to the JSON:
  *
  * <pre>
@@ -179,6 +189,7 @@ import org.apache.avro.generic.GenericRecord;
  *   .nullType().endUnion()
  * </pre>
  *
+ * <p/>
  * is equivalent to the Avro schema JSON:
  *
  * <pre>
@@ -189,6 +200,7 @@ import org.apache.avro.generic.GenericRecord;
  * ]
  * </pre>
  *
+ * <p/>
  * In a field context, the first type of a union defines what default type is
  * allowed.
  * </p>
@@ -201,6 +213,7 @@ import org.apache.avro.generic.GenericRecord;
  *   .nullable().intType()
  * </pre>
  *
+ * <p/>
  * The below two field declarations are equivalent:
  *
  * <pre>
@@ -217,6 +230,7 @@ import org.apache.avro.generic.GenericRecord;
  *   .type("MD5", "org.apache.avro.test")  // reference by name and namespace
  * </pre>
  *
+ * <p/>
  * When a type is specified by name, and the namespace is absent or null, the
  * namespace is inherited from the enclosing context. A namespace will propagate
  * as a default to child fields, nested types, or later defined types in a
@@ -227,6 +241,7 @@ import org.apache.avro.generic.GenericRecord;
  * namespace. {@link SchemaBuilder#builder()} returns a type builder with no
  * default namespace.
  */
+
 public class SchemaBuilder {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -341,6 +356,7 @@ public class SchemaBuilder {
    * builder().nullable();
    * </pre>
    *
+   * <p/>
    * and the following two lines are equivalent:
    *
    * <pre>
@@ -359,7 +375,7 @@ public class SchemaBuilder {
    * An abstract builder for all Avro types. All Avro types can have arbitrary
    * string key-value properties.
    */
-  public static abstract class PropBuilder<S extends PropBuilder<S>> {
+  public abstract static class PropBuilder<S extends PropBuilder<S>> {
     private Map<String, JsonNode> props = null;
 
     protected PropBuilder() {
@@ -417,7 +433,7 @@ public class SchemaBuilder {
    * 'name' is required, and provided to this builder. 'doc' and 'aliases' are
    * optional.
    */
-  public static abstract class NamedBuilder<S extends NamedBuilder<S>> extends PropBuilder<S> {
+  public abstract static class NamedBuilder<S extends NamedBuilder<S>> extends PropBuilder<S> {
     private final String name;
     private final NameContext names;
     private String doc;
@@ -434,12 +450,6 @@ public class SchemaBuilder {
       return self();
     }
 
-    /** configure this type's optional name aliases **/
-    public final S aliases(String... aliases) {
-      this.aliases = aliases;
-      return self();
-    }
-
     final String doc() {
       return doc;
     }
@@ -450,6 +460,12 @@ public class SchemaBuilder {
 
     final NameContext names() {
       return names;
+    }
+
+    /** configure this type's optional name aliases **/
+    public final S aliases(String... aliases) {
+      this.aliases = aliases;
+      return self();
     }
 
     final Schema addAliasesTo(Schema schema) {
@@ -475,7 +491,8 @@ public class SchemaBuilder {
    * An abstract type that provides builder methods for configuring the namespace
    * for all Avro types that have namespaces (Struct, and Enum).
    */
-  public static abstract class NamespacedBuilder<R, S extends NamespacedBuilder<R, S>> extends NamedBuilder<S> {
+  public abstract static class NamespacedBuilder<R, S extends NamespacedBuilder<R, S>>
+      extends NamedBuilder<S> {
     private final Completion<R> context;
     private String namespace;
 
@@ -517,7 +534,8 @@ public class SchemaBuilder {
   /**
    * An abstract type for fixed length types.
    */
-  public static abstract class FixedBuilder<R, S extends FixedBuilder<R, S>> extends PropBuilder<S> {
+  public abstract static class FixedBuilder<R, S extends FixedBuilder<R, S>>
+      extends PropBuilder<S> {
     private final Completion<R> context;
 
     protected FixedBuilder(Completion<R> context) {
@@ -537,7 +555,8 @@ public class SchemaBuilder {
   /**
    * An abstraction for sharing code amongst all primitive type builders.
    */
-  private static abstract class PrimitiveBuilder<R, P extends PrimitiveBuilder<R, P>> extends PropBuilder<P> {
+  private abstract static class PrimitiveBuilder<R, P extends PrimitiveBuilder<R, P>>
+      extends PropBuilder<P> {
     private final Completion<R> context;
     private final Schema immutable;
 
@@ -876,7 +895,8 @@ public class SchemaBuilder {
 
     private String enumDefault = null;
 
-    private static <R> EnumBuilder<R> create(Completion<R> context, NameContext names, String name) {
+    private static <R> EnumBuilder<R> create(
+        Completion<R> context, NameContext names, String name) {
       return new EnumBuilder<>(context, names, name);
     }
 
@@ -890,7 +910,8 @@ public class SchemaBuilder {
      * default if it was set.
      **/
     public R symbols(String... symbols) {
-      Schema schema = Schema.createEnum(name(), doc(), space(), Arrays.asList(symbols), this.enumDefault);
+      Schema schema = Schema.createEnum(
+          name(), doc(), space(), Arrays.asList(symbols), this.enumDefault);
       completeSchema(schema);
       return context().complete(schema);
     }
@@ -999,6 +1020,7 @@ public class SchemaBuilder {
    **/
   private static class NameContext {
     private static final Set<String> PRIMITIVES = new HashSet<>();
+
     static {
       PRIMITIVES.add("null");
       PRIMITIVES.add("boolean");
@@ -1011,6 +1033,7 @@ public class SchemaBuilder {
       PRIMITIVES.add("bytes");
       PRIMITIVES.add("string");
     }
+
     private final HashMap<String, Schema> schemas;
     private final String namespace;
 
@@ -1323,6 +1346,7 @@ public class SchemaBuilder {
      * map().values().intType()
      * </pre>
      *
+     * <p/>
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
@@ -1340,6 +1364,7 @@ public class SchemaBuilder {
      * array().items().longType()
      * </pre>
      *
+     * <p/>
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
@@ -1357,6 +1382,7 @@ public class SchemaBuilder {
      * binary("com.foo.IPv4").size(4)
      * </pre>
      *
+     * <p/>
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
@@ -1374,6 +1400,7 @@ public class SchemaBuilder {
      * char("com.foo.IPv4").size(4)
      * </pre>
      *
+     * <p/>
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
@@ -1388,10 +1415,11 @@ public class SchemaBuilder {
      * Build an Avro enum type. Example usage:
      *
      * <pre>
-     * enumeration("Suits").namespace("org.cards").doc("card suit names").defaultSymbol("HEART").symbols("HEART", "SPADE",
-     *     "DIAMOND", "CLUB")
+     * enumeration("Suits").namespace("org.cards").doc("card suit names").defaultSymbol("HEART")
+     *     .symbols("HEART", "SPADE", "DIAMOND", "CLUB")
      * </pre>
      *
+     * <p/>
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
@@ -1408,10 +1436,12 @@ public class SchemaBuilder {
      * Build an Avro struct type. Example usage:
      *
      * <pre>
-     * struct("com.foo.Foo").fields().name("field1").typeInt().intDefault(1).name("field2").typeString().noDefault()
+     * struct("com.foo.Foo").fields().name("field1").typeInt().intDefault(1).name("field2")
+     *     .typeString().noDefault()
      *     .name("field3").optional().typeBinary("FooFixed").size(4).endStruct()
      * </pre>
      *
+     * <p/>
      * Equivalent to Avro JSON Schema:
      *
      * <pre>
@@ -1507,6 +1537,7 @@ public class SchemaBuilder {
    * intSimple().withDefault(1);
    * </pre>
    *
+   * <p/>
    * or an array with items that are optional int types:
    *
    * <pre>
@@ -2040,12 +2071,13 @@ public class SchemaBuilder {
     }
   }
 
-  public final static class StructBuilder<R> extends NamespacedBuilder<R, StructBuilder<R>> {
+  public static final class StructBuilder<R> extends NamespacedBuilder<R, StructBuilder<R>> {
     private StructBuilder(Completion<R> context, NameContext names, String name) {
       super(context, names, name);
     }
 
-    private static <R> StructBuilder<R> create(Completion<R> context, NameContext names, String name) {
+    private static <R> StructBuilder<R> create(
+        Completion<R> context, NameContext names, String name) {
       return new StructBuilder<>(context, names, name);
     }
 
@@ -2062,7 +2094,7 @@ public class SchemaBuilder {
     }
   }
 
-  public final static class FieldAssembler<R> {
+  public static final class FieldAssembler<R> {
     private final List<Field> fields = new ArrayList<>();
     private final Completion<R> context;
     private final NameContext names;
@@ -2471,6 +2503,7 @@ public class SchemaBuilder {
   /**
    * Builds a Field in the context of a {@link FieldAssembler}.
    *
+   * <p/>
    * Usage is to first configure any of the optional parameters and then to call
    * one of the type methods to complete the field. For example
    *
@@ -2478,9 +2511,10 @@ public class SchemaBuilder {
    *   .namespace("org.apache.example").orderDescending().type()
    * </pre>
    *
+   * <p/>
    * Optional parameters for a field are namespace, doc, order, and aliases.
    */
-  public final static class FieldBuilder<R> extends NamedBuilder<FieldBuilder<R>> {
+  public static final class FieldBuilder<R> extends NamedBuilder<FieldBuilder<R>> {
     private final FieldAssembler<R> fields;
     private Field.Order order = Field.Order.ASCENDING;
     private boolean validatingDefaults = true;
@@ -2601,7 +2635,7 @@ public class SchemaBuilder {
   }
 
   /** Abstract base class for field defaults. **/
-  public static abstract class FieldDefault<R, S extends FieldDefault<R, S>> extends Completion<S> {
+  public abstract static class FieldDefault<R, S extends FieldDefault<R, S>> extends Completion<S> {
     private final FieldBuilder<R> field;
     private Schema schema;
 
@@ -2910,7 +2944,7 @@ public class SchemaBuilder {
     }
   }
 
-  public final static class GenericDefault<R> {
+  public static final class GenericDefault<R> {
     private final FieldBuilder<R> field;
     private final Schema schema;
 
@@ -2934,8 +2968,9 @@ public class SchemaBuilder {
   }
 
   /**
-   * Completion<R> is for internal builder use, all subclasses are private.
+   * Completion is for internal builder use, all subclasses are private.
    *
+   * <p/>
    * Completion is an object that takes a Schema and returns some result.
    */
   private abstract static class Completion<R> {
@@ -2993,7 +3028,7 @@ public class SchemaBuilder {
     }
   }
 
-  private static abstract class NestedCompletion<R> extends Completion<R> {
+  private abstract static class NestedCompletion<R> extends Completion<R> {
     private final Completion<R> context;
     private final PropBuilder<?> assembler;
 

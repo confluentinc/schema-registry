@@ -1,4 +1,6 @@
 /*
+ * Copyright 2025 Confluent Inc.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,6 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -249,6 +252,12 @@ public abstract class JsonProperties {
     return json != null ? JacksonUtils.toObject(json) : defaultValue;
   }
 
+  public void putAll(JsonProperties np) {
+    for (Entry<? extends String, ? extends JsonNode> e : np.props.entrySet()) {
+      addProp(e.getKey(), e.getValue());
+    }
+  }
+
   /**
    * Adds a property with the given name <tt>name</tt> and value <tt>value</tt>. Neither
    * <tt>name</tt> nor <tt>value</tt> can be <tt>null</tt>. It is illegal to add a property if
@@ -266,12 +275,6 @@ public abstract class JsonProperties {
       addProp(name, (JsonNode) value);
     } else {
       addProp(name, JacksonUtils.toJsonNode(value));
-    }
-  }
-
-  public void putAll(JsonProperties np) {
-    for (Entry<? extends String, ? extends JsonNode> e : np.props.entrySet()) {
-      addProp(e.getKey(), e.getValue());
     }
   }
 
@@ -351,4 +354,20 @@ public abstract class JsonProperties {
     return !props.isEmpty();
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof JsonProperties)) {
+      return false;
+    }
+    JsonProperties that = (JsonProperties) o;
+    return propsEqual(that);
+  }
+
+  @Override
+  public int hashCode() {
+    return propsHashCode();
+  }
 }

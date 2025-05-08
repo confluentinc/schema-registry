@@ -1,4 +1,6 @@
 /*
+ * Copyright 2025 Confluent Inc.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,6 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -77,7 +80,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * An abstract data type.
- * <p>
+ *
+ * <p/>
  * A schema may be one of:
  * <ul>
  * <li>A <i>struct</i>, mapping field names to field value data;
@@ -86,7 +90,7 @@ import org.slf4j.LoggerFactory;
  * <li>A <i>map</i>, containing string/value pairs, of a declared schema;
  * <li>A <i>union</i> of other schemas;
  * <li>A fixed sized <i>binary</i> object;
- * <li>A fixed sized <ichar</i> object;
+ * <li>A fixed sized <i>char</i> object;
  * <li>A unicode <i>string</i>;
  * <li>A sequence of <i>bytes</i>;
  * <li>A 32-bit signed <i>int</i>;
@@ -96,7 +100,8 @@ import org.slf4j.LoggerFactory;
  * <li>A <i>boolean</i>; or
  * <li><i>null</i>.
  * </ul>
- * <p>
+ *
+ * <p/>
  * Construct a schema using one of its static <tt>createXXX</tt> methods, or
  * more conveniently using {@link SchemaBuilder}. The schema objects are
  * <i>logically</i> immutable. There are only two mutating methods -
@@ -231,7 +236,7 @@ public abstract class Schema extends JsonProperties {
 
   private static final Set<String> SCHEMA_RESERVED = new HashSet<>(
       Arrays.asList("doc", "fields", "items", "name", "namespace", "size", "symbols", "values",
-          "type", "aliases"));
+          "type", "aliases", "tags"));
 
   private static final Set<String> ENUM_RESERVED = new HashSet<>(SCHEMA_RESERVED);
 
@@ -462,6 +467,21 @@ public abstract class Schema extends JsonProperties {
   }
 
   /**
+   * If this is a struct or enum, add a tag.
+   */
+  public void addTag(String tag) {
+    throw new SchemaRuntimeException("Not a named type: " + this);
+  }
+
+  /**
+   * If this is a struct or enum, return its tags, if any.
+   */
+  @JsonIgnore
+  public Set<String> getTags() {
+    throw new SchemaRuntimeException("Not a named type: " + this);
+  }
+
+  /**
    * Returns true if this struct is an error type.
    */
   @JsonIgnore
@@ -567,12 +587,6 @@ public abstract class Schema extends JsonProperties {
     }
   }
 
-  @Deprecated
-  void fieldsToJson(Set<String> knownNames, String namespace, JsonGenerator gen)
-      throws IOException {
-    throw new SchemaRuntimeException("Not a struct: " + this);
-  }
-
   @Override
   public boolean equals(Object o) {
     if (o == this) {
@@ -607,7 +621,8 @@ public abstract class Schema extends JsonProperties {
 
   private static final Set<String> FIELD_RESERVED = Collections
       .unmodifiableSet(
-          new HashSet<>(Arrays.asList("default", "doc", "name", "order", "type", "aliases")));
+          new HashSet<>(Arrays.asList(
+              "default", "doc", "name", "order", "type", "aliases", "tags")));
 
   /**
    * Returns true if this struct is a union type.
@@ -689,6 +704,7 @@ public abstract class Schema extends JsonProperties {
     private final JsonNode defaultValue;
     private final Order order;
     private Set<String> aliases;
+    private Set<String> tags;
 
     Field(String name, Schema schema, String doc, JsonNode defaultValue, boolean validateDefault,
         Order order) {
@@ -704,13 +720,16 @@ public abstract class Schema extends JsonProperties {
     /**
      * Constructs a new Field instance with the same {@code name}, {@code doc},
      * {@code defaultValue}, and {@code order} as {@code field} has with changing the schema to the
-     * specified one. It also copies all the {@code props} and {@code aliases}.
+     * specified one. It also copies all the {@code props}, {@code aliases} and {@code tags}.
      */
     public Field(Field field, Schema schema) {
       this(field.name, schema, field.doc, field.defaultValue, true, field.order);
       putAll(field);
       if (field.aliases != null) {
         aliases = new LinkedHashSet<>(field.aliases);
+      }
+      if (field.tags != null) {
+        tags = new LinkedHashSet<>(field.tags);
       }
     }
 
@@ -781,7 +800,7 @@ public abstract class Schema extends JsonProperties {
 
     /**
      * @return true if this Field has a default value set. Can be used to determine if a "null"
-     * return from defaultVal() is due to that being the default value or just not set.
+     *         return from defaultVal() is due to that being the default value or just not set.
      */
     @JsonIgnore
     public boolean hasDefaultValue() {
@@ -795,7 +814,7 @@ public abstract class Schema extends JsonProperties {
 
     /**
      * @return the default value for this field specified using the mapping in
-     * {@link JsonProperties}
+     *         {@link JsonProperties}
      */
     @JsonProperty("default")
     public Object defaultVal() {
@@ -823,6 +842,24 @@ public abstract class Schema extends JsonProperties {
         return Collections.emptySet();
       }
       return Collections.unmodifiableSet(aliases);
+    }
+
+    public void addTag(String tag) {
+      if (tags == null) {
+        this.tags = new LinkedHashSet<>();
+      }
+      tags.add(tag);
+    }
+
+    /**
+     * Return the defined tags as an unmodifiable Set.
+     */
+    @JsonProperty("tags")
+    public Set<String> tags() {
+      if (tags == null) {
+        return Collections.emptySet();
+      }
+      return Collections.unmodifiableSet(tags);
     }
 
     @Override
@@ -951,11 +988,12 @@ public abstract class Schema extends JsonProperties {
 
   }
 
-  private static abstract class NamedSchema extends Schema {
+  private abstract static class NamedSchema extends Schema {
 
     final Name name;
     final String doc;
     Set<Name> aliases;
+    Set<String> tags;
 
     public NamedSchema(Type type, Name name, String doc) {
       super(type);
@@ -1026,6 +1064,25 @@ public abstract class Schema extends JsonProperties {
       return result;
     }
 
+    @Override
+    public void addTag(String tag) {
+      if (tags == null) {
+        this.tags = new LinkedHashSet<>();
+      }
+      tags.add(tag);
+    }
+
+    @Override
+    @JsonIgnore(false)
+    @JsonProperty("tags")
+    public Set<String> getTags() {
+      Set<String> result = new LinkedHashSet<>();
+      if (tags != null) {
+        result.addAll(tags);
+      }
+      return result;
+    }
+
     public boolean writeNameRef(Set<String> knownNames, String currentNamespace, JsonGenerator gen)
         throws IOException {
       if (name.name != null) {
@@ -1049,19 +1106,6 @@ public abstract class Schema extends JsonProperties {
     int computeHash() {
       return super.computeHash() + name.hashCode();
     }
-
-    public void aliasesToJson(JsonGenerator gen) throws IOException {
-      if (aliases == null || aliases.isEmpty()) {
-        return;
-      }
-      gen.writeFieldName("aliases");
-      gen.writeStartArray();
-      for (Name alias : aliases) {
-        gen.writeString(alias.getQualified(name.space));
-      }
-      gen.writeEndArray();
-    }
-
   }
 
   /**
@@ -1508,10 +1552,10 @@ public abstract class Schema extends JsonProperties {
       if (o == this) {
         return true;
       }
-      if (!(o instanceof FixedBinarySchema)) {
+      if (!(o instanceof FixedCharSchema)) {
         return false;
       }
-      FixedBinarySchema that = (FixedBinarySchema) o;
+      FixedCharSchema that = (FixedCharSchema) o;
       return equalCachedHash(that) && size == that.size && propsEqual(that);
     }
 
@@ -1798,7 +1842,7 @@ public abstract class Schema extends JsonProperties {
     Map<Schema, Schema> seen = new IdentityHashMap<>(1);
     Map<Name, Name> aliases = new HashMap<>(1);
     Map<Name, Map<String, String>> fieldAliases = new HashMap<>(1);
-    getAliases(reader, seen, aliases, fieldAliases);
+    getAllAliases(reader, seen, aliases, fieldAliases);
 
     if (aliases.isEmpty() && fieldAliases.isEmpty()) {
       return writer; // no aliases
@@ -1826,9 +1870,9 @@ public abstract class Schema extends JsonProperties {
         seen.put(s, result);
         List<Field> newFields = new ArrayList<>();
         for (Field f : s.getFields()) {
-          Schema fSchema = applyAliases(f.schema, seen, aliases, fieldAliases);
-          String fName = getFieldAlias(name, f.name, fieldAliases);
-          Field newF = new Field(fName, fSchema, f.doc, f.defaultValue, true, f.order);
+          Schema fieldSchema = applyAliases(f.schema, seen, aliases, fieldAliases);
+          String fieldName = getFieldAlias(name, f.name, fieldAliases);
+          Field newF = new Field(fieldName, fieldSchema, f.doc, f.defaultValue, true, f.order);
           newF.putAll(f); // copy props
           newFields.add(newF);
         }
@@ -1880,8 +1924,8 @@ public abstract class Schema extends JsonProperties {
   }
 
   @SuppressWarnings("DataFlowIssue")
-  private static void getAliases(Schema schema, Map<Schema, Schema> seen, Map<Name, Name> aliases,
-      Map<Name, Map<String, String>> fieldAliases) {
+  private static void getAllAliases(Schema schema, Map<Schema, Schema> seen,
+      Map<Name, Name> aliases, Map<Name, Map<String, String>> fieldAliases) {
     if (schema instanceof NamedSchema) {
       NamedSchema namedSchema = (NamedSchema) schema;
       if (namedSchema.aliases != null) {
@@ -1905,7 +1949,7 @@ public abstract class Schema extends JsonProperties {
               structAliases.put(fieldAlias, field.name);
             }
           }
-          getAliases(field.schema, seen, aliases, fieldAliases);
+          getAllAliases(field.schema, seen, aliases, fieldAliases);
         }
         if (struct.aliases != null && fieldAliases.containsKey(struct.name)) {
           for (Name structAlias : struct.aliases) {
@@ -1914,15 +1958,17 @@ public abstract class Schema extends JsonProperties {
         }
         break;
       case ARRAY:
-        getAliases(schema.getElementType(), seen, aliases, fieldAliases);
+        getAllAliases(schema.getElementType(), seen, aliases, fieldAliases);
         break;
       case MAP:
-        getAliases(schema.getValueType(), seen, aliases, fieldAliases);
+        getAllAliases(schema.getValueType(), seen, aliases, fieldAliases);
         break;
       case UNION:
         for (Schema s : schema.getTypes()) {
-          getAliases(s, seen, aliases, fieldAliases);
+          getAllAliases(s, seen, aliases, fieldAliases);
         }
+        break;
+      default:
         break;
     }
   }
@@ -1943,14 +1989,12 @@ public abstract class Schema extends JsonProperties {
   /**
    * No change is permitted on LockableArrayList once lock() has been called on it.
    *
-   * @param <E>
-   */
-
-  /*
+   * <p/>
    * This class keeps a boolean variable <tt>locked</tt> which is set to
    * <tt>true</tt> in the lock() method. It's legal to call lock() any number of
    * times. Any lock() other than the first one is a no-op.
    *
+   * <p/>
    * If a mutating operation is performed after being locked, it throws an
    * <tt>IllegalStateException</tt>. Since modifications through iterator also use
    * the list's mutating operations, this effectively blocks all modifications.
@@ -2035,6 +2079,16 @@ public abstract class Schema extends JsonProperties {
     public void clear() {
       ensureUnlocked();
       super.clear();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+      return super.hashCode();
     }
   }
 

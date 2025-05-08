@@ -1,4 +1,6 @@
 /*
+ * Copyright 2025 Confluent Inc.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -35,9 +37,10 @@ import org.slf4j.LoggerFactory;
  * <li><tt>org.apache.avro.limits.string.maxLength</tt></li> limits the maximum
  * size of <tt>string</tt> types.</li>
  * </ul>
- * <p>
- * The default is to permit sizes up to {@link #MAX_ARRAY_VM_LIMIT}.
+ *
+ * <p>The default is to permit sizes up to {@link #MAX_ARRAY_VM_LIMIT}.
  */
+
 public class SystemLimitException extends SchemaRuntimeException {
 
   /**
@@ -51,7 +54,8 @@ public class SystemLimitException extends SchemaRuntimeException {
   static final int MAX_ARRAY_VM_LIMIT = Integer.MAX_VALUE - 8;
 
   public static final String MAX_BYTES_LENGTH_PROPERTY = "org.apache.avro.limits.bytes.maxLength";
-  public static final String MAX_COLLECTION_LENGTH_PROPERTY = "org.apache.avro.limits.collectionItems.maxLength";
+  public static final String MAX_COLLECTION_LENGTH_PROPERTY =
+      "org.apache.avro.limits.collectionItems.maxLength";
   public static final String MAX_STRING_LENGTH_PROPERTY = "org.apache.avro.limits.string.maxLength";
 
   private static int maxBytesLength = MAX_ARRAY_VM_LIMIT;
@@ -124,7 +128,7 @@ public class SystemLimitException extends SchemaRuntimeException {
    *                 permitted value. Negative and zero values have a special meaning in Avro
    *                 decoding.
    * @return The total number of items in the collection if and only if it is within the limit and
-   * non-negative.
+   *         non-negative.
    * @throws UnsupportedOperationException if reading the items would allocate a collection that the
    *                                       Java VM would be unable to handle
    * @throws SystemLimitException          if the decoding should fail because it would otherwise
@@ -157,7 +161,7 @@ public class SystemLimitException extends SchemaRuntimeException {
    *              permitted value. Negative and zero values have a special meaning in Avro
    *              decoding.
    * @return The total number of items in the collection if and only if it is within the limit and
-   * non-negative.
+   *         non-negative.
    * @throws UnsupportedOperationException if reading the items would allocate a collection that the
    *                                       Java VM would be unable to handle
    * @throws SystemLimitException          if the decoding should fail because it would otherwise
