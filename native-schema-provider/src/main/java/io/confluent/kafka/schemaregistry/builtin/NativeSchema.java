@@ -387,14 +387,14 @@ public class NativeSchema implements ParsedSchema {
           return cacheHit;
         }
 
-        boolean equals = Objects.equals(schema1.getAliases(), schema2.getAliases())
+        boolean equals = Objects.equals(schema1.getTags(), schema2.getTags())
             && Objects.equals(schema1.getDoc(), schema2.getDoc())
             && fieldMetaEqual(schema1.getFields(), schema2.getFields(), cache);
 
         cache.put(sp, equals);
         return equals;
       case ENUM:
-        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+        return Objects.equals(schema1.getTags(), schema2.getTags())
             && Objects.equals(schema1.getDoc(), schema2.getDoc())
             && Objects.equals(schema1.getEnumDefault(), schema2.getEnumDefault());
       case ARRAY:
@@ -402,7 +402,7 @@ public class NativeSchema implements ParsedSchema {
       case MAP:
         return metaEqual(schema1.getValueType(), schema2.getValueType(), cache);
       case BINARY:
-        return Objects.equals(schema1.getAliases(), schema2.getAliases())
+        return Objects.equals(schema1.getTags(), schema2.getTags())
             && Objects.equals(schema1.getDoc(), schema2.getDoc());
       case UNION:
         List<Schema> types1 = schema1.getTypes();
@@ -434,7 +434,7 @@ public class NativeSchema implements ParsedSchema {
       if (field1 == field2) {
         continue;
       }
-      if (!Objects.equals(field1.aliases(), field2.aliases())
+      if (!Objects.equals(field1.tags(), field2.tags())
           || !Objects.equals(field1.doc(), field2.doc())) {
         return false;
       }
@@ -469,19 +469,19 @@ public class NativeSchema implements ParsedSchema {
           return cacheHit;
         }
 
-        int result = Objects.hash(schema.getAliases(), schema.getDoc())
+        int result = Objects.hash(schema.getTags(), schema.getDoc())
             + fieldMetaHash(schema.getFields(), cache);
 
         cache.put(schema, result);
         return result;
       case ENUM:
-        return Objects.hash(schema.getAliases(), schema.getDoc(), schema.getEnumDefault());
+        return Objects.hash(schema.getTags(), schema.getDoc(), schema.getEnumDefault());
       case ARRAY:
         return metaHash(schema.getElementType(), cache);
       case MAP:
         return metaHash(schema.getValueType(), cache);
       case BINARY:
-        return Objects.hash(schema.getAliases(), schema.getDoc());
+        return Objects.hash(schema.getTags(), schema.getDoc());
       case UNION:
         int hash = 0;
         List<Schema> types = schema.getTypes();
@@ -497,7 +497,7 @@ public class NativeSchema implements ParsedSchema {
   private int fieldMetaHash(List<Schema.Field> fields, Map<Schema, Integer> cache) {
     int hash = 0;
     for (Schema.Field field : fields) {
-      hash += Objects.hash(field.aliases(), field.doc()) + metaHash(field.schema(), cache);
+      hash += Objects.hash(field.tags(), field.doc()) + metaHash(field.schema(), cache);
     }
     return hash;
   }

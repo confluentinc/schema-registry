@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.kafka.schemaregistry.builtin.JsonProperties;
 import io.confluent.kafka.schemaregistry.builtin.Schema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
-import io.confluent.kafka.schemaregistry.builtin.Schema.Field.Order;
 import java.io.IOException;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
@@ -45,7 +44,7 @@ public class Accessor {
 
     protected abstract Field createField(String name, Schema schema, String doc,
         JsonNode defaultValue,
-        boolean validate, Order order);
+        boolean validate);
 
     protected abstract Field createField(String name, Schema schema, String doc,
         JsonNode defaultValue);
@@ -125,9 +124,8 @@ public class Accessor {
   }
 
   public static Field createField(String name, Schema schema, String doc, JsonNode defaultValue,
-      boolean validate,
-      Order order) {
-    return fieldAccessor().createField(name, schema, doc, defaultValue, validate, order);
+      boolean validate) {
+    return fieldAccessor().createField(name, schema, doc, defaultValue, validate);
   }
 
   public static Field createField(String name, Schema schema, String doc, JsonNode defaultValue) {

@@ -143,7 +143,7 @@ import org.slf4j.LoggerFactory;
     // TODO decimal, etc.
 })
 @SuppressWarnings("unused")
-public abstract class Schema extends JsonProperties {
+public abstract class Schema {
 
   static final JsonFactory FACTORY = new JsonFactory();
   static final Logger LOG = LoggerFactory.getLogger(Schema.class);
@@ -162,7 +162,7 @@ public abstract class Schema extends JsonProperties {
   public enum Type {
     STRUCT, ENUM, ARRAY, MAP, UNION, CHAR, STRING, BINARY, BYTES,
     INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, NULL,
-    DECIMAL, DATE, TIME, TIMESTAMP, TIMESTAMP_LTZ, INTERVAL_DAY_TIME, INTERVAL_YEAR_MONTH,;
+    DECIMAL, DATE, TIME, TIMESTAMP, TIMESTAMP_LTZ, DAY_TIME_INTERVAL, YEAR_MONTH_INTERVAL;
 
     private final String name;
 
@@ -198,10 +198,11 @@ public abstract class Schema extends JsonProperties {
   }
 
   private final Type type;
+  private JsonProperties props;
 
   Schema(Type type) {
-    super(type == Type.ENUM ? ENUM_RESERVED : SCHEMA_RESERVED);
     this.type = type;
+    this.props = new JsonProperties(type == Type.ENUM ? ENUM_RESERVED : SCHEMA_RESERVED);
   }
 
   /**
@@ -235,8 +236,8 @@ public abstract class Schema extends JsonProperties {
   }
 
   private static final Set<String> SCHEMA_RESERVED = new HashSet<>(
-      Arrays.asList("doc", "fields", "items", "name", "namespace", "size", "symbols", "values",
-          "type", "aliases", "tags"));
+      Arrays.asList("doc", "fields", "items", "name", "namespace", "size", "symbols", "keys",
+          "values", "type", "tags", "params"));
 
   private static final Set<String> ENUM_RESERVED = new HashSet<>(SCHEMA_RESERVED);
 
@@ -246,15 +247,13 @@ public abstract class Schema extends JsonProperties {
 
   int hashCode = NO_HASHCODE;
 
-  @Override
   public void addProp(String name, String value) {
-    super.addProp(name, value);
+    props.addProp(name, value);
     hashCode = NO_HASHCODE;
   }
 
-  @Override
   public void addProp(String name, Object value) {
-    super.addProp(name, value);
+    props.addProp(name, value);
     hashCode = NO_HASHCODE;
   }
 
@@ -345,6 +344,22 @@ public abstract class Schema extends JsonProperties {
   @JsonProperty("type")
   public String getTypeName() {
     return type.getName();
+  }
+
+  /**
+   * Return the props of this schema.
+   */
+  @JsonIgnore
+  public JsonProperties getProps() {
+    return props;
+  }
+
+  /**
+   * Return the props of this schema as a map.
+   */
+  @JsonProperty("params")
+  public Map<String, Object> getObjectProps() {
+    return props.getObjectProps();
   }
 
   /**
@@ -442,28 +457,6 @@ public abstract class Schema extends JsonProperties {
   @JsonIgnore
   public String getFullName() {
     return getName();
-  }
-
-  /**
-   * If this is a struct or enum, add an alias.
-   */
-  public void addAlias(String alias) {
-    throw new SchemaRuntimeException("Not a named type: " + this);
-  }
-
-  /**
-   * If this is a struct or enum, add an alias.
-   */
-  public void addAlias(String alias, String space) {
-    throw new SchemaRuntimeException("Not a named type: " + this);
-  }
-
-  /**
-   * If this is a struct or enum, return its aliases, if any.
-   */
-  @JsonIgnore
-  public Set<String> getAliases() {
-    throw new SchemaRuntimeException("Not a named type: " + this);
   }
 
   /**
@@ -577,12 +570,12 @@ public abstract class Schema extends JsonProperties {
   }
 
   void toJson(Set<String> knownNames, String namespace, JsonGenerator gen) throws IOException {
-    if (!hasProps()) { // no props defined
+    if (!props.hasProps()) { // no props defined
       gen.writeString(getName()); // just write name
     } else {
       gen.writeStartObject();
       gen.writeStringField("type", getName());
-      writeProps(gen);
+      props.writeProps(gen);
       gen.writeEndObject();
     }
   }
@@ -599,7 +592,7 @@ public abstract class Schema extends JsonProperties {
     if (!(this.type == that.type)) {
       return false;
     }
-    return equalCachedHash(that) && propsEqual(that);
+    return equalCachedHash(that) && props.propsEqual(that.props);
   }
 
   @Override
@@ -611,7 +604,7 @@ public abstract class Schema extends JsonProperties {
   }
 
   int computeHash() {
-    return getType().hashCode() + propsHashCode();
+    return getType().hashCode() + props.propsHashCode();
   }
 
   final boolean equalCachedHash(Schema other) {
@@ -622,7 +615,7 @@ public abstract class Schema extends JsonProperties {
   private static final Set<String> FIELD_RESERVED = Collections
       .unmodifiableSet(
           new HashSet<>(Arrays.asList(
-              "default", "doc", "name", "order", "type", "aliases", "tags")));
+              "default", "doc", "name", "type", "tags", "params")));
 
   /**
    * Returns true if this struct is a union type.
@@ -655,7 +648,7 @@ public abstract class Schema extends JsonProperties {
    */
   @JsonInclude(Include.NON_EMPTY)
   @JsonIgnoreProperties(ignoreUnknown = true)
-  public static class Field extends JsonProperties {
+  public static class Field {
 
     static {
       Accessor.setAccessor(new FieldAccessor() {
@@ -666,29 +659,15 @@ public abstract class Schema extends JsonProperties {
 
         @Override
         protected Field createField(String name, Schema schema, String doc, JsonNode defaultValue) {
-          return new Field(name, schema, doc, defaultValue, true, Order.ASCENDING);
+          return new Field(name, schema, doc, defaultValue, true);
         }
 
         @Override
         protected Field createField(String name, Schema schema, String doc, JsonNode defaultValue,
-            boolean validate,
-            Order order) {
-          return new Field(name, schema, doc, defaultValue, validate, order);
+            boolean validate) {
+          return new Field(name, schema, doc, defaultValue, validate);
         }
       });
-    }
-
-    /**
-     * How values of this field should be ordered when sorting structs.
-     */
-    public enum Order {
-      ASCENDING, DESCENDING, IGNORE;
-
-      private final String name;
-
-      Order() {
-        this.name = this.name().toLowerCase(Locale.ENGLISH);
-      }
     }
 
     /**
@@ -702,32 +681,26 @@ public abstract class Schema extends JsonProperties {
     private final Schema schema;
     private final String doc;
     private final JsonNode defaultValue;
-    private final Order order;
-    private Set<String> aliases;
     private Set<String> tags;
+    private JsonProperties props;
 
-    Field(String name, Schema schema, String doc, JsonNode defaultValue, boolean validateDefault,
-        Order order) {
-      super(FIELD_RESERVED);
+    Field(String name, Schema schema, String doc, JsonNode defaultValue, boolean validateDefault) {
       this.name = validateName(name);
       this.schema = Objects.requireNonNull(schema, "schema is required and cannot be null");
       this.doc = doc;
       this.defaultValue =
           validateDefault ? validateDefault(name, schema, defaultValue) : defaultValue;
-      this.order = Objects.requireNonNull(order, "Order cannot be null");
+      this.props = new JsonProperties(FIELD_RESERVED);
     }
 
     /**
      * Constructs a new Field instance with the same {@code name}, {@code doc},
-     * {@code defaultValue}, and {@code order} as {@code field} has with changing the schema to the
-     * specified one. It also copies all the {@code props}, {@code aliases} and {@code tags}.
+     * and {@code defaultValue} as {@code field} has with changing the schema to the
+     * specified one. It also copies all the {@code props}, and {@code tags}.
      */
     public Field(Field field, Schema schema) {
-      this(field.name, schema, field.doc, field.defaultValue, true, field.order);
-      putAll(field);
-      if (field.aliases != null) {
-        aliases = new LinkedHashSet<>(field.aliases);
-      }
+      this(field.name, schema, field.doc, field.defaultValue, true);
+      props.putAll(field.props);
       if (field.tags != null) {
         tags = new LinkedHashSet<>(field.tags);
       }
@@ -737,14 +710,14 @@ public abstract class Schema extends JsonProperties {
      *
      */
     public Field(String name, Schema schema) {
-      this(name, schema, null, null, true, Order.ASCENDING);
+      this(name, schema, null, null, true);
     }
 
     /**
      *
      */
     public Field(String name, Schema schema, String doc) {
-      this(name, schema, doc, null, true, Order.ASCENDING);
+      this(name, schema, doc, null, true);
     }
 
     /**
@@ -754,19 +727,7 @@ public abstract class Schema extends JsonProperties {
     public Field(String name, Schema schema, String doc, Object defaultValue) {
       this(name, schema, doc,
           defaultValue == NULL_DEFAULT_VALUE ? NullNode.getInstance()
-              : JacksonUtils.toJsonNode(defaultValue), true,
-          Order.ASCENDING);
-    }
-
-    /**
-     * @param defaultValue the default value for this field specified using the mapping in
-     *                     {@link JsonProperties}
-     */
-    public Field(String name, Schema schema, String doc, Object defaultValue, Order order) {
-      this(name, schema, doc,
-          defaultValue == NULL_DEFAULT_VALUE ? NullNode.getInstance()
-              : JacksonUtils.toJsonNode(defaultValue), true,
-          Objects.requireNonNull(order));
+              : JacksonUtils.toJsonNode(defaultValue), true);
     }
 
     @JsonProperty("name")
@@ -821,29 +782,6 @@ public abstract class Schema extends JsonProperties {
       return JacksonUtils.toObject(defaultValue, schema);
     }
 
-    @JsonIgnore
-    public Order order() {
-      return order;
-    }
-
-    public void addAlias(String alias) {
-      if (aliases == null) {
-        this.aliases = new LinkedHashSet<>();
-      }
-      aliases.add(alias);
-    }
-
-    /**
-     * Return the defined aliases as an unmodifiable Set.
-     */
-    @JsonProperty("aliases")
-    public Set<String> aliases() {
-      if (aliases == null) {
-        return Collections.emptySet();
-      }
-      return Collections.unmodifiableSet(aliases);
-    }
-
     public void addTag(String tag) {
       if (tags == null) {
         this.tags = new LinkedHashSet<>();
@@ -862,6 +800,22 @@ public abstract class Schema extends JsonProperties {
       return Collections.unmodifiableSet(tags);
     }
 
+    /**
+     * Return the props of this field.
+     */
+    @JsonIgnore
+    public JsonProperties props() {
+      return props;
+    }
+
+    /**
+     * Return the props of this field as a map.
+     */
+    @JsonProperty("params")
+    public Map<String, Object> objectProps() {
+      return props.getObjectProps();
+    }
+
     @Override
     public boolean equals(Object other) {
       if (other == this) {
@@ -871,9 +825,10 @@ public abstract class Schema extends JsonProperties {
         return false;
       }
       Field that = (Field) other;
-      return (name.equals(that.name)) && (schema.equals(that.schema)) && defaultValueEquals(
-          that.defaultValue)
-          && (order == that.order) && propsEqual(that);
+      return (name.equals(that.name))
+          && (schema.equals(that.schema))
+          && defaultValueEquals(that.defaultValue)
+          && props.propsEqual(that.props);
     }
 
     @Override
@@ -992,7 +947,6 @@ public abstract class Schema extends JsonProperties {
 
     final Name name;
     final String doc;
-    Set<Name> aliases;
     Set<String> tags;
 
     public NamedSchema(Type type, Name name, String doc) {
@@ -1029,39 +983,6 @@ public abstract class Schema extends JsonProperties {
     @JsonIgnore
     public String getFullName() {
       return name.full;
-    }
-
-    @Override
-    public void addAlias(String alias) {
-      addAlias(alias, null);
-    }
-
-    @Override
-    public void addAlias(String name, String space) {
-      if (aliases == null) {
-        this.aliases = new LinkedHashSet<>();
-      }
-      if (space == null) {
-        space = this.name.space;
-      }
-      aliases.add(new Name(name, space));
-    }
-
-    @Override
-    @JsonIgnore(false)
-    @JsonProperty("aliases")
-    public Set<String> getAliases() {
-      Set<String> result = new LinkedHashSet<>();
-      if (aliases != null) {
-        for (Name alias : aliases) {
-          if (alias.space == null && name.space != null) {
-            result.add("." + alias.name);
-          } else {
-            result.add(alias.full);
-          }
-        }
-      }
-      return result;
     }
 
     @Override
@@ -1228,7 +1149,7 @@ public abstract class Schema extends JsonProperties {
       if (!equalNames(that)) {
         return false;
       }
-      if (!propsEqual(that)) {
+      if (!getProps().propsEqual(that.getProps())) {
         return false;
       }
       Set<SeenPair> seen = SEEN_EQUALS.get();
@@ -1321,7 +1242,7 @@ public abstract class Schema extends JsonProperties {
       }
       EnumSchema that = (EnumSchema) o;
       return equalCachedHash(that) && equalNames(that) && symbols.equals(that.symbols)
-          && propsEqual(that);
+          && getProps().propsEqual(that.getProps());
     }
 
     @Override
@@ -1362,7 +1283,8 @@ public abstract class Schema extends JsonProperties {
         return false;
       }
       ArraySchema that = (ArraySchema) o;
-      return equalCachedHash(that) && elementType.equals(that.elementType) && propsEqual(that);
+      return equalCachedHash(that) && elementType.equals(that.elementType)
+          && getProps().propsEqual(that.getProps());
     }
 
     @Override
@@ -1405,7 +1327,8 @@ public abstract class Schema extends JsonProperties {
         return false;
       }
       MapSchema that = (MapSchema) o;
-      return equalCachedHash(that) && valueType.equals(that.valueType) && propsEqual(that);
+      return equalCachedHash(that) && valueType.equals(that.valueType)
+          && getProps().propsEqual(that.getProps());
     }
 
     @Override
@@ -1469,7 +1392,8 @@ public abstract class Schema extends JsonProperties {
         return false;
       }
       UnionSchema that = (UnionSchema) o;
-      return equalCachedHash(that) && types.equals(that.types) && propsEqual(that);
+      return equalCachedHash(that) && types.equals(that.types)
+          && getProps().propsEqual(that.getProps());
     }
 
     @Override
@@ -1521,7 +1445,8 @@ public abstract class Schema extends JsonProperties {
         return false;
       }
       FixedBinarySchema that = (FixedBinarySchema) o;
-      return equalCachedHash(that) && size == that.size && propsEqual(that);
+      return equalCachedHash(that) && size == that.size
+          && getProps().propsEqual(that.getProps());
     }
 
     @Override
@@ -1556,7 +1481,8 @@ public abstract class Schema extends JsonProperties {
         return false;
       }
       FixedCharSchema that = (FixedCharSchema) o;
-      return equalCachedHash(that) && size == that.size && propsEqual(that);
+      return equalCachedHash(that) && size == that.size
+          && getProps().propsEqual(that.getProps());
     }
 
     @Override
@@ -1825,165 +1751,6 @@ public abstract class Schema extends JsonProperties {
       // for other types, same as validate default.
       return Schema.isValidDefault(schema, value);
     }
-  }
-
-  /**
-   * Rewrite a writer's schema using the aliases from a reader's schema. This permits reading
-   * structs and enums schemas whose names have changed, and structs whose field names have changed.
-   * The returned schema always contains the same data elements in the same order, but with possibly
-   * different names.
-   */
-  public static Schema applyAliases(Schema writer, Schema reader) {
-    if (writer.equals(reader)) {
-      return writer; // same schema
-    }
-
-    // create indexes of names
-    Map<Schema, Schema> seen = new IdentityHashMap<>(1);
-    Map<Name, Name> aliases = new HashMap<>(1);
-    Map<Name, Map<String, String>> fieldAliases = new HashMap<>(1);
-    getAllAliases(reader, seen, aliases, fieldAliases);
-
-    if (aliases.isEmpty() && fieldAliases.isEmpty()) {
-      return writer; // no aliases
-    }
-
-    seen.clear();
-    return applyAliases(writer, seen, aliases, fieldAliases);
-  }
-
-  @SuppressWarnings("DataFlowIssue")
-  private static Schema applyAliases(Schema s, Map<Schema, Schema> seen, Map<Name, Name> aliases,
-      Map<Name, Map<String, String>> fieldAliases) {
-
-    Name name = s instanceof NamedSchema ? ((NamedSchema) s).name : null;
-    Schema result = s;
-    switch (s.getType()) {
-      case STRUCT:
-        if (seen.containsKey(s)) {
-          return seen.get(s); // break loops
-        }
-        if (aliases.containsKey(name)) {
-          name = aliases.get(name);
-        }
-        result = Schema.createStruct(name.full, s.getDoc(), null, s.isError());
-        seen.put(s, result);
-        List<Field> newFields = new ArrayList<>();
-        for (Field f : s.getFields()) {
-          Schema fieldSchema = applyAliases(f.schema, seen, aliases, fieldAliases);
-          String fieldName = getFieldAlias(name, f.name, fieldAliases);
-          Field newF = new Field(fieldName, fieldSchema, f.doc, f.defaultValue, true, f.order);
-          newF.putAll(f); // copy props
-          newFields.add(newF);
-        }
-        result.setFields(newFields);
-        break;
-      case ENUM:
-        if (aliases.containsKey(name)) {
-          result = Schema.createEnum(aliases.get(name).full, s.getDoc(), null, s.getEnumSymbols(),
-              s.getEnumDefault());
-        }
-        break;
-      case ARRAY:
-        Schema e = applyAliases(s.getElementType(), seen, aliases, fieldAliases);
-        if (!e.equals(s.getElementType())) {
-          result = Schema.createArray(e);
-        }
-        break;
-      case MAP:
-        Schema k = applyAliases(s.getKeyType(), seen, aliases, fieldAliases);
-        Schema v = applyAliases(s.getValueType(), seen, aliases, fieldAliases);
-        if (!k.equals(s.getKeyType()) && !v.equals(s.getValueType())) {
-          result = Schema.createMap(k, v);
-        }
-        break;
-      case UNION:
-        List<Schema> types = new ArrayList<>();
-        for (Schema branch : s.getTypes()) {
-          types.add(applyAliases(branch, seen, aliases, fieldAliases));
-        }
-        result = Schema.createUnion(types);
-        break;
-      case BINARY:
-        if (aliases.containsKey(name)) {
-          result = Schema.createFixedBinary(s.getFixedSize());
-        }
-        break;
-      case CHAR:
-        if (aliases.containsKey(name)) {
-          result = Schema.createFixedChar(s.getFixedSize());
-        }
-        break;
-      default:
-        // NO-OP
-    }
-    if (!result.equals(s)) {
-      result.putAll(s); // copy props
-    }
-    return result;
-  }
-
-  @SuppressWarnings("DataFlowIssue")
-  private static void getAllAliases(Schema schema, Map<Schema, Schema> seen,
-      Map<Name, Name> aliases, Map<Name, Map<String, String>> fieldAliases) {
-    if (schema instanceof NamedSchema) {
-      NamedSchema namedSchema = (NamedSchema) schema;
-      if (namedSchema.aliases != null) {
-        for (Name alias : namedSchema.aliases) {
-          aliases.put(alias, namedSchema.name);
-        }
-      }
-    }
-    switch (schema.getType()) {
-      case STRUCT:
-        if (seen.containsKey(schema)) {
-          return; // break loops
-        }
-        seen.put(schema, schema);
-        StructSchema struct = (StructSchema) schema;
-        for (Field field : schema.getFields()) {
-          if (field.aliases != null) {
-            for (String fieldAlias : field.aliases) {
-              Map<String, String> structAliases = fieldAliases.computeIfAbsent(struct.name,
-                  k -> new HashMap<>());
-              structAliases.put(fieldAlias, field.name);
-            }
-          }
-          getAllAliases(field.schema, seen, aliases, fieldAliases);
-        }
-        if (struct.aliases != null && fieldAliases.containsKey(struct.name)) {
-          for (Name structAlias : struct.aliases) {
-            fieldAliases.put(structAlias, fieldAliases.get(struct.name));
-          }
-        }
-        break;
-      case ARRAY:
-        getAllAliases(schema.getElementType(), seen, aliases, fieldAliases);
-        break;
-      case MAP:
-        getAllAliases(schema.getValueType(), seen, aliases, fieldAliases);
-        break;
-      case UNION:
-        for (Schema s : schema.getTypes()) {
-          getAllAliases(s, seen, aliases, fieldAliases);
-        }
-        break;
-      default:
-        break;
-    }
-  }
-
-  private static String getFieldAlias(Name struct, String field,
-      Map<Name, Map<String, String>> fieldAliases) {
-    Map<String, String> structAliases = fieldAliases.get(struct);
-    if (structAliases == null) {
-      return field;
-    }
-    String alias = structAliases.get(field);
-    if (alias == null) {
-      return field;
-    }
-    return alias;
   }
 
   /**

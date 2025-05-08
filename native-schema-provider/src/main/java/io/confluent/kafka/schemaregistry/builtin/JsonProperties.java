@@ -21,6 +21,7 @@
 package io.confluent.kafka.schemaregistry.builtin;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -121,7 +122,7 @@ import org.apache.avro.util.MapEntry;
  *
  * @see org.apache.avro.data.Json
  */
-public abstract class JsonProperties {
+public class JsonProperties {
 
   static {
     Accessor.setAccessor(new JsonPropertiesAccessor() {
@@ -325,7 +326,6 @@ public abstract class JsonProperties {
   /**
    * Return the defined properties as an unmodifiable Map.
    */
-  @JsonIgnore
   public Map<String, Object> getObjectProps() {
     Map<String, Object> result = new LinkedHashMap<>();
     for (Entry<String, JsonNode> e : props.entrySet()) {
@@ -359,7 +359,6 @@ public abstract class JsonProperties {
     return Objects.equals(props, np.props);
   }
 
-  @JsonIgnore
   public boolean hasProps() {
     return !props.isEmpty();
   }

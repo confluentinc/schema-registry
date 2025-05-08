@@ -119,13 +119,12 @@ import org.apache.avro.generic.GenericRecord;
  * Every primitive type has a shortcut to create the trivial type, and a builder
  * when custom properties are required. The first line above is a shortcut for
  * the second, analogous to the JSON case.
- * <h6>Named Types</h6> Avro named types have names, namespace, aliases, and
- * doc. In this API these share a common parent, {@link NamespacedBuilder}. The
+ * <h6>Named Types</h6> Avro named types have names, namespace, and doc.
+ * In this API these share a common parent, {@link NamespacedBuilder}. The
  * builders for named types require a name to be constructed, and optional
  * configuration via:
  * <li>{@link NamespacedBuilder#doc()}</li>
  * <li>{@link NamespacedBuilder#namespace(String)}</li>
- * <li>{@link NamespacedBuilder#aliases(String...)}</li>
  * <li>{@link PropBuilder#prop(String, String)}</li>
  * <p/>
  * Each named type completes configuration of the optional properties with its
@@ -136,7 +135,6 @@ import org.apache.avro.generic.GenericRecord;
  *
  * <pre>
  * .enumeration("Suit").namespace("org.apache.test")
- *   .aliases("org.apache.test.OldSuit")
  *   .doc("CardSuits")
  *   .prop("customProp", "val")
  *   .symbols("SPADES", "HEARTS", "DIAMONDS", "CLUBS")
@@ -148,7 +146,6 @@ import org.apache.avro.generic.GenericRecord;
  * <pre>
  * { "type":"enum",
  *   "name":"Suit", "namespace":"org.apache.test",
- *   "aliases":["org.apache.test.OldSuit"],
  *   "doc":"Card Suits",
  *   "customProp":"val",
  *   "symbols":["SPADES", "HEARTS", "DIAMONDS", "CLUBS"]
@@ -165,7 +162,7 @@ import org.apache.avro.generic.GenericRecord;
  * {@link FieldAssembler} for defining the fields of the struct and completing
  * it. Each field must have a name, specified via
  * {@link FieldAssembler#name(String)}, which returns a {@link FieldBuilder} for
- * defining aliases, custom properties, and documentation of the field. After
+ * defining custom properties, and documentation of the field. After
  * configuring these optional values for a field, the type is selected or built
  * with {@link FieldBuilder#type()}.
  * <p/>
@@ -176,7 +173,7 @@ import org.apache.avro.generic.GenericRecord;
  * <p/>
  * There are field shortcut methods on {@link FieldAssembler} for primitive
  * types. These shortcuts create required, optional, and nullable fields, but do
- * not support field aliases, doc, or custom properties.
+ * not support field doc, or custom properties.
  *
  * <h6>Unions</h6> Union types are built via {@link TypeBuilder#unionOf()} or
  * {@link FieldTypeBuilder#unionOf()} in the context of type selection. This
@@ -425,19 +422,17 @@ public class SchemaBuilder {
   }
 
   /**
-   * An abstract type that provides builder methods for configuring the name, doc,
-   * and aliases of all Avro types that have names (fields, Struct, and
+   * An abstract type that provides builder methods for configuring the name and doc
+   * of all Avro types that have names (fields, Struct, and
    * Enum).
    * <p/>
-   * All Avro named types and fields have 'doc', 'aliases', and 'name' components.
-   * 'name' is required, and provided to this builder. 'doc' and 'aliases' are
-   * optional.
+   * All Avro named types and fields have 'doc', and 'name' components.
+   * 'name' is required, and provided to this builder. 'doc' is optional.
    */
   public abstract static class NamedBuilder<S extends NamedBuilder<S>> extends PropBuilder<S> {
     private final String name;
     private final NameContext names;
     private String doc;
-    private String[] aliases;
 
     protected NamedBuilder(NameContext names, String name) {
       this.name = Objects.requireNonNull(name, "Type must have a name");
@@ -460,30 +455,6 @@ public class SchemaBuilder {
 
     final NameContext names() {
       return names;
-    }
-
-    /** configure this type's optional name aliases **/
-    public final S aliases(String... aliases) {
-      this.aliases = aliases;
-      return self();
-    }
-
-    final Schema addAliasesTo(Schema schema) {
-      if (null != aliases) {
-        for (String alias : aliases) {
-          schema.addAlias(alias);
-        }
-      }
-      return schema;
-    }
-
-    final Field addAliasesTo(Field field) {
-      if (null != aliases) {
-        for (String alias : aliases) {
-          field.addAlias(alias);
-        }
-      }
-      return field;
     }
   }
 
@@ -520,8 +491,7 @@ public class SchemaBuilder {
     }
 
     final Schema completeSchema(Schema schema) {
-      addPropsTo(schema);
-      addAliasesTo(schema);
+      addPropsTo(schema.getProps());
       names().put(schema);
       return schema;
     }
@@ -543,7 +513,7 @@ public class SchemaBuilder {
     }
 
     final Schema completeSchema(Schema schema) {
-      addPropsTo(schema);
+      addPropsTo(schema.getProps());
       return schema;
     }
 
@@ -569,7 +539,7 @@ public class SchemaBuilder {
       Schema schema = immutable;
       if (super.hasProps()) {
         schema = Schema.create(immutable.getType());
-        addPropsTo(schema);
+        addPropsTo(schema.getProps());
       }
       return context.complete(schema);
     }
@@ -816,8 +786,7 @@ public class SchemaBuilder {
   }
 
   /**
-   * Builds an Avro fixed binary type with optional properties, namespace, doc, and
-   * aliases.
+   * Builds an Avro fixed binary type with optional properties, namespace, and doc.
    * <p/>
    * Set properties with {@link #prop(String, String)}.
    * <p/>
@@ -847,8 +816,7 @@ public class SchemaBuilder {
   }
 
   /**
-   * Builds an Avro fixed char type with optional properties, namespace, doc, and
-   * aliases.
+   * Builds an Avro fixed char type with optional properties, namespace, and doc.
    * <p/>
    * Set properties with {@link #prop(String, String)}.
    * <p/>
@@ -878,12 +846,10 @@ public class SchemaBuilder {
   }
 
   /**
-   * Builds an Avro Enum type with optional properties, namespace, doc, and
-   * aliases.
+   * Builds an Avro Enum type with optional properties, namespace, and doc.
    * <p/>
    * Set properties with {@link #prop(String, String)}, namespace with
-   * {@link #namespace(String)}, doc with {@link #doc(String)}, and aliases with
-   * {@link #aliases(String[])}.
+   * {@link #namespace(String)}, doc with {@link #doc(String)}.
    * <p/>
    * The Enum schema is finalized when its required symbols are set via
    * {@link #symbols(String[])}.
@@ -2508,38 +2474,19 @@ public class SchemaBuilder {
    * one of the type methods to complete the field. For example
    *
    * <pre>
-   *   .namespace("org.apache.example").orderDescending().type()
+   *   .namespace("org.apache.example").type()
    * </pre>
    *
    * <p/>
-   * Optional parameters for a field are namespace, doc, order, and aliases.
+   * Optional parameters for a field are namespace, and doc.
    */
   public static final class FieldBuilder<R> extends NamedBuilder<FieldBuilder<R>> {
     private final FieldAssembler<R> fields;
-    private Field.Order order = Field.Order.ASCENDING;
     private boolean validatingDefaults = true;
 
     private FieldBuilder(FieldAssembler<R> fields, NameContext names, String name) {
       super(names, name);
       this.fields = fields;
-    }
-
-    /** Set this field to have ascending order. Ascending is the default **/
-    public FieldBuilder<R> orderAscending() {
-      order = Field.Order.ASCENDING;
-      return self();
-    }
-
-    /** Set this field to have descending order. Descending is the default **/
-    public FieldBuilder<R> orderDescending() {
-      order = Field.Order.DESCENDING;
-      return self();
-    }
-
-    /** Set this field to ignore order. **/
-    public FieldBuilder<R> orderIgnore() {
-      order = Field.Order.IGNORE;
-      return self();
     }
 
     /**
@@ -2560,8 +2507,7 @@ public class SchemaBuilder {
     }
 
     /**
-     * Final step in configuring this field, finalizing name, namespace, alias, and
-     * order.
+     * Final step in configuring this field, finalizing name, and namespace.
      *
      * @return A builder for the field's type and default value.
      */
@@ -2570,8 +2516,8 @@ public class SchemaBuilder {
     }
 
     /**
-     * Final step in configuring this field, finalizing name, namespace, alias, and
-     * order. Sets the field's type to the provided schema, returns a
+     * Final step in configuring this field, finalizing name, and namespace.
+     * Sets the field's type to the provided schema, returns a
      * {@link GenericDefault}.
      */
     public GenericDefault<R> type(Schema type) {
@@ -2579,8 +2525,8 @@ public class SchemaBuilder {
     }
 
     /**
-     * Final step in configuring this field, finalizing name, namespace, alias, and
-     * order. Sets the field's type to the schema by name reference.
+     * Final step in configuring this field, finalizing name, and namespace.
+     * Sets the field's type to the schema by name reference.
      * <p/>
      * The name must correspond with a named schema that has already been created in
      * the context of this builder. The name may be a fully qualified name, or a
@@ -2595,8 +2541,8 @@ public class SchemaBuilder {
     }
 
     /**
-     * Final step in configuring this field, finalizing name, namespace, alias, and
-     * order. Sets the field's type to the schema by name reference.
+     * Final step in configuring this field, finalizing name, and namespace.
+     * Sets the field's type to the schema by name reference.
      * <p/>
      * The name must correspond with a named schema that has already been created in
      * the context of this builder. The name may be a fully qualified name, or a
@@ -2622,9 +2568,8 @@ public class SchemaBuilder {
     }
 
     private FieldAssembler<R> completeField(Schema schema, JsonNode defaultVal) {
-      Field field = new Field(name(), schema, doc(), defaultVal, validatingDefaults, order);
-      addPropsTo(field);
-      addAliasesTo(field);
+      Field field = new Field(name(), schema, doc(), defaultVal, validatingDefaults);
+      addPropsTo(field.props());
       return fields.addField(field);
     }
 
@@ -3040,7 +2985,7 @@ public class SchemaBuilder {
     @Override
     protected final R complete(Schema schema) {
       Schema outer = outerSchema(schema);
-      assembler.addPropsTo(outer);
+      assembler.addPropsTo(outer.getProps());
       return context.complete(outer);
     }
 
