@@ -162,7 +162,7 @@ public abstract class Schema extends JsonProperties {
   public enum Type {
     STRUCT, ENUM, ARRAY, MAP, UNION, CHAR, STRING, BINARY, BYTES,
     INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, NULL,
-    DECIMAL, DATE, TIME, TIMESTAMP, INTERVAL;
+    DECIMAL, DATE, TIME, TIMESTAMP, TIMESTAMP_LTZ, INTERVAL_DAY_TIME, INTERVAL_YEAR_MONTH,;
 
     private final String name;
 
