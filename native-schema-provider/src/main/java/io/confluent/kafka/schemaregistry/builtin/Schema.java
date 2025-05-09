@@ -160,9 +160,9 @@ public abstract class Schema {
    * The type of schema.
    */
   public enum Type {
-    STRUCT, ENUM, ARRAY, MAP, UNION, CHAR, STRING, BINARY, BYTES,
+    STRUCT, ENUM, ARRAY, MULTISET, MAP, UNION, CHAR, STRING, BINARY, BYTES,
     INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, NULL,
-    DECIMAL, DATE, TIME, TIMESTAMP, TIMESTAMP_LTZ, DAY_TIME_INTERVAL, YEAR_MONTH_INTERVAL;
+    DECIMAL, DATE, TIME, TIMESTAMP, TIMESTAMP_LOCAL_TZ, DAY_TIME_INTERVAL, YEAR_MONTH_INTERVAL;
 
     private final String name;
 
@@ -293,6 +293,13 @@ public abstract class Schema {
    */
   public static Schema createArray(Schema elementType) {
     return new ArraySchema(elementType);
+  }
+
+  /**
+   * Create an multiset schema.
+   */
+  public static Schema createMultiset(Schema elementType) {
+    return new MultisetSchema(elementType);
   }
 
   /**
@@ -483,11 +490,11 @@ public abstract class Schema {
   }
 
   /**
-   * If this is an array, returns its element type.
+   * If this is an array or multiset, returns its element type.
    */
   @JsonIgnore
   public Schema getElementType() {
-    throw new SchemaRuntimeException("Not an array: " + this);
+    throw new SchemaRuntimeException("Not an array or multiset: " + this);
   }
 
   /**
@@ -1293,6 +1300,41 @@ public abstract class Schema {
     }
   }
 
+  protected static class MultisetSchema extends Schema {
+
+    private final Schema elementType;
+
+    public MultisetSchema(Schema elementType) {
+      super(Type.MULTISET);
+      this.elementType = elementType;
+    }
+
+    @Override
+    @JsonIgnore(false)
+    @JsonProperty("items")
+    public Schema getElementType() {
+      return elementType;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == this) {
+        return true;
+      }
+      if (!(o instanceof MultisetSchema)) {
+        return false;
+      }
+      MultisetSchema that = (MultisetSchema) o;
+      return equalCachedHash(that) && elementType.equals(that.elementType)
+          && getProps().propsEqual(that.getProps());
+    }
+
+    @Override
+    int computeHash() {
+      return super.computeHash() + elementType.computeHash();
+    }
+  }
+
   protected static class MapSchema extends Schema {
 
     private final Schema keyType;
@@ -1690,6 +1732,7 @@ public abstract class Schema {
       case NULL:
         return defaultValue.isNull();
       case ARRAY:
+      case MULTISET:
         if (!defaultValue.isArray()) {
           return false;
         }

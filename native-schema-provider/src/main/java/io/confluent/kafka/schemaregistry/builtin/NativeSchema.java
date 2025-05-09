@@ -398,6 +398,7 @@ public class NativeSchema implements ParsedSchema {
             && Objects.equals(schema1.getDoc(), schema2.getDoc())
             && Objects.equals(schema1.getEnumDefault(), schema2.getEnumDefault());
       case ARRAY:
+      case MULTISET:
         return metaEqual(schema1.getElementType(), schema2.getElementType(), cache);
       case MAP:
         return metaEqual(schema1.getValueType(), schema2.getValueType(), cache);
@@ -477,6 +478,7 @@ public class NativeSchema implements ParsedSchema {
       case ENUM:
         return Objects.hash(schema.getTags(), schema.getDoc(), schema.getEnumDefault());
       case ARRAY:
+      case MULTISET:
         return metaHash(schema.getElementType(), cache);
       case MAP:
         return metaHash(schema.getValueType(), cache);
@@ -580,6 +582,7 @@ public class NativeSchema implements ParsedSchema {
             .map(it -> toTransformedMessage(ctx, schema.getElementType(), it, transform))
             .collect(Collectors.toList());
       case MAP:
+      case MULTISET:
         if (!(message instanceof Map)) {
           log.warn("Object does not match a map schema");
           return message;
@@ -658,6 +661,7 @@ public class NativeSchema implements ParsedSchema {
       case ARRAY:
         return Type.ARRAY;
       case MAP:
+      case MULTISET:
         return Type.MAP;
       case UNION:
         return Type.COMBINED;
@@ -728,6 +732,7 @@ public class NativeSchema implements ParsedSchema {
         }
         break;
       case ARRAY:
+      case MULTISET:
         getInlineTaggedEntitiesRecursively(tags, schema.getElementType(), visited);
         break;
       case MAP:

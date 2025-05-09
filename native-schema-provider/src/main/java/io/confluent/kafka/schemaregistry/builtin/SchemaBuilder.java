@@ -325,6 +325,17 @@ public class SchemaBuilder {
   }
 
   /**
+   * Create a builder for a multiset This is equivalent to:
+   *
+   * <pre>
+   * builder().multiset();
+   * </pre>
+   */
+  public static MultisetBuilder<Schema> multiset() {
+    return builder().multiset();
+  }
+
+  /**
    * Create a builder for an Avro map This is equivalent to:
    *
    * <pre>
@@ -976,6 +987,49 @@ public class SchemaBuilder {
   }
 
   /**
+   * Builds an Multiset type with optional properties.
+   * <p/>
+   * Set properties with {@link #prop(String, String)}.
+   * <p/>
+   * The Multiset schema's properties are finalized when {@link #items()} or
+   * {@link #items(Schema)} is called.
+   **/
+  public static final class MultisetBuilder<R> extends PropBuilder<MultisetBuilder<R>> {
+    private final Completion<R> context;
+    private final NameContext names;
+
+    public MultisetBuilder(Completion<R> context, NameContext names) {
+      this.context = context;
+      this.names = names;
+    }
+
+    private static <R> MultisetBuilder<R> create(Completion<R> context, NameContext names) {
+      return new MultisetBuilder<>(context, names);
+    }
+
+    @Override
+    protected MultisetBuilder<R> self() {
+      return this;
+    }
+
+    /**
+     * Return a type builder for configuring the multiset's nested items schema. This
+     * builder will return control to the multiset's enclosing context when complete.
+     **/
+    public TypeBuilder<R> items() {
+      return new TypeBuilder<>(new MultisetCompletion<>(this, context), names);
+    }
+
+    /**
+     * Complete configuration of this multiset, setting the schema of the multiset items
+     * to the schema provided. Returns control to the enclosing context.
+     **/
+    public R items(Schema itemsSchema) {
+      return new MultisetCompletion<>(this, context).complete(itemsSchema);
+    }
+  }
+
+  /**
    * internal class for passing the naming context around. This allows for the
    * following:
    * <li>Cache and re-use primitive schemas when they do not set properties.</li>
@@ -1339,6 +1393,24 @@ public class SchemaBuilder {
      **/
     public final ArrayBuilder<R> array() {
       return ArrayBuilder.create(context, names);
+    }
+
+    /**
+     * Build a multiset type Example usage:
+     *
+     * <pre>
+     * multiset().items().longType()
+     * </pre>
+     *
+     * <p/>
+     * Equivalent to Avro JSON Schema:
+     *
+     * <pre>
+     * {"type":"multiset", "values":"long"}
+     * </pre>
+     **/
+    public final MultisetBuilder<R> multiset() {
+      return MultisetBuilder.create(context, names);
     }
 
     /**
@@ -1721,6 +1793,11 @@ public class SchemaBuilder {
       return ArrayBuilder.create(wrap(new ArrayDefault<>(bldr)), names);
     }
 
+    /** Build a multiset type **/
+    public final MultisetBuilder<MultisetDefault<R>> multiset() {
+      return MultisetBuilder.create(wrap(new MultisetDefault<>(bldr)), names);
+    }
+
     /** Build an Avro fixed binary type. **/
     public final FixedBinaryBuilder<FixedDefault<R>> fixedBinary() {
       return FixedBinaryBuilder.create(wrap(new FixedDefault<>(bldr)));
@@ -2010,6 +2087,11 @@ public class SchemaBuilder {
     /** Build an Avro array type **/
     public ArrayBuilder<UnionAccumulator<ArrayDefault<R>>> array() {
       return ArrayBuilder.create(completion(new ArrayDefault<>(bldr)), names);
+    }
+
+    /** Build a multiset type **/
+    public MultisetBuilder<UnionAccumulator<MultisetDefault<R>>> multiset() {
+      return MultisetBuilder.create(completion(new MultisetDefault<>(bldr)), names);
     }
 
     /** Build an Avro fixed binary type. **/
@@ -2825,6 +2907,23 @@ public class SchemaBuilder {
   }
 
   /** Choose whether to use a default value for the field or not. **/
+  public static class MultisetDefault<R> extends FieldDefault<R, MultisetDefault<R>> {
+    private MultisetDefault(FieldBuilder<R> field) {
+      super(field);
+    }
+
+    /** Completes this field with the default value provided, cannot be null **/
+    public final <V> FieldAssembler<R> multisetDefault(List<V> defaultVal) {
+      return super.usingDefault(defaultVal);
+    }
+
+    @Override
+    final MultisetDefault<R> self() {
+      return this;
+    }
+  }
+
+  /** Choose whether to use a default value for the field or not. **/
   public static class FixedDefault<R> extends FieldDefault<R, FixedDefault<R>> {
     private FixedDefault(FieldBuilder<R> field) {
       super(field);
@@ -2997,7 +3096,7 @@ public class SchemaBuilder {
       super(assembler, context);
     }
 
-    // TODO RAY fix
+    // TODO RAY fix map
     @Override
     protected Schema outerSchema(Schema inner) {
       return Schema.createMap(null, inner);
@@ -3012,6 +3111,17 @@ public class SchemaBuilder {
     @Override
     protected Schema outerSchema(Schema inner) {
       return Schema.createArray(inner);
+    }
+  }
+
+  private static class MultisetCompletion<R> extends NestedCompletion<R> {
+    private MultisetCompletion(MultisetBuilder<R> assembler, Completion<R> context) {
+      super(assembler, context);
+    }
+
+    @Override
+    protected Schema outerSchema(Schema inner) {
+      return Schema.createMultiset(inner);
     }
   }
 
