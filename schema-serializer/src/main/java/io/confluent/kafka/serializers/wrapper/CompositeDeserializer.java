@@ -16,11 +16,15 @@
 
 package io.confluent.kafka.serializers.wrapper;
 
+import static io.confluent.kafka.serializers.schema.id.SchemaId.KEY_SCHEMA_ID_HEADER;
+import static io.confluent.kafka.serializers.schema.id.SchemaId.VALUE_SCHEMA_ID_HEADER;
+
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
@@ -71,26 +75,27 @@ public class CompositeDeserializer implements Deserializer<Object> {
       return null;
     }
 
-    // We assume TopicNameStrategy
-    String subject = isKey ? topic + "-key" : topic + "-value";
-
-    int schemaId = getSchemaId(ByteBuffer.wrap(bytes));
-
-    if (isValidSchemaId(subject, schemaId)) {
+    if (hasValidHeaderId(headers) || hasValidPrefixId(topic, bytes)) {
       return confluentDeserializer.deserialize(topic, headers, bytes);
     } else {
       return oldDeserializer.deserialize(topic, bytes);
     }
   }
 
-  private int getSchemaId(ByteBuffer payload) {
-    if (payload == null || payload.get() != MAGIC_BYTE) {
-      return -1;
-    }
-    return payload.getInt();
+  private boolean hasValidHeaderId(Headers headers) {
+    Header header = headers.lastHeader(isKey ? KEY_SCHEMA_ID_HEADER : VALUE_SCHEMA_ID_HEADER);
+    return header != null && header.value() != null;
   }
 
-  protected boolean isValidSchemaId(String subject, int id) {
+  private boolean hasValidPrefixId(String topic, byte[] bytes) {
+    // We assume TopicNameStrategy
+    String subject = isKey ? topic + "-key" : topic + "-value";
+
+    ByteBuffer payload = ByteBuffer.wrap(bytes);
+    if (payload.get() != MAGIC_BYTE) {
+      return false;
+    }
+    int id = payload.getInt();
     if (id == -1) {
       return false;
     }
