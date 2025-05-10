@@ -95,6 +95,7 @@ public class CompositeDeserializer implements Deserializer<Object> {
       return false;
     }
 
+    // We assume TopicNameStrategy
     String subject = isKey ? topic + "-key" : topic + "-value";
 
     try {
