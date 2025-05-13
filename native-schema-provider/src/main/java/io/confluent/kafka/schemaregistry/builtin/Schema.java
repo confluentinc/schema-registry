@@ -1990,7 +1990,8 @@ public abstract class Schema {
         jgen.writeString(name);
         return;
       }
-      String stringValue = MAPPER.writeValueAsString(value);
+      ObjectMapper mapper = ((ObjectMapper) jgen.getCodec());
+      String stringValue = mapper.writeValueAsString(value);
       jgen.writeRawValue(stringValue);
     }
 
@@ -2015,8 +2016,8 @@ public abstract class Schema {
     @Override
     public Schema deserialize(JsonParser jp, DeserializationContext ctxt)
         throws IOException, JsonProcessingException {
-      ObjectCodec oc = jp.getCodec();
-      JsonNode node = oc.readTree(jp);
+      ObjectMapper mapper = ((ObjectMapper) jp.getCodec());
+      JsonNode node = mapper.readTree(jp);
       if (node instanceof TextNode) {
         String name = node.asText();
         Type type = PRIMITIVES.get(name);
@@ -2026,7 +2027,7 @@ public abstract class Schema {
           throw new JsonMappingException(jp, "Unknown schema type: " + name);
         }
       }
-      return MAPPER.treeToValue(node, Schema.class);
+      return mapper.treeToValue(node, Schema.class);
     }
 
     @Override
