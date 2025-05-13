@@ -211,6 +211,14 @@ public class JsonProperties {
 
   private Set<String> reserved;
 
+  JsonProperties(Map<String, JsonNode> propMap) {
+    if (propMap != null) {
+      for (Entry<String, JsonNode> a : propMap.entrySet()) {
+        props.put(a.getKey(), a.getValue());
+      }
+    }
+  }
+
   JsonProperties(Set<String> reserved) {
     this.reserved = reserved;
   }

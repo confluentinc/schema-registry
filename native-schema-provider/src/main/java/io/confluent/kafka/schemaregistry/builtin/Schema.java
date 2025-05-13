@@ -20,6 +20,7 @@
 
 package io.confluent.kafka.schemaregistry.builtin;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -167,27 +168,28 @@ public abstract class Schema {
     private final String name;
 
     Type() {
-      switch (this) {
-        case INT8:
+      String n = this.name();
+      switch (n) {
+        case "INT8":
           this.name = "byte";
           break;
-        case INT16:
+        case "INT16":
           this.name = "short";
           break;
-        case INT32:
+        case "INT32":
           this.name = "int";
           break;
-        case INT64:
+        case "INT64":
           this.name = "long";
           break;
-        case FLOAT32:
+        case "FLOAT32":
           this.name = "float";
           break;
-        case FLOAT64:
+        case "FLOAT64":
           this.name = "double";
           break;
         default:
-          this.name = this.name().toLowerCase(Locale.ENGLISH);
+          this.name = n.toLowerCase(Locale.ENGLISH);
           break;
       }
     }
@@ -198,7 +200,7 @@ public abstract class Schema {
   }
 
   private final Type type;
-  private JsonProperties props;
+  JsonProperties props;
 
   Schema(Type type) {
     this.type = type;
@@ -691,6 +693,23 @@ public abstract class Schema {
     private Set<String> tags;
     private JsonProperties props;
 
+    @JsonCreator
+    public Field(
+        @JsonProperty("name") String name,
+        @JsonProperty("type") Schema schema,
+        @JsonProperty("doc") String doc,
+        @JsonProperty("tags") Set<String> tags,
+        @JsonProperty("params") Map<String, JsonNode> props,
+        @JsonProperty("default") JsonNode defaultValue
+    ) {
+      this.name = validateName(name);
+      this.schema = Objects.requireNonNull(schema, "schema is required and cannot be null");
+      this.doc = doc;
+      this.tags = tags != null ? tags : new LinkedHashSet<>();
+      this.props = new JsonProperties(props);
+      this.defaultValue = defaultValue;
+    }
+
     Field(String name, Schema schema, String doc, JsonNode defaultValue, boolean validateDefault) {
       this.name = validateName(name);
       this.schema = Objects.requireNonNull(schema, "schema is required and cannot be null");
@@ -1074,6 +1093,22 @@ public abstract class Schema {
     private Map<String, Field> fieldMap;
     private final boolean isError;
 
+    @JsonCreator
+    public StructSchema(
+        @JsonProperty("name") String name,
+        @JsonProperty("namespace") String namespace,
+        @JsonProperty("doc") String doc,
+        @JsonProperty("tags") Set<String> tags,
+        @JsonProperty("params") Map<String, JsonNode> params,
+        @JsonProperty("fields") List<Field> fields
+    ) {
+      super(Type.STRUCT, new Name(name, namespace), doc);
+      this.isError = false;
+      this.tags = tags != null ? tags : new LinkedHashSet<>();
+      this.props = new JsonProperties(params);
+      setFields(fields);
+    }
+
     public StructSchema(Name name, String doc, boolean isError) {
       super(Type.STRUCT, name, doc);
       this.isError = isError;
@@ -1199,6 +1234,21 @@ public abstract class Schema {
     private final Map<String, Integer> ordinals;
     private final String enumDefault;
 
+    @JsonCreator
+    public EnumSchema(
+        @JsonProperty("name") String name,
+        @JsonProperty("namespace") String namespace,
+        @JsonProperty("doc") String doc,
+        @JsonProperty("tags") Set<String> tags,
+        @JsonProperty("params") Map<String, JsonNode> params,
+        @JsonProperty("symbols") List<String> symbols,
+        @JsonProperty("default") String enumDefault
+    ) {
+      this(new Name(name, namespace), doc, new LockableArrayList<>(symbols), enumDefault);
+      this.tags = tags != null ? tags : new LinkedHashSet<>();
+      this.props = new JsonProperties(params);
+    }
+
     public EnumSchema(Name name, String doc, LockableArrayList<String> symbols,
         String enumDefault) {
       super(Type.ENUM, name, doc);
@@ -1269,6 +1319,17 @@ public abstract class Schema {
 
     private final Schema elementType;
 
+
+    @JsonCreator
+    public ArraySchema(
+        @JsonProperty("items") Schema elementType,
+        @JsonProperty("params") Map<String, JsonNode> params
+    ) {
+      super(Type.ARRAY);
+      this.elementType = elementType;
+      this.props = new JsonProperties(params);
+    }
+
     public ArraySchema(Schema elementType) {
       super(Type.ARRAY);
       this.elementType = elementType;
@@ -1309,6 +1370,16 @@ public abstract class Schema {
       this.elementType = elementType;
     }
 
+    @JsonCreator
+    public MultisetSchema(
+        @JsonProperty("items") Schema elementType,
+        @JsonProperty("params") Map<String, JsonNode> params
+    ) {
+      super(Type.MULTISET);
+      this.elementType = elementType;
+      this.props = new JsonProperties(params);
+    }
+
     @Override
     @JsonIgnore(false)
     @JsonProperty("items")
@@ -1339,6 +1410,18 @@ public abstract class Schema {
 
     private final Schema keyType;
     private final Schema valueType;
+
+    @JsonCreator
+    public MapSchema(
+        @JsonProperty("keys") Schema keyType,
+        @JsonProperty("values") Schema valueType,
+        @JsonProperty("params") Map<String, JsonNode> params
+    ) {
+      super(Type.MAP);
+      this.keyType = keyType;
+      this.valueType = valueType;
+      this.props = new JsonProperties(params);
+    }
 
     public MapSchema(Schema keyType, Schema valueType) {
       super(Type.MAP);
@@ -1383,6 +1466,14 @@ public abstract class Schema {
 
     private final List<Schema> types;
     private final Map<String, Integer> indexByName;
+
+    public UnionSchema(
+        @JsonProperty("types") List<Schema> types,
+        @JsonProperty("params") Map<String, JsonNode> params
+    ) {
+      this(new LockableArrayList<>(types));
+      this.props = new JsonProperties(params);
+    }
 
     public UnionSchema(LockableArrayList<Schema> types) {
       super(Type.UNION);
@@ -1465,6 +1556,16 @@ public abstract class Schema {
 
     private final int size;
 
+    @JsonCreator
+    public FixedBinarySchema(
+        @JsonProperty("size") int size,
+        @JsonProperty("params") Map<String, JsonNode> params
+    ) {
+      super(Type.BINARY);
+      SystemLimitException.checkMaxBytesLength(size);
+      this.size = size;
+    }
+
     public FixedBinarySchema(int size) {
       super(Type.BINARY);
       SystemLimitException.checkMaxBytesLength(size);
@@ -1500,6 +1601,16 @@ public abstract class Schema {
   protected static class FixedCharSchema extends Schema {
 
     private final int size;
+
+    @JsonCreator
+    public FixedCharSchema(
+        @JsonProperty("size") int size,
+        @JsonProperty("params") Map<String, JsonNode> params
+    ) {
+      super(Type.CHAR);
+      SystemLimitException.checkMaxBytesLength(size);
+      this.size = size;
+    }
 
     public FixedCharSchema(int size) {
       super(Type.CHAR);
