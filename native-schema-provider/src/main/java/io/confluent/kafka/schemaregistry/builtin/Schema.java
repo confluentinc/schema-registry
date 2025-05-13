@@ -33,10 +33,19 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.ObjectCodec;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.jsontype.TypeDeserializer;
+import com.fasterxml.jackson.databind.jsontype.TypeSerializer;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import io.confluent.kafka.schemaregistry.builtin.Schema.ArraySchema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.BooleanSchema;
@@ -168,30 +177,7 @@ public abstract class Schema {
     private final String name;
 
     Type() {
-      String n = this.name();
-      switch (n) {
-        case "INT8":
-          this.name = "byte";
-          break;
-        case "INT16":
-          this.name = "short";
-          break;
-        case "INT32":
-          this.name = "int";
-          break;
-        case "INT64":
-          this.name = "long";
-          break;
-        case "FLOAT32":
-          this.name = "float";
-          break;
-        case "FLOAT64":
-          this.name = "double";
-          break;
-        default:
-          this.name = n.toLowerCase(Locale.ENGLISH);
-          break;
-      }
+      this.name = name().toLowerCase(Locale.ENGLISH);
     }
 
     public String getName() {
@@ -366,9 +352,14 @@ public abstract class Schema {
   /**
    * Return the props of this schema as a map.
    */
-  @JsonProperty("params")
+  @JsonIgnore
   public Map<String, Object> getObjectProps() {
     return props.getObjectProps();
+  }
+
+  @JsonProperty("params")
+  public Map<String, JsonNode> getJsonProps() {
+    return props.getJsonProps();
   }
 
   /**
@@ -773,6 +764,8 @@ public abstract class Schema {
      * This field's {@link Schema}.
      */
     @JsonProperty("type")
+    @JsonSerialize(using = SchemaSerializer.class)
+    @JsonDeserialize(using = SchemaDeserializer.class)
     public Schema schema() {
       return schema;
     }
@@ -837,9 +830,14 @@ public abstract class Schema {
     /**
      * Return the props of this field as a map.
      */
-    @JsonProperty("params")
+    @JsonIgnore
     public Map<String, Object> objectProps() {
       return props.getObjectProps();
+    }
+
+    @JsonProperty("params")
+    public Map<String, JsonNode> jsonProps() {
+      return props.getJsonProps();
     }
 
     @Override
@@ -2013,7 +2011,7 @@ public abstract class Schema {
     }
   }
 
-  public static class SchemaSerializer extends StdSerializer<Schema> {
+  static class SchemaSerializer extends StdSerializer<Schema> {
 
     public SchemaSerializer() {
       this(null);
@@ -2027,6 +2025,55 @@ public abstract class Schema {
     public void serialize(
         Schema value, JsonGenerator jgen, SerializerProvider provider)
         throws IOException, JsonProcessingException {
+      String name = value.type.getName();
+      Type type = PRIMITIVES.get(name);
+      if (type != null && !value.props.hasProps()) {
+        jgen.writeString(name);
+        return;
+      }
+      String stringValue = MAPPER.writeValueAsString(value);
+      jgen.writeRawValue(stringValue);
+    }
+
+    @Override
+    public void serializeWithType(Schema value, JsonGenerator gen,
+        SerializerProvider provider, TypeSerializer typeSer)
+        throws IOException, JsonProcessingException {
+      serialize(value, gen, provider); // call your customized serialize method
+    }
+  }
+
+  static class SchemaDeserializer extends StdDeserializer<Schema> {
+
+    public SchemaDeserializer() {
+      this(null);
+    }
+
+    public SchemaDeserializer(Class<?> vc) {
+      super(vc);
+    }
+
+    @Override
+    public Schema deserialize(JsonParser jp, DeserializationContext ctxt)
+        throws IOException, JsonProcessingException {
+      ObjectCodec oc = jp.getCodec();
+      JsonNode node = oc.readTree(jp);
+      if (node instanceof TextNode) {
+        String name = node.asText();
+        Type type = PRIMITIVES.get(name);
+        if (type != null) {
+          return Schema.create(type);
+        } else {
+          throw new JsonMappingException(jp, "Unknown schema type: " + name);
+        }
+      }
+      return MAPPER.treeToValue(node, Schema.class);
+    }
+
+    @Override
+    public Object deserializeWithType(JsonParser jp, DeserializationContext ctxt,
+        TypeDeserializer typeDeserializer) throws IOException {
+      return deserialize(jp, ctxt);
     }
   }
 }

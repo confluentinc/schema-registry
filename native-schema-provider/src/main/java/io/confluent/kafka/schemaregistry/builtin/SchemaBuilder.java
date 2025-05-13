@@ -1044,12 +1044,12 @@ public class SchemaBuilder {
     static {
       PRIMITIVES.add("null");
       PRIMITIVES.add("boolean");
-      PRIMITIVES.add("byte");
-      PRIMITIVES.add("short");
-      PRIMITIVES.add("int");
-      PRIMITIVES.add("long");
-      PRIMITIVES.add("float");
-      PRIMITIVES.add("double");
+      PRIMITIVES.add("int8");
+      PRIMITIVES.add("int16");
+      PRIMITIVES.add("int32");
+      PRIMITIVES.add("int64");
+      PRIMITIVES.add("float32");
+      PRIMITIVES.add("float64");
       PRIMITIVES.add("bytes");
       PRIMITIVES.add("string");
     }
@@ -1062,12 +1062,12 @@ public class SchemaBuilder {
       this.namespace = null;
       schemas.put("null", Schema.create(Schema.Type.NULL));
       schemas.put("boolean", Schema.create(Schema.Type.BOOLEAN));
-      schemas.put("byte", Schema.create(Schema.Type.INT8));
-      schemas.put("short", Schema.create(Schema.Type.INT16));
-      schemas.put("int", Schema.create(Schema.Type.INT32));
-      schemas.put("long", Schema.create(Schema.Type.INT64));
-      schemas.put("float", Schema.create(Schema.Type.FLOAT32));
-      schemas.put("double", Schema.create(Schema.Type.FLOAT64));
+      schemas.put("int8", Schema.create(Schema.Type.INT8));
+      schemas.put("int16", Schema.create(Schema.Type.INT16));
+      schemas.put("int32", Schema.create(Schema.Type.INT32));
+      schemas.put("int64", Schema.create(Schema.Type.INT64));
+      schemas.put("float32", Schema.create(Schema.Type.FLOAT32));
+      schemas.put("float64", Schema.create(Schema.Type.FLOAT64));
       schemas.put("bytes", Schema.create(Schema.Type.BYTES));
       schemas.put("string", Schema.create(Schema.Type.STRING));
     }

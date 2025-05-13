@@ -239,6 +239,10 @@ public class JsonProperties {
     }
   }
 
+  protected Map<String, JsonNode> getJsonProps() {
+    return props;
+  }
+
   /**
    * Returns the value of the named, string-valued property in this schema. Returns <tt>null</tt> if
    * there is no string-valued property with that name.
