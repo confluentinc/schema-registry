@@ -223,7 +223,7 @@ public class NativeSchema implements ParsedSchema {
         Schema schemaRef = parseSchema(schema);
         schemaRefs.add(schemaRef);
       }
-      canonicalString = schemaObj.toString(schemaRefs, false);
+      canonicalString = schemaObj.toString();
     }
     return canonicalString;
   }

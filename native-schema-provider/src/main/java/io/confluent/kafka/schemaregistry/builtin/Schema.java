@@ -29,7 +29,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
-import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -68,7 +67,6 @@ import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor;
 import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor.FieldAccessor;
 import io.confluent.kafka.schemaregistry.builtin.util.internal.JacksonUtils;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -155,16 +153,10 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("unused")
 public abstract class Schema {
 
-  static final JsonFactory FACTORY = new JsonFactory();
   static final Logger LOG = LoggerFactory.getLogger(Schema.class);
-  static final ObjectMapper MAPPER = new ObjectMapper(FACTORY);
+  static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
-
-  static {
-    FACTORY.enable(JsonParser.Feature.ALLOW_COMMENTS);
-    FACTORY.setCodec(MAPPER);
-  }
 
   /**
    * The type of schema.
@@ -540,43 +532,10 @@ public abstract class Schema {
    */
   @Override
   public String toString() {
-    return toString(new HashSet<String>(), false);
-  }
-
-  String toString(Collection<Schema> referencedSchemas, boolean pretty) {
-    Set<String> knownNames = new HashSet<>();
-    if (referencedSchemas != null) {
-      for (Schema s : referencedSchemas) {
-        knownNames.add(s.getFullName());
-      }
-    }
-    return toString(knownNames, pretty);
-  }
-
-  String toString(Set<String> knownNames, boolean pretty) {
     try {
-      StringWriter writer = new StringWriter();
-      try (JsonGenerator gen = FACTORY.createGenerator(writer)) {
-        if (pretty) {
-          gen.useDefaultPrettyPrinter();
-        }
-        toJson(knownNames, null, gen);
-        gen.flush();
-        return writer.toString();
-      }
+      return MAPPER.writeValueAsString(this);
     } catch (IOException e) {
       throw new SchemaRuntimeException(e);
-    }
-  }
-
-  void toJson(Set<String> knownNames, String namespace, JsonGenerator gen) throws IOException {
-    if (!props.hasProps()) { // no props defined
-      gen.writeString(getName()); // just write name
-    } else {
-      gen.writeStartObject();
-      gen.writeStringField("type", getName());
-      props.writeProps(gen);
-      gen.writeEndObject();
     }
   }
 
