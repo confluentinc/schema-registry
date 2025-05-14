@@ -31,8 +31,10 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.kafka.schemaregistry.storage.Metadata;
+import io.confluent.kafka.schemaregistry.storage.MetadataEncoderStoreReaderThread;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.kcache.Cache;
 import io.kcache.CacheUpdateHandler;
@@ -47,20 +49,42 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.inject.Inject;
 
 public class MetadataEncoderService implements Closeable {
 
@@ -77,6 +101,17 @@ public class MetadataEncoderService implements Closeable {
   private final AtomicBoolean initialized = new AtomicBoolean();
   private final CountDownLatch initLatch = new CountDownLatch(1);
 
+  // new
+  private final String bootstrapBrokers;
+  private final String topic;
+  private final String groupId;
+  private Producer<byte[], byte[]> producer;
+  private final String noopKey;
+  private SchemaRegistryConfig config;
+  private final ResourceManagerStoreUpdateHandler rmStoreUpdateHandler;
+
+  private MetadataEncoderStoreReaderThread<String, KeysetWrapper> metadataEncoderStoreReaderThread;
+
   static {
     try {
       AeadConfig.register();
@@ -85,30 +120,259 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
+  @Inject
   public MetadataEncoderService(SchemaRegistry schemaRegistry) {
+    this.producer = null;  // Initialize before try block
     try {
       this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
-      SchemaRegistryConfig config = schemaRegistry.config();
+      this.config = schemaRegistry.config();
+
+      this.rmStoreUpdateHandler = new ResourceManagerStoreUpdateHandler(config);
+
+      log.info("LocalMES running");
+      
+      // Initialize final fields first
+      this.bootstrapBrokers = config.bootstrapBrokers();
+      this.topic = config.getString(SchemaRegistryConfig.METADATA_ENCODER_TOPIC_CONFIG);
+      this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
+      this.noopKey = "noop";
+      
       String secret = encoderSecret(config);
       if (secret == null) {
         log.warn("No value specified for {}, sensitive metadata will not be encoded",
             SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
         return;
       }
-      String topic = config.getString(SchemaRegistryConfig.METADATA_ENCODER_TOPIC_CONFIG);
+      
+      // Create producer after initializing fields
+      Properties props = new Properties();
+      props.putAll(config.originalsWithPrefix("metadata.encoder"));
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapBrokers);
+      props.put(ProducerConfig.ACKS_CONFIG, "-1");
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+              org.apache.kafka.common.serialization.ByteArraySerializer.class);
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+              org.apache.kafka.common.serialization.ByteArraySerializer.class);
+      props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+      this.producer = new KafkaProducer<>(props);
+      
+      // Rest of the initialization
       this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
-      this.encoders = createCache(new StringSerde(), new KeysetWrapperSerde(config), topic, null);
+      this.encoders = createCache(new StringSerde(), new KeysetWrapperSerde(config), this.topic, null);
+      // sending dummyRM
+      log.info("Test client connection");
+      sendDummyRM();
+
+      // Create reader thread
+      this.metadataEncoderStoreReaderThread = new MetadataEncoderStoreReaderThread<>(
+          this.bootstrapBrokers,
+          this.topic,
+          this.groupId,
+          null, // storeUpdateHandler - we don't need this
+          new KeysetWrapperSerde(config),// localStore - we don't need this
+          this.producer,
+          this.noopKey,
+          this.initialized,
+          config
+      );
+
+      init(); // manual trigger?
+
     } catch (Exception e) {
       throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
     }
   }
 
+  public static void addSchemaRegistryConfigsToClientProperties(SchemaRegistryConfig config,
+                                                                Properties props) {
+    props.putAll(config.originalsWithPrefix("metadata.encoder"));
+  }
+
+  private void createOrVerifyEncoderTopic() throws StoreInitializationException {
+
+    Properties props = new Properties();
+    addSchemaRegistryConfigsToClientProperties(this.config, props);
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+
+    try (AdminClient admin = AdminClient.create(props)) {
+      String temp_topic = "_schema_encoders_v0";
+      createEncoderTopic(admin, temp_topic); // try hard coding the creation once
+
+      
+      Set<String> allTopics = admin.listTopics().names().get(60000, TimeUnit.MILLISECONDS);
+      log.info("All topics: {}", allTopics);
+      if (allTopics.contains(topic)) {
+        log.info("Verifying encoder topic");
+        verifyEncoderTopic(admin);
+      } else {
+        log.info("Creating encoder topic");
+        createEncoderTopic(admin);
+      }
+    } catch (TimeoutException e) {
+      throw new StoreInitializationException(
+              "Timed out trying to create or validate encoder topic configuration",
+              e
+      );
+    } catch (InterruptedException | ExecutionException e) {
+      throw new StoreInitializationException(
+              "Failed trying to create or validate encoder topic configuration",
+              e
+      );
+    }
+  }
+
+  private void createEncoderTopic(AdminClient admin, String topic) throws StoreInitializationException,
+          InterruptedException,
+          ExecutionException,
+          TimeoutException {
+    log.info("Creating encoders topic {}", topic);
+
+    int numLiveBrokers = admin.describeCluster().nodes()
+            .get(60000, TimeUnit.MILLISECONDS).size();
+    if (numLiveBrokers <= 0) {
+      throw new StoreInitializationException("No live Kafka brokers");
+    }
+
+    int encoderTopicReplicationFactor = Math.min(numLiveBrokers, 3);
+    if (encoderTopicReplicationFactor < 3) {
+      log.warn("Creating the schema topic "
+              + topic
+              + " using a replication factor of "
+              + encoderTopicReplicationFactor
+              + ", which is less than the desired one of "
+              + 3 + ". If this is a production environment, it's "
+              + "crucial to add more brokers and increase the replication factor of the topic.");
+    }
+
+    NewTopic encoderTopicRequest = new NewTopic(topic, 1, (short) encoderTopicReplicationFactor);
+    Map topicConfigs = new HashMap(config.originalsWithPrefix("metadata.encoder.topic.config."));
+    topicConfigs.put(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_COMPACT
+    );
+    encoderTopicRequest.configs(topicConfigs);
+    try {
+      admin.createTopics(Collections.singleton(encoderTopicRequest)).all()
+              .get(60000, TimeUnit.MILLISECONDS);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof TopicExistsException) {
+        // If topic already exists, ensure that it is configured correctly.
+        verifyEncoderTopic(admin);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private void createEncoderTopic(AdminClient admin) throws StoreInitializationException,
+          InterruptedException,
+          ExecutionException,
+          TimeoutException {
+    log.info("Creating encoders topic {}", topic);
+
+    int numLiveBrokers = admin.describeCluster().nodes()
+            .get(60000, TimeUnit.MILLISECONDS).size();
+    if (numLiveBrokers <= 0) {
+      throw new StoreInitializationException("No live Kafka brokers");
+    }
+
+    int encoderTopicReplicationFactor = Math.min(numLiveBrokers, 3);
+    if (encoderTopicReplicationFactor < 3) {
+      log.warn("Creating the schema topic "
+              + topic
+              + " using a replication factor of "
+              + encoderTopicReplicationFactor
+              + ", which is less than the desired one of "
+              + 3 + ". If this is a production environment, it's "
+              + "crucial to add more brokers and increase the replication factor of the topic.");
+    }
+
+    NewTopic encoderTopicRequest = new NewTopic(topic, 1, (short) encoderTopicReplicationFactor);
+    Map topicConfigs = new HashMap(config.originalsWithPrefix("metadata.encoder.topic.config."));
+    topicConfigs.put(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_COMPACT
+    );
+    encoderTopicRequest.configs(topicConfigs);
+    try {
+      admin.createTopics(Collections.singleton(encoderTopicRequest)).all()
+              .get(60000, TimeUnit.MILLISECONDS);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof TopicExistsException) {
+        // If topic already exists, ensure that it is configured correctly.
+        verifyEncoderTopic(admin);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private void verifyEncoderTopic(AdminClient admin) throws StoreInitializationException,
+          InterruptedException,
+          ExecutionException,
+          TimeoutException {
+    log.info("Validating encoders topic {}", topic);
+
+    Set<String> topics = Collections.singleton(topic);
+    Map<String, TopicDescription> topicDescription = admin.describeTopics(topics)
+            .all().get(60000, TimeUnit.MILLISECONDS);
+
+    TopicDescription description = topicDescription.get(topic);
+    final int numPartitions = description.partitions().size();
+    if (numPartitions != 1) {
+      throw new StoreInitializationException("The encoder topic " + topic + " should have only 1 "
+              + "partition but has " + numPartitions);
+    }
+
+    if (description.partitions().get(0).replicas().size() < 3) {
+      log.warn("The replication factor of the encoder topic "
+              + topic
+              + " is less than the desired one of "
+              + "3"
+              + ". If this is a production environment, it's crucial to add more brokers and "
+              + "increase the replication factor of the topic.");
+    }
+
+    ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+
+    Map<ConfigResource, Config> configs =
+            admin.describeConfigs(Collections.singleton(topicResource)).all()
+                    .get(60000, TimeUnit.MILLISECONDS);
+    Config topicConfigs = configs.get(topicResource);
+    String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
+    log.info("Retention policy for encoder topic {} is {}", topic, retentionPolicy);
+    // REMOVE FOR LOCAL DEVELOPMENT
+//    if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
+//      log.error("The retention policy of the encoder topic {} is incorrect. "
+//              + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
+//              + "deleting your schemas after a week. "
+//              + "Refer to Kafka documentation for more details on cleanup policies", topic);
+//
+//      throw new StoreInitializationException("The retention policy of the encoder topic " + topic
+//              + " is incorrect. Expected cleanup.policy to be "
+//              + "'compact' but it is " + retentionPolicy);
+//
+//    }
+  }
+
+
   @VisibleForTesting
   protected MetadataEncoderService(
       SchemaRegistry schemaRegistry, Cache<String, KeysetWrapper> encoders) {
+    this.producer = null;  // Initialize before try block
     try {
       this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
       SchemaRegistryConfig config = schemaRegistry.config();
+
+      this.rmStoreUpdateHandler = new ResourceManagerStoreUpdateHandler(config);
+
+      // Initialize final fields first
+      this.bootstrapBrokers = config.bootstrapBrokers();
+      this.topic = config.getString(SchemaRegistryConfig.METADATA_ENCODER_TOPIC_CONFIG);
+      this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
+      this.noopKey = "noop";
+
+      
       String secret = encoderSecret(config);
       if (secret == null) {
         log.warn("No value specified for {}, sensitive metadata will not be encoded",
@@ -117,6 +381,18 @@ public class MetadataEncoderService implements Closeable {
       }
       this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
       this.encoders = encoders;
+
+      // Create producer after initializing fields
+      Properties props = new Properties();
+      props.putAll(config.originalsWithPrefix("metadata.encoder"));
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapBrokers);
+      props.put(ProducerConfig.ACKS_CONFIG, "-1");
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+              org.apache.kafka.common.serialization.ByteArraySerializer.class);
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+              org.apache.kafka.common.serialization.ByteArraySerializer.class);
+      props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+      this.producer = new KafkaProducer<>(props);
     } catch (Exception e) {
       throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
     }
@@ -206,13 +482,21 @@ public class MetadataEncoderService implements Closeable {
     return props;
   }
 
-  public void init() {
+  public void init() throws StoreInitializationException {
+    log.info("Initializing MetadataEncoderService");
+    createOrVerifyEncoderTopic();
     if (encoders != null && !initialized.get()) {
       encoders.init();
       maybeRotateSecrets();
       boolean isInitialized = initialized.compareAndSet(false, true);
       if (!isInitialized) {
         throw new IllegalStateException("Metadata encoder service was already initialized");
+      }
+      // Start the reader thread after initialization
+      log.info("Metadata encoder service initialized");
+      if (metadataEncoderStoreReaderThread != null) {
+        log.info("Metadata encoder service reader thread starting");
+        metadataEncoderStoreReaderThread.start();
       }
       initLatch.countDown();
     }
@@ -267,6 +551,7 @@ public class MetadataEncoderService implements Closeable {
   }
 
   public void encodeMetadata(SchemaValue schema) throws SchemaRegistryStoreException {
+    log.info("Encode metadata called");
     if (!initialized.get() || schema == null || isEncoded(schema)) {
       return;
     }
@@ -333,7 +618,7 @@ public class MetadataEncoderService implements Closeable {
       String tenant = qualifiedSubject.getTenant();
 
       // Only create the encoder if we are encoding during writes and not decoding during reads
-      KeysetHandle handle = isEncode ? getOrCreateEncoder(tenant) : getEncoder(tenant);
+      KeysetHandle handle = isEncode ? createTestEncoders(tenant) : getEncoder(tenant); // ALWAYS CREATE SO WE CAN TEST
       if (handle == null) {
         throw new SchemaRegistryStoreException("Could not get encoder for tenant " + tenant);
       }
@@ -358,6 +643,11 @@ public class MetadataEncoderService implements Closeable {
       } else {
         newProperties.remove(SchemaValue.ENCODED_PROPERTY);
       }
+      log.info("Setting metadata in transformMetadata");
+
+      // attempt to read from RM here
+      log.info("Attempting RM parity read");
+      rmStoreUpdateHandler.getKeysets(tenant);
 
       schema.setMetadata(
           new Metadata(metadata.getTags(), newProperties, metadata.getSensitive()));
@@ -366,25 +656,67 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  private KeysetHandle getOrCreateEncoder(String tenant) {
-    // Ensure encoders are up to date
+  // function to create multiple encoders for testing
+  private KeysetHandle createTestEncoders(String tenant) {
     encoders.sync();
-    KeysetWrapper wrapper = encoders.computeIfAbsent(tenant,
-        k -> {
-          try {
-            KeysetHandle handle = KeysetHandle.generateNew(keyTemplate);
-            return new KeysetWrapper(handle, false);
-          } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Could not create key template");
-          }
+    List<KeysetHandle> encoderList = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      String currTenant = tenant;
+      if (i != 0) {
+        currTenant = tenant + "_" + i;
+      }
+      KeysetWrapper wrapper = encoders.compute(currTenant,
+          (k, v) -> {
+            try {
+              log.info("Encoder wasnt present");
+              KeysetHandle handle = KeysetHandle.generateNew(keyTemplate);
+              return new KeysetWrapper(handle, false);
+            } catch (GeneralSecurityException e) {
+              throw new IllegalStateException("Could not create key template");
+            }
 
-        });
-    return wrapper.getKeysetHandle();
+          });
+      encoderList.add(wrapper.getKeysetHandle());
+    }
+    return encoderList.get(0);
+  }
+
+//  private KeysetHandle getOrCreateEncoder(String tenant) {
+//    // Ensure encoders are up to date
+//    encoders.sync();
+//    KeysetWrapper wrapper = encoders.computeIfAbsent(tenant,
+//        k -> {
+//          try {
+//            log.info("Encoder wasnt present");
+//            KeysetHandle handle = KeysetHandle.generateNew(keyTemplate);
+//            return new KeysetWrapper(handle, false);
+//          } catch (GeneralSecurityException e) {
+//            throw new IllegalStateException("Could not create key template");
+//          }
+//
+//        });
+//    log.info("Was encoder present?");
+//    return wrapper.getKeysetHandle();
+//  }
+
+  // send a test RM create to ensure client is up
+  private void sendDummyRM() {
+    rmStoreUpdateHandler.sendDummyTransaction();
   }
 
   @Override
   public void close() {
-    log.info("Shutting down MetadataEncoderService");
+    if (metadataEncoderStoreReaderThread != null) {
+      metadataEncoderStoreReaderThread.shutdown();
+      try {
+        metadataEncoderStoreReaderThread.join();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+    if (producer != null) {
+      producer.close();
+    }
     if (encoders != null) {
       try {
         encoders.close();

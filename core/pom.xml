@@ -16,6 +16,23 @@
 
     <dependencies>
         <dependency>
+            <groupId>io.confluent.resourcemanager</groupId>
+            <artifactId>apiserver-client</artifactId>
+            <version>0.4662.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent.resourcemanager</groupId>
+            <artifactId>apiserver-client</artifactId>
+            <version>0.4662.0</version>
+            <classifier>tests</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>4.29.4</version>
+        </dependency>
+        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
