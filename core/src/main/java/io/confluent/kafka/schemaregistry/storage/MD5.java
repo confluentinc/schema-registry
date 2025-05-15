@@ -16,9 +16,12 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.UUID;
 
 /**
  * Simple wrapper for 16 byte MD5 hash.
@@ -38,6 +41,20 @@ public class MD5 {
     }
 
     this.md5 = md5;
+  }
+
+  public static MD5 fromString(String string) {
+    byte[] bytes;
+    try {
+      UUID uuid = UUID.fromString(string);
+      ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
+      bb.putLong(uuid.getMostSignificantBits());
+      bb.putLong(uuid.getLeastSignificantBits());
+      bytes = bb.array();
+    } catch (IllegalArgumentException e) {
+      bytes = HexFormat.of().parseHex(string);
+    }
+    return new MD5(bytes);
   }
 
   public byte[] bytes() {
@@ -80,5 +97,14 @@ public class MD5 {
 
     MD5 otherMd5 = (MD5) o;
     return Arrays.equals(this.md5, otherMd5.md5);
+  }
+
+  @Override
+  public String toString() {
+    ByteBuffer byteBuffer = ByteBuffer.wrap(md5);
+    long high = byteBuffer.getLong();
+    long low = byteBuffer.getLong();
+    UUID uuid = new UUID(high, low);
+    return uuid.toString();
   }
 }
