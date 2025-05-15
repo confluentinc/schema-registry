@@ -26,6 +26,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.builtin.converter.AvroConverter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -49,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -252,6 +255,9 @@ public class NativeSchema implements ParsedSchema {
         return canonicalString();
       case AVRO:
         // TODO RAY:
+        AvroConverter converter = new AvroConverter(100);
+        AvroSchema s = converter.fromNativeSchema(this);
+        return s.canonicalString();
       default:
         // Don't throw an exception for forward compatibility of formats
         log.warn("Unsupported format {}", format);

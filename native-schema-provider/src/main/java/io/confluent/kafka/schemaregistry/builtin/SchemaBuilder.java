@@ -290,27 +290,27 @@ public class SchemaBuilder {
   }
 
   /**
-   * Create a builder for an Avro binary type with the specified size.
+   * Create a builder for an Avro binary type.
    * This is equivalent to:
    *
    * <pre>
-   * builder().fixedBinary(name);
+   * builder().fixedBinary();
    * </pre>
    */
   public static FixedBinaryBuilder<Schema> fixedBinary() {
-    return builder().fixedBinary();
+    return builder().fixedBinaryBuilder();
   }
 
   /**
-   * Create a builder for an Avro char type with the specified size.
+   * Create a builder for an Avro char type.
    * This is equivalent to:
    *
    * <pre>
-   * builder().fixedChar(name);
+   * builder().fixedChar();
    * </pre>
    */
   public static FixedCharBuilder<Schema> fixedChar() {
-    return builder().fixedChar();
+    return builder().fixedCharBuilder();
   }
 
   /**
@@ -926,6 +926,11 @@ public class SchemaBuilder {
       return this;
     }
 
+    // TODO RAY
+    public MapBuilder<R> keys(Schema keySchema) {
+      return this;
+    }
+
     /**
      * Return a type builder for configuring the map's nested values schema. This
      * builder will return control to the map's enclosing context when complete.
@@ -1427,7 +1432,7 @@ public class SchemaBuilder {
      * {"type":"binary", "size":4}
      * </pre>
      **/
-    public final FixedBinaryBuilder<R> fixedBinary() {
+    public final FixedBinaryBuilder<R> fixedBinaryBuilder() {
       return FixedBinaryBuilder.create(context);
     }
 
@@ -1445,7 +1450,7 @@ public class SchemaBuilder {
      * {"type":"char", "size":4}
      * </pre>
      **/
-    public final FixedCharBuilder<R> fixedChar() {
+    public final FixedCharBuilder<R> fixedCharBuilder() {
       return FixedCharBuilder.create(context);
     }
 
