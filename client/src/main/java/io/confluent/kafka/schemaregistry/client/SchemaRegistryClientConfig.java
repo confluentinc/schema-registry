@@ -38,14 +38,25 @@ public class SchemaRegistryClientConfig {
   public static final String HTTP_READ_TIMEOUT_MS = "http.read.timeout.ms";
   public static final int HTTP_READ_TIMEOUT_MS_DEFAULT = 60000;
 
+  public static final String MAX_RETRIES_CONFIG = "max.retries";
+  public static final int MAX_RETRIES_DEFAULT = 3;
+  public static final String RETRIES_WAIT_MS_CONFIG = "retries.wait.ms";
+  public static final int RETRIES_WAIT_MS_DEFAULT = 1000;
+  public static final String RETRIES_MAX_WAIT_MS_CONFIG = "retries.max.wait.ms";
+  public static final int RETRIES_MAX_WAIT_MS_DEFAULT = 20000;
+
   public static final String BEARER_AUTH_CREDENTIALS_SOURCE = "bearer.auth.credentials.source";
   public static final String BEARER_AUTH_TOKEN_CONFIG = "bearer.auth.token";
 
   public static final String PROXY_HOST = "proxy.host";
   public static final String PROXY_PORT = "proxy.port";
 
+  public static final String LATEST_CACHE_TTL_CONFIG = "latest.cache.ttl.sec";
+  public static final long LATEST_CACHE_TTL_DEFAULT = 60;
+
   public static final String MISSING_CACHE_SIZE_CONFIG = "missing.cache.size";
   public static final String MISSING_ID_CACHE_TTL_CONFIG = "missing.id.cache.ttl.sec";
+  public static final String MISSING_VERSION_CACHE_TTL_CONFIG = "missing.version.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
 
@@ -123,9 +134,62 @@ public class SchemaRegistryClientConfig {
     }
   }
 
+  public static Integer getMaxRetries(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(MAX_RETRIES_CONFIG)) {
+      Object maxRetriesVal
+          = configs.get(SchemaRegistryClientConfig.MAX_RETRIES_CONFIG);
+      return maxRetriesVal instanceof String
+          ? Integer.valueOf((String) maxRetriesVal)
+          : (Integer) maxRetriesVal;
+    } else {
+      return MAX_RETRIES_DEFAULT;
+    }
+  }
+
+  public static Integer getRetriesWaitMs(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(RETRIES_WAIT_MS_CONFIG)) {
+      Object retriesWaitMsVal
+          = configs.get(SchemaRegistryClientConfig.RETRIES_WAIT_MS_CONFIG);
+      return retriesWaitMsVal instanceof String
+          ? Integer.valueOf((String) retriesWaitMsVal)
+          : (Integer) retriesWaitMsVal;
+    } else {
+      return RETRIES_WAIT_MS_DEFAULT;
+    }
+  }
+
+  public static Integer getRetriesMaxWaitMs(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(RETRIES_MAX_WAIT_MS_CONFIG)) {
+      Object retriesMaxWaitMsVal
+          = configs.get(SchemaRegistryClientConfig.RETRIES_MAX_WAIT_MS_CONFIG);
+      return retriesMaxWaitMsVal instanceof String
+          ? Integer.valueOf((String) retriesMaxWaitMsVal)
+          : (Integer) retriesMaxWaitMsVal;
+    } else {
+      return RETRIES_MAX_WAIT_MS_DEFAULT;
+    }
+  }
+
+  public static long getLatestTTL(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)) {
+      Object latestVal = configs.get(LATEST_CACHE_TTL_CONFIG);
+      return latestVal instanceof String
+          ? Long.parseLong((String) latestVal)
+          : ((Number) latestVal).longValue();
+    } else {
+      return LATEST_CACHE_TTL_DEFAULT;
+    }
+  }
+
   public static long getMissingIdTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
         ? (Long) configs.get(MISSING_ID_CACHE_TTL_CONFIG)
+        : 0L;
+  }
+
+  public static long getMissingVersionTTL(Map<String, ?> configs) {
+    return configs != null && configs.containsKey(MISSING_VERSION_CACHE_TTL_CONFIG)
+        ? (Long) configs.get(MISSING_VERSION_CACHE_TTL_CONFIG)
         : 0L;
   }
 

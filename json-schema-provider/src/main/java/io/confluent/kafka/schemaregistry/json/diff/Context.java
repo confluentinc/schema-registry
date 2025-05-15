@@ -57,6 +57,7 @@ public class Context {
       schemas.add(schema);
     }
 
+    @Override
     public void close() {
       schemas.remove(schema);
     }
@@ -71,6 +72,7 @@ public class Context {
       jsonPath.addLast(path);
     }
 
+    @Override
     public void close() {
       jsonPath.removeLast();
     }

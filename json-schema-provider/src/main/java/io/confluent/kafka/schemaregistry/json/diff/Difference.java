@@ -16,6 +16,9 @@
 package io.confluent.kafka.schemaregistry.json.diff;
 
 import java.util.Objects;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
 
 public class Difference {
   public enum Type {
@@ -76,6 +79,83 @@ public class Difference {
 
   private final String jsonPath;
   private final Type type;
+  Set<Type> keywordAddedOrRemoved = new HashSet<>(Arrays.asList(Type.MAXIMUM_ADDED,
+      Type.MINIMUM_ADDED,
+      Type.EXCLUSIVE_MAXIMUM_ADDED, Type.EXCLUSIVE_MINIMUM_ADDED, Type.MULTIPLE_OF_ADDED,
+      Type.MAX_LENGTH_ADDED, Type.MIN_LENGTH_ADDED, Type.PATTERN_ADDED,
+      Type.REQUIRED_ATTRIBUTE_ADDED, Type.MAX_PROPERTIES_ADDED, Type.MIN_PROPERTIES_ADDED,
+      Type.DEPENDENCY_ARRAY_ADDED, Type.DEPENDENCY_SCHEMA_ADDED, Type.MAX_ITEMS_ADDED,
+      Type.MIN_ITEMS_ADDED, Type.UNIQUE_ITEMS_ADDED, Type.ADDITIONAL_ITEMS_REMOVED,
+      Type.ADDITIONAL_PROPERTIES_REMOVED));
+  Set<Type> valueIncreased = new HashSet<>(Arrays.asList(Type.MIN_LENGTH_INCREASED,
+      Type.MINIMUM_INCREASED, Type.EXCLUSIVE_MINIMUM_INCREASED, Type.MIN_PROPERTIES_INCREASED,
+      Type.MULTIPLE_OF_EXPANDED, Type.MIN_ITEMS_INCREASED));
+  Set<Type> valueDecreased = new HashSet<>(Arrays.asList(Type.MAX_LENGTH_DECREASED,
+      Type.MAXIMUM_DECREASED, Type.MAX_ITEMS_DECREASED,
+      Type.EXCLUSIVE_MAXIMUM_DECREASED, Type.MAX_PROPERTIES_DECREASED));
+  Set<Type> typeNarrowed = new HashSet<>(Arrays.asList(
+      Type.ADDITIONAL_ITEMS_NARROWED, Type.ENUM_ARRAY_NARROWED, Type.SUM_TYPE_NARROWED,
+      Type.ADDITIONAL_PROPERTIES_NARROWED));
+  Set<Type> valueChanged = new HashSet<>(Arrays.asList(Type.PATTERN_CHANGED,
+      Type.MULTIPLE_OF_CHANGED, Type.DEPENDENCY_ARRAY_CHANGED));
+  Set<Type> typeChanged = new HashSet<>(Arrays.asList(Type.TYPE_CHANGED, Type.TYPE_NARROWED,
+      Type.COMBINED_TYPE_CHANGED, Type.COMBINED_TYPE_SUBSCHEMAS_CHANGED, Type.ENUM_ARRAY_CHANGED));
+  Set<Type> typeExtended = new HashSet<>(Arrays.asList(Type.DEPENDENCY_ARRAY_EXTENDED,
+      Type.PRODUCT_TYPE_EXTENDED, Type.SUM_TYPE_EXTENDED, Type.NOT_TYPE_EXTENDED));
+
+  private String error() {
+    String message = "";
+    if (keywordAddedOrRemoved.contains(type)) {
+      message = "The keyword at path '" + jsonPath + "' in the %s schema is not present in "
+                  + "the %s schema";
+    } else if (valueIncreased.contains(type)) {
+      message = "The value at path '" + jsonPath + "' in the %s schema is "
+                  + "more than its value in the %s schema";
+    } else if (valueDecreased.contains(type)) {
+      message =  "The value at path '" + jsonPath + "' in the %s schema is "
+                   + "less than its value in the %s schema";
+    } else if (valueChanged.contains(type)) {
+      message = "The value at path '" + jsonPath + "' is different between the "
+                  + "%s and %s schema";
+    } else if (typeNarrowed.contains(type)) {
+      message = "An array or combined type at path '" + jsonPath + "' has fewer elements in the "
+                  + "%s schema than the %s schema";
+    } else if (typeExtended.contains(type)) {
+      message = "An array or combined type at path '" + jsonPath + "' has more elements in the "
+                  + "%s schema than the %s schema";
+    } else if (typeChanged.contains(type)) {
+      message = "A type at path '" + jsonPath + "' is different between the "
+                  + "%s schema and the %s schema";
+    } else {
+      message = propertyOrItemError();
+    }
+    return message;
+  }
+
+  private String propertyOrItemError() {
+    if (type == Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL
+          || type == Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL) {
+      return "The %s schema has an open content model and has a property or item at "
+               + "path '" + jsonPath + "' which is missing in the %s schema";
+    } else if (type == Type.REQUIRED_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL) {
+      return "The %s schema has an unopen content model and has a required property "
+               + "at path '" + jsonPath + "' which is missing in the %s schema";
+    } else if (type == Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL
+          || type == Type.ITEM_REMOVED_FROM_CLOSED_CONTENT_MODEL) {
+      return "The %s has a closed content model and is missing a property or item present at "
+               + "path '" + jsonPath + "' in the %s schema";
+    } else if (type == Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
+          || type == Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
+      return "A property or item is missing in the %s schema but present at path '"
+               + jsonPath + "' in the %s schema and is not covered by its partially "
+               + "open content model";
+    } else if (type == Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL
+          || type == Type.ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
+      return "The %s schema has a property or item at path '" + jsonPath + "' which is "
+               + "missing in the %s schema and is not covered by its partially open content model";
+    }
+    return "";
+  }
 
   public Difference(final Type type, final String jsonPath) {
     this.jsonPath = jsonPath;
@@ -109,6 +189,6 @@ public class Difference {
 
   @Override
   public String toString() {
-    return "Difference{" + "jsonPath='" + jsonPath + '\'' + ", type=" + type + '}';
+    return "{errorType:\"" + type + "\"" + ", description:\"" + error() + "'}";
   }
 }

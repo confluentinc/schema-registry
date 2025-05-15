@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package io.confluent.kafka.schemaregistry.rules;
+
+option java_package = "io.confluent.kafka.schemaregistry.rules";
+option java_outer_classname = "NewSpecificWidgetProto";
+option java_multiple_files = false;
+
+message NewSpecificWidget {
+    string name = 1;
+    int32 height = 2;
+    int32 version = 3;
+}

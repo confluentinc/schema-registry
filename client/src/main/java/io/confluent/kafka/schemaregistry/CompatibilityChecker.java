@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class CompatibilityChecker {
 
@@ -79,7 +80,15 @@ public class CompatibilityChecker {
   public List<String> isCompatible(
       ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas
   ) {
-    List<? extends ParsedSchema> previousSchemasCopy = new ArrayList<>(previousSchemas);
+    return isCompatibleWithHolders(newSchema, previousSchemas.stream()
+        .map(SimpleParsedSchemaHolder::new)
+        .collect(Collectors.toCollection(ArrayList::new)));
+  }
+
+  public List<String> isCompatibleWithHolders(
+      ParsedSchema newSchema, List<ParsedSchemaHolder> previousSchemas
+  ) {
+    List<ParsedSchemaHolder> previousSchemasCopy = new ArrayList<>(previousSchemas);
     // Validator checks in list order, but checks should occur in reverse chronological order
     Collections.reverse(previousSchemasCopy);
     return validator.validate(newSchema, previousSchemasCopy);

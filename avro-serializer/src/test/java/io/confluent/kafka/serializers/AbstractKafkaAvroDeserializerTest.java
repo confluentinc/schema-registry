@@ -6,7 +6,6 @@ import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -21,6 +20,7 @@ import java.lang.reflect.Field;
 import java.util.Map;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.HashMap;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -77,7 +77,7 @@ public class AbstractKafkaAvroDeserializerTest {
     String subject = subjectNameStrategy.subjectName(topic, false,
         new AvroSchema(avroRecord.getSchema()));
     avroSerializer.configure(configs, false);
-    deserializer.configure(new KafkaAvroDeserializerConfig(configs));
+    deserializer.configure(new KafkaAvroDeserializerConfig(configs), null);
     schemaRegistry.register(subject, new AvroSchema(avroRecord.getSchema()));
     byte[] bytes = avroSerializer.serialize(topic, avroRecord);
     IndexedRecord deserialized
@@ -218,5 +218,57 @@ public class AbstractKafkaAvroDeserializerTest {
     }
 
     Assert.assertNull(kafkaAvroSerializer.schemaRegistry);
+  }
+
+  @Test
+  public void testInvalidSpecificSchemaKeyTypeConfig() {
+    HashMap<String, String> props = new HashMap<String, String>();
+    // Intentionally invalid schema registry URL to satisfy the config class's requirement that
+    // it be set.
+    props.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG,
+        Object.class.getName()
+    );
+
+    try {
+      new KafkaAvroDeserializer(
+        new MockSchemaRegistryClient(),
+        props
+      );
+      fail();
+    }
+    catch (ConfigException e) {
+      Assert.assertEquals(
+        "Value 'java.lang.Object' specified for " +
+          "'specific.avro.value.type' is not a " +
+          "'org.apache.avro.specific.SpecificRecord'",
+        e.getMessage()
+      );
+    }
+
+
+    props.remove(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG);
+    props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_KEY_TYPE_CONFIG,
+        Object.class.getName()
+    );
+
+    try {
+      new KafkaAvroDeserializer(
+        new MockSchemaRegistryClient(),
+        props,
+        true
+      );
+      fail();
+    }
+    catch (ConfigException e) {
+      Assert.assertEquals(
+        "Value 'java.lang.Object' specified for " +
+          "'specific.avro.key.type' is not a " +
+          "'org.apache.avro.specific.SpecificRecord'",
+        e.getMessage()
+      );
+    }
+
   }
 }

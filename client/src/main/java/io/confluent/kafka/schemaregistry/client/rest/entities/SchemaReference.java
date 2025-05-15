@@ -22,6 +22,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -118,5 +121,17 @@ public class SchemaReference implements Comparable<SchemaReference> {
         + ", version="
         + version
         + '}';
+  }
+
+  public void updateHash(MessageDigest md) {
+    if (name != null) {
+      md.update(name.getBytes(StandardCharsets.UTF_8));
+    }
+    if (subject != null) {
+      md.update(subject.getBytes(StandardCharsets.UTF_8));
+    }
+    if (version != null) {
+      md.update(ByteBuffer.allocate(4).putInt(version).array());
+    }
   }
 }

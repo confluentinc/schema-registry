@@ -21,7 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 
 import java.net.URL;
 import java.util.Map;
-import org.apache.kafka.common.security.oauthbearer.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 
 public class StaticTokenCredentialProvider implements BearerAuthCredentialProvider {
 

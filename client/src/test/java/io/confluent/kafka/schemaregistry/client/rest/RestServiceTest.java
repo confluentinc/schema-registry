@@ -83,6 +83,34 @@ public class RestServiceTest {
   @Mock
   private URL url;
 
+  @Test
+  public void testSetForwardHeader() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", true);
+    RestService restServiceSpy = spy(restService);
+
+    HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
+    InputStream inputStream = mock(InputStream.class);
+
+    doReturn(url).when(restServiceSpy).url(anyString());
+    when(url.openConnection()).thenReturn(httpURLConnection);
+    when(httpURLConnection.getURL()).thenReturn(url);
+    when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
+
+    when(httpURLConnection.getInputStream()).thenReturn(inputStream);
+    when(inputStream.read(any(), anyInt(), anyInt())).thenAnswer(invocationOnMock -> {
+      byte[] b = invocationOnMock.getArgument(0);
+      byte[] json = "[\"abc\"]".getBytes(StandardCharsets.UTF_8);
+      System.arraycopy(json, 0, b, 0, json.length);
+      return json.length;
+    });
+
+    Map<String, String> headerProperties = new HashMap<>();
+    headerProperties.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    restServiceSpy.getAllSubjects(headerProperties);
+    // Make sure that the X-Forward header is set to true
+    verify(httpURLConnection).setRequestProperty(RestService.X_FORWARD_HEADER, "true");
+  }
+
   /*
    * Test setBasicAuthRequestHeader (private method) indirectly through getAllSubjects.
    */
