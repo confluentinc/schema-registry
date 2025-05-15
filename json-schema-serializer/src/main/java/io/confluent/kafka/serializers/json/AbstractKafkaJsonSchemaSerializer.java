@@ -48,6 +48,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean propagateSchemaTags;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
@@ -62,6 +63,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     configureClientProperties(config, new JsonSchemaProvider());
     this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.propagateSchemaTags = config.propagateSchemaTags();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
@@ -131,7 +133,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
-            registerWithResponse(subject, schema, normalizeSchema);
+            registerWithResponse(subject, schema, normalizeSchema, propagateSchemaTags);
         if (s.getSchema() != null) {
           Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
           if (optSchema.isPresent()) {
@@ -161,7 +163,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       if (validate) {
-        validateJson(object, schema);
+        object = validateJson(object, schema);
       }
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       out.write(MAGIC_BYTE);
@@ -181,12 +183,18 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     }
   }
 
-  protected void validateJson(T object,
-                              JsonSchema schema)
+  @SuppressWarnings("unchecked")
+  protected T validateJson(T object,
+                           JsonSchema schema)
       throws SerializationException {
     try {
-      JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
-      schema.validate(jsonNode);
+      JsonNode jsonNode = object instanceof JsonNode
+          ? (JsonNode) object
+          : objectMapper.convertValue(object, JsonNode.class);
+      jsonNode = schema.validate(jsonNode);
+      return object instanceof JsonNode
+          ? object
+          : (T) objectMapper.convertValue(jsonNode, object.getClass());
     } catch (JsonProcessingException e) {
       throw new SerializationException("JSON "
           + object
