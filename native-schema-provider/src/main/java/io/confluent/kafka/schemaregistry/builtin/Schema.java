@@ -62,9 +62,9 @@ import io.confluent.kafka.schemaregistry.builtin.Schema.ShortSchema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.StringSchema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.StructSchema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.UnionSchema;
-import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor;
-import io.confluent.kafka.schemaregistry.builtin.util.internal.Accessor.FieldAccessor;
-import io.confluent.kafka.schemaregistry.builtin.util.internal.JacksonUtils;
+import io.confluent.kafka.schemaregistry.builtin.utils.internal.Accessor;
+import io.confluent.kafka.schemaregistry.builtin.utils.internal.Accessor.FieldAccessor;
+import io.confluent.kafka.schemaregistry.builtin.utils.internal.JacksonUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -340,12 +340,20 @@ public abstract class Schema {
     return props;
   }
 
+  public String getProp(String name) {
+    return props.getProp(name);
+  }
+
   /**
    * Return the props of this schema as a map.
    */
   @JsonIgnore
   public Map<String, Object> getObjectProps() {
     return props.getObjectProps();
+  }
+
+  public Object getObjectProp(String name) {
+    return props.getObjectProp(name);
   }
 
   @JsonProperty("params")
@@ -576,7 +584,7 @@ public abstract class Schema {
               "default", "doc", "name", "type", "tags", "params")));
 
   /**
-   * Returns true if this struct is a union type.
+   * Returns true if this schema is a union type.
    */
   @JsonIgnore
   public boolean isUnion() {
@@ -584,7 +592,7 @@ public abstract class Schema {
   }
 
   /**
-   * Returns true if this struct is a union type containing null.
+   * Returns true if this schema is a null or a union type containing null.
    */
   @JsonIgnore
   public boolean isNullable() {
@@ -599,6 +607,14 @@ public abstract class Schema {
     }
 
     return false;
+  }
+
+  /**
+   * Returns true if this schema is a union type containing null.
+   */
+  @JsonIgnore
+  public boolean isOptional() {
+    return isUnion() && isNullable();
   }
 
   /**

@@ -26,7 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
-import io.confluent.kafka.schemaregistry.builtin.util.internal.JacksonUtils;
+import io.confluent.kafka.schemaregistry.builtin.utils.internal.JacksonUtils;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;

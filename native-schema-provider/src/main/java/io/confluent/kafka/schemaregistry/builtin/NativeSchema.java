@@ -29,10 +29,12 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.builtin.converters.AvroConverter;
 import io.confluent.kafka.schemaregistry.builtin.converters.FlinkConverter;
+import io.confluent.kafka.schemaregistry.builtin.converters.ProtobufConverter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
@@ -255,11 +257,15 @@ public class NativeSchema implements ParsedSchema {
         return canonicalString();
       case AVRO:
         AvroConverter avroConverter = new AvroConverter(100);
-        AvroSchema s = avroConverter.fromNativeSchema(this);
-        return s.canonicalString();
+        AvroSchema avroSchema = avroConverter.fromNativeSchema(this);
+        return avroSchema.canonicalString();
       case FLINK:
         FlinkConverter flinkConverter = new FlinkConverter(100);
         return flinkConverter.fromNativeSchema(this);
+      case PROTOBUF:
+        ProtobufConverter protobufConverter = new ProtobufConverter(100);
+        ProtobufSchema protobufSchema = protobufConverter.fromNativeSchema(this);
+        return protobufSchema.canonicalString();
       default:
         // Don't throw an exception for forward compatibility of formats
         log.warn("Unsupported format {}", format);
