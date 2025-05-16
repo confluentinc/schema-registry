@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.builtin.converter;
+package io.confluent.kafka.schemaregistry.builtin.converters;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.builtin.NativeSchema;

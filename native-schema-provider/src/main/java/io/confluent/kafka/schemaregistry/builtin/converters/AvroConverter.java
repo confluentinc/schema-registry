@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.builtin.converter;
+package io.confluent.kafka.schemaregistry.builtin.converters;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.IntNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.builtin.NativeSchema;
 import io.confluent.kafka.schemaregistry.builtin.Schema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.BaseTypeBuilder;
-import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.EnumBuilder;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.FieldAssembler;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.PropBuilder;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.UnionAccumulator;
@@ -37,19 +33,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.apache.avro.AvroTypeException;
-import org.apache.avro.JsonProperties;
 import org.apache.avro.generic.GenericData.EnumSymbol;
 import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.util.internal.JacksonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

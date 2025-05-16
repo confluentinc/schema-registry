@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.builtin.util.internal;
+package io.confluent.kafka.schemaregistry.builtin.utils.internal;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;

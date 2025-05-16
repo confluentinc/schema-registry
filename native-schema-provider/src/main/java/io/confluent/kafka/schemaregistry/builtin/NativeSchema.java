@@ -27,8 +27,8 @@ import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.builtin.converter.AvroConverter;
-import io.confluent.kafka.schemaregistry.builtin.converter.FlinkConverter;
+import io.confluent.kafka.schemaregistry.builtin.converters.AvroConverter;
+import io.confluent.kafka.schemaregistry.builtin.converters.FlinkConverter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -52,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
