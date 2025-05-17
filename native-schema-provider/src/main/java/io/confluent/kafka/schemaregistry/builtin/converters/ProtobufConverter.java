@@ -30,11 +30,8 @@ import io.confluent.kafka.schemaregistry.builtin.Schema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
 import io.confluent.kafka.schemaregistry.builtin.Schema.Type;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder;
-import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.BaseTypeBuilder;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.FieldAssembler;
 import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.FieldBuilder;
-import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.FieldTypeBuilder;
-import io.confluent.kafka.schemaregistry.builtin.SchemaBuilder.StructBuilder;
 import io.confluent.kafka.schemaregistry.builtin.SchemaRuntimeException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
@@ -52,7 +49,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -114,18 +110,6 @@ public class ProtobufConverter {
 
   private final Map<NativeSchema, ProtobufSchema> fromConnectSchemaCache;
   private final Map<Pair<String, ProtobufSchema>, NativeSchema> toConnectSchemaCache;
-  private boolean generalizedSumTypeSupport;
-  private boolean ignoreDefaultForNullables;
-  private boolean enhancedSchemaSupport;
-  private boolean scrubInvalidNames;
-  private boolean useIntForEnums;
-  private boolean useOptionalForNullables;
-  private boolean supportOptionalForProto2;
-  private boolean useWrapperForNullables;
-  private boolean useWrapperForRawPrimitives;
-  private boolean generateStructForNulls;
-  private boolean generateIndexForUnions;
-  private boolean flattenUnions;
 
   public ProtobufConverter(int cacheSize) {
     fromConnectSchemaCache = new BoundedConcurrentHashMap<>(cacheSize);
@@ -150,6 +134,7 @@ public class ProtobufConverter {
     }
   }
 
+  /*
   private Object getFieldType(Object ctx, String name) {
     FieldDescriptor field = ((Descriptor) ctx).findFieldByName(name);
     if (field == null) {
@@ -160,6 +145,7 @@ public class ProtobufConverter {
     }
     return getFieldType(field);
   }
+   */
 
   private Object getFieldType(FieldDescriptor field) {
     switch (field.getJavaType()) {
@@ -259,7 +245,8 @@ public class ProtobufConverter {
       case BYTES:
         return typeToDescriptor(PROTOBUF_BYTES_WRAPPER_TYPE);
       case STRUCT:
-        DynamicSchema dynamicSchema = rawSchemaFromNativeSchema(ctx, namespace, name, rootElem.rawSchema());
+        DynamicSchema dynamicSchema = rawSchemaFromNativeSchema(
+            ctx, namespace, name, rootElem.rawSchema());
         return dynamicSchema.getMessageDescriptor(name);
       case ARRAY:
       case MAP:
@@ -303,7 +290,7 @@ public class ProtobufConverter {
           schema,
           message,
           fieldSchema,
-          scrubName(field.name()),
+          field.name(),
           field.defaultVal(),
           tag
       );
@@ -564,11 +551,11 @@ public class ProtobufConverter {
     switch (schema.getType()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT16:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT16);
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
         if (schema.getProp(PROTOBUF_TYPE_ENUM) != null) {
@@ -578,7 +565,7 @@ public class ProtobufConverter {
         if (schema.getProp(PROTOBUF_TYPE_PROP) != null) {
           defaultType = schema.getProp(PROTOBUF_TYPE_PROP);
         }
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
         defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
@@ -598,22 +585,22 @@ public class ProtobufConverter {
           default:
             wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
         }
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? wrapperType : defaultType;
       case FLOAT32:
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
       case FLOAT64:
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_DOUBLE_WRAPPER_TYPE : FieldDescriptor.Type.DOUBLE.toString().toLowerCase();
       case BOOLEAN:
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_BOOL_WRAPPER_TYPE : FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_STRING_WRAPPER_TYPE : FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
-        return useWrapperForNullables && schema.isOptional()
+        return schema.isOptional()
             ? PROTOBUF_BYTES_WRAPPER_TYPE : FieldDescriptor.Type.BYTES.toString().toLowerCase();
       case ARRAY:
         // Array should not occur here
@@ -673,9 +660,12 @@ public class ProtobufConverter {
 
   private String unionFieldName(OneofDescriptor oneofDescriptor) {
     String name = oneofDescriptor.getName();
+    // TODO RAY
+    /*
     if (generateIndexForUnions) {
       name += "_" + oneofDescriptor.getIndex();
     }
+     */
     return name;
   }
 
@@ -686,7 +676,7 @@ public class ProtobufConverter {
 
   private boolean isOptional(FieldDescriptor fieldDescriptor) {
     return fieldDescriptor.toProto().getProto3Optional()
-        || (supportOptionalForProto2 && hasOptionalKeyword(fieldDescriptor));
+        || hasOptionalKeyword(fieldDescriptor);
   }
 
   // copied from Descriptors.java since it is not public
@@ -736,20 +726,28 @@ public class ProtobufConverter {
     if (result != null) {
       return result;
     }
+    // TODO RAY
+    String name = descriptor.getName();
+    /*
     String name = enhancedSchemaSupport ? descriptor.getFullName() : descriptor.getName();
+     */
     FieldAssembler<Schema> builder = SchemaBuilder.builder().struct(name).fields();
     List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
     for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
+      /*
       if (flattenUnions) {
         List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
         for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
           builder = toNativeSchema(ctx, fieldDescriptor, builder.name(fieldDescriptor.getName()));
         }
       } else {
-        String unionFieldName = unionFieldName(oneOfDescriptor);
-        // TODO RAY fix default
-        builder = builder.name(unionFieldName).type(toNativeSchema(ctx, oneOfDescriptor)).noDefault();
-      }
+
+       */
+      String unionFieldName = unionFieldName(oneOfDescriptor);
+      // TODO RAY fix default
+      builder = builder.name(unionFieldName)
+          .type(toNativeSchema(ctx, oneOfDescriptor)).noDefault();
+      //}
     }
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
@@ -882,8 +880,13 @@ public class ProtobufConverter {
 
       case ENUM:
         EnumDescriptor enumDescriptor = descriptor.getEnumType();
+        // TODO RAY
+        String name = enumDescriptor.getName();
+        /*
         String name = enhancedSchemaSupport
             ? enumDescriptor.getFullName() : enumDescriptor.getName();
+
+         */
         // TODO RAY
         String paramName = GENERALIZED_TYPE_ENUM;
         builder = builder.prop(paramName, enumDescriptor.getName());
@@ -902,9 +905,9 @@ public class ProtobufConverter {
         }
 
       case MESSAGE: {
+        /*
         String fullName = descriptor.getMessageType().getFullName();
         switch (fullName) {
-          /*
           case PROTOBUF_DECIMAL_TYPE:
             Integer precision = null;
             int scale = 0;
@@ -943,10 +946,11 @@ public class ProtobufConverter {
             builder = Timestamp.builder();
             break;
 
-           */
           default:
             return toUnwrappedOrStructSchema(ctx, descriptor, builder);
         }
+           */
+        return toUnwrappedOrStructSchema(ctx, descriptor, builder);
       }
 
       default:
@@ -986,7 +990,8 @@ public class ProtobufConverter {
     }
   }
 
-  private FieldAssembler<Schema> toUnwrappedSchema(Descriptor descriptor, FieldBuilder<Schema> builder) {
+  private FieldAssembler<Schema> toUnwrappedSchema(
+      Descriptor descriptor, FieldBuilder<Schema> builder) {
     String fullName = descriptor.getFullName();
     switch (fullName) {
       case PROTOBUF_DOUBLE_WRAPPER_TYPE:
@@ -1012,7 +1017,8 @@ public class ProtobufConverter {
     }
   }
 
-  private FieldAssembler<Schema> toStructSchema(ToConnectContext ctx, FieldDescriptor descriptor, FieldBuilder<Schema> builder) {
+  private FieldAssembler<Schema> toStructSchema(
+      ToConnectContext ctx, FieldDescriptor descriptor, FieldBuilder<Schema> builder) {
     // TODO RAY
     /*
     if (isMapDescriptor(descriptor)) {
@@ -1020,16 +1026,16 @@ public class ProtobufConverter {
     }
 
      */
-    String fullName = descriptor.getMessageType().getFullName();
     // TODO RAY
     /*
+    String fullName = descriptor.getMessageType().getFullName();
     SchemaBuilder builder = ctx.get(fullName);
     if (builder != null) {
       builder = new SchemaWrapper(builder);
     } else {
 
      */
-      Schema s = toNativeSchema(ctx, descriptor.getMessageType(), null);
+    Schema s = toNativeSchema(ctx, descriptor.getMessageType(), null);
     //}
     return builder.type(s).noDefault();
   }
@@ -1073,9 +1079,6 @@ public class ProtobufConverter {
       return result;
     }
     String[] parts = fullName.split("\\.");
-    for (int i = 0; i < parts.length; i++) {
-      parts[i] = scrubName(parts[i]);
-    }
     if (parts.length <= 1) {
       result[0] = null;
       result[1] = parts[0];
@@ -1098,11 +1101,7 @@ public class ProtobufConverter {
     } else {
       result = fullName;
     }
-    return scrubName(result);
-  }
-
-  private String scrubName(String name) {
-    return scrubInvalidNames ? doScrubName(name) : name;
+    return result;
   }
 
   // Visible for testing

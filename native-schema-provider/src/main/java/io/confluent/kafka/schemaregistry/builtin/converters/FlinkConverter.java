@@ -16,15 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.builtin.converters;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.builtin.NativeSchema;
 import io.confluent.kafka.schemaregistry.builtin.Schema;
 import io.confluent.kafka.schemaregistry.builtin.Schema.Field;
 import io.confluent.kafka.schemaregistry.builtin.SchemaRuntimeException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -106,15 +103,15 @@ public class FlinkConverter {
         break;
       case STRUCT:
         StringBuilder sb = new StringBuilder("CREATE TABLE '" + schema.getName() + "' (\n");
-        String namespace = schema.getNamespace();
-        String name = schema.getName();
-        String doc = schema.getDoc();
-        List<org.apache.avro.Schema.Field> fields = new ArrayList<>();
+        //String namespace = schema.getNamespace();
+        //String name = schema.getName();
+        //String doc = schema.getDoc();
         for (int i = 0; i < schema.getFields().size(); i++) {
           Field field = schema.getFields().get(i);
           String fieldName = field.name();
-          String fieldDoc = field.doc();
-          sb.append("    '" + fieldName + "' " + fromNativeSchema(field.schema(), fromNativeContext));
+          //String fieldDoc = field.doc();
+          sb.append("    '" + fieldName + "' "
+              + fromNativeSchema(field.schema(), fromNativeContext));
           if (i < schema.getFields().size() - 1) {
             sb.append(",\n");
           } else {
@@ -152,7 +149,7 @@ public class FlinkConverter {
    */
   private static class FromNativeContext {
     //SchemaMap is used to resolve references that need to mapped as types
-    private Map<Schema, AvroSchema> schemaMap;
+    //private Map<Schema, AvroSchema> schemaMap;
     //schema name to Schema reference to resolve cycles
     private int defaultSchemaNameIndex = 0;
 

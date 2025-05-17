@@ -462,11 +462,7 @@ public class AvroConverter {
     return false;
   }
 
-  protected boolean getForceOptionalDefault() {
-    return false;
-  }
-
-  private NativeSchema toNativeSchema(AvroSchema schema, ToNativeContext toNativeContext) {
+  public NativeSchema toNativeSchema(AvroSchema schema, ToNativeContext toNativeContext) {
 
     NativeSchema cachedSchema = toNativeSchemaCache.get(schema);
     if (cachedSchema != null) {
@@ -482,8 +478,11 @@ public class AvroConverter {
   private Schema toNativeSchema(
       org.apache.avro.Schema schema, ToNativeContext toNativeContext) {
 
+    // TODO RAY
+    /*
     String type = schema.getProp(CFLT_TYPE_PROP);
     String logicalType = schema.getProp(AVRO_LOGICAL_TYPE_PROP);
+     */
 
     final PropBuilder<?> builder;
 
@@ -759,7 +758,7 @@ public class AvroConverter {
    */
   private static class FromNativeContext {
     //SchemaMap is used to resolve references that need to mapped as types
-    private Map<Schema, AvroSchema> schemaMap;
+    //private Map<Schema, AvroSchema> schemaMap;
     //schema name to Schema reference to resolve cycles
     private int defaultSchemaNameIndex = 0;
 
