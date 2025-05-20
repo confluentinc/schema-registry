@@ -20,8 +20,8 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
 import java.io.IOException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 
 /**
@@ -44,15 +44,15 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
 
 public class CachedOauthTokenRetriever {
 
-  private AccessTokenRetriever accessTokenRetriever;
-  private AccessTokenValidator accessTokenValidator;
+  private JwtRetriever tokenRetriever;
+  private JwtValidator tokenValidator;
   private OauthTokenCache oauthTokenCache;
 
 
-  public void configure(AccessTokenRetriever accessTokenRetriever,
-      AccessTokenValidator accessTokenValidator, OauthTokenCache oauthTokenCache) {
-    this.accessTokenRetriever = accessTokenRetriever;
-    this.accessTokenValidator = accessTokenValidator;
+  public void configure(JwtRetriever tokenRetriever, JwtValidator tokenValidator,
+      OauthTokenCache oauthTokenCache) {
+    this.tokenRetriever = tokenRetriever;
+    this.tokenValidator = tokenValidator;
     this.oauthTokenCache = oauthTokenCache;
 
   }
@@ -61,7 +61,7 @@ public class CachedOauthTokenRetriever {
     if (oauthTokenCache.isTokenExpired()) {
       String token = null;
       try {
-        token = accessTokenRetriever.retrieve();
+        token = tokenRetriever.retrieve();
       } catch (IOException | RuntimeException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "Failed to Retrieve OAuth Token for Schema Registry", e);
@@ -69,7 +69,7 @@ public class CachedOauthTokenRetriever {
 
       OAuthBearerToken oauthBearerToken;
       try {
-        oauthBearerToken = accessTokenValidator.validate(token);
+        oauthBearerToken = tokenValidator.validate(token);
       } catch (ValidateException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "OAuth Token for Schema Registry is Invalid", e);
