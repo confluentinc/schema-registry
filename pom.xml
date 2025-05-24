@@ -78,6 +78,8 @@
         <module>client-encryption-gcp</module>
         <module>client-encryption-hcvault</module>
         <module>client-encryption</module>
+        <module>dataproduct-registry-client</module>
+        <module>dataproduct-registry</module>
         <module>benchmark</module>
         <module>jacoco-aggregate-schema-registry</module>
     </modules>
