@@ -60,12 +60,12 @@ public class DataProductRegistryRestService extends RestService implements Confi
     super(baseUrlConfig);
   }
 
-  public List<String> listDataProducts(String env, String cluster, boolean lookupDeleted)
+  public List<String> listDataProductNames(String env, String cluster, boolean lookupDeleted)
       throws IOException, RestClientException {
-    return listDataProducts(DEFAULT_REQUEST_PROPERTIES, env, cluster, lookupDeleted);
+    return listDataProductNames(DEFAULT_REQUEST_PROPERTIES, env, cluster, lookupDeleted);
   }
 
-  public List<String> listDataProducts(Map<String, String> requestProperties,
+  public List<String> listDataProductNames(Map<String, String> requestProperties,
       String env, String cluster, boolean lookupDeleted)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath(
@@ -76,7 +76,7 @@ public class DataProductRegistryRestService extends RestService implements Confi
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);
   }
 
-  public List<String> listDataProductsWithPagination(String env, String cluster,
+  public List<String> listDataProductNamesWithPagination(String env, String cluster,
       boolean lookupDeleted, int offset, int limit) throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath(
         "/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts")
@@ -84,6 +84,36 @@ public class DataProductRegistryRestService extends RestService implements Confi
         .queryParam("offset", offset)
         .queryParam("limit", limit);
     String path = builder.build(env, cluster).toString();
+
+    return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, STRINGS_TYPE);
+  }
+
+  public List<Integer> listDataProductVersions(
+      String env, String cluster, String name, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return listDataProductVersions(DEFAULT_REQUEST_PROPERTIES, env, cluster, name, lookupDeleted);
+  }
+
+  public List<Integer> listDataProductVersions(Map<String, String> requestProperties,
+      String env, String cluster, String name, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath(
+            "/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts/{name}")
+        .queryParam("deleted", lookupDeleted);
+    String path = builder.build(env, cluster, name).toString();
+
+    return httpRequest(path, "GET", null, requestProperties, INTEGERS_TYPE);
+  }
+
+  public List<String> listDataProductVersionsWithPagination(
+      String env, String cluster, String name,
+      boolean lookupDeleted, int offset, int limit) throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath(
+            "/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts/{name}")
+        .queryParam("deleted", lookupDeleted)
+        .queryParam("offset", offset)
+        .queryParam("limit", limit);
+    String path = builder.build(env, cluster, name).toString();
 
     return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, STRINGS_TYPE);
   }

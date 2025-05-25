@@ -115,49 +115,6 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Path("/{name}/versions/{version}")
-  @Operation(summary = "Get a data product by name.", responses = {
-      @ApiResponse(responseCode = "200", description = "The data product info",
-          content = @Content(schema = @Schema(implementation = RegisteredDataProduct.class))),
-      @ApiResponse(responseCode = "404",
-          description = "Error code 40470 -- Data product not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid data product")
-  })
-  @PerformanceMetric("dataproducts.get")
-  @DocumentedName("getDataProduct")
-  public RegisteredDataProduct getDataProduct(
-      @Parameter(description = "The environment", required = true)
-      @PathParam("env") String env,
-      @Parameter(description = "The cluster", required = true)
-      @PathParam("cluster") String cluster,
-      @Parameter(description = "Name of the data product", required = true)
-      @PathParam("name") String name,
-      @Parameter(description = "Version of the data product", required = true)
-      @PathParam("version") String version,
-      @Parameter(description = "Whether to include deleted data products")
-      @QueryParam("deleted") boolean lookupDeleted) {
-
-    checkName(name);
-    VersionId versionId;
-    try {
-      versionId = new VersionId(version);
-    } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException(e.getMessage());
-    }
-
-    try {
-      DataProductValue product = dataProductRegistry.getDataProduct(
-          env, cluster, name, versionId.getVersionId(), lookupDeleted);
-      if (product == null) {
-        throw DataProductRegistryErrors.dataProductNotFoundException(name);
-      }
-      return product.toEntity();
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while retrieving data product", e);
-    }
-  }
-
-  @GET
   @Path("/{name}/versions")
   @Operation(summary = "List versions of data product.", responses = {
       @ApiResponse(responseCode = "200",
@@ -170,7 +127,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid data product")
   })
   @PerformanceMetric("dataproducts.versions.list")
-  @DocumentedName("getAllDataProductVersions")
+  @DocumentedName("getDataProductVersions")
   public List<Integer> getDataProductVersions(
       @Parameter(description = "The environment", required = true)
       @PathParam("env") String env,
@@ -205,7 +162,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
           description = "Error code 40470 -- Data product not found")
   })
   @PerformanceMetric("dataproducts.versions.get")
-  @DocumentedName("getDataProductByVersion")
+  @DocumentedName("getDataProductVersion")
   public RegisteredDataProduct getDataProductByVersion(
       @Parameter(description = "The environment", required = true)
       @PathParam("env") String env,

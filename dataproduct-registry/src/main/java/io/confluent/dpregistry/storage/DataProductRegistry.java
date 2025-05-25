@@ -381,13 +381,16 @@ public class DataProductRegistry implements Closeable {
     KeyValue<DataProductKey, DataProductValue> latest =
         getLatestDataProduct(env, cluster, request.getInfo().getName());
     int newVersion = latest != null ? latest.key.getVersion() + 1 : MIN_VERSION;
+    String newGuid = UUID.randomUUID().toString();
 
-    DataProductValue value = new DataProductValue(UUID.randomUUID().toString(), request);
+    DataProductValue value = new DataProductValue(newVersion, newGuid, request);
     DataProductKey key = new DataProductKey(
         tenant, env, cluster, request.getInfo().getName(), newVersion);
     KeyValue<DataProductKey, DataProductValue> oldKeyValue =
         getLatestDataProduct(env, cluster, request.getInfo().getName());
-    if (oldKeyValue != null && value.isEquivalent(oldKeyValue.value)) {
+    if (oldKeyValue != null
+        && !oldKeyValue.value.isDeleted()
+        && value.isEquivalent(oldKeyValue.value)) {
       // If the value is equivalent to the latest version, return the existing one
       return oldKeyValue.value;
     }
@@ -467,7 +470,8 @@ public class DataProductRegistry implements Closeable {
       for (KeyValue<DataProductKey, DataProductValue> product : products) {
         if (!product.value.isDeleted()) {
           DataProductValue oldValue = product.value;
-          DataProductValue newValue = new DataProductValue(oldValue.getGuid(), oldValue.getInfo(),
+          DataProductValue newValue = new DataProductValue(
+              oldValue.getVersion(), oldValue.getGuid(), oldValue.getInfo(),
               oldValue.getSchemas(), oldValue.getConfigs(), true, null, null);
           dataProducts.put(product.key, newValue);
         }
@@ -543,7 +547,8 @@ public class DataProductRegistry implements Closeable {
       dataProducts.remove(key);
     } else {
       if (!value.isDeleted()) {
-        DataProductValue newValue = new DataProductValue(value.getGuid(), value.getInfo(),
+        DataProductValue newValue = new DataProductValue(
+            value.getVersion(), value.getGuid(), value.getInfo(),
             value.getSchemas(), value.getConfigs(), true, null, null);
         dataProducts.put(key, newValue);
       }

@@ -33,6 +33,7 @@ import java.util.TreeMap;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DataProductValue {
 
+  private final int version;
   private final String guid;
   private final DataProductInfo info;
   private final DataProductSchemas schemas;
@@ -43,6 +44,7 @@ public class DataProductValue {
 
   @JsonCreator
   public DataProductValue(
+      @JsonProperty("version") int version,
       @JsonProperty("guid") String guid,
       @JsonProperty("info") DataProductInfo info,
       @JsonProperty("schemas") DataProductSchemas schemas,
@@ -50,6 +52,7 @@ public class DataProductValue {
       @JsonProperty("deleted") boolean deleted,
       @JsonProperty("offset") Long offset,
       @JsonProperty("ts") Long timestamp) {
+    this.version = version;
     this.guid = guid;
     this.info = info;
     this.schemas = schemas;
@@ -62,8 +65,9 @@ public class DataProductValue {
     this.timestamp = timestamp;
   }
 
-  public DataProductValue(String guid, DataProduct dataProduct) {
-    this.guid = guid; // GUID is not part of DataProduct
+  public DataProductValue(int version, String guid, DataProduct dataProduct) {
+    this.version = version;
+    this.guid = guid;
     this.info = dataProduct.getInfo() != null
         ? new DataProductInfo(dataProduct.getInfo())
         : null;
@@ -77,6 +81,11 @@ public class DataProductValue {
     this.deleted = false;
     this.offset = null;
     this.timestamp = null;
+  }
+
+  @JsonProperty("version")
+  public int getVersion() {
+    return version;
   }
 
   @JsonProperty("guid")
@@ -130,7 +139,8 @@ public class DataProductValue {
       return false;
     }
     DataProductValue dataProduct = (DataProductValue) o;
-    return Objects.equals(guid, dataProduct.guid)
+    return Objects.equals(version, dataProduct.version)
+        && Objects.equals(guid, dataProduct.guid)
         && Objects.equals(info, dataProduct.info)
         && Objects.equals(schemas, dataProduct.schemas)
         && Objects.equals(configs, dataProduct.configs);
@@ -138,11 +148,12 @@ public class DataProductValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(guid, info, schemas, configs);
+    return Objects.hash(version, guid, info, schemas, configs);
   }
 
   public RegisteredDataProduct toEntity() {
     return new RegisteredDataProduct(
+        version,
         guid,
         info != null ? info.toEntity() : null,
         schemas != null ? schemas.toEntity() : null,

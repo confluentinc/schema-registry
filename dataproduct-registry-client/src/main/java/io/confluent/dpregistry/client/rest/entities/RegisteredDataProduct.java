@@ -17,6 +17,7 @@
 package io.confluent.dpregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -34,6 +35,7 @@ import java.util.TreeMap;
 @Schema(description = "Registered Data Product")
 public class RegisteredDataProduct {
 
+  private final Integer version;
   private final String guid;
   private final DataProductInfo info;
   private final DataProductSchemas schemas;
@@ -43,12 +45,14 @@ public class RegisteredDataProduct {
 
   @JsonCreator
   public RegisteredDataProduct(
+      @JsonProperty("version") Integer version,
       @JsonProperty("guid") String guid,
       @JsonProperty("info") DataProductInfo info,
       @JsonProperty("schemas") DataProductSchemas schemas,
       @JsonProperty("configs") Map<String, String> configs,
       @JsonProperty("ts") Long timestamp,
       @JsonProperty("deleted") Boolean deleted) {
+    this.version = version;
     this.guid = guid;
     this.info = info;
     this.schemas = schemas;
@@ -58,6 +62,12 @@ public class RegisteredDataProduct {
     this.configs = Collections.unmodifiableSortedMap(sortedConfigs);
     this.timestamp = timestamp;
     this.deleted = deleted;
+  }
+
+  @Schema(description = "Data product version")
+  @JsonProperty("version")
+  public Integer getVersion() {
+    return version;
   }
 
   @Schema(description = "Data product guid")
@@ -96,6 +106,13 @@ public class RegisteredDataProduct {
     return deleted;
   }
 
+  @JsonIgnore
+  public boolean isEquivalent(RegisteredDataProduct that) {
+    return Objects.equals(info, that.info)
+        && Objects.equals(schemas, that.schemas)
+        && Objects.equals(configs, that.configs);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -105,7 +122,8 @@ public class RegisteredDataProduct {
       return false;
     }
     RegisteredDataProduct dataProduct = (RegisteredDataProduct) o;
-    return Objects.equals(guid, dataProduct.guid)
+    return Objects.equals(version, dataProduct.version)
+        && Objects.equals(guid, dataProduct.guid)
         && Objects.equals(info, dataProduct.info)
         && Objects.equals(schemas, dataProduct.schemas)
         && Objects.equals(configs, dataProduct.configs);
@@ -113,7 +131,7 @@ public class RegisteredDataProduct {
 
   @Override
   public int hashCode() {
-    return Objects.hash(guid, info, schemas, configs);
+    return Objects.hash(version, guid, info, schemas, configs);
   }
 
   @Override
@@ -128,5 +146,4 @@ public class RegisteredDataProduct {
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
-
 }

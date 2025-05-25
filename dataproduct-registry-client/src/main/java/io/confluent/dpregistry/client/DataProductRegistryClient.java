@@ -17,6 +17,7 @@
 package io.confluent.dpregistry.client;
 
 import io.confluent.dpregistry.client.rest.entities.DataProduct;
+import io.confluent.dpregistry.client.rest.entities.RegisteredDataProduct;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.Closeable;
 import java.io.IOException;
@@ -26,19 +27,33 @@ public interface DataProductRegistryClient extends Closeable {
 
   public static final int LATEST_VERSION = -1;
 
-  List<String> listDataProducts(boolean lookupDeleted)
+  List<String> listDataProductNames(
+      String env, String cluster, boolean lookupDeleted)
       throws IOException, RestClientException;
 
-  DataProduct getDataProduct(String env, String cluster, String name, boolean lookupDeleted)
+  List<Integer> listDataProductVersions(
+      String env, String cluster, String name, boolean lookupDeleted)
       throws IOException, RestClientException;
 
-  DataProduct createDataProduct(
+  RegisteredDataProduct getDataProduct(
+      String env, String cluster, String name, int version, boolean lookupDeleted)
+      throws IOException, RestClientException;
+
+  RegisteredDataProduct getLatestDataProduct(
+      String env, String cluster, String name, boolean lookupDeleted)
+      throws IOException, RestClientException;
+
+  RegisteredDataProduct createDataProduct(
       String env,
       String cluster,
       DataProduct dataProduct)
       throws IOException, RestClientException;
 
   void deleteDataProduct(String env, String cluster, String name, boolean permanentDelete)
+      throws IOException, RestClientException;
+
+  void deleteDataProductVersion(
+      String env, String cluster, String name, int version, boolean permanentDelete)
       throws IOException, RestClientException;
 
   void reset();
