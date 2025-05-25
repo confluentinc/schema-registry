@@ -20,7 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.confluent.dpregistry.client.DataProductRegistryClient;
-import io.confluent.dpregistry.client.rest.DekRegistryRestService;
+import io.confluent.dpregistry.client.rest.DataProductRegistryRestService;
 import io.confluent.dpregistry.client.rest.entities.RegisteredDataProduct;
 import io.confluent.dpregistry.metrics.MetricsManager;
 import io.confluent.dpregistry.storage.exceptions.DataProductNotSoftDeletedException;
@@ -31,7 +31,6 @@ import io.confluent.dpregistry.client.rest.entities.DataProduct;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
-import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
@@ -76,7 +75,7 @@ public class DataProductRegistry implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(DataProductRegistry.class);
 
-  public static final String KEY = "dekRegistry";
+  public static final String KEY = "dataProductRegistry";
 
   public static final int LATEST_VERSION = DataProductRegistryClient.LATEST_VERSION;
   public static final int MIN_VERSION = 1;
@@ -94,8 +93,10 @@ public class DataProductRegistry implements Closeable {
   private final MetricsManager metricsManager;
   private final DataProductRegistryConfig config;
 
-  private final int dataProductSearchDefaultLimit;
-  private final int dataProductSearchMaxLimit;
+  private final int nameSearchDefaultLimit;
+  private final int nameSearchMaxLimit;
+  private final int versionSearchDefaultLimit;
+  private final int versionSearchMaxLimit;
   // visible for testing
   final Cache<DataProductKey, DataProductValue> dataProducts;
   private final Map<String, Lock> tenantToLock = new ConcurrentHashMap<>();
@@ -114,9 +115,14 @@ public class DataProductRegistry implements Closeable {
       this.config = new DataProductRegistryConfig(schemaRegistry.config().originalProperties());
       this.dataProducts = createCache(new DataProductKeySerde(), new DataProductValueSerde(),
           config.topic(), getCacheUpdateHandler(config));
-      this.dataProductSearchDefaultLimit =
-              config.getInt(DataProductRegistryConfig.DATAPRODUCT_SEARCH_DEFAULT_LIMIT_CONFIG);
-      this.dataProductSearchMaxLimit = config.getInt(DataProductRegistryConfig.DATAPRODUCT_SEARCH_MAX_LIMIT_CONFIG);
+      this.nameSearchDefaultLimit =
+          config.getInt(DataProductRegistryConfig.DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.nameSearchMaxLimit =
+          config.getInt(DataProductRegistryConfig.DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_CONFIG);
+      this.versionSearchDefaultLimit =
+          config.getInt(DataProductRegistryConfig.DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.versionSearchMaxLimit =
+          config.getInt(DataProductRegistryConfig.DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
     }
@@ -172,11 +178,11 @@ public class DataProductRegistry implements Closeable {
 
   private CacheUpdateHandler<DataProductKey, DataProductValue> getCacheUpdateHandler(
       DataProductRegistryConfig config) {
-    Map<String, Object> handlerConfigs =
-        config.originalsWithPrefix(DataProductRegistryConfig.DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_CONFIG + ".");
+    Map<String, Object> handlerConfigs = config.originalsWithPrefix(
+        DataProductRegistryConfig.DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_CONFIG + ".");
     handlerConfigs.put(DataProductCacheUpdateHandler.DATA_PRODUCT_REGISTRY, this);
-    List<DataProductCacheUpdateHandler> customCacheHandlers =
-        config.getConfiguredInstances(DataProductRegistryConfig.DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_CONFIG,
+    List<DataProductCacheUpdateHandler> customCacheHandlers = config.getConfiguredInstances(
+        DataProductRegistryConfig.DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_CONFIG,
         DataProductCacheUpdateHandler.class,
         handlerConfigs);
     DataProductCacheUpdateHandler cacheHandler = new DefaultDataProductCacheUpdateHandler(this);
@@ -250,6 +256,14 @@ public class DataProductRegistry implements Closeable {
         .collect(Collectors.toList());
   }
 
+  public List<Integer> getDataProductVersions(
+      String env, String cluster, String name, boolean lookupDeleted) {
+    String tenant = schemaRegistry.tenant();
+    return getDataProducts(tenant, env, cluster, name, lookupDeleted).stream()
+        .map(kv -> ((DataProductKey) kv.key).getVersion())
+        .collect(Collectors.toList());
+  }
+
   protected List<KeyValue<DataProductKey, DataProductValue>> getDataProducts(
       String tenant, String env, String cluster, boolean lookupDeleted) {
     List<KeyValue<DataProductKey, DataProductValue>> result = new ArrayList<>();
@@ -287,7 +301,8 @@ public class DataProductRegistry implements Closeable {
   }
 
   public DataProductValue getDataProduct(
-      String env, String cluster, String name, int version, boolean lookupDeleted) {
+      String env, String cluster, String name, int version, boolean lookupDeleted)
+      throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     DataProductKey key = new DataProductKey(tenant, env, cluster, name, version);
     DataProductValue value = dataProducts.get(key);
@@ -337,9 +352,10 @@ public class DataProductRegistry implements Closeable {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     UriBuilder builder = UriBuilder.fromPath(
-        "/dataproduct-registry/v1/env/{env}/cluster/{cluster}/dataproducts");
+        "/dataproduct-registry/v1/environments/{env}/clusters/{cluster}"
+            + "/dataproducts/{name}/versions");
 
-    String path = builder.build(env, cluster).toString();
+    String path = builder.build(env, cluster, request.getInfo().getName()).toString();
 
     log.debug(String.format("Forwarding create data product request to %s", baseUrl));
     try {
@@ -366,9 +382,16 @@ public class DataProductRegistry implements Closeable {
         getLatestDataProduct(env, cluster, request.getInfo().getName());
     int newVersion = latest != null ? latest.key.getVersion() + 1 : MIN_VERSION;
 
+    DataProductValue value = new DataProductValue(UUID.randomUUID().toString(), request);
     DataProductKey key = new DataProductKey(
         tenant, env, cluster, request.getInfo().getName(), newVersion);
-    DataProductValue value = new DataProductValue(UUID.randomUUID().toString(), request);
+    KeyValue<DataProductKey, DataProductValue> oldKeyValue =
+        getLatestDataProduct(env, cluster, request.getInfo().getName());
+    if (oldKeyValue != null && value.isEquivalent(oldKeyValue.value)) {
+      // If the value is equivalent to the latest version, return the existing one
+      return oldKeyValue.value;
+    }
+
     dataProducts.put(key, value);
     // Retrieve data product with ts set
     return dataProducts.get(key);
@@ -403,7 +426,7 @@ public class DataProductRegistry implements Closeable {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     UriBuilder builder = UriBuilder.fromPath(
-        "/dataproduct-registry/v1/env/{env}/cluster/{cluster}/dataproducts/{name}")
+        "/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts/{name}")
         .queryParam("permanent", permanentDelete);
     String path = builder.build(env, cluster, name).toString();
 
@@ -481,7 +504,7 @@ public class DataProductRegistry implements Closeable {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     UriBuilder builder = UriBuilder.fromPath(
-        "/dataproduct-registry/v1/env/{env}/cluster/{cluster}/dataproducts/{name}"
+        "/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts/{name}"
             + "/versions/{version}")
         .queryParam("permanent", permanentDelete);
     String path = builder.build(env, cluster, name, version).toString();
@@ -535,14 +558,18 @@ public class DataProductRegistry implements Closeable {
     return limit;
   }
 
-  public int normalizeSearchLimit(int suppliedLimit) {
-    return normalizeLimit(suppliedLimit, dataProductSearchDefaultLimit, dataProductSearchMaxLimit);
+  public int normalizeNameSearchLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, nameSearchDefaultLimit, nameSearchMaxLimit);
+  }
+
+  public int normalizeVersionSearchLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, versionSearchDefaultLimit, versionSearchMaxLimit);
   }
 
   @PreDestroy
   @Override
   public void close() throws IOException {
-    log.info("Shutting down dek registry");
+    log.info("Shutting down data product registry");
     if (dataProducts != null) {
       dataProducts.close();
     }

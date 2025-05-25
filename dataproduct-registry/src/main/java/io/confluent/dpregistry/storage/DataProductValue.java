@@ -114,6 +114,13 @@ public class DataProductValue {
     return timestamp;
   }
 
+  @JsonIgnore
+  public boolean isEquivalent(DataProductValue that) {
+    return Objects.equals(info, that.info)
+        && Objects.equals(schemas, that.schemas)
+        && Objects.equals(configs, that.configs);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {

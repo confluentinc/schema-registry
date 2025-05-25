@@ -17,7 +17,6 @@ package io.confluent.dpregistry.metrics;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.confluent.dekregistry.client.rest.entities.KeyType;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import java.io.Closeable;
@@ -39,15 +38,11 @@ public class MetricsManager implements Closeable {
 
   public static final String KEY = "metricsManager";
 
-  static final String METRIC_GROUP = "dek_registry";
+  static final String METRIC_GROUP = "dataproduct_registry";
 
   static final String TENANT_TAG = "tenant";
 
-  static final String NUM_KEKS = "num_keks";
-
-  static final String NUM_KEKS_SHARED = "num_keks_shared";
-
-  static final String NUM_DEKS = "num_deks";
+  static final String NUM_DATA_PRODUCTS = "num_dataproducts";
 
   private final Map<String, TenantMetrics> tenantMetrics = new ConcurrentHashMap<>();
 
@@ -60,44 +55,23 @@ public class MetricsManager implements Closeable {
     schemaRegistry.properties().put(KEY, this);
   }
 
-  public long getKeyCount(String tenant, KeyType keyType) {
+  public long getDataProductCount(String tenant) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    return tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).get();
+    return tenantMetrics.getSensor(MetricDescriptor.NUM_DATA_PRODUCTS_MD, null, null).get();
   }
 
-  public void incrementKeyCount(String tenant, KeyType keyType) {
+  public void incrementKeyCount(String tenant) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).add(1);
+    tenantMetrics.getSensor(MetricDescriptor.NUM_DATA_PRODUCTS_MD, null, null).add(1);
   }
 
-  public void decrementKeyCount(String tenant, KeyType keyType) {
+  public void decrementKeyCount(String tenant) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    tenantMetrics.getSensor(getMetricDescriptor(keyType), null, null).add(-1);
-  }
-
-  public void incrementSharedKeyCount(String tenant) {
-    TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    tenantMetrics.getSensor(MetricDescriptor.NUM_KEKS_SHARED_MD, null, null).add(1);
-  }
-
-  public void decrementSharedKeyCount(String tenant) {
-    TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
-    tenantMetrics.getSensor(MetricDescriptor.NUM_KEKS_SHARED_MD, null, null).add(-1);
+    tenantMetrics.getSensor(MetricDescriptor.NUM_DATA_PRODUCTS_MD, null, null).add(-1);
   }
 
   private TenantMetrics getOrCreateTenantMetrics(String tenant) {
     return tenantMetrics.computeIfAbsent(tenant, TenantMetrics::new);
-  }
-
-  private MetricDescriptor getMetricDescriptor(KeyType keyType) {
-    switch (keyType) {
-      case KEK:
-        return MetricDescriptor.NUM_KEKS_MD;
-      case DEK:
-        return MetricDescriptor.NUM_DEKS_MD;
-      default:
-        throw new IllegalArgumentException();
-    }
   }
 
   @Override
@@ -161,12 +135,8 @@ public class MetricsManager implements Closeable {
   }
 
   private enum MetricDescriptor {
-    NUM_KEKS_MD(NUM_KEKS, METRIC_GROUP,
-        "Number of keks"),
-    NUM_KEKS_SHARED_MD(NUM_KEKS_SHARED, METRIC_GROUP,
-        "Number of keks shared"),
-    NUM_DEKS_MD(NUM_DEKS, METRIC_GROUP,
-        "Number of deks");
+    NUM_DATA_PRODUCTS_MD(NUM_DATA_PRODUCTS, METRIC_GROUP,
+        "Number of data products");
 
     public final String metricName;
     public final String group;

@@ -20,7 +20,9 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
@@ -113,4 +115,18 @@ public class RegisteredDataProduct {
   public int hashCode() {
     return Objects.hash(guid, info, schemas, configs);
   }
+
+  @Override
+  public String toString() {
+    try {
+      return toJson();
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
 }

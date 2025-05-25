@@ -15,28 +15,14 @@
 
 package io.confluent.dpregistry.web.rest.resources;
 
-import static io.confluent.dekregistry.storage.DekRegistry.MIN_VERSION;
-
-import com.google.common.base.CharMatcher;
-import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
-import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
-import io.confluent.dekregistry.client.rest.entities.Dek;
-import io.confluent.dekregistry.client.rest.entities.Kek;
-import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
-import io.confluent.dekregistry.storage.DataEncryptionKey;
-import io.confluent.dekregistry.storage.DekRegistry;
-import io.confluent.dekregistry.storage.KeyEncryptionKey;
-import io.confluent.dekregistry.storage.exceptions.AlreadyExistsException;
-import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
-import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
-import io.confluent.dekregistry.storage.exceptions.KeyNotSoftDeletedException;
-import io.confluent.dekregistry.storage.exceptions.KeyReferenceExistsException;
-import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
-import io.confluent.dekregistry.storage.exceptions.TooManyKeysException;
-import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
+import io.confluent.dpregistry.client.rest.entities.DataProduct;
+import io.confluent.dpregistry.storage.DataProductKey;
+import io.confluent.dpregistry.storage.exceptions.DataProductNotSoftDeletedException;
+import io.confluent.dpregistry.web.rest.exceptions.DataProductRegistryErrors;
+import io.confluent.dpregistry.client.rest.entities.RegisteredDataProduct;
 import io.confluent.dpregistry.storage.DataProductRegistry;
+import io.confluent.dpregistry.storage.DataProductValue;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
-import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
@@ -45,6 +31,7 @@ import io.confluent.kafka.schemaregistry.rest.resources.DocumentedName;
 import io.confluent.kafka.schemaregistry.rest.resources.RequestHeaderBuilder;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
+import io.kcache.KeyValue;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -57,7 +44,6 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -69,15 +55,13 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Path("/dataproduct-registry/v1")
+@Path("/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts")
 @Singleton
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
     Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
@@ -111,14 +95,19 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
   @PerformanceMetric("dataproducts.list")
   @DocumentedName("getDataProductNames")
   public List<String> getDataProductNames(
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
       @Parameter(description = "Whether to include deleted data products")
       @QueryParam("deleted") boolean lookupDeleted,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    limit = dataProductRegistry.normalizeSearchLimit(limit);
-    List<String> dataProductNames = dataProductRegistry.getDataProductNames(lookupDeleted);
+    limit = dataProductRegistry.normalizeNameSearchLimit(limit);
+    List<String> dataProductNames = dataProductRegistry.getDataProductNames(
+        env, cluster, lookupDeleted);
     return dataProductNames.stream()
       .skip(offset)
       .limit(limit)
@@ -126,178 +115,110 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
   }
 
   @GET
-  @Path("/{name}")
+  @Path("/{name}/versions/{version}")
   @Operation(summary = "Get a data product by name.", responses = {
       @ApiResponse(responseCode = "200", description = "The data product info",
-          content = @Content(schema = @Schema(implementation = Kek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Data product not found"),
+          content = @Content(schema = @Schema(implementation = RegisteredDataProduct.class))),
+      @ApiResponse(responseCode = "404",
+          description = "Error code 40470 -- Data product not found"),
       @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid data product")
   })
-  @PerformanceMetric("keks.get")
-  @DocumentedName("getKek")
-  public Kek getKek(
-      @Parameter(description = "Name of the kek", required = true)
+  @PerformanceMetric("dataproducts.get")
+  @DocumentedName("getDataProduct")
+  public RegisteredDataProduct getDataProduct(
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
+      @Parameter(description = "Name of the data product", required = true)
       @PathParam("name") String name,
-      @Parameter(description = "Whether to include deleted keys")
+      @Parameter(description = "Version of the data product", required = true)
+      @PathParam("version") String version,
+      @Parameter(description = "Whether to include deleted data products")
       @QueryParam("deleted") boolean lookupDeleted) {
 
     checkName(name);
-
-    KeyEncryptionKey key = dataProductRegistry.getKek(name, lookupDeleted);
-    if (key == null) {
-      throw DekRegistryErrors.keyNotFoundException(name);
+    VersionId versionId;
+    try {
+      versionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
     }
-    return key.toEntity();
-  }
-
-  @GET
-  @Path("/{name}/deks")
-  @Operation(summary = "Get a list of dek subjects.", responses = {
-      @ApiResponse(responseCode = "200",
-          description = "List of dek subjects", content = @Content(
-          array = @ArraySchema(schema = @Schema(
-              example = "User")))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
-  })
-  @PerformanceMetric("deks.list")
-  @DocumentedName("getDekSubjects")
-  public List<String> getDekSubjects(
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted,
-      @Parameter(description = "Pagination offset for results")
-      @DefaultValue("0") @QueryParam("offset") int offset,
-      @Parameter(description = "Pagination size for results. Ignored if negative")
-      @DefaultValue("-1") @QueryParam("limit") int limit) {
-
-    checkName(kekName);
-
-    KeyEncryptionKey key = dataProductRegistry.getKek(kekName, lookupDeleted);
-    if (key == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
-    }
-    limit = dataProductRegistry.normalizeDekSubjectLimit(limit);
-    List<String> dekSubjects = dataProductRegistry.getDekSubjects(kekName, lookupDeleted);
-    return dekSubjects.stream()
-      .skip(offset)
-      .limit(limit)
-      .collect(Collectors.toList());
-  }
-
-  @GET
-  @Path("/{name}/deks/{subject}")
-  @Operation(summary = "Get a dek by subject.", responses = {
-      @ApiResponse(responseCode = "200", description = "The dek info",
-          content = @Content(schema = @Schema(implementation = Dek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
-      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
-  })
-  @PerformanceMetric("deks.get")
-  @DocumentedName("getDek")
-  public Dek getDek(
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm,
-      @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
-
-    checkName(kekName);
-    checkSubject(subject);
 
     try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, lookupDeleted);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(kekName);
+      DataProductValue product = dataProductRegistry.getDataProduct(
+          env, cluster, name, versionId.getVersionId(), lookupDeleted);
+      if (product == null) {
+        throw DataProductRegistryErrors.dataProductNotFoundException(name);
       }
-      DataEncryptionKey key = dataProductRegistry.getDek(
-          kekName, subject, MIN_VERSION, algorithm, lookupDeleted);
-      if (key == null) {
-        throw DekRegistryErrors.keyNotFoundException(subject);
-      }
-      return key.toDekEntity();
-    } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      return product.toEntity();
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while retrieving key", e);
+      throw Errors.schemaRegistryException("Error while retrieving data product", e);
     }
   }
 
   @GET
-  @Path("/{name}/deks/{subject}/versions")
-  @Operation(summary = "List versions of dek.", responses = {
+  @Path("/{name}/versions")
+  @Operation(summary = "List versions of data product.", responses = {
       @ApiResponse(responseCode = "200",
-          description = "List of version numbers for dek",
+          description = "List of version numbers for data product",
           content = @Content(array = @ArraySchema(
               schema = @Schema(type = "integer",
                   format = "int32", example = "1")))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
+      @ApiResponse(responseCode = "404",
+          description = "Error code 40470 -- Data product not found"),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid data product")
   })
-  @PerformanceMetric("deks.versions.list")
-  @DocumentedName("getAllDekVersions")
-  public List<Integer> getDekVersions(
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm,
-      @Parameter(description = "Whether to include deleted keys")
+  @PerformanceMetric("dataproducts.versions.list")
+  @DocumentedName("getAllDataProductVersions")
+  public List<Integer> getDataProductVersions(
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
+      @Parameter(description = "Name of the data product", required = true)
+      @PathParam("name") String name,
+      @Parameter(description = "Whether to include deleted data products")
       @QueryParam("deleted") boolean lookupDeleted,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
 
-    checkName(kekName);
-    checkSubject(subject);
+    checkName(name);
 
-    KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, lookupDeleted);
-    if (kek == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
-    }
-    limit = dataProductRegistry.normalizeDekVersionLimit(limit);
-    List<Integer> dekVersions = dataProductRegistry.getDekVersions(
-            kekName, subject, algorithm, lookupDeleted);
-    return dekVersions.stream()
+    limit = dataProductRegistry.normalizeVersionSearchLimit(limit);
+    List<Integer> versions = dataProductRegistry.getDataProductVersions(
+        env, cluster, name, lookupDeleted);
+    return versions.stream()
       .skip(offset)
       .limit(limit)
       .collect(Collectors.toList());
   }
 
   @GET
-  @Path("/{name}/deks/{subject}/versions/{version}")
-  @Operation(summary = "Get a dek by subject and version.", responses = {
-      @ApiResponse(responseCode = "200", description = "The dek info",
-          content = @Content(schema = @Schema(implementation = Dek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42202 -- Invalid version. "
-          + "Error code 42271 -- Invalid key."),
-      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
+  @Path("/{name}/versions/{version}")
+  @Operation(summary = "Get a data product by name and version.", responses = {
+      @ApiResponse(responseCode = "200", description = "The data product info",
+          content = @Content(schema = @Schema(implementation = RegisteredDataProduct.class))),
+      @ApiResponse(responseCode = "404",
+          description = "Error code 40470 -- Data product not found")
   })
-  @PerformanceMetric("deks.versions.get")
-  @DocumentedName("getDekByVersion")
-  public Dek getDekByVersion(
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
+  @PerformanceMetric("dataproducts.versions.get")
+  @DocumentedName("getDataProductByVersion")
+  public RegisteredDataProduct getDataProductByVersion(
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
+      @Parameter(description = "Name of the data product", required = true)
+      @PathParam("name") String name,
       @Parameter(description = "Version of the dek", required = true)
       @PathParam("version") String version,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm,
-      @Parameter(description = "Whether to include deleted keys")
+      @Parameter(description = "Whether to include deleted data products")
       @QueryParam("deleted") boolean lookupDeleted) {
 
-    checkName(kekName);
-    checkSubject(subject);
+    checkName(name);
     VersionId versionId;
     try {
       versionId = new VersionId(version);
@@ -306,242 +227,76 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
     }
 
     try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, lookupDeleted);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(kekName);
+      DataProductValue product = dataProductRegistry.getDataProduct(
+          env, cluster, name, versionId.getVersionId(), lookupDeleted);
+      if (product == null) {
+        throw DataProductRegistryErrors.dataProductNotFoundException(name);
       }
-      DataEncryptionKey key = dataProductRegistry.getDek(
-          kekName, subject, versionId.getVersionId(), algorithm, lookupDeleted);
-      if (key == null) {
-        throw DekRegistryErrors.keyNotFoundException(subject);
-      }
-      return key.toDekEntity();
-    } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      return product.toEntity();
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while retrieving key", e);
+      throw Errors.schemaRegistryException("Error while retrieving data product", e);
     }
   }
 
   @POST
-  @Operation(summary = "Create a kek.", responses = {
+  @Operation(summary = "Create a data product.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
-          content = @Content(schema = @Schema(implementation = Kek.class))),
+          content = @Content(schema = @Schema(implementation = RegisteredDataProduct.class))),
       @ApiResponse(responseCode = "409", description = "Conflict. "
-          + "Error code 40971 -- Key already exists. "
-          + "Error code 40972 -- Too many keys."),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
+          + "Error code 40971 -- Data product already exists.")
   })
-  @PerformanceMetric("keks.create")
-  @DocumentedName("registerKek")
-  public void createKek(
+  @PerformanceMetric("dataproducts.create")
+  @DocumentedName("registerDataProduct")
+  public void createDataProduct(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      @Parameter(description = "Whether to test kek sharing")
-      @QueryParam("testSharing") boolean testSharing,
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
       @Parameter(description = "The create request", required = true)
-      @NotNull CreateKekRequest request) {
+      @NotNull DataProduct request) {
 
-    log.debug("Creating kek {}", request.getName());
+    log.debug("Creating data product {}", request.getInfo().getName());
 
-    checkName(request.getName());
-
-    if (request.getKmsKeyId() == null || request.getKmsKeyId().isEmpty()) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsKeyId");
-    } else if (request.getKmsType() == null) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsType");
-    }
-
-    try {
-      request.validate();
-    } catch (Exception e) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("kmsKeyId");
-    }
+    checkName(request.getInfo().getName());
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      if (request.isShared() && testSharing) {
-        KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
-            request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
-        dataProductRegistry.testKek(kek);
-      }
-
-      Kek kek = dataProductRegistry.createKekOrForward(request, headerProperties);
-      asyncResponse.resume(kek);
-    } catch (AlreadyExistsException e) {
-      throw DekRegistryErrors.alreadyExistsException(e.getMessage());
-    } catch (TooManyKeysException e) {
-      throw DekRegistryErrors.tooManyKeysException(dataProductRegistry.config().maxKeys());
+      RegisteredDataProduct product = dataProductRegistry.createDataProductOrForward(
+          env, cluster, request, headerProperties);
+      asyncResponse.resume(product);
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
-    }
-  }
-
-  @POST
-  @Path("/{name}/test")
-  @Operation(summary = "Test a kek.", responses = {
-      @ApiResponse(responseCode = "200", description = "The test response",
-          content = @Content(schema = @Schema(implementation = Kek.class))),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
-      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
-  })
-  @PerformanceMetric("keks.test")
-  @DocumentedName("testKek")
-  public void testKek(
-      final @Suspended AsyncResponse asyncResponse,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName) {
-
-    log.debug("Testing kek {}", kekName);
-
-    checkName(kekName);
-
-    KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, false);
-    if (kek == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
-    }
-
-    try {
-      dataProductRegistry.testKek(kek);
-      asyncResponse.resume(kek);
-    } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
-    } catch (InvalidKeyException e) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while testing key", e);
-    }
-  }
-
-  @POST
-  @Path("/{name}/deks")
-  @Operation(summary = "Create a dek.", responses = {
-      @ApiResponse(responseCode = "200", description = "The create response",
-          content = @Content(schema = @Schema(implementation = Dek.class))),
-      @ApiResponse(responseCode = "409", description = "Conflict. "
-          + "Error code 40971 -- Key already exists. "
-          + "Error code 40972 -- Too many keys."),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
-      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
-  })
-  @PerformanceMetric("deks.create")
-  @DocumentedName("registerDek")
-  public void createDek(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "The create request", required = true)
-      @NotNull CreateDekRequest request) {
-
-    log.debug("Creating dek {} for kek {}", request.getSubject(), kekName);
-
-    checkName(kekName);
-    checkSubject(request.getSubject());
-
-    KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, request.isDeleted());
-    if (kek == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
-    }
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, getSchemaRegistry().config().whitelistHeaders());
-
-    try {
-      Dek dek = dataProductRegistry.createDekOrForward(kekName, request, headerProperties);
-      asyncResponse.resume(dek);
-    } catch (AlreadyExistsException e) {
-      throw DekRegistryErrors.alreadyExistsException(e.getMessage());
-    } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
-    } catch (InvalidKeyException e) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
-    } catch (TooManyKeysException e) {
-      throw DekRegistryErrors.tooManyKeysException(dataProductRegistry.config().maxKeys());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
-    }
-  }
-
-  @PUT
-  @Path("/{name}")
-  @Operation(summary = "Alters a kek.", responses = {
-      @ApiResponse(responseCode = "200", description = "The update response",
-          content = @Content(schema = @Schema(implementation = Kek.class))),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "409", description = "Error code 40971 -- Key already exists"),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
-  })
-  @PerformanceMetric("keks.put")
-  @DocumentedName("updateKek")
-  public void putKek(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String name,
-      @Parameter(description = "Whether to test kek sharing")
-      @QueryParam("testSharing") boolean testSharing,
-      @Parameter(description = "The update request", required = true)
-      @NotNull UpdateKekRequest request) {
-
-    log.debug("Updating kek {}", name);
-
-    checkName(name);
-
-    KeyEncryptionKey oldKek = dataProductRegistry.getKek(name, false);
-    if (oldKek == null) {
-      throw DekRegistryErrors.keyNotFoundException(name);
-    }
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, getSchemaRegistry().config().whitelistHeaders());
-
-    try {
-      boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
-      if (shared && testSharing) {
-        SortedMap<String, String> kmsProps = request.getKmsProps() != null
-            ? new TreeMap<>(request.getKmsProps())
-            : oldKek.getKmsProps();
-        KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
-            oldKek.getKmsKeyId(), kmsProps, null, true, false);
-        dataProductRegistry.testKek(newKek);
-      }
-
-      Kek kek = dataProductRegistry.putKekOrForward(name, request, headerProperties);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(name);
-      }
-      asyncResponse.resume(kek);
-    } catch (AlreadyExistsException e) {
-      throw DekRegistryErrors.alreadyExistsException(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
+      throw Errors.schemaRegistryException(
+          "Error while creating data product: " + e.getMessage(), e);
     }
   }
 
   @DELETE
   @Path("/{name}")
-  @Operation(summary = "Delete a kek.", responses = {
+  @Operation(summary = "Delete all versions of a data product.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
       @ApiResponse(responseCode = "404", description = "Not found. "
-          + "Error code 40470 -- Key not found. "
-          + "Error code 40471 -- Key not soft-deleted."),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42271 -- Invalid key. "
-          + "Error code 42272 -- References to key exist."),
+          + "Error code 40470 -- Data product not found. "
+          + "Error code 40471 -- Data product not soft-deleted.")
   })
-  @PerformanceMetric("keks.delete")
-  @DocumentedName("deregisterKek")
-  public void deleteKek(
+  @PerformanceMetric("dataproducts.delete")
+  @DocumentedName("deleteDataProduct")
+  public void deleteDataProduct(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
+      @Parameter(description = "Name of the data product", required = true)
       @PathParam("name") String name,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
 
-    log.debug("Deleting kek {}", name);
+    log.debug("Deleting data product {}", name);
 
     checkName(name);
 
@@ -549,251 +304,47 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(name, true);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(name);
-      }
-
-      dataProductRegistry.deleteDataProductOrForward(name, permanentDelete, headerProperties);
-      asyncResponse.resume(Response.status(204).build());
-    } catch (KeyNotSoftDeletedException e) {
-      throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
-    } catch (KeyReferenceExistsException e) {
-      throw DekRegistryErrors.referenceExistsException(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting key", e);
-    }
-  }
-
-  @DELETE
-  @Path("/{name}/deks/{subject}")
-  @Operation(summary = "Delete all versions of a dek.", responses = {
-      @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Not found. "
-          + "Error code 40470 -- Key not found. "
-          + "Error code 40471 -- Key not soft-deleted."),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
-  })
-  @PerformanceMetric("deks.delete")
-  @DocumentedName("deregisterDekVersions")
-  public void deleteDekVersions(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm,
-      @Parameter(description = "Whether to perform a permanent delete")
-      @QueryParam("permanent") boolean permanentDelete) {
-
-    log.debug("Deleting dek {} for kek {}", subject, kekName);
-
-    checkName(kekName);
-    checkSubject(subject);
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, getSchemaRegistry().config().whitelistHeaders());
-
-    try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, true);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(kekName);
-      }
-      DataEncryptionKey key = dataProductRegistry.getLatestDek(kekName, subject, algorithm, true);
-      if (key == null) {
-        throw DekRegistryErrors.keyNotFoundException(subject);
+      KeyValue<DataProductKey, DataProductValue> product =
+          dataProductRegistry.getLatestDataProduct(env, cluster, name);
+      if (product == null) {
+        throw DataProductRegistryErrors.dataProductNotFoundException(name);
       }
 
       dataProductRegistry.deleteDataProductOrForward(
-          kekName, subject, algorithm, permanentDelete, headerProperties);
+          cluster, env, name, permanentDelete, headerProperties);
       asyncResponse.resume(Response.status(204).build());
-    } catch (KeyNotSoftDeletedException e) {
-      throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting key", e);
+      throw Errors.schemaRegistryException("Error while deleting data product", e);
     }
   }
 
   @DELETE
-  @Path("/{name}/deks/{subject}/versions/{version}")
-  @Operation(summary = "Delete a dek version.", responses = {
+  @Path("/{name}/versions/{version}")
+  @Operation(summary = "Delete a data product version.", responses = {
       @ApiResponse(responseCode = "204", description = "No Content"),
       @ApiResponse(responseCode = "404", description = "Not found. "
-          + "Error code 40470 -- Key not found. "
-          + "Error code 40471 -- Key not soft-deleted."),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42202 -- Invalid version. "
-          + "Error code 42271 -- Invalid key."),
+          + "Error code 40470 -- Data product not found. "
+          + "Error code 40471 -- Data product not soft-deleted.")
   })
-  @PerformanceMetric("deks.versions.delete")
-  @DocumentedName("deregisterDekVersion")
-  public void deleteDekVersion(
+  @PerformanceMetric("dataproducts.versions.delete")
+  @DocumentedName("deleteDataProductVersion")
+  public void deleteDataProductVersion(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
-      @Parameter(description = "Version of the dek", required = true)
+      @Parameter(description = "The environment", required = true)
+      @PathParam("env") String env,
+      @Parameter(description = "The cluster", required = true)
+      @PathParam("cluster") String cluster,
+      @Parameter(description = "Name of the data product", required = true)
+      @PathParam("name") String name,
+      @Parameter(description = "Version of the data product", required = true)
       @PathParam("version") String version,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
 
-    log.debug("Deleting dek {} for kek {}", subject, kekName);
-
-    checkName(kekName);
-    checkSubject(subject);
-    VersionId versionId;
-    try {
-      versionId = new VersionId(version);
-    } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException(e.getMessage());
-    }
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, getSchemaRegistry().config().whitelistHeaders());
-
-    try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, true);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(kekName);
-      }
-      DataEncryptionKey key = dataProductRegistry.getDek(
-          kekName, subject, versionId.getVersionId(), algorithm, true);
-      if (key == null) {
-        throw DekRegistryErrors.keyNotFoundException(subject);
-      }
-
-      dataProductRegistry.deleteDekVersionOrForward(
-          kekName, subject, versionId.getVersionId(), algorithm, permanentDelete, headerProperties);
-      asyncResponse.resume(Response.status(204).build());
-    } catch (KeyNotSoftDeletedException e) {
-      throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting key", e);
-    }
-  }
-
-  @POST
-  @Path("/{name}/undelete")
-  @Operation(summary = "Undelete a kek.", responses = {
-      @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Error code 40470 -- Key not found"),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42271 -- Invalid key. "
-          + "Error code 42272 -- References to key exist."),
-  })
-  @PerformanceMetric("keks.undelete")
-  @DocumentedName("undeleteKek")
-  public void undeleteKek(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String name) {
-
-    log.debug("Undeleting kek {}", name);
+    log.debug("Deleting data product {}, version {}", name, version);
 
     checkName(name);
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, getSchemaRegistry().config().whitelistHeaders());
-
-    try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(name, true);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(name);
-      }
-
-      dataProductRegistry.undeleteKekOrForward(name, headerProperties);
-      asyncResponse.resume(Response.status(204).build());
-    } catch (KeyReferenceExistsException e) {
-      throw DekRegistryErrors.referenceExistsException(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while undeleting key", e);
-    }
-  }
-
-  @POST
-  @Path("/{name}/deks/{subject}/undelete")
-  @Operation(summary = "Undelete all versions of a dek.", responses = {
-      @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Not found. "
-          + "Error code 40470 -- Key not found. "
-          + "Error code 40472 -- Key must be undeleted."),
-      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key")
-  })
-  @PerformanceMetric("deks.undelete")
-  @DocumentedName("undeleteDekVersions")
-  public void undeleteDekVersions(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm) {
-
-    log.debug("Undeleting dek {} for kek {}", subject, kekName);
-
-    checkName(kekName);
-    checkSubject(subject);
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, getSchemaRegistry().config().whitelistHeaders());
-
-    try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, true);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(kekName);
-      }
-      DataEncryptionKey key = dataProductRegistry.getLatestDek(kekName, subject, algorithm, true);
-      if (key == null) {
-        throw DekRegistryErrors.keyNotFoundException(subject);
-      }
-
-      dataProductRegistry.undeleteDekOrForward(kekName, subject, algorithm, headerProperties);
-      asyncResponse.resume(Response.status(204).build());
-    } catch (KeySoftDeletedException e) {
-      throw DekRegistryErrors.keySoftDeletedException(e.getName());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while undeleting key", e);
-    }
-  }
-
-  @POST
-  @Path("/{name}/deks/{subject}/versions/{version}/undelete")
-  @Operation(summary = "Undelete a dek version.", responses = {
-      @ApiResponse(responseCode = "204", description = "No Content"),
-      @ApiResponse(responseCode = "404", description = "Not found. "
-          + "Error code 40470 -- Key not found. "
-          + "Error code 40472 -- Key must be undeleted."),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42202 -- Invalid version. "
-          + "Error code 42271 -- Invalid key."),
-  })
-  @PerformanceMetric("deks.versions.undelete")
-  @DocumentedName("undeleteDekVersion")
-  public void undeleteDekVersion(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Name of the kek", required = true)
-      @PathParam("name") String kekName,
-      @Parameter(description = "Subject of the dek", required = true)
-      @PathParam("subject") String subject,
-      @Parameter(description = "Version of the dek", required = true)
-      @PathParam("version") String version,
-      @Parameter(description = "Algorithm of the dek")
-      @QueryParam("algorithm") DekFormat algorithm) {
-
-    log.debug("Undeleting dek {} for kek {}", subject, kekName);
-
-    checkName(kekName);
-    checkSubject(subject);
     VersionId versionId;
     try {
       versionId = new VersionId(version);
@@ -805,49 +356,38 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      KeyEncryptionKey kek = dataProductRegistry.getKek(kekName, true);
-      if (kek == null) {
-        throw DekRegistryErrors.keyNotFoundException(kekName);
-      }
-      DataEncryptionKey key = dataProductRegistry.getDek(
-          kekName, subject, versionId.getVersionId(), algorithm, true);
-      if (key == null) {
-        throw DekRegistryErrors.keyNotFoundException(subject);
+      DataProductValue product = dataProductRegistry.getDataProduct(
+          env, cluster, name, versionId.getVersionId(), true);
+      if (product == null) {
+        throw DataProductRegistryErrors.dataProductNotFoundException(name);
       }
 
-      dataProductRegistry.undeleteDekVersionOrForward(
-          kekName, subject, versionId.getVersionId(), algorithm, headerProperties);
+      dataProductRegistry.deleteDataProductVersionOrForward(
+          env, cluster, name, versionId.getVersionId(), permanentDelete, headerProperties);
       asyncResponse.resume(Response.status(204).build());
-    } catch (KeySoftDeletedException e) {
-      throw DekRegistryErrors.keySoftDeletedException(e.getName());
+    } catch (DataProductNotSoftDeletedException e) {
+      throw DataProductRegistryErrors.dataProductNotSoftDeletedException(e.getName());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while undeleting key", e);
+      throw Errors.schemaRegistryException("Error while deleting data product", e);
     }
   }
 
   private static void checkName(String name) {
     if (name == null || name.isEmpty()) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+      throw DataProductRegistryErrors.invalidOrMissingDataProduct("name");
     }
     if (name.length() > NAME_MAX_LENGTH) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+      throw DataProductRegistryErrors.invalidOrMissingDataProduct("name");
     }
     char first = name.charAt(0);
     if (!(Character.isLetter(first) || first == '_')) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+      throw DataProductRegistryErrors.invalidOrMissingDataProduct("name");
     }
     for (int i = 1; i < name.length(); i++) {
       char c = name.charAt(i);
       if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
-        throw DekRegistryErrors.invalidOrMissingKeyInfo("name");
+        throw DataProductRegistryErrors.invalidOrMissingDataProduct("name");
       }
-    }
-  }
-
-  private static void checkSubject(String subject) {
-    if (subject == null || subject.isEmpty()
-        || CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("subject");
     }
   }
 }

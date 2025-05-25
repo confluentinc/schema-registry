@@ -21,7 +21,8 @@ import org.slf4j.LoggerFactory;
 
 public class DefaultDataProductCacheUpdateHandler implements DataProductCacheUpdateHandler {
 
-  private static final Logger log = LoggerFactory.getLogger(DefaultDataProductCacheUpdateHandler.class);
+  private static final Logger log = LoggerFactory.getLogger(
+      DefaultDataProductCacheUpdateHandler.class);
 
   private final DataProductRegistry dataProductRegistry;
 

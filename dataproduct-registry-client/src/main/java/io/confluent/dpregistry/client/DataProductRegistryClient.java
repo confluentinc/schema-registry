@@ -16,13 +16,11 @@
 
 package io.confluent.dpregistry.client;
 
-import com.google.common.base.Ticker;
 import io.confluent.dpregistry.client.rest.entities.DataProduct;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 public interface DataProductRegistryClient extends Closeable {
 

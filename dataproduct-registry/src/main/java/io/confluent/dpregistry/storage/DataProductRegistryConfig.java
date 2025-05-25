@@ -39,21 +39,35 @@ public class DataProductRegistryConfig extends SchemaRegistryConfig {
 
   protected static final String DATAPRODUCT_REGISTRY_TOPIC_DEFAULT = "_dp_registry";
 
-  protected static final String DATAPRODUCT_SEARCH_DEFAULT_LIMIT_CONFIG = "dataproduct.search.default.limit";
-  protected static final int DATAPRODUCT_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+  protected static final String DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_CONFIG =
+      "dataproduct.name.search.default.limit";
+  protected static final int DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
-  protected static final String DATAPRODUCT_SEARCH_MAX_LIMIT_CONFIG = "dataproduct.search.max.limit";
-  protected static final int DATAPRODUCT_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+  protected static final String DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_CONFIG =
+      "dataproduct.name.search.max.limit";
+  protected static final int DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  protected static final String DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG =
+      "dataproduct.version.search.default.limit";
+  protected static final int DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  protected static final String DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_CONFIG =
+      "dataproduct.version.search.max.limit";
+  protected static final int DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
   protected static final String DATAPRODUCT_REGISTRY_TOPIC_DOC =
       "The topic used to persist data products for the data product registry.";
   protected static final String DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_DOC =
       "A list of classes to use as CacheUpdateHandler. Implementing the interface "
           + "<code>CacheUpdateHandler</code> allows you to handle Kafka cache update events.";
-  protected static final String DATAPRODUCT_SEARCH_DEFAULT_LIMIT_DOC =
-      "The default limit for data product searches.";
-  protected static final String DATAPRODUCT_SEARCH_MAX_LIMIT_DOC =
-      "The max limit for data product searches.";
+  protected static final String DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for data product searches by name.";
+  protected static final String DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for data product searches by name.";
+  protected static final String DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for data product searches by version.";
+  protected static final String DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for data product searches by version.";
 
   private static final ConfigDef serverConfig;
 
@@ -61,11 +75,18 @@ public class DataProductRegistryConfig extends SchemaRegistryConfig {
     serverConfig = baseSchemaRegistryConfigDef()
         .define(DATAPRODUCT_REGISTRY_TOPIC_CONFIG, STRING, DATAPRODUCT_REGISTRY_TOPIC_DEFAULT,
             HIGH, DATAPRODUCT_REGISTRY_TOPIC_DOC)
-        .define(DATAPRODUCT_SEARCH_DEFAULT_LIMIT_CONFIG, INT,
-            DATAPRODUCT_SEARCH_DEFAULT_LIMIT_DEFAULT,
-            LOW, DATAPRODUCT_SEARCH_DEFAULT_LIMIT_DOC)
-        .define(DATAPRODUCT_SEARCH_MAX_LIMIT_CONFIG, INT, DATAPRODUCT_SEARCH_MAX_LIMIT_DEFAULT,
-            LOW, DATAPRODUCT_SEARCH_MAX_LIMIT_DOC)
+        .define(DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_CONFIG, INT,
+            DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            LOW, DATAPRODUCT_NAME_SEARCH_DEFAULT_LIMIT_DOC)
+        .define(DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_CONFIG, INT,
+            DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_DEFAULT,
+            LOW, DATAPRODUCT_NAME_SEARCH_MAX_LIMIT_DOC)
+        .define(DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG, INT,
+            DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            LOW, DATAPRODUCT_VERSION_SEARCH_DEFAULT_LIMIT_DOC)
+        .define(DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_CONFIG, INT,
+            DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_DEFAULT,
+            LOW, DATAPRODUCT_VERSION_SEARCH_MAX_LIMIT_DOC)
         .define(DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_CONFIG, ConfigDef.Type.LIST, "",
             LOW, DATAPRODUCT_REGISTRY_UPDATE_HANDLERS_DOC);
   }
@@ -93,7 +114,8 @@ public class DataProductRegistryConfig extends SchemaRegistryConfig {
     this(serverConfig, props);
   }
 
-  public DataProductRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
+  public DataProductRegistryConfig(ConfigDef configDef, Properties props)
+      throws RestConfigException {
     super(configDef, props);
   }
 

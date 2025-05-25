@@ -20,7 +20,9 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
@@ -87,6 +89,19 @@ public class DataProduct {
   @Override
   public int hashCode() {
     return Objects.hash(info, schemas, configs);
+  }
+
+  @Override
+  public String toString() {
+    try {
+      return toJson();
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
   public void updateHash(MessageDigest md) {
