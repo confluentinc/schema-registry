@@ -554,7 +554,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
 
-      dataProductRegistry.deleteKekOrForward(name, permanentDelete, headerProperties);
+      dataProductRegistry.deleteDataProductOrForward(name, permanentDelete, headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (KeyNotSoftDeletedException e) {
       throw DekRegistryErrors.keyNotSoftDeletedException(e.getName());
@@ -606,7 +606,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
 
-      dataProductRegistry.deleteDekOrForward(
+      dataProductRegistry.deleteDataProductOrForward(
           kekName, subject, algorithm, permanentDelete, headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (KeyNotSoftDeletedException e) {
