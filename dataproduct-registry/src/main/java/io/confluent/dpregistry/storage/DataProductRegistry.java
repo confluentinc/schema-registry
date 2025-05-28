@@ -251,7 +251,7 @@ public class DataProductRegistry implements Closeable {
 
   public List<String> getDataProductNames(String env, String cluster, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getDataProducts(env, cluster, tenant, lookupDeleted).stream()
+    return getDataProducts(tenant, env, cluster, lookupDeleted).stream()
         .map(kv -> ((DataProductKey) kv.key).getName())
         .collect(Collectors.toList());
   }
