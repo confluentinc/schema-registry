@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Collections;
 import java.util.Map;
@@ -34,15 +35,15 @@ public class DataProductSchemas {
 
   public static final int NAME_MAX_LENGTH = 256;
 
-  private final Map<String, DataProductSchema> headers;
-  private final DataProductSchema key;
-  private final DataProductSchema value;
+  private final Map<String, SchemaValue> headers;
+  private final SchemaValue key;
+  private final SchemaValue value;
 
   @JsonCreator
-  public DataProductSchemas(@JsonProperty("headers") Map<String, DataProductSchema> headers,
-              @JsonProperty("key") DataProductSchema key,
-              @JsonProperty("value") DataProductSchema value) {
-    SortedMap<String, DataProductSchema> sortedHeaders = headers != null
+  public DataProductSchemas(@JsonProperty("headers") Map<String, SchemaValue> headers,
+              @JsonProperty("key") SchemaValue key,
+              @JsonProperty("value") SchemaValue value) {
+    SortedMap<String, SchemaValue> sortedHeaders = headers != null
         ? new TreeMap<>(headers)
         : Collections.emptySortedMap();
     this.headers = Collections.unmodifiableSortedMap(sortedHeaders);
@@ -57,32 +58,32 @@ public class DataProductSchemas {
             .collect(
                 TreeMap::new,
                 (m, e) ->
-                    m.put(e.getKey(), new DataProductSchema(e.getValue())),
+                    m.put(e.getKey(), new SchemaValue(e.getValue())),
                 TreeMap::putAll))
         : Collections.emptySortedMap();
     this.key = dataProductSchemas.getKey() != null
-        ? new DataProductSchema(dataProductSchemas.getKey())
+        ? new SchemaValue(dataProductSchemas.getKey())
         : null;
     this.value = dataProductSchemas.getValue() != null
-        ? new DataProductSchema(dataProductSchemas.getValue())
+        ? new SchemaValue(dataProductSchemas.getValue())
         : null;
   }
 
   @Schema(description = "Headers")
   @JsonProperty("headers")
-  public Map<String, DataProductSchema> getHeaders() {
+  public Map<String, SchemaValue> getHeaders() {
     return headers;
   }
 
   @Schema(description = "Key")
   @JsonProperty("key")
-  public DataProductSchema getKey() {
+  public SchemaValue getKey() {
     return key;
   }
 
   @Schema(description = "Value")
   @JsonProperty("value")
-  public DataProductSchema getValue() {
+  public SchemaValue getValue() {
     return value;
   }
 
@@ -112,11 +113,11 @@ public class DataProductSchemas {
                 .collect(
                     TreeMap::new,
                     (m, e) ->
-                        m.put(e.getKey(), e.getValue().toEntity()),
+                        m.put(e.getKey(), e.getValue().toSchemaEntity()),
                     TreeMap::putAll)
             : Collections.emptySortedMap(),
-        key != null ? key.toEntity() : null,
-        value != null ? value.toEntity() : null
+        key != null ? key.toSchemaEntity() : null,
+        value != null ? value.toSchemaEntity() : null
     );
   }
 }

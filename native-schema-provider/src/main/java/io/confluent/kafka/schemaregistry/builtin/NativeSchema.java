@@ -51,6 +51,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -246,7 +247,7 @@ public class NativeSchema implements ParsedSchema {
     if (format == null || format.trim().isEmpty()) {
       return canonicalString();
     }
-    Format formatEnum = Format.get(format);
+    Format formatEnum = Format.get(format.toLowerCase(Locale.ROOT));
     if (formatEnum == null) {
       // Don't throw an exception for forward compatibility of formats
       log.warn("Unsupported format {}", format);

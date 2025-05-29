@@ -22,6 +22,7 @@ import io.confluent.dpregistry.web.rest.exceptions.DataProductRegistryErrors;
 import io.confluent.dpregistry.client.rest.entities.RegisteredDataProduct;
 import io.confluent.dpregistry.storage.DataProductRegistry;
 import io.confluent.dpregistry.storage.DataProductValue;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -29,6 +30,7 @@ import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.resources.DocumentedName;
 import io.confluent.kafka.schemaregistry.rest.resources.RequestHeaderBuilder;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.kcache.KeyValue;
@@ -172,6 +174,8 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       @PathParam("name") String name,
       @Parameter(description = "Version of the dek", required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted data products")
       @QueryParam("deleted") boolean lookupDeleted) {
 
@@ -184,12 +188,27 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
     }
 
     try {
-      DataProductValue product = dataProductRegistry.getDataProduct(
+      DataProductValue value = dataProductRegistry.getDataProduct(
           env, cluster, name, versionId.getVersionId(), lookupDeleted);
-      if (product == null) {
+      if (value == null) {
         throw DataProductRegistryErrors.dataProductNotFoundException(name);
       }
-      return product.toEntity();
+      RegisteredDataProduct product = value.toEntity();
+      if (product.getSchemas() != null && format != null && !format.trim().isEmpty()) {
+        if (product.getSchemas().getKey() != null) {
+          ParsedSchema keySchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
+              product.getSchemas().getKey(), false, false);
+          String formattedKey = keySchema.formattedString(format);
+          product.getSchemas().getKey().setSchema(formattedKey);
+        }
+        if (product.getSchemas().getValue() != null) {
+          ParsedSchema valueSchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
+              product.getSchemas().getValue(), false, false);
+          String formattedValue = valueSchema.formattedString(format);
+          product.getSchemas().getValue().setSchema(formattedValue);
+        }
+      }
+      return product;
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving data product", e);
     }

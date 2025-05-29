@@ -20,26 +20,25 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.swagger.v3.oas.annotations.media.Schema;
-import java.nio.charset.StandardCharsets;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.security.MessageDigest;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@Schema(description = "Data Product Schema")
+@io.swagger.v3.oas.annotations.media.Schema(description = "Data Product Schema")
 public class DataProductSchema {
 
-  private final String schema;
+  private final Schema schema;
 
   @JsonCreator
-  public DataProductSchema(@JsonProperty("schema") String schema) {
+  public DataProductSchema(@JsonProperty("schema") Schema schema) {
     this.schema = schema;
   }
 
-  @Schema(description = "Schema")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Schema")
   @JsonProperty("schema")
-  public String getSchema() {
+  public Schema getSchema() {
     return schema;
   }
 
@@ -62,7 +61,7 @@ public class DataProductSchema {
 
   public void updateHash(MessageDigest md) {
     if (schema != null) {
-      md.update(schema.getBytes(StandardCharsets.UTF_8));
+      schema.updateHash(md);
     }
   }
 }

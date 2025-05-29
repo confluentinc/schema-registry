@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 
@@ -28,21 +29,21 @@ import java.util.Objects;
 @Schema(description = "Data Product Schema")
 public class DataProductSchema {
 
-  private final String schema;
+  private final SchemaValue schema;
 
   @JsonCreator
-  public DataProductSchema(@JsonProperty("schema") String schema) {
+  public DataProductSchema(@JsonProperty("schema") SchemaValue schema) {
     this.schema = schema;
   }
 
   public DataProductSchema(
       io.confluent.dpregistry.client.rest.entities.DataProductSchema dataProductSchema) {
-    this.schema = dataProductSchema.getSchema();
+    this.schema = new SchemaValue(dataProductSchema.getSchema());
   }
 
   @Schema(description = "Schema")
   @JsonProperty("schema")
-  public String getSchema() {
+  public SchemaValue getSchema() {
     return schema;
   }
 
@@ -64,6 +65,7 @@ public class DataProductSchema {
   }
 
   public io.confluent.dpregistry.client.rest.entities.DataProductSchema toEntity() {
-    return new io.confluent.dpregistry.client.rest.entities.DataProductSchema(schema);
+    return new io.confluent.dpregistry.client.rest.entities.DataProductSchema(
+        schema.toSchemaEntity());
   }
 }

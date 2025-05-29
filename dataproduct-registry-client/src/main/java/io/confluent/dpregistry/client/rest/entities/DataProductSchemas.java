@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
@@ -31,20 +31,20 @@ import java.util.TreeMap;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@Schema(description = "Data Product Schemas")
+@io.swagger.v3.oas.annotations.media.Schema(description = "Data Product Schemas")
 public class DataProductSchemas {
 
   public static final int NAME_MAX_LENGTH = 256;
 
-  private final Map<String, DataProductSchema> headers;
-  private final DataProductSchema key;
-  private final DataProductSchema value;
+  private final Map<String, Schema> headers;
+  private final Schema key;
+  private final Schema value;
 
   @JsonCreator
-  public DataProductSchemas(@JsonProperty("headers") Map<String, DataProductSchema> headers,
-              @JsonProperty("key") DataProductSchema key,
-              @JsonProperty("value") DataProductSchema value) {
-    SortedMap<String, DataProductSchema> sortedHeaders = headers != null
+  public DataProductSchemas(@JsonProperty("headers") Map<String, Schema> headers,
+              @JsonProperty("key") Schema key,
+              @JsonProperty("value") Schema value) {
+    SortedMap<String, Schema> sortedHeaders = headers != null
         ? new TreeMap<>(headers)
         : Collections.emptySortedMap();
     this.headers = Collections.unmodifiableSortedMap(sortedHeaders);
@@ -52,21 +52,21 @@ public class DataProductSchemas {
     this.value = value;
   }
 
-  @Schema(description = "Headers")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Headers")
   @JsonProperty("headers")
-  public Map<String, DataProductSchema> getHeaders() {
+  public Map<String, Schema> getHeaders() {
     return headers;
   }
 
-  @Schema(description = "Key")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Key")
   @JsonProperty("key")
-  public DataProductSchema getKey() {
+  public Schema getKey() {
     return key;
   }
 
-  @Schema(description = "Value")
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Value")
   @JsonProperty("value")
-  public DataProductSchema getValue() {
+  public Schema getValue() {
     return value;
   }
 
