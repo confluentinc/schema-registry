@@ -60,7 +60,7 @@ public class FlinkConverter {
   }
 
   public String fromNativeSchema(Schema schema,
-                                                 FromNativeContext fromNativeContext) {
+                                 FromNativeContext fromNativeContext) {
     if (schema == null) {
       return null;
     }
@@ -68,7 +68,6 @@ public class FlinkConverter {
     // Extra type annotation information for otherwise lossy conversions
     String cfltType = null;
 
-    final org.apache.avro.Schema baseSchema;
     int size = -1;
     switch (schema.getType()) {
       case INT8:

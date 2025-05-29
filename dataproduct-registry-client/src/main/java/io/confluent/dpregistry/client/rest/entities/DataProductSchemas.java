@@ -36,9 +36,9 @@ public class DataProductSchemas {
 
   public static final int NAME_MAX_LENGTH = 256;
 
-  private final Map<String, Schema> headers;
-  private final Schema key;
-  private final Schema value;
+  private Map<String, Schema> headers;
+  private Schema key;
+  private Schema value;
 
   @JsonCreator
   public DataProductSchemas(@JsonProperty("headers") Map<String, Schema> headers,
@@ -64,10 +64,20 @@ public class DataProductSchemas {
     return key;
   }
 
+  @JsonProperty("key")
+  public void setKey(Schema key) {
+    this.key = key;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = "Value")
   @JsonProperty("value")
   public Schema getValue() {
     return value;
+  }
+
+  @JsonProperty("value")
+  public void setValue(Schema value) {
+    this.value = value;
   }
 
   @Override

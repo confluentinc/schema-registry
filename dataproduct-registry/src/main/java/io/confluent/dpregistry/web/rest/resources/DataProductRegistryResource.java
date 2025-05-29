@@ -15,6 +15,9 @@
 
 package io.confluent.dpregistry.web.rest.resources;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.dpregistry.client.rest.entities.DataProduct;
 import io.confluent.dpregistry.storage.DataProductKey;
 import io.confluent.dpregistry.storage.exceptions.DataProductNotSoftDeletedException;
@@ -23,9 +26,12 @@ import io.confluent.dpregistry.client.rest.entities.RegisteredDataProduct;
 import io.confluent.dpregistry.storage.DataProductRegistry;
 import io.confluent.dpregistry.storage.DataProductValue;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.builtin.NativeSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.resources.DocumentedName;
@@ -76,6 +82,8 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
   private static final Logger log = LoggerFactory.getLogger(DataProductRegistryResource.class);
 
   public static final int NAME_MAX_LENGTH = 256;
+
+  public static final ObjectMapper MAPPER = Jackson.newObjectMapper();
 
   private final DataProductRegistry dataProductRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -195,22 +203,75 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       }
       RegisteredDataProduct product = value.toEntity();
       if (product.getSchemas() != null && format != null && !format.trim().isEmpty()) {
-        if (product.getSchemas().getKey() != null) {
-          ParsedSchema keySchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
-              product.getSchemas().getKey(), false, false);
-          String formattedKey = keySchema.formattedString(format);
-          product.getSchemas().getKey().setSchema(formattedKey);
-        }
-        if (product.getSchemas().getValue() != null) {
-          ParsedSchema valueSchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
-              product.getSchemas().getValue(), false, false);
-          String formattedValue = valueSchema.formattedString(format);
-          product.getSchemas().getValue().setSchema(formattedValue);
+        if (format.equalsIgnoreCase("flink")) {
+          formatFlink(product, format);
+        } else {
+          formatKeyAndValue(product, format);
         }
       }
       return product;
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving data product", e);
+    }
+  }
+
+  private void formatFlink(RegisteredDataProduct product, String format)
+      throws InvalidSchemaException {
+    try {
+      ObjectNode root = MAPPER.createObjectNode();
+      ObjectNode schemaNode = root.putObject("schema");
+      ArrayNode fieldsNode = schemaNode.putArray("fields");
+      // For the demo, assume key and value schemas are native schema structs if they exist
+      if (product.getSchemas().getKey() != null) {
+        ParsedSchema keySchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
+            product.getSchemas().getKey(), false, false);
+        formatFlinkFields(keySchema, fieldsNode);
+      }
+      if (product.getSchemas().getValue() != null) {
+        ParsedSchema valueSchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
+            product.getSchemas().getValue(), false, false);
+        formatFlinkFields(valueSchema, fieldsNode);
+      }
+      ObjectNode configsNode = root.putObject("options");
+      if (product.getConfigs() != null) {
+        product.getConfigs().forEach(configsNode::put);
+      }
+      product.getSchemas().setKey(null);
+      product.getSchemas().getValue().setSchema(MAPPER.writeValueAsString(root));
+    } catch (Exception e) {
+      throw new InvalidSchemaException(
+          "Error formatting data product for Flink: " + e.getMessage(), e);
+    }
+  }
+
+  private static void formatFlinkFields(ParsedSchema schema, ArrayNode fieldsNode) {
+    if (schema instanceof NativeSchema) {
+      io.confluent.kafka.schemaregistry.builtin.Schema s =
+          (io.confluent.kafka.schemaregistry.builtin.Schema) schema.rawSchema();
+      if (s.getType() == io.confluent.kafka.schemaregistry.builtin.Schema.Type.STRUCT) {
+        s.getFields().forEach(field -> {
+          NativeSchema fs = new NativeSchema(field.schema());
+          fieldsNode.addObject()
+              .put("name", field.name())
+              .put("type", fs.formattedString("flink"));
+        });
+      }
+    }
+  }
+
+  private void formatKeyAndValue(RegisteredDataProduct product, String format)
+      throws InvalidSchemaException {
+    if (product.getSchemas().getKey() != null) {
+      ParsedSchema keySchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
+          product.getSchemas().getKey(), false, false);
+      String formattedKey = keySchema.formattedString(format);
+      product.getSchemas().getKey().setSchema(formattedKey);
+    }
+    if (product.getSchemas().getValue() != null) {
+      ParsedSchema valueSchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
+          product.getSchemas().getValue(), false, false);
+      String formattedValue = valueSchema.formattedString(format);
+      product.getSchemas().getValue().setSchema(formattedValue);
     }
   }
 
