@@ -38,6 +38,7 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-streams-*
     - maven-snapshots/maven/io.confluent/kafka-connect-*
     - maven-snapshots/maven/io.confluent/dek-registry*
+    - maven-snapshots/maven/io.confluent/dataproduct-registry*
     - maven-snapshots/maven/io.confluent/kafka-protobuf-*
     - maven-snapshots/maven/io.confluent/kafka-json-*
     - maven-snapshots/maven/io.confluent/kafka-schema-*
