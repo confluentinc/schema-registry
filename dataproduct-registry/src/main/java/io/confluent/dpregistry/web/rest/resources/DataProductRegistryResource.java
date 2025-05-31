@@ -61,11 +61,16 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -304,10 +309,41 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
     try {
       RegisteredDataProduct product = dataProductRegistry.createDataProductOrForward(
           env, cluster, request, headerProperties);
+
+      createTopicIfNotExists(env, cluster, request);
+
       asyncResponse.resume(product);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
           "Error while creating data product: " + e.getMessage(), e);
+    }
+  }
+
+  private void createTopicIfNotExists(String env, String cluster, DataProduct product) {
+    Properties props = new Properties();
+    product.getConfigs().forEach((key, value) -> {
+      if (key.startsWith("properties.")) {
+        String propKey = key.substring("properties.".length());
+        props.put(propKey, value);
+      }
+    });
+    try (AdminClient admin = AdminClient.create(props)) {
+      String topicName = product.getInfo().getName();
+      // TODO RAY make configurable
+      int numPartitions = 1;
+      short replicationFactor = 1;
+      int timeoutMs = 30000;
+      NewTopic topicRequest = new NewTopic(topicName, numPartitions, replicationFactor);
+      if (!admin.listTopics().names().get().contains(topicName)) {
+        // Create topic with default settings
+        admin.createTopics(Collections.singleton(topicRequest)).all().get(
+            timeoutMs, TimeUnit.MILLISECONDS);
+        log.info("Created topic {}", topicName);
+      } else {
+        log.info("Topic {} already exists", topicName);
+      }
+    } catch (Exception e) {
+      throw Errors.schemaRegistryException("Error while creating topic for data product", e);
     }
   }
 
@@ -349,9 +385,36 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
 
       dataProductRegistry.deleteDataProductOrForward(
           cluster, env, name, permanentDelete, headerProperties);
+
+      deleteTopic(env, cluster, product);
+
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting data product", e);
+    }
+  }
+
+  private void deleteTopic(String env, String cluster, DataProductValue product) {
+    Properties props = new Properties();
+    product.getConfigs().forEach((key, value) -> {
+      if (key.startsWith("properties.")) {
+        String propKey = key.substring("properties.".length());
+        props.put(propKey, value);
+      }
+    });
+    try (AdminClient admin = AdminClient.create(props)) {
+      String topicName = product.getInfo().getName();
+      // delete topic if it exists
+      if (admin.listTopics().names().get().contains(topicName)) {
+        // Delete topic with default settings
+        admin.deleteTopics(Collections.singleton(topicName)).all().get(
+            30000, TimeUnit.MILLISECONDS);
+        log.info("Deleted topic {}", topicName);
+      } else {
+        log.info("Topic {} does not exist", topicName);
+      }
+    } catch (Exception e) {
+      throw Errors.schemaRegistryException("Error while deleting topic for data product", e);
     }
   }
 
