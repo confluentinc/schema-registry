@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
@@ -103,11 +104,20 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(String.format("Converting Kafka Connect data to byte[] failed due to "
-          + "serialization error of topic %s: ",
-          topic),
-          e
-      );
+      if (e.getCause() instanceof java.io.IOException) {
+        throw new ConnectException(
+            String.format("I/O error while serializing Json data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Converting Kafka Connect data to byte[] failed due to "
+                    + "serialization error of topic %s: ",
+                topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access JSON Schema data from "
@@ -141,11 +151,20 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(String.format("Converting byte[] to Kafka Connect data failed due to "
-          + "serialization error of topic %s: ",
-          topic),
-          e
-      );
+      if (e.getCause() instanceof java.io.IOException) {
+        throw new ConnectException(
+            String.format("I/O error while deserializing data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Converting byte[] to Kafka Connect data failed due to "
+                    + "serialization error of topic %s: ",
+                topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access JSON Schema data from "
