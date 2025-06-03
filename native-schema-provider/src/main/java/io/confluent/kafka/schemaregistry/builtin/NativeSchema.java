@@ -247,7 +247,7 @@ public class NativeSchema implements ParsedSchema {
     if (format == null || format.trim().isEmpty()) {
       return canonicalString();
     }
-    Format formatEnum = Format.get(format.toLowerCase(Locale.ROOT));
+    Format formatEnum = Format.get(format);
     if (formatEnum == null) {
       // Don't throw an exception for forward compatibility of formats
       log.warn("Unsupported format {}", format);
@@ -915,7 +915,7 @@ public class NativeSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {
