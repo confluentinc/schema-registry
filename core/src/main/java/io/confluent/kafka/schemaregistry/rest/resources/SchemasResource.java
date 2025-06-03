@@ -29,7 +29,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
-import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -172,7 +171,6 @@ public class SchemasResource {
         schemaRegistry.extractSchemaTags(s, tags);
         schema.setSchemaTags(s.getSchemaTags());
       }
-      schema.setGuid(MD5.ofSchema(new Schema(null, null, null, schema)).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
@@ -375,7 +373,6 @@ public class SchemasResource {
       if (schema == null) {
         throw Errors.schemaNotFoundException(guid);
       }
-      schema.setGuid(MD5.ofSchema(new Schema(null, null, null, schema)).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {

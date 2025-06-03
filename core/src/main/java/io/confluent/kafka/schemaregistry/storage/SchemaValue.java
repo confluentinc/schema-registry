@@ -304,17 +304,29 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   }
 
   public Schema toSchemaEntity() {
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references =
+        getReferences() == null
+            ? null
+            : getReferences().stream()
+                .map(SchemaReference::toRefEntity)
+                .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        getMetadata() == null ? null : getMetadata().toMetadataEntity();
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
+        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity();
+    byte[] bytes = getMd5Bytes();
+    MD5 md5 = bytes != null
+        ? new MD5(bytes)
+        : MD5.ofSchema(getSchema(), references, metadata, ruleSet);
     return new Schema(
         getSubject(),
         getVersion(),
         getId(),
-        null,
+        md5.toString(),
         getSchemaType(),
-        getReferences() == null ? null : getReferences().stream()
-            .map(SchemaReference::toRefEntity)
-            .collect(Collectors.toList()),
-        getMetadata() == null ? null : getMetadata().toMetadataEntity(),
-        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
+        references,
+        metadata,
+        ruleSet,
         getSchema(),
         null,
         getTimestamp(),
