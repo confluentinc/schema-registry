@@ -1127,7 +1127,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode"
+        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode,"
         + " in context " + context);
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
@@ -1195,7 +1195,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode"
+        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode,"
         + " in context " + context);
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
@@ -1428,7 +1428,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (!existingSchema.equals(schemaCopy)) {
           String context = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
           throw new OperationNotPermittedException(
-              String.format("Overwrite new schema with id %s is not permitted. (context: %s)", id, context)
+              String.format("Overwrite new schema with id %s is not permitted."
+              +  "(context: %s)", id, context)
           );
         }
       }
@@ -2201,7 +2202,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (isReadOnlyMode(subject)) {
       String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode"
+      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode,"
       + " in context " + context);
     }
     ConfigKey configKey = new ConfigKey(subject);
