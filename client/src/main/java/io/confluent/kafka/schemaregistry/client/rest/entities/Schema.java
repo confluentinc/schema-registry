@@ -447,6 +447,16 @@ public class Schema implements Comparable<Schema> {
   }
 
   public void updateHash(MessageDigest md) {
+    updateHash(md, schema, references, metadata, ruleSet);
+  }
+
+  public static void updateHash(
+      MessageDigest md,
+      String schema,
+      List<SchemaReference> references,
+      Metadata metadata,
+      RuleSet ruleSet
+  ) {
     if (schema != null) {
       md.update(schema.getBytes(StandardCharsets.UTF_8));
     }
