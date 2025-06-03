@@ -1208,6 +1208,12 @@ public class RestApiTest extends ClusterTestHarness {
         schemaString.getReferences(),
         "Schema references should be found"
     );
+
+    SchemaString schemaString2 = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        4, "root", "resolved", null, false);
+    // Ensure the guids match even though we are formatting the schema
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
   }
 
   @Test
