@@ -2161,9 +2161,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
     try {
       restApp.restClient.registerSchema(schema, "testSubject2");
-      fail(String.format("Subject %s is in read-only mode, in context %s", "testSubject2", context));
+      fail(String.format("Subject %s in context %s is in read-only mode", "testSubject2", context));
     } catch (RestClientException rce) {
-      assertEquals("Subject is in read-only mode, in context " + context, Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
+      assertEquals("Subject testSubject2 in context " 
+      + context + " is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
           .getErrorCode());
     }
   }

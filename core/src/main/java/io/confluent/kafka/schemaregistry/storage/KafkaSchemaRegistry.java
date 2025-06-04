@@ -856,21 +856,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
     if (isReadOnlyMode(subject)) {
       throw new OperationNotPermittedException("Subject " + subject 
-      + " is in read-only mode, in context " 
-      + context);
+      + " in context " + context + " is in read-only mode");
     }
 
     if (schema.getId() >= 0) {
       if (getModeInScope(subject) != Mode.IMPORT) {
         throw new OperationNotPermittedException("Subject " + subject 
-        + " is not in import mode, in context " 
-        + context);
+        + " in context " + context + " is not in import mode");
       }
     } else {
       if (getModeInScope(subject) != Mode.READWRITE) {
         throw new OperationNotPermittedException(
-            "Subject " + subject + " is not in read-write mode, in context " 
-            + context
+            "Subject " + subject + " in context "
+            + context + " is not in read-write mode"
         );
       }
     }
@@ -1127,8 +1125,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode,"
-        + " in context " + context);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+        + context + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
       if (!lookupCache.referencesSchema(key).isEmpty()) {
@@ -1195,8 +1193,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode,"
-        + " in context " + context);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+        + context + " is in read-only mode");
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
@@ -1428,8 +1426,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (!existingSchema.equals(schemaCopy)) {
           String context = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
           throw new OperationNotPermittedException(
-              String.format("Overwrite new schema with id %s is not permitted."
-              +  "(context: %s)", id, context)
+              String.format("Overwrite new schema with id %s in context" 
+              + " %s is not permitted.",
+              id, context)
           );
         }
       }
@@ -2202,8 +2201,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (isReadOnlyMode(subject)) {
       String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode,"
-      + " in context " + context);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+      + context + " is in read-only mode");
     }
     ConfigKey configKey = new ConfigKey(subject);
     try {
@@ -2245,8 +2244,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (isReadOnlyMode(subject)) {
       String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode"
-      + " in context " + context);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+      + context + " is in read-only mode");
     }
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
