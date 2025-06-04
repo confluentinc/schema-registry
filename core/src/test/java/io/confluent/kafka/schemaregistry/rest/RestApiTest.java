@@ -57,6 +57,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectExcep
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -2135,6 +2136,9 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
 
+    // default context for error message
+    String context = ".";
+
     try {
       restApp.restClient.getMode(subject).getMode();
       fail(String.format("Subject %s should not be found when there's no mode override", subject));
@@ -2157,9 +2161,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
     try {
       restApp.restClient.registerSchema(schema, "testSubject2");
-      fail(String.format("Subject %s is in read-only mode", "testSubject2"));
+      fail(String.format("Subject %s in context %s is in read-only mode", "testSubject2", context));
     } catch (RestClientException rce) {
-      assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
+      assertEquals("Subject testSubject2 in context " 
+      + context + " is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
           .getErrorCode());
     }
   }
