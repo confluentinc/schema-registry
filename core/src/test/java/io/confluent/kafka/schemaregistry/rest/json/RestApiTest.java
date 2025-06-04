@@ -18,8 +18,6 @@ package io.confluent.kafka.schemaregistry.rest.json;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import org.junit.Assert;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,11 +41,13 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -79,9 +79,10 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> allSubjects = new ArrayList<String>();
 
     // test getAllSubjects with no existing data
-    assertEquals("Getting all subjects should return empty",
+    assertEquals(
         allSubjects,
-        restApp.restClient.getAllSubjects()
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should return empty"
     );
 
     // test registering and verifying new schemas in subject1
@@ -104,9 +105,10 @@ public class RestApiTest extends ClusterTestHarness {
           Collections.emptyList(),
           subject1
       ).getId();
-      assertEquals("Re-registering an existing schema should return the existing version",
+      assertEquals(
           expectedId,
-          foundId
+          foundId,
+          "Re-registering an existing schema should return the existing version"
       );
     }
 
@@ -122,20 +124,21 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test getAllVersions with existing data
     assertEquals(
-        "Getting all versions from subject1 should match all registered versions",
         allVersionsInSubject1,
-        restApp.restClient.getAllVersions(subject1)
+        restApp.restClient.getAllVersions(subject1),
+        "Getting all versions from subject1 should match all registered versions"
     );
     assertEquals(
-        "Getting all versions from subject2 should match all registered versions",
         allVersionsInSubject2,
-        restApp.restClient.getAllVersions(subject2)
+        restApp.restClient.getAllVersions(subject2),
+        "Getting all versions from subject2 should match all registered versions"
     );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         allSubjects,
-        restApp.restClient.getAllSubjects()
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
     );
   }
 
@@ -151,18 +154,20 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
     int registeredId = restApp.restClient.registerSchema(request, "referrer", false).getId();
-    assertEquals("Registering a new schema should succeed", 2, registeredId);
+    assertEquals(2, registeredId, "Registering a new schema should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(2);
     // the newly registered schema should be immediately readable on the leader
-    assertEquals("Registered schema should be found",
+    assertEquals(
         MAPPER.readTree(schemas.get("main.json")),
-        MAPPER.readTree(schemaString.getSchemaString())
+        MAPPER.readTree(schemaString.getSchemaString()),
+        "Registered schema should be found"
     );
 
-    assertEquals("Schema references should be found",
+    assertEquals(
         Collections.singletonList(ref),
-        schemaString.getReferences()
+        schemaString.getReferences(),
+        "Schema references should be found"
     );
 
     List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
@@ -175,7 +180,7 @@ public class RestApiTest extends ClusterTestHarness {
     JsonSchema schema = JsonSchemaUtils.getSchema(holder, schemaRegistryClient);
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
             JsonSchema.TYPE, schema.references(), "referrer", false);
-    assertEquals("Registered schema should be found", 2, registeredSchema.getId().intValue());
+    assertEquals(2, registeredSchema.getId().intValue(), "Registered schema should be found");
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
@@ -184,9 +189,11 @@ public class RestApiTest extends ClusterTestHarness {
       );
       fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Reference found",
+      assertEquals(
           Errors.REFERENCE_EXISTS_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Reference found"
+      );
     }
 
     assertEquals((Integer) 1, restApp.restClient
@@ -213,15 +220,17 @@ public class RestApiTest extends ClusterTestHarness {
       // This is a dummy schema holder to be used for its annotations
   }
 
-  @Test(expected = RestClientException.class)
+  @Test
   public void testSchemaMissingReferences() throws Exception {
-    Map<String, String> schemas = getJsonSchemaWithReferences();
+    assertThrows(RestClientException.class, () -> {
+      Map<String, String> schemas = getJsonSchemaWithReferences();
 
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemas.get("main.json"));
-    request.setSchemaType(JsonSchema.TYPE);
-    request.setReferences(Collections.emptyList());
-    restApp.restClient.registerSchema(request, "referrer", false);
+      RegisterSchemaRequest request = new RegisterSchemaRequest();
+      request.setSchema(schemas.get("main.json"));
+      request.setSchemaType(JsonSchema.TYPE);
+      request.setReferences(Collections.emptyList());
+      restApp.restClient.registerSchema(request, "referrer", false);
+    });
   }
 
   @Test
@@ -268,10 +277,16 @@ public class RestApiTest extends ClusterTestHarness {
     lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
     int versionOfRegisteredSchema1Subject1 =
         restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
-    assertEquals("1st schema under subject1 should have version 1", 1,
-        versionOfRegisteredSchema1Subject1);
-    assertEquals("1st schema registered globally should have id 3", 3,
-        idOfRegisteredSchema1Subject1);
+    assertEquals(
+        1,
+        versionOfRegisteredSchema1Subject1,
+        "1st schema under subject1 should have version 1"
+    );
+    assertEquals(
+        3,
+        idOfRegisteredSchema1Subject1,
+        "1st schema registered globally should have id 3"
+    );
   }
 
   @Test
@@ -280,18 +295,21 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> allSubjects = new ArrayList<String>();
 
     // test getAllSubjects with no existing data
-    assertEquals("Getting all subjects should return empty",
+    assertEquals(
         allSubjects,
-        restApp.restClient.getAllSubjects()
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should return empty"
     );
 
     try {
       registerAndVerifySchema(restApp.restClient, getBadSchema(), 1, subject1);
       fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema",
+      assertEquals(
           Errors.INVALID_SCHEMA_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Invalid schema"
+      );
     }
 
     try {
@@ -299,15 +317,18 @@ public class RestApiTest extends ClusterTestHarness {
           Arrays.asList(new SchemaReference("bad", "bad", 100)), 1, subject1);
       fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema",
+      assertEquals(
           Errors.INVALID_SCHEMA_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Invalid schema"
+      );
     }
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         allSubjects,
-        restApp.restClient.getAllSubjects()
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
     );
   }
 
@@ -476,9 +497,11 @@ public class RestApiTest extends ClusterTestHarness {
       registerAndVerifySchema(restApp.restClient, request, 3, subject);
       fail("Registering version that is not next version should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema",
+      assertEquals(
           Errors.INVALID_SCHEMA_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Invalid schema"
+      );
     }
 
     // Register schema with version 4
@@ -592,14 +615,15 @@ public class RestApiTest extends ClusterTestHarness {
         references,
         subject
     ).getId();
-    Assert.assertEquals(
-        "Registering a new schema should succeed",
+    assertEquals(
         expectedId,
-        registeredId
+        registeredId,
+        "Registering a new schema should succeed"
     );
-    Assert.assertEquals("Registered schema should be found",
+    assertEquals(
         MAPPER.readTree(schemaString),
-        MAPPER.readTree(restService.getId(expectedId).getSchemaString())
+        MAPPER.readTree(restService.getId(expectedId).getSchemaString()),
+        "Registered schema should be found"
     );
   }
 
@@ -610,15 +634,15 @@ public class RestApiTest extends ClusterTestHarness {
       String subject
   ) throws IOException, RestClientException {
     int registeredId = restService.registerSchema(request, subject, false).getId();
-    Assert.assertEquals(
-        "Registering a new schema should succeed",
+    assertEquals(
         (long) expectedId,
-        (long) registeredId
+        (long) registeredId,
+        "Registering a new schema should succeed"
     );
-    Assert.assertEquals(
-        "Registered schema should be found",
+    assertEquals(
         request.getSchema().trim(),
-        restService.getId(expectedId).getSchemaString().trim()
+        restService.getId(expectedId).getSchemaString().trim(),
+        "Registered schema should be found"
     );
   }
 

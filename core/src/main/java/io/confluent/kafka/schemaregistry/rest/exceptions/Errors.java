@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
@@ -127,6 +127,14 @@ public class Errors {
     }
     return new RestNotFoundException(
         String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, id), SCHEMA_NOT_FOUND_ERROR_CODE);
+  }
+
+  public static RestException schemaNotFoundException(String guid) {
+    if (guid == null) {
+      return schemaNotFoundException();
+    }
+    return new RestNotFoundException(
+        String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, guid), SCHEMA_NOT_FOUND_ERROR_CODE);
   }
 
   public static RestIncompatibleSchemaException incompatibleSchemaException(String message,
