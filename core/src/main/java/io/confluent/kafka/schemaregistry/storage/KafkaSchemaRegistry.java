@@ -864,7 +864,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
     if (schema.getId() >= 0) {
       if (!getModeInScope(subject).isImportOrForwardMode()) {
-        throw new OperationNotPermittedException("Subject "+ subject 
+        throw new OperationNotPermittedException("Subject " + subject 
         + " in context " + context + " is not in import or forward mode");
       }
     } else {
