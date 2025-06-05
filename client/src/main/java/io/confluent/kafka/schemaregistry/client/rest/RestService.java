@@ -1007,9 +1007,16 @@ public class RestService implements Closeable, Configurable {
       throws IOException, RestClientException {
     return getId(requestProperties, id, subject, null, findTags, fetchMaxId);
   }
-  
+
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
+      throws IOException, RestClientException {
+    return getId(requestProperties, id, subject, format, null, findTags, fetchMaxId);
+  }
+
+  public SchemaString getId(Map<String, String> requestProperties,
+      int id, String subject, String format, String referenceFormat,
+      Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", fetchMaxId);
@@ -1023,6 +1030,9 @@ public class RestService implements Closeable, Configurable {
     }
     if (format != null) {
       builder.queryParam("format", format);
+    }
+    if (referenceFormat != null) {
+      builder.queryParam("referenceFormat", referenceFormat);
     }
     String path = builder.build(id).toString();
 
@@ -1086,6 +1096,13 @@ public class RestService implements Closeable, Configurable {
   public Schema getVersion(Map<String, String> requestProperties,
       String subject, int version, String format, boolean lookupDeletedSchema, Set<String> findTags)
       throws IOException, RestClientException {
+    return getVersion(requestProperties, subject, version, format, null, lookupDeletedSchema, null);
+  }
+
+  public Schema getVersion(Map<String, String> requestProperties,
+      String subject, int version, String format, String referenceFormat,
+      boolean lookupDeletedSchema, Set<String> findTags)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}")
         .queryParam("deleted", lookupDeletedSchema);
     if (findTags != null && !findTags.isEmpty()) {
@@ -1095,6 +1112,9 @@ public class RestService implements Closeable, Configurable {
     }
     if (format != null) {
       builder.queryParam("format", format);
+    }
+    if (referenceFormat != null) {
+      builder.queryParam("referenceFormat", referenceFormat);
     }
     String path = builder.build(subject, version).toString();
 

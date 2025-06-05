@@ -158,6 +158,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -3151,7 +3152,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {
