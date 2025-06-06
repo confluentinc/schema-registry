@@ -131,7 +131,7 @@ public class JsonSchemaConverterTest {
   }
 
   @Test
-  public void testComplexWithDefaults() {
+  public void testComplexWithDefaults() throws Exception {
     int dateDefVal = 100;
     int timeDefVal = 1000 * 60 * 60 * 2;
     long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
@@ -190,6 +190,12 @@ public class JsonSchemaConverterTest {
         .put("decimal", decimalDef);
 
     byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
+
+    // validate data against schema
+    JsonSchema jsonSchema = new JsonSchemaData().fromConnectSchema(original.schema());
+    JsonNode convertedJson = new ObjectMapper().readTree(Arrays.copyOfRange(converted, 5, converted.length));
+    jsonSchema.validate(convertedJson);
+
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
     assertEquals(expected, schemaAndValue.value());
   }
