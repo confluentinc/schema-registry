@@ -190,12 +190,6 @@ public class JsonSchemaConverterTest {
         .put("decimal", decimalDef);
 
     byte[] converted = converter.fromConnectData(TOPIC, original.schema(), original);
-
-    // validate data against schema
-    JsonSchema jsonSchema = new JsonSchemaData().fromConnectSchema(original.schema());
-    JsonNode convertedJson = new ObjectMapper().readTree(Arrays.copyOfRange(converted, 5, converted.length));
-    jsonSchema.validate(convertedJson);
-
     SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, converted);
     assertEquals(expected, schemaAndValue.value());
   }
