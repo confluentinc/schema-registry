@@ -131,7 +131,7 @@ public class JsonSchemaConverterTest {
   }
 
   @Test
-  public void testComplexWithDefaults() {
+  public void testComplexWithDefaults() throws Exception {
     int dateDefVal = 100;
     int timeDefVal = 1000 * 60 * 60 * 2;
     long tsDefVal = 1000 * 60 * 60 * 24 * 365 + 100;
