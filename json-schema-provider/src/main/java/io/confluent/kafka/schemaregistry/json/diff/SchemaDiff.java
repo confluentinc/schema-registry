@@ -189,7 +189,7 @@ public class SchemaDiff {
           (String) update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       if (BYTES_VAL.equals(originalConnectType) && BYTES_VAL.equals(updateConnectType)) {
         // Allow two types with connect.type of bytes to be considered equivalent.
-        // This is to allow a fix for decimal converstions in the JSON converter to
+        // This is to allow a fix for decimal conversions in the JSON converter to
         // be considered backwards compatible.
         return;
       }
