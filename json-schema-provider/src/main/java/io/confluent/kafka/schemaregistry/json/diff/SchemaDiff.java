@@ -188,8 +188,9 @@ public class SchemaDiff {
       String updateConnectType =
           (String) update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
       if (BYTES_VAL.equals(originalConnectType) && BYTES_VAL.equals(updateConnectType)) {
-        // Special case for bytes, due to a bug in the converter that incorrectly
-        // mapped decimal schemas to number instead of string.
+        // Allow two types with connect.type of bytes to be considered equivalent.
+        // This is to allow a fix for decimal converstions in the JSON converter to
+        // be considered backwards compatible.
         return;
       }
 
