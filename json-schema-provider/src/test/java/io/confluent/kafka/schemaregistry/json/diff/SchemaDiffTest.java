@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -90,6 +91,18 @@ public class SchemaDiffTest {
     final List<Difference> changes = SchemaDiff.compare(first, second);
     // Changing from empty schema to empty object schema is incompatible
     Assert.assertFalse(changes.isEmpty());
+  }
+
+  @Test
+  public void testConnectTypeAsBytes() {
+    String firstSchema = "{\"type\":\"string\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.version\":1,\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"2\"}}";
+    String secondSchema = "{\"type\":\"number\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.version\":1,\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"2\"}}";
+    final Schema first = SchemaLoader.load(new JSONObject(firstSchema));
+    final Schema second = SchemaLoader.load(new JSONObject(secondSchema));
+    final List<Difference> changes = SchemaDiff.compare(first, second);
+    Assert.assertTrue(changes.isEmpty());
   }
 
   public static String readFile(String fileName) {
