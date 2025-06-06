@@ -26,11 +26,12 @@ public class Difference {
     this.incompatibility = incompatibility;
   }
 
+  @SuppressWarnings("CyclomaticComplexity")
   public String error() {
+    String errorDescription;
     SchemaIncompatibilityType errorType = incompatibility.getType();
     String path = incompatibility.getLocation();
 
-    String errorDescription = "";
     switch (errorType) {
       case FIXED_SIZE_MISMATCH:
         errorDescription = "The size of FIXED type field at path '" + path + "' in the %s "

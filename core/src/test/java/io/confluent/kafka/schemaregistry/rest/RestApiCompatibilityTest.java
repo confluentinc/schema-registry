@@ -46,6 +46,7 @@ import org.junit.Test;
 
 import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -265,6 +266,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setCompatibilityGroup("application.version");
+    config.setValidateFields(false);
     // add compatibility group
     assertEquals("Adding compatibility group should succeed",
         config,
@@ -355,6 +357,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     // Add compatibility group after first schema already registered
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setCompatibilityGroup("application.version");
+    config.setValidateFields(false);
     // add compatibility group
     assertEquals("Adding compatibility group should succeed",
         config,
@@ -400,6 +403,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     Metadata metadata = new Metadata(null, properties, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setDefaultMetadata(metadata);
+    config.setValidateFields(false);
     // add config metadata
     assertEquals("Adding config with initial metadata should succeed",
         config,
@@ -497,7 +501,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         response.getId());
     Metadata metadata4 = response.getMetadata();
     assertEquals("configValue", metadata4.getProperties().get("configKey"));
-    assertEquals(null, metadata4.getProperties().get("subjectKey"));
+    assertNull(metadata4.getProperties().get("subjectKey"));
     assertEquals("newSubjectValue", metadata4.getProperties().get("newSubjectKey"));
 
     assertEquals("Version should match",
@@ -509,7 +513,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     schemaString = restApp.restClient.getId(expectedIdSchema3, subject);
     metadata4 = schemaString.getMetadata();
     assertEquals("configValue", metadata4.getProperties().get("configKey"));
-    assertEquals(null, metadata4.getProperties().get("subjectKey"));
+    assertNull(metadata4.getProperties().get("subjectKey"));
     assertEquals("newSubjectValue", metadata4.getProperties().get("newSubjectKey"));
   }
 
@@ -527,6 +531,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     RuleSet ruleSet = new RuleSet(rules, null);
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setDefaultRuleSet(ruleSet);
+    config.setValidateFields(false);
     // add config ruleSet
     assertEquals("Adding config with initial ruleSet should succeed",
         config,
@@ -846,6 +851,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setNormalize(true);
+    config.setValidateFields(false);
     // set normalize config
     assertEquals("Setting normalize config should succeed",
         config,
@@ -962,6 +968,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setAlias("badSubject");
+    config.setValidateFields(false);
     // set global alias config
     assertEquals("Setting alias config should succeed",
         config,

@@ -114,7 +114,7 @@ public class DeriveAvroSchema extends DeriveSchema {
   protected JsonNode convertToFormat(JsonNode schema, String name) {
     ObjectNode schemaForRecord = convertToFormatForRecord(schema, name);
     AvroSchema avroSchema = new AvroSchema(schemaForRecord.toString());
-    avroSchema.validate();
+    avroSchema.validate(false);
     try {
       return mapper.readTree(avroSchema.toString());
     } catch (JsonProcessingException e) {

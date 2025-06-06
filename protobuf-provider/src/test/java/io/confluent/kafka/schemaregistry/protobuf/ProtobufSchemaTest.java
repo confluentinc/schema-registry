@@ -68,7 +68,7 @@ import static org.junit.Assert.fail;
 
 public class ProtobufSchemaTest {
 
-  private static ObjectMapper objectMapper = new ObjectMapper();
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   private static final String recordSchemaString = "syntax = \"proto3\";\n"
       + "\n"
@@ -224,6 +224,28 @@ public class ProtobufSchemaTest {
       + "}\n";
 
   @Test
+  public void testHasTopLevelField() {
+    ParsedSchema parsedSchema = new ProtobufSchema(recordSchemaString);
+    assertTrue(parsedSchema.hasTopLevelField("test_string"));
+    assertFalse(parsedSchema.hasTopLevelField("doesNotExist"));
+  }
+
+  @Test
+  public void testGetReservedFields() {
+    Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "name, city"),
+        Collections.emptySet());
+    ParsedSchema parsedSchema = new ProtobufSchema(recordSchemaString,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        reservedFieldMetadata,
+        null,
+        null,
+        null);
+    assertEquals(ImmutableSet.of("name", "city"), parsedSchema.getReservedFields());
+  }
+
+  @Test
   public void testRecordToProtobuf() throws Exception {
     String json = "{\n"
         + "    \"test_string\": \"string\",\n"
@@ -341,14 +363,14 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testOptionEscape() throws Exception {
+  public void testOptionEscape() {
     String optionSchemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "option java_outer_classname = \"TestOptionEscape\";\n"
         + "option testBackslash = \"backslash\\\\backslash\";\n"
         + "option testDoubleQuote = \"\\\"something\\\"\";\n"
-        + "option testSingleQuote = \"\\\'something\\\'\";\n"
+        + "option testSingleQuote = \"\\'something\\'\";\n"
         + "option testNewline = \"newline\\n\";\n"
         + "option testBell = \"bell\\a\";\n"
         + "option testBackspace = \"backspace\\b\";\n"
@@ -370,7 +392,7 @@ public class ProtobufSchemaTest {
 
     assertTrue(parsed.contains("backslash\\\\backslash"));
     assertTrue(parsed.contains("\\\"something\\\""));
-    assertTrue(parsed.contains("\\\'something\\\'"));
+    assertTrue(parsed.contains("\\'something\\'"));
     assertTrue(parsed.contains("newline\\n"));
     assertTrue(parsed.contains("bell\\a"));
     assertTrue(parsed.contains("backspace\\b"));
@@ -1085,7 +1107,7 @@ public class ProtobufSchemaTest {
 
 
   @Test
-  public void testRanges() throws Exception {
+  public void testRanges() {
     String schemaString = "\nmessage Money {\n"
         + "  reserved 5000 to 6000;\n"
         + "  reserved 10000 to 10001;\n"
@@ -1153,7 +1175,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testComplexEnum() throws Exception {
+  public void testComplexEnum() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package acme.api.items;\n"
         + "\n"
@@ -1339,7 +1361,7 @@ public class ProtobufSchemaTest {
     assertTrue(result.get("test_str").isTextual());
     assertEquals("string", result.get("test_str").textValue());
     assertTrue(result.get("testBool").isBoolean());
-    assertEquals(true, result.get("testBool").booleanValue());
+    assertTrue(result.get("testBool").booleanValue());
     assertTrue(result.get("testBytes").isTextual());
     assertEquals("aGVsbG8=", result.get("testBytes").textValue());
     assertTrue(result.get("testDouble").isDouble());
@@ -1455,7 +1477,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testNativeDependencies() throws Exception {
+  public void testNativeDependencies() {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "import \"confluent/meta.proto\";\n"
@@ -1529,7 +1551,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testRoundTrip() throws Exception {
+  public void testRoundTrip() {
     ProtobufSchema schema = new ProtobufSchema(readFile("NestedNoMapTestProto.proto"),
         Collections.emptyList(), Collections.emptyMap(), null, null);
     String canonical = schema.canonicalString();
@@ -1537,7 +1559,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testSameMessageName() throws Exception {
+  public void testSameMessageName() {
     List<SchemaReference> refs = new ArrayList<>();
     refs.add(new SchemaReference("TestProto.proto", "test1", 1));
     refs.add(new SchemaReference("TestProto2.proto", "test1", 1));
@@ -1555,7 +1577,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testNativeTypeImports() throws Exception {
+  public void testNativeTypeImports() {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "import \"confluent/meta.proto\";\n"
@@ -2176,7 +2198,6 @@ public class ProtobufSchemaTest {
         + "    optional string foobar_string = 71001;\n"
         + "  }\n"
         + "\n"
-        + ""
         + "  message More {\n"
         + "    option (my_message_option) = {\n"
         + "      [FooBar.More2.more2_string]: \"foobar\",\n"
@@ -2417,7 +2438,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testEnumAfterMessage() throws Exception {
+  public void testEnumAfterMessage() {
     assertEquals(enumAfterMessageSchemaString, enumBeforeMessageSchema.canonicalString());
     assertEquals(enumAfterMessageSchemaString,
         new ProtobufSchema(enumBeforeMessageSchema.toDescriptor()).canonicalString());
@@ -2459,7 +2480,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testNumberFormats() throws Exception {
+  public void testNumberFormats() {
     FormatContext ctx = new FormatContext(false, true);
     checkNumber(ctx, "123", "123");
     checkNumber(ctx, "0123", "83"); // octal
