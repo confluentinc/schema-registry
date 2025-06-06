@@ -47,6 +47,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.json.DecimalFormat;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -723,6 +724,7 @@ public class JsonSchemaData {
         break;
       case BYTES:
         builder = Decimal.LOGICAL_NAME.equals(schema.name())
+            && config.decimalFormat() == DecimalFormat.NUMERIC
                   ? NumberSchema.builder()
                   : StringSchema.builder();
         unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_BYTES);
