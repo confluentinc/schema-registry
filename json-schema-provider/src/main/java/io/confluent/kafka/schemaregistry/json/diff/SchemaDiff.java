@@ -39,6 +39,9 @@ import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 public class SchemaDiff {
   public static final Set<Difference.Type> COMPATIBLE_CHANGES;
 
+  private static final String CONNECT_TYPE_PROP = "connect.type";
+  private static final String BYTES_VAL = "bytes";
+
   static {
     Set<Difference.Type> changes = new HashSet<>();
 
@@ -179,10 +182,21 @@ public class SchemaDiff {
       // TrueSchema extends EmptySchema
       if (original instanceof FalseSchema || update instanceof EmptySchema) {
         return;
-      } else {
-        ctx.addDifference(Type.TYPE_CHANGED);
+      }
+
+      String originalConnectType =
+          (String) original.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      String updateConnectType =
+          (String) update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      if (BYTES_VAL.equals(originalConnectType) && BYTES_VAL.equals(updateConnectType)) {
+        // Allow two types with connect.type of bytes to be considered equivalent.
+        // This is to allow a fix for decimal conversions in the JSON converter to
+        // be considered backwards compatible.
         return;
       }
+
+      ctx.addDifference(Type.TYPE_CHANGED);
+      return;
     }
 
     try (Context.SchemaScope schemaScope = ctx.enterSchema(original)) {
