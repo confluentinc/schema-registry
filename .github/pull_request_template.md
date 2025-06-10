@@ -23,6 +23,8 @@ Please answer the questions with Y, N or N/A if not applicable.
     - If not, please explain why it is not required
 - **[ ]** Does this change require modifying existing system tests or adding new system tests? <!-- Primarily for changes that could impact CCloud integrations -->
     - If so, include tracking information for the system test changes
+- **[ ]** Must this be released together with other change(s), either in this repo or another one?
+    - If so, please include the link(s) to the changes that must be released together
 
 References
 ----------
