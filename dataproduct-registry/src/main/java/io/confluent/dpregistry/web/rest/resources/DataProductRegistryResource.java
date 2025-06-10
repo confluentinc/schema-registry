@@ -386,7 +386,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       dataProductRegistry.deleteDataProductOrForward(
           cluster, env, name, permanentDelete, headerProperties);
 
-      deleteTopic(env, cluster, product);
+      deleteTopic(env, cluster, product.value);
 
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {
