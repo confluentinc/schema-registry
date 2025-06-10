@@ -74,6 +74,8 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.clients.admin.AdminClientConfig.SECURITY_PROTOCOL_CONFIG;
+
 @Path("/dataproduct-registry/v1/environments/{env}/clusters/{cluster}/dataproducts")
 @Singleton
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -120,6 +122,9 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
+
+    log.info("get data product for cluster {}", cluster);
+
     limit = dataProductRegistry.normalizeNameSearchLimit(limit);
     List<String> dataProductNames = dataProductRegistry.getDataProductNames(
         env, cluster, lookupDeleted);
@@ -327,6 +332,15 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         props.put(propKey, value);
       }
     });
+
+    //S et the security protocol and password.
+    props.put(SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT");
+    props.put("sasl.mechanism", "PLAIN"); // Or "SCRAM-SHA-256", etc.
+    String jaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required " +
+            "username=\"owner\" " +
+            "password=\"owner_password\";";
+    props.put("sasl.jaas.config", jaasConfig);
+
     try (AdminClient admin = AdminClient.create(props)) {
       String topicName = product.getInfo().getName();
       // TODO RAY make configurable
@@ -386,7 +400,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       dataProductRegistry.deleteDataProductOrForward(
           cluster, env, name, permanentDelete, headerProperties);
 
-      deleteTopic(env, cluster, product);
+      //deleteTopic(env, cluster, product);
 
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {
