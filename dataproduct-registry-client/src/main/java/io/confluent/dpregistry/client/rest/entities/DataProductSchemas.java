@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
@@ -38,18 +39,24 @@ public class DataProductSchemas {
 
   private Map<String, Schema> headers;
   private Schema key;
+  private SchemaReference keyReference;
   private Schema value;
+  private SchemaReference valueReference;
 
   @JsonCreator
   public DataProductSchemas(@JsonProperty("headers") Map<String, Schema> headers,
               @JsonProperty("key") Schema key,
-              @JsonProperty("value") Schema value) {
+              @JsonProperty("keyReference") SchemaReference keyReference,
+              @JsonProperty("value") Schema value,
+              @JsonProperty("valueReference") SchemaReference valueReference) {
     SortedMap<String, Schema> sortedHeaders = headers != null
         ? new TreeMap<>(headers)
         : Collections.emptySortedMap();
     this.headers = Collections.unmodifiableSortedMap(sortedHeaders);
     this.key = key;
+    this.keyReference = keyReference;
     this.value = value;
+    this.valueReference = valueReference;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = "Headers")
@@ -69,6 +76,17 @@ public class DataProductSchemas {
     this.key = key;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Key Reference")
+  @JsonProperty("keyReference")
+  public SchemaReference getKeyReference() {
+    return keyReference;
+  }
+
+  @JsonProperty("keyReference")
+  public void setKeyReference(SchemaReference keyReference) {
+    this.keyReference = keyReference;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = "Value")
   @JsonProperty("value")
   public Schema getValue() {
@@ -78,6 +96,17 @@ public class DataProductSchemas {
   @JsonProperty("value")
   public void setValue(Schema value) {
     this.value = value;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(description = "Value Reference")
+  @JsonProperty("valueReference")
+  public SchemaReference getValueReference() {
+    return valueReference;
+  }
+
+  @JsonProperty("valueReference")
+  public void setValueReference(SchemaReference valueReference) {
+    this.valueReference = valueReference;
   }
 
   @Override
@@ -91,12 +120,14 @@ public class DataProductSchemas {
     DataProductSchemas rule = (DataProductSchemas) o;
     return Objects.equals(headers, rule.headers)
         && Objects.equals(key, rule.key)
-        && Objects.equals(value, rule.value);
+        && Objects.equals(keyReference, rule.keyReference)
+        && Objects.equals(value, rule.value)
+        && Objects.equals(valueReference, rule.valueReference);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(headers, key, value);
+    return Objects.hash(headers, key, keyReference, value, valueReference);
   }
 
   public void updateHash(MessageDigest md) {
@@ -111,8 +142,14 @@ public class DataProductSchemas {
     if (key != null) {
       key.updateHash(md);
     }
+    if (keyReference != null) {
+      keyReference.updateHash(md);
+    }
     if (value != null) {
       value.updateHash(md);
+    }
+    if (valueReference != null) {
+      valueReference.updateHash(md);
     }
   }
 }

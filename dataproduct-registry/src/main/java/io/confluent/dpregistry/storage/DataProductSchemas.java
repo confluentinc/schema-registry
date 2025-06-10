@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.storage.SchemaReference;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Collections;
@@ -37,18 +38,24 @@ public class DataProductSchemas {
 
   private final Map<String, SchemaValue> headers;
   private final SchemaValue key;
+  private final SchemaReference keyReference;
   private final SchemaValue value;
+  private final SchemaReference valueReference;
 
   @JsonCreator
   public DataProductSchemas(@JsonProperty("headers") Map<String, SchemaValue> headers,
               @JsonProperty("key") SchemaValue key,
-              @JsonProperty("value") SchemaValue value) {
+              @JsonProperty("keyReference") SchemaReference keyReference,
+              @JsonProperty("value") SchemaValue value,
+              @JsonProperty("valueReference") SchemaReference valueReference) {
     SortedMap<String, SchemaValue> sortedHeaders = headers != null
         ? new TreeMap<>(headers)
         : Collections.emptySortedMap();
     this.headers = Collections.unmodifiableSortedMap(sortedHeaders);
     this.key = key;
+    this.keyReference = keyReference;
     this.value = value;
+    this.valueReference = valueReference;
   }
 
   public DataProductSchemas(
@@ -64,8 +71,14 @@ public class DataProductSchemas {
     this.key = dataProductSchemas.getKey() != null
         ? new SchemaValue(dataProductSchemas.getKey())
         : null;
+    this.keyReference = dataProductSchemas.getKeyReference() != null
+        ? new SchemaReference(dataProductSchemas.getKeyReference())
+        : null;
     this.value = dataProductSchemas.getValue() != null
         ? new SchemaValue(dataProductSchemas.getValue())
+        : null;
+    this.valueReference = dataProductSchemas.getValueReference() != null
+        ? new SchemaReference(dataProductSchemas.getValueReference())
         : null;
   }
 
@@ -81,10 +94,22 @@ public class DataProductSchemas {
     return key;
   }
 
+  @Schema(description = "Key Reference")
+  @JsonProperty("keyReference")
+  public SchemaReference getKeyReference() {
+    return keyReference;
+  }
+
   @Schema(description = "Value")
   @JsonProperty("value")
   public SchemaValue getValue() {
     return value;
+  }
+
+  @Schema(description = "Value Reference")
+  @JsonProperty("valueReference")
+  public SchemaReference getValueReference() {
+    return valueReference;
   }
 
   @Override
@@ -98,12 +123,14 @@ public class DataProductSchemas {
     DataProductSchemas rule = (DataProductSchemas) o;
     return Objects.equals(headers, rule.headers)
         && Objects.equals(key, rule.key)
-        && Objects.equals(value, rule.value);
+        && Objects.equals(keyReference, rule.keyReference)
+        && Objects.equals(value, rule.value)
+        && Objects.equals(valueReference, rule.valueReference);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(headers, key, value);
+    return Objects.hash(headers, key, keyReference, value, valueReference);
   }
 
   public io.confluent.dpregistry.client.rest.entities.DataProductSchemas toEntity() {
@@ -117,7 +144,9 @@ public class DataProductSchemas {
                     TreeMap::putAll)
             : Collections.emptySortedMap(),
         key != null ? key.toSchemaEntity() : null,
-        value != null ? value.toSchemaEntity() : null
+        keyReference != null ? keyReference.toRefEntity() : null,
+        value != null ? value.toSchemaEntity() : null,
+        valueReference != null ? valueReference.toRefEntity() : null
     );
   }
 }
