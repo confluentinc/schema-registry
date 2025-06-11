@@ -56,7 +56,8 @@ import javax.net.ssl.SSLSocketFactory;
 /**
  * <code>HttpJwtRetriever</code> is a {@link JwtRetriever} that will communicate with an OAuth/OIDC
  * provider directly via HTTP to post client credentials
- * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
+ * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/
+ * {@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
 public class HttpJwtRetriever implements JwtRetriever {
@@ -155,7 +156,8 @@ public class HttpJwtRetriever implements JwtRetriever {
     String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader);
     String requestBody = formatRequestBody(scope);
     Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
-    Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
+    Map<String, String> headers =
+        Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
     String responseBody;
 
@@ -166,23 +168,26 @@ public class HttpJwtRetriever implements JwtRetriever {
         try {
           con = (HttpURLConnection) new URL(tokenEndpointUrl).openConnection();
 
-          if (sslSocketFactory != null && con instanceof HttpsURLConnection)
+          if (sslSocketFactory != null && con instanceof HttpsURLConnection) {
             ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
+          }
 
           return post(con, headers, requestBody, loginConnectTimeoutMs, loginReadTimeoutMs);
         } catch (IOException e) {
           throw new ExecutionException(e);
         } finally {
-          if (con != null)
+          if (con != null) {
             con.disconnect();
+          }
         }
       });
       return parseAccessToken(responseBody);
     } catch (ExecutionException e) {
-      if (e.getCause() instanceof IOException)
+      if (e.getCause() instanceof IOException) {
         throw (JwtRetrieverException) e.getCause();
-      else
+      } else {
         throw new KafkaException(e.getCause());
+      }
     } catch (IOException e) {
       throw new JwtRetrieverException(e);
     }
@@ -209,8 +214,9 @@ public class HttpJwtRetriever implements JwtRetriever {
     con.setRequestProperty("Accept", "application/json");
 
     if (headers != null) {
-      for (Map.Entry<String, String> header : headers.entrySet())
+      for (Map.Entry<String, String> header : headers.entrySet()) {
         con.setRequestProperty(header.getKey(), header.getValue());
+      }
     }
 
     con.setRequestProperty("Cache-Control", "no-cache");
@@ -222,18 +228,21 @@ public class HttpJwtRetriever implements JwtRetriever {
 
     con.setUseCaches(false);
 
-    if (connectTimeoutMs != null)
+    if (connectTimeoutMs != null) {
       con.setConnectTimeout(connectTimeoutMs);
+    }
 
-    if (readTimeoutMs != null)
+    if (readTimeoutMs != null) {
       con.setReadTimeout(readTimeoutMs);
+    }
 
     log.debug("handleInput - preparing to connect to {}", con.getURL());
     con.connect();
 
     if (requestBody != null) {
       try (OutputStream os = con.getOutputStream()) {
-        ByteArrayInputStream is = new ByteArrayInputStream(requestBody.getBytes(StandardCharsets.UTF_8));
+        ByteArrayInputStream is =
+            new ByteArrayInputStream(requestBody.getBytes(StandardCharsets.UTF_8));
         log.debug("handleInput - preparing to write request body to {}", con.getURL());
         copy(is, os);
       }
@@ -271,13 +280,17 @@ public class HttpJwtRetriever implements JwtRetriever {
       log.warn("handleOutput - error retrieving data", e);
     }
 
-    if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
+    if (responseCode == HttpURLConnection.HTTP_OK
+        || responseCode == HttpURLConnection.HTTP_CREATED) {
       log.debug("handleOutput - responseCode: {}, error response: {}", responseCode,
           errorResponseBody);
 
-      if (responseBody == null || responseBody.isEmpty())
-        throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %d from %s and error message %s",
+      if (responseBody == null || responseBody.isEmpty()) {
+        throw new IOException(String.format(
+            "The token endpoint response was unexpectedly empty despite response code %d "
+                + "from %s and error message %s",
             responseCode, con.getURL(), formatErrorMessage(errorResponseBody)));
+      }
 
       return responseBody;
     } else {
@@ -287,12 +300,17 @@ public class HttpJwtRetriever implements JwtRetriever {
       if (UNRETRYABLE_HTTP_CODES.contains(responseCode)) {
         // We know that this is a non-transient error, so let's not keep retrying the
         // request unnecessarily.
-        throw new UnretryableException(new IOException(String.format("The response code %s and error response %s was encountered reading the token endpoint response; will not attempt further retries",
+        throw new UnretryableException(
+            new IOException(
+                String.format("The response code %s and error response %s was encountered reading "
+                    + "the token endpoint response; will not attempt further retries",
             responseCode, formatErrorMessage(errorResponseBody))));
       } else {
         // We don't know if this is a transient (retryable) error or not, so let's assume
         // it is.
-        throw new IOException(String.format("The unexpected response code %s and error message %s was encountered reading the token endpoint response",
+        throw new IOException(
+            String.format("The unexpected response code %s and error message %s was encountered "
+                    + "reading the token endpoint response",
             responseCode, formatErrorMessage(errorResponseBody)));
       }
     }
@@ -302,8 +320,9 @@ public class HttpJwtRetriever implements JwtRetriever {
     byte[] buf = new byte[4096];
     int b;
 
-    while ((b = is.read(buf)) != -1)
+    while ((b = is.read(buf)) != -1) {
       os.write(buf, 0, b);
+    }
   }
 
   static String formatErrorMessage(String errorResponseBody) {
@@ -316,9 +335,11 @@ public class HttpJwtRetriever implements JwtRetriever {
     try {
       JsonNode rootNode = mapper.readTree(errorResponseBody);
       if (!rootNode.at("/error").isMissingNode()) {
-        return String.format("{%s - %s}", rootNode.at("/error"), rootNode.at("/error_description"));
+        return String.format("{%s - %s}", rootNode.at("/error"),
+            rootNode.at("/error_description"));
       } else if (!rootNode.at("/errorCode").isMissingNode()) {
-        return String.format("{%s - %s}", rootNode.at("/errorCode"), rootNode.at("/errorSummary"));
+        return String.format("{%s - %s}", rootNode.at("/errorCode"),
+            rootNode.at("/errorSummary"));
       } else {
         return errorResponseBody;
       }
@@ -341,20 +362,27 @@ public class HttpJwtRetriever implements JwtRetriever {
       if (snippet.length() > MAX_RESPONSE_BODY_LENGTH) {
         int actualLength = responseBody.length();
         String s = responseBody.substring(0, MAX_RESPONSE_BODY_LENGTH);
-        snippet = String.format("%s (trimmed to first %d characters out of %d total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
+        snippet = String.format(
+            "%s (trimmed to first %d characters out of %d total)",
+            s, MAX_RESPONSE_BODY_LENGTH, actualLength);
       }
 
-      throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
+      throw new IOException(
+          String.format("The token endpoint response did not contain an access_token value. "
+              + "Response: (%s)", snippet));
     }
 
-    return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
+    return sanitizeString("the token endpoint response's access_token JSON attribute",
+        accessTokenNode.textValue());
   }
 
   static String formatAuthorizationHeader(String clientId, String clientSecret, boolean urlencode) {
     clientId = sanitizeString("the token endpoint request client ID parameter", clientId);
-    clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
+    clientSecret =
+        sanitizeString("the token endpoint request client secret parameter", clientSecret);
 
-    // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
+    // according to RFC-6749 clientId & clientSecret must be urlencoded,
+    // see https://tools.ietf.org/html/rfc6749#section-2.3.1
     if (urlencode) {
       clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8);
       clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
@@ -380,16 +408,20 @@ public class HttpJwtRetriever implements JwtRetriever {
   }
 
   private static String sanitizeString(String name, String value) {
-    if (value == null)
+    if (value == null) {
       throw new IllegalArgumentException(String.format("The value for %s must be non-null", name));
+    }
 
-    if (value.isEmpty())
+    if (value.isEmpty()) {
       throw new IllegalArgumentException(String.format("The value for %s must be non-empty", name));
+    }
 
     value = value.trim();
 
-    if (value.isEmpty())
-      throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
+    if (value.isEmpty()) {
+      throw new IllegalArgumentException(
+          String.format("The value for %s must not contain only whitespace", name));
+    }
 
     return value;
   }

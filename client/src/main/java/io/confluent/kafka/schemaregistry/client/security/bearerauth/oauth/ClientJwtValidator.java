@@ -43,7 +43,6 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
  * by the client to perform some rudimentary validation of the JWT access token that is received
  * as part of the response from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
- *
  * The validation steps performed are:
  *
  * <ol>
@@ -52,7 +51,8 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
  *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section 2.1</a>
  *     </li>
  *     <li>Basic conversion of the token into an in-memory map</li>
- *     <li>Presence of <code>scope</code>, <code>exp</code>, <code>subject</code>, and <code>iat</code> claims</li>
+ *     <li>Presence of <code>scope</code>, <code>exp</code>, <code>subject</code>,
+ *         and <code>iat</code> claims</li>
  * </ol>
  */
 
@@ -77,8 +77,10 @@ public class ClientJwtValidator implements JwtValidator {
    */
 
   public ClientJwtValidator(String scopeClaimName, String subClaimName) {
-    this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
-    this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
+    this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(
+        DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
+    this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(
+        DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
   }
 
   /**
@@ -98,18 +100,20 @@ public class ClientJwtValidator implements JwtValidator {
     try {
       payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
     } catch (OAuthBearerIllegalTokenException e) {
-      throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+      throw new JwtValidatorException(
+          String.format("Could not validate the access token: %s", e.getMessage()), e);
     }
 
     Object scopeRaw = getClaim(payload, scopeClaimName);
     Collection<String> scopeRawCollection;
 
-    if (scopeRaw instanceof String)
+    if (scopeRaw instanceof String) {
       scopeRawCollection = Collections.singletonList((String) scopeRaw);
-    else if (scopeRaw instanceof Collection)
+    } else if (scopeRaw instanceof Collection) {
       scopeRawCollection = (Collection<String>) scopeRaw;
-    else
+    } else {
       scopeRawCollection = Collections.emptySet();
+    }
 
     Number expirationRaw = (Number) getClaim(payload, EXPIRATION_CLAIM_NAME);
     String subRaw = (String) getClaim(payload, subClaimName);
