@@ -184,7 +184,7 @@ public class HttpJwtRetriever implements JwtRetriever {
       return parseAccessToken(responseBody);
     } catch (ExecutionException e) {
       if (e.getCause() instanceof IOException) {
-        throw (JwtRetrieverException) e.getCause();
+        throw new JwtRetrieverException(e.getCause());
       } else {
         throw new KafkaException(e.getCause());
       }
@@ -269,13 +269,18 @@ public class HttpJwtRetriever implements JwtRetriever {
       responseBody = os.toString(StandardCharsets.UTF_8);
     } catch (Exception e) {
       // there still can be useful error response from the servers, lets get it
-      try (InputStream is = con.getErrorStream()) {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        log.debug("handleOutput - preparing to read error response body from {}", con.getURL());
-        copy(is, os);
-        errorResponseBody = os.toString(StandardCharsets.UTF_8);
-      } catch (Exception e2) {
-        log.warn("handleOutput - error retrieving error information", e2);
+      InputStream errorStream = con.getErrorStream();
+      if (errorStream != null) {
+        try (InputStream is = errorStream) {
+          ByteArrayOutputStream os = new ByteArrayOutputStream();
+          log.debug("handleOutput - preparing to read error response body from {}", con.getURL());
+          copy(is, os);
+          errorResponseBody = os.toString(StandardCharsets.UTF_8);
+        } catch (Exception e2) {
+          log.warn("handleOutput - error retrieving error information", e2);
+        }
+      } else {
+        log.debug("handleOutput - no error stream available for {}", con.getURL());
       }
       log.warn("handleOutput - error retrieving data", e);
     }
@@ -354,7 +359,7 @@ public class HttpJwtRetriever implements JwtRetriever {
     JsonNode rootNode = mapper.readTree(responseBody);
     JsonNode accessTokenNode = rootNode.at("/access_token");
 
-    if (accessTokenNode == null) {
+    if (accessTokenNode.isMissingNode()) {
       // Only grab the first N characters so that if the response body is huge, we don't
       // blow up.
       String snippet = responseBody;

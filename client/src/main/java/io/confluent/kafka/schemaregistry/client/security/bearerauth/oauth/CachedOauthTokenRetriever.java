@@ -26,7 +26,7 @@ import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 
 /**
  * <p>
- * <code>CachedOauthTokenRetriever</code> is an wrapper around {@link JwtRetriever} that
+ * <code>CachedOauthTokenRetriever</code> is a wrapper around {@link JwtRetriever} that
  * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
  * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/
  * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})

@@ -166,7 +166,7 @@ public class HttpJwtRetrieverTest {
     ObjectNode node = mapper.createObjectNode();
     node.put("sub", "jdoe");
 
-    assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+    assertThrows(IOException.class, () -> HttpJwtRetriever.parseAccessToken(mapper.writeValueAsString(node)));
   }
 
   @Test
