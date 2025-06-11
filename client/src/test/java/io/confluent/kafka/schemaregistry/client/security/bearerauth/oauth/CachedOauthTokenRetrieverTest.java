@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
 import java.io.IOException;
 import java.util.Collections;
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.JwtValidator;
@@ -123,7 +124,7 @@ public class CachedOauthTokenRetrieverTest {
     when(oauthTokenCache.isTokenExpired()).thenReturn(true);
     // Test whether IO exception is handled first when token retrieval,
     // then test whether Validation exception is handled when token validation
-    when(tokenRetriever.retrieve()).thenThrow(new IOException(ioError))
+    when(tokenRetriever.retrieve()).thenThrow(new JwtRetrieverException(ioError))
         .thenReturn(tokenString1);
 
     Assert.assertThrows(ioError, SchemaRegistryOauthTokenRetrieverException.class, () -> {
