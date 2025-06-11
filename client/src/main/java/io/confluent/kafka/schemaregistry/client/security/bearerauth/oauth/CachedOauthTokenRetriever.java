@@ -18,15 +18,15 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
-import java.io.IOException;
+import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 
 /**
  * <p>
- * <code>CachedOauthTokenRetriever</code> is an wrapper around {@link AccessTokenRetriever} that
+ * <code>CachedOauthTokenRetriever</code> is a wrapper around {@link JwtRetriever} that
  * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
  * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/
  * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})
@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
  * inorder to fetch an access token.
  * </p>
  * <p>
- * This class adds caching mechanism over {@link AccessTokenRetriever} using {@link
+ * This class adds caching mechanism over {@link JwtRetriever} using {@link
  * OauthTokenCache}
  * </p>
  *
@@ -62,7 +62,7 @@ public class CachedOauthTokenRetriever {
       String token = null;
       try {
         token = tokenRetriever.retrieve();
-      } catch (IOException | RuntimeException e) {
+      } catch (JwtRetrieverException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "Failed to Retrieve OAuth Token for Schema Registry", e);
       }
@@ -70,7 +70,7 @@ public class CachedOauthTokenRetriever {
       OAuthBearerToken oauthBearerToken;
       try {
         oauthBearerToken = tokenValidator.validate(token);
-      } catch (ValidateException e) {
+      } catch (JwtValidatorException e) {
         throw new SchemaRegistryOauthTokenRetrieverException(
             "OAuth Token for Schema Registry is Invalid", e);
       }
