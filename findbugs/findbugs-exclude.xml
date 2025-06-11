@@ -164,6 +164,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Bug pattern="EI_EXPOSE_STATIC_REP2"/>
+    </Match>
+
+    <Match>
         <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
 
