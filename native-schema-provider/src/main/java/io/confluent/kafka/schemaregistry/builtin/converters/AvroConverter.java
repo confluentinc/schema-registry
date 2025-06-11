@@ -236,18 +236,21 @@ public class AvroConverter {
         baseSchema = org.apache.avro.SchemaBuilder.builder().booleanType();
         break;
       case CHAR:
-        size = schema.getFixedSize();
+        // TODO RAY
+        //size = schema.getFixedSize();
         baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
         break;
       case STRING:
         baseSchema = org.apache.avro.SchemaBuilder.builder().stringType();
         break;
       case BINARY:
-        size = schema.getFixedSize();
+        // TODO RAY
+        //size = schema.getFixedSize();
         baseSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
         break;
       case BYTES:
-        size = schema.getFixedSize();
+        // TODO RAY
+        //size = schema.getFixedSize();
         baseSchema = org.apache.avro.SchemaBuilder.builder().bytesType();
         break;
       case ARRAY:

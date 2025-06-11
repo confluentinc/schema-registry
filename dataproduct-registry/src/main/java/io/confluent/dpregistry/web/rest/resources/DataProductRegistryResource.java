@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.confluent.dpregistry.client.rest.entities.DataProduct;
+import io.confluent.dpregistry.client.rest.entities.DataProductSchemas;
 import io.confluent.dpregistry.storage.DataProductKey;
 import io.confluent.dpregistry.storage.exceptions.DataProductNotSoftDeletedException;
 import io.confluent.dpregistry.web.rest.exceptions.DataProductRegistryErrors;
@@ -28,6 +29,7 @@ import io.confluent.dpregistry.storage.DataProductValue;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.builtin.NativeSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -63,6 +65,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -223,6 +226,8 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
   private void formatFlink(RegisteredDataProduct product, String format)
       throws InvalidSchemaException {
     try {
+      populateReferences(product.getSchemas());
+
       ObjectNode root = MAPPER.createObjectNode();
       ObjectNode schemaNode = root.putObject("schema");
       ArrayNode fieldsNode = schemaNode.putArray("fields");
@@ -242,6 +247,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         product.getConfigs().forEach(configsNode::put);
       }
       product.getSchemas().setKey(null);
+      product.getSchemas().getValue().setSchemaType("flink");
       product.getSchemas().getValue().setSchema(MAPPER.writeValueAsString(root));
     } catch (Exception e) {
       throw new InvalidSchemaException(
@@ -258,24 +264,28 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
           NativeSchema fs = new NativeSchema(field.schema());
           fieldsNode.addObject()
               .put("name", field.name())
-              .put("type", fs.formattedString("flink"));
+              .put("type", fs.formattedString("FLINK"));
         });
       }
     }
   }
 
   private void formatKeyAndValue(RegisteredDataProduct product, String format)
-      throws InvalidSchemaException {
+      throws SchemaRegistryException {
+    populateReferences(product.getSchemas());
+
     if (product.getSchemas().getKey() != null) {
       ParsedSchema keySchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
           product.getSchemas().getKey(), false, false);
       String formattedKey = keySchema.formattedString(format);
+      product.getSchemas().getKey().setSchemaType(format.toUpperCase(Locale.ROOT));
       product.getSchemas().getKey().setSchema(formattedKey);
     }
     if (product.getSchemas().getValue() != null) {
       ParsedSchema valueSchema = ((KafkaSchemaRegistry) getSchemaRegistry()).parseSchema(
           product.getSchemas().getValue(), false, false);
       String formattedValue = valueSchema.formattedString(format);
+      product.getSchemas().getValue().setSchemaType(format.toUpperCase(Locale.ROOT));
       product.getSchemas().getValue().setSchema(formattedValue);
     }
   }
@@ -307,6 +317,8 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      checkReferences(request.getSchemas());
+
       RegisteredDataProduct product = dataProductRegistry.createDataProductOrForward(
           env, cluster, request, headerProperties);
 
@@ -472,6 +484,19 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
     }
   }
 
+  private io.confluent.kafka.schemaregistry.client.rest.entities.Schema getByReference(
+      SchemaReference reference) throws SchemaRegistryException {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+        getSchemaRegistry().getByVersion(reference.getSubject(), reference.getVersion(), true);
+    if (s == null) {
+      throw new SchemaRegistryException("No schema reference found for subject \""
+          + reference.getSubject()
+          + "\" and version "
+          + reference.getVersion());
+    }
+    return s;
+  }
+
   private static void checkName(String name) {
     if (name == null || name.isEmpty()) {
       throw DataProductRegistryErrors.invalidOrMissingDataProduct("name");
@@ -487,6 +512,32 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       char c = name.charAt(i);
       if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
         throw DataProductRegistryErrors.invalidOrMissingDataProduct("name");
+      }
+    }
+  }
+
+  private void checkReferences(DataProductSchemas schemas) throws SchemaRegistryException {
+    if (schemas != null) {
+      if (schemas.getKeyReference() != null) {
+        getByReference(schemas.getKeyReference());
+      }
+      if (schemas.getValueReference() != null) {
+        getByReference(schemas.getValueReference());
+      }
+    }
+  }
+
+  private void populateReferences(DataProductSchemas schemas) throws SchemaRegistryException {
+    if (schemas != null) {
+      if (schemas.getKeyReference() != null) {
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            getByReference(schemas.getKeyReference());
+        schemas.setKey(s);
+      }
+      if (schemas.getValueReference() != null) {
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            getByReference(schemas.getValueReference());
+        schemas.setValue(s);
       }
     }
   }
