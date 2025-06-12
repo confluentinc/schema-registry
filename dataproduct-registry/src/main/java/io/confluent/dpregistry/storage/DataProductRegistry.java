@@ -316,9 +316,15 @@ public class DataProductRegistry implements Closeable {
   public KeyValue<DataProductKey, DataProductValue> getLatestDataProduct(
       String env, String cluster, String name)
       throws SchemaRegistryException {
+    return getLatestDataProduct(env, cluster, name, false);
+  }
+
+  public KeyValue<DataProductKey, DataProductValue> getLatestDataProduct(
+      String env, String cluster, String name, boolean lookupDeleted)
+      throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     List<KeyValue<DataProductKey, DataProductValue>> products =
-        getDataProducts(tenant, env, cluster, name, false);
+        getDataProducts(tenant, env, cluster, name, lookupDeleted);
     Collections.reverse(products);
     return products.isEmpty() ? null : products.get(0);
   }

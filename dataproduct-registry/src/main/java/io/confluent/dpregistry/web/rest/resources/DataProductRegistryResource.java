@@ -390,7 +390,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
 
     try {
       KeyValue<DataProductKey, DataProductValue> product =
-          dataProductRegistry.getLatestDataProduct(env, cluster, name);
+          dataProductRegistry.getLatestDataProduct(env, cluster, name, true);
       if (product == null) {
         throw DataProductRegistryErrors.dataProductNotFoundException(name);
       }
