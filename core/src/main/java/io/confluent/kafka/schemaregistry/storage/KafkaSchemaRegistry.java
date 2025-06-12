@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.builtin.NativeSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
@@ -285,7 +286,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG + ".");
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
-        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
+        new AvroSchemaProvider(), new JsonSchemaProvider(),
+        new ProtobufSchemaProvider(), new NativeSchemaProvider()
     );
     for (SchemaProvider provider : defaultSchemaProviders) {
       provider.configure(schemaProviderConfigs);
