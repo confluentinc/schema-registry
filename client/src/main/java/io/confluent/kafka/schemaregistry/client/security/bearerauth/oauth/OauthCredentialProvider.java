@@ -24,12 +24,10 @@ import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientJwtValidator;
 
 /**
  * <code>OAuthCredentialProvider</code> is a <code>BearerAuthCredentialProvider</code>
@@ -87,7 +85,6 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
   }
 
   private JwtRetriever getTokenRetriever(ConfigurationUtils cu) {
-
     String clientId = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID);
     String clientSecret = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
     String scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE, false);
