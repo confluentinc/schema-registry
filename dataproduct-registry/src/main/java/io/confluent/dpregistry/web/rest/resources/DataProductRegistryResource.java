@@ -396,7 +396,7 @@ public class DataProductRegistryResource extends SchemaRegistryResource {
       }
 
       dataProductRegistry.deleteDataProductOrForward(
-          cluster, env, name, permanentDelete, headerProperties);
+          env, cluster, name, permanentDelete, headerProperties);
 
       if (permanentDelete) {
         deleteTopic(env, cluster, product.value);
