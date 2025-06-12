@@ -1268,10 +1268,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
-  public void deleteContext(String context) throws SchemaRegistryException {
+  public void deleteContext(String delimitedContext) throws SchemaRegistryException {
     try {
       // Strip the context delimiters
-      String rawContext = QualifiedSubject.contextFor(tenant(), context);
+      String rawContext = QualifiedSubject.contextFor(tenant(), delimitedContext);
       ContextKey contextKey = new ContextKey(tenant(), rawContext);
       this.kafkaStore.delete(contextKey);
     } catch (StoreTimeoutException te) {
@@ -1284,22 +1284,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public void deleteContextOrForward(
       Map<String, String> requestProperties,
-      String context) throws SchemaRegistryException {
-    kafkaStore.lockFor(context).lock();
+      String delimitedContext) throws SchemaRegistryException {
+    kafkaStore.lockFor(delimitedContext).lock();
     try {
       if (isLeader()) {
-        deleteContext(context);
+        deleteContext(delimitedContext);
       } else {
         // forward registering request to the leader
         if (leaderIdentity != null) {
-          forwardDeleteContextRequestToLeader(requestProperties, context);
+          forwardDeleteContextRequestToLeader(requestProperties, delimitedContext);
         } else {
           throw new UnknownLeaderException("Register schema request failed since leader is "
                                            + "unknown");
         }
       }
     } finally {
-      kafkaStore.lockFor(context).unlock();
+      kafkaStore.lockFor(delimitedContext).unlock();
     }
   }
 
@@ -1580,18 +1580,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   private void forwardDeleteContextRequestToLeader(
       Map<String, String> requestProperties,
-      String context) throws SchemaRegistryRequestForwardingException {
+      String delimitedContext) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete context request for %s to %s",
-        context, baseUrl));
+        delimitedContext, baseUrl));
     try {
-      leaderRestService.deleteContext(requestProperties, context);
+      leaderRestService.deleteContext(requestProperties, delimitedContext);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
               "Unexpected error while forwarding delete context "
-                  + "request %s to %s", context, baseUrl), e);
+                  + "request %s to %s", delimitedContext, baseUrl), e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }

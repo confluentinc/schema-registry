@@ -126,22 +126,22 @@ public class ContextsResource {
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
       @Parameter(description = "Name of the context", required = true)
-      @PathParam("context") String context) {
-    log.debug("Deleting context {}", context);
+      @PathParam("context") String delimitedContext) {
+    log.debug("Deleting context {}", delimitedContext);
 
-    context = QualifiedSubject.normalize(schemaRegistry.tenant(), context);
+    context = QualifiedSubject.normalize(schemaRegistry.tenant(), delimitedContext);
 
     Iterator<ExtendedSchema> schemas;
     try {
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
-          context, false, LookupFilter.INCLUDE_DELETED, false, null);
+          delimitedContext, false, LookupFilter.INCLUDE_DELETED, false, null);
       if (schemas.hasNext()) {
-        throw Errors.contextNotEmptyException(context);
+        throw Errors.contextNotEmptyException(delimitedContext);
       }
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteContextOrForward(headerProperties, context);
+      schemaRegistry.deleteContextOrForward(headerProperties, delimitedContext);
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting context", e);

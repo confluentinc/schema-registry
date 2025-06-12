@@ -1616,11 +1616,11 @@ public class RestService implements Closeable, Configurable {
 
   public void deleteContext(
       Map<String, String> requestProperties,
-      String context
+      String delimitedContext
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/contexts/{context}");
-    String path = builder.build(context).toString();
+    String path = builder.build(delimitedContext).toString();
 
     httpRequest(path, "DELETE", null, requestProperties, VOID_RESPONSE_TYPE);
   }
