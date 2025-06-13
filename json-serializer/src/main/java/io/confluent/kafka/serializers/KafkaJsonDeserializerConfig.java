@@ -24,7 +24,7 @@ import java.util.Map;
  * Deserializer configuration for {@link KafkaJsonDeserializer}. It's slightly odd
  * to have this extend {@link KafkaJsonDecoderConfig} (in most other cases the
  * Decoder variants extend from the Deserializer version), but the reason is that
- * {@link kafka.serializer.Decoder} doesn't provide the ability to distinguish
+ * {@link org.apache.kafka.tools.api.Decoder} doesn't provide the ability to distinguish
  * between constructing serializers for keys or for values. So the type configuration
  * options do not work with {@link KafkaJsonDecoder}.
  */
