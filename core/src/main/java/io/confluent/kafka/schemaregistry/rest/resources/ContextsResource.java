@@ -129,7 +129,7 @@ public class ContextsResource {
       @PathParam("context") String delimitedContext) {
     log.debug("Deleting context {}", delimitedContext);
 
-    context = QualifiedSubject.normalize(schemaRegistry.tenant(), delimitedContext);
+    delimitedContext = QualifiedSubject.normalize(schemaRegistry.tenant(), delimitedContext);
 
     Iterator<ExtendedSchema> schemas;
     try {
