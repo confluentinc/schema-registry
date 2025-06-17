@@ -107,6 +107,10 @@ public class ConfigResource {
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
 
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return updateTopLevelConfig(headers, request);
+    }
+
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
     try {
@@ -180,6 +184,10 @@ public class ConfigResource {
           "Whether to return the global compatibility level "
               + " if subject compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return getTopLevelConfig();
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
@@ -351,6 +359,11 @@ public class ConfigResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.debug("Deleting compatibility setting for subject {}", subject);
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      deleteTopLevelConfig(asyncResponse, headers);
+      return;
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

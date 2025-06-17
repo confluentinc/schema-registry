@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.6.5-0, 7.6.6-0)</version>
+        <version>[7.6.6-0, 7.6.7-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.6.5-0</version>
+    <version>7.6.6-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -90,14 +90,14 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
-        <aws.sdk.version>2.30.33</aws.sdk.version>
+        <aws.sdk.version>2.21.44</aws.sdk.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.4.5</cel-version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.5</jsonata-version>
-        <json-schema.version>1.14.5</json-schema.version>
-        <json-skema.version>0.20.0</json-skema.version>
+        <json-schema.version>1.14.6</json-schema.version>
+        <json-skema.version>0.22.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -106,7 +106,7 @@
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.6.5-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.6.6-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
@@ -266,7 +266,7 @@
             <dependency>
                 <groupId>io.yokota</groupId>
                 <artifactId>mbknor-jackson-jsonschema-java8</artifactId>
-                <version>1.0.39.2</version>
+                <version>1.0.39.3</version>
             </dependency>
             <dependency>
                 <groupId>org.antlr</groupId>

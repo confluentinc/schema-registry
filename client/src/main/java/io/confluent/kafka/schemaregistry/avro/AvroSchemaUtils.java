@@ -38,6 +38,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.Conversion;
 import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -49,6 +50,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
@@ -79,16 +81,18 @@ import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
 
-  private static final GenericData GENERIC_DATA_INSTANCE = new GenericData();
-  private static final ReflectData REFLECT_DATA_INSTANCE = new ReflectData();
-  private static final ReflectData REFLECT_DATA_ALLOW_NULL_INSTANCE = new AllowNull();
-  private static final SpecificData SPECIFIC_DATA_INSTANCE = new SpecificData();
+  private static final GenericData GENERIC_DATA_INSTANCE =
+      new NameAwareGenericData(GenericData.get());
+  private static final GenericData GENERIC_DATA_INSTANCE_WITH_LOGICAL = new NameAwareGenericData();
+  private static final ReflectData REFLECT_DATA_INSTANCE_WITH_LOGICAL = new ReflectData();
+  private static final ReflectData REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL = new AllowNull();
+  private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
-    addLogicalTypeConversion(GENERIC_DATA_INSTANCE);
-    addLogicalTypeConversion(REFLECT_DATA_INSTANCE);
-    addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE);
-    addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE);
+    addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
+    addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
+    addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
+    addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
   }
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
@@ -120,11 +124,11 @@ public class AvroSchemaUtils {
   }
 
   public static GenericData getGenericData(boolean useLogicalTypes) {
-    return useLogicalTypes ? getGenericData() : GenericData.get();
+    return useLogicalTypes ? getGenericData() : GENERIC_DATA_INSTANCE;
   }
 
   public static GenericData getGenericData() {
-    return GENERIC_DATA_INSTANCE;
+    return GENERIC_DATA_INSTANCE_WITH_LOGICAL;
   }
 
   public static ReflectData getReflectData(boolean useLogicalTypes, boolean allowNull) {
@@ -134,11 +138,11 @@ public class AvroSchemaUtils {
   }
 
   public static ReflectData getReflectData() {
-    return REFLECT_DATA_INSTANCE;
+    return REFLECT_DATA_INSTANCE_WITH_LOGICAL;
   }
 
   public static ReflectData getReflectDataAllowNull() {
-    return REFLECT_DATA_ALLOW_NULL_INSTANCE;
+    return REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL;
   }
 
   public static SpecificData getSpecificDataForSchema(Schema reader, boolean useLogicalTypes) {
@@ -162,7 +166,7 @@ public class AvroSchemaUtils {
   }
 
   public static SpecificData getSpecificData() {
-    return SPECIFIC_DATA_INSTANCE;
+    return SPECIFIC_DATA_INSTANCE_WITH_LOGICAL;
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
@@ -720,6 +724,94 @@ public class AvroSchemaUtils {
       generator.writeNumber((BigDecimal) datum);
     } else {
       throw new AvroRuntimeException("Unknown datum class: " + datum.getClass());
+    }
+  }
+
+  static class NameAwareGenericData extends GenericData {
+    private final GenericData delegate;
+
+    public NameAwareGenericData() {
+      this(null);
+    }
+
+    public NameAwareGenericData(GenericData delegate) {
+      this.delegate = delegate;
+    }
+
+    // The following methods override methods that use position instead of name
+
+    @Override
+    public void setField(Object record, String name, int position, Object value) {
+      if (record instanceof GenericRecord) {
+        ((GenericRecord) record).put(name, value);
+      } else {
+        ((IndexedRecord) record).put(position, value);
+      }
+    }
+
+    @Override
+    public Object getField(Object record, String name, int position) {
+      if (record instanceof GenericRecord) {
+        return ((GenericRecord) record).get(name);
+      } else {
+        return ((IndexedRecord) record).get(position);
+      }
+    }
+
+    // The following methods override all methods that rely on logical conversions
+
+    @Override
+    public Collection<Conversion<?>> getConversions() {
+      if (this.delegate != null) {
+        return this.delegate.getConversions();
+      } else {
+        return super.getConversions();
+      }
+    }
+
+    @Override
+    public void addLogicalTypeConversion(Conversion<?> conversion) {
+      if (this.delegate != null) {
+        this.delegate.addLogicalTypeConversion(conversion);
+      } else {
+        super.addLogicalTypeConversion(conversion);
+      }
+    }
+
+    @Override
+    public <T> Conversion<T> getConversionByClass(Class<T> datumClass) {
+      if (this.delegate != null) {
+        return this.delegate.getConversionByClass(datumClass);
+      } else {
+        return super.getConversionByClass(datumClass);
+      }
+    }
+
+    @Override
+    public <T> Conversion<T> getConversionByClass(Class<T> datumClass, LogicalType logicalType) {
+      if (this.delegate != null) {
+        return this.delegate.getConversionByClass(datumClass, logicalType);
+      } else {
+        return super.getConversionByClass(datumClass, logicalType);
+      }
+    }
+
+    @Override
+    public <T> Conversion<T> getConversionFor(LogicalType logicalType) {
+      if (this.delegate != null) {
+        return this.delegate.getConversionFor(logicalType);
+      } else {
+        return super.getConversionFor(logicalType);
+      }
+    }
+
+    @Override
+    public int resolveUnion(Schema union, Object datum) {
+      if (this.delegate != null) {
+        return this.delegate.resolveUnion(union, datum);
+      } else {
+        return super.resolveUnion(union, datum);
+      }
     }
   }
 

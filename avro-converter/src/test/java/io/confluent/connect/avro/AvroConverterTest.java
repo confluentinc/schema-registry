@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -367,6 +368,55 @@ public class AvroConverterTest {
 
     assertThat(schemaAndValue.schema(), equalTo(schema));
     assertThat(schemaAndValue.value(), equalTo(value));
+  }
+
+  @Test
+  public void testSingleFieldSerialization() throws RestClientException, IOException {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    Map<String, ?> converterConfig = ImmutableMap.of(
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
+        AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, false,
+        AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, false,
+        AbstractKafkaSchemaSerDeConfig.NORMALIZE_SCHEMAS, true,
+        AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, true,
+        AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, TopicNameStrategy.class.getName());
+    avroConverter.configure(converterConfig, false);
+
+    org.apache.avro.Schema registredSchema = org.apache.avro.SchemaBuilder
+        .record("MySchema")
+        .fields()
+        .requiredString("id")
+        .endRecord();
+
+    schemaRegistry.register("topic-value", new AvroSchema(registredSchema));
+
+    Schema inputSchema1 = SchemaBuilder.struct()
+        .field("foo", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+        .field("id", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+        .build();
+
+    Struct inputValue1 = new Struct(inputSchema1)
+        .put("foo", "123")
+        .put("id", "456");
+
+    Schema inputSchema2 = SchemaBuilder.struct()
+        .field("id", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+        .field("foo", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+        .build();
+
+    Struct inputValue2 = new Struct(inputSchema2)
+        .put("id", "456")
+        .put("foo", "123");
+
+    final byte[] bytes1 = avroConverter.fromConnectData("topic", inputSchema1, inputValue1);
+    final SchemaAndValue schemaAndValue1 = avroConverter.toConnectData("topic", bytes1);
+
+    final byte[] bytes2 = avroConverter.fromConnectData("topic", inputSchema2, inputValue2);
+    final SchemaAndValue schemaAndValue2 = avroConverter.toConnectData("topic", bytes2);
+
+
+    assertEquals(schemaAndValue1.value(), schemaAndValue2.value());
   }
 
   private void assertSameSchemaMultipleTopic(AvroConverter converter, SchemaRegistryClient schemaRegistry, boolean isKey) throws IOException, RestClientException {

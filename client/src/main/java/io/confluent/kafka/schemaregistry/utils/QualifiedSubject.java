@@ -255,6 +255,11 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
+  public static boolean isDefaultContext(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
+  }
+
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
