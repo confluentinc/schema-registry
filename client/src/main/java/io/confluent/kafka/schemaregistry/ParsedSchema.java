@@ -242,7 +242,7 @@ public interface ParsedSchema {
 
   /**
    * @param field name of the field to check
-   * @return true, if the schema has {@param field} in its top level fields. false, otherwise.
+   * @return true, if the schema has field in its top level fields. false, otherwise.
    */
   default boolean hasTopLevelField(String field) {
     throw new UnsupportedOperationException();
