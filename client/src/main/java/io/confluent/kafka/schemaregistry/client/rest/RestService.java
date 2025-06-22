@@ -38,6 +38,26 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import org.apache.hc.client5.http.classic.HttpClient;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
+import org.apache.hc.client5.http.classic.methods.HttpDelete;
+import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.SocketConfig;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.util.Timeout;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -52,11 +72,14 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.Proxy;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -191,6 +214,8 @@ public class RestService implements Closeable, Configurable {
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
   private Proxy proxy;
+  private HttpHost clientProxy;
+  private HttpClient httpClient;
   private boolean isForward;
   private RetryExecutor retryExecutor;
 
@@ -211,10 +236,22 @@ public class RestService implements Closeable, Configurable {
   }
 
   public RestService(UrlList baseUrls, boolean isForward) {
+    this(baseUrls, isForward, false);
+  }
+
+  public RestService(String baseUrlConfig, boolean isForward, boolean apacheClient) {
+    this(new UrlList(parseBaseUrl(baseUrlConfig)), isForward, apacheClient);
+  }
+
+  public RestService(UrlList baseUrls, boolean isForward, boolean apacheClient) {
     this.baseUrls = baseUrls;
     this.isForward = isForward;
     // ensure retry executor is set for tests
     this.retryExecutor = new RetryExecutor(0, 0, 0);
+
+    if (apacheClient) {
+      this.httpClient = HttpClients.createDefault();
+    }
   }
 
   @Override
@@ -222,53 +259,135 @@ public class RestService implements Closeable, Configurable {
     this.retryExecutor = new RetryExecutor(
         SchemaRegistryClientConfig.getMaxRetries(configs),
         SchemaRegistryClientConfig.getRetriesWaitMs(configs),
-        SchemaRegistryClientConfig.getRetriesMaxWaitMs(configs)
-    );
+        SchemaRegistryClientConfig.getRetriesMaxWaitMs(configs));
+
     setHttpConnectTimeoutMs(SchemaRegistryClientConfig.getHttpConnectTimeoutMs(configs));
     setHttpReadTimeoutMs(SchemaRegistryClientConfig.getHttpReadTimeoutMs(configs));
 
-    String basicCredentialsSource =
-        (String) configs.get(SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
-    String bearerCredentialsSource =
-        (String) configs.get(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
+    String basicCredentialsSource = (String) configs.get(
+        SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE);
+    String bearerCredentialsSource = (String) configs.get(
+        SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE);
 
     if (isNonEmpty(basicCredentialsSource) && isNonEmpty(bearerCredentialsSource)) {
       throw new ConfigException(format(
           "Only one of '%s' and '%s' may be specified",
           SchemaRegistryClientConfig.BASIC_AUTH_CREDENTIALS_SOURCE,
-          SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE
-      ));
+          SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE));
 
     } else if (isNonEmpty(basicCredentialsSource)) {
-      BasicAuthCredentialProvider basicAuthCredentialProvider =
-          BasicAuthCredentialProviderFactory.getBasicAuthCredentialProvider(
+      BasicAuthCredentialProvider basicAuthCredentialProvider = BasicAuthCredentialProviderFactory
+          .getBasicAuthCredentialProvider(
               basicCredentialsSource,
-              configs
-          );
+              configs);
       setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
     } else if (isNonEmpty(bearerCredentialsSource)) {
       BearerAuthCredentialProvider bearerAuthCredentialProvider =
           BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
               bearerCredentialsSource,
-              configs
-          );
+              configs);
       setBearerAuthCredentialProvider(bearerAuthCredentialProvider);
-    }
-
-    String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
-    Integer proxyPort = proxyPortVal instanceof String
-                        ? Integer.valueOf((String) proxyPortVal)
-                        : (Integer) proxyPortVal;
-
-    if (isValidProxyConfig(proxyHost, proxyPort)) {
-      setProxy(proxyHost, proxyPort);
     }
 
     if (SchemaRegistryClientConfig.getUrlRandomize(configs)) {
       baseUrls.randomizeIndex();
     }
+
+    if (SchemaRegistryClientConfig.getApacheClient(configs)) {
+      configureHttpClient(configs);
+    } else {
+
+      String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
+      Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+      Integer proxyPort = proxyPortVal instanceof String
+          ? Integer.valueOf((String) proxyPortVal)
+          : (Integer) proxyPortVal;
+
+      if (isValidProxyConfig(proxyHost, proxyPort)) {
+        setProxy(proxyHost, proxyPort);
+      }
+    }
+  }
+
+  private void configureHttpClient(Map<String, ?> configs) {
+
+    String rawProxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
+    String proxyHost = null;
+
+    if (rawProxyHost != null) {
+      try {
+        URI uri = new URI(rawProxyHost);
+        proxyHost = uri.getHost();
+      } catch (URISyntaxException e) {
+        proxyHost = rawProxyHost.replaceFirst("^https?://", "");
+      }
+    }
+
+    Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
+    Integer proxyPort = proxyPortVal instanceof String
+        ? Integer.valueOf((String) proxyPortVal)
+        : (Integer) proxyPortVal;
+
+    if (isValidProxyConfig(proxyHost, proxyPort)) {
+      setProxy(proxyHost, proxyPort);
+    }
+
+    createNewHttpClient();
+  }
+
+  private void reconfigureHttpClient() {
+    if (this.httpClient == null) {
+      return;
+    } else {
+      try {
+        ((CloseableHttpClient) httpClient).close();
+      } catch (IOException e) {
+        log.warn("Error closing existing HTTP client", e);
+      }
+    }
+
+    createNewHttpClient();
+  }
+
+  private void createNewHttpClient(){
+    RequestConfig requestConfig = RequestConfig.custom()
+        .setConnectionRequestTimeout(Timeout.ofMilliseconds(
+            this.httpConnectTimeoutMs))
+        .setResponseTimeout(Timeout.ofMilliseconds(
+            this.httpReadTimeoutMs)).build();
+
+
+    HttpClientBuilder httpClientBuilder = HttpClients.custom();
+
+    httpClientBuilder
+        .setDefaultRequestConfig(requestConfig);
+
+    if (this.sslSocketFactory != null) {
+      SSLConnectionSocketFactory sslSf = new SSLConnectionSocketFactory(
+          this.sslSocketFactory,
+          this.hostnameVerifier
+      );
+
+      PoolingHttpClientConnectionManager connectionManager =
+          PoolingHttpClientConnectionManagerBuilder.create()
+              .setSSLSocketFactory(sslSf)
+              .setDefaultSocketConfig(SocketConfig.custom()
+                  .setSoTimeout(Timeout.ofSeconds(30))
+                  .build())
+              .build();
+
+      httpClientBuilder.setConnectionManager(connectionManager);
+    } else {
+      httpClientBuilder.setConnectionManager(
+          PoolingHttpClientConnectionManagerBuilder.create().build());
+    }
+
+    if (this.clientProxy != null) {
+      httpClientBuilder.setProxy(clientProxy);
+    }
+
+    this.httpClient = httpClientBuilder.build();
   }
 
   private static boolean isNonEmpty(String s) {
@@ -281,18 +400,22 @@ public class RestService implements Closeable, Configurable {
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
     this.sslSocketFactory = sslSocketFactory;
+    reconfigureHttpClient();
   }
 
   public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
     this.hostnameVerifier = hostnameVerifier;
+    reconfigureHttpClient();
   }
 
   public void setHttpConnectTimeoutMs(int httpConnectTimeoutMs) {
     this.httpConnectTimeoutMs = httpConnectTimeoutMs;
+    reconfigureHttpClient();
   }
 
   public void setHttpReadTimeoutMs(int httpReadTimeoutMs) {
     this.httpReadTimeoutMs = httpReadTimeoutMs;
+    reconfigureHttpClient();
   }
 
   /**
@@ -308,68 +431,73 @@ public class RestService implements Closeable, Configurable {
                                 Map<String, String> requestProperties,
                                 TypeReference<T> responseFormat)
       throws IOException, RestClientException {
-    String requestData = requestBodyData == null
-                         ? "null"
-                         : new String(requestBodyData, StandardCharsets.UTF_8);
-    log.debug(format("Sending %s with input %s to %s",
-                            method, requestData,
-                            requestUrl));
+    if (httpClient != null) {
+      return sendHttpRequestWithClient(requestUrl, method, requestBodyData,
+          requestProperties, responseFormat);
+    } else {
+      String requestData = requestBodyData == null
+          ? "null"
+          : new String(requestBodyData, StandardCharsets.UTF_8);
+      log.debug(format("Sending %s with input %s to %s",
+          method, requestData,
+          requestUrl));
 
-    HttpURLConnection connection = null;
-    try {
-      URL url = url(requestUrl);
+      HttpURLConnection connection = null;
+      try {
+        URL url = url(requestUrl);
 
-      connection = buildConnection(url, method, requestProperties);
+        connection = buildConnection(url, method, requestProperties);
 
-      if (requestBodyData != null) {
-        connection.setDoOutput(true);
-        try (OutputStream os = connection.getOutputStream()) {
-          os.write(requestBodyData);
-          os.flush();
-        } catch (IOException e) {
-          log.error("Failed to send HTTP request to endpoint: {}", url, e);
-          throw e;
-        }
-      }
-
-      int responseCode = connection.getResponseCode();
-      if (responseCode == HttpURLConnection.HTTP_OK) {
-        InputStream is = connection.getInputStream();
-        T result = jsonDeserializer.readValue(is, responseFormat);
-        is.close();
-        return result;
-      } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
-        return null;
-      } else {
-        ErrorMessage errorMessage;
-        try (InputStream es = connection.getErrorStream()) {
-          if (es != null) {
-            String errorString = CharStreams.toString(new InputStreamReader(es, Charsets.UTF_8));
-            try {
-              errorMessage = jsonDeserializer.readValue(errorString, ErrorMessage.class);
-            } catch (JsonProcessingException e) {
-              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
-                  "Unable to parse error message from schema registry: '(%s)'",
-                  errorString
-              ));
-            }
-          } else {
-            errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+        if (requestBodyData != null) {
+          connection.setDoOutput(true);
+          try (OutputStream os = connection.getOutputStream()) {
+            os.write(requestBodyData);
+            os.flush();
+          } catch (IOException e) {
+            log.error("Failed to send HTTP request to endpoint: {}", url, e);
+            throw e;
           }
         }
-        throw new RestClientException(errorMessage.getMessage(), responseCode,
-                                      errorMessage.getErrorCode());
-      }
 
-    } finally {
-      if (connection != null) {
-        connection.disconnect();
+        int responseCode = connection.getResponseCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+          InputStream is = connection.getInputStream();
+          T result = jsonDeserializer.readValue(is, responseFormat);
+          is.close();
+          return result;
+        } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+          return null;
+        } else {
+          ErrorMessage errorMessage;
+          try (InputStream es = connection.getErrorStream()) {
+            if (es != null) {
+              String errorString = CharStreams.toString(new InputStreamReader(es, Charsets.UTF_8));
+              try {
+                errorMessage = jsonDeserializer.readValue(errorString, ErrorMessage.class);
+              } catch (JsonProcessingException e) {
+                errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
+                    "Unable to parse error message from schema registry: '(%s)'",
+                    errorString
+                ));
+              }
+            } else {
+              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+            }
+          }
+          throw new RestClientException(errorMessage.getMessage(), responseCode,
+              errorMessage.getErrorCode());
+        }
+
+      } finally {
+        if (connection != null) {
+          connection.disconnect();
+        }
       }
     }
   }
 
   protected HttpURLConnection buildConnection(URL url, String method, Map<String,
-                                            String> requestProperties)
+      String> requestProperties)
       throws IOException {
     HttpURLConnection connection = null;
     if (proxy == null) {
@@ -405,10 +533,99 @@ public class RestService implements Closeable, Configurable {
         configuredSslSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
       }
       ((HttpsURLConnection) connection).setSSLSocketFactory(
-              new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
+          new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
       if (hostnameVerifier != null) {
         ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
       }
+    }
+  }
+
+  private void setRequestHeaders(String requestUrl, Map<String, String> requestProperties,
+                                 HttpUriRequestBase request) throws MalformedURLException {
+    Map<String, String> headers = getAuthHeaders(url(requestUrl));
+    headers.putAll(requestProperties);
+
+    if (httpHeaders != null) {
+      headers.putAll(httpHeaders);
+    }
+    headers.forEach(request::setHeader);
+  }
+
+  private <T> T sendHttpRequestWithClient(String requestUrl, String method, byte[] requestBodyData,
+                                          Map<String, String> requestProperties,
+                                          TypeReference<T> responseFormat)
+      throws IOException, RestClientException {
+    String requestData = requestBodyData == null ? "null"
+        : new String(requestBodyData, StandardCharsets.UTF_8);
+    log.debug(format("Sending %s with input %s to %s",
+        method, requestData,
+        requestUrl));
+    try {
+      HttpUriRequestBase request;
+      switch (method.toUpperCase()) {
+        case "GET":
+          request = new HttpGet(requestUrl);
+          break;
+        case "POST":
+          request = new HttpPost(requestUrl);
+          if (requestBodyData != null) {
+            request.setEntity(new StringEntity(
+                new String(requestBodyData, StandardCharsets.UTF_8)));
+          }
+          break;
+        case "PUT":
+          request = new HttpPut(requestUrl);
+          if (requestBodyData != null) {
+            request.setEntity(new StringEntity(
+                new String(requestBodyData, StandardCharsets.UTF_8)));
+          }
+          break;
+        case "DELETE":
+          request = new HttpDelete(requestUrl);
+          break;
+        default:
+          throw new IllegalArgumentException("Unsupported HTTP method: " + method);
+      }
+
+      setRequestHeaders(requestUrl, requestProperties, request);
+
+      try (CloseableHttpResponse response = (CloseableHttpResponse)
+          httpClient.executeOpen(null, request, null)) {
+        int responseCode = response.getCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+          try {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            return jsonDeserializer.readValue(responseBody, responseFormat);
+          } catch (ParseException e) {
+            throw new IOException("Error parsing response", e);
+          }
+        } else if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
+          return null;
+        } else {
+          ErrorMessage errorMessage;
+          try {
+            String responseBody = EntityUtils.toString(response.getEntity());
+            if (responseBody != null && !responseBody.isEmpty()) {
+              try {
+                errorMessage = jsonDeserializer.readValue(responseBody, ErrorMessage.class);
+              } catch (JsonProcessingException e) {
+                errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, format(
+                    "Unable to parse error message from schema registry: '(%s)'",
+                    responseBody));
+              }
+            } else {
+              errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error");
+            }
+          } catch (ParseException e) {
+            errorMessage = new ErrorMessage(JSON_PARSE_ERROR_CODE, "Error parsing response");
+          }
+          throw new RestClientException(errorMessage.getMessage(), responseCode,
+              errorMessage.getErrorCode());
+        }
+      }
+    } catch (IOException e) {
+      log.error("Failed to send HTTP request to endpoint: {}", requestUrl, e);
+      throw e;
     }
   }
 
@@ -557,8 +774,8 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(subject).toString();
 
     Schema schema = httpRequest(path, "POST",
-                                registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
-                                requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
+        registerSchemaRequest.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, SUBJECT_SCHEMA_VERSION_RESPONSE_TYPE_REFERENCE);
     return schema;
   }
 
@@ -619,7 +836,7 @@ public class RestService implements Closeable, Configurable {
   public RegisterSchemaResponse registerSchema(String schemaString, String schemaType,
                                                List<SchemaReference> references, String subject,
                                                int version, int id, boolean normalize)
-                            throws IOException, RestClientException {
+      throws IOException, RestClientException {
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemaString);
     request.setSchemaType(schemaType);
@@ -719,7 +936,7 @@ public class RestService implements Closeable, Configurable {
                                         boolean verbose)
       throws IOException, RestClientException {
     return testCompatibility(DEFAULT_REQUEST_PROPERTIES, registerSchemaRequest,
-                             subject, version, normalize, verbose);
+        subject, version, normalize, verbose);
   }
 
   public List<String> testCompatibility(Map<String, String> requestProperties,
@@ -776,12 +993,12 @@ public class RestService implements Closeable, Configurable {
                                           String subject)
       throws IOException, RestClientException {
     String path = subject != null
-                  ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
-                  : "/config";
+        ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
+        : "/config";
 
-    ConfigUpdateRequest response =
-        httpRequest(path, "PUT", configUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
-                    requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
+    ConfigUpdateRequest response = httpRequest(path, "PUT",
+        configUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, UPDATE_CONFIG_RESPONSE_TYPE_REFERENCE);
     return response;
   }
 
@@ -805,8 +1022,7 @@ public class RestService implements Closeable, Configurable {
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
         : "/config";
 
-    Config config =
-        httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
+    Config config = httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
     return config;
   }
 
@@ -818,7 +1034,8 @@ public class RestService implements Closeable, Configurable {
   public Config deleteConfig(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
     String path = subject != null
-        ? UriBuilder.fromPath("/config/{subject}").build(subject).toString() : "/config";
+        ? UriBuilder.fromPath("/config/{subject}").build(subject).toString()
+        : "/config";
 
     Config response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_CONFIG_RESPONSE_TYPE);
@@ -853,11 +1070,11 @@ public class RestService implements Closeable, Configurable {
         ? UriBuilder.fromPath("/mode/{subject}")
         .queryParam("force", force).build(subject).toString()
         : UriBuilder.fromPath("/mode")
-            .queryParam("force", force).build().toString();
+        .queryParam("force", force).build().toString();
 
-    ModeUpdateRequest response =
-        httpRequest(path, "PUT", modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
-            requestProperties, UPDATE_MODE_RESPONSE_TYPE_REFERENCE);
+    ModeUpdateRequest response = httpRequest(path, "PUT",
+        modeUpdateRequest.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, UPDATE_MODE_RESPONSE_TYPE_REFERENCE);
     return response;
   }
 
@@ -878,8 +1095,7 @@ public class RestService implements Closeable, Configurable {
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
         : "/mode";
 
-    Mode mode =
-        httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
+    Mode mode = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
     return mode;
   }
 
@@ -908,12 +1124,12 @@ public class RestService implements Closeable, Configurable {
   }
 
   public List<Schema> getSchemas(Map<String, String> requestProperties,
-      String subjectPrefix,
-      boolean lookupDeletedSchema,
-      boolean latestOnly,
-      String ruleType,
-      Integer offset,
-      Integer limit)
+                                 String subjectPrefix,
+                                 boolean lookupDeletedSchema,
+                                 boolean latestOnly,
+                                 String ruleType,
+                                 Integer offset,
+                                 Integer limit)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas");
     if (subjectPrefix != null) {
@@ -938,13 +1154,13 @@ public class RestService implements Closeable, Configurable {
   }
 
   public List<ExtendedSchema> getSchemas(Map<String, String> requestProperties,
-      String subjectPrefix,
-      boolean includeAliases,
-      boolean lookupDeletedSchema,
-      boolean latestOnly,
-      String ruleType,
-      Integer offset,
-      Integer limit)
+                                         String subjectPrefix,
+                                         boolean includeAliases,
+                                         boolean lookupDeletedSchema,
+                                         boolean latestOnly,
+                                         String ruleType,
+                                         Integer offset,
+                                         Integer limit)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas");
     if (subjectPrefix != null) {
@@ -998,7 +1214,9 @@ public class RestService implements Closeable, Configurable {
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-      int id, String subject, boolean fetchMaxId) throws IOException, RestClientException {
+                            int id,
+                            String subject,
+                            boolean fetchMaxId) throws IOException, RestClientException {
     return getId(requestProperties, id, subject, null, null, fetchMaxId);
   }
 
@@ -1009,14 +1227,18 @@ public class RestService implements Closeable, Configurable {
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-      int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
+                            int id,
+                            String subject,
+                            String format,
+                            Set<String> findTags,
+                            boolean fetchMaxId)
       throws IOException, RestClientException {
     return getId(requestProperties, id, subject, format, null, findTags, fetchMaxId);
   }
 
   public SchemaString getId(Map<String, String> requestProperties,
-      int id, String subject, String format, String referenceFormat,
-      Set<String> findTags, boolean fetchMaxId)
+                            int id, String subject, String format, String referenceFormat,
+                            Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", fetchMaxId);
@@ -1037,7 +1259,7 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(id).toString();
 
     SchemaString response = httpRequest(path, "GET", null, requestProperties,
-                                        GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+        GET_SCHEMA_BY_ID_RESPONSE_TYPE);
     return response;
   }
 
@@ -1047,14 +1269,14 @@ public class RestService implements Closeable, Configurable {
 
   public String getOnlySchemaById(Map<String, String> requestProperties,
                                   int id, String subject)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/schema");
     if (subject != null) {
       builder.queryParam("subject", subject);
     }
     String path = builder.build(id).toString();
     JsonNode response = httpRequest(path, "GET", null,
-            requestProperties, GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+        requestProperties, GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
     return response.toString();
   }
 
@@ -1094,14 +1316,18 @@ public class RestService implements Closeable, Configurable {
   }
 
   public Schema getVersion(Map<String, String> requestProperties,
-      String subject, int version, String format, boolean lookupDeletedSchema, Set<String> findTags)
+                           String subject,
+                           int version,
+                           String format,
+                           boolean lookupDeletedSchema,
+                           Set<String> findTags)
       throws IOException, RestClientException {
     return getVersion(requestProperties, subject, version, format, null, lookupDeletedSchema, null);
   }
 
   public Schema getVersion(Map<String, String> requestProperties,
-      String subject, int version, String format, String referenceFormat,
-      boolean lookupDeletedSchema, Set<String> findTags)
+                           String subject, int version, String format, String referenceFormat,
+                           boolean lookupDeletedSchema, Set<String> findTags)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}")
         .queryParam("deleted", lookupDeletedSchema);
@@ -1136,7 +1362,7 @@ public class RestService implements Closeable, Configurable {
 
   public Schema getLatestVersion(Map<String, String> requestProperties,
                                  String subject, Set<String> findTags)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getLatestVersion(requestProperties, subject, null, findTags);
   }
 
@@ -1153,27 +1379,27 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(subject).toString();
 
     Schema response = httpRequest(path, "GET", null, requestProperties,
-                                  GET_SCHEMA_RESPONSE_TYPE);
+        GET_SCHEMA_RESPONSE_TYPE);
     return response;
   }
 
   public String getVersionSchemaOnly(String subject, int version)
-            throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/schema");
     String path = builder.build(subject, version).toString();
 
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
-            GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+        GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
     return response.toString();
   }
 
   public String getLatestVersionSchemaOnly(String subject)
-            throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/latest/schema");
     String path = builder.build(subject).toString();
 
     JsonNode response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
-            GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
+        GET_SCHEMA_ONLY_BY_VERSION_RESPONSE_TYPE);
     return response.toString();
   }
 
@@ -1185,13 +1411,18 @@ public class RestService implements Closeable, Configurable {
   }
 
   public Schema getLatestWithMetadata(Map<String, String> requestProperties,
-      String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
+                                      String subject,
+                                      Map<String, String> metadata,
+                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     return getLatestWithMetadata(requestProperties, subject, metadata, null, lookupDeletedSchema);
   }
 
   public Schema getLatestWithMetadata(Map<String, String> requestProperties,
-      String subject, Map<String, String> metadata, String format, boolean lookupDeletedSchema)
+                                      String subject,
+                                      Map<String, String> metadata,
+                                      String format,
+                                      boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/metadata");
     for (Map.Entry<String, String> entry : metadata.entrySet()) {
@@ -1226,14 +1457,14 @@ public class RestService implements Closeable, Configurable {
 
   public List<Integer> getReferencedByWithPagination(String subject, int version,
                                                      int offset, int limit)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
     builder.queryParam("offset", offset);
     builder.queryParam("limit", limit);
     String path = builder.build(subject, version).toString();
 
     List<Integer> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
-            GET_REFERENCED_BY_RESPONSE_TYPE);
+        GET_REFERENCED_BY_RESPONSE_TYPE);
     return response;
   }
 
@@ -1251,7 +1482,7 @@ public class RestService implements Closeable, Configurable {
   public List<Integer> getAllVersions(Map<String, String> requestProperties,
                                       String subject,
                                       boolean lookupDeletedSchema)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getAllVersions(requestProperties, subject, lookupDeletedSchema, false);
   }
 
@@ -1275,7 +1506,7 @@ public class RestService implements Closeable, Configurable {
                                                     boolean lookupDeletedSchema,
                                                     int offset,
                                                     int limit)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
     builder.queryParam("deleted", lookupDeletedSchema);
     builder.queryParam("deletedOnly", false);
@@ -1284,7 +1515,7 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
-            ALL_VERSIONS_RESPONSE_TYPE);
+        ALL_VERSIONS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1308,13 +1539,13 @@ public class RestService implements Closeable, Configurable {
   }
 
   public List<String> getAllContextsWithPagination(int limit, int offset)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/contexts");
     builder.queryParam("limit", limit);
     builder.queryParam("offset", offset);
     String path = builder.build().toString();
     List<String> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
-            ALL_CONTEXTS_RESPONSE_TYPE);
+        ALL_CONTEXTS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1336,7 +1567,7 @@ public class RestService implements Closeable, Configurable {
   public List<String> getAllSubjects(Map<String, String> requestProperties)
       throws IOException, RestClientException {
     List<String> response = httpRequest("/subjects", "GET", null, requestProperties,
-                                        ALL_TOPICS_RESPONSE_TYPE);
+        ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1365,16 +1596,16 @@ public class RestService implements Closeable, Configurable {
   }
 
   public List<String> getAllSubjectsWithPagination(int offset, int limit)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return getAllSubjectsWithPagination(DEFAULT_REQUEST_PROPERTIES, offset, limit);
   }
 
   public List<String> getAllSubjectsWithPagination(Map<String, String> requestProperties,
                                                    int offset, int limit)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     String url = "/subjects?limit=" + limit + "&offset=" + offset;
     List<String> response = httpRequest(url, "GET", null, requestProperties,
-            ALL_TOPICS_RESPONSE_TYPE);
+        ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1424,18 +1655,18 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(id).toString();
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
-                                        ALL_TOPICS_RESPONSE_TYPE);
+        ALL_TOPICS_RESPONSE_TYPE);
 
     return response;
   }
 
   public List<String> getAllSubjectsByIdWithPagination(Map<String, String> requestProperties,
-                                         int id,
-                                         String subject,
-                                         boolean lookupDeleted,
-                                         int limit,
-                                         int offset)
-          throws IOException, RestClientException {
+                                                       int id,
+                                                       String subject,
+                                                       boolean lookupDeleted,
+                                                       int limit,
+                                                       int offset)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
     builder.queryParam("deleted", lookupDeleted);
     if (subject != null) {
@@ -1446,7 +1677,7 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(id).toString();
 
     List<String> response = httpRequest(path, "GET", null, requestProperties,
-            ALL_TOPICS_RESPONSE_TYPE);
+        ALL_TOPICS_RESPONSE_TYPE);
 
     return response;
   }
@@ -1498,13 +1729,13 @@ public class RestService implements Closeable, Configurable {
   }
 
   public List<SubjectVersion> getAllVersionsByIdWithPagination(
-          Map<String, String> requestProperties,
-          int id,
-          String subject,
-          boolean lookupDeleted,
-          int offset,
-          int limit)
-          throws IOException, RestClientException {
+      Map<String, String> requestProperties,
+      int id,
+      String subject,
+      boolean lookupDeleted,
+      int offset,
+      int limit)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
     builder.queryParam("deleted", lookupDeleted);
     if (subject != null) {
@@ -1515,7 +1746,7 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(id).toString();
 
     List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,
-            GET_VERSIONS_RESPONSE_TYPE);
+        GET_VERSIONS_RESPONSE_TYPE);
 
     return response;
   }
@@ -1558,56 +1789,54 @@ public class RestService implements Closeable, Configurable {
       String subject,
       String version
   ) throws IOException,
-                                                                            RestClientException {
+      RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}");
     String path = builder.build(subject, version).toString();
 
     Integer response = httpRequest(path, "DELETE", null, requestProperties,
-                                   DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
+        DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
     return response;
   }
 
   public Integer deleteSchemaVersion(
-          Map<String, String> requestProperties,
-          String subject,
-          String version,
-          boolean permanentDelete
-  ) throws IOException,
-          RestClientException {
+      Map<String, String> requestProperties,
+      String subject,
+      String version,
+      boolean permanentDelete) throws IOException,
+      RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}");
     builder.queryParam("permanent", permanentDelete);
     String path = builder.build(subject, version).toString();
 
     Integer response = httpRequest(path, "DELETE", null, requestProperties,
-            DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
+        DELETE_SUBJECT_VERSION_RESPONSE_TYPE);
     return response;
   }
 
   public List<Integer> deleteSubject(
       Map<String, String> requestProperties,
-      String subject
-  ) throws IOException,
-                                                            RestClientException {
+      String subject) throws IOException,
+      RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
     String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
-                                         DELETE_SUBJECT_RESPONSE_TYPE);
+        DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
   }
 
   public List<Integer> deleteSubject(
-          Map<String, String> requestProperties,
-          String subject,
-          boolean permanentDelete
+      Map<String, String> requestProperties,
+      String subject,
+      boolean permanentDelete
   ) throws IOException,
-          RestClientException {
+      RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
     builder.queryParam("permanent", permanentDelete);
     String path = builder.build(subject).toString();
 
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
-            DELETE_SUBJECT_RESPONSE_TYPE);
+        DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
   }
 
@@ -1618,13 +1847,13 @@ public class RestService implements Closeable, Configurable {
   public ServerClusterId getClusterId(Map<String, String> requestProperties)
       throws IOException, RestClientException {
     return httpRequest("/v1/metadata/id", "GET", null,
-                        requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
+        requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
   }
 
   public SchemaRegistryServerVersion getSchemaRegistryServerVersion()
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     return httpRequest("/v1/metadata/version", "GET", null,
-            DEFAULT_REQUEST_PROPERTIES, GET_SR_VERSION_RESPONSE_TYPE);
+        DEFAULT_REQUEST_PROPERTIES, GET_SR_VERSION_RESPONSE_TYPE);
   }
 
   private static List<String> parseBaseUrl(String baseUrl) {
@@ -1667,6 +1896,38 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
+  private Map<String, String> getAuthHeaders(URL url) {
+    Map<String, String> headers = new HashMap<>();
+
+    if (basicAuthCredentialProvider != null) {
+      String userInfo = basicAuthCredentialProvider.getUserInfo(url);
+      if (userInfo != null) {
+        String authHeader = Base64.getEncoder().encodeToString(
+            userInfo.getBytes(StandardCharsets.UTF_8));
+        headers.put(AUTHORIZATION_HEADER, "Basic " + authHeader);
+      }
+    }
+
+    if (bearerAuthCredentialProvider != null) {
+      String bearerToken = bearerAuthCredentialProvider.getBearerToken(url);
+      if (bearerToken != null) {
+        headers.put(AUTHORIZATION_HEADER, "Bearer " + bearerToken);
+      }
+
+      String targetIdentityPoolId = bearerAuthCredentialProvider.getTargetIdentityPoolId();
+      if (targetIdentityPoolId != null) {
+        headers.put(TARGET_IDENTITY_POOL_ID, targetIdentityPoolId);
+      }
+
+      String targetSchemaRegistry = bearerAuthCredentialProvider.getTargetSchemaRegistry();
+      if (targetSchemaRegistry != null) {
+        headers.put(TARGET_SR_CLUSTER, targetSchemaRegistry);
+      }
+    }
+
+    return headers;
+  }
+
   private void setCustomHeaders(HttpURLConnection connection) {
     if (httpHeaders != null) {
       httpHeaders.forEach((k, v) -> connection.setRequestProperty(k, v));
@@ -1689,6 +1950,8 @@ public class RestService implements Closeable, Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+    this.clientProxy = new HttpHost(proxyHost, proxyPort);
+    reconfigureHttpClient();
   }
 
   /**
@@ -1705,8 +1968,16 @@ public class RestService implements Closeable, Configurable {
 
   @Override
   public void close() throws IOException {
-    if (bearerAuthCredentialProvider != null) {
-      bearerAuthCredentialProvider.close();
+    if (this.httpClient != null) {
+      try {
+        ((CloseableHttpClient) httpClient).close();
+      } catch (IOException e) {
+        log.warn("Error closing existing HTTP client", e);
+      }
+    }
+
+    if (this.bearerAuthCredentialProvider != null) {
+      this.bearerAuthCredentialProvider.close();
     }
   }
 }
