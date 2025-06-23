@@ -27,6 +27,16 @@ public class ContextFilterTest {
   }
 
   @Test
+  public void testSpecificContext() {
+    String path = "/contexts/.foo/";
+    Assert.assertEquals(
+        "Context must be delimited",
+        "/contexts/:.foo:/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
   public void testSubjectPartOfUri() {
     String path = "/contexts/.test-ctx/subjects/test-subject/versions";
     Assert.assertEquals(

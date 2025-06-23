@@ -1268,6 +1268,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  @Override
+  public void deleteContext(String delimitedContext) throws SchemaRegistryException {
+    try {
+      // Strip the context delimiters
+      String rawContext = QualifiedSubject.contextFor(tenant(), delimitedContext);
+      ContextKey contextKey = new ContextKey(tenant(), rawContext);
+      this.kafkaStore.delete(contextKey);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while deleting the context in the"
+                                             + " backend Kafka store", e);
+    }
+  }
+
+  public void deleteContextOrForward(
+      Map<String, String> requestProperties,
+      String delimitedContext) throws SchemaRegistryException {
+    kafkaStore.lockFor(delimitedContext).lock();
+    try {
+      if (isLeader()) {
+        deleteContext(delimitedContext);
+      } else {
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteContextRequestToLeader(requestProperties, delimitedContext);
+        } else {
+          throw new UnknownLeaderException("Register schema request failed since leader is "
+                                           + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(delimitedContext).unlock();
+    }
+  }
+
   public Schema lookUpSchemaUnderSubjectUsingContexts(
       String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
@@ -1529,7 +1565,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    log.debug(String.format("Forwarding delete subject request for  %s to %s",
+    log.debug(String.format("Forwarding delete subject request for %s to %s",
                             subject, baseUrl));
     try {
       return leaderRestService.deleteSubject(requestProperties, subject, permanentDelete);
@@ -1538,6 +1574,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           String.format(
               "Unexpected error while forwarding delete subject "
               + "request %s to %s", subject, baseUrl), e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void forwardDeleteContextRequestToLeader(
+      Map<String, String> requestProperties,
+      String delimitedContext) throws SchemaRegistryRequestForwardingException {
+    UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding delete context request for %s to %s",
+        delimitedContext, baseUrl));
+    try {
+      leaderRestService.deleteContext(requestProperties, delimitedContext);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format(
+              "Unexpected error while forwarding delete context "
+                  + "request %s to %s", delimitedContext, baseUrl), e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }
