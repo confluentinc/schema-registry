@@ -30,8 +30,8 @@ public class ContextFilterTest {
   public void testSpecificContext() {
     String path = "/contexts/.foo/";
     Assert.assertEquals(
-        "URI most not change",
-        "/contexts/.foo/",
+        "Context must be delimited",
+        "/contexts/:.foo:/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
