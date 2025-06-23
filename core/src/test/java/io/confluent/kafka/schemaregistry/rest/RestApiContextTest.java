@@ -404,6 +404,45 @@ public class RestApiContextTest extends ClusterTestHarness {
         noCtxRestClient3.getId(1, subject2A).getSchemaString(),
         "Registered schema should be found"
     );
+
+    // Delete subject1
+    restClient1.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, false);
+    restClient1.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, true);
+
+    try {
+      restClient1.getAllVersions(subject1);
+      fail("Getting all versions from non-existing subject1 should fail with "
+          + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+          + " (subject not found)");
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
+    }
+
+    try {
+      noCtxRestClient3.deleteContext(RestService.DEFAULT_REQUEST_PROPERTIES, ".ctx2");
+      fail("Deleting context .ctx2 should fail with "
+          + Errors.CONTEXT_NOT_EMPTY_ERROR_CODE
+          + " (context not empty)");
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.CONTEXT_NOT_EMPTY_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 422 status for non-empty context"
+      );
+    }
+
+    noCtxRestClient3.deleteContext(RestService.DEFAULT_REQUEST_PROPERTIES, ".ctx1");
+
+    List<String> contexts = restClient1.getAllContexts();
+    assertEquals(
+        ImmutableList.of(DEFAULT_CONTEXT, ".ctx2"),
+        contexts,
+        "Getting all contexts should return all registered contexts after subject1 deletion"
+    );
   }
 
   static void registerAndVerifySchema(RestService restService, String schemaString,

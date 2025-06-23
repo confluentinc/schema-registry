@@ -87,6 +87,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   List<Integer> deleteSubject(String subject, boolean permanentDelete)
       throws SchemaRegistryException;
 
+  void deleteContext(String delimitedContext) throws SchemaRegistryException;
+
   default Schema lookUpSchemaUnderSubject(
       String subject, Schema schema, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
