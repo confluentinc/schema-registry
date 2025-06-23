@@ -153,6 +153,9 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
       };
+  private static final TypeReference<Void> VOID_RESPONSE_TYPE =
+      new TypeReference<Void>() {
+      };
   private static final TypeReference<Mode> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
       new TypeReference<Mode>() {
       };
@@ -1609,6 +1612,17 @@ public class RestService implements Closeable, Configurable {
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
             DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
+  }
+
+  public void deleteContext(
+      Map<String, String> requestProperties,
+      String delimitedContext
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/contexts/{context}");
+    String path = builder.build(delimitedContext).toString();
+
+    httpRequest(path, "DELETE", null, requestProperties, VOID_RESPONSE_TYPE);
   }
 
   public ServerClusterId getClusterId() throws IOException, RestClientException {

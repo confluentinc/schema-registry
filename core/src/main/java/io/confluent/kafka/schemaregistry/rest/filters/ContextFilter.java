@@ -132,6 +132,10 @@ public class ContextFilter implements ContainerRequestFilter {
     } else if (contextPathFound) {
       // Must be a root contexts only
       modifiedPath.append("contexts").append("/");
+    } else if ((modifiedPath.isEmpty() || modifiedPath.toString().equals("/"))
+        && !DEFAULT_CONTEXT.equals(context)) {
+      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      modifiedPath.append("contexts").append("/").append(normalizedContext).append("/");
     }
 
     return new ContextAndPath(context, modifiedPath.toString());
