@@ -237,7 +237,7 @@ public class ApacheClientRestServiceTest {
     RestService restService = new RestService("http://localhost:8081", false, true);
 
     Map<String, Object> configs = new HashMap<>();
-    configs.put("proxy.host", "localhost");
+    configs.put("proxy.host", "http://localhost");
     configs.put("proxy.port", 8082);
     restService.configure(configs);
 
@@ -260,7 +260,6 @@ public class ApacheClientRestServiceTest {
     proxyField.setAccessible(true);
     HttpHost proxy = (HttpHost) proxyField.get(proxyPlanner);
 
-// 6) Assert on it
     assertEquals("localhost", proxy.getHostName());
     assertEquals(8082, proxy.getPort());
   }
