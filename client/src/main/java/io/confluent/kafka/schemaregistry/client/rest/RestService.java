@@ -256,6 +256,9 @@ public class RestService implements Closeable, Configurable {
 
   @Override
   public void configure(Map<String, ?> configs) {
+    if (SchemaRegistryClientConfig.getApacheClient(configs)) {
+      this.httpClient = HttpClients.createDefault();
+    }
     this.retryExecutor = new RetryExecutor(
         SchemaRegistryClientConfig.getMaxRetries(configs),
         SchemaRegistryClientConfig.getRetriesWaitMs(configs),
@@ -294,36 +297,7 @@ public class RestService implements Closeable, Configurable {
       baseUrls.randomizeIndex();
     }
 
-    if (SchemaRegistryClientConfig.getApacheClient(configs)) {
-      configureHttpClient(configs);
-    } else {
-
-      String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-      Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
-      Integer proxyPort = proxyPortVal instanceof String
-          ? Integer.valueOf((String) proxyPortVal)
-          : (Integer) proxyPortVal;
-
-      if (isValidProxyConfig(proxyHost, proxyPort)) {
-        setProxy(proxyHost, proxyPort);
-      }
-    }
-  }
-
-  private void configureHttpClient(Map<String, ?> configs) {
-
-    String rawProxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
-    String proxyHost = null;
-
-    if (rawProxyHost != null) {
-      try {
-        URI uri = new URI(rawProxyHost);
-        proxyHost = uri.getHost();
-      } catch (URISyntaxException e) {
-        proxyHost = rawProxyHost.replaceFirst("^https?://", "");
-      }
-    }
-
+    String proxyHost = (String) configs.get(SchemaRegistryClientConfig.PROXY_HOST);
     Object proxyPortVal = configs.get(SchemaRegistryClientConfig.PROXY_PORT);
     Integer proxyPort = proxyPortVal instanceof String
         ? Integer.valueOf((String) proxyPortVal)
@@ -333,7 +307,7 @@ public class RestService implements Closeable, Configurable {
       setProxy(proxyHost, proxyPort);
     }
 
-    createNewHttpClient();
+    reconfigureHttpClient();
   }
 
   private void reconfigureHttpClient() {
@@ -350,7 +324,7 @@ public class RestService implements Closeable, Configurable {
     createNewHttpClient();
   }
 
-  private void createNewHttpClient(){
+  private void createNewHttpClient() {
     RequestConfig requestConfig = RequestConfig.custom()
         .setConnectionRequestTimeout(Timeout.ofMilliseconds(
             this.httpConnectTimeoutMs))
@@ -1950,7 +1924,15 @@ public class RestService implements Closeable, Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
-    this.clientProxy = new HttpHost(proxyHost, proxyPort);
+    if (this.httpClient != null) {
+      try {
+        URI uri = new URI(proxyHost);
+        proxyHost = uri.getHost();
+      } catch (URISyntaxException e) {
+        proxyHost = proxyHost.replaceFirst("^https?://", "");
+      }
+      this.clientProxy = new HttpHost(proxyHost, proxyPort);
+    }
     reconfigureHttpClient();
   }
 
