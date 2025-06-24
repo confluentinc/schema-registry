@@ -97,7 +97,7 @@
         <google.auth.version>1.24.1</google.auth.version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.5</jsonata-version>
-        <json-schema.version>1.14.5</json-schema.version>
+        <json-schema.version>1.14.6</json-schema.version>
         <json-skema.version>0.20.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
