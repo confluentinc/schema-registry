@@ -138,7 +138,8 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
-    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
       throw Errors.invalidSubjectException(subject);
     }
 
