@@ -544,4 +544,27 @@ public class RestApiModeTest extends ClusterTestHarness {
         SCHEMA2_STRING,
         restApp.restClient.getVersion(subject, 2).getSchema());
   }
+
+  @Test
+  public void testGlobalContextWithReadOnlyMode() throws Exception {
+    String subject = "testSubject";
+    String mode = "READONLY";
+
+    // set mode in global context to read only
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, ":.__GLOBAL:").getMode());
+
+    // register a valid avro schema
+    try {
+      restApp.restClient.registerSchema(SCHEMA_STRING, subject);
+      fail("Registering during read-only mode should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a constraint violation",
+          RestConstraintViolationException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
+  }
+
 }
