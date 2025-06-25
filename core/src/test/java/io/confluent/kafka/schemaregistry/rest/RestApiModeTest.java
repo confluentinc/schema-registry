@@ -16,6 +16,7 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import org.junit.Test;
 
@@ -544,4 +545,30 @@ public class RestApiModeTest extends ClusterTestHarness {
         SCHEMA2_STRING,
         restApp.restClient.getVersion(subject, 2).getSchema());
   }
+
+  @Test
+  public void testGlobalContextWithReadOnlyMode() throws Exception {
+    String subject = "testSubject";
+    String mode = "READONLY";
+
+    // set mode in global context to read only
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode, ":.__GLOBAL:").getMode());
+
+    Mode mode1 = restApp.restClient.getMode(null, true);
+    assertEquals("readonly", mode1.getMode().toLowerCase());
+
+    // register a valid avro schema
+    try {
+      restApp.restClient.registerSchema(SCHEMA_STRING, subject);
+      fail("Registering during read-only mode should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals("Should get a constraint violation",
+          RestConstraintViolationException.DEFAULT_ERROR_CODE,
+          e.getStatus());
+    }
+  }
+
 }
