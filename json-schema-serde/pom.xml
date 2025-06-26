@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.3-0</version>
+        <version>8.0.1-0</version>
     </parent>
 
     <licenses>
@@ -21,6 +21,10 @@
     <artifactId>kafka-streams-json-schema-serde</artifactId>
     <packaging>jar</packaging>
     <name>kafka-streams-json-schema-serde</name>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -46,5 +50,4 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 </project>

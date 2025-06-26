@@ -25,6 +25,7 @@ import com.google.common.base.Charsets;
 import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
@@ -127,6 +128,9 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<List<SubjectVersion>> GET_VERSIONS_RESPONSE_TYPE =
       new TypeReference<List<SubjectVersion>>() {
       };
+  private static final TypeReference<List<ContextId>> GET_IDS_RESPONSE_TYPE =
+      new TypeReference<List<ContextId>>() {
+      };
   private static final TypeReference<CompatibilityCheckResponse>
       COMPATIBILITY_CHECK_RESPONSE_TYPE_REFERENCE =
       new TypeReference<CompatibilityCheckResponse>() {
@@ -148,6 +152,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<? extends List<Integer>> DELETE_SUBJECT_RESPONSE_TYPE =
       new TypeReference<List<Integer>>() {
+      };
+  private static final TypeReference<Void> VOID_RESPONSE_TYPE =
+      new TypeReference<Void>() {
       };
   private static final TypeReference<Mode> DELETE_SUBJECT_MODE_RESPONSE_TYPE =
       new TypeReference<Mode>() {
@@ -1003,9 +1010,16 @@ public class RestService implements Closeable, Configurable {
       throws IOException, RestClientException {
     return getId(requestProperties, id, subject, null, findTags, fetchMaxId);
   }
-  
+
   public SchemaString getId(Map<String, String> requestProperties,
       int id, String subject, String format, Set<String> findTags, boolean fetchMaxId)
+      throws IOException, RestClientException {
+    return getId(requestProperties, id, subject, format, null, findTags, fetchMaxId);
+  }
+
+  public SchemaString getId(Map<String, String> requestProperties,
+      int id, String subject, String format, String referenceFormat,
+      Set<String> findTags, boolean fetchMaxId)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}")
         .queryParam("fetchMaxId", fetchMaxId);
@@ -1019,6 +1033,9 @@ public class RestService implements Closeable, Configurable {
     }
     if (format != null) {
       builder.queryParam("format", format);
+    }
+    if (referenceFormat != null) {
+      builder.queryParam("referenceFormat", referenceFormat);
     }
     String path = builder.build(id).toString();
 
@@ -1082,6 +1099,13 @@ public class RestService implements Closeable, Configurable {
   public Schema getVersion(Map<String, String> requestProperties,
       String subject, int version, String format, boolean lookupDeletedSchema, Set<String> findTags)
       throws IOException, RestClientException {
+    return getVersion(requestProperties, subject, version, format, null, lookupDeletedSchema, null);
+  }
+
+  public Schema getVersion(Map<String, String> requestProperties,
+      String subject, int version, String format, String referenceFormat,
+      boolean lookupDeletedSchema, Set<String> findTags)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}")
         .queryParam("deleted", lookupDeletedSchema);
     if (findTags != null && !findTags.isEmpty()) {
@@ -1091,6 +1115,9 @@ public class RestService implements Closeable, Configurable {
     }
     if (format != null) {
       builder.queryParam("format", format);
+    }
+    if (referenceFormat != null) {
+      builder.queryParam("referenceFormat", referenceFormat);
     }
     String path = builder.build(subject, version).toString();
 
@@ -1496,6 +1523,39 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public SchemaString getByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    return getByGuid(DEFAULT_REQUEST_PROPERTIES, guid, format);
+  }
+
+  public SchemaString getByGuid(Map<String, String> requestProperties, String guid, String format)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/guids/{guid}");
+    if (format != null) {
+      builder.queryParam("format", format);
+    }
+    String path = builder.build(guid).toString();
+
+    SchemaString response = httpRequest(path, "GET", null, requestProperties,
+        GET_SCHEMA_BY_ID_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<ContextId> getAllContextIds(String guid) throws IOException, RestClientException {
+    return getAllContextIds(DEFAULT_REQUEST_PROPERTIES, guid);
+  }
+
+  public List<ContextId> getAllContextIds(Map<String, String> requestProperties, String guid)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/guids/{guid}/ids");
+    String path = builder.build(guid).toString();
+
+    List<ContextId> response = httpRequest(path, "GET", null, requestProperties,
+        GET_IDS_RESPONSE_TYPE);
+
+    return response;
+  }
+
   public Integer deleteSchemaVersion(
       Map<String, String> requestProperties,
       String subject,
@@ -1552,6 +1612,17 @@ public class RestService implements Closeable, Configurable {
     List<Integer> response = httpRequest(path, "DELETE", null, requestProperties,
             DELETE_SUBJECT_RESPONSE_TYPE);
     return response;
+  }
+
+  public void deleteContext(
+      Map<String, String> requestProperties,
+      String delimitedContext
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/contexts/{context}");
+    String path = builder.build(delimitedContext).toString();
+
+    httpRequest(path, "DELETE", null, requestProperties, VOID_RESPONSE_TYPE);
   }
 
   public ServerClusterId getClusterId() throws IOException, RestClientException {

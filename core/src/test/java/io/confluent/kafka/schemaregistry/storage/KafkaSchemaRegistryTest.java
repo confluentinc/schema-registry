@@ -23,8 +23,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
@@ -33,20 +32,20 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   private SchemaRegistryConfig config;
 
-  @Before
-  public void setUp() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
     String listeners = "http://localhost:123, https://localhost:456";
     Properties props = new Properties();
     props.setProperty(RestConfig.PORT_CONFIG, "123");
     props.setProperty(RestConfig.LISTENERS_CONFIG, listeners);
-    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, brokerList);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     config = new SchemaRegistryConfig(props);
@@ -62,8 +61,8 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     NamedURI listener =
         KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected listeners to take precedence over port.", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+    assertEquals(456, listener.getUri().getPort(), "Expected listeners to take precedence over port.");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -76,8 +75,8 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     NamedURI listener =
         KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected port to take the configured port value", 123, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+    assertEquals(123, listener.getUri().getPort(), "Expected port to take the configured port value");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -90,8 +89,8 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     NamedURI listener =
         KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
-    assertEquals("Expected HTTPS listener's port to be returned", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
+    assertEquals(456, listener.getUri().getPort(), "Expected HTTPS listener's port to be returned");
+    assertEquals(SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
   }
 
   @Test
@@ -104,8 +103,8 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     NamedURI listener =
         KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected last listener's port to be returned", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+    assertEquals(456, listener.getUri().getPort(), "Expected last listener's port to be returned");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -121,9 +120,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     NamedURI listener =
       KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
-    assertEquals("Expected internal listener's port to be returned", 123, listener.getUri().getPort());
-    assertEquals("Expected internal listener's name to be returned", "bob", listener.getName());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+    assertEquals(123, listener.getUri().getPort());
+    assertEquals("bob", listener.getName());
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test

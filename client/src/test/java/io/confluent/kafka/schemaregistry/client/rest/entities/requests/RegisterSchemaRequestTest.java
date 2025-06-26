@@ -69,6 +69,6 @@ public class RegisterSchemaRequestTest {
     request.setSchemaType("AVRO");
 
     // Note that schemaType is omitted
-    assertEquals("{\"schema\":\"string\"}", request.toJson());
+    assertEquals("{\"schemaType\":\"AVRO\",\"schema\":\"string\"}", request.toJson());
   }
 }

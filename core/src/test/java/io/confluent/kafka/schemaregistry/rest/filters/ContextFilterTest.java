@@ -6,9 +6,9 @@ package io.confluent.kafka.schemaregistry.rest.filters;
 
 import java.net.URI;
 import java.util.Collections;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -22,6 +22,16 @@ public class ContextFilterTest {
     Assert.assertEquals(
         "URI most not change",
         "/contexts/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSpecificContext() {
+    String path = "/contexts/.foo/";
+    Assert.assertEquals(
+        "Context must be delimited",
+        "/contexts/:.foo:/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }

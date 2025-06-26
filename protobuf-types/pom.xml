@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.3-0</version>
+        <version>8.0.1-0</version>
     </parent>
 
     <licenses>
@@ -25,6 +25,10 @@
     <artifactId>kafka-protobuf-types</artifactId>
     <packaging>jar</packaging>
     <name>kafka-protobuf-types</name>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -54,24 +58,23 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>com.github.os72</groupId>
-                <artifactId>protoc-jar-maven-plugin</artifactId>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+
+                <configuration>
+                    <protocVersion>${protobuf.version}</protocVersion>
+                    <outputDirectory>src/main/java</outputDirectory>
+                    <sourceDirectories>
+                        <include>src/main/proto</include>
+                    </sourceDirectories>
+                    <embedSourcesInClassOutputs>true</embedSourcesInClassOutputs>
+                </configuration>
+
                 <executions>
                     <execution>
-                        <phase>generate-sources</phase>
                         <goals>
-                            <goal>run</goal>
+                            <goal>generate</goal>
                         </goals>
-                        <configuration>
-                            <protocVersion>${protobuf.version}</protocVersion>
-                            <includeStdTypes>true</includeStdTypes>
-                            <addSources>none</addSources>
-                            <addProtoSources>inputs</addProtoSources>
-                            <outputDirectory>src/main/java</outputDirectory>
-                            <inputDirectories>
-                                <include>src/main/proto</include>
-                            </inputDirectories>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>
