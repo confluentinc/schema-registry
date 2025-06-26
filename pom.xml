@@ -265,7 +265,7 @@
             <dependency>
                 <groupId>com.hubspot.jackson</groupId>
                 <artifactId>jackson-datatype-protobuf</artifactId>
-                <version>0.9.17</version>
+                <version>0.9.18</version>
             </dependency>
             <dependency>
                 <groupId>com.github.erosb</groupId>
