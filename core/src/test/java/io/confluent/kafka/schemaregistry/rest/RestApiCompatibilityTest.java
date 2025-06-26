@@ -1527,9 +1527,11 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
     int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(schemaString1, subject));
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
 
     // register an incompatible avro
     String incompatibleSchemaString = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -1542,17 +1544,21 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a conflict status",
+      assertEquals(
           RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a conflict status"
+      );
     }
 
     // change compatibility level to none in the global context and try again
-    assertEquals("Changing compatibility level should succeed",
+    assertEquals(
         CompatibilityLevel.NONE.name,
         restApp.restClient
             .updateCompatibility(CompatibilityLevel.NONE.name, ":.__GLOBAL:")
-            .getCompatibilityLevel());
+            .getCompatibilityLevel(),
+        "Changing compatibility level should succeed"
+    );
 
     Config config = restApp.restClient.getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true);
     assertEquals("none", config.getCompatibilityLevel().toLowerCase());

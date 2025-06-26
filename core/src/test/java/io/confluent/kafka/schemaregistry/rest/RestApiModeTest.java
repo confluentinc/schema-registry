@@ -640,9 +640,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering during read-only mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 
