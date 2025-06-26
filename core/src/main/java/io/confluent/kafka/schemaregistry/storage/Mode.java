@@ -18,6 +18,10 @@ package io.confluent.kafka.schemaregistry.storage;
 public enum Mode {
   READWRITE,
   READONLY,
+  /**
+   * @deprecated Use {@link #READONLY} with the global context (":.__GLOBAL:") instead.
+   */
+  @Deprecated
   READONLY_OVERRIDE,
   IMPORT,
   FORWARD;

@@ -806,7 +806,8 @@ public class RestService implements Closeable, Configurable {
     String path = subject != null
         ? UriBuilder.fromPath("/config/{subject}")
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
-        : "/config";
+        : UriBuilder.fromPath("/config")
+        .queryParam("defaultToGlobal", defaultToGlobal).build().toString();
 
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
@@ -879,7 +880,8 @@ public class RestService implements Closeable, Configurable {
     String path = subject != null
         ? UriBuilder.fromPath("/mode/{subject}")
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
-        : "/mode";
+        : UriBuilder.fromPath("/mode")
+        .queryParam("defaultToGlobal", defaultToGlobal).build().toString();
 
     Mode mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
