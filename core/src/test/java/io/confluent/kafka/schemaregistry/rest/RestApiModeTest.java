@@ -16,6 +16,7 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import org.junit.Test;
 
@@ -554,6 +555,9 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals(
         mode,
         restApp.restClient.setMode(mode, ":.__GLOBAL:").getMode());
+
+    Mode mode1 = restApp.restClient.getMode(null, true);
+    assertEquals("readonly", mode1.getMode().toLowerCase());
 
     // register a valid avro schema
     try {

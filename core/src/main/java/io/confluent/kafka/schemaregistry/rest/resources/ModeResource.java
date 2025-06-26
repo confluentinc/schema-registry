@@ -237,8 +237,10 @@ public class ModeResource {
       })
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("mode.get-global")
-  public Mode getTopLevelMode() {
-    return getMode(null, false);
+  public Mode getTopLevelMode(
+      @Parameter(description = "Whether to return the global mode if subject mode not found")
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+    return getMode(null, defaultToGlobal);
   }
 
   @DELETE

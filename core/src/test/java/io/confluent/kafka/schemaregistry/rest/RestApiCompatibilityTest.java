@@ -1386,6 +1386,9 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
             .updateCompatibility(CompatibilityLevel.NONE.name, ":.__GLOBAL:")
             .getCompatibilityLevel());
 
+    Config config = restApp.restClient.getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true);
+    assertEquals("none", config.getCompatibilityLevel().toLowerCase());
+
     try {
       restApp.restClient.registerSchema(incompatibleSchemaString, subject);
     } catch (RestClientException e) {

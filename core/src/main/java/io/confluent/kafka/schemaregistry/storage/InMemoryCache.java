@@ -257,16 +257,15 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue configValue = (ConfigValue) get((K) subjectConfigKey);
-    if (configValue == null && subject == null) {
-      return defaultForTopLevel;
-    }
     if (configValue != null) {
       return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
     }
-    if (!returnTopLevelIfNotFound) {
-      return null;
-    }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!returnTopLevelIfNotFound) {
+      return subject == null || qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+          ? defaultForTopLevel
+          : null;
+    }
     if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
       configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
     } else {
@@ -275,7 +274,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (configValue != null) {
       return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
     }
-    qs = QualifiedSubject.create(tenant(),
+    qs = QualifiedSubject.createFromUnqualified(tenant(),
         CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER);
     configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
     if (configValue != null) {
@@ -299,16 +298,15 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   ) throws StoreException {
     ModeKey modeKey = new ModeKey(subject);
     ModeValue modeValue = (ModeValue) get((K) modeKey);
-    if (modeValue == null && subject == null) {
-      return defaultForTopLevel;
-    }
     if (modeValue != null) {
       return modeValue.getMode();
     }
-    if (!returnTopLevelIfNotFound) {
-      return null;
-    }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!returnTopLevelIfNotFound) {
+      return subject == null || qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+          ? defaultForTopLevel
+          : null;
+    }
     if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
       modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
     } else {
@@ -317,7 +315,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (modeValue != null) {
       return modeValue.getMode();
     }
-    qs = QualifiedSubject.create(tenant(),
+    qs = QualifiedSubject.createFromUnqualified(tenant(),
         CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER);
     modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
     if (modeValue != null) {
