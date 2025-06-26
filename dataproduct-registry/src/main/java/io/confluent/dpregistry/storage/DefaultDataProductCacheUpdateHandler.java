@@ -15,6 +15,10 @@
 
 package io.confluent.dpregistry.storage;
 
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +32,10 @@ public class DefaultDataProductCacheUpdateHandler implements DataProductCacheUpd
 
   public DefaultDataProductCacheUpdateHandler(DataProductRegistry dataProductRegistry) {
     this.dataProductRegistry = dataProductRegistry;
+  }
+
+  public KafkaSchemaRegistry getSchemaRegistry() {
+    return dataProductRegistry.getSchemaRegistry();
   }
 
   @Override
@@ -94,6 +102,58 @@ public class DefaultDataProductCacheUpdateHandler implements DataProductCacheUpd
           dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
         }
       }
+    }
+     */
+    String name = key.getName();
+    Integer version = key.getVersion();
+    SchemaValue keySchema = null;
+    SchemaValue oldKeySchema = null;
+    SchemaValue valueSchema = null;
+    SchemaValue oldValueSchema = null;
+    if (value != null && value.getSchemas() != null) {
+      DataProductSchemas schemas = value.getSchemas();
+      keySchema = schemas.getKey();
+      valueSchema = schemas.getValue();
+    }
+    if (oldValue != null && oldValue.getSchemas() != null) {
+      DataProductSchemas schemas = oldValue.getSchemas();
+      oldKeySchema = schemas.getKey();
+      oldValueSchema = schemas.getValue();
+    }
+    // For now we use subject names
+    handleSchemaUpdate(name + "-key", version, keySchema, oldKeySchema);
+    handleSchemaUpdate(name + "-value", version, valueSchema, oldValueSchema);
+  }
+
+  private void handleSchemaUpdate(
+      String subject,
+      Integer version,
+      SchemaValue schemaValue,
+      SchemaValue oldSchemaValue) {
+    try {
+      getSchemaRegistry().getKafkaStore().put(
+          new SchemaKey(subject, version),
+          schemaValue
+      );
+    } catch (StoreException e) {
+      throw new RuntimeException(e);
+    }
+    // TODO RAY metrics
+    //final MetricsContainer metricsContainer = schemaRegistry.getMetricsContainer();
+    /*
+    SchemaKey schemaKey = new SchemaKey(subject, version);
+    if (schemaValue != null) {
+      // Update the maximum id seen so far
+      getSchemaRegistry().getIdentityGenerator().schemaRegistered(schemaKey, schemaValue);
+
+      if (schemaValue.isDeleted()) {
+        getSchemaRegistry().getLookupCache().schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
+      } else {
+        getSchemaRegistry().getLookupCache().schemaRegistered(
+            schemaKey, schemaValue, oldSchemaValue);
+      }
+    } else if (oldSchemaValue != null) {
+      getSchemaRegistry().getLookupCache().schemaTombstoned(schemaKey, oldSchemaValue);
     }
      */
   }

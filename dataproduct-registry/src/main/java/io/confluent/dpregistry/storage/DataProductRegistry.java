@@ -28,6 +28,7 @@ import io.confluent.dpregistry.storage.serialization.DataProductKeySerde;
 import io.confluent.dpregistry.storage.serialization.DataProductValueSerde;
 import io.confluent.dpregistry.storage.utils.CompositeCacheUpdateHandler;
 import io.confluent.dpregistry.client.rest.entities.DataProduct;
+import io.confluent.dpregistry.client.rest.entities.DataProductSchemas;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
@@ -36,6 +37,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForward
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.RestConfigException;
 import io.confluent.rest.exceptions.RestException;
@@ -388,6 +390,18 @@ public class DataProductRegistry implements Closeable {
         getLatestDataProduct(env, cluster, request.getInfo().getName());
     int newVersion = latest != null ? latest.key.getVersion() + 1 : MIN_VERSION;
     String newGuid = UUID.randomUUID().toString();
+
+    DataProductSchemas schemas = request.getSchemas();
+    if (schemas != null) {
+      if (schemas.getKey() != null) {
+        int id = schemaRegistry.getIdentityGenerator().id(new SchemaValue(schemas.getKey()));
+        schemas.getKey().setId(id);
+      }
+      if (schemas.getValue() != null) {
+        int id = schemaRegistry.getIdentityGenerator().id(new SchemaValue(schemas.getValue()));
+        schemas.getValue().setId(id);
+      }
+    }
 
     DataProductValue value = new DataProductValue(newVersion, newGuid, request);
     DataProductKey key = new DataProductKey(

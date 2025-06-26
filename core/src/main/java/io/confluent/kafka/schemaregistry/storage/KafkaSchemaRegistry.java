@@ -2617,7 +2617,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
+  public KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
     return this.kafkaStore;
   }
 
