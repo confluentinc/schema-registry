@@ -250,7 +250,7 @@
             <dependency>
                 <groupId>com.hubspot.jackson</groupId>
                 <artifactId>jackson-datatype-protobuf</artifactId>
-                <version>0.9.13</version>
+                <version>0.9.16</version>
             </dependency>
             <dependency>
                 <groupId>com.github.erosb</groupId>
