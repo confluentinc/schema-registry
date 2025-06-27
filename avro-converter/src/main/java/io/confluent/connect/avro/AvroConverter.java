@@ -30,12 +30,12 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
@@ -105,7 +105,7 @@ public class AvroConverter implements Converter {
       );
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException) {
-        throw new ConnectException(
+        throw new NetworkException(
             String.format("I/O error while serializing Avro data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
@@ -154,7 +154,7 @@ public class AvroConverter implements Converter {
       );
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException) {
-        throw new ConnectException(
+        throw new NetworkException(
             String.format("I/O error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
