@@ -16,19 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
-public enum RuleMode {
-  UPGRADE,
-  DOWNGRADE,
-  UPDOWN,
-  WRITE,
-  READ,
-  WRITEREAD;
-
-  public boolean isMigrationRule() {
-    return this == UPGRADE || this == DOWNGRADE || this == UPDOWN;
-  }
-
-  public boolean isDomainOrEncodingRule() {
-    return this == WRITE || this == READ || this == WRITEREAD;
-  }
+public enum RulePhase {
+  MIGRATION,
+  DOMAIN,
+  ENCODING;
 }
