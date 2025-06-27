@@ -187,7 +187,7 @@ public class SchemaValuesTest {
     Metadata metadata = new Metadata(null, null, null);
     List<Rule> domainRules = Collections.singletonList(new Rule(null, null, RuleKind.TRANSFORM,
         RuleMode.WRITEREAD, null, null, null, null, null, null, false));
-    RuleSet ruleSet = new RuleSet(domainRules, null);
+    RuleSet ruleSet = new RuleSet(domainRules, null, null);
 
     schema = new SchemaValue(
         "subject", 1, 1, null, "AVRO", null, metadata, ruleSet, schemaString, false);

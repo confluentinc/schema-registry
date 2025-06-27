@@ -23,6 +23,7 @@ import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
@@ -180,7 +181,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       if (readerSchema != null) {
         schema = readerSchema;
       }
-      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
+      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (message == null) {
           message = DynamicMessage.parseFrom(schema.toDescriptor(),
               new ByteArrayInputStream(buffer.array(), start, length),

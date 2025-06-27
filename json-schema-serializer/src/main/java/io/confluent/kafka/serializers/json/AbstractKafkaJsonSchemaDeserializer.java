@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -165,7 +166,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
-      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
+      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
           jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
         }
