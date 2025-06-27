@@ -20,20 +20,16 @@ import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpKmsDriver.PRIV
 import static io.confluent.kafka.schemaregistry.encryption.gcp.GcpKmsDriver.PRIVATE_KEY_ID;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class GcpFieldEncryptionProperties extends FieldEncryptionProperties {
+public class GcpEncryptionProperties extends EncryptionProperties {
 
-  public GcpFieldEncryptionProperties(List<String> ruleNames) {
-    super(ruleNames);
-  }
-
-  public GcpFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public GcpEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     super(ruleNames, ruleExecutor);
   }
 
