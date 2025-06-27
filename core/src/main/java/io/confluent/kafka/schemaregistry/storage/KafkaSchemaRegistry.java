@@ -1761,6 +1761,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         : new SchemaString(null, null, schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
       ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
+      schemaString.setSchemaType(format.toUpperCase(Locale.ROOT));
       schemaString.setSchemaString(parsedSchema.formattedString(format));
     } else {
       schemaString.setSchemaString(schema.getSchema());
