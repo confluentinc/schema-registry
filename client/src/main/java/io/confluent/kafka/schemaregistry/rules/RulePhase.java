@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,10 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.client.rest.entities;
+package io.confluent.kafka.schemaregistry.rules;
 
-public enum RuleMode {
-  UPGRADE,
-  DOWNGRADE,
-  UPDOWN,
-  WRITE,
-  READ,
-  WRITEREAD;
-
-  public boolean isMigrationRule() {
-    return this == UPGRADE || this == DOWNGRADE || this == UPDOWN;
-  }
-
-  public boolean isDomainOrEncodingRule() {
-    return this == WRITE || this == READ || this == WRITEREAD;
-  }
+public enum RulePhase {
+  MIGRATION,
+  DOMAIN,
+  ENCODING;
 }

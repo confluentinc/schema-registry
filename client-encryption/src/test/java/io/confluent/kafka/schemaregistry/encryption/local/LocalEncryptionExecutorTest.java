@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.gcp;
+package io.confluent.kafka.schemaregistry.encryption.local;
 
+import io.confluent.kafka.schemaregistry.encryption.EncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
-import io.confluent.kafka.schemaregistry.encryption.RestApiFieldEncryptionTest;
 import java.util.List;
 
-public class RestApiGcpFieldEncryptionTest extends RestApiFieldEncryptionTest {
+public class LocalEncryptionExecutorTest extends EncryptionExecutorTest {
 
-  public RestApiGcpFieldEncryptionTest() throws Exception {
+  public LocalEncryptionExecutorTest() throws Exception {
     super();
   }
 
   @Override
-  protected EncryptionProperties getFieldEncryptionProperties(List<String> ruleNames) {
-    return new GcpEncryptionProperties(ruleNames, FieldEncryptionExecutor.class);
+  protected EncryptionProperties getEncryptionProperties(
+      List<String> ruleNames, Class<?> ruleExecutor) {
+    return new LocalEncryptionProperties(ruleNames, ruleExecutor);
   }
 }
 
