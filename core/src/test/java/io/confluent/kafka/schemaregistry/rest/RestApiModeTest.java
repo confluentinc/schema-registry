@@ -31,7 +31,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 
@@ -1040,10 +1039,10 @@ public class RestApiModeTest extends ClusterTestHarness {
   @Test
   public void testSetForwardMode() throws Exception {
     String subject = "testSubject";
-    String mode = Mode.FORWARD.toString();
+    String mode = "FORWARD";
 
     try {
-      restApp.restClient.setMode(Mode.FORWARD.toString(), subject);
+      restApp.restClient.setMode(mode, subject);
     } catch (RestClientException e) {
       assertEquals(42204, e.getErrorCode());
       assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
