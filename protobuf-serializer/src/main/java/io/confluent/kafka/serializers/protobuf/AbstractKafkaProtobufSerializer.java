@@ -20,6 +20,7 @@ import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
@@ -168,6 +169,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
         object.writeTo(baos);
         byte[] payload = baos.toByteArray();
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
         return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
       }
     } catch (InterruptedIOException e) {

@@ -26,21 +26,16 @@ import io.github.jopenlibs.vault.response.LogicalResponse;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class HcVaultFieldEncryptionProperties extends FieldEncryptionProperties {
+public class HcVaultEncryptionProperties extends EncryptionProperties {
 
-  public HcVaultFieldEncryptionProperties(List<String> ruleNames) {
-    super(ruleNames);
-  }
-
-  public HcVaultFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public HcVaultEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     super(ruleNames, ruleExecutor);
   }
 

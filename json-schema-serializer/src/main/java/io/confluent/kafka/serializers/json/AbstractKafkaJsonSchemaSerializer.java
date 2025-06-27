@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
@@ -174,6 +175,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       }
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
         byte[] payload = objectMapper.writeValueAsBytes(object);
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
         return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
       }
     } catch (InterruptedIOException e) {

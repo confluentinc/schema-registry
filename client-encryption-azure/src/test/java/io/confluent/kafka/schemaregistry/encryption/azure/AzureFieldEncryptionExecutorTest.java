@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import java.util.List;
 
 public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
@@ -27,9 +27,9 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new AzureFieldEncryptionProperties(ruleNames, ruleExecutor);
+    return new AzureEncryptionProperties(ruleNames, ruleExecutor);
   }
 }
 

@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
@@ -182,6 +183,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
           writeDatum(baos, value, rawSchema);
         }
         byte[] payload = baos.toByteArray();
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
         return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
       }
     } catch (ExecutionException ex) {

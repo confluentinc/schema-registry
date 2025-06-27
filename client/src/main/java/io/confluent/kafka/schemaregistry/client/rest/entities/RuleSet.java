@@ -31,7 +31,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Rule set, which includes rules and a list of reference names for included rule sets.
+ * Rule set, which includes migration rules (for migrating between versions), domain rules
+ * (for business logic), and encoding rules (for encoding logic).
  */
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -40,11 +41,13 @@ public class RuleSet {
 
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
+  private final List<Rule> encodingRules;
 
   @JsonCreator
   public RuleSet(
       @JsonProperty("migrationRules") List<Rule> migrationRules,
-      @JsonProperty("domainRules") List<Rule> domainRules
+      @JsonProperty("domainRules") List<Rule> domainRules,
+      @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
@@ -52,6 +55,16 @@ public class RuleSet {
     this.domainRules = domainRules != null
         ? Collections.unmodifiableList(domainRules)
         : Collections.emptyList();
+    this.encodingRules = encodingRules != null
+        ? Collections.unmodifiableList(encodingRules)
+        : Collections.emptyList();
+  }
+
+  public RuleSet(
+      @JsonProperty("migrationRules") List<Rule> migrationRules,
+      @JsonProperty("domainRules") List<Rule> domainRules
+  ) {
+    this(migrationRules, domainRules, null);
   }
 
   public List<Rule> getMigrationRules() {
@@ -62,25 +75,43 @@ public class RuleSet {
     return domainRules;
   }
 
-  public boolean isEmpty() {
-    return (migrationRules == null || migrationRules.isEmpty())
-        && (domainRules == null || domainRules.isEmpty());
+  public List<Rule> getEncodingRules() {
+    return encodingRules;
   }
 
-  public boolean hasRules(RuleMode mode) {
+  public boolean isEmpty() {
+    return (migrationRules == null || migrationRules.isEmpty())
+        && (domainRules == null || domainRules.isEmpty())
+        && (encodingRules == null || encodingRules.isEmpty());
+  }
+
+  public List<Rule> getRules(RulePhase phase) {
+    switch (phase) {
+      case MIGRATION:
+        return getMigrationRules();
+      case DOMAIN:
+        return getDomainRules();
+      case ENCODING:
+        return getEncodingRules();
+      default:
+        throw new IllegalArgumentException("Unsupported rule phase " + phase);
+    }
+  }
+
+  public boolean hasRules(RulePhase phase, RuleMode mode) {
     switch (mode) {
       case UPGRADE:
       case DOWNGRADE:
-        return getMigrationRules().stream().anyMatch(r -> r.getMode() == mode
+        return getRules(phase).stream().anyMatch(r -> r.getMode() == mode
             || r.getMode() == RuleMode.UPDOWN);
       case UPDOWN:
-        return getMigrationRules().stream().anyMatch(r -> r.getMode() == mode);
+        return getRules(phase).stream().anyMatch(r -> r.getMode() == mode);
       case WRITE:
       case READ:
-        return getDomainRules().stream().anyMatch(r -> r.getMode() == mode
+        return getRules(phase).stream().anyMatch(r -> r.getMode() == mode
             || r.getMode() == RuleMode.WRITEREAD);
       case WRITEREAD:
-        return getDomainRules().stream().anyMatch(r -> r.getMode() == mode);
+        return getRules(phase).stream().anyMatch(r -> r.getMode() == mode);
       default:
         return false;
     }
@@ -88,7 +119,8 @@ public class RuleSet {
 
   public boolean hasRulesWithType(String type) {
     return getDomainRules().stream().anyMatch(r -> type.equals(r.getType()))
-        || getMigrationRules().stream().anyMatch(r -> type.equals(r.getType()));
+        || getMigrationRules().stream().anyMatch(r -> type.equals(r.getType()))
+        || getEncodingRules().stream().anyMatch(r -> type.equals(r.getType()));
   }
 
   public boolean equals(Object o) {
@@ -100,12 +132,13 @@ public class RuleSet {
     }
     RuleSet ruleSet = (RuleSet) o;
     return Objects.equals(migrationRules, ruleSet.migrationRules)
-        && Objects.equals(domainRules, ruleSet.domainRules);
+        && Objects.equals(domainRules, ruleSet.domainRules)
+        && Objects.equals(encodingRules, ruleSet.encodingRules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules);
+    return Objects.hash(migrationRules, domainRules, encodingRules);
   }
 
   @Override
@@ -113,6 +146,7 @@ public class RuleSet {
     return "Rules{"
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
+        + ", encodingRules=" + encodingRules
         + '}';
   }
 
@@ -122,6 +156,9 @@ public class RuleSet {
     }
     if (domainRules != null) {
       domainRules.forEach(r -> r.updateHash(md));
+    }
+    if (encodingRules != null) {
+      encodingRules.forEach(r -> r.updateHash(md));
     }
   }
 
@@ -148,8 +185,21 @@ public class RuleSet {
         }
         names.add(name);
         rule.validate();
-        if (!rule.getMode().isDomainRule()) {
+        if (!rule.getMode().isDomainOrEncodingRule()) {
           throw new RuleException("Domain rules can only be WRITE, READ, WRITEREAD");
+        }
+      }
+    }
+    if (encodingRules != null) {
+      for (Rule rule : encodingRules) {
+        String name = rule.getName();
+        if (names.contains(name)) {
+          throw new RuleException("Found rule with duplicate name '" + name + "'");
+        }
+        names.add(name);
+        rule.validate();
+        if (!rule.getMode().isDomainOrEncodingRule()) {
+          throw new RuleException("Encoding rules can only be WRITE, READ, WRITEREAD");
         }
       }
     }
@@ -163,7 +213,8 @@ public class RuleSet {
     } else {
       return new RuleSet(
           merge(oldRuleSet.migrationRules, newRuleSet.migrationRules),
-          merge(oldRuleSet.domainRules, newRuleSet.domainRules)
+          merge(oldRuleSet.domainRules, newRuleSet.domainRules),
+          merge(oldRuleSet.encodingRules, newRuleSet.encodingRules)
       );
     }
   }
