@@ -20,12 +20,12 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
@@ -105,7 +105,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       );
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException) {
-        throw new ConnectException(
+        throw new NetworkException(
             String.format("I/O error while serializing Json data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
@@ -152,7 +152,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       );
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException) {
-        throw new ConnectException(
+        throw new NetworkException(
             String.format("I/O error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
