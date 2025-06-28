@@ -203,6 +203,7 @@ public abstract class ClusterTestHarness {
 
     props.setProperty("auto.create.topics.enable", "true");
     props.setProperty("num.partitions", "1");
+    props.setProperty("cleanup.policy", "compact");
   }
 
   protected KafkaConfig getKafkaConfig(int brokerId) {
