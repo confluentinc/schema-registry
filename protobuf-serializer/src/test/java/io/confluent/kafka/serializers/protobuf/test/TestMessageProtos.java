@@ -143,119 +143,6 @@ public final class TestMessageProtos {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private TestMessage(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              testString_ = s;
-              break;
-            }
-            case 16: {
-
-              testBool_ = input.readBool();
-              break;
-            }
-            case 26: {
-
-              testBytes_ = input.readBytes();
-              break;
-            }
-            case 33: {
-
-              testDouble_ = input.readDouble();
-              break;
-            }
-            case 45: {
-
-              testFloat_ = input.readFloat();
-              break;
-            }
-            case 53: {
-
-              testFixed32_ = input.readFixed32();
-              break;
-            }
-            case 57: {
-
-              testFixed64_ = input.readFixed64();
-              break;
-            }
-            case 64: {
-
-              testInt32_ = input.readInt32();
-              break;
-            }
-            case 72: {
-
-              testInt64_ = input.readInt64();
-              break;
-            }
-            case 85: {
-
-              testSfixed32_ = input.readSFixed32();
-              break;
-            }
-            case 89: {
-
-              testSfixed64_ = input.readSFixed64();
-              break;
-            }
-            case 96: {
-
-              testSint32_ = input.readSInt32();
-              break;
-            }
-            case 104: {
-
-              testSint64_ = input.readSInt64();
-              break;
-            }
-            case 112: {
-
-              testUint32_ = input.readUInt32();
-              break;
-            }
-            case 120: {
-
-              testUint64_ = input.readUInt64();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
-    }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
       return io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.internal_static_io_confluent_kafka_serializers_protobuf_test_TestMessage_descriptor;
@@ -520,7 +407,7 @@ public final class TestMessageProtos {
       if (testUint64_ != 0L) {
         output.writeUInt64(15, testUint64_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -588,7 +475,7 @@ public final class TestMessageProtos {
         size += com.google.protobuf.CodedOutputStream
           .computeUInt64Size(15, testUint64_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -635,7 +522,7 @@ public final class TestMessageProtos {
           != other.getTestUint32()) return false;
       if (getTestUint64()
           != other.getTestUint64()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -684,7 +571,7 @@ public final class TestMessageProtos {
       hash = (37 * hash) + TEST_UINT64_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           getTestUint64());
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -801,18 +688,13 @@ public final class TestMessageProtos {
 
       // Construct using io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -982,7 +864,7 @@ public final class TestMessageProtos {
         if (other.getTestUint64() != 0L) {
           setTestUint64(other.getTestUint64());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -997,17 +879,105 @@ public final class TestMessageProtos {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                testString_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 16: {
+                testBool_ = input.readBool();
+
+                break;
+              } // case 16
+              case 26: {
+                testBytes_ = input.readBytes();
+
+                break;
+              } // case 26
+              case 33: {
+                testDouble_ = input.readDouble();
+
+                break;
+              } // case 33
+              case 45: {
+                testFloat_ = input.readFloat();
+
+                break;
+              } // case 45
+              case 53: {
+                testFixed32_ = input.readFixed32();
+
+                break;
+              } // case 53
+              case 57: {
+                testFixed64_ = input.readFixed64();
+
+                break;
+              } // case 57
+              case 64: {
+                testInt32_ = input.readInt32();
+
+                break;
+              } // case 64
+              case 72: {
+                testInt64_ = input.readInt64();
+
+                break;
+              } // case 72
+              case 85: {
+                testSfixed32_ = input.readSFixed32();
+
+                break;
+              } // case 85
+              case 89: {
+                testSfixed64_ = input.readSFixed64();
+
+                break;
+              } // case 89
+              case 96: {
+                testSint32_ = input.readSInt32();
+
+                break;
+              } // case 96
+              case 104: {
+                testSint64_ = input.readSInt64();
+
+                break;
+              } // case 104
+              case 112: {
+                testUint32_ = input.readUInt32();
+
+                break;
+              } // case 112
+              case 120: {
+                testUint64_ = input.readUInt64();
+
+                break;
+              } // case 120
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -1556,7 +1526,18 @@ public final class TestMessageProtos {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new TestMessage(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -1719,132 +1700,6 @@ public final class TestMessageProtos {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private TestMessage2(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              testString_ = s;
-              break;
-            }
-            case 16: {
-
-              testBool_ = input.readBool();
-              break;
-            }
-            case 26: {
-
-              testBytes_ = input.readBytes();
-              break;
-            }
-            case 33: {
-
-              testDouble_ = input.readDouble();
-              break;
-            }
-            case 45: {
-
-              testFloat_ = input.readFloat();
-              break;
-            }
-            case 53: {
-
-              testFixed32_ = input.readFixed32();
-              break;
-            }
-            case 57: {
-
-              testFixed64_ = input.readFixed64();
-              break;
-            }
-            case 64: {
-
-              testInt32_ = input.readInt32();
-              break;
-            }
-            case 72: {
-
-              testInt64_ = input.readInt64();
-              break;
-            }
-            case 85: {
-
-              testSfixed32_ = input.readSFixed32();
-              break;
-            }
-            case 89: {
-
-              testSfixed64_ = input.readSFixed64();
-              break;
-            }
-            case 96: {
-
-              testSint32_ = input.readSInt32();
-              break;
-            }
-            case 104: {
-
-              testSint64_ = input.readSInt64();
-              break;
-            }
-            case 112: {
-
-              testUint32_ = input.readUInt32();
-              break;
-            }
-            case 120: {
-
-              testUint64_ = input.readUInt64();
-              break;
-            }
-            case 130: {
-              io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.Builder subBuilder = null;
-              if (testMessage_ != null) {
-                subBuilder = testMessage_.toBuilder();
-              }
-              testMessage_ = input.readMessage(io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(testMessage_);
-                testMessage_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -2139,7 +1994,7 @@ public final class TestMessageProtos {
       if (testMessage_ != null) {
         output.writeMessage(16, getTestMessage());
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -2211,7 +2066,7 @@ public final class TestMessageProtos {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(16, getTestMessage());
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -2263,7 +2118,7 @@ public final class TestMessageProtos {
         if (!getTestMessage()
             .equals(other.getTestMessage())) return false;
       }
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -2316,7 +2171,7 @@ public final class TestMessageProtos {
         hash = (37 * hash) + TEST_MESSAGE_FIELD_NUMBER;
         hash = (53 * hash) + getTestMessage().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -2433,18 +2288,13 @@ public final class TestMessageProtos {
 
       // Construct using io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -2628,7 +2478,7 @@ public final class TestMessageProtos {
         if (other.hasTestMessage()) {
           mergeTestMessage(other.getTestMessage());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -2643,17 +2493,112 @@ public final class TestMessageProtos {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2 parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                testString_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 16: {
+                testBool_ = input.readBool();
+
+                break;
+              } // case 16
+              case 26: {
+                testBytes_ = input.readBytes();
+
+                break;
+              } // case 26
+              case 33: {
+                testDouble_ = input.readDouble();
+
+                break;
+              } // case 33
+              case 45: {
+                testFloat_ = input.readFloat();
+
+                break;
+              } // case 45
+              case 53: {
+                testFixed32_ = input.readFixed32();
+
+                break;
+              } // case 53
+              case 57: {
+                testFixed64_ = input.readFixed64();
+
+                break;
+              } // case 57
+              case 64: {
+                testInt32_ = input.readInt32();
+
+                break;
+              } // case 64
+              case 72: {
+                testInt64_ = input.readInt64();
+
+                break;
+              } // case 72
+              case 85: {
+                testSfixed32_ = input.readSFixed32();
+
+                break;
+              } // case 85
+              case 89: {
+                testSfixed64_ = input.readSFixed64();
+
+                break;
+              } // case 89
+              case 96: {
+                testSint32_ = input.readSInt32();
+
+                break;
+              } // case 96
+              case 104: {
+                testSint64_ = input.readSInt64();
+
+                break;
+              } // case 104
+              case 112: {
+                testUint32_ = input.readUInt32();
+
+                break;
+              } // case 112
+              case 120: {
+                testUint64_ = input.readUInt64();
+
+                break;
+              } // case 120
+              case 130: {
+                input.readMessage(
+                    getTestMessageFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 130
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -3321,7 +3266,18 @@ public final class TestMessageProtos {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new TestMessage2(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 

@@ -1488,56 +1488,6 @@ public final class MetadataProto {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private KafkaMessageOptions(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                topic_ = new com.google.protobuf.LazyStringArrayList();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              topic_.add(s);
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          topic_ = topic_.getUnmodifiableView();
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
-    }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
       return com.acme.glup.MetadataProto.internal_static_Acme_Glup_KafkaMessageOptions_descriptor;
@@ -1603,7 +1553,7 @@ public final class MetadataProto {
       for (int i = 0; i < topic_.size(); i++) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, topic_.getRaw(i));
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -1620,7 +1570,7 @@ public final class MetadataProto {
         size += dataSize;
         size += 1 * getTopicList().size();
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -1637,7 +1587,7 @@ public final class MetadataProto {
 
       if (!getTopicList()
           .equals(other.getTopicList())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -1652,7 +1602,7 @@ public final class MetadataProto {
         hash = (37 * hash) + TOPIC_FIELD_NUMBER;
         hash = (53 * hash) + getTopicList().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -1773,18 +1723,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.KafkaMessageOptions.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -1881,7 +1826,7 @@ public final class MetadataProto {
           }
           onChanged();
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -1896,17 +1841,36 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.KafkaMessageOptions parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                java.lang.String s = input.readStringRequireUtf8();
+                ensureTopicIsMutable();
+                topic_.add(s);
+                break;
+              } // case 10
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.KafkaMessageOptions) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -2053,7 +2017,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new KafkaMessageOptions(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -2289,101 +2264,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private DataSet(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              id_ = s;
-              break;
-            }
-            case 18: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                format_ = new java.util.ArrayList<com.acme.glup.MetadataProto.DataSetFormat>();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              format_.add(
-                  input.readMessage(com.acme.glup.MetadataProto.DataSetFormat.parser(), extensionRegistry));
-              break;
-            }
-            case 24: {
-              int rawValue = input.readEnum();
-
-              partitionScheme_ = rawValue;
-              break;
-            }
-            case 34: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              javaClass_ = s;
-              break;
-            }
-            case 40: {
-
-              forTests_ = input.readBool();
-              break;
-            }
-            case 50: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              owner_ = s;
-              break;
-            }
-            case 56: {
-
-              private_ = input.readBool();
-              break;
-            }
-            case 64: {
-              int rawValue = input.readEnum();
-
-              kind_ = rawValue;
-              break;
-            }
-            case 72: {
-
-              retentionDays_ = input.readInt32();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          format_ = java.util.Collections.unmodifiableList(format_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -2740,7 +2620,7 @@ public final class MetadataProto {
       if (retentionDays_ != 0) {
         output.writeInt32(9, retentionDays_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -2782,7 +2662,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(9, retentionDays_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -2813,7 +2693,7 @@ public final class MetadataProto {
       if (kind_ != other.kind_) return false;
       if (getRetentionDays()
           != other.getRetentionDays()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -2846,7 +2726,7 @@ public final class MetadataProto {
       hash = (53 * hash) + kind_;
       hash = (37 * hash) + RETENTION_DAYS_FIELD_NUMBER;
       hash = (53 * hash) + getRetentionDays();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -2967,19 +2847,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.DataSet.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getFormatFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -2988,10 +2862,11 @@ public final class MetadataProto {
 
         if (formatBuilder_ == null) {
           format_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000001);
         } else {
+          format_ = null;
           formatBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000001);
         partitionScheme_ = 0;
 
         javaClass_ = "";
@@ -3151,7 +3026,7 @@ public final class MetadataProto {
         if (other.getRetentionDays() != 0) {
           setRetentionDays(other.getRetentionDays());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -3166,17 +3041,83 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.DataSet parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                id_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 18: {
+                com.acme.glup.MetadataProto.DataSetFormat m =
+                    input.readMessage(
+                        com.acme.glup.MetadataProto.DataSetFormat.parser(),
+                        extensionRegistry);
+                if (formatBuilder_ == null) {
+                  ensureFormatIsMutable();
+                  format_.add(m);
+                } else {
+                  formatBuilder_.addMessage(m);
+                }
+                break;
+              } // case 18
+              case 24: {
+                partitionScheme_ = input.readEnum();
+
+                break;
+              } // case 24
+              case 34: {
+                javaClass_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 34
+              case 40: {
+                forTests_ = input.readBool();
+
+                break;
+              } // case 40
+              case 50: {
+                owner_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 50
+              case 56: {
+                private_ = input.readBool();
+
+                break;
+              } // case 56
+              case 64: {
+                kind_ = input.readEnum();
+
+                break;
+              } // case 64
+              case 72: {
+                retentionDays_ = input.readInt32();
+
+                break;
+              } // case 72
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.DataSet) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -4100,7 +4041,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new DataSet(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -4207,75 +4159,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private DataSetChunk(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                partition_ = new java.util.ArrayList<com.acme.glup.MetadataProto.Partition>();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              partition_.add(
-                  input.readMessage(com.acme.glup.MetadataProto.Partition.parser(), extensionRegistry));
-              break;
-            }
-            case 18: {
-              com.acme.glup.MetadataProto.DataSetFormat.Builder subBuilder = null;
-              if (format_ != null) {
-                subBuilder = format_.toBuilder();
-              }
-              format_ = input.readMessage(com.acme.glup.MetadataProto.DataSetFormat.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(format_);
-                format_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 26: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              datasetId_ = s;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          partition_ = java.util.Collections.unmodifiableList(partition_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -4417,7 +4300,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(datasetId_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 3, datasetId_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -4437,7 +4320,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(datasetId_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, datasetId_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -4461,7 +4344,7 @@ public final class MetadataProto {
       }
       if (!getDatasetId()
           .equals(other.getDatasetId())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -4482,7 +4365,7 @@ public final class MetadataProto {
       }
       hash = (37 * hash) + DATASETID_FIELD_NUMBER;
       hash = (53 * hash) + getDatasetId().hashCode();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -4603,29 +4486,24 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.DataSetChunk.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getPartitionFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
         super.clear();
         if (partitionBuilder_ == null) {
           partition_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000001);
         } else {
+          partition_ = null;
           partitionBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000001);
         if (formatBuilder_ == null) {
           format_ = null;
         } else {
@@ -4757,7 +4635,7 @@ public final class MetadataProto {
           datasetId_ = other.datasetId_;
           onChanged();
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -4772,17 +4650,55 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.DataSetChunk parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                com.acme.glup.MetadataProto.Partition m =
+                    input.readMessage(
+                        com.acme.glup.MetadataProto.Partition.parser(),
+                        extensionRegistry);
+                if (partitionBuilder_ == null) {
+                  ensurePartitionIsMutable();
+                  partition_.add(m);
+                } else {
+                  partitionBuilder_.addMessage(m);
+                }
+                break;
+              } // case 10
+              case 18: {
+                input.readMessage(
+                    getFormatFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 18
+              case 26: {
+                datasetId_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 26
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.DataSetChunk) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -5254,7 +5170,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new DataSetChunk(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -5484,109 +5411,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private DataSetFormat(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              path_ = s;
-              break;
-            }
-            case 16: {
-              int rawValue = input.readEnum();
-
-              fileFormat_ = rawValue;
-              break;
-            }
-            case 24: {
-              int rawValue = input.readEnum();
-
-              partitionScheme_ = rawValue;
-              break;
-            }
-            case 34: {
-              com.acme.glup.MetadataProto.HDFSPartition.Builder subBuilder = null;
-              if (startPartition_ != null) {
-                subBuilder = startPartition_.toBuilder();
-              }
-              startPartition_ = input.readMessage(com.acme.glup.MetadataProto.HDFSPartition.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(startPartition_);
-                startPartition_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 42: {
-              com.acme.glup.MetadataProto.HDFSPartition.Builder subBuilder = null;
-              if (endPartition_ != null) {
-                subBuilder = endPartition_.toBuilder();
-              }
-              endPartition_ = input.readMessage(com.acme.glup.MetadataProto.HDFSPartition.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(endPartition_);
-                endPartition_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 56: {
-
-              retentionDays_ = input.readInt32();
-              break;
-            }
-            case 64: {
-
-              priority_ = input.readInt32();
-              break;
-            }
-            case 74: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              label_ = s;
-              break;
-            }
-            case 80: {
-              int rawValue = input.readEnum();
-
-              monitoringLevel_ = rawValue;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -5921,7 +5745,7 @@ public final class MetadataProto {
       if (monitoringLevel_ != com.acme.glup.MetadataProto.MonitoringLevel.DEFAULT.getNumber()) {
         output.writeEnum(10, monitoringLevel_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -5964,7 +5788,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeEnumSize(10, monitoringLevel_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -6000,7 +5824,7 @@ public final class MetadataProto {
       if (!getLabel()
           .equals(other.getLabel())) return false;
       if (monitoringLevel_ != other.monitoringLevel_) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -6033,7 +5857,7 @@ public final class MetadataProto {
       hash = (53 * hash) + getLabel().hashCode();
       hash = (37 * hash) + MONITORING_LEVEL_FIELD_NUMBER;
       hash = (53 * hash) + monitoringLevel_;
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -6154,18 +5978,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.DataSetFormat.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -6316,7 +6135,7 @@ public final class MetadataProto {
         if (other.monitoringLevel_ != 0) {
           setMonitoringLevelValue(other.getMonitoringLevelValue());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -6331,17 +6150,79 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.DataSetFormat parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                path_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 16: {
+                fileFormat_ = input.readEnum();
+
+                break;
+              } // case 16
+              case 24: {
+                partitionScheme_ = input.readEnum();
+
+                break;
+              } // case 24
+              case 34: {
+                input.readMessage(
+                    getStartPartitionFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 34
+              case 42: {
+                input.readMessage(
+                    getEndPartitionFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 42
+              case 56: {
+                retentionDays_ = input.readInt32();
+
+                break;
+              } // case 56
+              case 64: {
+                priority_ = input.readInt32();
+
+                break;
+              } // case 64
+              case 74: {
+                label_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 74
+              case 80: {
+                monitoringLevel_ = input.readEnum();
+
+                break;
+              } // case 80
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.DataSetFormat) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -7187,7 +7068,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new DataSetFormat(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -7262,56 +7154,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private HDFSOptions(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 26: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                import_ = new java.util.ArrayList<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions>();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              import_.add(
-                  input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.parser(), extensionRegistry));
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          import_ = java.util.Collections.unmodifiableList(import_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -7476,97 +7318,6 @@ public final class MetadataProto {
       getUnknownFields() {
         return this.unknownFields;
       }
-      private ImportOptions(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        this();
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
-        }
-        int mutable_bitField0_ = 0;
-        com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-            com.google.protobuf.UnknownFieldSet.newBuilder();
-        try {
-          boolean done = false;
-          while (!done) {
-            int tag = input.readTag();
-            switch (tag) {
-              case 0:
-                done = true;
-                break;
-              case 10: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                owner_ = s;
-                break;
-              }
-              case 18: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                name_ = s;
-                break;
-              }
-              case 32: {
-                int rawValue = input.readEnum();
-
-                partitioning_ = rawValue;
-                break;
-              }
-              case 40: {
-                int rawValue = input.readEnum();
-
-                format_ = rawValue;
-                break;
-              }
-              case 48: {
-
-                private_ = input.readBool();
-                break;
-              }
-              case 90: {
-                if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                  generator_ = new java.util.ArrayList<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator>();
-                  mutable_bitField0_ |= 0x00000001;
-                }
-                generator_.add(
-                    input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.parser(), extensionRegistry));
-                break;
-              }
-              case 98: {
-                if (!((mutable_bitField0_ & 0x00000002) != 0)) {
-                  view_ = new java.util.ArrayList<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View>();
-                  mutable_bitField0_ |= 0x00000002;
-                }
-                view_.add(
-                    input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.parser(), extensionRegistry));
-                break;
-              }
-              default: {
-                if (!parseUnknownField(
-                    input, unknownFields, extensionRegistry, tag)) {
-                  done = true;
-                }
-                break;
-              }
-            }
-          }
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.setUnfinishedMessage(this);
-        } catch (java.io.IOException e) {
-          throw new com.google.protobuf.InvalidProtocolBufferException(
-              e).setUnfinishedMessage(this);
-        } finally {
-          if (((mutable_bitField0_ & 0x00000001) != 0)) {
-            generator_ = java.util.Collections.unmodifiableList(generator_);
-          }
-          if (((mutable_bitField0_ & 0x00000002) != 0)) {
-            view_ = java.util.Collections.unmodifiableList(view_);
-          }
-          this.unknownFields = unknownFields.build();
-          makeExtensionsImmutable();
-        }
-      }
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return com.acme.glup.MetadataProto.internal_static_Acme_Glup_HDFSOptions_ImportOptions_descriptor;
@@ -7638,56 +7389,6 @@ public final class MetadataProto {
         getUnknownFields() {
           return this.unknownFields;
         }
-        private View(
-            com.google.protobuf.CodedInputStream input,
-            com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-            throws com.google.protobuf.InvalidProtocolBufferException {
-          this();
-          if (extensionRegistry == null) {
-            throw new java.lang.NullPointerException();
-          }
-          com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-              com.google.protobuf.UnknownFieldSet.newBuilder();
-          try {
-            boolean done = false;
-            while (!done) {
-              int tag = input.readTag();
-              switch (tag) {
-                case 0:
-                  done = true;
-                  break;
-                case 82: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions.Builder subBuilder = null;
-                  if (hive_ != null) {
-                    subBuilder = hive_.toBuilder();
-                  }
-                  hive_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(hive_);
-                    hive_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                default: {
-                  if (!parseUnknownField(
-                      input, unknownFields, extensionRegistry, tag)) {
-                    done = true;
-                  }
-                  break;
-                }
-              }
-            }
-          } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-            throw e.setUnfinishedMessage(this);
-          } catch (java.io.IOException e) {
-            throw new com.google.protobuf.InvalidProtocolBufferException(
-                e).setUnfinishedMessage(this);
-          } finally {
-            this.unknownFields = unknownFields.build();
-            makeExtensionsImmutable();
-          }
-        }
         public static final com.google.protobuf.Descriptors.Descriptor
             getDescriptor() {
           return com.acme.glup.MetadataProto.internal_static_Acme_Glup_HDFSOptions_ImportOptions_View_descriptor;
@@ -7758,49 +7459,6 @@ public final class MetadataProto {
           getUnknownFields() {
             return this.unknownFields;
           }
-          private HiveOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 24: {
-                    int rawValue = input.readEnum();
-
-                    partitioning_ = rawValue;
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
-          }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
             return com.acme.glup.MetadataProto.internal_static_Acme_Glup_HDFSOptions_ImportOptions_View_HiveOptions_descriptor;
@@ -7858,7 +7516,7 @@ public final class MetadataProto {
             if (partitioning_ != com.acme.glup.MetadataProto.PartitionScheme.UNSUPPORTED_PARTITION_SCHEME.getNumber()) {
               output.writeEnum(3, partitioning_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -7871,7 +7529,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeEnumSize(3, partitioning_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -7887,7 +7545,7 @@ public final class MetadataProto {
             com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions other = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions) obj;
 
             if (partitioning_ != other.partitioning_) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -7900,7 +7558,7 @@ public final class MetadataProto {
             hash = (19 * hash) + getDescriptor().hashCode();
             hash = (37 * hash) + PARTITIONING_FIELD_NUMBER;
             hash = (53 * hash) + partitioning_;
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -8023,18 +7681,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -8119,7 +7772,7 @@ public final class MetadataProto {
               if (other.partitioning_ != 0) {
                 setPartitioningValue(other.getPartitioningValue());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -8134,17 +7787,35 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 24: {
+                      partitioning_ = input.readEnum();
+
+                      break;
+                    } // case 24
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.HiveOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -8254,7 +7925,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new HiveOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -8329,7 +8011,7 @@ public final class MetadataProto {
           if (hive_ != null) {
             output.writeMessage(10, getHive());
           }
-          unknownFields.writeTo(output);
+          getUnknownFields().writeTo(output);
         }
 
         @java.lang.Override
@@ -8342,7 +8024,7 @@ public final class MetadataProto {
             size += com.google.protobuf.CodedOutputStream
               .computeMessageSize(10, getHive());
           }
-          size += unknownFields.getSerializedSize();
+          size += getUnknownFields().getSerializedSize();
           memoizedSize = size;
           return size;
         }
@@ -8362,7 +8044,7 @@ public final class MetadataProto {
             if (!getHive()
                 .equals(other.getHive())) return false;
           }
-          if (!unknownFields.equals(other.unknownFields)) return false;
+          if (!getUnknownFields().equals(other.getUnknownFields())) return false;
           return true;
         }
 
@@ -8377,7 +8059,7 @@ public final class MetadataProto {
             hash = (37 * hash) + HIVE_FIELD_NUMBER;
             hash = (53 * hash) + getHive().hashCode();
           }
-          hash = (29 * hash) + unknownFields.hashCode();
+          hash = (29 * hash) + getUnknownFields().hashCode();
           memoizedHashCode = hash;
           return hash;
         }
@@ -8494,18 +8176,13 @@ public final class MetadataProto {
 
           // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.newBuilder()
           private Builder() {
-            maybeForceBuilderInitialization();
+
           }
 
           private Builder(
               com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
             super(parent);
-            maybeForceBuilderInitialization();
-          }
-          private void maybeForceBuilderInitialization() {
-            if (com.google.protobuf.GeneratedMessageV3
-                    .alwaysUseFieldBuilders) {
-            }
+
           }
           @java.lang.Override
           public Builder clear() {
@@ -8598,7 +8275,7 @@ public final class MetadataProto {
             if (other.hasHive()) {
               mergeHive(other.getHive());
             }
-            this.mergeUnknownFields(other.unknownFields);
+            this.mergeUnknownFields(other.getUnknownFields());
             onChanged();
             return this;
           }
@@ -8613,17 +8290,37 @@ public final class MetadataProto {
               com.google.protobuf.CodedInputStream input,
               com.google.protobuf.ExtensionRegistryLite extensionRegistry)
               throws java.io.IOException {
-            com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View parsedMessage = null;
+            if (extensionRegistry == null) {
+              throw new java.lang.NullPointerException();
+            }
             try {
-              parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+              boolean done = false;
+              while (!done) {
+                int tag = input.readTag();
+                switch (tag) {
+                  case 0:
+                    done = true;
+                    break;
+                  case 82: {
+                    input.readMessage(
+                        getHiveFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 82
+                  default: {
+                    if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                      done = true; // was an endgroup tag
+                    }
+                    break;
+                  } // default:
+                } // switch (tag)
+              } // while (!done)
             } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View) e.getUnfinishedMessage();
               throw e.unwrapIOException();
             } finally {
-              if (parsedMessage != null) {
-                mergeFrom(parsedMessage);
-              }
-            }
+              onChanged();
+            } // finally
             return this;
           }
 
@@ -8814,7 +8511,18 @@ public final class MetadataProto {
               com.google.protobuf.CodedInputStream input,
               com.google.protobuf.ExtensionRegistryLite extensionRegistry)
               throws com.google.protobuf.InvalidProtocolBufferException {
-            return new View(input, extensionRegistry);
+            Builder builder = newBuilder();
+            try {
+              builder.mergeFrom(input, extensionRegistry);
+            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+              throw e.setUnfinishedMessage(builder.buildPartial());
+            } catch (com.google.protobuf.UninitializedMessageException e) {
+              throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+            } catch (java.io.IOException e) {
+              throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                  .setUnfinishedMessage(builder.buildPartial());
+            }
+            return builder.buildPartial();
           }
         };
 
@@ -9149,209 +8857,6 @@ public final class MetadataProto {
         getUnknownFields() {
           return this.unknownFields;
         }
-        private Generator(
-            com.google.protobuf.CodedInputStream input,
-            com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-            throws com.google.protobuf.InvalidProtocolBufferException {
-          this();
-          if (extensionRegistry == null) {
-            throw new java.lang.NullPointerException();
-          }
-          int mutable_bitField0_ = 0;
-          com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-              com.google.protobuf.UnknownFieldSet.newBuilder();
-          try {
-            boolean done = false;
-            while (!done) {
-              int tag = input.readTag();
-              switch (tag) {
-                case 0:
-                  done = true;
-                  break;
-                case 10: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions.Builder subBuilder = null;
-                  if (dataloader_ != null) {
-                    subBuilder = dataloader_.toBuilder();
-                  }
-                  dataloader_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(dataloader_);
-                    dataloader_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 18: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions.Builder subBuilder = null;
-                  if (kafka2Hdfs_ != null) {
-                    subBuilder = kafka2Hdfs_.toBuilder();
-                  }
-                  kafka2Hdfs_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(kafka2Hdfs_);
-                    kafka2Hdfs_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 26: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions.Builder subBuilder = null;
-                  if (sync_ != null) {
-                    subBuilder = sync_.toBuilder();
-                  }
-                  sync_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(sync_);
-                    sync_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 34: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions.Builder subBuilder = null;
-                  if (external_ != null) {
-                    subBuilder = external_.toBuilder();
-                  }
-                  external_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(external_);
-                    external_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 42: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions.Builder subBuilder = null;
-                  if (backup_ != null) {
-                    subBuilder = backup_.toBuilder();
-                  }
-                  backup_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(backup_);
-                    backup_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 50: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions.Builder subBuilder = null;
-                  if (transcoding_ != null) {
-                    subBuilder = transcoding_.toBuilder();
-                  }
-                  transcoding_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(transcoding_);
-                    transcoding_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 58: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions.Builder subBuilder = null;
-                  if (kacoha_ != null) {
-                    subBuilder = kacoha_.toBuilder();
-                  }
-                  kacoha_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(kacoha_);
-                    kacoha_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 66: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions.Builder subBuilder = null;
-                  if (deduplicate_ != null) {
-                    subBuilder = deduplicate_.toBuilder();
-                  }
-                  deduplicate_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(deduplicate_);
-                    deduplicate_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 74: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions.Builder subBuilder = null;
-                  if (sampler_ != null) {
-                    subBuilder = sampler_.toBuilder();
-                  }
-                  sampler_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(sampler_);
-                    sampler_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 82: {
-                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions.Builder subBuilder = null;
-                  if (comparator_ != null) {
-                    subBuilder = comparator_.toBuilder();
-                  }
-                  comparator_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions.parser(), extensionRegistry);
-                  if (subBuilder != null) {
-                    subBuilder.mergeFrom(comparator_);
-                    comparator_ = subBuilder.buildPartial();
-                  }
-
-                  break;
-                }
-                case 2002: {
-                  if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                    to_ = new java.util.ArrayList<com.acme.glup.MetadataProto.Location>();
-                    mutable_bitField0_ |= 0x00000001;
-                  }
-                  to_.add(
-                      input.readMessage(com.acme.glup.MetadataProto.Location.parser(), extensionRegistry));
-                  break;
-                }
-                case 2010: {
-                  java.lang.String s = input.readStringRequireUtf8();
-
-                  namespace_ = s;
-                  break;
-                }
-                case 2026: {
-                  java.lang.String s = input.readStringRequireUtf8();
-
-                  startDate_ = s;
-                  break;
-                }
-                case 2034: {
-                  java.lang.String s = input.readStringRequireUtf8();
-
-                  stopDate_ = s;
-                  break;
-                }
-                case 2040: {
-
-                  ignoreCn_ = input.readBool();
-                  break;
-                }
-                default: {
-                  if (!parseUnknownField(
-                      input, unknownFields, extensionRegistry, tag)) {
-                    done = true;
-                  }
-                  break;
-                }
-              }
-            }
-          } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-            throw e.setUnfinishedMessage(this);
-          } catch (java.io.IOException e) {
-            throw new com.google.protobuf.InvalidProtocolBufferException(
-                e).setUnfinishedMessage(this);
-          } finally {
-            if (((mutable_bitField0_ & 0x00000001) != 0)) {
-              to_ = java.util.Collections.unmodifiableList(to_);
-            }
-            this.unknownFields = unknownFields.build();
-            makeExtensionsImmutable();
-          }
-        }
         public static final com.google.protobuf.Descriptors.Descriptor
             getDescriptor() {
           return com.acme.glup.MetadataProto.internal_static_Acme_Glup_HDFSOptions_ImportOptions_Generator_descriptor;
@@ -9491,72 +8996,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private DedupOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    inputDatasetId_ = s;
-                    break;
-                  }
-                  case 18: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    inputFormatLabel_ = s;
-                    break;
-                  }
-                  case 26: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputDatasetId_ = s;
-                    break;
-                  }
-                  case 34: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputFormatLabel_ = s;
-                    break;
-                  }
-                  case 40: {
-
-                    useHippoCuttleJob_ = input.readBool();
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -9801,7 +9240,7 @@ public final class MetadataProto {
             if (useHippoCuttleJob_ != false) {
               output.writeBool(5, useHippoCuttleJob_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -9826,7 +9265,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeBoolSize(5, useHippoCuttleJob_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -9851,7 +9290,7 @@ public final class MetadataProto {
                 .equals(other.getOutputFormatLabel())) return false;
             if (getUseHippoCuttleJob()
                 != other.getUseHippoCuttleJob()) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -9873,7 +9312,7 @@ public final class MetadataProto {
             hash = (37 * hash) + USE_HIPPO_CUTTLE_JOB_FIELD_NUMBER;
             hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
                 getUseHippoCuttleJob());
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -9990,18 +9429,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -10114,7 +9548,7 @@ public final class MetadataProto {
               if (other.getUseHippoCuttleJob() != false) {
                 setUseHippoCuttleJob(other.getUseHippoCuttleJob());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -10129,17 +9563,55 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      inputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 10
+                    case 18: {
+                      inputFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 18
+                    case 26: {
+                      outputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 26
+                    case 34: {
+                      outputFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 34
+                    case 40: {
+                      useHippoCuttleJob_ = input.readBool();
+
+                      break;
+                    } // case 40
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DedupOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -10608,7 +10080,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new DedupOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -10731,66 +10214,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private Kafka2HdfsOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    topic_ = s;
-                    break;
-                  }
-                  case 24: {
-
-                    deduplicate_ = input.readBool();
-                    break;
-                  }
-                  case 34: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputDatasetId_ = s;
-                    break;
-                  }
-                  case 42: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputFormatLabel_ = s;
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -10984,7 +10407,7 @@ public final class MetadataProto {
             if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(outputFormatLabel_)) {
               com.google.protobuf.GeneratedMessageV3.writeString(output, 5, outputFormatLabel_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -11006,7 +10429,7 @@ public final class MetadataProto {
             if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(outputFormatLabel_)) {
               size += com.google.protobuf.GeneratedMessageV3.computeStringSize(5, outputFormatLabel_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -11029,7 +10452,7 @@ public final class MetadataProto {
                 .equals(other.getOutputDatasetId())) return false;
             if (!getOutputFormatLabel()
                 .equals(other.getOutputFormatLabel())) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -11049,7 +10472,7 @@ public final class MetadataProto {
             hash = (53 * hash) + getOutputDatasetId().hashCode();
             hash = (37 * hash) + OUTPUT_FORMAT_LABEL_FIELD_NUMBER;
             hash = (53 * hash) + getOutputFormatLabel().hashCode();
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -11166,18 +10589,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -11283,7 +10701,7 @@ public final class MetadataProto {
                 outputFormatLabel_ = other.outputFormatLabel_;
                 onChanged();
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -11298,17 +10716,50 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      topic_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 10
+                    case 24: {
+                      deduplicate_ = input.readBool();
+
+                      break;
+                    } // case 24
+                    case 34: {
+                      outputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 34
+                    case 42: {
+                      outputFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 42
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.Kafka2HdfsOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -11675,7 +11126,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new Kafka2HdfsOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -11746,53 +11208,6 @@ public final class MetadataProto {
           getUnknownFields() {
             return this.unknownFields;
           }
-          private KacohaConfig(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 8: {
-
-                    partitionsPerTask_ = input.readInt32();
-                    break;
-                  }
-                  case 16: {
-
-                    pollBufferSizeBytes_ = input.readInt32();
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
-          }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
             return com.acme.glup.MetadataProto.internal_static_Acme_Glup_HDFSOptions_ImportOptions_Generator_KacohaConfig_descriptor;
@@ -11856,7 +11271,7 @@ public final class MetadataProto {
             if (pollBufferSizeBytes_ != 0) {
               output.writeInt32(2, pollBufferSizeBytes_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -11873,7 +11288,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeInt32Size(2, pollBufferSizeBytes_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -11892,7 +11307,7 @@ public final class MetadataProto {
                 != other.getPartitionsPerTask()) return false;
             if (getPollBufferSizeBytes()
                 != other.getPollBufferSizeBytes()) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -11907,7 +11322,7 @@ public final class MetadataProto {
             hash = (53 * hash) + getPartitionsPerTask();
             hash = (37 * hash) + POLL_BUFFER_SIZE_BYTES_FIELD_NUMBER;
             hash = (53 * hash) + getPollBufferSizeBytes();
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -12024,18 +11439,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -12126,7 +11536,7 @@ public final class MetadataProto {
               if (other.getPollBufferSizeBytes() != 0) {
                 setPollBufferSizeBytes(other.getPollBufferSizeBytes());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -12141,17 +11551,40 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 8: {
+                      partitionsPerTask_ = input.readInt32();
+
+                      break;
+                    } // case 8
+                    case 16: {
+                      pollBufferSizeBytes_ = input.readInt32();
+
+                      break;
+                    } // case 16
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -12273,7 +11706,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new KacohaConfig(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -12370,62 +11814,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private KacohaConfigPerDc(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 8: {
-                    int rawValue = input.readEnum();
-
-                    dc_ = rawValue;
-                    break;
-                  }
-                  case 18: {
-                    com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.Builder subBuilder = null;
-                    if (config_ != null) {
-                      subBuilder = config_.toBuilder();
-                    }
-                    config_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.parser(), extensionRegistry);
-                    if (subBuilder != null) {
-                      subBuilder.mergeFrom(config_);
-                      config_ = subBuilder.buildPartial();
-                    }
-
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -12525,7 +11913,7 @@ public final class MetadataProto {
             if (config_ != null) {
               output.writeMessage(2, getConfig());
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -12542,7 +11930,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeMessageSize(2, getConfig());
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -12563,7 +11951,7 @@ public final class MetadataProto {
               if (!getConfig()
                   .equals(other.getConfig())) return false;
             }
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -12580,7 +11968,7 @@ public final class MetadataProto {
               hash = (37 * hash) + CONFIG_FIELD_NUMBER;
               hash = (53 * hash) + getConfig().hashCode();
             }
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -12697,18 +12085,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -12807,7 +12190,7 @@ public final class MetadataProto {
               if (other.hasConfig()) {
                 mergeConfig(other.getConfig());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -12822,17 +12205,42 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 8: {
+                      dc_ = input.readEnum();
+
+                      break;
+                    } // case 8
+                    case 18: {
+                      input.readMessage(
+                          getConfigFieldBuilder().getBuilder(),
+                          extensionRegistry);
+
+                      break;
+                    } // case 18
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -13097,7 +12505,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new KacohaConfigPerDc(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -13292,92 +12711,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private KaCoHaOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            int mutable_bitField0_ = 0;
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    topic_ = s;
-                    break;
-                  }
-                  case 18: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputDatasetId_ = s;
-                    break;
-                  }
-                  case 24: {
-
-                    deduplicate_ = input.readBool();
-                    break;
-                  }
-                  case 34: {
-                    com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.Builder subBuilder = null;
-                    if (config_ != null) {
-                      subBuilder = config_.toBuilder();
-                    }
-                    config_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfig.parser(), extensionRegistry);
-                    if (subBuilder != null) {
-                      subBuilder.mergeFrom(config_);
-                      config_ = subBuilder.buildPartial();
-                    }
-
-                    break;
-                  }
-                  case 42: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputFormatLabel_ = s;
-                    break;
-                  }
-                  case 50: {
-                    if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                      configPerDc_ = new java.util.ArrayList<com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc>();
-                      mutable_bitField0_ |= 0x00000001;
-                    }
-                    configPerDc_.add(
-                        input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc.parser(), extensionRegistry));
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              if (((mutable_bitField0_ & 0x00000001) != 0)) {
-                configPerDc_ = java.util.Collections.unmodifiableList(configPerDc_);
-              }
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -13675,7 +13008,7 @@ public final class MetadataProto {
             for (int i = 0; i < configPerDc_.size(); i++) {
               output.writeMessage(6, configPerDc_.get(i));
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -13705,7 +13038,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeMessageSize(6, configPerDc_.get(i));
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -13735,7 +13068,7 @@ public final class MetadataProto {
                 .equals(other.getOutputFormatLabel())) return false;
             if (!getConfigPerDcList()
                 .equals(other.getConfigPerDcList())) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -13763,7 +13096,7 @@ public final class MetadataProto {
               hash = (37 * hash) + CONFIG_PER_DC_FIELD_NUMBER;
               hash = (53 * hash) + getConfigPerDcList().hashCode();
             }
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -13880,19 +13213,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-                getConfigPerDcFieldBuilder();
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -13913,10 +13240,11 @@ public final class MetadataProto {
 
               if (configPerDcBuilder_ == null) {
                 configPerDc_ = java.util.Collections.emptyList();
-                bitField0_ = (bitField0_ & ~0x00000001);
               } else {
+                configPerDc_ = null;
                 configPerDcBuilder_.clear();
               }
+              bitField0_ = (bitField0_ & ~0x00000001);
               return this;
             }
 
@@ -14054,7 +13382,7 @@ public final class MetadataProto {
                   }
                 }
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -14069,17 +13397,70 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      topic_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 10
+                    case 18: {
+                      outputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 18
+                    case 24: {
+                      deduplicate_ = input.readBool();
+
+                      break;
+                    } // case 24
+                    case 34: {
+                      input.readMessage(
+                          getConfigFieldBuilder().getBuilder(),
+                          extensionRegistry);
+
+                      break;
+                    } // case 34
+                    case 42: {
+                      outputFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 42
+                    case 50: {
+                      com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc m =
+                          input.readMessage(
+                              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KacohaConfigPerDc.parser(),
+                              extensionRegistry);
+                      if (configPerDcBuilder_ == null) {
+                        ensureConfigPerDcIsMutable();
+                        configPerDc_.add(m);
+                      } else {
+                        configPerDcBuilder_.addMessage(m);
+                      }
+                      break;
+                    } // case 50
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.KaCoHaOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
             private int bitField0_;
@@ -14914,7 +14295,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new KaCoHaOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -15019,70 +14411,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private DataloaderOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            int mutable_bitField0_ = 0;
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 8: {
-                    int rawValue = input.readEnum();
-                    if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                      platform_ = new java.util.ArrayList<java.lang.Integer>();
-                      mutable_bitField0_ |= 0x00000001;
-                    }
-                    platform_.add(rawValue);
-                    break;
-                  }
-                  case 10: {
-                    int length = input.readRawVarint32();
-                    int oldLimit = input.pushLimit(length);
-                    while(input.getBytesUntilLimit() > 0) {
-                      int rawValue = input.readEnum();
-                      if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                        platform_ = new java.util.ArrayList<java.lang.Integer>();
-                        mutable_bitField0_ |= 0x00000001;
-                      }
-                      platform_.add(rawValue);
-                    }
-                    input.popLimit(oldLimit);
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              if (((mutable_bitField0_ & 0x00000001) != 0)) {
-                platform_ = java.util.Collections.unmodifiableList(platform_);
-              }
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -15202,7 +14530,7 @@ public final class MetadataProto {
             for (int i = 0; i < platform_.size(); i++) {
               output.writeEnumNoTag(platform_.get(i));
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -15223,7 +14551,7 @@ public final class MetadataProto {
                   .computeUInt32SizeNoTag(dataSize);
               }platformMemoizedSerializedSize = dataSize;
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -15239,7 +14567,7 @@ public final class MetadataProto {
             com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions other = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions) obj;
 
             if (!platform_.equals(other.platform_)) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -15254,7 +14582,7 @@ public final class MetadataProto {
               hash = (37 * hash) + PLATFORM_FIELD_NUMBER;
               hash = (53 * hash) + platform_.hashCode();
             }
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -15371,18 +14699,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -15479,7 +14802,7 @@ public final class MetadataProto {
                 }
                 onChanged();
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -15494,17 +14817,47 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 8: {
+                      int tmpRaw = input.readEnum();
+                      ensurePlatformIsMutable();
+                      platform_.add(tmpRaw);
+                      break;
+                    } // case 8
+                    case 10: {
+                      int length = input.readRawVarint32();
+                      int oldLimit = input.pushLimit(length);
+                      while(input.getBytesUntilLimit() > 0) {
+                        int tmpRaw = input.readEnum();
+                        ensurePlatformIsMutable();
+                        platform_.add(tmpRaw);
+                      }
+                      input.popLimit(oldLimit);
+                      break;
+                    } // case 10
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.DataloaderOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
             private int bitField0_;
@@ -15741,7 +15094,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new DataloaderOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -15971,116 +15335,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private SyncOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            int mutable_bitField0_ = 0;
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    com.acme.glup.MetadataProto.Location.Builder subBuilder = null;
-                    if (from_ != null) {
-                      subBuilder = from_.toBuilder();
-                    }
-                    from_ = input.readMessage(com.acme.glup.MetadataProto.Location.parser(), extensionRegistry);
-                    if (subBuilder != null) {
-                      subBuilder.mergeFrom(from_);
-                      from_ = subBuilder.buildPartial();
-                    }
-
-                    break;
-                  }
-                  case 26: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    sourceNamespace_ = s;
-                    break;
-                  }
-                  case 48: {
-                    int rawValue = input.readEnum();
-                    if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                      platforms_ = new java.util.ArrayList<java.lang.Integer>();
-                      mutable_bitField0_ |= 0x00000001;
-                    }
-                    platforms_.add(rawValue);
-                    break;
-                  }
-                  case 50: {
-                    int length = input.readRawVarint32();
-                    int oldLimit = input.pushLimit(length);
-                    while(input.getBytesUntilLimit() > 0) {
-                      int rawValue = input.readEnum();
-                      if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                        platforms_ = new java.util.ArrayList<java.lang.Integer>();
-                        mutable_bitField0_ |= 0x00000001;
-                      }
-                      platforms_.add(rawValue);
-                    }
-                    input.popLimit(oldLimit);
-                    break;
-                  }
-                  case 64: {
-
-                    isBackfilling_ = input.readBool();
-                    break;
-                  }
-                  case 74: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    toLabel_ = s;
-                    break;
-                  }
-                  case 82: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    toDatasetId_ = s;
-                    break;
-                  }
-                  case 88: {
-
-                    withBackfilling_ = input.readBool();
-                    break;
-                  }
-                  case 96: {
-
-                    isScheduledOnSource_ = input.readBool();
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              if (((mutable_bitField0_ & 0x00000001) != 0)) {
-                platforms_ = java.util.Collections.unmodifiableList(platforms_);
-              }
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -16447,7 +15701,7 @@ public final class MetadataProto {
             if (isScheduledOnSource_ != false) {
               output.writeBool(12, isScheduledOnSource_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -16493,7 +15747,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeBoolSize(12, isScheduledOnSource_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -16526,7 +15780,7 @@ public final class MetadataProto {
                 != other.getWithBackfilling()) return false;
             if (getIsScheduledOnSource()
                 != other.getIsScheduledOnSource()) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -16560,7 +15814,7 @@ public final class MetadataProto {
             hash = (37 * hash) + IS_SCHEDULED_ON_SOURCE_FIELD_NUMBER;
             hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
                 getIsScheduledOnSource());
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -16677,18 +15931,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -16838,7 +16087,7 @@ public final class MetadataProto {
               if (other.getIsScheduledOnSource() != false) {
                 setIsScheduledOnSource(other.getIsScheduledOnSource());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -16853,17 +16102,84 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      input.readMessage(
+                          getFromFieldBuilder().getBuilder(),
+                          extensionRegistry);
+
+                      break;
+                    } // case 10
+                    case 26: {
+                      sourceNamespace_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 26
+                    case 48: {
+                      int tmpRaw = input.readEnum();
+                      ensurePlatformsIsMutable();
+                      platforms_.add(tmpRaw);
+                      break;
+                    } // case 48
+                    case 50: {
+                      int length = input.readRawVarint32();
+                      int oldLimit = input.pushLimit(length);
+                      while(input.getBytesUntilLimit() > 0) {
+                        int tmpRaw = input.readEnum();
+                        ensurePlatformsIsMutable();
+                        platforms_.add(tmpRaw);
+                      }
+                      input.popLimit(oldLimit);
+                      break;
+                    } // case 50
+                    case 64: {
+                      isBackfilling_ = input.readBool();
+
+                      break;
+                    } // case 64
+                    case 74: {
+                      toLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 74
+                    case 82: {
+                      toDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 82
+                    case 88: {
+                      withBackfilling_ = input.readBool();
+
+                      break;
+                    } // case 88
+                    case 96: {
+                      isScheduledOnSource_ = input.readBool();
+
+                      break;
+                    } // case 96
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SyncOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
             private int bitField0_;
@@ -17684,7 +17000,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new SyncOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -17832,89 +17159,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private BackupOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            int mutable_bitField0_ = 0;
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    com.acme.glup.MetadataProto.Location.Builder subBuilder = null;
-                    if (from_ != null) {
-                      subBuilder = from_.toBuilder();
-                    }
-                    from_ = input.readMessage(com.acme.glup.MetadataProto.Location.parser(), extensionRegistry);
-                    if (subBuilder != null) {
-                      subBuilder.mergeFrom(from_);
-                      from_ = subBuilder.buildPartial();
-                    }
-
-                    break;
-                  }
-                  case 18: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    sourceNamespace_ = s;
-                    break;
-                  }
-                  case 24: {
-                    int rawValue = input.readEnum();
-                    if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                      platforms_ = new java.util.ArrayList<java.lang.Integer>();
-                      mutable_bitField0_ |= 0x00000001;
-                    }
-                    platforms_.add(rawValue);
-                    break;
-                  }
-                  case 26: {
-                    int length = input.readRawVarint32();
-                    int oldLimit = input.pushLimit(length);
-                    while(input.getBytesUntilLimit() > 0) {
-                      int rawValue = input.readEnum();
-                      if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                        platforms_ = new java.util.ArrayList<java.lang.Integer>();
-                        mutable_bitField0_ |= 0x00000001;
-                      }
-                      platforms_.add(rawValue);
-                    }
-                    input.popLimit(oldLimit);
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              if (((mutable_bitField0_ & 0x00000001) != 0)) {
-                platforms_ = java.util.Collections.unmodifiableList(platforms_);
-              }
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -18119,7 +17363,7 @@ public final class MetadataProto {
             for (int i = 0; i < platforms_.size(); i++) {
               output.writeEnumNoTag(platforms_.get(i));
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -18147,7 +17391,7 @@ public final class MetadataProto {
                   .computeUInt32SizeNoTag(dataSize);
               }platformsMemoizedSerializedSize = dataSize;
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -18170,7 +17414,7 @@ public final class MetadataProto {
             if (!getSourceNamespace()
                 .equals(other.getSourceNamespace())) return false;
             if (!platforms_.equals(other.platforms_)) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -18191,7 +17435,7 @@ public final class MetadataProto {
               hash = (37 * hash) + PLATFORMS_FIELD_NUMBER;
               hash = (53 * hash) + platforms_.hashCode();
             }
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -18308,18 +17552,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -18437,7 +17676,7 @@ public final class MetadataProto {
                 }
                 onChanged();
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -18452,17 +17691,59 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      input.readMessage(
+                          getFromFieldBuilder().getBuilder(),
+                          extensionRegistry);
+
+                      break;
+                    } // case 10
+                    case 18: {
+                      sourceNamespace_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 18
+                    case 24: {
+                      int tmpRaw = input.readEnum();
+                      ensurePlatformsIsMutable();
+                      platforms_.add(tmpRaw);
+                      break;
+                    } // case 24
+                    case 26: {
+                      int length = input.readRawVarint32();
+                      int oldLimit = input.pushLimit(length);
+                      while(input.getBytesUntilLimit() > 0) {
+                        int tmpRaw = input.readEnum();
+                        ensurePlatformsIsMutable();
+                        platforms_.add(tmpRaw);
+                      }
+                      input.popLimit(oldLimit);
+                      break;
+                    } // case 26
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.BackupOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
             private int bitField0_;
@@ -18938,7 +18219,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new BackupOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -19126,84 +18418,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private TranscodingOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    inputDatasetId_ = s;
-                    break;
-                  }
-                  case 18: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputDatasetId_ = s;
-                    break;
-                  }
-                  case 24: {
-                    int rawValue = input.readEnum();
-
-                    inputFormat_ = rawValue;
-                    break;
-                  }
-                  case 32: {
-                    int rawValue = input.readEnum();
-
-                    outputFormat_ = rawValue;
-                    break;
-                  }
-                  case 42: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    inputDatasetLabel_ = s;
-                    break;
-                  }
-                  case 50: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputDatasetLabel_ = s;
-                    break;
-                  }
-                  case 56: {
-
-                    isByPlatform_ = input.readBool();
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -19506,7 +18720,7 @@ public final class MetadataProto {
             if (isByPlatform_ != false) {
               output.writeBool(7, isByPlatform_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -19539,7 +18753,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeBoolSize(7, isByPlatform_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -19566,7 +18780,7 @@ public final class MetadataProto {
                 .equals(other.getOutputDatasetLabel())) return false;
             if (getIsByPlatform()
                 != other.getIsByPlatform()) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -19592,7 +18806,7 @@ public final class MetadataProto {
             hash = (37 * hash) + IS_BY_PLATFORM_FIELD_NUMBER;
             hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
                 getIsByPlatform());
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -19713,18 +18927,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -19849,7 +19058,7 @@ public final class MetadataProto {
               if (other.getIsByPlatform() != false) {
                 setIsByPlatform(other.getIsByPlatform());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -19864,17 +19073,65 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      inputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 10
+                    case 18: {
+                      outputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 18
+                    case 24: {
+                      inputFormat_ = input.readEnum();
+
+                      break;
+                    } // case 24
+                    case 32: {
+                      outputFormat_ = input.readEnum();
+
+                      break;
+                    } // case 32
+                    case 42: {
+                      inputDatasetLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 42
+                    case 50: {
+                      outputDatasetLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 50
+                    case 56: {
+                      isByPlatform_ = input.readBool();
+
+                      break;
+                    } // case 56
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.TranscodingOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -20485,7 +19742,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new TranscodingOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -20629,72 +19897,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private SamplerOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    inputDatasetId_ = s;
-                    break;
-                  }
-                  case 18: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    inputFormatLabel_ = s;
-                    break;
-                  }
-                  case 26: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputDatasetId_ = s;
-                    break;
-                  }
-                  case 34: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    outputFormatLabel_ = s;
-                    break;
-                  }
-                  case 45: {
-
-                    samplingRate_ = input.readFloat();
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -20937,7 +20139,7 @@ public final class MetadataProto {
             if (java.lang.Float.floatToRawIntBits(samplingRate_) != 0) {
               output.writeFloat(5, samplingRate_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -20962,7 +20164,7 @@ public final class MetadataProto {
               size += com.google.protobuf.CodedOutputStream
                 .computeFloatSize(5, samplingRate_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -20988,7 +20190,7 @@ public final class MetadataProto {
             if (java.lang.Float.floatToIntBits(getSamplingRate())
                 != java.lang.Float.floatToIntBits(
                     other.getSamplingRate())) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -21010,7 +20212,7 @@ public final class MetadataProto {
             hash = (37 * hash) + SAMPLING_RATE_FIELD_NUMBER;
             hash = (53 * hash) + java.lang.Float.floatToIntBits(
                 getSamplingRate());
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -21127,18 +20329,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -21251,7 +20448,7 @@ public final class MetadataProto {
               if (other.getSamplingRate() != 0F) {
                 setSamplingRate(other.getSamplingRate());
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -21266,17 +20463,55 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      inputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 10
+                    case 18: {
+                      inputFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 18
+                    case 26: {
+                      outputDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 26
+                    case 34: {
+                      outputFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 34
+                    case 45: {
+                      samplingRate_ = input.readFloat();
+
+                      break;
+                    } // case 45
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.SamplerOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -21739,7 +20974,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new SamplerOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -21921,79 +21167,6 @@ public final class MetadataProto {
           public final com.google.protobuf.UnknownFieldSet
           getUnknownFields() {
             return this.unknownFields;
-          }
-          private ComparatorOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  case 10: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    leftDatasetId_ = s;
-                    break;
-                  }
-                  case 18: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    leftFormatLabel_ = s;
-                    break;
-                  }
-                  case 26: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    rightDatasetId_ = s;
-                    break;
-                  }
-                  case 34: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    rightFormatLabel_ = s;
-                    break;
-                  }
-                  case 42: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    hostname_ = s;
-                    break;
-                  }
-                  case 50: {
-                    java.lang.String s = input.readStringRequireUtf8();
-
-                    ignoredFields_ = s;
-                    break;
-                  }
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
           }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
@@ -22316,7 +21489,7 @@ public final class MetadataProto {
             if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(ignoredFields_)) {
               com.google.protobuf.GeneratedMessageV3.writeString(output, 6, ignoredFields_);
             }
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -22343,7 +21516,7 @@ public final class MetadataProto {
             if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(ignoredFields_)) {
               size += com.google.protobuf.GeneratedMessageV3.computeStringSize(6, ignoredFields_);
             }
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -22370,7 +21543,7 @@ public final class MetadataProto {
                 .equals(other.getHostname())) return false;
             if (!getIgnoredFields()
                 .equals(other.getIgnoredFields())) return false;
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -22393,7 +21566,7 @@ public final class MetadataProto {
             hash = (53 * hash) + getHostname().hashCode();
             hash = (37 * hash) + IGNORED_FIELDS_FIELD_NUMBER;
             hash = (53 * hash) + getIgnoredFields().hashCode();
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -22516,18 +21689,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -22648,7 +21816,7 @@ public final class MetadataProto {
                 ignoredFields_ = other.ignoredFields_;
                 onChanged();
               }
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -22663,17 +21831,60 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    case 10: {
+                      leftDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 10
+                    case 18: {
+                      leftFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 18
+                    case 26: {
+                      rightDatasetId_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 26
+                    case 34: {
+                      rightFormatLabel_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 34
+                    case 42: {
+                      hostname_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 42
+                    case 50: {
+                      ignoredFields_ = input.readStringRequireUtf8();
+
+                      break;
+                    } // case 50
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ComparatorOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
 
@@ -23285,7 +22496,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new ComparatorOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -23336,43 +22558,6 @@ public final class MetadataProto {
           getUnknownFields() {
             return this.unknownFields;
           }
-          private ExternalOptions(
-              com.google.protobuf.CodedInputStream input,
-              com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-              throws com.google.protobuf.InvalidProtocolBufferException {
-            this();
-            if (extensionRegistry == null) {
-              throw new java.lang.NullPointerException();
-            }
-            com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-                com.google.protobuf.UnknownFieldSet.newBuilder();
-            try {
-              boolean done = false;
-              while (!done) {
-                int tag = input.readTag();
-                switch (tag) {
-                  case 0:
-                    done = true;
-                    break;
-                  default: {
-                    if (!parseUnknownField(
-                        input, unknownFields, extensionRegistry, tag)) {
-                      done = true;
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              throw e.setUnfinishedMessage(this);
-            } catch (java.io.IOException e) {
-              throw new com.google.protobuf.InvalidProtocolBufferException(
-                  e).setUnfinishedMessage(this);
-            } finally {
-              this.unknownFields = unknownFields.build();
-              makeExtensionsImmutable();
-            }
-          }
           public static final com.google.protobuf.Descriptors.Descriptor
               getDescriptor() {
             return com.acme.glup.MetadataProto.internal_static_Acme_Glup_HDFSOptions_ImportOptions_Generator_ExternalOptions_descriptor;
@@ -23400,7 +22585,7 @@ public final class MetadataProto {
           @java.lang.Override
           public void writeTo(com.google.protobuf.CodedOutputStream output)
                               throws java.io.IOException {
-            unknownFields.writeTo(output);
+            getUnknownFields().writeTo(output);
           }
 
           @java.lang.Override
@@ -23409,7 +22594,7 @@ public final class MetadataProto {
             if (size != -1) return size;
 
             size = 0;
-            size += unknownFields.getSerializedSize();
+            size += getUnknownFields().getSerializedSize();
             memoizedSize = size;
             return size;
           }
@@ -23424,7 +22609,7 @@ public final class MetadataProto {
             }
             com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions other = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions) obj;
 
-            if (!unknownFields.equals(other.unknownFields)) return false;
+            if (!getUnknownFields().equals(other.getUnknownFields())) return false;
             return true;
           }
 
@@ -23435,7 +22620,7 @@ public final class MetadataProto {
             }
             int hash = 41;
             hash = (19 * hash) + getDescriptor().hashCode();
-            hash = (29 * hash) + unknownFields.hashCode();
+            hash = (29 * hash) + getUnknownFields().hashCode();
             memoizedHashCode = hash;
             return hash;
           }
@@ -23552,18 +22737,13 @@ public final class MetadataProto {
 
             // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions.newBuilder()
             private Builder() {
-              maybeForceBuilderInitialization();
+
             }
 
             private Builder(
                 com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
               super(parent);
-              maybeForceBuilderInitialization();
-            }
-            private void maybeForceBuilderInitialization() {
-              if (com.google.protobuf.GeneratedMessageV3
-                      .alwaysUseFieldBuilders) {
-              }
+
             }
             @java.lang.Override
             public Builder clear() {
@@ -23642,7 +22822,7 @@ public final class MetadataProto {
 
             public Builder mergeFrom(com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions other) {
               if (other == com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions.getDefaultInstance()) return this;
-              this.mergeUnknownFields(other.unknownFields);
+              this.mergeUnknownFields(other.getUnknownFields());
               onChanged();
               return this;
             }
@@ -23657,17 +22837,30 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws java.io.IOException {
-              com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions parsedMessage = null;
+              if (extensionRegistry == null) {
+                throw new java.lang.NullPointerException();
+              }
               try {
-                parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+                boolean done = false;
+                while (!done) {
+                  int tag = input.readTag();
+                  switch (tag) {
+                    case 0:
+                      done = true;
+                      break;
+                    default: {
+                      if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                        done = true; // was an endgroup tag
+                      }
+                      break;
+                    } // default:
+                  } // switch (tag)
+                } // while (!done)
               } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-                parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.ExternalOptions) e.getUnfinishedMessage();
                 throw e.unwrapIOException();
               } finally {
-                if (parsedMessage != null) {
-                  mergeFrom(parsedMessage);
-                }
-              }
+                onChanged();
+              } // finally
               return this;
             }
             @java.lang.Override
@@ -23703,7 +22896,18 @@ public final class MetadataProto {
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
                 throws com.google.protobuf.InvalidProtocolBufferException {
-              return new ExternalOptions(input, extensionRegistry);
+              Builder builder = newBuilder();
+              try {
+                builder.mergeFrom(input, extensionRegistry);
+              } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                throw e.setUnfinishedMessage(builder.buildPartial());
+              } catch (com.google.protobuf.UninitializedMessageException e) {
+                throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+              } catch (java.io.IOException e) {
+                throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                    .setUnfinishedMessage(builder.buildPartial());
+              }
+              return builder.buildPartial();
             }
           };
 
@@ -24271,7 +23475,7 @@ public final class MetadataProto {
           if (ignoreCn_ != false) {
             output.writeBool(255, ignoreCn_);
           }
-          unknownFields.writeTo(output);
+          getUnknownFields().writeTo(output);
         }
 
         @java.lang.Override
@@ -24337,7 +23541,7 @@ public final class MetadataProto {
             size += com.google.protobuf.CodedOutputStream
               .computeBoolSize(255, ignoreCn_);
           }
-          size += unknownFields.getSerializedSize();
+          size += getUnknownFields().getSerializedSize();
           memoizedSize = size;
           return size;
         }
@@ -24412,7 +23616,7 @@ public final class MetadataProto {
               .equals(other.getStopDate())) return false;
           if (getIgnoreCn()
               != other.getIgnoreCn()) return false;
-          if (!unknownFields.equals(other.unknownFields)) return false;
+          if (!getUnknownFields().equals(other.getUnknownFields())) return false;
           return true;
         }
 
@@ -24476,7 +23680,7 @@ public final class MetadataProto {
           hash = (37 * hash) + IGNORE_CN_FIELD_NUMBER;
           hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
               getIgnoreCn());
-          hash = (29 * hash) + unknownFields.hashCode();
+          hash = (29 * hash) + getUnknownFields().hashCode();
           memoizedHashCode = hash;
           return hash;
         }
@@ -24593,19 +23797,13 @@ public final class MetadataProto {
 
           // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.newBuilder()
           private Builder() {
-            maybeForceBuilderInitialization();
+
           }
 
           private Builder(
               com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
             super(parent);
-            maybeForceBuilderInitialization();
-          }
-          private void maybeForceBuilderInitialization() {
-            if (com.google.protobuf.GeneratedMessageV3
-                    .alwaysUseFieldBuilders) {
-              getToFieldBuilder();
-            }
+
           }
           @java.lang.Override
           public Builder clear() {
@@ -24672,10 +23870,11 @@ public final class MetadataProto {
             }
             if (toBuilder_ == null) {
               to_ = java.util.Collections.emptyList();
-              bitField0_ = (bitField0_ & ~0x00000001);
             } else {
+              to_ = null;
               toBuilder_.clear();
             }
+            bitField0_ = (bitField0_ & ~0x00000001);
             namespace_ = "";
 
             startDate_ = "";
@@ -24893,7 +24092,7 @@ public final class MetadataProto {
             if (other.getIgnoreCn() != false) {
               setIgnoreCn(other.getIgnoreCn());
             }
-            this.mergeUnknownFields(other.unknownFields);
+            this.mergeUnknownFields(other.getUnknownFields());
             onChanged();
             return this;
           }
@@ -24908,17 +24107,133 @@ public final class MetadataProto {
               com.google.protobuf.CodedInputStream input,
               com.google.protobuf.ExtensionRegistryLite extensionRegistry)
               throws java.io.IOException {
-            com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator parsedMessage = null;
+            if (extensionRegistry == null) {
+              throw new java.lang.NullPointerException();
+            }
             try {
-              parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+              boolean done = false;
+              while (!done) {
+                int tag = input.readTag();
+                switch (tag) {
+                  case 0:
+                    done = true;
+                    break;
+                  case 10: {
+                    input.readMessage(
+                        getDataloaderFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 10
+                  case 18: {
+                    input.readMessage(
+                        getKafka2HdfsFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 18
+                  case 26: {
+                    input.readMessage(
+                        getSyncFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 26
+                  case 34: {
+                    input.readMessage(
+                        getExternalFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 34
+                  case 42: {
+                    input.readMessage(
+                        getBackupFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 42
+                  case 50: {
+                    input.readMessage(
+                        getTranscodingFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 50
+                  case 58: {
+                    input.readMessage(
+                        getKacohaFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 58
+                  case 66: {
+                    input.readMessage(
+                        getDeduplicateFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 66
+                  case 74: {
+                    input.readMessage(
+                        getSamplerFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 74
+                  case 82: {
+                    input.readMessage(
+                        getComparatorFieldBuilder().getBuilder(),
+                        extensionRegistry);
+
+                    break;
+                  } // case 82
+                  case 2002: {
+                    com.acme.glup.MetadataProto.Location m =
+                        input.readMessage(
+                            com.acme.glup.MetadataProto.Location.parser(),
+                            extensionRegistry);
+                    if (toBuilder_ == null) {
+                      ensureToIsMutable();
+                      to_.add(m);
+                    } else {
+                      toBuilder_.addMessage(m);
+                    }
+                    break;
+                  } // case 2002
+                  case 2010: {
+                    namespace_ = input.readStringRequireUtf8();
+
+                    break;
+                  } // case 2010
+                  case 2026: {
+                    startDate_ = input.readStringRequireUtf8();
+
+                    break;
+                  } // case 2026
+                  case 2034: {
+                    stopDate_ = input.readStringRequireUtf8();
+
+                    break;
+                  } // case 2034
+                  case 2040: {
+                    ignoreCn_ = input.readBool();
+
+                    break;
+                  } // case 2040
+                  default: {
+                    if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                      done = true; // was an endgroup tag
+                    }
+                    break;
+                  } // default:
+                } // switch (tag)
+              } // while (!done)
             } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-              parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator) e.getUnfinishedMessage();
               throw e.unwrapIOException();
             } finally {
-              if (parsedMessage != null) {
-                mergeFrom(parsedMessage);
-              }
-            }
+              onChanged();
+            } // finally
             return this;
           }
           private int bitField0_;
@@ -26840,7 +26155,18 @@ public final class MetadataProto {
               com.google.protobuf.CodedInputStream input,
               com.google.protobuf.ExtensionRegistryLite extensionRegistry)
               throws com.google.protobuf.InvalidProtocolBufferException {
-            return new Generator(input, extensionRegistry);
+            Builder builder = newBuilder();
+            try {
+              builder.mergeFrom(input, extensionRegistry);
+            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+              throw e.setUnfinishedMessage(builder.buildPartial());
+            } catch (com.google.protobuf.UninitializedMessageException e) {
+              throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+            } catch (java.io.IOException e) {
+              throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                  .setUnfinishedMessage(builder.buildPartial());
+            }
+            return builder.buildPartial();
           }
         };
 
@@ -27113,7 +26439,7 @@ public final class MetadataProto {
         for (int i = 0; i < view_.size(); i++) {
           output.writeMessage(12, view_.get(i));
         }
-        unknownFields.writeTo(output);
+        getUnknownFields().writeTo(output);
       }
 
       @java.lang.Override
@@ -27148,7 +26474,7 @@ public final class MetadataProto {
           size += com.google.protobuf.CodedOutputStream
             .computeMessageSize(12, view_.get(i));
         }
-        size += unknownFields.getSerializedSize();
+        size += getUnknownFields().getSerializedSize();
         memoizedSize = size;
         return size;
       }
@@ -27175,7 +26501,7 @@ public final class MetadataProto {
             .equals(other.getGeneratorList())) return false;
         if (!getViewList()
             .equals(other.getViewList())) return false;
-        if (!unknownFields.equals(other.unknownFields)) return false;
+        if (!getUnknownFields().equals(other.getUnknownFields())) return false;
         return true;
       }
 
@@ -27205,7 +26531,7 @@ public final class MetadataProto {
           hash = (37 * hash) + VIEW_FIELD_NUMBER;
           hash = (53 * hash) + getViewList().hashCode();
         }
-        hash = (29 * hash) + unknownFields.hashCode();
+        hash = (29 * hash) + getUnknownFields().hashCode();
         memoizedHashCode = hash;
         return hash;
       }
@@ -27322,20 +26648,13 @@ public final class MetadataProto {
 
         // Construct using com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.newBuilder()
         private Builder() {
-          maybeForceBuilderInitialization();
+
         }
 
         private Builder(
             com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
           super(parent);
-          maybeForceBuilderInitialization();
-        }
-        private void maybeForceBuilderInitialization() {
-          if (com.google.protobuf.GeneratedMessageV3
-                  .alwaysUseFieldBuilders) {
-            getGeneratorFieldBuilder();
-            getViewFieldBuilder();
-          }
+
         }
         @java.lang.Override
         public Builder clear() {
@@ -27352,16 +26671,18 @@ public final class MetadataProto {
 
           if (generatorBuilder_ == null) {
             generator_ = java.util.Collections.emptyList();
-            bitField0_ = (bitField0_ & ~0x00000001);
           } else {
+            generator_ = null;
             generatorBuilder_.clear();
           }
+          bitField0_ = (bitField0_ & ~0x00000001);
           if (viewBuilder_ == null) {
             view_ = java.util.Collections.emptyList();
-            bitField0_ = (bitField0_ & ~0x00000002);
           } else {
+            view_ = null;
             viewBuilder_.clear();
           }
+          bitField0_ = (bitField0_ & ~0x00000002);
           return this;
         }
 
@@ -27529,7 +26850,7 @@ public final class MetadataProto {
               }
             }
           }
-          this.mergeUnknownFields(other.unknownFields);
+          this.mergeUnknownFields(other.getUnknownFields());
           onChanged();
           return this;
         }
@@ -27544,17 +26865,81 @@ public final class MetadataProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws java.io.IOException {
-          com.acme.glup.MetadataProto.HDFSOptions.ImportOptions parsedMessage = null;
+          if (extensionRegistry == null) {
+            throw new java.lang.NullPointerException();
+          }
           try {
-            parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+            boolean done = false;
+            while (!done) {
+              int tag = input.readTag();
+              switch (tag) {
+                case 0:
+                  done = true;
+                  break;
+                case 10: {
+                  owner_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 10
+                case 18: {
+                  name_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 18
+                case 32: {
+                  partitioning_ = input.readEnum();
+
+                  break;
+                } // case 32
+                case 40: {
+                  format_ = input.readEnum();
+
+                  break;
+                } // case 40
+                case 48: {
+                  private_ = input.readBool();
+
+                  break;
+                } // case 48
+                case 90: {
+                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator m =
+                      input.readMessage(
+                          com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.Generator.parser(),
+                          extensionRegistry);
+                  if (generatorBuilder_ == null) {
+                    ensureGeneratorIsMutable();
+                    generator_.add(m);
+                  } else {
+                    generatorBuilder_.addMessage(m);
+                  }
+                  break;
+                } // case 90
+                case 98: {
+                  com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View m =
+                      input.readMessage(
+                          com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.View.parser(),
+                          extensionRegistry);
+                  if (viewBuilder_ == null) {
+                    ensureViewIsMutable();
+                    view_.add(m);
+                  } else {
+                    viewBuilder_.addMessage(m);
+                  }
+                  break;
+                } // case 98
+                default: {
+                  if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                    done = true; // was an endgroup tag
+                  }
+                  break;
+                } // default:
+              } // switch (tag)
+            } // while (!done)
           } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-            parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions.ImportOptions) e.getUnfinishedMessage();
             throw e.unwrapIOException();
           } finally {
-            if (parsedMessage != null) {
-              mergeFrom(parsedMessage);
-            }
-          }
+            onChanged();
+          } // finally
           return this;
         }
         private int bitField0_;
@@ -28397,7 +27782,18 @@ public final class MetadataProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ImportOptions(input, extensionRegistry);
+          Builder builder = newBuilder();
+          try {
+            builder.mergeFrom(input, extensionRegistry);
+          } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+            throw e.setUnfinishedMessage(builder.buildPartial());
+          } catch (com.google.protobuf.UninitializedMessageException e) {
+            throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+          } catch (java.io.IOException e) {
+            throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                .setUnfinishedMessage(builder.buildPartial());
+          }
+          return builder.buildPartial();
         }
       };
 
@@ -28474,7 +27870,7 @@ public final class MetadataProto {
       for (int i = 0; i < import_.size(); i++) {
         output.writeMessage(3, import_.get(i));
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -28487,7 +27883,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, import_.get(i));
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -28504,7 +27900,7 @@ public final class MetadataProto {
 
       if (!getImportList()
           .equals(other.getImportList())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -28519,7 +27915,7 @@ public final class MetadataProto {
         hash = (37 * hash) + IMPORT_FIELD_NUMBER;
         hash = (53 * hash) + getImportList().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -28636,29 +28032,24 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.HDFSOptions.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getImportFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
         super.clear();
         if (importBuilder_ == null) {
           import_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000001);
         } else {
+          import_ = null;
           importBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000001);
         return this;
       }
 
@@ -28769,7 +28160,7 @@ public final class MetadataProto {
             }
           }
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -28784,17 +28175,43 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.HDFSOptions parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 26: {
+                com.acme.glup.MetadataProto.HDFSOptions.ImportOptions m =
+                    input.readMessage(
+                        com.acme.glup.MetadataProto.HDFSOptions.ImportOptions.parser(),
+                        extensionRegistry);
+                if (importBuilder_ == null) {
+                  ensureImportIsMutable();
+                  import_.add(m);
+                } else {
+                  importBuilder_.addMessage(m);
+                }
+                break;
+              } // case 26
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.HDFSOptions) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -29071,7 +28488,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new HDFSOptions(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -29147,53 +28575,6 @@ public final class MetadataProto {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private ProducerTransportOptions(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-
-              syslog_ = input.readBool();
-              break;
-            }
-            case 16: {
-
-              kafka_ = input.readBool();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
-    }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
       return com.acme.glup.MetadataProto.internal_static_Acme_Glup_ProducerTransportOptions_descriptor;
@@ -29257,7 +28638,7 @@ public final class MetadataProto {
       if (kafka_ != false) {
         output.writeBool(2, kafka_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -29274,7 +28655,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(2, kafka_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -29293,7 +28674,7 @@ public final class MetadataProto {
           != other.getSyslog()) return false;
       if (getKafka()
           != other.getKafka()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -29310,7 +28691,7 @@ public final class MetadataProto {
       hash = (37 * hash) + KAFKA_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getKafka());
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -29432,18 +28813,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.ProducerTransportOptions.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -29534,7 +28910,7 @@ public final class MetadataProto {
         if (other.getKafka() != false) {
           setKafka(other.getKafka());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -29549,17 +28925,40 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.ProducerTransportOptions parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                syslog_ = input.readBool();
+
+                break;
+              } // case 8
+              case 16: {
+                kafka_ = input.readBool();
+
+                break;
+              } // case 16
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.ProducerTransportOptions) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -29681,7 +29080,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new ProducerTransportOptions(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -29757,53 +29167,6 @@ public final class MetadataProto {
     getUnknownFields() {
       return this.unknownFields;
     }
-    private PropertyOptions(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-
-              valuable_ = input.readBool();
-              break;
-            }
-            case 16: {
-
-              highVolume_ = input.readBool();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
-    }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
       return com.acme.glup.MetadataProto.internal_static_Acme_Glup_PropertyOptions_descriptor;
@@ -29867,7 +29230,7 @@ public final class MetadataProto {
       if (highVolume_ != false) {
         output.writeBool(2, highVolume_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -29884,7 +29247,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(2, highVolume_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -29903,7 +29266,7 @@ public final class MetadataProto {
           != other.getValuable()) return false;
       if (getHighVolume()
           != other.getHighVolume()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -29920,7 +29283,7 @@ public final class MetadataProto {
       hash = (37 * hash) + HIGH_VOLUME_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getHighVolume());
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -30042,18 +29405,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.PropertyOptions.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -30144,7 +29502,7 @@ public final class MetadataProto {
         if (other.getHighVolume() != false) {
           setHighVolume(other.getHighVolume());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -30159,17 +29517,40 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.PropertyOptions parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                valuable_ = input.readBool();
+
+                break;
+              } // case 8
+              case 16: {
+                highVolume_ = input.readBool();
+
+                break;
+              } // case 16
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.PropertyOptions) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -30291,7 +29672,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new PropertyOptions(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -30524,123 +29916,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private GlupOptions(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              com.acme.glup.MetadataProto.KafkaMessageOptions.Builder subBuilder = null;
-              if (kafka_ != null) {
-                subBuilder = kafka_.toBuilder();
-              }
-              kafka_ = input.readMessage(com.acme.glup.MetadataProto.KafkaMessageOptions.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(kafka_);
-                kafka_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 18: {
-              com.acme.glup.MetadataProto.HDFSOptions.Builder subBuilder = null;
-              if (hdfs_ != null) {
-                subBuilder = hdfs_.toBuilder();
-              }
-              hdfs_ = input.readMessage(com.acme.glup.MetadataProto.HDFSOptions.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(hdfs_);
-                hdfs_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 24: {
-
-              samplingPct_ = input.readUInt32();
-              break;
-            }
-            case 32: {
-
-              preprodSamplingPct_ = input.readUInt32();
-              break;
-            }
-            case 42: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                dataset_ = new java.util.ArrayList<com.acme.glup.MetadataProto.DataSet>();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              dataset_.add(
-                  input.readMessage(com.acme.glup.MetadataProto.DataSet.parser(), extensionRegistry));
-              break;
-            }
-            case 48: {
-
-              messageSamplingPct_ = input.readUInt32();
-              break;
-            }
-            case 58: {
-              com.acme.glup.MetadataProto.ProducerTransportOptions.Builder subBuilder = null;
-              if (producers_ != null) {
-                subBuilder = producers_.toBuilder();
-              }
-              producers_ = input.readMessage(com.acme.glup.MetadataProto.ProducerTransportOptions.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(producers_);
-                producers_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 66: {
-              com.acme.glup.MetadataProto.PropertyOptions.Builder subBuilder = null;
-              if (properties_ != null) {
-                subBuilder = properties_.toBuilder();
-              }
-              properties_ = input.readMessage(com.acme.glup.MetadataProto.PropertyOptions.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(properties_);
-                properties_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          dataset_ = java.util.Collections.unmodifiableList(dataset_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -30950,7 +30225,7 @@ public final class MetadataProto {
       if (properties_ != null) {
         output.writeMessage(8, getProperties());
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -30991,7 +30266,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(8, getProperties());
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -31034,7 +30309,7 @@ public final class MetadataProto {
         if (!getProperties()
             .equals(other.getProperties())) return false;
       }
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -31071,7 +30346,7 @@ public final class MetadataProto {
         hash = (37 * hash) + PROPERTIES_FIELD_NUMBER;
         hash = (53 * hash) + getProperties().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -31188,19 +30463,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.GlupOptions.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getDatasetFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -31223,10 +30492,11 @@ public final class MetadataProto {
 
         if (datasetBuilder_ == null) {
           dataset_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000001);
         } else {
+          dataset_ = null;
           datasetBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000001);
         messageSamplingPct_ = 0;
 
         if (producersBuilder_ == null) {
@@ -31395,7 +30665,7 @@ public final class MetadataProto {
         if (other.hasProperties()) {
           mergeProperties(other.getProperties());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -31410,17 +30680,86 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.GlupOptions parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                input.readMessage(
+                    getKafkaFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 10
+              case 18: {
+                input.readMessage(
+                    getHdfsFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 18
+              case 24: {
+                samplingPct_ = input.readUInt32();
+
+                break;
+              } // case 24
+              case 32: {
+                preprodSamplingPct_ = input.readUInt32();
+
+                break;
+              } // case 32
+              case 42: {
+                com.acme.glup.MetadataProto.DataSet m =
+                    input.readMessage(
+                        com.acme.glup.MetadataProto.DataSet.parser(),
+                        extensionRegistry);
+                if (datasetBuilder_ == null) {
+                  ensureDatasetIsMutable();
+                  dataset_.add(m);
+                } else {
+                  datasetBuilder_.addMessage(m);
+                }
+                break;
+              } // case 42
+              case 48: {
+                messageSamplingPct_ = input.readUInt32();
+
+                break;
+              } // case 48
+              case 58: {
+                input.readMessage(
+                    getProducersFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 58
+              case 66: {
+                input.readMessage(
+                    getPropertiesFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 66
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.GlupOptions) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -32518,7 +31857,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new GlupOptions(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -32653,96 +32003,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private GlupFieldOptions(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-
-              sampled_ = input.readBool();
-              break;
-            }
-            case 16: {
-
-              samplingKey_ = input.readBool();
-              break;
-            }
-            case 24: {
-              int rawValue = input.readEnum();
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                disabledPlatform_ = new java.util.ArrayList<java.lang.Integer>();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              disabledPlatform_.add(rawValue);
-              break;
-            }
-            case 26: {
-              int length = input.readRawVarint32();
-              int oldLimit = input.pushLimit(length);
-              while(input.getBytesUntilLimit() > 0) {
-                int rawValue = input.readEnum();
-                if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                  disabledPlatform_ = new java.util.ArrayList<java.lang.Integer>();
-                  mutable_bitField0_ |= 0x00000001;
-                }
-                disabledPlatform_.add(rawValue);
-              }
-              input.popLimit(oldLimit);
-              break;
-            }
-            case 32: {
-
-              shouldCleanPii_ = input.readBool();
-              break;
-            }
-            case 40: {
-
-              pendingDeletion_ = input.readBool();
-              break;
-            }
-            case 50: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              addedAt_ = s;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          disabledPlatform_ = java.util.Collections.unmodifiableList(disabledPlatform_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -32947,7 +32207,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(addedAt_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 6, addedAt_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -32987,7 +32247,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(addedAt_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(6, addedAt_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -33013,7 +32273,7 @@ public final class MetadataProto {
           != other.getPendingDeletion()) return false;
       if (!getAddedAt()
           .equals(other.getAddedAt())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -33042,7 +32302,7 @@ public final class MetadataProto {
           getPendingDeletion());
       hash = (37 * hash) + ADDED_AT_FIELD_NUMBER;
       hash = (53 * hash) + getAddedAt().hashCode();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -33164,18 +32424,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.GlupFieldOptions.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -33303,7 +32558,7 @@ public final class MetadataProto {
           addedAt_ = other.addedAt_;
           onChanged();
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -33318,17 +32573,72 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.GlupFieldOptions parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                sampled_ = input.readBool();
+
+                break;
+              } // case 8
+              case 16: {
+                samplingKey_ = input.readBool();
+
+                break;
+              } // case 16
+              case 24: {
+                int tmpRaw = input.readEnum();
+                ensureDisabledPlatformIsMutable();
+                disabledPlatform_.add(tmpRaw);
+                break;
+              } // case 24
+              case 26: {
+                int length = input.readRawVarint32();
+                int oldLimit = input.pushLimit(length);
+                while(input.getBytesUntilLimit() > 0) {
+                  int tmpRaw = input.readEnum();
+                  ensureDisabledPlatformIsMutable();
+                  disabledPlatform_.add(tmpRaw);
+                }
+                input.popLimit(oldLimit);
+                break;
+              } // case 26
+              case 32: {
+                shouldCleanPii_ = input.readBool();
+
+                break;
+              } // case 32
+              case 40: {
+                pendingDeletion_ = input.readBool();
+
+                break;
+              } // case 40
+              case 50: {
+                addedAt_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 50
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.GlupFieldOptions) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -33740,7 +33050,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new GlupFieldOptions(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -33825,54 +33146,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private JsonMapping(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              name_ = s;
-              break;
-            }
-            case 16: {
-
-              skip_ = input.readBool();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -33968,7 +33241,7 @@ public final class MetadataProto {
       if (skip_ != false) {
         output.writeBool(2, skip_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -33984,7 +33257,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(2, skip_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -34003,7 +33276,7 @@ public final class MetadataProto {
           .equals(other.getName())) return false;
       if (getSkip()
           != other.getSkip()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -34019,7 +33292,7 @@ public final class MetadataProto {
       hash = (37 * hash) + SKIP_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getSkip());
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -34140,18 +33413,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.JsonMapping.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -34243,7 +33511,7 @@ public final class MetadataProto {
         if (other.getSkip() != false) {
           setSkip(other.getSkip());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -34258,17 +33526,40 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.JsonMapping parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                name_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 16: {
+                skip_ = input.readBool();
+
+                break;
+              } // case 16
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.JsonMapping) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -34443,7 +33734,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new JsonMapping(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -34531,54 +33833,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private JsonAlias(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              name_ = s;
-              break;
-            }
-            case 24: {
-
-              useEnumFieldId_ = input.readBool();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -34676,7 +33930,7 @@ public final class MetadataProto {
       if (useEnumFieldId_ != false) {
         output.writeBool(3, useEnumFieldId_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -34692,7 +33946,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(3, useEnumFieldId_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -34711,7 +33965,7 @@ public final class MetadataProto {
           .equals(other.getName())) return false;
       if (getUseEnumFieldId()
           != other.getUseEnumFieldId()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -34727,7 +33981,7 @@ public final class MetadataProto {
       hash = (37 * hash) + USE_ENUM_FIELD_ID_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getUseEnumFieldId());
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -34849,18 +34103,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.JsonAlias.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -34952,7 +34201,7 @@ public final class MetadataProto {
         if (other.getUseEnumFieldId() != false) {
           setUseEnumFieldId(other.getUseEnumFieldId());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -34967,17 +34216,40 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.JsonAlias parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                name_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 10
+              case 24: {
+                useEnumFieldId_ = input.readBool();
+
+                break;
+              } // case 24
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.JsonAlias) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -35158,7 +34430,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new JsonAlias(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -35346,95 +34629,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private BaseGlupMessage(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              com.acme.glup.MetadataProto.Origin.Builder subBuilder = null;
-              if (glupOrigin_ != null) {
-                subBuilder = glupOrigin_.toBuilder();
-              }
-              glupOrigin_ = input.readMessage(com.acme.glup.MetadataProto.Origin.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(glupOrigin_);
-                glupOrigin_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 18: {
-              com.acme.glup.MetadataProto.Partition.Builder subBuilder = null;
-              if (partition_ != null) {
-                subBuilder = partition_.toBuilder();
-              }
-              partition_ = input.readMessage(com.acme.glup.MetadataProto.Partition.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(partition_);
-                partition_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 400082: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                setFields_ = com.google.protobuf.MapField.newMapField(
-                    SetFieldsDefaultEntryHolder.defaultEntry);
-                mutable_bitField0_ |= 0x00000001;
-              }
-              com.google.protobuf.MapEntry<java.lang.Integer, java.lang.Boolean>
-              setFields__ = input.readMessage(
-                  SetFieldsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
-              setFields_.getMutableMap().put(
-                  setFields__.getKey(), setFields__.getValue());
-              break;
-            }
-            case 16777210: {
-              if (!((mutable_bitField0_ & 0x00000002) != 0)) {
-                controlMessage_ = new java.util.ArrayList<com.acme.glup.MetadataProto.ControlMessage.Watermark>();
-                mutable_bitField0_ |= 0x00000002;
-              }
-              controlMessage_.add(
-                  input.readMessage(com.acme.glup.MetadataProto.ControlMessage.Watermark.parser(), extensionRegistry));
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000002) != 0)) {
-          controlMessage_ = java.util.Collections.unmodifiableList(controlMessage_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -35703,7 +34897,7 @@ public final class MetadataProto {
       for (int i = 0; i < controlMessage_.size(); i++) {
         output.writeMessage(2097151, controlMessage_.get(i));
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -35734,7 +34928,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2097151, controlMessage_.get(i));
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -35763,7 +34957,7 @@ public final class MetadataProto {
           other.internalGetSetFields())) return false;
       if (!getControlMessageList()
           .equals(other.getControlMessageList())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -35790,7 +34984,7 @@ public final class MetadataProto {
         hash = (37 * hash) + CONTROL_MESSAGE_FIELD_NUMBER;
         hash = (53 * hash) + getControlMessageList().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -35933,19 +35127,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.BaseGlupMessage.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getControlMessageFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -35965,10 +35153,11 @@ public final class MetadataProto {
         internalGetMutableSetFields().clear();
         if (controlMessageBuilder_ == null) {
           controlMessage_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000002);
         } else {
+          controlMessage_ = null;
           controlMessageBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000002);
         return this;
       }
 
@@ -36099,7 +35288,7 @@ public final class MetadataProto {
             }
           }
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -36114,17 +35303,65 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.BaseGlupMessage parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                input.readMessage(
+                    getGlupOriginFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 10
+              case 18: {
+                input.readMessage(
+                    getPartitionFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 18
+              case 400082: {
+                com.google.protobuf.MapEntry<java.lang.Integer, java.lang.Boolean>
+                setFields__ = input.readMessage(
+                    SetFieldsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+                internalGetMutableSetFields().getMutableMap().put(
+                    setFields__.getKey(), setFields__.getValue());
+                break;
+              } // case 400082
+              case 16777210: {
+                com.acme.glup.MetadataProto.ControlMessage.Watermark m =
+                    input.readMessage(
+                        com.acme.glup.MetadataProto.ControlMessage.Watermark.parser(),
+                        extensionRegistry);
+                if (controlMessageBuilder_ == null) {
+                  ensureControlMessageIsMutable();
+                  controlMessage_.add(m);
+                } else {
+                  controlMessageBuilder_.addMessage(m);
+                }
+                break;
+              } // case 16777210
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.BaseGlupMessage) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -36874,7 +36111,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new BaseGlupMessage(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -37045,83 +36293,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private ForwardedWatermarkMessage(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 40: {
-
-              originalKafkaOffset_ = input.readInt64();
-              break;
-            }
-            case 48: {
-
-              timestamp_ = input.readInt64();
-              break;
-            }
-            case 56: {
-
-              consolidationEnabled_ = input.readBool();
-              break;
-            }
-            case 82: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              datasetId_ = s;
-              break;
-            }
-            case 90: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              datasetFormatLabel_ = s;
-              break;
-            }
-            case 16777210: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                controlMessage_ = new java.util.ArrayList<com.acme.glup.MetadataProto.ControlMessage.Watermark>();
-                mutable_bitField0_ |= 0x00000001;
-              }
-              controlMessage_.add(
-                  input.readMessage(com.acme.glup.MetadataProto.ControlMessage.Watermark.parser(), extensionRegistry));
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        if (((mutable_bitField0_ & 0x00000001) != 0)) {
-          controlMessage_ = java.util.Collections.unmodifiableList(controlMessage_);
-        }
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -37365,7 +36536,7 @@ public final class MetadataProto {
       for (int i = 0; i < controlMessage_.size(); i++) {
         output.writeMessage(2097151, controlMessage_.get(i));
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -37396,7 +36567,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2097151, controlMessage_.get(i));
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -37423,7 +36594,7 @@ public final class MetadataProto {
           .equals(other.getDatasetFormatLabel())) return false;
       if (!getControlMessageList()
           .equals(other.getControlMessageList())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -37451,7 +36622,7 @@ public final class MetadataProto {
         hash = (37 * hash) + CONTROL_MESSAGE_FIELD_NUMBER;
         hash = (53 * hash) + getControlMessageList().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -37572,19 +36743,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.ForwardedWatermarkMessage.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-          getControlMessageFieldBuilder();
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -37601,10 +36766,11 @@ public final class MetadataProto {
 
         if (controlMessageBuilder_ == null) {
           controlMessage_ = java.util.Collections.emptyList();
-          bitField0_ = (bitField0_ & ~0x00000001);
         } else {
+          controlMessage_ = null;
           controlMessageBuilder_.clear();
         }
+        bitField0_ = (bitField0_ & ~0x00000001);
         return this;
       }
 
@@ -37737,7 +36903,7 @@ public final class MetadataProto {
             }
           }
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -37752,17 +36918,68 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.ForwardedWatermarkMessage parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 40: {
+                originalKafkaOffset_ = input.readInt64();
+
+                break;
+              } // case 40
+              case 48: {
+                timestamp_ = input.readInt64();
+
+                break;
+              } // case 48
+              case 56: {
+                consolidationEnabled_ = input.readBool();
+
+                break;
+              } // case 56
+              case 82: {
+                datasetId_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 82
+              case 90: {
+                datasetFormatLabel_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 90
+              case 16777210: {
+                com.acme.glup.MetadataProto.ControlMessage.Watermark m =
+                    input.readMessage(
+                        com.acme.glup.MetadataProto.ControlMessage.Watermark.parser(),
+                        extensionRegistry);
+                if (controlMessageBuilder_ == null) {
+                  ensureControlMessageIsMutable();
+                  controlMessage_.add(m);
+                } else {
+                  controlMessageBuilder_.addMessage(m);
+                }
+                break;
+              } // case 16777210
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.ForwardedWatermarkMessage) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -38432,7 +37649,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new ForwardedWatermarkMessage(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -38548,67 +37776,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private Location(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-              int rawValue = input.readEnum();
-
-              env_ = rawValue;
-              break;
-            }
-            case 16: {
-              int rawValue = input.readEnum();
-
-              dc_ = rawValue;
-              break;
-            }
-            case 26: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              label_ = s;
-              break;
-            }
-            case 34: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              datasetId_ = s;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -38779,7 +37946,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(datasetId_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 4, datasetId_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -38802,7 +37969,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(datasetId_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(4, datasetId_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -38823,7 +37990,7 @@ public final class MetadataProto {
           .equals(other.getLabel())) return false;
       if (!getDatasetId()
           .equals(other.getDatasetId())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -38842,7 +38009,7 @@ public final class MetadataProto {
       hash = (53 * hash) + getLabel().hashCode();
       hash = (37 * hash) + DATASET_ID_FIELD_NUMBER;
       hash = (53 * hash) + getDatasetId().hashCode();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -38959,18 +38126,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.Location.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -39075,7 +38237,7 @@ public final class MetadataProto {
           datasetId_ = other.datasetId_;
           onChanged();
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -39090,17 +38252,50 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.Location parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                env_ = input.readEnum();
+
+                break;
+              } // case 8
+              case 16: {
+                dc_ = input.readEnum();
+
+                break;
+              } // case 16
+              case 26: {
+                label_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 26
+              case 34: {
+                datasetId_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 34
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.Location) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -39436,7 +38631,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Location(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -39576,72 +38782,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private Origin(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-              int rawValue = input.readEnum();
-
-              datacenter_ = rawValue;
-              break;
-            }
-            case 21: {
-
-              ip4_ = input.readFixed32();
-              break;
-            }
-            case 26: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              hostname_ = s;
-              break;
-            }
-            case 34: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              containerTask_ = s;
-              break;
-            }
-            case 42: {
-              java.lang.String s = input.readStringRequireUtf8();
-
-              containerApp_ = s;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -39858,7 +38998,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(containerApp_)) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 5, containerApp_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -39884,7 +39024,7 @@ public final class MetadataProto {
       if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(containerApp_)) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(5, containerApp_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -39908,7 +39048,7 @@ public final class MetadataProto {
           .equals(other.getContainerTask())) return false;
       if (!getContainerApp()
           .equals(other.getContainerApp())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -39929,7 +39069,7 @@ public final class MetadataProto {
       hash = (53 * hash) + getContainerTask().hashCode();
       hash = (37 * hash) + CONTAINER_APP_FIELD_NUMBER;
       hash = (53 * hash) + getContainerApp().hashCode();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -40050,18 +39190,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.Origin.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -40173,7 +39308,7 @@ public final class MetadataProto {
           containerApp_ = other.containerApp_;
           onChanged();
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -40188,17 +39323,55 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.Origin parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                datacenter_ = input.readEnum();
+
+                break;
+              } // case 8
+              case 21: {
+                ip4_ = input.readFixed32();
+
+                break;
+              } // case 21
+              case 26: {
+                hostname_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 26
+              case 34: {
+                containerTask_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 34
+              case 42: {
+                containerApp_ = input.readStringRequireUtf8();
+
+                break;
+              } // case 42
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.Origin) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -40622,7 +39795,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Origin(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -40691,56 +39875,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private ControlMessage(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 10: {
-              com.acme.glup.MetadataProto.ControlMessage.Watermark.Builder subBuilder = null;
-              if (watermark_ != null) {
-                subBuilder = watermark_.toBuilder();
-              }
-              watermark_ = input.readMessage(com.acme.glup.MetadataProto.ControlMessage.Watermark.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(watermark_);
-                watermark_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -40949,61 +40083,6 @@ public final class MetadataProto {
       getUnknownFields() {
         return this.unknownFields;
       }
-      private WatermarkOrigin(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        this();
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
-        }
-        com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-            com.google.protobuf.UnknownFieldSet.newBuilder();
-        try {
-          boolean done = false;
-          while (!done) {
-            int tag = input.readTag();
-            switch (tag) {
-              case 0:
-                done = true;
-                break;
-              case 10: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                kafkaTopic_ = s;
-                break;
-              }
-              case 16: {
-                int rawValue = input.readEnum();
-
-                datacenter_ = rawValue;
-                break;
-              }
-              case 24: {
-                int rawValue = input.readEnum();
-
-                cluster_ = rawValue;
-                break;
-              }
-              default: {
-                if (!parseUnknownField(
-                    input, unknownFields, extensionRegistry, tag)) {
-                  done = true;
-                }
-                break;
-              }
-            }
-          }
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.setUnfinishedMessage(this);
-        } catch (java.io.IOException e) {
-          throw new com.google.protobuf.InvalidProtocolBufferException(
-              e).setUnfinishedMessage(this);
-        } finally {
-          this.unknownFields = unknownFields.build();
-          makeExtensionsImmutable();
-        }
-      }
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return com.acme.glup.MetadataProto.internal_static_Acme_Glup_ControlMessage_WatermarkOrigin_descriptor;
@@ -41116,7 +40195,7 @@ public final class MetadataProto {
         if (cluster_ != com.acme.glup.MetadataProto.ControlMessage.Cluster.UNSUPPORTED_CLUSTER.getNumber()) {
           output.writeEnum(3, cluster_);
         }
-        unknownFields.writeTo(output);
+        getUnknownFields().writeTo(output);
       }
 
       @java.lang.Override
@@ -41136,7 +40215,7 @@ public final class MetadataProto {
           size += com.google.protobuf.CodedOutputStream
             .computeEnumSize(3, cluster_);
         }
-        size += unknownFields.getSerializedSize();
+        size += getUnknownFields().getSerializedSize();
         memoizedSize = size;
         return size;
       }
@@ -41155,7 +40234,7 @@ public final class MetadataProto {
             .equals(other.getKafkaTopic())) return false;
         if (datacenter_ != other.datacenter_) return false;
         if (cluster_ != other.cluster_) return false;
-        if (!unknownFields.equals(other.unknownFields)) return false;
+        if (!getUnknownFields().equals(other.getUnknownFields())) return false;
         return true;
       }
 
@@ -41172,7 +40251,7 @@ public final class MetadataProto {
         hash = (53 * hash) + datacenter_;
         hash = (37 * hash) + CLUSTER_FIELD_NUMBER;
         hash = (53 * hash) + cluster_;
-        hash = (29 * hash) + unknownFields.hashCode();
+        hash = (29 * hash) + getUnknownFields().hashCode();
         memoizedHashCode = hash;
         return hash;
       }
@@ -41289,18 +40368,13 @@ public final class MetadataProto {
 
         // Construct using com.acme.glup.MetadataProto.ControlMessage.WatermarkOrigin.newBuilder()
         private Builder() {
-          maybeForceBuilderInitialization();
+
         }
 
         private Builder(
             com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
           super(parent);
-          maybeForceBuilderInitialization();
-        }
-        private void maybeForceBuilderInitialization() {
-          if (com.google.protobuf.GeneratedMessageV3
-                  .alwaysUseFieldBuilders) {
-          }
+
         }
         @java.lang.Override
         public Builder clear() {
@@ -41398,7 +40472,7 @@ public final class MetadataProto {
           if (other.cluster_ != 0) {
             setClusterValue(other.getClusterValue());
           }
-          this.mergeUnknownFields(other.unknownFields);
+          this.mergeUnknownFields(other.getUnknownFields());
           onChanged();
           return this;
         }
@@ -41413,17 +40487,45 @@ public final class MetadataProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws java.io.IOException {
-          com.acme.glup.MetadataProto.ControlMessage.WatermarkOrigin parsedMessage = null;
+          if (extensionRegistry == null) {
+            throw new java.lang.NullPointerException();
+          }
           try {
-            parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+            boolean done = false;
+            while (!done) {
+              int tag = input.readTag();
+              switch (tag) {
+                case 0:
+                  done = true;
+                  break;
+                case 10: {
+                  kafkaTopic_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 10
+                case 16: {
+                  datacenter_ = input.readEnum();
+
+                  break;
+                } // case 16
+                case 24: {
+                  cluster_ = input.readEnum();
+
+                  break;
+                } // case 24
+                default: {
+                  if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                    done = true; // was an endgroup tag
+                  }
+                  break;
+                } // default:
+              } // switch (tag)
+            } // while (!done)
           } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-            parsedMessage = (com.acme.glup.MetadataProto.ControlMessage.WatermarkOrigin) e.getUnfinishedMessage();
             throw e.unwrapIOException();
           } finally {
-            if (parsedMessage != null) {
-              mergeFrom(parsedMessage);
-            }
-          }
+            onChanged();
+          } // finally
           return this;
         }
 
@@ -41643,7 +40745,18 @@ public final class MetadataProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws com.google.protobuf.InvalidProtocolBufferException {
-          return new WatermarkOrigin(input, extensionRegistry);
+          Builder builder = newBuilder();
+          try {
+            builder.mergeFrom(input, extensionRegistry);
+          } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+            throw e.setUnfinishedMessage(builder.buildPartial());
+          } catch (com.google.protobuf.UninitializedMessageException e) {
+            throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+          } catch (java.io.IOException e) {
+            throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                .setUnfinishedMessage(builder.buildPartial());
+          }
+          return builder.buildPartial();
         }
       };
 
@@ -41914,113 +41027,6 @@ public final class MetadataProto {
       public final com.google.protobuf.UnknownFieldSet
       getUnknownFields() {
         return this.unknownFields;
-      }
-      private Watermark(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        this();
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
-        }
-        int mutable_bitField0_ = 0;
-        com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-            com.google.protobuf.UnknownFieldSet.newBuilder();
-        try {
-          boolean done = false;
-          while (!done) {
-            int tag = input.readTag();
-            switch (tag) {
-              case 0:
-                done = true;
-                break;
-              case 10: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                type_ = s;
-                break;
-              }
-              case 18: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                hostname_ = s;
-                break;
-              }
-              case 26: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                kafkaTopic_ = s;
-                break;
-              }
-              case 32: {
-
-                partition_ = input.readInt32();
-                break;
-              }
-              case 40: {
-
-                partitionCount_ = input.readInt32();
-                break;
-              }
-              case 50: {
-
-                processUuid_ = input.readBytes();
-                break;
-              }
-              case 58: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                region_ = s;
-                break;
-              }
-              case 64: {
-
-                timestampSeconds_ = input.readInt32();
-                break;
-              }
-              case 74: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                cluster_ = s;
-                break;
-              }
-              case 82: {
-                java.lang.String s = input.readStringRequireUtf8();
-
-                environment_ = s;
-                break;
-              }
-              case 400082: {
-                if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                  setFields_ = com.google.protobuf.MapField.newMapField(
-                      SetFieldsDefaultEntryHolder.defaultEntry);
-                  mutable_bitField0_ |= 0x00000001;
-                }
-                com.google.protobuf.MapEntry<java.lang.Integer, java.lang.Boolean>
-                setFields__ = input.readMessage(
-                    SetFieldsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
-                setFields_.getMutableMap().put(
-                    setFields__.getKey(), setFields__.getValue());
-                break;
-              }
-              default: {
-                if (!parseUnknownField(
-                    input, unknownFields, extensionRegistry, tag)) {
-                  done = true;
-                }
-                break;
-              }
-            }
-          }
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.setUnfinishedMessage(this);
-        } catch (java.io.IOException e) {
-          throw new com.google.protobuf.InvalidProtocolBufferException(
-              e).setUnfinishedMessage(this);
-        } finally {
-          this.unknownFields = unknownFields.build();
-          makeExtensionsImmutable();
-        }
       }
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
@@ -42530,7 +41536,7 @@ public final class MetadataProto {
             internalGetSetFields(),
             SetFieldsDefaultEntryHolder.defaultEntry,
             50010);
-        unknownFields.writeTo(output);
+        getUnknownFields().writeTo(output);
       }
 
       @java.lang.Override
@@ -42583,7 +41589,7 @@ public final class MetadataProto {
           size += com.google.protobuf.CodedOutputStream
               .computeMessageSize(50010, setFields__);
         }
-        size += unknownFields.getSerializedSize();
+        size += getUnknownFields().getSerializedSize();
         memoizedSize = size;
         return size;
       }
@@ -42620,7 +41626,7 @@ public final class MetadataProto {
             .equals(other.getEnvironment())) return false;
         if (!internalGetSetFields().equals(
             other.internalGetSetFields())) return false;
-        if (!unknownFields.equals(other.unknownFields)) return false;
+        if (!getUnknownFields().equals(other.getUnknownFields())) return false;
         return true;
       }
 
@@ -42655,7 +41661,7 @@ public final class MetadataProto {
           hash = (37 * hash) + SET_FIELDS_FIELD_NUMBER;
           hash = (53 * hash) + internalGetSetFields().hashCode();
         }
-        hash = (29 * hash) + unknownFields.hashCode();
+        hash = (29 * hash) + getUnknownFields().hashCode();
         memoizedHashCode = hash;
         return hash;
       }
@@ -42794,18 +41800,13 @@ public final class MetadataProto {
 
         // Construct using com.acme.glup.MetadataProto.ControlMessage.Watermark.newBuilder()
         private Builder() {
-          maybeForceBuilderInitialization();
+
         }
 
         private Builder(
             com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
           super(parent);
-          maybeForceBuilderInitialization();
-        }
-        private void maybeForceBuilderInitialization() {
-          if (com.google.protobuf.GeneratedMessageV3
-                  .alwaysUseFieldBuilders) {
-          }
+
         }
         @java.lang.Override
         public Builder clear() {
@@ -42956,7 +41957,7 @@ public final class MetadataProto {
           }
           internalGetMutableSetFields().mergeFrom(
               other.internalGetSetFields());
-          this.mergeUnknownFields(other.unknownFields);
+          this.mergeUnknownFields(other.getUnknownFields());
           onChanged();
           return this;
         }
@@ -42971,17 +41972,88 @@ public final class MetadataProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws java.io.IOException {
-          com.acme.glup.MetadataProto.ControlMessage.Watermark parsedMessage = null;
+          if (extensionRegistry == null) {
+            throw new java.lang.NullPointerException();
+          }
           try {
-            parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+            boolean done = false;
+            while (!done) {
+              int tag = input.readTag();
+              switch (tag) {
+                case 0:
+                  done = true;
+                  break;
+                case 10: {
+                  type_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 10
+                case 18: {
+                  hostname_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 18
+                case 26: {
+                  kafkaTopic_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 26
+                case 32: {
+                  partition_ = input.readInt32();
+
+                  break;
+                } // case 32
+                case 40: {
+                  partitionCount_ = input.readInt32();
+
+                  break;
+                } // case 40
+                case 50: {
+                  processUuid_ = input.readBytes();
+
+                  break;
+                } // case 50
+                case 58: {
+                  region_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 58
+                case 64: {
+                  timestampSeconds_ = input.readInt32();
+
+                  break;
+                } // case 64
+                case 74: {
+                  cluster_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 74
+                case 82: {
+                  environment_ = input.readStringRequireUtf8();
+
+                  break;
+                } // case 82
+                case 400082: {
+                  com.google.protobuf.MapEntry<java.lang.Integer, java.lang.Boolean>
+                  setFields__ = input.readMessage(
+                      SetFieldsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+                  internalGetMutableSetFields().getMutableMap().put(
+                      setFields__.getKey(), setFields__.getValue());
+                  break;
+                } // case 400082
+                default: {
+                  if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                    done = true; // was an endgroup tag
+                  }
+                  break;
+                } // default:
+              } // switch (tag)
+            } // while (!done)
           } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-            parsedMessage = (com.acme.glup.MetadataProto.ControlMessage.Watermark) e.getUnfinishedMessage();
             throw e.unwrapIOException();
           } finally {
-            if (parsedMessage != null) {
-              mergeFrom(parsedMessage);
-            }
-          }
+            onChanged();
+          } // finally
           return this;
         }
         private int bitField0_;
@@ -43925,7 +42997,18 @@ public final class MetadataProto {
             com.google.protobuf.CodedInputStream input,
             com.google.protobuf.ExtensionRegistryLite extensionRegistry)
             throws com.google.protobuf.InvalidProtocolBufferException {
-          return new Watermark(input, extensionRegistry);
+          Builder builder = newBuilder();
+          try {
+            builder.mergeFrom(input, extensionRegistry);
+          } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+            throw e.setUnfinishedMessage(builder.buildPartial());
+          } catch (com.google.protobuf.UninitializedMessageException e) {
+            throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+          } catch (java.io.IOException e) {
+            throw new com.google.protobuf.InvalidProtocolBufferException(e)
+                .setUnfinishedMessage(builder.buildPartial());
+          }
+          return builder.buildPartial();
         }
       };
 
@@ -43988,7 +43071,7 @@ public final class MetadataProto {
       if (watermark_ != null) {
         output.writeMessage(1, getWatermark());
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -44001,7 +43084,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, getWatermark());
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -44021,7 +43104,7 @@ public final class MetadataProto {
         if (!getWatermark()
             .equals(other.getWatermark())) return false;
       }
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -44036,7 +43119,7 @@ public final class MetadataProto {
         hash = (37 * hash) + WATERMARK_FIELD_NUMBER;
         hash = (53 * hash) + getWatermark().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -44157,18 +43240,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.ControlMessage.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -44261,7 +43339,7 @@ public final class MetadataProto {
         if (other.hasWatermark()) {
           mergeWatermark(other.getWatermark());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -44276,17 +43354,37 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.ControlMessage parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 10: {
+                input.readMessage(
+                    getWatermarkFieldBuilder().getBuilder(),
+                    extensionRegistry);
+
+                break;
+              } // case 10
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.ControlMessage) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -44441,7 +43539,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new ControlMessage(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -44538,60 +43647,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private Partition(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-
-              timestampSeconds_ = input.readUInt64();
-              break;
-            }
-            case 16: {
-              int rawValue = input.readEnum();
-
-              hostPlatform_ = rawValue;
-              break;
-            }
-            case 24: {
-              int rawValue = input.readEnum();
-
-              eventType_ = rawValue;
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -44690,7 +43745,7 @@ public final class MetadataProto {
       if (eventType_ != com.acme.glup.MetadataProto.EventType.UNSUPPORTED_EVENT_TYPE.getNumber()) {
         output.writeEnum(3, eventType_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -44711,7 +43766,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeEnumSize(3, eventType_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -44730,7 +43785,7 @@ public final class MetadataProto {
           != other.getTimestampSeconds()) return false;
       if (hostPlatform_ != other.hostPlatform_) return false;
       if (eventType_ != other.eventType_) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -44748,7 +43803,7 @@ public final class MetadataProto {
       hash = (53 * hash) + hostPlatform_;
       hash = (37 * hash) + EVENT_TYPE_FIELD_NUMBER;
       hash = (53 * hash) + eventType_;
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -44870,18 +43925,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.Partition.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -44978,7 +44028,7 @@ public final class MetadataProto {
         if (other.eventType_ != 0) {
           setEventTypeValue(other.getEventTypeValue());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -44993,17 +44043,45 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.Partition parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                timestampSeconds_ = input.readUInt64();
+
+                break;
+              } // case 8
+              case 16: {
+                hostPlatform_ = input.readEnum();
+
+                break;
+              } // case 16
+              case 24: {
+                eventType_ = input.readEnum();
+
+                break;
+              } // case 24
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.Partition) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -45210,7 +44288,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Partition(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -45311,65 +44400,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private HDFSPartition(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 8: {
-
-              timestampSeconds_ = input.readUInt64();
-              break;
-            }
-            case 16: {
-              int rawValue = input.readEnum();
-
-              hostPlatform_ = rawValue;
-              break;
-            }
-            case 24: {
-              int rawValue = input.readEnum();
-
-              eventType_ = rawValue;
-              break;
-            }
-            case 32: {
-
-              depth_ = input.readInt32();
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -45480,7 +44510,7 @@ public final class MetadataProto {
       if (depth_ != 0) {
         output.writeInt32(4, depth_);
       }
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -45505,7 +44535,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(4, depth_);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -45526,7 +44556,7 @@ public final class MetadataProto {
       if (eventType_ != other.eventType_) return false;
       if (getDepth()
           != other.getDepth()) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -45546,7 +44576,7 @@ public final class MetadataProto {
       hash = (53 * hash) + eventType_;
       hash = (37 * hash) + DEPTH_FIELD_NUMBER;
       hash = (53 * hash) + getDepth();
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -45668,18 +44698,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.HDFSPartition.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -45782,7 +44807,7 @@ public final class MetadataProto {
         if (other.getDepth() != 0) {
           setDepth(other.getDepth());
         }
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -45797,17 +44822,50 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.HDFSPartition parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                timestampSeconds_ = input.readUInt64();
+
+                break;
+              } // case 8
+              case 16: {
+                hostPlatform_ = input.readEnum();
+
+                break;
+              } // case 16
+              case 24: {
+                eventType_ = input.readEnum();
+
+                break;
+              } // case 24
+              case 32: {
+                depth_ = input.readInt32();
+
+                break;
+              } // case 32
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.HDFSPartition) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
 
@@ -46043,7 +45101,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new HDFSPartition(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
@@ -46171,67 +45240,6 @@ public final class MetadataProto {
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
       return this.unknownFields;
-    }
-    private Hash128(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      if (extensionRegistry == null) {
-        throw new java.lang.NullPointerException();
-      }
-      int mutable_bitField0_ = 0;
-      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
-          com.google.protobuf.UnknownFieldSet.newBuilder();
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            case 9: {
-
-              mostSigBits_ = input.readFixed64();
-              break;
-            }
-            case 17: {
-
-              leastSigBits_ = input.readFixed64();
-              break;
-            }
-            case 400082: {
-              if (!((mutable_bitField0_ & 0x00000001) != 0)) {
-                setFields_ = com.google.protobuf.MapField.newMapField(
-                    SetFieldsDefaultEntryHolder.defaultEntry);
-                mutable_bitField0_ |= 0x00000001;
-              }
-              com.google.protobuf.MapEntry<java.lang.Integer, java.lang.Boolean>
-              setFields__ = input.readMessage(
-                  SetFieldsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
-              setFields_.getMutableMap().put(
-                  setFields__.getKey(), setFields__.getValue());
-              break;
-            }
-            default: {
-              if (!parseUnknownField(
-                  input, unknownFields, extensionRegistry, tag)) {
-                done = true;
-              }
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        this.unknownFields = unknownFields.build();
-        makeExtensionsImmutable();
-      }
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
@@ -46411,7 +45419,7 @@ public final class MetadataProto {
           internalGetSetFields(),
           SetFieldsDefaultEntryHolder.defaultEntry,
           50010);
-      unknownFields.writeTo(output);
+      getUnknownFields().writeTo(output);
     }
 
     @java.lang.Override
@@ -46438,7 +45446,7 @@ public final class MetadataProto {
         size += com.google.protobuf.CodedOutputStream
             .computeMessageSize(50010, setFields__);
       }
-      size += unknownFields.getSerializedSize();
+      size += getUnknownFields().getSerializedSize();
       memoizedSize = size;
       return size;
     }
@@ -46459,7 +45467,7 @@ public final class MetadataProto {
           != other.getLeastSigBits()) return false;
       if (!internalGetSetFields().equals(
           other.internalGetSetFields())) return false;
-      if (!unknownFields.equals(other.unknownFields)) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
 
@@ -46480,7 +45488,7 @@ public final class MetadataProto {
         hash = (37 * hash) + SET_FIELDS_FIELD_NUMBER;
         hash = (53 * hash) + internalGetSetFields().hashCode();
       }
-      hash = (29 * hash) + unknownFields.hashCode();
+      hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
     }
@@ -46623,18 +45631,13 @@ public final class MetadataProto {
 
       // Construct using com.acme.glup.MetadataProto.Hash128.newBuilder()
       private Builder() {
-        maybeForceBuilderInitialization();
+
       }
 
       private Builder(
           com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
+
       }
       @java.lang.Override
       public Builder clear() {
@@ -46731,7 +45734,7 @@ public final class MetadataProto {
         }
         internalGetMutableSetFields().mergeFrom(
             other.internalGetSetFields());
-        this.mergeUnknownFields(other.unknownFields);
+        this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
       }
@@ -46746,17 +45749,48 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        com.acme.glup.MetadataProto.Hash128 parsedMessage = null;
+        if (extensionRegistry == null) {
+          throw new java.lang.NullPointerException();
+        }
         try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 9: {
+                mostSigBits_ = input.readFixed64();
+
+                break;
+              } // case 9
+              case 17: {
+                leastSigBits_ = input.readFixed64();
+
+                break;
+              } // case 17
+              case 400082: {
+                com.google.protobuf.MapEntry<java.lang.Integer, java.lang.Boolean>
+                setFields__ = input.readMessage(
+                    SetFieldsDefaultEntryHolder.defaultEntry.getParserForType(), extensionRegistry);
+                internalGetMutableSetFields().getMutableMap().put(
+                    setFields__.getKey(), setFields__.getValue());
+                break;
+              } // case 400082
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (com.acme.glup.MetadataProto.Hash128) e.getUnfinishedMessage();
           throw e.unwrapIOException();
         } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
+          onChanged();
+        } // finally
         return this;
       }
       private int bitField0_;
@@ -47035,7 +46069,18 @@ public final class MetadataProto {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Hash128(input, extensionRegistry);
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
       }
     };
 
