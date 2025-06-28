@@ -19,8 +19,10 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -33,14 +35,14 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
@@ -80,7 +82,7 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
     int i = 0;
     while (i < numMessages) {
-      ConsumerRecords<String, Object> records = consumer.poll(1000);
+      ConsumerRecords<String, Object> records = consumer.poll(Duration.ofMillis(1000));
       for (ConsumerRecord<String, Object> record : records) {
         recordList.add(record.value());
         i++;
@@ -212,6 +214,32 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
     int id = client.register("test-value", avroSchema);
     Collection<SubjectVersion> versions = client.getAllVersionsById(id);
     assertEquals(new SubjectVersion("test-value", 1), versions.iterator().next());
+  }
+
+  @Test
+  public void testGetAllContexts() throws Exception {
+    AvroSchema avroSchema = new AvroSchema("{\"type\":\"record\",\"name\":\"ts1\","
+        + "\"fields\":[{\"name\": \"fld1\",\"type\": \"int\"}]}");
+    MockSchemaRegistryClient client =
+        new MockSchemaRegistryClient(Collections.singletonList(new AvroSchemaProvider()));
+    int id = client.register(":.context2:test-value", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register(":.context1:test-value", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register(":.context1:test-value2", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register("test-value", avroSchema);
+    id = client.register("test-value", avroSchema);
+    assertEquals(1, id);
+
+    Collection<String> contexts = client.getAllContexts();
+    Iterator<String> iter = contexts.iterator();
+    assertEquals(".", iter.next());
+    assertEquals(".context1", iter.next());
+    assertEquals(".context2", iter.next());
   }
 }
 

@@ -15,8 +15,8 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -29,7 +29,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RestApiContextTest extends ClusterTestHarness {
 
@@ -63,20 +63,26 @@ public class RestApiContextTest extends ClusterTestHarness {
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
 
     // test getAllContexts
-    assertEquals("Getting all subjects should return default context",
+    assertEquals(
         Collections.singletonList(DEFAULT_CONTEXT),
-        restApp.restClient.getAllContexts());
+        restApp.restClient.getAllContexts(),
+        "Getting all subjects should return default context"
+    );
 
     // test getAllSubjects with no existing data
-    assertEquals("Getting all subjects should return empty",
-                 Collections.emptyList(),
-                 restApp.restClient.getAllSubjects());
+    assertEquals(
+        Collections.emptyList(),
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should return empty"
+    );
 
     // test registering and verifying new schemas in subject1
     int schemaIdCounter = 1;
@@ -94,8 +100,10 @@ public class RestApiContextTest extends ClusterTestHarness {
       int expectedId = i + 1;
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = restApp.restClient.registerSchema(schemaString, subject1);
-      assertEquals("Re-registering an existing schema should return the existing version",
-                   expectedId, foundId);
+      assertEquals(
+          expectedId, foundId,
+          "Re-registering an existing schema should return the existing version"
+      );
     }
 
     // reset the schema id counter due to a different context
@@ -138,62 +146,86 @@ public class RestApiContextTest extends ClusterTestHarness {
     }
 
     // test getAllVersions with existing data
-    assertEquals("Getting all versions from subject1 should match all registered versions",
-                 allVersionsInSubject1,
-                 restApp.restClient.getAllVersions(subject1));
-    assertEquals("Getting all versions from subject2 should match all registered versions",
-                 allVersionsInSubject2,
-                 restApp.restClient.getAllVersions(subject2));
+    assertEquals(
+        allVersionsInSubject1,
+        restApp.restClient.getAllVersions(subject1),
+        "Getting all versions from subject1 should match all registered versions"
+    );
+    assertEquals(
+        allVersionsInSubject2,
+        restApp.restClient.getAllVersions(subject2),
+        "Getting all versions from subject2 should match all registered versions"
+    );
 
     // test getAllContexts
-    assertEquals("Getting all contexts should return all registered contexts",
-                 ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2", ".ctx3"),
-                 restApp.restClient.getAllContexts());
+    assertEquals(
+        ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2", ".ctx3"),
+        restApp.restClient.getAllContexts(),
+        "Getting all contexts should return all registered contexts"
+    );
 
     // test getAllSubjectsWithPrefix with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
-                 Collections.singletonList(subject1),
-                restApp.restClient.getAllSubjects(":.ctx1:", false));
+    assertEquals(
+        Collections.singletonList(subject1),
+        restApp.restClient.getAllSubjects(":.ctx1:", false),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // test getAllSubjectsWithPrefix with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
-                 Collections.singletonList(subject2),
-                 restApp.restClient.getAllSubjects(":.ctx2:", false));
+    assertEquals(
+        Collections.singletonList(subject2),
+        restApp.restClient.getAllSubjects(":.ctx2:", false),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match default subjects",
-                 Collections.singletonList(subject4),
-                 restApp.restClient.getAllSubjects("", false));
+    assertEquals(
+        Collections.singletonList(subject4),
+        restApp.restClient.getAllSubjects("", false),
+        "Getting all subjects should match default subjects"
+    );
 
     // test getAllSubjectsWithPrefix with context wildcard
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         ImmutableList.of(subject1, subject2, subject3, subject4),
-        restApp.restClient.getAllSubjects(":*:", false));
+        restApp.restClient.getAllSubjects(":*:", false),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // test getSchemas with context wildcard
-    assertEquals("Getting all schemas should match all registered subjects",
+    assertEquals(
         schemasInSubject1 + schemasInSubject2 + schemasInSubject3 + schemasInSubject4,
-        restApp.restClient.getSchemas(":*:", false, false).size());
+        restApp.restClient.getSchemas(":*:", false, false).size(),
+        "Getting all schemas should match all registered subjects"
+    );
 
     // test getSchemas with context wildcard and subject
-    assertEquals("Getting all schemas should match registered subjects",
+    assertEquals(
         schemasInSubject1 + schemasInSubject3 + schemasInSubject4,
-        restApp.restClient.getSchemas(":*:testTopic1", false, false).size());
+        restApp.restClient.getSchemas(":*:testTopic1", false, false).size(),
+        "Getting all schemas should match registered subjects"
+    );
 
     // test getSchemas with context wildcard and subject
-    assertEquals("Getting all schemas should match registered subjects",
+    assertEquals(
         schemasInSubject2,
-        restApp.restClient.getSchemas(":*:testTopic2", false, false).size());
+        restApp.restClient.getSchemas(":*:testTopic2", false, false).size(),
+        "Getting all schemas should match registered subjects"
+    );
 
     Schema schema = restApp.restClient.getVersion("testTopic2", 1);
-    assertEquals("Getting schema by version w/o context should succeed",
+    assertEquals(
         1,
-        schema.getVersion().intValue());
+        schema.getVersion().intValue(),
+        "Getting schema by version w/o context should succeed"
+    );
 
     schema = restApp.restClient.lookUpSubjectVersion(schema.getSchema(), "testTopic2");
-    assertEquals("Getting schema by schema w/o context should succeed",
+    assertEquals(
         1,
-        schema.getVersion().intValue());
+        schema.getVersion().intValue(),
+        "Getting schema by schema w/o context should succeed"
+    );
   }
 
   @Test
@@ -225,9 +257,11 @@ public class RestApiContextTest extends ClusterTestHarness {
           + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
           + " (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
+      assertEquals(
           Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
 
     // test registering and verifying new schemas in subject1
@@ -246,8 +280,10 @@ public class RestApiContextTest extends ClusterTestHarness {
       int expectedId = i + 1;
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = restClient1.registerSchema(schemaString, subject1);
-      assertEquals("Re-registering an existing schema should return the existing version",
-          expectedId, foundId);
+      assertEquals(
+          expectedId, foundId,
+          "Re-registering an existing schema should return the existing version"
+      );
     }
 
     // reset the schema id counter due to a different context
@@ -274,9 +310,11 @@ public class RestApiContextTest extends ClusterTestHarness {
       restClient3.getId(schemaIdCounter);
       fail("Registered schema should not be found in default context");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing schema",
+      assertEquals(
           Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing schema"
+      );
     }
 
     // test registering schemas in subject3
@@ -290,71 +328,136 @@ public class RestApiContextTest extends ClusterTestHarness {
     }
 
     // test getAllVersions with existing data
-    assertEquals("Getting all versions from subject1 should match all registered versions",
+    assertEquals(
         allVersionsInSubject1,
-        restClient1.getAllVersions(subject1));
-    assertEquals("Getting all versions from subject2A should match all registered versions",
+        restClient1.getAllVersions(subject1),
+        "Getting all versions from subject1 should match all registered versions"
+    );
+    assertEquals(
         allVersionsInSubject2,
-        restClient2.getAllVersions(subject2A));
-    assertEquals("Getting all versions from subject3 should match all registered versions",
+        restClient2.getAllVersions(subject2A),
+        "Getting all versions from subject2A should match all registered versions"
+    );
+    assertEquals(
         allVersionsInSubject3,
-        restClient3.getAllVersions(subject3));
-    assertEquals("Getting all versions from subject3 should match all registered versions",
+        restClient3.getAllVersions(subject3),
+        "Getting all versions from subject3 should match all registered versions"
+    );
+    assertEquals(
         allVersionsInSubject3,
-        noCtxRestClient3.getAllVersions(subject3));
-    assertEquals("Getting all versions from subject3 should match all registered versions",
+        noCtxRestClient3.getAllVersions(subject3),
+        "Getting all versions from subject3 should match all registered versions"
+    );
+    assertEquals(
         allVersionsInSubject3,
-        noCtxRestClient3.getAllVersions(":.:" + subject3));
+        noCtxRestClient3.getAllVersions(":.:" + subject3),
+        "Getting all versions from subject3 should match all registered versions"
+    );
 
     // test getAllContexts
-    assertEquals("Getting all contexts should return all registered contexts",
+    assertEquals(
         ImmutableList.of(DEFAULT_CONTEXT, ".ctx1", ".ctx2"),
-        restClient1.getAllContexts());
+        restClient1.getAllContexts(),
+        "Getting all contexts should return all registered contexts"
+    );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         Collections.singletonList(":.ctx1:" + subject1),
-        restClient1.getAllSubjects());
+        restClient1.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         ImmutableList.of(":.ctx2:" + subject2A, ":.ctx2:" + subject2B, ":.ctx2:" + subject2C),
-        restClient2.getAllSubjects());
+        restClient2.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         Collections.singletonList(subject3),
-        restClient3.getAllSubjects());
+        restClient3.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         Collections.singletonList(subject3),
-        noCtxRestClient3.getAllSubjects("", false));
+        noCtxRestClient3.getAllSubjects("", false),
+        "Getting all subjects should match all registered subjects"
+    );
 
     // Now ask for schema id 1 from subject3.
     // This should return schema id 1 from the default context
-    assertEquals("Registered schema should be found",
+    assertEquals(
         allSchemasInSubject3.get(0),
-        noCtxRestClient3.getId(1, subject3).getSchemaString());
+        noCtxRestClient3.getId(1, subject3).getSchemaString(),
+        "Registered schema should be found"
+    );
 
     // Now ask for schema id 1 from subject2A.
     // This should NOT return schema id 1 from the default context
-    assertEquals("Registered schema should be found",
+    assertEquals(
         allSchemasInSubject2.get(0),
-        noCtxRestClient3.getId(1, subject2A).getSchemaString());
+        noCtxRestClient3.getId(1, subject2A).getSchemaString(),
+        "Registered schema should be found"
+    );
+
+    // Delete subject1
+    restClient1.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, false);
+    restClient1.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, true);
+
+    try {
+      restClient1.getAllVersions(subject1);
+      fail("Getting all versions from non-existing subject1 should fail with "
+          + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
+          + " (subject not found)");
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
+    }
+
+    try {
+      noCtxRestClient3.deleteContext(RestService.DEFAULT_REQUEST_PROPERTIES, ".ctx2");
+      fail("Deleting context .ctx2 should fail with "
+          + Errors.CONTEXT_NOT_EMPTY_ERROR_CODE
+          + " (context not empty)");
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.CONTEXT_NOT_EMPTY_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 422 status for non-empty context"
+      );
+    }
+
+    noCtxRestClient3.deleteContext(RestService.DEFAULT_REQUEST_PROPERTIES, ".ctx1");
+
+    List<String> contexts = restClient1.getAllContexts();
+    assertEquals(
+        ImmutableList.of(DEFAULT_CONTEXT, ".ctx2"),
+        contexts,
+        "Getting all contexts should return all registered contexts after subject1 deletion"
+    );
   }
 
   static void registerAndVerifySchema(RestService restService, String schemaString,
       int expectedId, String subject)
       throws IOException, RestClientException {
     int registeredId = restService.registerSchema(schemaString, subject);
-    assertEquals("Registering a new schema should succeed", expectedId, registeredId);
+    assertEquals(expectedId, registeredId, "Registering a new schema should succeed");
 
     // the newly registered schema should be immediately readable on the leader
     // Note: this differs from TestUtils in that it passes the subject to getId()
-    assertEquals("Registered schema should be found",
+    assertEquals(
         schemaString,
-        restService.getId(expectedId, subject).getSchemaString());
+        restService.getId(expectedId, subject).getSchemaString(),
+        "Registered schema should be found"
+    );
   }
 }
 

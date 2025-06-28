@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
@@ -119,7 +120,11 @@ public class DataEncryptionKeyId extends EncryptionKeyId {
     } else if (that.getSubject() == null) {
       return 1;
     } else {
-      int subjectComparison = this.getSubject().compareTo(that.getSubject());
+      QualifiedSubject qs1 = QualifiedSubject.createFromUnqualified(
+          this.getTenant(), this.getSubject());
+      QualifiedSubject qs2 = QualifiedSubject.createFromUnqualified(
+          that.getTenant(), that.getSubject());
+      int subjectComparison = qs1.compareTo(qs2);
       if (subjectComparison != 0) {
         return subjectComparison < 0 ? -1 : 1;
       }

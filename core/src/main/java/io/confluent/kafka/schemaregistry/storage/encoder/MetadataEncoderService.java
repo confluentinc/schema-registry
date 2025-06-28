@@ -26,6 +26,7 @@ import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.proto.AesGcmKey;
 import com.google.crypto.tink.subtle.Hkdf;
 import com.google.protobuf.ByteString;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.MD5;
@@ -123,6 +124,11 @@ public class MetadataEncoderService implements Closeable {
 
   public KafkaSchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
+  }
+
+  @VisibleForTesting
+  public Cache<String, KeysetWrapper> getEncoders() {
+    return encoders;
   }
 
   protected static Aead getPrimitive(String secret) throws GeneralSecurityException {
@@ -246,26 +252,37 @@ public class MetadataEncoderService implements Closeable {
     initLatch.await();
   }
 
+  @VisibleForTesting
   public KeysetHandle getEncoder(String tenant) {
     if (encoders == null) {
       return null;
     }
     KeysetWrapper wrapper = encoders.get(tenant);
+    if (wrapper == null) {
+      // Ensure encoders are up to date
+      encoders.sync();
+      wrapper = encoders.get(tenant);
+    }
     return wrapper != null ? wrapper.getKeysetHandle() : null;
   }
 
-  public void encodeMetadata(SchemaValue schema) {
+  public void encodeMetadata(SchemaValue schema) throws SchemaRegistryStoreException {
     if (!initialized.get() || schema == null || isEncoded(schema)) {
       return;
     }
-    transformMetadata(schema, true, (aead, value) -> {
-      try {
-        byte[] ciphertext = aead.encrypt(value.getBytes(StandardCharsets.UTF_8), EMPTY_AAD);
-        return Base64.getEncoder().encodeToString(ciphertext);
-      } catch (GeneralSecurityException e) {
-        throw new IllegalStateException("Could not encrypt sensitive metadata", e);
-      }
-    });
+    try {
+      transformMetadata(schema, true, (aead, value) -> {
+        try {
+          byte[] ciphertext = aead.encrypt(value.getBytes(StandardCharsets.UTF_8), EMPTY_AAD);
+          return Base64.getEncoder().encodeToString(ciphertext);
+        } catch (GeneralSecurityException e) {
+          throw new IllegalStateException("Could not encrypt sensitive metadata", e);
+        }
+      });
+    } catch (IllegalStateException e) {
+      throw new SchemaRegistryStoreException(
+          "Could not encrypt metadata for schema id " + schema.getId(), e);
+    }
   }
 
   private boolean isEncoded(SchemaValue schema) {
@@ -277,22 +294,28 @@ public class MetadataEncoderService implements Closeable {
     return schema.getMetadata().getProperties().containsKey(SchemaValue.ENCODED_PROPERTY);
   }
 
-  public void decodeMetadata(SchemaValue schema) {
+  public void decodeMetadata(SchemaValue schema) throws SchemaRegistryStoreException {
     if (!initialized.get() || schema == null || !isEncoded(schema)) {
       return;
     }
-    transformMetadata(schema, false, (aead, value) -> {
-      try {
-        byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(value), EMPTY_AAD);
-        return new String(plaintext, StandardCharsets.UTF_8);
-      } catch (GeneralSecurityException e) {
-        throw new IllegalStateException("Could not encrypt sensitive metadata", e);
-      }
-    });
+    try {
+      transformMetadata(schema, false, (aead, value) -> {
+        try {
+          byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(value), EMPTY_AAD);
+          return new String(plaintext, StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException e) {
+          throw new IllegalStateException("Could not decrypt sensitive metadata", e);
+        }
+      });
+    } catch (IllegalStateException e) {
+      throw new SchemaRegistryStoreException(
+          "Could not decrypt metadata for schema id " + schema.getId(), e);
+    }
   }
 
   private void transformMetadata(
-      SchemaValue schema, boolean isEncode, BiFunction<Aead, String, String> func) {
+      SchemaValue schema, boolean isEncode, BiFunction<Aead, String, String> func)
+      throws SchemaRegistryStoreException {
     Metadata metadata = schema.getMetadata();
     if (metadata == null
         || metadata.getProperties() == null
@@ -309,7 +332,11 @@ public class MetadataEncoderService implements Closeable {
       QualifiedSubject qualifiedSubject = QualifiedSubject.create(schemaRegistry.tenant(), subject);
       String tenant = qualifiedSubject.getTenant();
 
-      KeysetHandle handle = getOrCreateEncoder(tenant);
+      // Only create the encoder if we are encoding during writes and not decoding during reads
+      KeysetHandle handle = isEncode ? getOrCreateEncoder(tenant) : getEncoder(tenant);
+      if (handle == null) {
+        throw new SchemaRegistryStoreException("Could not get encoder for tenant " + tenant);
+      }
       Aead aead = handle.getPrimitive(Aead.class);
 
       SortedMap<String, String> newProperties = metadata.getProperties().entrySet().stream()
@@ -335,11 +362,13 @@ public class MetadataEncoderService implements Closeable {
       schema.setMetadata(
           new Metadata(metadata.getTags(), newProperties, metadata.getSensitive()));
     } catch (GeneralSecurityException e) {
-      throw new IllegalStateException("Could not encrypt sensitive metadata", e);
+      throw new SchemaRegistryStoreException("Could not transform schema id " + schema.getId(), e);
     }
   }
 
   private KeysetHandle getOrCreateEncoder(String tenant) {
+    // Ensure encoders are up to date
+    encoders.sync();
     KeysetWrapper wrapper = encoders.computeIfAbsent(tenant,
         k -> {
           try {

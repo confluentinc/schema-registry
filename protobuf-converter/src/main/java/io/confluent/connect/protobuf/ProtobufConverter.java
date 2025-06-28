@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
@@ -110,10 +111,18 @@ public class ProtobufConverter implements Converter {
           topic
       ), e);
     } catch (SerializationException e) {
-      throw new DataException(String.format(
-          "Failed to serialize Protobuf data from topic %s :",
-          topic
-      ), e);
+      if (e.getCause() instanceof java.io.IOException) {
+        throw new ConnectException(
+            String.format("I/O error while serializing Protobuf data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(String.format(
+            "Failed to serialize Protobuf data from topic %s:",
+            topic
+        ), e);
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
@@ -151,10 +160,18 @@ public class ProtobufConverter implements Converter {
           topic
       ), e);
     } catch (SerializationException e) {
-      throw new DataException(String.format(
-          "Failed to deserialize data for topic %s to Protobuf: ",
-          topic
-      ), e);
+      if (e.getCause() instanceof java.io.IOException) {
+        throw new ConnectException(
+            String.format("I/O error while deserializing data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(String.format(
+            "Failed to deserialize data for topic %s to Protobuf:",
+            topic
+        ), e);
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())

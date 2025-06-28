@@ -16,15 +16,18 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.BACKWARD;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD;
+import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD_TRANSITIVE;
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
+import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -34,6 +37,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -45,12 +49,17 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -65,7 +74,7 @@ import java.util.Objects;
 import java.util.Properties;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -92,20 +101,40 @@ public class RestApiTest extends ClusterTestHarness {
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
 
     // test getAllContexts
-    assertEquals("Getting all subjects should return default context",
+    assertEquals(
         Collections.singletonList(DEFAULT_CONTEXT),
-        restApp.restClient.getAllContexts());
+        restApp.restClient.getAllContexts(),
+        "Getting all subjects should return default context"
+    );
+
+    // test getAllContextsWithPagination limit=1 offset=0
+    assertEquals(
+        Collections.singletonList(DEFAULT_CONTEXT),
+        restApp.restClient.getAllContextsWithPagination(1, 0),
+        "Getting all subjects should return default context"
+    );
+
+    // test getAllContextsWithPagination limit=1 offset=0
+    assertEquals(
+        Collections.emptyList(),
+        restApp.restClient.getAllContextsWithPagination(1, 1),
+        "Getting all subjects should return default context"
+    );
 
     // test getAllSubjects with no existing data
-    assertEquals("Getting all subjects should return empty",
-                 allSubjects,
-                 restApp.restClient.getAllSubjects());
+    assertEquals(
+        allSubjects,
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should return empty"
+    );
 
     // test registering and verifying new schemas in subject1
     int schemaIdCounter = 1;
@@ -124,8 +153,10 @@ public class RestApiTest extends ClusterTestHarness {
       int expectedId = i + 1;
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = restApp.restClient.registerSchema(schemaString, subject1);
-      assertEquals("Re-registering an existing schema should return the existing version",
-                   expectedId, foundId);
+      assertEquals(
+          expectedId, foundId,
+          "Re-registering an existing schema should return the existing version"
+      );
     }
 
     // test registering schemas in subject2
@@ -140,24 +171,61 @@ public class RestApiTest extends ClusterTestHarness {
     allSubjects.add(subject2);
 
     // test getAllVersions with existing data
-    assertEquals("Getting all versions from subject1 should match all registered versions",
-                 allVersionsInSubject1,
-                 restApp.restClient.getAllVersions(subject1));
-    assertEquals("Getting all versions from subject2 should match all registered versions",
-                 allVersionsInSubject2,
-                 restApp.restClient.getAllVersions(subject2));
+    assertEquals(
+        allVersionsInSubject1,
+        restApp.restClient.getAllVersions(subject1),
+        "Getting all versions from subject1 should match all registered versions"
+    );
+    assertEquals(
+        allVersionsInSubject2,
+        restApp.restClient.getAllVersions(subject2),
+        "Getting all versions from subject2 should match all registered versions"
+    );
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
-                 allSubjects,
-                 restApp.restClient.getAllSubjects());
+    assertEquals(
+        allSubjects,
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
+    );
+
+    // test pagination with limit of 1
+    assertEquals(
+        ImmutableList.of(allSubjects.get(0)),
+        restApp.restClient.getAllSubjectsWithPagination(0, 1),
+        "Getting all subjects with pagination offset=0, limit=1 should return first registered subject"
+    );
+    assertEquals(
+        ImmutableList.of(allSubjects.get(1)),
+        restApp.restClient.getAllSubjectsWithPagination(1, 1),
+        "Getting all subjects with pagination offset=1, limit=1 should return second registered subject"
+    );
 
     List<Schema> latestSchemas = restApp.restClient.getSchemas(null, false, true);
-    assertEquals("Getting latest schemas should return two schemas",
-                 2,
-                 latestSchemas.size());
+    assertEquals(
+        2,
+        latestSchemas.size(),
+        "Getting latest schemas should return two schemas"
+    );
     assertEquals(Integer.valueOf(10), latestSchemas.get(0).getVersion());
     assertEquals(Integer.valueOf(5), latestSchemas.get(1).getVersion());
+
+    SchemaString schemaString = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, null, null, false);
+    assertNotNull(schemaString.getTimestamp());
+    assertFalse(schemaString.getDeleted());
+
+    SchemaString schemaString2 = restApp.restClient.getByGuid(
+        RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid(), null);
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
+    assertNotNull(schemaString.getTimestamp());
+    assertFalse(schemaString.getDeleted());
+
+    List<ContextId> contextId = restApp.restClient.getAllContextIds(
+        RestService.DEFAULT_REQUEST_PROPERTIES, schemaString.getGuid());
+    assertEquals(1, contextId.size());
+    assertEquals(DEFAULT_CONTEXT, contextId.get(0).getContext());
+    assertEquals(1, contextId.get(0).getId());
   }
 
   @Test
@@ -165,8 +233,10 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     int id1 = restApp.restClient.registerSchema(schema, "subject1");
     int id2 = restApp.restClient.registerSchema(schema, "subject2");
-    assertEquals("Registering the same schema under different subjects should return the same id",
-                 id1, id2);
+    assertEquals(
+        id1, id2,
+        "Registering the same schema under different subjects should return the same id"
+    );
   }
 
   @Test
@@ -186,7 +256,7 @@ public class RestApiTest extends ClusterTestHarness {
           + Errors.INVALID_SCHEMA_ERROR_CODE
           + " (invalid schema)");
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
 
     try {
@@ -195,7 +265,7 @@ public class RestApiTest extends ClusterTestHarness {
           + Errors.INVALID_SCHEMA_ERROR_CODE
           + " (invalid schema)");
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
   }
 
@@ -223,8 +293,8 @@ public class RestApiTest extends ClusterTestHarness {
                 + Errors.INVALID_SCHEMA_ERROR_CODE
                 + " (invalid schema)");
     } catch (RestClientException rce) {
-        assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
-        assertTrue("Verify error message verbosity", rce.getMessage().contains(expectedErrorMessage));
+        assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+        assertTrue(rce.getMessage().contains(expectedErrorMessage), "Verify error message verbosity");
     }
   }
 
@@ -246,7 +316,39 @@ public class RestApiTest extends ClusterTestHarness {
               + Errors.INVALID_SCHEMA_ERROR_CODE
               + " (invalid schema)");
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testRegisterBadReferenceInContext() throws Exception {
+    List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    String subject = "testSubject";
+    String avroSchema = avroSchemas.get(0);
+
+    int id1 = restApp.restClient.registerSchema(avroSchema, subject);
+    assertEquals(1, id1, "1st schema registered in first context should have id 1");
+
+    // Create another context so that lookup will search it
+    String subject2 = ":.ctx:testFoo";
+    String avroSchema2 = avroSchemas.get(1);
+
+    int id2 = restApp.restClient.registerSchema(avroSchema2, subject2);
+    assertEquals(1, id2, "2nd schema registered in second context should have id 1");
+
+    SchemaReference reference = new SchemaReference("testSubject", "testSubject", 1);
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"somerecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    try {
+      restApp.restClient.lookUpSubjectVersion(schemaString, "AVRO",
+          Collections.singletonList(reference), subject, false);
+      fail(String.format("Subject %s should not be found", subject));
+    } catch (RestClientException rce) {
+      assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
   }
 
@@ -260,22 +362,19 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.updateCompatibility(NONE.name, subject);
 
     int id1 = restApp.restClient.registerSchema(avroSchema, subject);
-    assertEquals("1st schema registered globally should have id 1", 1,
-        id1);
+    assertEquals(1, id1, "1st schema registered globally should have id 1");
 
     boolean isCompatible = restApp.restClient.testCompatibility(jsonSchema, "JSON", null, subject, "latest", false).isEmpty();
-    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+    assertTrue(isCompatible, "Different schema type is allowed when compatibility is NONE");
 
     int id2 = restApp.restClient.registerSchema(jsonSchema, "JSON", null, subject).getId();
-    assertEquals("2nd schema registered globally should have id 2", 2,
-        id2);
+    assertEquals(2, id2, "2nd schema registered globally should have id 2");
 
     isCompatible = restApp.restClient.testCompatibility(protobufSchema, "PROTOBUF", null, subject, "latest", false).isEmpty();
-    assertTrue("Different schema type is allowed when compatibility is NONE", isCompatible);
+    assertTrue(isCompatible, "Different schema type is allowed when compatibility is NONE");
 
     int id3 = restApp.restClient.registerSchema(protobufSchema, "PROTOBUF", null, subject).getId();
-    assertEquals("3rd schema registered globally should have id 3", 3,
-        id3);
+    assertEquals(3, id3, "3rd schema registered globally should have id 3");
   }
 
   @Test
@@ -286,15 +385,13 @@ public class RestApiTest extends ClusterTestHarness {
     String avroSchema = avroSchemas.get(0);
 
     int id1 = restApp.restClient.registerSchema(avroSchema, subject);
-    assertEquals("1st schema registered in first context should have id 1", 1,
-        id1);
+    assertEquals(1, id1, "1st schema registered in first context should have id 1");
 
     String subject2 = ":.ctx:testSubject";
     String avroSchema2 = avroSchemas.get(1);
 
     int id2 = restApp.restClient.registerSchema(avroSchema2, subject2);
-    assertEquals("2nd schema registered in second context should have id 1", 1,
-        id2);
+    assertEquals(1, id2, "2nd schema registered in second context should have id 1");
 
     List<String> subjects = restApp.restClient.getAllSubjects("", false);
     assertEquals(Collections.singletonList(subject), subjects);
@@ -307,6 +404,16 @@ public class RestApiTest extends ClusterTestHarness {
 
     List<Schema> schemas2 = restApp.restClient.getSchemas(":.ctx:", false, false);
     assertEquals(avroSchema2, schemas2.get(0).getSchema());
+
+    int id3 = restApp.restClient.registerSchema(avroSchema, subject2);
+    assertEquals(2, id3, "3nd schema registered in second context should have id 2");
+
+    SchemaString schemaString = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, subject, null, null, false);
+    SchemaString schemaString2 = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 2, subject2, null, null, false);
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
+    assertNotNull(schemaString.getTimestamp());
   }
 
   @Test
@@ -330,8 +437,10 @@ public class RestApiTest extends ClusterTestHarness {
       int id2 = restApp.restClient.registerSchema(schema2, "subject1", 2, 1);
       fail(String.format("Schema2 is registered with id %s, should receive error here", id2));
     } catch (RestClientException e) {
-      assertEquals("Overwrite schema for the same ID is not permitted.",
-          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+      assertEquals(
+          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode(),
+          "Overwrite schema for the same ID is not permitted."
+      );
     }
 
     try {
@@ -340,9 +449,28 @@ public class RestApiTest extends ClusterTestHarness {
       int id2 = restApp.restClient.registerSchema(schema2, "subject2", 1, 1);
       fail(String.format("Schema2 is registered with id %s, should receive error here", id2));
     } catch (RestClientException e) {
-      assertEquals("Overwrite schema for the same ID is not permitted.",
-          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode());
+      assertEquals(
+          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, e.getErrorCode(),
+          "Overwrite schema for the same ID is not permitted."
+      );
     }
+  }
+
+  @Test
+  public void testImportSameSchemaDifferentVersion() throws Exception {
+    String schema = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\"}]}";
+
+    restApp.restClient.setMode("IMPORT");
+
+    int id1 = restApp.restClient.registerSchema(schema, "subject1", 1, 1);
+    assertEquals(1, id1);
+    id1 = restApp.restClient.registerSchema(schema, "subject1", 2, 1);
+    assertEquals(1, id1);
+    id1 = restApp.restClient.registerSchema(schema, "subject1", 1, 1);
+    assertEquals(1, id1);
   }
 
   @Test
@@ -361,7 +489,7 @@ public class RestApiTest extends ClusterTestHarness {
     String schema1 = allSchemas.get(0);
     boolean isCompatible =
         restApp.restClient.testCompatibility(schema1, subject, "latest").isEmpty();
-    assertTrue("First schema registered should be compatible", isCompatible);
+    assertTrue(isCompatible, "First schema registered should be compatible");
 
     for (int i = 0; i < numSchemas; i++) {
       // Test that compatibility check doesn't change the number of versions
@@ -403,7 +531,7 @@ public class RestApiTest extends ClusterTestHarness {
                                                                 String.valueOf(
                                                                     versionOfRegisteredSchema))
                                               .isEmpty();
-    assertFalse("Schema should be incompatible with specified version", isCompatible);
+    assertFalse(isCompatible, "Schema should be incompatible with specified version");
   }
 
   @Test
@@ -435,20 +563,41 @@ public class RestApiTest extends ClusterTestHarness {
 
     //schema3 is compatible with schema2, but not compatible with schema1
     boolean isCompatible = restApp.restClient.testCompatibility(schema3, subject, "latest").isEmpty();
-    assertTrue("Schema is compatible with the latest version", isCompatible);
+    assertTrue(isCompatible, "Schema is compatible with the latest version");
     isCompatible = restApp.restClient.testCompatibility(schema3, subject, null).isEmpty();
-    assertFalse("Schema should be incompatible with FORWARD_TRANSITIVE setting", isCompatible);
+    assertFalse(isCompatible, "Schema should be incompatible with FORWARD_TRANSITIVE setting");
     try {
       restApp.restClient.registerSchema(schema3String, subject);
       fail("Schema register should fail since schema is incompatible");
     } catch (RestClientException e) {
-      assertEquals("Schema register should fail since schema is incompatible",
-          Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
+      assertEquals(Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, e.getErrorCode());
       assertFalse(e.getMessage().isEmpty());
       assertTrue(e.getMessage().contains("oldSchemaVersion:"));
       assertTrue(e.getMessage().contains("oldSchema:"));
       assertTrue(e.getMessage().contains("compatibility:"));
     }
+  }
+
+  @Test
+  public void testBadFormat() throws Exception {
+    String subject = "testSubject";
+
+    String schema1String = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":"
+        + "\"f" + "\"}]}";
+    String schema1 = AvroUtils.parseSchema(schema1String).canonicalString();
+
+    restApp.restClient.registerSchema(schema1, subject);
+
+    SchemaString schemaString = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, "bad-format", null, false);
+    assertEquals(
+        schema1,
+        schemaString.getSchemaString(),
+        "Registered schema should be found"
+    );
   }
 
   @Test
@@ -479,45 +628,60 @@ public class RestApiTest extends ClusterTestHarness {
         restApp.restClient.registerSchema(schema1, subject1);
     int versionOfRegisteredSchema1Subject1 =
         restApp.restClient.lookUpSubjectVersion(schema1, subject1).getVersion();
-    assertEquals("1st schema under subject1 should have version 1", 1,
-                 versionOfRegisteredSchema1Subject1);
-    assertEquals("1st schema registered globally should have id 1", 1,
-                 idOfRegisteredSchema1Subject1);
+    assertEquals(
+        1, versionOfRegisteredSchema1Subject1,
+        "1st schema under subject1 should have version 1"
+    );
+    assertEquals(
+        1, idOfRegisteredSchema1Subject1,
+        "1st schema registered globally should have id 1"
+    );
 
     int idOfRegisteredSchema2Subject1 =
         restApp.restClient.registerSchema(schema2, subject1);
     int versionOfRegisteredSchema2Subject1 =
         restApp.restClient.lookUpSubjectVersion(schema2, subject1).getVersion();
-    assertEquals("2nd schema under subject1 should have version 2", 2,
-                 versionOfRegisteredSchema2Subject1);
-    assertEquals("2nd schema registered globally should have id 2", 2,
-                 idOfRegisteredSchema2Subject1);
+    assertEquals(
+        2, versionOfRegisteredSchema2Subject1,
+        "2nd schema under subject1 should have version 2"
+    );
+    assertEquals(
+        2, idOfRegisteredSchema2Subject1,
+        "2nd schema registered globally should have id 2"
+    );
 
     int idOfRegisteredSchema2Subject2 =
         restApp.restClient.registerSchema(schema2, subject2);
     int versionOfRegisteredSchema2Subject2 =
         restApp.restClient.lookUpSubjectVersion(schema2, subject2).getVersion();
     assertEquals(
-        "2nd schema under subject1 should still have version 1 as the first schema under subject2",
         1,
-        versionOfRegisteredSchema2Subject2);
-    assertEquals("Since schema is globally registered but not under subject2, id should not change",
-                 2,
-                 idOfRegisteredSchema2Subject2);
+        versionOfRegisteredSchema2Subject2,
+        "2nd schema under subject1 should still have version 1 as the first schema under subject2"
+    );
+    assertEquals(
+        2,
+        idOfRegisteredSchema2Subject2,
+        "Since schema is globally registered but not under subject2, id should not change"
+    );
   }
 
   @Test
   public void testConfigDefaults() throws Exception {
-    assertEquals("Default compatibility level should be none for this test instance",
-                 NONE.name,
-                 restApp.restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(
+        NONE.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "Default compatibility level should be none for this test instance"
+    );
 
     // change it to forward
     restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name, null);
 
-    assertEquals("New compatibility level should be forward for this test instance",
-                 FORWARD.name,
-                 restApp.restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(
+        FORWARD.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "New compatibility level should be forward for this test instance"
+    );
   }
 
   @Test
@@ -528,64 +692,152 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException e) {
       fail("Changing config for an invalid subject should succeed");
     }
-    assertEquals("New compatibility level for this subject should be forward",
-                 FORWARD.name,
-                 restApp.restClient.getConfig(subject).getCompatibilityLevel());
+    assertEquals(
+        FORWARD.name,
+        restApp.restClient.getConfig(subject).getCompatibilityLevel(),
+        "New compatibility level for this subject should be forward"
+    );
   }
 
   @Test
   public void testSubjectConfigChange() throws Exception {
     String subject = "testSubject";
-    assertEquals("Default compatibility level should be none for this test instance",
-                 NONE.name,
-                 restApp.restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(
+        NONE.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "Default compatibility level should be none for this test instance"
+    );
 
     // change subject compatibility to forward
     restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name, subject);
 
-    assertEquals("Global compatibility level should remain none for this test instance",
-                 NONE.name,
-                 restApp.restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(
+        NONE.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "Global compatibility level should remain none for this test instance"
+    );
 
-    assertEquals("New compatibility level for this subject should be forward",
-                 FORWARD.name,
-                 restApp.restClient.getConfig(subject).getCompatibilityLevel());
+    assertEquals(
+        FORWARD.name,
+        restApp.restClient.getConfig(subject).getCompatibilityLevel(),
+        "New compatibility level for this subject should be forward"
+    );
 
     // delete subject compatibility
     restApp.restClient.deleteConfig(subject);
 
-    assertEquals("Compatibility level for this subject should be reverted to none",
+    assertEquals(
         NONE.name,
         restApp.restClient
             .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true)
-            .getCompatibilityLevel());
+            .getCompatibilityLevel(),
+        "Compatibility level for this subject should be reverted to none"
+    );
   }
 
   @Test
   public void testGlobalConfigChange() throws Exception{
-    assertEquals("Default compatibility level should be none for this test instance",
+    assertEquals(
         NONE.name,
-        restApp.restClient.getConfig(null).getCompatibilityLevel());
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "Default compatibility level should be none for this test instance"
+    );
 
     // change subject compatibility to forward
     restApp.restClient.updateCompatibility(CompatibilityLevel.FORWARD.name, null);
-    assertEquals("New Global compatibility level should be forward",
+    assertEquals(
         FORWARD.name,
-        restApp.restClient.getConfig(null).getCompatibilityLevel());
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "New Global compatibility level should be forward"
+    );
 
     // change subject compatibility to backward
     restApp.restClient.updateCompatibility(BACKWARD.name, null);
-    assertEquals("New Global compatibility level should be backward",
+    assertEquals(
         BACKWARD.name,
-        restApp.restClient.getConfig(null).getCompatibilityLevel());
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "New Global compatibility level should be backward"
+    );
 
     // delete Global compatibility
     restApp.restClient.deleteConfig(null);
-    assertEquals("Global compatibility level should be reverted to none",
+    assertEquals(
         NONE.name,
         restApp.restClient
             .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
-            .getCompatibilityLevel());
+            .getCompatibilityLevel(),
+        "Global compatibility level should be reverted to none"
+    );
+  }
+
+  @Test
+  public void testDefaultContextConfigAndMode() throws Exception {
+    String defaultContext = ":.:";
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(FORWARD.name());
+    assertEquals(
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null));
+
+    assertEquals(
+        FORWARD.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, defaultContext, true)
+            .getCompatibilityLevel()
+    );
+
+    configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(FORWARD_TRANSITIVE.name());
+    assertEquals(
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, defaultContext));
+
+    assertEquals(
+        FORWARD_TRANSITIVE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
+            .getCompatibilityLevel()
+    );
+
+    restApp.restClient.deleteConfig(defaultContext);
+
+    assertEquals(
+        NONE.name,
+        restApp.restClient
+            .getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true)
+            .getCompatibilityLevel()
+    );
+
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(IMPORT.name());
+    assertEquals(
+        modeUpdateRequest,
+        restApp.restClient.setMode(IMPORT.name(), null));
+
+    assertEquals(
+        IMPORT.name(),
+        restApp.restClient
+            .getMode(defaultContext, true)
+            .getMode()
+    );
+
+    modeUpdateRequest = new ModeUpdateRequest(READONLY.name());
+    assertEquals(
+        modeUpdateRequest,
+        restApp.restClient.setMode(READONLY.name(), defaultContext));
+
+    assertEquals(
+        READONLY.name(),
+        restApp.restClient
+            .getMode(null, true)
+            .getMode()
+    );
+
+    // We don't support deleting the mode for the default context
+    assertThrows(
+        RestClientException.class,
+        () -> restApp.restClient.deleteSubjectMode(defaultContext)
+    );
   }
 
   @Test
@@ -597,9 +849,11 @@ public class RestApiTest extends ClusterTestHarness {
            + " (schema not found)");
     } catch (RestClientException rce) {
       // this is expected.
-      assertEquals("Should get a 404 status for non-existing id",
-                   Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing id"
+      );
     }
   }
 
@@ -632,9 +886,11 @@ public class RestApiTest extends ClusterTestHarness {
            + " (subject not found)");
     } catch (RestClientException rce) {
       // this is expected.
-      assertEquals("Should get a 404 status for non-existing subject",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
   }
 
@@ -648,9 +904,11 @@ public class RestApiTest extends ClusterTestHarness {
            + " (subject not found)");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Unregistered subject shouldn't be found in getVersion()",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   e.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          e.getErrorCode(),
+          "Unregistered subject shouldn't be found in getVersion()"
+      );
     }
   }
 
@@ -667,8 +925,10 @@ public class RestApiTest extends ClusterTestHarness {
            + " (version not found)");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Unregistered version shouldn't be found",
-                   Errors.VERSION_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+      assertEquals(
+          Errors.VERSION_NOT_FOUND_ERROR_CODE, e.getErrorCode(),
+          "Unregistered version shouldn't be found"
+      );
     }
   }
 
@@ -685,9 +945,11 @@ public class RestApiTest extends ClusterTestHarness {
            + " (invalid version)");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Invalid version shouldn't be found",
-                   RestInvalidVersionException.ERROR_CODE,
-                   e.getErrorCode());
+      assertEquals(
+          RestInvalidVersionException.ERROR_CODE,
+          e.getErrorCode(),
+          "Invalid version shouldn't be found"
+      );
     }
   }
 
@@ -698,14 +960,14 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "\rbad\nsubject\t";
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
-      fail("Registering invalid subject should fail with "
-          + RestInvalidSubjectException.ERROR_CODE
-          + " (invalid subject)");
+      fail("Registering invalid subject should fail with 400");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Invalid subject shouldn't be registered",
-                   RestInvalidSubjectException.ERROR_CODE,
-                   e.getErrorCode());
+      assertEquals(
+          400,
+          e.getStatus(),
+          "Invalid subject shouldn't be registered"
+      );
     }
   }
 
@@ -716,16 +978,22 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
 
-    assertEquals("Version 1 schema should match",
-                 schemas.get(0),
-                 restApp.restClient.getVersion(subject, 1).getSchema());
+    assertEquals(
+        schemas.get(0),
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Version 1 schema should match"
+    );
 
-    assertEquals("Version 2 schema should match",
-                 schemas.get(1),
-                 restApp.restClient.getVersion(subject, 2).getSchema());
-    assertEquals("Latest schema should be the same as version 2",
-                 schemas.get(1),
-                 restApp.restClient.getLatestVersion(subject).getSchema());
+    assertEquals(
+        schemas.get(1),
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Version 2 schema should match"
+    );
+    assertEquals(
+        schemas.get(1),
+        restApp.restClient.getLatestVersion(subject).getSchema(),
+        "Latest schema should be the same as version 2"
+    );
   }
 
   @Test
@@ -733,9 +1001,11 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = String.valueOf(TestUtils.getRandomCanonicalAvroString(1));
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
-    assertEquals("Schema with ID 1 should match.",
-            schema,
-            restApp.restClient.getOnlySchemaById(1));
+    assertEquals(
+        schema,
+        restApp.restClient.getOnlySchemaById(1),
+        "Schema with ID 1 should match."
+    );
   }
 
   @Test
@@ -745,9 +1015,11 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
 
-    assertEquals("Latest schema should be the same as version 2",
-                 schemas.get(1),
-                 restApp.restClient.getLatestVersionSchemaOnly(subject));
+    assertEquals(
+        schemas.get(1),
+        restApp.restClient.getLatestVersionSchemaOnly(subject),
+        "Latest schema should be the same as version 2"
+    );
   }
 
   @Test
@@ -756,9 +1028,11 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
 
-    assertEquals("Retrieved schema should be the same as version 1",
-                schemas.get(0),
-                restApp.restClient.getVersionSchemaOnly(subject, 1));
+    assertEquals(
+        schemas.get(0),
+        restApp.restClient.getVersionSchemaOnly(subject, 1),
+        "Retrieved schema should be the same as version 1"
+    );
   }
 
   @Test
@@ -789,17 +1063,24 @@ public class RestApiTest extends ClusterTestHarness {
     request.setReferences(Collections.singletonList(ref));
     String subject2 = context + "my_referrer";
     int registeredId = restApp.restClient.registerSchema(request, subject2, false).getId();
-    assertEquals("Registering a new schema should succeed", parentId, registeredId);
+    assertEquals(parentId, registeredId, "Registering a new schema should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(parentId, subject2);
-    // the newly registered schema should be immediately readable on the leader
-    assertEquals("Registered schema should be found",
-        schemas.get(1),
-        schemaString.getSchemaString());
+    assertEquals(subject2, schemaString.getSubject());
+    assertEquals(1, schemaString.getVersion());
 
-    assertEquals("Schema references should be found",
+    // the newly registered schema should be immediately readable on the leader
+    assertEquals(
+        schemas.get(1),
+        schemaString.getSchemaString(),
+        "Registered schema should be found"
+    );
+
+    assertEquals(
         Collections.singletonList(ref),
-        schemaString.getReferences());
+        schemaString.getReferences(),
+        "Schema references should be found"
+    );
 
     List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
     assertEquals(parentId, refs.get(0).intValue());
@@ -809,7 +1090,10 @@ public class RestApiTest extends ClusterTestHarness {
     // Note that we pass an empty list of refs since SR will perform a deep equality check
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
         AvroSchema.TYPE, Collections.emptyList(), subject2, false);
-    assertEquals("Registered schema should be found", parentId, registeredSchema.getId().intValue());
+    assertEquals(
+        parentId, registeredSchema.getId().intValue(),
+        "Registered schema should be found"
+    );
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
@@ -818,9 +1102,11 @@ public class RestApiTest extends ClusterTestHarness {
       );
       fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Reference found",
+      assertEquals(
           Errors.REFERENCE_EXISTS_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Reference found"
+      );
     }
 
     assertEquals((Integer) 1, restApp.restClient
@@ -828,6 +1114,103 @@ public class RestApiTest extends ClusterTestHarness {
             (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
 
     refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertTrue(refs.isEmpty());
+
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
+    assertTrue(refs.isEmpty());
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+  }
+
+  @Test
+  public void testSchemaUnqualifiedReferencesInContext() throws Exception {
+    String context = ":.ctx:";
+    int parentId = 2;
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String unqualifiedSubject = "my_reference";
+    String subject = context + unqualifiedSubject;
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get(1));
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", unqualifiedSubject, 1);
+    request.setReferences(Collections.singletonList(ref));
+    String subject2 = context + "my_referrer";
+    int registeredId = restApp.restClient.registerSchema(request, subject2, false).getId();
+    assertEquals(parentId, registeredId, "Registering a new schema should succeed");
+
+    SchemaString schemaString = restApp.restClient.getId(parentId, subject2);
+    assertEquals(subject2, schemaString.getSubject());
+    assertEquals(1, schemaString.getVersion());
+    assertFalse(schemaString.getReferences().get(0).getSubject().startsWith(context));
+
+    Schema schemaResult = restApp.restClient.getVersion(subject2, 1);
+    assertEquals(subject2, schemaResult.getSubject());
+    assertEquals(1, schemaResult.getVersion());
+    assertFalse(schemaResult.getReferences().get(0).getSubject().startsWith(context));
+
+    SchemaString schemaString2 = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
+        parentId, subject2, null, "qualified", null, false);
+    assertEquals(subject2, schemaString2.getSubject());
+    assertEquals(1, schemaString2.getVersion());
+    assertTrue(schemaString2.getReferences().get(0).getSubject().startsWith(context));
+
+    Schema schemaResult2 = restApp.restClient.getVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject2, 1, null, "qualified", false, null);
+    assertEquals(subject2, schemaResult2.getSubject());
+    assertEquals(1, schemaResult2.getVersion());
+    assertTrue(schemaResult2.getReferences().get(0).getSubject().startsWith(context));
+
+    // the newly registered schema should be immediately readable on the leader
+    assertEquals(
+        schemas.get(1),
+        schemaString.getSchemaString(),
+        "Registered schema should be found"
+    );
+
+    assertEquals(
+        Collections.singletonList(ref),
+        schemaString.getReferences(),
+        "Schema references should be found"
+    );
+
+    List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertEquals(parentId, refs.get(0).intValue());
+
+    ns.MyRecord myrecord = new ns.MyRecord();
+    AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
+    // Note that we pass an empty list of refs since SR will perform a deep equality check
+    Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
+        AvroSchema.TYPE, Collections.emptyList(), subject2, false);
+    assertEquals(
+        parentId, registeredSchema.getId().intValue(),
+        "Registered schema should be found"
+    );
+
+    try {
+      restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+          subject,
+          String.valueOf(1)
+      );
+      fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.REFERENCE_EXISTS_ERROR_CODE,
+          rce.getErrorCode(),
+          "Reference found"
+      );
+    }
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertTrue(refs.isEmpty());
+
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
     assertTrue(refs.isEmpty());
 
     assertEquals((Integer) 1, restApp.restClient
@@ -890,14 +1273,14 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
     int registeredId = restApp.restClient.registerSchema(request, "ref1", false).getId();
-    assertEquals("Registering a new schema should succeed", 2, registeredId);
+    assertEquals(2, registeredId, "Registering a new schema should succeed");
 
     request = new RegisterSchemaRequest();
     request.setSchema(ref2);
     ref = new SchemaReference("myavro.currencies.Currency", "shared", 1);
     request.setReferences(Collections.singletonList(ref));
     registeredId = restApp.restClient.registerSchema(request, "ref2", false).getId();
-    assertEquals("Registering a new schema should succeed", 3, registeredId);
+    assertEquals(3, registeredId, "Registering a new schema should succeed");
 
     request = new RegisterSchemaRequest();
     request.setSchema(root);
@@ -905,27 +1288,39 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference r2 = new SchemaReference("myavro.BudgetUpdated", "ref2", 1);
     request.setReferences(Arrays.asList(r1, r2));
     registeredId = restApp.restClient.registerSchema(request, "root", false).getId();
-    assertEquals("Registering a new schema should succeed", 4, registeredId);
+    assertEquals(4, registeredId, "Registering a new schema should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(4);
     // the newly registered schema should be immediately readable on the leader
-    assertEquals("Registered schema should be found",
+    assertEquals(
         root,
-        schemaString.getSchemaString());
+        schemaString.getSchemaString(),
+        "Registered schema should be found"
+    );
 
-    assertEquals("Schema references should be found",
+    assertEquals(
         Arrays.asList(r1, r2),
-        schemaString.getReferences());
+        schemaString.getReferences(),
+        "Schema references should be found"
+    );
+
+    SchemaString schemaString2 = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        4, "root", "resolved", null, false);
+    // Ensure the guids match even though we are formatting the schema
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
   }
 
-  @Test(expected = RestClientException.class)
+  @Test
   public void testSchemaMissingReferences() throws Exception {
-    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    assertThrows(RestClientException.class, () -> {
+      List<String> schemas = TestUtils.getAvroSchemaWithReferences();
 
-    RegisterSchemaRequest request = new RegisterSchemaRequest();
-    request.setSchema(schemas.get(1));
-    request.setReferences(Collections.emptyList());
-    restApp.restClient.registerSchema(request, "referrer", false);
+      RegisterSchemaRequest request = new RegisterSchemaRequest();
+      request.setSchema(schemas.get(1));
+      request.setReferences(Collections.emptyList());
+      restApp.restClient.registerSchema(request, "referrer", false);
+    });
   }
 
   @Test
@@ -978,10 +1373,14 @@ public class RestApiTest extends ClusterTestHarness {
     lookUpRequest.setReferences(Arrays.asList(ref2, ref1));
     int versionOfRegisteredSchema1Subject1 =
         restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
-    assertEquals("1st schema under subject1 should have version 1", 1,
-        versionOfRegisteredSchema1Subject1);
-    assertEquals("1st schema registered globally should have id 3", 3,
-        idOfRegisteredSchema1Subject1);
+    assertEquals(
+        1, versionOfRegisteredSchema1Subject1,
+        "1st schema under subject1 should have version 1"
+    );
+    assertEquals(
+        3, idOfRegisteredSchema1Subject1,
+        "1st schema registered globally should have id 3"
+    );
 
     // send schema with all references resolved
     lookUpRequest = new RegisterSchemaRequest();
@@ -992,8 +1391,10 @@ public class RestApiTest extends ClusterTestHarness {
     lookUpRequest.setSchema(resolvedSchema.canonicalString());
     versionOfRegisteredSchema1Subject1 =
         restApp.restClient.lookUpSubjectVersion(lookUpRequest, subject1, true, false).getVersion();
-    assertEquals("1st schema under subject1 should have version 1", 1,
-        versionOfRegisteredSchema1Subject1);
+    assertEquals(
+        1, versionOfRegisteredSchema1Subject1,
+        "1st schema under subject1 should have version 1"
+    );
 
 
     String recordInvalidDefaultSchema =
@@ -1010,9 +1411,11 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient.registerSchema(registerRequest, subject1, true);
       fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema",
+      assertEquals(
           Errors.INVALID_SCHEMA_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Invalid schema"
+      );
     }
 
     List<String> messages = restApp.restClient.testCompatibility(
@@ -1026,18 +1429,21 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> allSubjects = new ArrayList<>();
 
     // test getAllSubjects with no existing data
-    assertEquals("Getting all subjects should return empty",
+    assertEquals(
         allSubjects,
-        restApp.restClient.getAllSubjects()
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should return empty"
     );
 
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, TestUtils.getBadSchema(), 1, subject1);
       fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema",
+      assertEquals(
           Errors.INVALID_SCHEMA_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Invalid schema"
+      );
     }
 
     try {
@@ -1046,15 +1452,18 @@ public class RestApiTest extends ClusterTestHarness {
           ImmutableList.of(new SchemaReference("bad", "bad", 100)), 1, subject1);
       fail("Registering bad reference should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema",
+      assertEquals(
           Errors.INVALID_SCHEMA_ERROR_CODE,
-          rce.getErrorCode());
+          rce.getErrorCode(),
+          "Invalid schema"
+      );
     }
 
     // test getAllSubjects with existing data
-    assertEquals("Getting all subjects should match all registered subjects",
+    assertEquals(
         allSubjects,
-        restApp.restClient.getAllSubjects()
+        restApp.restClient.getAllSubjects(),
+        "Getting all subjects should match all registered subjects"
     );
   }
 
@@ -1067,9 +1476,11 @@ public class RestApiTest extends ClusterTestHarness {
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Subject not found",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Subject not found"
+      );
     }
   }
 
@@ -1086,7 +1497,7 @@ public class RestApiTest extends ClusterTestHarness {
            + Errors.SCHEMA_NOT_FOUND_ERROR_CODE
            + " (schema not found)");
     } catch (RestClientException rce) {
-      assertEquals("Schema not found", Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
   }
 
@@ -1103,18 +1514,31 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
 
-    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"),
+        "Deleting Schema Version Success"
+    );
 
     associatedSubjects = restApp.restClient.getAllSubjectsById(1);
     assertEquals(associatedSubjects.size(), 1);
     assertEquals(Collections.singletonList(subject1), associatedSubjects);
 
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+    assertEquals(Collections.emptyList(), associatedSubjects);
+
     associatedSubjects = restApp.restClient.getAllSubjectsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 0);
+    assertEquals(associatedSubjects.size(), 1);
+    assertEquals(Collections.singletonList(subject1), associatedSubjects);
+
   }
 
   @Test
@@ -1124,9 +1548,11 @@ public class RestApiTest extends ClusterTestHarness {
       fail("Getting all subjects associated with id 1 should fail with "
             + Errors.SCHEMA_NOT_FOUND_ERROR_CODE + " (schema not found)");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing schema",
-              Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(
+          Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing schema"
+      );
     }
   }
 
@@ -1144,18 +1570,29 @@ public class RestApiTest extends ClusterTestHarness {
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
 
-    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"),
+        "Deleting Schema Version Success"
+    );
 
     associatedSubjects = restApp.restClient.getAllVersionsById(1);
     assertEquals(associatedSubjects.size(), 1);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
 
+    associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+
     associatedSubjects = restApp.restClient.getAllVersionsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
+
+    associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 1);
+    assertEquals(associatedSubjects.size(), 1);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
   }
 
@@ -1164,11 +1601,11 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     boolean result = restApp.restClient.testCompatibility(schema, "non-existent-subject", "latest")
                                        .isEmpty();
-    assertTrue("Compatibility succeeds", result);
+    assertTrue(result, "Compatibility succeeds");
 
     result = restApp.restClient.testCompatibility(schema, "non-existent-subject", null)
         .isEmpty();
-    assertTrue("Compatibility succeeds", result);
+    assertTrue(result, "Compatibility succeeds");
   }
 
   @Test
@@ -1182,7 +1619,7 @@ public class RestApiTest extends ClusterTestHarness {
            + Errors.VERSION_NOT_FOUND_ERROR_CODE
            + " (version not found)");
     } catch (RestClientException rce) {
-      assertEquals("Version not found", Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
   }
 
@@ -1197,9 +1634,7 @@ public class RestApiTest extends ClusterTestHarness {
            + RestInvalidVersionException.ERROR_CODE
            + " (version not found)");
     } catch (RestClientException rce) {
-      assertEquals("Version not found",
-                   RestInvalidVersionException.ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(RestInvalidVersionException.ERROR_CODE, rce.getErrorCode());
     }
   }
 
@@ -1211,8 +1646,7 @@ public class RestApiTest extends ClusterTestHarness {
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " error code (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Subject not found",
-                   Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE,
+      assertEquals(Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE,
                    rce.getErrorCode());
     }
   }
@@ -1222,18 +1656,24 @@ public class RestApiTest extends ClusterTestHarness {
     // schema string with extra white space
     String schema = "{   \"type\":   \"string\"}";
     String subject = "test";
-    assertEquals("Registering a new schema should succeed",
-                 1,
-                 restApp.restClient.registerSchema(schema, subject));
+    assertEquals(
+        1,
+        restApp.restClient.registerSchema(schema, subject),
+        "Registering a new schema should succeed"
+    );
 
-    assertEquals("Registering the same schema should get back the same id",
-                 1,
-                 restApp.restClient.registerSchema(schema, subject));
+    assertEquals(
+        1,
+        restApp.restClient.registerSchema(schema, subject),
+        "Registering the same schema should get back the same id"
+    );
 
-    assertEquals("Lookup the same schema should get back the same id",
-                 1,
-                 restApp.restClient.lookUpSubjectVersion(schema, subject)
-                     .getId().intValue());
+    assertEquals(
+        1,
+        restApp.restClient.lookUpSubjectVersion(schema, subject)
+            .getId().intValue(),
+        "Lookup the same schema should get back the same id"
+    );
   }
 
   @Test
@@ -1244,20 +1684,28 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
 
-    assertEquals("Deleting Schema Version Success", (Integer) 2, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+    assertEquals(
+        (Integer) 2, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"),
+        "Deleting Schema Version Success"
+    );
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
+
+    Schema schema = restApp.restClient.getVersion(subject, 2, true);
+    assertEquals((Integer) 2, schema.getVersion());
+    assertTrue(schema.getDeleted());
 
     try {
       restApp.restClient.getVersion(subject, 2);
       fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
                          Errors.VERSION_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Version not found",
-                   Errors.VERSION_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.VERSION_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Version not found"
+      );
     }
     try {
       RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -1268,23 +1716,29 @@ public class RestApiTest extends ClusterTestHarness {
                          subject,
                          Errors.SCHEMA_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Schema not found",
-                   Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Schema not found"
+      );
     }
 
-    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"));
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"),
+        "Deleting Schema Version Success"
+    );
     try {
       List<Integer> versions = restApp.restClient.getAllVersions(subject);
       fail("Getting all versions from non-existing subject1 should fail with "
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " (subject not found). Got " + versions);
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
 
     //re-register twice and versions should be same
@@ -1312,20 +1766,28 @@ public class RestApiTest extends ClusterTestHarness {
                               true);
       fail("Permanent deleting first time should throw schemaVersionNotSoftDeletedException");
     } catch (RestClientException rce) {
-      assertEquals("Schema version must be soft deleted first",
-              Errors.SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(
+          Errors.SCHEMAVERSION_NOT_SOFT_DELETED_ERROR_CODE,
+          rce.getErrorCode(),
+          "Schema version must be soft deleted first"
+      );
     }
 
     //soft delete
-    assertEquals("Deleting Schema Version Success", (Integer) 2, restApp.restClient
-            .deleteSchemaVersion
-                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"));
+    assertEquals(
+        (Integer) 2, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2"),
+        "Deleting Schema Version Success"
+    );
 
     assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
     assertEquals(Arrays.asList(1,2), restApp.restClient.getAllVersions(
             RestService.DEFAULT_REQUEST_PROPERTIES,
             subject, true));
+    // test with pagination
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersionsWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES,
+            subject, true, 0, 1));
     //soft delete again
     try {
       restApp.restClient
@@ -1333,9 +1795,11 @@ public class RestApiTest extends ClusterTestHarness {
                       (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
       fail("Soft deleting second time should throw schemaVersionSoftDeletedException");
     } catch (RestClientException rce) {
-      assertEquals("Schema version already soft deleted",
-              Errors.SCHEMAVERSION_SOFT_DELETED_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(
+          Errors.SCHEMAVERSION_SOFT_DELETED_ERROR_CODE,
+          rce.getErrorCode(),
+          "Schema version already soft deleted"
+      );
     }
 
     try {
@@ -1343,13 +1807,15 @@ public class RestApiTest extends ClusterTestHarness {
       fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
               Errors.VERSION_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Version not found",
-              Errors.VERSION_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(
+          Errors.VERSION_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Version not found"
+      );
     }
 
       Schema schema = restApp.restClient.getVersion(subject, 2, true);
-      assertEquals("Lookup Version Match", (Integer) 2, schema.getVersion());
+      assertEquals((Integer) 2, schema.getVersion());
 
     try {
       RegisterSchemaRequest request = new RegisterSchemaRequest();
@@ -1360,23 +1826,21 @@ public class RestApiTest extends ClusterTestHarness {
               subject,
               Errors.SCHEMA_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Schema not found",
-              Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
     // permanent delete
-    assertEquals("Deleting Schema Version Success", (Integer) 2, restApp.restClient
-            .deleteSchemaVersion
-                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2", true));
+    assertEquals(
+        (Integer) 2, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2", true),
+        "Deleting Schema Version Success"
+    );
     // GET after permanent delete should give exception
     try {
       restApp.restClient.getVersion(subject, 2, true);
       fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
               Errors.VERSION_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Version not found",
-              Errors.VERSION_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
     //permanent delete again
     try {
@@ -1385,14 +1849,14 @@ public class RestApiTest extends ClusterTestHarness {
       fail(String.format("Getting Version %s for subject %s should fail with %s", "2", subject,
               Errors.VERSION_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Version not found",
-              Errors.VERSION_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(Errors.VERSION_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
 
-    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
-            .deleteSchemaVersion
-                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"));
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"),
+        "Deleting Schema Version Success"
+    );
 
     try {
       List<Integer> versions = restApp.restClient.getAllVersions(subject);
@@ -1400,9 +1864,11 @@ public class RestApiTest extends ClusterTestHarness {
               + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
               + " (subject not found). Got " + versions);
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
-              Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
 
     //re-register twice and versions should be same
@@ -1423,9 +1889,11 @@ public class RestApiTest extends ClusterTestHarness {
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " error code (subject not found)");
     } catch (RestClientException rce) {
-      assertEquals("Subject not found",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Subject not found"
+      );
     }
   }
 
@@ -1437,31 +1905,38 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
 
-    assertEquals("Deleting Schema Version Success", (Integer) 2, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"));
+    assertEquals(
+        (Integer) 2, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"),
+        "Deleting Schema Version Success"
+    );
 
     Schema schema = restApp.restClient.getLatestVersion(subject);
-    assertEquals("Latest Version Schema", schemas.get(0), schema.getSchema());
+    assertEquals(schemas.get(0), schema.getSchema());
 
-    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"));
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest"),
+        "Deleting Schema Version Success"
+    );
     try {
       restApp.restClient.getLatestVersion(subject);
       fail("Getting latest versions from non-existing subject should fail with "
            + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
            + " (subject not found).");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
-                   Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
 
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(2), 3, subject);
-    assertEquals("Latest version available after subject re-registration",
-            schemas.get(2),
-            restApp.restClient.getLatestVersion(subject).getSchema());
+    assertEquals(
+        schemas.get(2),
+        restApp.restClient.getLatestVersion(subject).getSchema(),
+        "Latest version available after subject re-registration"
+    );
   }
 
   @Test
@@ -1474,9 +1949,11 @@ public class RestApiTest extends ClusterTestHarness {
               + Errors.SUBJECT_NOT_FOUND_ERROR_CODE
               + " (subject not found).");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject",
-              Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
-              rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject"
+      );
     }
   }
 
@@ -1488,14 +1965,18 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
 
-    assertEquals("Latest Version Schema", schemas.get(1), restApp.restClient.getLatestVersion(subject).getSchema());
+    assertEquals(schemas.get(1), restApp.restClient.getLatestVersion(subject).getSchema());
 
-    assertEquals("Deleting Schema Older Version Success", (Integer) 1, restApp.restClient
-            .deleteSchemaVersion
-                    (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
-    assertEquals("Latest Version Schema Still Same",
-            schemas.get(1),
-            restApp.restClient.getLatestVersion(subject).getSchema());
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"),
+        "Deleting Schema Older Version Success"
+    );
+    assertEquals(
+        schemas.get(1),
+        restApp.restClient.getLatestVersion(subject).getSchema(),
+        "Latest Version Schema Still Same"
+    );
   }
 
   @Test
@@ -1507,9 +1988,11 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
     } catch (RestClientException rce) {
-      assertEquals("Should get a 404 status for non-existing subject version",
-                   Errors.VERSION_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.VERSION_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Should get a 404 status for non-existing subject version"
+      );
     }
 
   }
@@ -1521,30 +2004,31 @@ public class RestApiTest extends ClusterTestHarness {
 
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
-    assertEquals("Deleting Schema Version Success", (Integer) 1, restApp.restClient
-        .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+    assertEquals(
+        (Integer) 1, restApp.restClient
+            .deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"),
+        "Deleting Schema Version Success"
+    );
     try {
       restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, false);
       fail(String.format("Lookup Subject Version %s for subject %s should fail with %s", "2",
                          subject,
                          Errors.SCHEMA_NOT_FOUND_ERROR_CODE));
     } catch (RestClientException rce) {
-      assertEquals("Schema not found",
-                   Errors.SCHEMA_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
     //verify deleted schema
     Schema schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, true);
-    assertEquals("Lookup Version Match", (Integer) 1, schema.getVersion());
+    assertEquals((Integer) 1, schema.getVersion());
 
     //re-register schema again and verify we get latest version
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, true);
-    assertEquals("Lookup Version Match", (Integer) 3, schema.getVersion());
+    assertEquals((Integer) 3, schema.getVersion());
     schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, false);
-    assertEquals("Lookup Version Match", (Integer) 3, schema.getVersion());
+    assertEquals((Integer) 3, schema.getVersion());
     schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject);
-    assertEquals("Lookup Version Match", (Integer) 3, schema.getVersion());
+    assertEquals((Integer) 3, schema.getVersion());
   }
 
   @Test
@@ -1588,31 +2072,32 @@ public class RestApiTest extends ClusterTestHarness {
 
     boolean isCompatible = restApp.restClient.testCompatibility(wrongSchema2, subject,
                                                                 "latest").isEmpty();
-    assertTrue("Schema should be compatible with specified version", isCompatible);
+    assertTrue(isCompatible, "Schema should be compatible with specified version");
 
     restApp.restClient.registerSchema(wrongSchema2, subject);
 
     isCompatible = restApp.restClient.testCompatibility(correctSchema2, subject,
                                                         "latest").isEmpty();
-    assertFalse("Schema should be incompatible with specified version", isCompatible);
+    assertFalse(isCompatible, "Schema should be incompatible with specified version");
     try {
       restApp.restClient.registerSchema(correctSchema2, subject);
       fail("Schema should be Incompatible");
     } catch (RestClientException rce) {
-      assertEquals("Incompatible Schema",
-                   Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, rce.getErrorCode());
     }
 
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "latest");
     isCompatible = restApp.restClient.testCompatibility(correctSchema2, subject,
                                                         "latest").isEmpty();
-    assertTrue("Schema should be compatible with specified version", isCompatible);
+    assertTrue(isCompatible, "Schema should be compatible with specified version");
 
     restApp.restClient.registerSchema(correctSchema2, subject);
 
-    assertEquals("Version is same", (Integer) 3, restApp.restClient.lookUpSubjectVersion
-        (correctSchema2String, subject).getVersion());
+    assertEquals(
+        (Integer) 3,
+        restApp.restClient.lookUpSubjectVersion(correctSchema2String, subject).getVersion(),
+        "Version is same"
+    );
 
   }
 
@@ -1645,19 +2130,24 @@ public class RestApiTest extends ClusterTestHarness {
     restApp.restClient.registerSchema(schema2, subject);
 
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
-    assertEquals("Compatibility Level Exists", CompatibilityLevel.BACKWARD.name, restApp
-        .restClient.getConfig(subject).getCompatibilityLevel());
-    assertEquals("Top Compatibility Level Exists", CompatibilityLevel.FULL.name, restApp
-        .restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(CompatibilityLevel.BACKWARD.name, restApp
+        .restClient.getConfig(subject).getCompatibilityLevel(), "Compatibility Level Exists");
+    assertEquals(CompatibilityLevel.FULL.name, restApp
+        .restClient.getConfig(null).getCompatibilityLevel(), "Top Compatibility Level Exists");
     restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
     try {
       restApp.restClient.getConfig(subject);
     } catch (RestClientException rce) {
-      assertEquals("Compatibility Level doesn't exist",
-              Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE, rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE, rce.getErrorCode(),
+          "Compatibility Level doesn't exist"
+      );
     }
-    assertEquals("Top Compatibility Level Exists", CompatibilityLevel.FULL.name, restApp
-        .restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(
+        CompatibilityLevel.FULL.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "Top Compatibility Level Exists"
+    );
 
   }
 
@@ -1671,32 +2161,50 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
     expectedResponse.add(subject2);
-    assertEquals("Current Subjects", expectedResponse,
-            restApp.restClient.getAllSubjects());
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.getAllSubjects(),
+        "Current Subjects"
+    );
     List<Integer> deletedResponse = new ArrayList<>();
     deletedResponse.add(1);
-    assertEquals("Versions Deleted Match", deletedResponse,
-            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject2));
+    assertEquals(
+        deletedResponse,
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject2),
+        "Versions Deleted Match"
+    );
 
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
-    assertEquals("Current Subjects", expectedResponse,
-            restApp.restClient.getAllSubjects());
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.getAllSubjects(),
+        "Current Subjects"
+    );
 
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
     expectedResponse.add(subject2);
-    assertEquals("Current Subjects", expectedResponse,
-            restApp.restClient.getAllSubjects(true));
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.getAllSubjects(true),
+        "Current Subjects"
+    );
 
-    assertEquals("Versions Deleted Match", deletedResponse,
-            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
-                    subject2, true));
+    assertEquals(
+        deletedResponse,
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
+                    subject2, true),
+        "Versions Deleted Match"
+    );
 
     expectedResponse = new ArrayList<>();
     expectedResponse.add(subject1);
-    assertEquals("Current Subjects", expectedResponse,
-            restApp.restClient.getAllSubjects());
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.getAllSubjects(),
+        "Current Subjects"
+    );
   }
 
   @Test
@@ -1713,19 +2221,36 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals((Integer) 1,
         restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
 
-    assertEquals("List All Versions Match",
-        Collections.singletonList(2), restApp.restClient.getAllVersions(subject1));
-    assertEquals("List All Versions Include deleted Match",
-        Arrays.asList(1, 2), restApp.restClient.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, true));
-    assertEquals("List Deleted Versions Match",
-        Collections.singletonList(1), restApp.restClient.getDeletedOnlyVersions(subject1));
+    assertEquals(
+        Collections.singletonList(2), restApp.restClient.getAllVersions(subject1),
+        "List All Versions Match"
+    );
+    assertEquals(
+        Arrays.asList(1, 2),
+        restApp.restClient.getAllVersions(RestService.DEFAULT_REQUEST_PROPERTIES, subject1, true),
+        "List All Versions Include deleted Match"
+    );
+    assertEquals(
+        Collections.singletonList(1),
+        restApp.restClient.getDeletedOnlyVersions(subject1),
+        "List Deleted Versions Match"
+    );
 
-    assertEquals("List All Subjects Match",
-        Collections.singletonList(subject1), restApp.restClient.getAllSubjects());
-    assertEquals("List All Subjects Include deleted Match",
-        Arrays.asList(subject1, subject2), restApp.restClient.getAllSubjects(true));
-    assertEquals("List Deleted Only Subjects Match",
-        Collections.singletonList(subject2), restApp.restClient.getDeletedOnlySubjects(null));
+    assertEquals(
+        Collections.singletonList(subject1),
+        restApp.restClient.getAllSubjects(),
+        "List All Subjects Match"
+    );
+    assertEquals(
+        Arrays.asList(subject1, subject2),
+        restApp.restClient.getAllSubjects(true),
+        "List All Subjects Include deleted Match"
+    );
+    assertEquals(
+        Collections.singletonList(subject2),
+        restApp.restClient.getDeletedOnlySubjects(null),
+        "List Deleted Only Subjects Match"
+    );
   }
 
   @Test
@@ -1737,13 +2262,16 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> expectedResponse = new ArrayList<>();
     expectedResponse.add(1);
     expectedResponse.add(2);
-    assertEquals("Versions Deleted Match", expectedResponse,
-        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject));
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject),
+        "Versions Deleted Match"
+    );
     try {
       restApp.restClient.getLatestVersion(subject);
       fail(String.format("Subject %s should not be found", subject));
     } catch (RestClientException rce) {
-      assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
 
   }
@@ -1757,8 +2285,11 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> expectedResponse = new ArrayList<>();
     expectedResponse.add(1);
     expectedResponse.add(2);
-    assertEquals("Versions Deleted Match", expectedResponse,
-            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject));
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject),
+        "Versions Deleted Match"
+    );
 
     Schema schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, true );
     assertEquals(1, (long)schema.getVersion());
@@ -1769,7 +2300,10 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject);
       fail(String.format("Subject %s should not be found", subject));
     } catch (RestClientException rce) {
-      assertEquals("Subject exists in soft deleted format.", Errors.SUBJECT_SOFT_DELETED_ERROR_CODE, rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_SOFT_DELETED_ERROR_CODE, rce.getErrorCode(),
+          "Subject exists in soft deleted format."
+      );
     }
   }
 
@@ -1790,34 +2324,43 @@ public class RestApiTest extends ClusterTestHarness {
               true);
       fail("Delete permanent should not succeed");
     } catch (RestClientException rce) {
-      assertEquals("Subject '%s' was not deleted first before permanent delete", Errors.SUBJECT_NOT_SOFT_DELETED_ERROR_CODE, rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_NOT_SOFT_DELETED_ERROR_CODE,
+          rce.getErrorCode(),
+          "Subject was not deleted first before permanent delete"
+      );
     }
 
-    assertEquals("Versions Deleted Match", expectedResponse,
-            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject));
+    assertEquals(
+        expectedResponse,
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject),
+        "Versions Deleted Match"
+    );
 
     Schema schema = restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, true );
     assertEquals(1, (long)schema.getVersion());
     schema = restApp.restClient.lookUpSubjectVersion(schemas.get(1), subject, true );
     assertEquals(2, (long)schema.getVersion());
 
-    assertEquals("Versions Deleted Match", expectedResponse,
-            restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES,
-                    subject,
-                    true));
+    assertEquals(
+        expectedResponse,
+        restApp.restClient
+            .deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true),
+        "Versions Deleted Match"
+    );
     for (Integer i : expectedResponse) {
       try {
         restApp.restClient.lookUpSubjectVersion(schemas.get(0), subject, false);
         fail(String.format("Subject %s should not be found", subject));
       } catch (RestClientException rce) {
-        assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+        assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
       }
 
       try {
         restApp.restClient.lookUpSubjectVersion(schemas.get(i-1), subject, true);
         fail(String.format("Subject %s should not be found", subject));
       } catch (RestClientException rce) {
-        assertEquals("Subject Not Found", Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+        assertEquals(Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
       }
     }
   }
@@ -1833,14 +2376,20 @@ public class RestApiTest extends ClusterTestHarness {
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
     TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(1), 2, subject);
 
-    assertEquals("Versions match", Arrays.asList(3, 4),
-                 restApp.restClient.getAllVersions(subject));
+    assertEquals(
+        Arrays.asList(3, 4),
+        restApp.restClient.getAllVersions(subject),
+        "Versions match"
+    );
     try {
       restApp.restClient.getVersion(subject, 1);
       fail("Version 1 should not be found");
     } catch (RestClientException rce) {
-      assertEquals("Version not found", Errors.VERSION_NOT_FOUND_ERROR_CODE,
-                   rce.getErrorCode());
+      assertEquals(
+          Errors.VERSION_NOT_FOUND_ERROR_CODE,
+          rce.getErrorCode(),
+          "Version not found"
+      );
     }
   }
 
@@ -1876,11 +2425,17 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       restApp.restClient.getConfig(subject);
     } catch (RestClientException rce) {
-      assertEquals("Compatibility Level doesn't exist",
-              Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE, rce.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_LEVEL_COMPATIBILITY_NOT_CONFIGURED_ERROR_CODE,
+          rce.getErrorCode(),
+          "Compatibility Level doesn't exist"
+      );
     }
-    assertEquals("Top Compatibility Level Exists", CompatibilityLevel.FULL.name, restApp
-        .restClient.getConfig(null).getCompatibilityLevel());
+    assertEquals(
+        CompatibilityLevel.FULL.name,
+        restApp.restClient.getConfig(null).getCompatibilityLevel(),
+        "Top Compatibility Level Exists"
+    );
 
   }
 
@@ -1941,12 +2496,17 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
 
+    // default context for error message
+    String context = ".";
+
     try {
       restApp.restClient.getMode(subject).getMode();
       fail(String.format("Subject %s should not be found when there's no mode override", subject));
     } catch (RestClientException e) {
-      assertEquals(String.format("No mode override for subject %s, get mode should return not configured", subject),
-          Errors.SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE, e.getErrorCode());
+      assertEquals(
+          Errors.SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE, e.getErrorCode(),
+          String.format("No mode override for subject %s, get mode should return not configured", subject)
+      );
     }
     assertEquals("READWRITE", restApp.restClient.getMode(subject, true).getMode());
 
@@ -1963,10 +2523,13 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
     try {
       restApp.restClient.registerSchema(schema, "testSubject2");
-      fail(String.format("Subject %s is in read-only mode", "testSubject2"));
+      fail(String.format("Subject %s in context %s is in read-only mode", "testSubject2", context));
     } catch (RestClientException rce) {
-      assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
-          .getErrorCode());
+      assertEquals(
+          Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce.getErrorCode(),
+          String.format("Subject %s in context" 
+          +" %s is in read-only mode", "testSubject2", context)
+      );
     }
   }
 
@@ -2006,9 +2569,11 @@ public class RestApiTest extends ClusterTestHarness {
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
     int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false).getId());
+        restApp.restClient.registerSchema(request1, subject, false).getId(),
+        "Registering should succeed"
+    );
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     assertNull(schemaString.getRuleSet());
@@ -2034,60 +2599,84 @@ public class RestApiTest extends ClusterTestHarness {
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
     configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
     configUpdateRequest.setValidateFields(true);
-    assertEquals("Updating config should succeed",
+    assertEquals(
         configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, null));
-    assertThrows("Fail registering subject0 because of global validateFields",
+        restApp.restClient.updateConfig(configUpdateRequest, null),
+        "Updating config should succeed"
+    );
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.registerSchema(request1, subject0, false));
+        () -> restApp.restClient.registerSchema(request1, subject0, false),
+        "Fail registering subject0 because of global validateFields"
+    );
 
     // global validateFields = false
     configUpdateRequest.setValidateFields(false);
-    assertEquals("Updating config should succeed",
+    assertEquals(
         configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, null));
-    assertEquals("Should register despite reserved fields",
+        restApp.restClient.updateConfig(configUpdateRequest, null),
+        "Updating config should succeed"
+    );
+    assertEquals(
         1,
-        restApp.restClient.registerSchema(request1, subject0, false).getId());
+        restApp.restClient.registerSchema(request1, subject0, false).getId(),
+        "Should register despite reserved fields"
+    );
 
     // global validateFields = false; testSubject1 validateFields = true
     String subject1 = "testSubject1";
     configUpdateRequest.setValidateFields(true);
-    assertEquals("Updating config should succeed",
+    assertEquals(
         configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, subject1));
-    assertThrows("Fail registering subject1 because of subject1 validateFields",
+        restApp.restClient.updateConfig(configUpdateRequest, subject1),
+        "Updating config should succeed"
+    );
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.registerSchema(request1, subject1, false));
+        () -> restApp.restClient.registerSchema(request1, subject1, false),
+        "Fail registering subject1 because of subject1 validateFields"
+    );
     String subject2 = "testSubject2";
-    assertEquals("Should register despite reserved fields",
+    assertEquals(
         1,
-        restApp.restClient.registerSchema(request1, subject2, false).getId());
+        restApp.restClient.registerSchema(request1, subject2, false).getId(),
+        "Should register despite reserved fields"
+    );
 
     // global validateFields = true; testSubject1 validateFields = false
     configUpdateRequest.setValidateFields(true);
-    assertEquals("Updating config should succeed",
+    assertEquals(
         configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, null));
+        restApp.restClient.updateConfig(configUpdateRequest, null),
+        "Updating config should succeed"
+    );
     configUpdateRequest.setValidateFields(false);
-    assertEquals("Updating config should succeed",
+    assertEquals(
         configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, subject1));
-    assertEquals("Should register despite reserved fields",
+        restApp.restClient.updateConfig(configUpdateRequest, subject1),
+        "Updating config should succeed"
+    );
+    assertEquals(
         1,
-        restApp.restClient.registerSchema(request1, subject1, false).getId());
+        restApp.restClient.registerSchema(request1, subject1, false).getId(),
+        "Should register despite reserved fields"
+    );
     String subject3 = "testSubject3";
-    assertThrows("Fail registering because of subject3 validateFields",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.registerSchema(request1, subject3, false));
+        () -> restApp.restClient.registerSchema(request1, subject3, false),
+        "Fail registering because of subject3 validateFields"
+    );
 
     // remove reserved fields for subject1
     request1.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "g"),
         Collections.emptySet()));
-    assertEquals("Should register despite removal of reserved fields",
+    assertEquals(
         2,
-        restApp.restClient.registerSchema(request1, subject1, false).getId());
+        restApp.restClient.registerSchema(request1, subject1, false).getId(),
+        "Should register despite removal of reserved fields"
+    );
 
     // remove reserved fields for subject0
     schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -2101,9 +2690,259 @@ public class RestApiTest extends ClusterTestHarness {
     request2.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "g"),
         Collections.emptySet()));
-    assertThrows("Fail registering because of removal of reserved fields",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.registerSchema(request2, subject0, false));
+        () -> restApp.restClient.registerSchema(request2, subject0, false),
+        "Fail registering because of removal of reserved fields"
+    );
+  }
+
+  @Test
+  public void testInvalidSchema() {
+    assertThrows(InvalidSchemaException.class, () ->
+        ((KafkaSchemaRegistry) restApp.schemaRegistry()).parseSchema(null));
+  }
+
+  @Test
+  public void testConfluentVersion() throws Exception {
+    String subject = "test";
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"name\":\"f1\",\"type\":\"string\"}]}";
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchemaType(AvroSchema.TYPE);
+    request.setSchema(schemaString);
+    // Register with null version
+    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+
+    Schema result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+
+    // Register schema with version 2
+    request.setVersion(2);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Lookup schema with null version
+    request.setVersion(null);
+    request.setMetadata(null);
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
+    // Lookup schema with confluent:version 1 (should return one without metadata)
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "1"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
+    // Lookup schema with confluent:version 2
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Delete version 1
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    // Lookup schema with null version
+    request.setVersion(null);
+    request.setMetadata(null);
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with null version
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with version 3
+    request.setVersion(3);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 3, result.getVersion());
+    assertEquals("3", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with version 3
+    request.setVersion(3);
+    request.setMetadata(null);
+    try {
+      registerAndVerifySchema(restApp.restClient, request, 3, subject);
+      fail("Registering version that is not next version should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+
+    // Register schema with version 4
+    request.setVersion(4);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 4, subject);
+
+    // Lookup schema with null version
+    request.setVersion(null);
+    request.setMetadata(null);
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 4, result.getVersion());
+    assertEquals("4", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with confluent:version -1
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "-1"), null));
+    registerAndVerifySchema(restApp.restClient, request, 5, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 5, result.getVersion());
+    assertEquals("5", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with confluent:version 2
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    // Register schema with confluent:version 3
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "3"), null));
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with confluent:version 0
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "0"), null));
+    registerAndVerifySchema(restApp.restClient, request, 6, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 6, result.getVersion());
+    assertEquals("6", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with empty metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.emptyMap(), null));
+    registerAndVerifySchema(restApp.restClient, request, 6, subject);
+
+    // Register schema with new metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
+    registerAndVerifySchema(restApp.restClient, request, 7, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 7, result.getVersion());
+    assertNull(result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with confluent:version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 8, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 8, result.getVersion());
+    assertEquals("8", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Lookup schema with new metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 7, result.getVersion());
+    assertNull(result.getMetadata().getProperties().get("confluent:version"));
+
+    // Delete version 7
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "7");
+
+    // Lookup schema with new metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 8, result.getVersion());
+    assertEquals("8", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Use same schema with doc
+    schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"doc\":\"mydoc\","
+        + "\"fields\":"
+        + "[{\"name\":\"f1\",\"type\":\"string\"}]}";
+    request = new RegisterSchemaRequest();
+    request.setSchemaType(AvroSchema.TYPE);
+    request.setSchema(schemaString);
+
+    // Look up schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    try {
+      restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+      fail("Looking up version that is not next version should fail with " + Errors.SCHEMA_NOT_FOUND_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      RegisterSchemaRequest request,
+      int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
+    RegisterSchemaResponse response = restService.registerSchema(request, subject, false);
+    assertNotNull(response.getVersion());
+
+    int registeredId = response.getId();
+    assertEquals(
+        (long) expectedId,
+        (long) registeredId,
+        "Registering a new schema should succeed"
+    );
+    assertEquals(
+        request.getSchema().trim(),
+        restService.getId(expectedId).getSchemaString().trim(),
+        "Registered schema should be found"
+    );
   }
 
   @Override

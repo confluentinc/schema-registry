@@ -45,7 +45,7 @@ public class LazyParsedSchemaHolder implements ParsedSchemaHolder {
   @Override
   public ParsedSchema schema() {
     try {
-      return schemaRegistry.parseSchema(schemaValue().toSchemaEntity());
+      return schemaRegistry.parseSchema(schemaRegistry.toSchemaEntity(schemaValue()));
     } catch (SchemaRegistryException e) {
       throw new IllegalStateException(e);
     }

@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
@@ -30,6 +31,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetExcep
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -41,19 +43,19 @@ import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Map;
 
 @Path("/config")
@@ -97,6 +99,7 @@ public class ConfigResource {
                     + "Error code 50003 indicates a failure forwarding the request to the primary.",
             content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.update-subject")
   public ConfigUpdateRequest updateSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -104,7 +107,17 @@ public class ConfigResource {
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request);
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return updateTopLevelConfig(headers, request);
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating subject level config", e);
+    }
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -125,16 +138,16 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
-    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
       throw Errors.invalidSubjectException(subject);
     }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.updateConfigOrForward(subject, new Config(request), headerProperties);
+      Config config = schemaRegistry.updateConfigOrForward(subject, request, headerProperties);
+      return new ConfigUpdateRequest(config);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -145,8 +158,6 @@ public class ConfigResource {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
     }
-
-    return request;
   }
 
   @Path("/{subject}")
@@ -165,6 +176,7 @@ public class ConfigResource {
                     + "Error code 50001 indicates a failure in the backend data store.",
             content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.get-subject")
   public Config getSubjectLevelConfig(
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
@@ -173,12 +185,15 @@ public class ConfigResource {
               + " if subject compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return getTopLevelConfig(defaultToGlobal);
+    }
+
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     Config config;
     try {
-      config =
-          defaultToGlobal
+      config = defaultToGlobal
           ? schemaRegistry.getConfigInScope(subject)
           : schemaRegistry.getConfig(subject);
       if (config == null) {
@@ -209,12 +224,18 @@ public class ConfigResource {
                   + "Error code 50003 indicates a failure forwarding the request to the primary.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.update-global")
   public ConfigUpdateRequest updateTopLevelConfig(
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating global level config", e);
+    }
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -236,9 +257,8 @@ public class ConfigResource {
       }
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.updateConfigOrForward(null, new Config(request), headerProperties);
+      Config config = schemaRegistry.updateConfigOrForward(null, request, headerProperties);
+      return new ConfigUpdateRequest(config);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -249,8 +269,6 @@ public class ConfigResource {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
     }
-
-    return request;
   }
 
   @GET
@@ -264,10 +282,17 @@ public class ConfigResource {
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
-  public Config getTopLevelConfig() {
+  @PerformanceMetric("config.get-global")
+  public Config getTopLevelConfig(
+      @Parameter(description =
+        "Whether to return the global compatibility level "
+            + " if subject compatibility level not found")
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     Config config;
     try {
-      config = schemaRegistry.getConfig(null);
+      config = defaultToGlobal
+          ? schemaRegistry.getConfigInScope(null)
+          : schemaRegistry.getConfig(null);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get compatibility level", e);
     }
@@ -288,6 +313,7 @@ public class ConfigResource {
                           + "Error code 50001 indicates a failure in the backend data store.",
               content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.delete-global")
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers) {
@@ -330,12 +356,18 @@ public class ConfigResource {
                   + "Error code 50001 indicates a failure in the backend data store.",
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("config.delete-subject")
   public void deleteSubjectConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.debug("Deleting compatibility setting for subject {}", subject);
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      deleteTopLevelConfig(asyncResponse, headers);
+      return;
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

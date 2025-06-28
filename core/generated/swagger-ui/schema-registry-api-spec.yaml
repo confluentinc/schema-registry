@@ -636,7 +636,22 @@ paths:
       - Contexts (v1)
       summary: List contexts
       description: Retrieves a list of contexts.
-      operationId: listContexts_1
+      operationId: listContexts
+      parameters:
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: The contexts.
@@ -963,6 +978,12 @@ paths:
         schema:
           type: string
           default: ""
+      - name: aliases
+        in: query
+        description: Whether to include aliases in the search
+        schema:
+          type: boolean
+          default: false
       - name: deleted
         in: query
         description: Whether to return soft deleted schemas
@@ -1054,6 +1075,13 @@ paths:
         schema:
           type: string
           default: ""
+      - name: findTags
+        in: query
+        description: Find tagged entities for the given tags or * for all tags
+        schema:
+          type: array
+          items:
+            type: string
       - name: fetchMaxId
         in: query
         description: Whether to fetch the maximum schema identifier that exists
@@ -1124,6 +1152,20 @@ paths:
         description: Whether to include subjects where the schema was deleted
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of subjects matching the specified parameters.
@@ -1196,6 +1238,20 @@ paths:
         description: Whether to include subject versions where the schema was deleted
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of subject versions matching the specified parameters.
@@ -1296,6 +1352,20 @@ paths:
         schema:
           type: string
           default: ":*:"
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       - name: deleted
         in: query
         description: Whether to look up deleted subjects
@@ -1362,6 +1432,12 @@ paths:
         description: Whether to normalize the given schema
         schema:
           type: boolean
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to lookup deleted schemas
@@ -1515,6 +1591,20 @@ paths:
         description: Whether to return deleted schemas only
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of version numbers matching the specified parameters.
@@ -1586,6 +1676,12 @@ paths:
         description: Whether to normalize the given schema
         schema:
           type: boolean
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       requestBody:
         description: Schema
         content:
@@ -1679,11 +1775,24 @@ paths:
         required: true
         schema:
           type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to include deleted schema
         schema:
           type: boolean
+      - name: findTags
+        in: query
+        description: Find tagged entities for the given tags or * for all tags
+        schema:
+          type: array
+          items:
+            type: string
       responses:
         "200":
           description: The schema.
@@ -1851,6 +1960,20 @@ paths:
         required: true
         schema:
           type: string
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of IDs for schemas that reference the specified schema.
@@ -1922,7 +2045,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_2
       parameters:
       - name: subject
         in: path
@@ -1940,6 +2063,12 @@ paths:
         required: true
         schema:
           type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to include deleted schema
@@ -2016,7 +2145,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly
       parameters:
       - name: id
         in: path
@@ -2113,6 +2242,12 @@ paths:
           type: array
           items:
             type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to lookup deleted schemas
@@ -2274,6 +2409,16 @@ components:
         schema:
           type: string
           description: Schema definition string
+        schemaTagsToAdd:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaTags"
+        schemaTagsToRemove:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaTags"
+        propagateSchemaTags:
+          type: boolean
       description: Schema register request
     SchemaReference:
       type: object
@@ -2300,6 +2445,8 @@ components:
         normalize:
           type: boolean
         validateFields:
+          type: boolean
+        validateRules:
           type: boolean
         compatibilityLevel:
           type: string
@@ -2332,6 +2479,8 @@ components:
         normalize:
           type: boolean
         validateFields:
+          type: boolean
+        validateRules:
           type: boolean
         compatibility:
           type: string
@@ -2402,6 +2551,11 @@ components:
           $ref: "#/components/schemas/Metadata"
         ruleSet:
           $ref: "#/components/schemas/RuleSet"
+        schemaTags:
+          type: array
+          description: Schema tags
+          items:
+            $ref: "#/components/schemas/SchemaTags"
         maxId:
           type: integer
           description: Maximum ID
@@ -2442,6 +2596,11 @@ components:
           type: string
           description: Schema definition string
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        schemaTags:
+          type: array
+          description: Schema tags
+          items:
+            $ref: "#/components/schemas/SchemaTags"
         ruleSet:
           $ref: "#/components/schemas/RuleSet"
       description: Schema
@@ -2618,6 +2777,54 @@ components:
           type: array
           items:
             type: string
+    ExtendedSchema:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: Name of the subject
+          example: User
+        version:
+          type: integer
+          description: Version number
+          format: int32
+          example: 1
+        id:
+          type: integer
+          description: Globally unique identifier of the schema
+          format: int32
+          example: 100001
+        schemaType:
+          type: string
+          description: Schema type
+          example: AVRO
+        references:
+          type: array
+          description: References to other schemas
+          items:
+            $ref: "#/components/schemas/SchemaReference"
+        metadata:
+          $ref: "#/components/schemas/Metadata"
+        ruleset:
+          $ref: "#/components/schemas/RuleSet"
+        schema:
+          type: string
+          description: Schema definition string
+          example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        aliases:
+          type: array
+          description: Aliases for the given subject
+          items:
+            type: string
+            description: Aliases for the given subject
+        ruleSet:
+          $ref: "#/components/schemas/RuleSet"
+        schemaTags:
+          type: array
+          description: Schema tags
+          items:
+            $ref: "#/components/schemas/SchemaTags"
+      description: ExtendedSchema
     TagSchemaRequest:
       type: object
       properties:

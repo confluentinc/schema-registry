@@ -15,7 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionMapper;
+import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionWriterInterceptor;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
@@ -31,15 +34,19 @@ import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
-import org.eclipse.jetty.servlet.ServletContextHandler;
+import java.util.Arrays;
+import java.util.Collection;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.util.resource.Resource;
-import org.eclipse.jetty.util.resource.ResourceCollection;
+import org.eclipse.jetty.util.resource.ResourceFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Configurable;
+import jakarta.ws.rs.core.Configurable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -55,11 +62,24 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   @Override
+  protected ObjectMapper getJsonMapper() {
+    return JacksonMapper.INSTANCE;
+  }
+
+  @Override
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
-    context.insertHandler(new RequestIdHandler());
+    context.insertHandler(new RequestHeaderHandler());
+    List<Handler.Singleton> schemaRegistryCustomHandlers =
+            schemaRegistry.getCustomHandler();
+    if (schemaRegistryCustomHandlers != null) {
+      for (Handler.Singleton
+              schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
+        context.insertHandler(schemaRegistryCustomHandler);
+      }
+    }
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
@@ -119,6 +139,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));
+    config.register(new JettyEofExceptionMapper());
+    config.register(new JettyEofExceptionWriterInterceptor());
 
     List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
         schemaRegistry.getResourceExtensions();
@@ -170,13 +192,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   @Override
-  protected ResourceCollection getStaticResources() {
+  protected Collection<Resource> getStaticResources() {
+    ResourceFactory.LifeCycle resourceFactory = ResourceFactory.lifecycle();
     List<String> locations = config.getStaticLocations();
     if (locations != null && !locations.isEmpty()) {
       Resource[] resources = locations.stream()
-          .map(Resource::newClassPathResource)
+          .map(resource -> resourceFactory.newClassLoaderResource(resource))
           .toArray(Resource[]::new);
-      return new ResourceCollection(resources);
+      return Arrays.asList(resources);
     } else {
       return super.getStaticResources();
     }

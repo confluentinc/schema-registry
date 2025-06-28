@@ -15,16 +15,24 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
+import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,21 +41,23 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.PathParam;
-import java.util.ArrayList;
-import java.util.Iterator;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.PathParam;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+
 
 @Path("/schemas")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -82,9 +92,11 @@ public class SchemasResource {
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.get-schemas")
-  public List<Schema> getSchemas(
+  public List<ExtendedSchema> getSchemas(
       @Parameter(description = "Filters results by the respective subject prefix")
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Whether to include aliases in the search")
+      @DefaultValue("false") @QueryParam("aliases") boolean aliases,
       @Parameter(description = "Whether to return soft deleted schemas")
       @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description =
@@ -96,8 +108,7 @@ public class SchemasResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    Iterator<Schema> schemas;
-    List<Schema> filteredSchemas = new ArrayList<>();
+    Iterator<ExtendedSchema> schemas;
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
@@ -105,32 +116,28 @@ public class SchemasResource {
           ? schema -> schema.getRuleSet() != null && schema.getRuleSet().hasRulesWithType(ruleType)
           : null;
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
-          subjectPrefix, filter, latestOnly, postFilter);
+          subjectPrefix, aliases, filter, latestOnly, postFilter);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    limit = schemaRegistry.normalizeLimit(limit);
-    int toIndex = offset + limit;
-    int index = 0;
-    while (schemas.hasNext() && index < toIndex) {
-      Schema schema = schemas.next();
-      if (index >= offset) {
-        filteredSchemas.add(schema);
-      }
-      index++;
-    }
-    return filteredSchemas;
+    limit = schemaRegistry.normalizeSchemaLimit(limit);
+    return Streams.stream(schemas)
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
   @Path("/ids/{id}")
-  @DocumentedName("getSchemasById")
-  @Operation(summary = "Get schema string by ID",
-      description = "Retrieves the schema string identified by the input ID.",
+  @DocumentedName("getSchemaById")
+  @Operation(summary = "Get schema by ID",
+      description = "Retrieves the schema identified by the input ID.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "The schema string.",
+        @ApiResponse(responseCode = "200", description = "The schema.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
                 implementation = SchemaString.class))),
         @ApiResponse(responseCode = "404",
@@ -145,12 +152,16 @@ public class SchemasResource {
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.ids.get-schema")
   public SchemaString getSchema(
-      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @Parameter(description = "unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
       @Parameter(description = "Name of the subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Desired output format for references")
+      @DefaultValue("") @QueryParam("referenceFormat") String referenceFormat,
+      @Parameter(description = "Find tagged entities for the given tags or * for all tags")
+      @QueryParam("findTags") List<String> tags,
       @Parameter(description = "Whether to fetch the maximum schema identifier that exists")
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema;
@@ -158,14 +169,40 @@ public class SchemasResource {
                           + "registry";
     try {
       schema = schemaRegistry.get(id, subject, format, fetchMaxId);
+      if (schema == null) {
+        throw Errors.schemaNotFoundException(id);
+      }
+      if (tags != null && !tags.isEmpty()) {
+        Schema s = new Schema(null, null, null, schema);
+        schemaRegistry.extractSchemaTags(s, tags);
+        schema.setSchemaTags(s.getSchemaTags());
+      }
+      QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
+      boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+      List<SchemaReference> refs = schema.getReferences();
+      boolean hasRefs = refs != null && !refs.isEmpty();
+      if (isQualifiedSubject
+          && hasRefs
+          && referenceFormat != null
+          && referenceFormat.equals("qualified")) {
+        // Convert references to be qualified with the parent subject
+        List<SchemaReference> qualifiedRefs = refs.stream()
+            .map(ref -> {
+              QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+                  schemaRegistry.tenant(), qs.toQualifiedSubject(), ref.getSubject());
+              return new SchemaReference(
+                  ref.getName(), refSubject.toUnqualifiedSubject(), ref.getVersion());
+            })
+            .collect(Collectors.toList());
+        schema.setReferences(qualifiedRefs);
+      }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
-    }
-    if (schema == null) {
-      throw Errors.schemaNotFoundException(id);
     }
     return schema;
   }
@@ -191,13 +228,18 @@ public class SchemasResource {
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                     ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.get-subjects")
   public Set<String> getSubjects(
-      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @Parameter(description = "Unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
       @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Whether to include subjects where the schema was deleted")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
     Set<String> subjects;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
         + id + " from the schema registry";
@@ -214,8 +256,11 @@ public class SchemasResource {
     if (subjects == null) {
       throw Errors.schemaNotFoundException();
     }
-
-    return subjects;
+    limit = schemaRegistry.normalizeSubjectLimit(limit);
+    return subjects.stream()
+            .skip(offset)
+            .limit(limit)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
   }
 
   @GET
@@ -239,13 +284,18 @@ public class SchemasResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.get-versions")
   public List<SubjectVersion> getVersions(
-      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @Parameter(description = "Unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
       @Parameter(description = "Filters results by the respective subject")
       @QueryParam("subject") String subject,
       @Parameter(description = "Whether to include subject versions where the schema was deleted")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
     List<SubjectVersion> versions;
     String errorMessage = "Error while retrieving all subjects associated with schema id "
                           + id + " from the schema registry";
@@ -262,8 +312,11 @@ public class SchemasResource {
     if (versions == null) {
       throw Errors.schemaNotFoundException();
     }
-
-    return versions;
+    limit = schemaRegistry.normalizeSubjectVersionLimit(limit);
+    return versions.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
@@ -287,8 +340,7 @@ public class SchemasResource {
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.ids.get-schema.only")
   public String getSchemaOnly(
-      @Parameter(description = "Globally unique "
-              + "identifier of the schema", required = true)
+      @Parameter(description = "Unique identifier of the schema", required = true)
       @PathParam("id") Integer id,
       @Parameter(description = "Name of the subject")
       @QueryParam("subject") String subject,
@@ -299,6 +351,8 @@ public class SchemasResource {
     String schema ;
     try {
       schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -309,6 +363,88 @@ public class SchemasResource {
       throw Errors.schemaNotFoundException(id);
     }
     return schema;
+  }
+
+  @GET
+  @Path("/guids/{guid}")
+  @DocumentedName("getSchemaByGuid")
+  @Operation(summary = "Get schema by GUID",
+      description = "Retrieves the schema identified by the input GUID.",
+      responses = {
+          @ApiResponse(responseCode = "200", description = "The schema.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = SchemaString.class))),
+          @ApiResponse(responseCode = "404",
+              description = "Not Found. Error code 40403 indicates schema not found.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+              description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.guids.get-schema")
+  public SchemaString getSchemaByGuid(
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @PathParam("guid") String guid,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format) {
+    SchemaString schema;
+    String errorMessage = "Error while retrieving schema with guid " + guid + " from the schema "
+        + "registry";
+    try {
+      schema = schemaRegistry.getByGuid(guid, format);
+      if (schema == null) {
+        throw Errors.schemaNotFoundException(guid);
+      }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    return schema;
+  }
+
+  @GET
+  @Path("/guids/{guid}/ids")
+  @DocumentedName("getAllIdsByGuid")
+  @Operation(summary = "Get IDs by GUID",
+      description = "Retrieves the IDs identified by the input GUID.",
+      responses = {
+          @ApiResponse(responseCode = "200", description = "List of IDs for the given GUID.",
+              content = @Content(array = @ArraySchema(
+                  schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
+                      ContextId.class)))),
+          @ApiResponse(responseCode = "404",
+              description = "Not Found. Error code 40403 indicates schema not found.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+              description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+              content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(
+                  implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.guids.get-ids")
+  public List<ContextId> getIdsByGuid(
+      @Parameter(description = "Globally unique identifier of the schema", required = true)
+      @PathParam("guid") String guid) {
+    List<ContextId> ids;
+    String errorMessage = "Error while retrieving all ids with guid " + guid + " from the schema "
+        + "registry";
+    try {
+      ids = schemaRegistry.listIdsForGuid(guid);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    return ids;
   }
 
   @GET
@@ -327,6 +463,7 @@ public class SchemasResource {
           content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("schemas.get-types")
   public Set<String> getSchemaTypes() {
     return schemaRegistry.schemaTypes();
   }

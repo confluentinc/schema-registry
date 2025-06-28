@@ -54,8 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -80,7 +79,7 @@ public class RestApiTest extends ClusterTestHarness {
     return props;
   }
 
-  @Before
+  @Override
   public void setUp() throws Exception {
     super.setUp();
     fakeTicker = new FakeTicker();
@@ -131,13 +130,17 @@ public class RestApiTest extends ClusterTestHarness {
 
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
     String kekName = "kek1";
+    String kek3Name = "kek3";
     String kmsType = "test-kms";
     String kmsKeyId = "myid";
+    String kmsKeyId3 = "myid2";
     String subject = "mysubject";
     String badSubject = "badSubject";
     String subject2 = "mysubject2";
+    String subject3 = "foosubject";
     DekFormat algorithm = DekFormat.AES256_GCM;
     Kek kek = new Kek(kekName, kmsType, kmsKeyId, null, null, false, null, null);
+    Kek kek3 = new Kek(kek3Name, kmsType, kmsKeyId3, null, null, false, null, null);
 
     if (isImport) {
       client.setMode("IMPORT");
@@ -294,6 +297,24 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 0, 1);
+    assertEquals(ImmutableList.of(1), versions);
+
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 1, 1);
+    assertEquals(ImmutableList.of(2), versions);
+
+    List<String> kekNames = client.listKeks(Collections.singletonList(subject), false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeks(Collections.singletonList(subject2), false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 0, 1);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 1, 1);
+    assertEquals(Collections.emptyList(), kekNames);
+
     try {
       client.deleteKek(headers, kekName, false);
       fail();
@@ -327,6 +348,11 @@ public class RestApiTest extends ClusterTestHarness {
     deks = client.listDeks(kekName, true);
     assertEquals(ImmutableList.of(subject, subject2), deks);
 
+    deks = client.listDeksWithPagination(kekName, true, 0, 1);
+    assertEquals(ImmutableList.of(subject), deks);
+    deks = client.listDeksWithPagination(kekName, true, 1, 1);
+    assertEquals(ImmutableList.of(subject2), deks);
+
     client.deleteDekVersion(headers, kekName, subject2, 2, null, false);
 
     versions = client.listDekVersions(kekName, subject2, null, false);
@@ -336,6 +362,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
+
+    kekNames = client.listKeks(Collections.singletonList(subject2), false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeks(Collections.singletonList(subject), true);
+    assertEquals(ImmutableList.of(kekName), kekNames);
 
     client.deleteDek(headers, kekName, subject2, algorithm, false);
     client.deleteKek(headers, kekName, false);
@@ -366,7 +398,29 @@ public class RestApiTest extends ClusterTestHarness {
     deks = client.listDeks(kekName, false);
     assertEquals(ImmutableList.of(subject2), deks);
 
-    // Delete again
+    // Create kek3
+    Kek newKek3 = client.createKek(headers, kek3Name, kmsType, kmsKeyId3, null, null, false, false);
+    assertEquals(kek3, newKek3);
+
+    // Create dek3
+    Dek dek3 = new Dek(kek3Name, subject3, 1, algorithm, encryptedDekStr, null, null, null);
+    Dek newDek3 = client.createDek(headers, kek3Name, subject3, null, algorithm, encryptedDekStr, false);
+    assertEquals(dek3, newDek3);
+
+    kekNames = client.listKeks(Collections.singletonList(subject2), false);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeks(Collections.singletonList("foo"), false);
+    assertEquals(ImmutableList.of(kek3Name), kekNames);
+
+    kekNames = client.listKeks(ImmutableList.of("foo", subject2), false);
+    assertEquals(ImmutableList.of(kekName, kek3Name), kekNames);
+
+    // Clean up kek3/dek3
+    client.deleteDek(headers, kek3Name, subject3, algorithm, false);
+    client.deleteKek(headers, kek3Name, false);
+
+    // Delete dek again
     client.deleteDek(headers, kekName, subject2, algorithm, false);
     client.deleteKek(headers, kekName, false);
 

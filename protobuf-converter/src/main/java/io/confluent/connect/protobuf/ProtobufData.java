@@ -19,11 +19,14 @@ package io.confluent.connect.protobuf;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos;
+import com.google.protobuf.DescriptorProtos.Edition;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
@@ -36,6 +39,8 @@ import com.google.protobuf.util.Timestamps;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -44,6 +49,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -303,6 +309,7 @@ public class ProtobufData {
   private boolean useWrapperForRawPrimitives;
   private boolean generateStructForNulls;
   private boolean generateIndexForUnions;
+  private boolean flattenUnions;
 
   public ProtobufData() {
     this(new ProtobufDataConfig.Builder().with(
@@ -329,6 +336,7 @@ public class ProtobufData {
     this.useWrapperForRawPrimitives = protobufDataConfig.useWrapperForRawPrimitives();
     this.generateStructForNulls = protobufDataConfig.generateStructForNulls();
     this.generateIndexForUnions = protobufDataConfig.generateIndexForUnions();
+    this.flattenUnions = protobufDataConfig.flattenUnions();
   }
 
   /**
@@ -724,7 +732,7 @@ public class ProtobufData {
       String fieldTag = fieldSchema.parameters() != null ? fieldSchema.parameters()
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : index++;
-      FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
+      FieldDefinition.Builder fieldDef = fieldDefinitionFromConnectSchema(
           ctx,
           schema,
           message,
@@ -733,27 +741,15 @@ public class ProtobufData {
           tag
       );
       if (fieldDef != null) {
-        boolean isProto3Optional = "optional".equals(fieldDef.getLabel());
+        boolean isProto3Optional = "optional".equals(getLabel(fieldSchema));
         if (isProto3Optional) {
           // Add a synthentic oneof
           MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + fieldDef.getName());
-          oneofBuilder.addField(
-              true,
-              fieldDef.getType(),
-              fieldDef.getName(),
-              fieldDef.getNum(),
-              fieldDef.getDefaultVal(),
-              fieldDef.getMeta()
-          );
+          fieldDef.setProto3Optional(true);
+          fieldDef.setOneofIndex(oneofBuilder.getIdx());
+          oneofBuilder.addField(fieldDef.build());
         } else {
-          message.addField(
-              fieldDef.getLabel(),
-              fieldDef.getType(),
-              fieldDef.getName(),
-              fieldDef.getNum(),
-              fieldDef.getDefaultVal(),
-              fieldDef.getMeta()
-          );
+          message.addField(fieldDef.build());
         }
       }
     }
@@ -773,7 +769,7 @@ public class ProtobufData {
       String fieldTag = fieldSchema.parameters() != null ? fieldSchema.parameters()
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : 0;
-      FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
+      FieldDefinition.Builder fieldDef = fieldDefinitionFromConnectSchema(
           ctx,
           schema,
           message,
@@ -782,18 +778,13 @@ public class ProtobufData {
           tag
       );
       if (fieldDef != null) {
-        oneof.addField(
-            fieldDef.getType(),
-            fieldDef.getName(),
-            fieldDef.getNum(),
-            fieldDef.getDefaultVal(),
-            fieldDef.getMeta()
-        );
+        fieldDef.setOneofIndex(oneof.getIdx());
+        oneof.addField(fieldDef.build());
       }
     }
   }
 
-  private FieldDefinition fieldDefinitionFromConnectSchema(
+  private FieldDefinition.Builder fieldDefinitionFromConnectSchema(
       FromConnectContext ctx,
       DynamicSchema.Builder schema,
       MessageDefinition.Builder message,
@@ -801,14 +792,9 @@ public class ProtobufData {
       String name,
       int tag
   ) {
-    String label = null;
+    String label = getLabel(fieldSchema);
     if (fieldSchema.type() == Schema.Type.ARRAY) {
-      label = "repeated";
       fieldSchema = fieldSchema.valueSchema();
-    } else if (fieldSchema.type() == Schema.Type.MAP) {
-      label = "repeated";
-    } else if (useOptionalForNullables && fieldSchema.isOptional()) {
-      label = "optional";
     }
     Map<String, String> params = new HashMap<>();
     String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params);
@@ -852,14 +838,27 @@ public class ProtobufData {
         defaultVal = fieldSchema.defaultValue();
       }
     }
-    return new FieldDefinition(
-        label,
-        type,
-        name,
-        tag,
-        defaultVal != null ? defaultVal.toString() : null,
-        new ProtobufMeta(null, params, null)
-    );
+    FieldDefinition.Builder builder = FieldDefinition.newBuilder(new Context(), name, tag, type);
+    if (label != null) {
+      builder.setLabel(label);
+    }
+    if (defaultVal != null) {
+      builder.setDefaultValue(defaultVal.toString());
+    }
+    builder.setMeta(new ProtobufMeta(null, params, null));
+    return builder;
+  }
+
+  private String getLabel(Schema fieldSchema) {
+    String label = null;
+    if (fieldSchema.type() == Schema.Type.ARRAY) {
+      label = "repeated";
+    } else if (fieldSchema.type() == Schema.Type.MAP) {
+      label = "repeated";
+    } else if (useOptionalForNullables && fieldSchema.isOptional()) {
+      label = "optional";
+    }
+    return label;
   }
 
   private Descriptor typeToDescriptor(String type) {
@@ -918,77 +917,11 @@ public class ProtobufData {
     }
   }
 
-  static class FieldDefinition {
-
-    private final String label;
-    private final String type;
-    private final String name;
-    private final int num;
-    private final String defaultVal;
-    private final ProtobufMeta meta;
-
-    public FieldDefinition(String label, String type, String name, int num, String defaultVal,
-        ProtobufMeta meta) {
-      this.label = label;
-      this.type = type;
-      this.name = name;
-      this.num = num;
-      this.defaultVal = defaultVal;
-      this.meta = meta;
-    }
-
-    public String getType() {
-      return type;
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public int getNum() {
-      return num;
-    }
-
-    public String getDefaultVal() {
-      return defaultVal;
-    }
-
-    public String getLabel() {
-      return label;
-    }
-
-    public ProtobufMeta getMeta() {
-      return meta;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      FieldDefinition that = (FieldDefinition) o;
-      return num == that.num
-          && Objects.equals(label, that.label)
-          && Objects.equals(type, that.type)
-          && Objects.equals(name, that.name)
-          && Objects.equals(defaultVal, that.defaultVal)
-          && Objects.equals(meta, that.meta);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(label, type, name, num, defaultVal, meta);
-    }
-  }
-
   private MessageDefinition mapDefinitionFromConnectSchema(
       FromConnectContext ctx, DynamicSchema.Builder schema, String name, Schema mapElem
   ) {
     MessageDefinition.Builder map = MessageDefinition.newBuilder(name);
-    FieldDefinition key = fieldDefinitionFromConnectSchema(
+    FieldDefinition.Builder key = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
         map,
@@ -996,9 +929,8 @@ public class ProtobufData {
         KEY_FIELD,
         1
     );
-    map.addField(key.getLabel(), key.getType(), key.getName(), key.getNum(),
-        key.getDefaultVal(), null);
-    FieldDefinition val = fieldDefinitionFromConnectSchema(
+    map.addField(key.build());
+    FieldDefinition.Builder val = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
         map,
@@ -1006,8 +938,7 @@ public class ProtobufData {
         VALUE_FIELD,
         2
     );
-    map.addField(val.getLabel(), val.getType(), val.getName(), val.getNum(),
-        val.getDefaultVal(), null);
+    map.addField(val.build());
     return map.build();
   }
 
@@ -1294,7 +1225,11 @@ public class ProtobufData {
               FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
               Object obj = message.getField(fieldDescriptor);
               if (obj != null) {
-                setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
+                if (flattenUnions) {
+                  setStructField(schema, message, struct, fieldDescriptor);
+                } else {
+                  setUnionField(schema, message, struct, oneOfDescriptor, fieldDescriptor);
+                }
               }
             }
           }
@@ -1376,7 +1311,27 @@ public class ProtobufData {
 
   private boolean isOptional(FieldDescriptor fieldDescriptor) {
     return fieldDescriptor.toProto().getProto3Optional()
-        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
+        || (supportOptionalForProto2 && hasOptionalKeyword(fieldDescriptor));
+  }
+
+  // copied from Descriptors.java since it is not public
+  private boolean hasOptionalKeyword(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (getEdition(fieldDescriptor.getFile()) == Edition.EDITION_PROTO2
+        && fieldDescriptor.isOptional()
+        && fieldDescriptor.getContainingOneof() == null);
+  }
+
+  // copied from Descriptors.java since it is not public
+  private DescriptorProtos.Edition getEdition(FileDescriptor file) {
+    switch (file.toProto().getSyntax()) {
+      case "editions":
+        return file.toProto().getEdition();
+      case "proto3":
+        return Edition.EDITION_PROTO3;
+      default:
+        return Edition.EDITION_PROTO2;
+    }
   }
 
   private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
@@ -1412,8 +1367,15 @@ public class ProtobufData {
       builder.name(name);
       List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
       for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
-        String unionFieldName = unionFieldName(oneOfDescriptor);
-        builder.field(unionFieldName, toConnectSchema(ctx, oneOfDescriptor));
+        if (flattenUnions) {
+          List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
+          for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
+            builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+          }
+        } else {
+          String unionFieldName = unionFieldName(oneOfDescriptor);
+          builder.field(unionFieldName, toConnectSchema(ctx, oneOfDescriptor));
+        }
       }
       List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
       for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
@@ -1591,7 +1553,7 @@ public class ProtobufData {
     }
 
     if (useOptionalForNullables) {
-      if (descriptor.hasOptionalKeyword()) {
+      if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }
     } else if (!useWrapperForNullables) {
@@ -1680,15 +1642,22 @@ public class ProtobufData {
    */
   private String[] splitName(String fullName) {
     String[] result = new String[2];
-    int indexLastDot = fullName.lastIndexOf('.');
-    if (indexLastDot >= 0) {
-      result[0] = fullName.substring(0, indexLastDot);
-      result[1] = fullName.substring(indexLastDot + 1);
-    } else {
+    if (fullName == null || fullName.isEmpty()) {
       result[0] = null;
       result[1] = fullName;
+      return result;
     }
-    result[1] = scrubName(result[1]);
+    String[] parts = fullName.split("\\.");
+    for (int i = 0; i < parts.length; i++) {
+      parts[i] = scrubName(parts[i]);
+    }
+    if (parts.length <= 1) {
+      result[0] = null;
+      result[1] = parts[0];
+    } else {
+      result[0] = String.join(".", Arrays.copyOfRange(parts, 0, parts.length - 1));
+      result[1] = parts[parts.length - 1];
+    }
     return result;
   }
 

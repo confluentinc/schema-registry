@@ -21,15 +21,11 @@ import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.jdk.javaapi.CollectionConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -37,7 +33,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
 import java.util.List;
-import java.util.LinkedList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Map;
@@ -56,6 +51,8 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+  public static final String RESOURCE_CERT_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "cert.type";
+  public static final String RESOURCE_CERT_LABEL_NAME = RESOURCE_LABEL_PREFIX + "cert.name";
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
   public static final String LISTENER_NAME_PREFIX = "listener.name.";
@@ -114,6 +111,11 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>kafkastore.init.timeout.ms</code>
    */
   public static final String KAFKASTORE_INIT_TIMEOUT_CONFIG = "kafkastore.init.timeout.ms";
+  /**
+   * <code>kafkastore.init.wait.for.reader</code>
+   */
+  public static final String KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG =
+      "kafkastore.init.wait.for.reader";
   /**
    * <code>kafkastore.update.handler</code>
    */
@@ -214,11 +216,51 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_SEARCH_MAX_LIMIT_CONFIG = "schema.search.max.limit";
   public static final int SCHEMA_SEARCH_MAX_LIMIT_DEFAULT = 1000;
 
+  /**
+   * <code>subject.version.search.default.limit</code>
+   */
+  public static final String SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG =
+          "subject.version.search.default.limit";
+  public static final int SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>subject.version.search.max.limit</code>
+   */
+  public static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG =
+          "subject.version.search.max.limit";
+  public static final int SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>context.search.default.limit</code>
+   */
+  public static final String CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG = "context.search.default.limit";
+  public static final int CONTEXT_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>context.search.max.limit</code>
+   */
+  public static final String CONTEXT_SEARCH_MAX_LIMIT_CONFIG = "context.search.max.limit";
+  public static final int CONTEXT_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>subject.search.default.limit</code>
+   */
+  public static final String SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG = "subject.search.default.limit";
+  public static final int SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;
+  /**
+   * <code>subject.search.max.limit</code>
+   */
+  public static final String SUBJECT_SEARCH_MAX_LIMIT_CONFIG = "subject.search.max.limit";
+  public static final int SUBJECT_SEARCH_MAX_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
   public static final String METADATA_ENCODER_SECRET_CONFIG = "metadata.encoder.secret";
   public static final String METADATA_ENCODER_OLD_SECRET_CONFIG = "metadata.encoder.old.secret";
 
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
+
+  public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
+  public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
 
   public static final String KAFKASTORE_SECURITY_PROTOCOL_CONFIG =
       "kafkastore.security.protocol";
@@ -318,6 +360,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String KAFKASTORE_INIT_TIMEOUT_DOC =
       "The timeout for initialization of the Kafka store, including creation of the Kafka topic "
       + "that stores schema data.";
+  protected static final String KAFKASTORE_INIT_WAIT_FOR_READER_DOC =
+      "If true, Kafka store initialization and leader election will wait for the Kafka reader to "
+      + "reach the last offset.";
   protected static final String KAFKASTORE_CHECKPOINT_DIR_DOC =
       "For persistent stores, the directory in which to store offset checkpoints.";
   protected static final String KAFKASTORE_CHECKPOINT_VERSION_DOC =
@@ -367,6 +412,18 @@ public class SchemaRegistryConfig extends RestConfig {
       "The default limit for schema searches.";
   protected static final String SCHEMA_SEARCH_MAX_LIMIT_DOC =
       "The max limit for schema searches.";
+  protected static final String CONTEXT_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for context searches.";
+  protected static final String CONTEXT_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for context searches.";
+  protected static final String SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for subject version searches.";
+  protected static final String SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for subject version searches.";
+  protected static final String SUBJECT_SEARCH_DEFAULT_LIMIT_DOC =
+      "The default limit for subject searches.";
+  protected static final String SUBJECT_SEARCH_MAX_LIMIT_DOC =
+      "The max limit for subject searches.";
   protected static final String METADATA_ENCODER_SECRET_DOC =
       "The secret used to encrypt and decrypt encoder keysets. "
       + "Use a random string with high entropy.";
@@ -390,6 +447,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
+  protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
+      "If true, health check will call the local storage.";
   protected static final String KAFKASTORE_SECURITY_PROTOCOL_DOC =
       "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
       + "Values can be `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.";
@@ -527,6 +586,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(KAFKASTORE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_INIT_TIMEOUT_DOC
     )
+    .define(KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG, ConfigDef.Type.BOOLEAN, true,
+        ConfigDef.Importance.LOW, KAFKASTORE_INIT_WAIT_FOR_READER_DOC
+    )
     .define(KAFKASTORE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
         ConfigDef.Importance.MEDIUM, KAFKASTORE_TIMEOUT_DOC
     )
@@ -575,6 +637,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
     )
+    .define(CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            CONTEXT_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, CONTEXT_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(CONTEXT_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            CONTEXT_SEARCH_MAX_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, CONTEXT_SEARCH_MAX_LIMIT_DOC
+    )
     .define(SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
         SCHEMA_SEARCH_DEFAULT_LIMIT_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_SEARCH_DEFAULT_LIMIT_DOC
@@ -582,6 +652,22 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
         SCHEMA_SEARCH_MAX_LIMIT_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_VERSION_SEARCH_MAX_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_VERSION_SEARCH_MAX_LIMIT_DOC
+    )
+    .define(SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_SEARCH_DEFAULT_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_SEARCH_DEFAULT_LIMIT_DOC
+    )
+    .define(SUBJECT_SEARCH_MAX_LIMIT_CONFIG, ConfigDef.Type.INT,
+            SUBJECT_SEARCH_MAX_LIMIT_DEFAULT,
+            ConfigDef.Importance.LOW, SUBJECT_SEARCH_MAX_LIMIT_DOC
     )
     .define(METADATA_ENCODER_SECRET_CONFIG, ConfigDef.Type.PASSWORD, null,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_SECRET_DOC
@@ -612,6 +698,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
+    )
+    .define(ENABLE_STORE_HEALTH_CHECK, ConfigDef.Type.BOOLEAN, DEFAULT_ENABLE_STORE_HEALTH_CHECK,
+        ConfigDef.Importance.LOW, ENABLE_STORE_HEALTH_CHECK_DOC
     )
     .define(KAFKASTORE_SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING,
         SecurityProtocol.PLAINTEXT.toString(), ConfigDef.Importance.MEDIUM,
@@ -794,22 +883,6 @@ public class SchemaRegistryConfig extends RestConfig {
         endpoints,
         this.getString(KAFKASTORE_SECURITY_PROTOCOL_CONFIG)
     );
-  }
-
-  static List<String> brokersToEndpoints(List<Broker> brokers) {
-    final List<String> endpoints = new LinkedList<>();
-    for (Broker broker : brokers) {
-      for (EndPoint ep : CollectionConverters.asJavaCollection(broker.endPoints())) {
-        String
-            hostport =
-            ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
-        String endpoint = ep.securityProtocol() + "://" + hostport;
-
-        endpoints.add(endpoint);
-      }
-    }
-
-    return endpoints;
   }
 
   static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {

@@ -26,6 +26,9 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +40,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private final IdGenerator idGenerator;
   private final List<String> canonicalizeSchemaTypes;
+  private final Map<TopicPartition, Long> offsets = new ConcurrentHashMap<>();
 
   public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
@@ -136,6 +140,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     } else if (key.getKeyType() == SchemaRegistryKeyType.CLEAR_SUBJECT) {
       handleClearSubject((ClearSubjectValue) value);
     }
+    offsets.put(tp, offset + 1);
   }
 
   private void handleDeleteSubject(DeleteSubjectValue deleteSubjectValue) {
@@ -149,8 +154,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         SchemaValue schemaValue = (SchemaValue) this.lookupCache.get(schemaKey);
         if (schemaValue != null) {
           schemaValue.setDeleted(true);
-          lookupCache.put(schemaKey, schemaValue);
-          lookupCache.schemaDeleted(schemaKey, schemaValue, schemaValue);
+          SchemaValue oldSchemaValue = (SchemaValue) lookupCache.put(schemaKey, schemaValue);
+          lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject {} in the local cache", subject, e);
@@ -187,6 +192,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
     }
+  }
+
+  @Override
+  public Map<TopicPartition, Long> checkpoint(int count) {
+    return offsets;
   }
 
   private static String getSchemaType(SchemaValue schemaValue) {

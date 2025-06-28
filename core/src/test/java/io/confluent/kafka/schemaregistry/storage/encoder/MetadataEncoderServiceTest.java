@@ -32,6 +32,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import org.junit.Test;
 
 public class MetadataEncoderServiceTest {
@@ -61,10 +63,14 @@ public class MetadataEncoderServiceTest {
     assertNotEquals(schema.getMetadata().getProperties().get("sensitive"), "foo");
     assertNotNull(schema.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
 
-    encoderService.decodeMetadata(schema);
-    assertEquals(schema.getMetadata().getProperties().get("nonsensitive"), "foo");
+    SchemaValue schema2 = new SchemaValue(
+        "mysubject", null, null, null, null, null,
+        new io.confluent.kafka.schemaregistry.storage.Metadata(
+            schema.getMetadata().toMetadataEntity()), null, "true", false);
+    encoderService.decodeMetadata(schema2);
+    assertEquals(schema2.getMetadata().getProperties().get("nonsensitive"), "foo");
     // the value of "sensitive" is decrypted
-    assertEquals(schema.getMetadata().getProperties().get("sensitive"), "foo");
-    assertNull(schema.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
+    assertEquals(schema2.getMetadata().getProperties().get("sensitive"), "foo");
+    assertNull(schema2.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
   }
 }

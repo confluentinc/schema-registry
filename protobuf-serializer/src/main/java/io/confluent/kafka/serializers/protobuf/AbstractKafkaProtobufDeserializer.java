@@ -19,10 +19,13 @@ package io.confluent.kafka.serializers.protobuf;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
-import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
@@ -43,7 +46,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -71,7 +73,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     try {
       this.specificProtobufClass = type;
       if (specificProtobufClass != null && !specificProtobufClass.equals(Object.class)) {
-        this.parseMethod = specificProtobufClass.getDeclaredMethod("parseFrom", ByteBuffer.class);
+        this.parseMethod = specificProtobufClass.getDeclaredMethod(
+            "parseFrom", ByteBuffer.class, ExtensionRegistryLite.class);
       }
       this.deriveType = config.getBoolean(KafkaProtobufDeserializerConfig.DERIVE_TYPE_CONFIG);
     } catch (Exception e) {
@@ -128,28 +131,32 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       return null;
     }
 
-    int id = -1;
-    try {
-      ByteBuffer buffer = getByteBuffer(payload);
-      id = buffer.getInt();
+    SchemaId schemaId = new SchemaId(ProtobufSchema.TYPE);
+    try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
+      final ByteBuffer buffer =
+          schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
-      ProtobufSchema schema = ((ProtobufSchema)
-          schemaRegistry.getSchemaBySubjectAndId(subject, id));
-      MessageIndexes indexes = MessageIndexes.readFrom(buffer);
+      ProtobufSchema schema = (ProtobufSchema) getSchemaBySchemaId(subject, schemaId);
+      MessageIndexes indexes = new MessageIndexes(schemaId.getMessageIndexes());
       String name = schema.toMessageName(indexes);
       schema = schemaWithName(schema, name);
+      if (isKey != null && strategyUsesSchema(isKey)) {
+        subject = subjectName(topic, isKey, schema);
+        schema = schemaForDeserialize(schemaId, schema, subject, isKey);
+      }
 
-      ParsedSchema readerSchema = null;
+      ProtobufSchema readerSchema = null;
       if (metadata != null) {
-        readerSchema = getLatestWithMetadata(subject);
+        readerSchema = (ProtobufSchema) getLatestWithMetadata(subject).getSchema();
       } else if (useLatestVersion) {
-        readerSchema = lookupLatestVersion(subject, schema, false);
+        readerSchema = (ProtobufSchema) lookupLatestVersion(subject, schema, false).getSchema();
+      }
+      if (readerSchema != null && readerSchema.toDescriptor(name) != null) {
+        readerSchema = schemaWithName(readerSchema, name);
       }
       if (includeSchemaAndVersion || readerSchema != null) {
-        subject = subjectName(topic, isKey, schema);
-        schema = schemaForDeserialize(id, schema, subject, isKey);
-        Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
+        Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
         schema = schema.copy(version);
         schema = schemaWithName(schema, name);
       }
@@ -158,32 +165,35 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         migrations = getMigrations(subject, schema, readerSchema);
       }
 
-      int length = buffer.limit() - 1 - idSize;
+      int length = buffer.remaining();
       int start = buffer.position() + buffer.arrayOffset();
 
       Object message = null;
       if (!migrations.isEmpty()) {
         message = DynamicMessage.parseFrom(schema.toDescriptor(),
-            new ByteArrayInputStream(buffer.array(), start, length));
+            new ByteArrayInputStream(buffer.array(), start, length),
+            ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
       }
 
       if (readerSchema != null) {
-        schema = (ProtobufSchema) readerSchema;
+        schema = readerSchema;
       }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
         if (message == null) {
           message = DynamicMessage.parseFrom(schema.toDescriptor(),
-              new ByteArrayInputStream(buffer.array(), start, length));
+              new ByteArrayInputStream(buffer.array(), start, length),
+              ProtobufSchema.EXTENSION_REGISTRY);
         }
         message = executeRules(
             subject, topic, headers, payload, RuleMode.READ, null, schema, message
         );
       }
 
+      ByteBuffer protobufBytes = buffer;
       if (message != null) {
-        buffer = ByteBuffer.wrap(((Message) message).toByteArray());
+        protobufBytes = ByteBuffer.wrap(((Message) message).toByteArray());
         length = buffer.limit();
         start = 0;
       }
@@ -191,19 +201,20 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       Object value;
       if (parseMethod != null) {
         try {
-          value = parseMethod.invoke(null, buffer);
+          value = parseMethod.invoke(null, protobufBytes, ProtobufSchema.EXTENSION_REGISTRY);
         } catch (Exception e) {
           throw new ConfigException("Not a valid protobuf builder", e);
         }
       } else if (deriveType) {
-        value = deriveType(buffer, schema);
+        value = deriveType(protobufBytes, schema);
       } else {
         Descriptor descriptor = schema.toDescriptor();
         if (descriptor == null) {
           throw new SerializationException("Could not find descriptor with name " + schema.name());
         }
         value = DynamicMessage.parseFrom(descriptor,
-            new ByteArrayInputStream(buffer.array(), start, length)
+            new ByteArrayInputStream(protobufBytes.array(), start, length),
+            ProtobufSchema.EXTENSION_REGISTRY
         );
       }
 
@@ -223,11 +234,12 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
       return value;
     } catch (InterruptedIOException e) {
-      throw new TimeoutException("Error deserializing Protobuf message for id " + id, e);
+      throw new TimeoutException("Error deserializing Protobuf message for id " + schemaId, e);
     } catch (IOException | RuntimeException e) {
-      throw new SerializationException("Error deserializing Protobuf message for id " + id, e);
+      throw new SerializationException(
+          "Error deserializing Protobuf message for id " + schemaId, e);
     } catch (RestClientException e) {
-      throw toKafkaException(e, "Error retrieving Protobuf schema for id " + id);
+      throw toKafkaException(e, "Error retrieving Protobuf schema for id " + schemaId);
     } finally {
       postOp(payload);
     }
@@ -247,8 +259,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     }
     try {
       Class<?> cls = Class.forName(clsName);
-      Method parseMethod = cls.getDeclaredMethod("parseFrom", ByteBuffer.class);
-      return parseMethod.invoke(null, buffer);
+      Method parseMethod = cls.getDeclaredMethod(
+          "parseFrom", ByteBuffer.class, ExtensionRegistryLite.class);
+      return parseMethod.invoke(null, buffer, ProtobufSchema.EXTENSION_REGISTRY);
     } catch (ClassNotFoundException e) {
       throw new SerializationException("Class " + clsName + " could not be found.");
     } catch (NoSuchMethodException e) {
@@ -260,30 +273,29 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private Integer schemaVersion(
-      String topic, boolean isKey, int id, String subject, ProtobufSchema schema, Object value
+      String topic, boolean isKey, SchemaId schemaId,
+      String subject, ProtobufSchema schema, Object value
   ) throws IOException, RestClientException {
-    Integer version;
-    if (isDeprecatedSubjectNameStrategy(isKey)) {
-      subject = getSubjectName(topic, isKey, value, schema);
+    Integer version = null;
+    ProtobufSchema subjectSchema = (ProtobufSchema) getSchemaBySchemaId(subject, schemaId);
+    Metadata metadata = subjectSchema.metadata();
+    if (metadata != null) {
+      version = metadata.getConfluentVersionNumber();
     }
-    ProtobufSchema subjectSchema =
-        (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-    version = schemaRegistry.getVersion(subject, subjectSchema);
+    if (version == null) {
+      version = schemaRegistry.getVersion(subject, subjectSchema);
+    }
     return version;
   }
 
   private String subjectName(String topic, boolean isKey, ProtobufSchema schemaFromRegistry) {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? null
-           : getSubjectName(topic, isKey, null, schemaFromRegistry);
+    return getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private ProtobufSchema schemaForDeserialize(
-      int id, ProtobufSchema schemaFromRegistry, String subject, boolean isKey
+      SchemaId schemaId, ProtobufSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? ProtobufSchemaUtils.copyOf(schemaFromRegistry)
-           : (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    return (ProtobufSchema) getSchemaBySchemaId(subject, schemaId);
   }
 
   protected ProtobufSchemaAndValue deserializeWithSchemaAndVersion(
