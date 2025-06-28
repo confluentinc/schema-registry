@@ -59,6 +59,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectExcep
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -1124,6 +1125,100 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testSchemaUnqualifiedReferencesInContext() throws Exception {
+    String context = ":.ctx:";
+    int parentId = 2;
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String unqualifiedSubject = "my_reference";
+    String subject = context + unqualifiedSubject;
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), 1, subject);
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get(1));
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", unqualifiedSubject, 1);
+    request.setReferences(Collections.singletonList(ref));
+    String subject2 = context + "my_referrer";
+    int registeredId = restApp.restClient.registerSchema(request, subject2, false).getId();
+    assertEquals(parentId, registeredId, "Registering a new schema should succeed");
+
+    SchemaString schemaString = restApp.restClient.getId(parentId, subject2);
+    assertEquals(subject2, schemaString.getSubject());
+    assertEquals(1, schemaString.getVersion());
+    assertFalse(schemaString.getReferences().get(0).getSubject().startsWith(context));
+
+    Schema schemaResult = restApp.restClient.getVersion(subject2, 1);
+    assertEquals(subject2, schemaResult.getSubject());
+    assertEquals(1, schemaResult.getVersion());
+    assertFalse(schemaResult.getReferences().get(0).getSubject().startsWith(context));
+
+    SchemaString schemaString2 = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
+        parentId, subject2, null, "qualified", null, false);
+    assertEquals(subject2, schemaString2.getSubject());
+    assertEquals(1, schemaString2.getVersion());
+    assertTrue(schemaString2.getReferences().get(0).getSubject().startsWith(context));
+
+    Schema schemaResult2 = restApp.restClient.getVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+        subject2, 1, null, "qualified", false, null);
+    assertEquals(subject2, schemaResult2.getSubject());
+    assertEquals(1, schemaResult2.getVersion());
+    assertTrue(schemaResult2.getReferences().get(0).getSubject().startsWith(context));
+
+    // the newly registered schema should be immediately readable on the leader
+    assertEquals(
+        schemas.get(1),
+        schemaString.getSchemaString(),
+        "Registered schema should be found"
+    );
+
+    assertEquals(
+        Collections.singletonList(ref),
+        schemaString.getReferences(),
+        "Schema references should be found"
+    );
+
+    List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertEquals(parentId, refs.get(0).intValue());
+
+    ns.MyRecord myrecord = new ns.MyRecord();
+    AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
+    // Note that we pass an empty list of refs since SR will perform a deep equality check
+    Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
+        AvroSchema.TYPE, Collections.emptyList(), subject2, false);
+    assertEquals(
+        parentId, registeredSchema.getId().intValue(),
+        "Registered schema should be found"
+    );
+
+    try {
+      restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
+          subject,
+          String.valueOf(1)
+      );
+      fail("Deleting reference should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.REFERENCE_EXISTS_ERROR_CODE,
+          rce.getErrorCode(),
+          "Reference found"
+      );
+    }
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
+
+    refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertTrue(refs.isEmpty());
+
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
+    assertTrue(refs.isEmpty());
+
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1"));
+  }
+
+  @Test
   public void testSchemaReferencesMultipleLevels() throws Exception {
     String root = "[\"myavro.BudgetDecreased\",\"myavro.BudgetUpdated\"]";
 
@@ -1208,6 +1303,12 @@ public class RestApiTest extends ClusterTestHarness {
         schemaString.getReferences(),
         "Schema references should be found"
     );
+
+    SchemaString schemaString2 = restApp.restClient.getId(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        4, "root", "resolved", null, false);
+    // Ensure the guids match even though we are formatting the schema
+    assertEquals(schemaString.getGuid(), schemaString2.getGuid());
   }
 
   @Test
@@ -2395,6 +2496,9 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
 
+    // default context for error message
+    String context = ".";
+
     try {
       restApp.restClient.getMode(subject).getMode();
       fail(String.format("Subject %s should not be found when there's no mode override", subject));
@@ -2419,11 +2523,12 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
     try {
       restApp.restClient.registerSchema(schema, "testSubject2");
-      fail(String.format("Subject %s is in read-only mode", "testSubject2"));
+      fail(String.format("Subject %s in context %s is in read-only mode", "testSubject2", context));
     } catch (RestClientException rce) {
       assertEquals(
           Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce.getErrorCode(),
-          "Subject is in read-only mode"
+          String.format("Subject %s in context" 
+          +" %s is in read-only mode", "testSubject2", context)
       );
     }
   }

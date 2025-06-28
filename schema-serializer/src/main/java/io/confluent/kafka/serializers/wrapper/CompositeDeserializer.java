@@ -19,8 +19,11 @@ package io.confluent.kafka.serializers.wrapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
-import java.nio.ByteBuffer;
+import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import java.util.Map;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
@@ -30,9 +33,8 @@ public class CompositeDeserializer implements Deserializer<Object> {
 
   protected Logger log = LoggerFactory.getLogger(CompositeDeserializer.class);
 
-  protected static final byte MAGIC_BYTE = 0x0;
-
   private boolean isKey;
+  private SchemaIdDeserializer schemaIdDeserializer;
   private Deserializer<?> oldDeserializer;
   private Deserializer<?> confluentDeserializer;
   private SchemaRegistryClient schemaRegistryClient;
@@ -51,6 +53,7 @@ public class CompositeDeserializer implements Deserializer<Object> {
   protected void configure(CompositeDeserializerConfig config, boolean isKey) {
     this.isKey = isKey;
     Map<String, Object> originals = config.originals();
+    this.schemaIdDeserializer = new DualSchemaIdDeserializer();
     this.oldDeserializer = config.getConfiguredInstance(
         CompositeDeserializerConfig.COMPOSITE_OLD_DESERIALIZER, Deserializer.class);
     this.oldDeserializer.configure(originals, isKey);
@@ -71,29 +74,29 @@ public class CompositeDeserializer implements Deserializer<Object> {
       return null;
     }
 
-    // We assume TopicNameStrategy
-    String subject = isKey ? topic + "-key" : topic + "-value";
-
-    int schemaId = getSchemaId(ByteBuffer.wrap(bytes));
-
-    if (isValidSchemaId(subject, schemaId)) {
-      return confluentDeserializer.deserialize(topic, headers, bytes);
-    } else {
-      return oldDeserializer.deserialize(topic, bytes);
+    SchemaId schemaId = new SchemaId("");
+    try {
+      schemaIdDeserializer.deserialize(topic, isKey, headers, bytes, schemaId);
+      if (isValidSchemaId(topic, schemaId)) {
+        return confluentDeserializer.deserialize(topic, headers, bytes);
+      }
+    } catch (SerializationException e) {
+      // ignore, fall through
     }
+    return oldDeserializer.deserialize(topic, bytes);
   }
 
-  private int getSchemaId(ByteBuffer payload) {
-    if (payload == null || payload.get() != MAGIC_BYTE) {
-      return -1;
-    }
-    return payload.getInt();
+  private boolean isValidSchemaId(String topic, SchemaId schemaId) {
+    return schemaId.getGuid() != null || hasValidId(topic, schemaId.getId());
   }
 
-  protected boolean isValidSchemaId(String subject, int id) {
-    if (id == -1) {
+  private boolean hasValidId(String topic, Integer id) {
+    if (id == null || id <= 0) {
       return false;
     }
+
+    // We assume TopicNameStrategy
+    String subject = isKey ? topic + "-key" : topic + "-value";
 
     try {
       // Obtain the schema.

@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -102,6 +103,18 @@ public class SchemaDiffTest {
     final List<Difference> changes = SchemaDiff.compare(first, second);
     // Changing from empty schema to empty object schema is incompatible
     Assert.assertFalse(changes.isEmpty());
+  }
+
+  @Test
+  public void testConnectTypeAsBytes() {
+    String firstSchema = "{\"type\":\"string\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.version\":1,\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"2\"}}";
+    String secondSchema = "{\"type\":\"number\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.version\":1,\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"2\"}}";
+    final Schema first = SchemaLoader.load(new JSONObject(firstSchema));
+    final Schema second = SchemaLoader.load(new JSONObject(secondSchema));
+    final List<Difference> changes = SchemaDiff.compare(first, second);
+    Assert.assertTrue(changes.isEmpty());
   }
 
   public static String readFile(String fileName) {

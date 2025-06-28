@@ -38,7 +38,7 @@ public class DekRegistryConfig extends SchemaRegistryConfig {
   public static final String DEK_REGISTRY_UPDATE_HANDLERS_CONFIG = "dek.registry.update.handlers";
 
   protected static final String DEK_REGISTRY_TOPIC_DEFAULT = "_dek_registry_keys";
-  protected static final int DEK_REGISTRY_MAX_KEYS_DEFAULT = 10000;
+  protected static final int DEK_REGISTRY_MAX_KEYS_DEFAULT = 20000;
 
   protected static final String KEK_SEARCH_DEFAULT_LIMIT_CONFIG = "kek.search.default.limit";
   protected static final int KEK_SEARCH_DEFAULT_LIMIT_DEFAULT = Integer.MAX_VALUE;

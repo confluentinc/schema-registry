@@ -181,6 +181,7 @@ public class SchemaId {
   static class SchemaMessageIndexes {
 
     private static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
+    private static final byte[] DEFAULT_MSG_INDEXES = new byte[]{0x00};
 
     private final List<Integer> indexes;
 
@@ -194,10 +195,7 @@ public class SchemaId {
 
     public byte[] toByteArray() {
       if (indexes.equals(DEFAULT_INDEX)) {
-        // optimization
-        ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(0));
-        ByteUtils.writeVarint(0, buffer);
-        return buffer.array();
+        return DEFAULT_MSG_INDEXES;
       }
       int size = ByteUtils.sizeOfVarint(indexes.size());
       for (Integer index : indexes) {

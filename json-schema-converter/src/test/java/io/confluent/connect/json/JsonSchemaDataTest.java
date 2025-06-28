@@ -303,21 +303,20 @@ public class JsonSchemaDataTest {
   public void testFromConnectUnion() {
     NumberSchema firstSchema = NumberSchema.builder()
         .requiresInteger(true)
-        .unprocessedProperties(ImmutableMap.of("connect.type", "int8", "connect.index", 0))
+        .unprocessedProperties(ImmutableMap.of("connect.type", "int32", "connect.index", 0))
         .build();
-    NumberSchema secondSchema = NumberSchema.builder()
-        .requiresInteger(true)
-        .unprocessedProperties(ImmutableMap.of("connect.type", "int16", "connect.index", 1))
+    StringSchema secondSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
         .build();
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
         .build();
     SchemaBuilder builder = SchemaBuilder.struct().name(JSON_TYPE_ONE_OF);
-    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.INT8_SCHEMA);
-    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.INT16_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.0", Schema.INT32_SCHEMA);
+    builder.field(JSON_TYPE_ONE_OF + ".field.1", Schema.STRING_SCHEMA);
     Schema connectSchema = builder.build();
 
-    Struct actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.0", (byte) 12);
-    checkNonObjectConversion(schema, ShortNode.valueOf((short) 12), connectSchema, actual);
+    Struct actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.0", 12);
+    checkNonObjectConversion(schema, IntNode.valueOf(12), connectSchema, actual);
   }
 
   @Test
@@ -327,26 +326,28 @@ public class JsonSchemaDataTest {
             Collections.singletonMap(JsonSchemaDataConfig.GENERALIZED_SUM_TYPE_SUPPORT_CONFIG, "true")));
     NumberSchema firstSchema = NumberSchema.builder()
         .requiresInteger(true)
-        .unprocessedProperties(ImmutableMap.of("connect.type", "int8", "connect.index", 0))
+        .unprocessedProperties(ImmutableMap.of("connect.type", "int32", "connect.index", 0))
         .build();
-    NumberSchema secondSchema = NumberSchema.builder()
-        .requiresInteger(true)
-        .unprocessedProperties(ImmutableMap.of("connect.type", "int16", "connect.index", 1))
+    StringSchema secondSchema = StringSchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.index", 1))
         .build();
     CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema, secondSchema))
         .build();
     SchemaBuilder builder = SchemaBuilder.struct().name("connect_union_0");
-    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", Schema.INT8_SCHEMA);
-    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "1", Schema.INT16_SCHEMA);
+    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", Schema.INT32_SCHEMA);
+    builder.field(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "1", Schema.STRING_SCHEMA);
     builder.parameter(GENERALIZED_TYPE_UNION, "connect_union_0");
     Schema connectSchema = builder.build();
 
-    Struct actual = new Struct(connectSchema).put(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", (byte) 12);
-    checkNonObjectConversion(schema, ShortNode.valueOf((short) 12), connectSchema, actual);
+    Struct actual = new Struct(connectSchema).put(GENERALIZED_TYPE_UNION_FIELD_PREFIX + "0", 12);
+    checkNonObjectConversion(schema, IntNode.valueOf(12), connectSchema, actual);
   }
 
   @Test
   public void testFromConnectUnionDifferentStruct() {
+    jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.OBJECT_ADDITIONAL_PROPERTIES_CONFIG, "false")));
     NumberSchema numberSchema = NumberSchema.builder()
         .requiresInteger(true)
         .unprocessedProperties(ImmutableMap.of("connect.index", 0, "connect.type", "int8"))
@@ -357,12 +358,14 @@ public class JsonSchemaDataTest {
     ObjectSchema firstSchema = ObjectSchema.builder()
         .addPropertySchema("a", numberSchema)
         .addPropertySchema("b", stringSchema)
+        .additionalProperties(false)
         .title("field0")
         .unprocessedProperties(ImmutableMap.of("connect.index", 0))
         .build();
     ObjectSchema secondSchema = ObjectSchema.builder()
         .addPropertySchema("c", numberSchema)
         .addPropertySchema("d", stringSchema)
+        .additionalProperties(false)
         .title("field1")
         .unprocessedProperties(ImmutableMap.of("connect.index", 1))
         .build();
@@ -400,6 +403,7 @@ public class JsonSchemaDataTest {
         .put("d", "sample string");
     actual = new Struct(connectSchema).put(JSON_TYPE_ONE_OF + ".field.1", struct);
     checkNonObjectConversion(schema, obj, connectSchema, actual);
+    jsonSchemaData = new JsonSchemaData();
   }
 
   @Test
@@ -408,7 +412,7 @@ public class JsonSchemaDataTest {
         new JsonSchemaData(new JsonSchemaDataConfig(
             Collections.singletonMap(JsonSchemaDataConfig.DECIMAL_FORMAT_CONFIG,
                 DecimalFormat.BASE64.name())));
-    NumberSchema schema = NumberSchema.builder()
+    StringSchema schema = StringSchema.builder()
         .title("org.apache.kafka.connect.data.Decimal")
         .unprocessedProperties(ImmutableMap.of("connect.type",
             "bytes",
@@ -637,10 +641,18 @@ public class JsonSchemaDataTest {
   private void checkNonObjectConversion(
       org.everit.json.schema.Schema expectedSchema, Object expected, Schema schema, Object value
   ) {
-    JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
-    JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
-    assertEquals(expectedSchema, jsonSchema != null ? jsonSchema.rawSchema() : null);
-    assertEquals(expected, jsonValue);
+    try {
+      JsonSchema jsonSchema = jsonSchemaData.fromConnectSchema(schema);
+      JsonNode jsonValue = jsonSchemaData.fromConnectData(schema, value);
+      // Don't validate instances of ShortNode as JSON Schema does not support shorts
+      if (jsonSchema != null && jsonValue != null && !(jsonValue instanceof ShortNode)) {
+        jsonSchema.validate(jsonValue);
+      }
+      assertEquals(expectedSchema, jsonSchema != null ? jsonSchema.rawSchema() : null);
+      assertEquals(expected, jsonValue);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   // JSON Schema -> Connect: directly corresponding types

@@ -1516,4 +1516,58 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     s = restApp.restClient.lookUpSubjectVersion(request1, subject, false, false);
     assertEquals(expectedIdSchema2, s.getId().intValue());
   }
+
+  @Test
+  public void testGlobalContextWithNone() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = 1;
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    // register an incompatible avro
+    String incompatibleSchemaString = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
+    try {
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
+      fail("Registering an incompatible schema should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
+    }
+
+    // change compatibility level to none in the global context and try again
+    assertEquals(
+        CompatibilityLevel.NONE.name,
+        restApp.restClient
+            .updateCompatibility(CompatibilityLevel.NONE.name, ":.__GLOBAL:")
+            .getCompatibilityLevel(),
+        "Changing compatibility level should succeed"
+    );
+
+    Config config = restApp.restClient.getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true);
+    assertEquals("none", config.getCompatibilityLevel().toLowerCase());
+
+    try {
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
+    } catch (RestClientException e) {
+      fail("Registering an incompatible schema should succeed after bumping down the compatibility "
+          + "level to none");
+    }
+  }
 }

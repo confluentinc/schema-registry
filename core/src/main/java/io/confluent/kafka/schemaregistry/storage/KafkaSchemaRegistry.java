@@ -855,18 +855,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   private void checkRegisterMode(
       String subject, Schema schema
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
+    String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+      throw new OperationNotPermittedException("Subject " + subject 
+      + " in context " + context + " is in read-only mode");
     }
 
     if (schema.getId() >= 0) {
       if (getModeInScope(subject) != Mode.IMPORT) {
-        throw new OperationNotPermittedException("Subject " + subject + " is not in import mode");
+        throw new OperationNotPermittedException("Subject " + subject 
+        + " in context " + context + " is not in import mode");
       }
     } else {
       if (getModeInScope(subject) != Mode.READWRITE) {
         throw new OperationNotPermittedException(
-            "Subject " + subject + " is not in read-write mode"
+            "Subject " + subject + " in context "
+            + context + " is not in read-write mode"
         );
       }
     }
@@ -1122,7 +1126,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       throws SchemaRegistryException {
     try {
       if (isReadOnlyMode(subject)) {
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+        String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+        + context + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
       if (!lookupCache.referencesSchema(key).isEmpty()) {
@@ -1188,7 +1194,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     // Ensure cache is up-to-date before any potential writes
     try {
       if (isReadOnlyMode(subject)) {
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+        String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+        + context + " is in read-only mode");
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
@@ -1256,6 +1264,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  public void deleteContext(String delimitedContext) throws SchemaRegistryException {
+    try {
+      // Strip the context delimiters
+      String rawContext = QualifiedSubject.contextFor(tenant(), delimitedContext);
+      ContextKey contextKey = new ContextKey(tenant(), rawContext);
+      this.kafkaStore.delete(contextKey);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while deleting the context in the"
+                                             + " backend Kafka store", e);
+    }
+  }
+
+  public void deleteContextOrForward(
+      Map<String, String> requestProperties,
+      String delimitedContext) throws SchemaRegistryException {
+    kafkaStore.lockFor(delimitedContext).lock();
+    try {
+      if (isLeader()) {
+        deleteContext(delimitedContext);
+      } else {
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteContextRequestToLeader(requestProperties, delimitedContext);
+        } else {
+          throw new UnknownLeaderException("Register schema request failed since leader is "
+                                           + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(delimitedContext).unlock();
     }
   }
 
@@ -1418,8 +1462,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         schemaCopy.setSubject(existingSchema.getSubject());
         schemaCopy.setVersion(existingSchema.getVersion());
         if (!existingSchema.equals(schemaCopy)) {
+          String context = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
           throw new OperationNotPermittedException(
-              String.format("Overwrite new schema with id %s is not permitted.", id)
+              String.format("Overwrite new schema with id %s in context" 
+              + " %s is not permitted.",
+              id, context)
           );
         }
       }
@@ -1517,7 +1564,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    log.debug(String.format("Forwarding delete subject request for  %s to %s",
+    log.debug(String.format("Forwarding delete subject request for %s to %s",
                             subject, baseUrl));
     try {
       return leaderRestService.deleteSubject(requestProperties, subject, permanentDelete);
@@ -1526,6 +1573,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           String.format(
               "Unexpected error while forwarding delete subject "
               + "request %s to %s", subject, baseUrl), e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void forwardDeleteContextRequestToLeader(
+      Map<String, String> requestProperties,
+      String delimitedContext) throws SchemaRegistryRequestForwardingException {
+    UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding delete context request for %s to %s",
+        delimitedContext, baseUrl));
+    try {
+      leaderRestService.deleteContext(requestProperties, delimitedContext);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format(
+              "Unexpected error while forwarding delete context "
+                  + "request %s to %s", delimitedContext, baseUrl), e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }
@@ -2259,7 +2325,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public Config updateConfig(String subject, ConfigUpdateRequest config)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+      + context + " is in read-only mode");
     }
     ConfigKey configKey = new ConfigKey(subject);
     try {
@@ -2300,7 +2368,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public void deleteSubjectConfig(String subject)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+      + context + " is in read-only mode");
     }
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);

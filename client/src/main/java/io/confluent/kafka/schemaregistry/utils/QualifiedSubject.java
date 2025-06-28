@@ -37,6 +37,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String CONTEXT_WILDCARD = CONTEXT_DELIMITER + WILDCARD + CONTEXT_DELIMITER;
 
+  // A special context that is used for global configuration and mode settings.
+  public static final String GLOBAL_CONTEXT_NAME = ".__GLOBAL";
+
   // Subject name under which global permissions are stored.
   public static final String GLOBAL_SUBJECT_NAME = "__GLOBAL";
 
@@ -138,6 +141,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  /**
+   * Returns the context without the tenant prefix.
+   */
   public String toUnqualifiedContext() {
     return DEFAULT_CONTEXT.equals(context)
         ? ""
@@ -148,6 +154,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return toQualifiedContext() + subject;
   }
 
+  /**
+   * Returns the context and subject without the tenant prefix.
+   */
   public String toUnqualifiedSubject() {
     return toUnqualifiedContext() + subject;
   }
@@ -261,6 +270,11 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
+    return isValidSubject(tenant, qualifiedSubject, false);
+  }
+
+  public static boolean isValidSubject(
+      String tenant, String qualifiedSubject, boolean isConfigOrMode) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
     }
@@ -268,6 +282,10 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     // For backward compatibility, we allow an empty subject
     if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)
         || qs.getSubject().equals(EMPTY_SUBJECT_NAME)) {
+      return false;
+    }
+    if (!isConfigOrMode && qs.getContext().equals(GLOBAL_CONTEXT_NAME)) {
+      // Global context is only valid for config or mode subjects
       return false;
     }
     return true;
