@@ -16,10 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.encryption.local;
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-
 import io.confluent.kafka.schemaregistry.encryption.EncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import java.util.List;
