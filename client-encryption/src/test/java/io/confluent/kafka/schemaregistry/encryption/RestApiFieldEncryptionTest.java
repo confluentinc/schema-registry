@@ -78,7 +78,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     super(1, true);
   }
 
-  protected abstract FieldEncryptionProperties getFieldEncryptionProperties(List<String> ruleNames);
+  protected abstract EncryptionProperties getFieldEncryptionProperties(List<String> ruleNames);
 
   @Override
   protected Properties getSchemaRegistryProperties() throws Exception {
@@ -112,7 +112,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   @Test
   public void testPrivateKek() throws Exception {
     List<String> ruleNames = ImmutableList.of("myRule");
-    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+    EncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
 
     DekRegistryClient dekRegistry = new CachedDekRegistryClient(
         new DekRegistryRestService(restApp.restClient.getBaseUrls()),
@@ -128,7 +128,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   @Test
   public void testSharedKek() throws Exception {
     List<String> ruleNames = ImmutableList.of("myRule");
-    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+    EncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
 
     DekRegistryClient dekRegistry = new CachedDekRegistryClient(
         new DekRegistryRestService(restApp.restClient.getBaseUrls()),
@@ -144,7 +144,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     testFieldEncryption(fieldEncryptionProps, dekRegistry);
   }
 
-  private void testFieldEncryption(FieldEncryptionProperties fieldEncryptionProps, DekRegistryClient dekRegistry) throws Exception {
+  private void testFieldEncryption(EncryptionProperties fieldEncryptionProps, DekRegistryClient dekRegistry) throws Exception {
     String topic = "test";
     Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(
         restApp.restClient.getBaseUrls().toString());
@@ -199,7 +199,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   @Test
   public void testFieldEncryptionWithDekRotation() throws Exception {
     List<String> ruleNames = ImmutableList.of("myRule");
-    FieldEncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+    EncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
 
     DekRegistryClient dekRegistry = new CachedDekRegistryClient(
         new DekRegistryRestService(restApp.restClient.getBaseUrls()),
@@ -287,7 +287,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     return avroRecord;
   }
 
-  private Metadata getMetadata(FieldEncryptionProperties fieldEncryptionProps, String kekName) {
+  private Metadata getMetadata(EncryptionProperties fieldEncryptionProps, String kekName) {
     Map<String, String> properties = new HashMap<>();
     properties.put(FieldEncryptionExecutor.ENCRYPT_KEK_NAME, kekName);
     properties.put(FieldEncryptionExecutor.ENCRYPT_KMS_TYPE, fieldEncryptionProps.getKmsType());

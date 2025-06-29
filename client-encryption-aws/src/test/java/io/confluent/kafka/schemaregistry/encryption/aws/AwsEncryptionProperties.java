@@ -16,21 +16,16 @@ package io.confluent.kafka.schemaregistry.encryption.aws;
 
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AwsFieldEncryptionProperties extends FieldEncryptionProperties {
+public class AwsEncryptionProperties extends EncryptionProperties {
 
-  public AwsFieldEncryptionProperties(List<String> ruleNames) {
-    super(ruleNames);
-  }
-
-  public AwsFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public AwsEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     super(ruleNames, ruleExecutor);
   }
 
