@@ -16,20 +16,16 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 
 import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.SECRET;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
+public class LocalEncryptionProperties extends EncryptionProperties {
 
-  public LocalFieldEncryptionProperties(List<String> ruleNames) {
-    super(ruleNames);
-  }
-
-  public LocalFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public LocalEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     super(ruleNames, ruleExecutor);
   }
 

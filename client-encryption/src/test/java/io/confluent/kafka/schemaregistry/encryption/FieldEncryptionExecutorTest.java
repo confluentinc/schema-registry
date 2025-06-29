@@ -89,7 +89,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -108,7 +107,7 @@ public abstract class FieldEncryptionExecutorTest {
     }
   }
 
-  protected final FieldEncryptionProperties fieldEncryptionProps;
+  protected final EncryptionProperties fieldEncryptionProps;
   protected final SchemaRegistryClient schemaRegistry;
   protected final DekRegistryClient dekRegistry;
   protected final KafkaAvroSerializer avroSerializer;
@@ -159,7 +158,7 @@ public abstract class FieldEncryptionExecutorTest {
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
     List<String> qualifiedRuleNames = ImmutableList.of("test-key:rule1", "test-value:rule1");
-    FieldEncryptionProperties qualifiedFieldEncryptionProps =
+    EncryptionProperties qualifiedFieldEncryptionProps =
         getFieldEncryptionProperties(qualifiedRuleNames, FieldEncryptionExecutor.class);
     Map<String, Object> qualifiedClientProps = qualifiedFieldEncryptionProps.getClientProperties("mock://");
     avroKeySerializer = new KafkaAvroSerializer();
@@ -197,7 +196,7 @@ public abstract class FieldEncryptionExecutorTest {
     badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
   }
 
-  protected abstract FieldEncryptionProperties getFieldEncryptionProperties(
+  protected abstract EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor);
 
   protected Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {

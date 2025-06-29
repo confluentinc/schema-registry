@@ -205,7 +205,11 @@ public class EncryptionExecutor implements RuleExecutor {
     switch (type) {
       case BYTES:
         if (obj instanceof ByteBuffer) {
-          return ((ByteBuffer) obj).array();
+          ByteBuffer buffer = (ByteBuffer) obj;
+          int remainingSize = buffer.remaining();
+          byte[] remaining = new byte[remainingSize];
+          buffer.get(remaining, 0, remainingSize);
+          return remaining;
         } else if (obj instanceof ByteString) {
           return ((ByteString) obj).toByteArray();
         } else if (obj instanceof byte[]) {
