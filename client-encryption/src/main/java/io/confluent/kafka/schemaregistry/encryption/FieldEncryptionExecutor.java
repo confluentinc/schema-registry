@@ -16,8 +16,6 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
-import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
-import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;

@@ -134,7 +134,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
     SchemaId schemaId = new SchemaId(ProtobufSchema.TYPE);
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
-      final ByteBuffer buffer =
+      ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
@@ -146,6 +146,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
+      buffer = (ByteBuffer) executeRules(
+          subject, topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
+          schema, buffer
+      );
 
       ProtobufSchema readerSchema = null;
       if (metadata != null) {

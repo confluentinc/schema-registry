@@ -22,6 +22,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -394,8 +395,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       this.payload = payload;
       SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
       try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
-        this.buffer = schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
+        ByteBuffer buf = schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
         this.schemaId = schemaId;
+        buf = (ByteBuffer) executeRules(
+            getSubject(), topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
+            schemaFromRegistry(), buf
+        );
+        this.buffer = buf;
       } catch (IOException e) {
         throw new SerializationException(
             "Error deserializing Avro message for id " + schemaId, e);

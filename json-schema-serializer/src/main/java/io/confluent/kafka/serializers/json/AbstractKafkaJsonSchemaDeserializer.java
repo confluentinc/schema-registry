@@ -129,7 +129,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
     SchemaId schemaId = new SchemaId(JsonSchema.TYPE);
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
-      final ByteBuffer buffer =
+      ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
@@ -138,6 +138,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
+      buffer = (ByteBuffer) executeRules(
+          subject, topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
+          schema, buffer
+      );
 
       ParsedSchema readerSchema = null;
       if (metadata != null) {

@@ -681,12 +681,21 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected Object executeRules(
       String subject, String topic, Headers headers,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
-    return executeRules(subject, topic, headers, message, ruleMode, source, target, message);
+    return executeRules(
+        subject, topic, headers, message, ruleMode, RulePhase.MIGRATION, source, target, message);
   }
 
   protected Object executeRules(
       String subject, String topic, Headers headers, Object original,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(
+        subject, topic, headers, original, ruleMode, RulePhase.DOMAIN, source, target, message);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RuleMode ruleMode, RulePhase rulePhase,
+      ParsedSchema source, ParsedSchema target, Object message) {
     if (message == null || target == null) {
       return message;
     }
@@ -703,7 +712,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       }
     } else {
       if (target.ruleSet() != null) {
-        rules = target.ruleSet().getDomainRules();
+        rules = rulePhase == RulePhase.ENCODING
+            ? target.ruleSet().getEncodingRules()
+            : target.ruleSet().getDomainRules();
         if (ruleMode == RuleMode.READ) {
           rules = new ArrayList<>(rules);
           // Execute read rules in reverse order for symmetry
