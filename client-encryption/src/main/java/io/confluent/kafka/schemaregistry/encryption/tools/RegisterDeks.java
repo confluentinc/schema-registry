@@ -29,8 +29,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionExecutor.EncryptionExecutorTransform;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor.FieldEncryptionExecutorTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -140,7 +140,7 @@ public class RegisterDeks implements Callable<Integer> {
       executor.configure(ruleConfigs);
       RuleContext ctx = new RuleContext(configs, null, parsedSchema,
           subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
-      FieldEncryptionExecutorTransform transform = executor.newTransform(ctx);
+      EncryptionExecutorTransform transform = executor.getEncryptionExecutor().newTransform(ctx);
       transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
     }
   }
