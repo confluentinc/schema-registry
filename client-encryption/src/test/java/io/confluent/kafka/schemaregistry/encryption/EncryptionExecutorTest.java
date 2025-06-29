@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,24 +20,16 @@ import static io.confluent.kafka.schemaregistry.encryption.EncryptionExecutor.CL
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import com.google.crypto.tink.aead.AeadConfig;
+import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
@@ -51,11 +43,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
-import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
-import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
+import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
@@ -67,8 +60,6 @@ import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -76,6 +67,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericData;
@@ -95,36 +87,23 @@ public abstract class EncryptionExecutorTest {
     }
   }
 
-  protected final EncryptionProperties fieldEncryptionProps;
+  protected final EncryptionProperties encryptionProps;
   protected final SchemaRegistryClient schemaRegistry;
   protected final DekRegistryClient dekRegistry;
   protected final KafkaAvroSerializer avroSerializer;
   protected final KafkaAvroDeserializer avroDeserializer;
-  protected final KafkaAvroSerializer avroKeySerializer;
-  protected final KafkaAvroDeserializer avroKeyDeserializer;
-  protected final KafkaAvroSerializer avroValueSerializer;
-  protected final KafkaAvroDeserializer avroValueDeserializer;
-  protected final KafkaAvroSerializer avroSerializerWithoutKey;
-  protected final KafkaAvroDeserializer avroDeserializerWithoutKey;
-  protected final KafkaAvroSerializer reflectionAvroSerializer;
-  protected final KafkaAvroDeserializer reflectionAvroDeserializer;
   protected final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
-  protected final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
-  protected final KafkaJsonSchemaSerializer<Employee> jsonSchemaSerializer3;
   protected final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   protected final KafkaProtobufSerializer<Widget> protobufSerializer;
-  protected final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
   protected final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
-  protected final KafkaAvroSerializer badSerializer;
-  protected final KafkaAvroDeserializer badDeserializer;
   protected final String topic;
   protected final FakeClock fakeClock = new FakeClock();
 
   public EncryptionExecutorTest() throws Exception {
     topic = "test";
     List<String> ruleNames = ImmutableList.of("rule1", "rule2");
-    fieldEncryptionProps = getEncryptionProperties(ruleNames, EncryptionExecutor.class);
-    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties("mock://");
+    encryptionProps = getEncryptionProperties(ruleNames, EncryptionExecutor.class);
+    Map<String, Object> clientProps = encryptionProps.getClientProperties("mock://");
     clientProps.put(CLOCK, fakeClock);
     schemaRegistry = SchemaRegistryClientFactory.newClient(Collections.singletonList(
         "mock://"),
@@ -138,50 +117,19 @@ public abstract class EncryptionExecutorTest {
         "mock://"),
         1000,
         100000,
-        Collections.singletonMap(TEST_CLIENT, fieldEncryptionProps.getTestClient()),
+        Collections.singletonMap(TEST_CLIENT, encryptionProps.getTestClient()),
         null
     );
 
     avroSerializer = new KafkaAvroSerializer(schemaRegistry, clientProps);
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
-    List<String> qualifiedRuleNames = ImmutableList.of("test-key:rule1", "test-value:rule1");
-    EncryptionProperties qualifiedEncryptionProps =
-        getEncryptionProperties(qualifiedRuleNames, EncryptionExecutor.class);
-    Map<String, Object> qualifiedClientProps = qualifiedEncryptionProps.getClientProperties("mock://");
-    avroKeySerializer = new KafkaAvroSerializer();
-    avroKeySerializer.configure(qualifiedClientProps, true);
-    avroKeyDeserializer = new KafkaAvroDeserializer();
-    avroKeyDeserializer.configure(qualifiedClientProps, true);
-    avroValueSerializer = new KafkaAvroSerializer();
-    avroValueSerializer.configure(qualifiedClientProps, false);
-    avroValueDeserializer = new KafkaAvroDeserializer();
-    avroValueDeserializer.configure(qualifiedClientProps, false);
-
-    Map<String, Object> clientPropsWithoutKey = fieldEncryptionProps.getClientProperties("mock://");
-    avroSerializerWithoutKey = new KafkaAvroSerializer(schemaRegistry, clientPropsWithoutKey);
-    avroDeserializerWithoutKey = new KafkaAvroDeserializer(schemaRegistry, clientPropsWithoutKey);
-
-    Map<String, Object> reflectionClientProps = new HashMap<>(clientProps);
-    reflectionClientProps.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, "true");
-    reflectionAvroSerializer = new KafkaAvroSerializer(schemaRegistry, reflectionClientProps);
-    reflectionAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, reflectionClientProps);
-
     clientProps.put(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, false);
     jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
-    jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
-    jsonSchemaSerializer3 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, clientProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
-    protobufSerializerBytes = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, clientProps);
-
-    Map<String, Object> badClientProps = new HashMap<>(clientProps);
-    badClientProps.remove(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS);
-    badClientProps.put(AbstractKafkaSchemaSerDeConfig.RULE_SERVICE_LOADER_ENABLE, false);
-    badSerializer = new KafkaAvroSerializer(schemaRegistry, badClientProps);
-    badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
   }
 
   protected abstract EncryptionProperties getEncryptionProperties(
@@ -243,44 +191,6 @@ public abstract class EncryptionExecutorTest {
     return null;
   }
 
-  protected Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
-    return addBadSpyToCryptor(serde, DekFormat.AES256_GCM);
-  }
-
-  protected Cryptor addBadSpyToCryptor(AbstractKafkaSchemaSerDe serde, DekFormat dekFormat) throws Exception {
-    Map<String, Map<String, RuleBase>> executors = serde.getRuleExecutors();
-    EncryptionExecutor executor =
-        (EncryptionExecutor) executors.get(EncryptionExecutor.TYPE).entrySet()
-            .iterator().next().getValue();
-    if (executor != null) {
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
-      Cryptor spy = spy(new Cryptor(dekFormat));
-      doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any(), any());
-      doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any(), any());
-      cryptors.put(dekFormat, spy);
-      return spy;
-    }
-    return null;
-  }
-
-  protected Schema createF1Schema() {
-    String userSchema = "{\"type\": \"record\", "
-        + "\"name\": \"myrecord\","
-        + "\"fields\": ["
-        + "{\"name\": \"f1\", \"type\": \"string\", \"confluent:tags\": [\"PII\"]}"
-        + "]}";
-    Parser parser = new Parser();
-    Schema schema = parser.parse(userSchema);
-    return schema;
-  }
-
-  protected GenericRecord createF1Record() {
-    Schema schema = createF1Schema();
-    GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("f1", "hello world");
-    return avroRecord;
-  }
-
   protected Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
@@ -301,71 +211,6 @@ public abstract class EncryptionExecutorTest {
     avroRecord.put("name2", "testUser2");
     avroRecord.put("age", 18);
     return avroRecord;
-  }
-
-  protected GenericRecord createUserRecordWithNull() {
-    Schema schema = createUserSchema();
-    GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("name", null);
-    avroRecord.put("name2", "testUser2");
-    avroRecord.put("age", 18);
-    return avroRecord;
-  }
-
-  protected Schema createUserSchemaWithTaggedInt() {
-    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
-        + "\"name\": \"User\","
-        + "\"fields\": ["
-        + "{\"name\": \"name\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
-        + "{\"name\": \"name2\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII2\"]},"
-        + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"confluent:tags\": [\"PII\"]}"
-        + "]}";
-    Parser parser = new Parser();
-    Schema schema = parser.parse(userSchema);
-    return schema;
-  }
-
-  protected IndexedRecord createUserRecordWithTaggedInt() {
-    Schema schema = createUserSchemaWithTaggedInt();
-    GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("name", "testUser");
-    avroRecord.put("name2", "testUser2");
-    avroRecord.put("age", 18);
-    return avroRecord;
-  }
-
-  protected Schema createUserBytesSchema() {
-    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
-        + "\"name\": \"User\","
-        + "\"fields\": ["
-        + "{\"name\": \"name\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII\", \"PII3\"]},"
-        + "{\"name\": \"name2\", \"type\": [\"null\", \"bytes\"], \"confluent:tags\": [\"PII2\"]}"
-        + "]}";
-    Parser parser = new Parser();
-    Schema schema = parser.parse(userSchema);
-    return schema;
-  }
-
-  protected IndexedRecord createUserBytesRecord() {
-    Schema schema = createUserBytesSchema();
-    GenericRecord avroRecord = new GenericData.Record(schema);
-    avroRecord.put("name", ByteBuffer.wrap("testUser".getBytes(StandardCharsets.UTF_8)));
-    avroRecord.put("name2", ByteBuffer.wrap("testUser2".getBytes(StandardCharsets.UTF_8)));
-    return avroRecord;
-  }
-
-  protected Schema createWidgetSchema() {
-    String userSchema = "{\"type\":\"record\",\"name\":\"OldWidget\",\"namespace\":\"io.confluent.kafka.schemaregistry.encryption.EncryptionExecutorTest\",\"fields\":\n"
-        + "[{\"name\": \"name\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]},\n"
-        + "{\"name\": \"ssn\", \"type\": { \"type\": \"array\", \"items\": \"string\"},\"confluent:tags\": [\"PII\"]},\n"
-        + "{\"name\": \"piiArray\", \"type\": { \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\":\"OldPii\", \"fields\":\n"
-        + "[{\"name\": \"pii\", \"type\": \"string\",\"confluent:tags\": [\"PII\"]}]}}},\n"
-        + "{\"name\": \"piiMap\", \"type\": { \"type\": \"map\", \"values\": \"OldPii\"},\n"
-        + "\"confluent:tags\": [\"PII\"]},\n"
-        + "{\"name\": \"size\", \"type\": \"int\"},{\"name\": \"version\", \"type\": \"int\"}]}";
-    Parser parser = new Parser();
-    Schema schema = parser.parse(userSchema);
-    return schema;
   }
 
   @After
@@ -396,6 +241,145 @@ public abstract class EncryptionExecutorTest {
     assertEquals("testUser", record.get("name").toString());
   }
 
+  @Test
+  public void testKafkaJsonSchemaSerializer() throws Exception {
+    OldWidget widget = new OldWidget("alice");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        EncryptionExecutor.TYPE, null, null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer);
+    byte[] bytes = jsonSchemaSerializer.serialize(topic, headers, widget);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(jsonSchemaDeserializer);
+    Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be a Widget",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "123",
+        ((JsonNode)obj).get("ssn").get(0).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "456",
+        ((JsonNode)obj).get("ssn").get(1).textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "789",
+        ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "012",
+        ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
+    );
+  }
+
+  @Test
+  public void testKafkaProtobufSerializer() throws Exception {
+    Widget widget = Widget.newBuilder()
+        .setName("alice")
+        .addSsn("123")
+        .addSsn("456")
+        .addPiiArray(Pii.newBuilder().setPii("789").build())
+        .addPiiArray(Pii.newBuilder().setPii("012").build())
+        .putPiiMap("key1", Pii.newBuilder().setPii("345").build())
+        .putPiiMap("key2", Pii.newBuilder().setPii("678").build())
+        .setSize(123)
+        .build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    Rule rule = new Rule("rule1", null, null, null,
+        EncryptionExecutor.TYPE, null, null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(protobufSerializer);
+    byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(protobufDeserializer);
+    Object obj = protobufDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be a Widget",
+        DynamicMessage.class.isInstance(obj)
+    );
+    DynamicMessage dynamicMessage = (DynamicMessage) obj;
+    Descriptor dynamicDesc = dynamicMessage.getDescriptorForType();
+    assertEquals(
+        "Returned object should be a NewWidget",
+        "alice",
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
+    );
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("123", "456"),
+        ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("ssn"))
+    );
+    List<String> ssnArrayValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_array")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          return msg.getField(msg.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("789", "012"),
+        ssnArrayValues
+    );
+    List<String> ssnMapValues = ((List<?>)((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("pii_map")))
+        .stream()
+        .map(o -> {
+          DynamicMessage msg = (DynamicMessage) o;
+          DynamicMessage msg2 = (DynamicMessage) msg.getField(msg.getDescriptorForType().findFieldByName("value"));
+          return msg2.getField(msg2.getDescriptorForType().findFieldByName("pii")).toString();
+        })
+        .collect(Collectors.toList());
+    assertEquals(
+        "Returned object should be a NewWidget",
+        ImmutableList.of("345", "678"),
+        ssnMapValues
+    );
+  }
+
   protected Metadata getMetadata(String kekName) {
     return getMetadata(kekName, null);
   }
@@ -403,8 +387,8 @@ public abstract class EncryptionExecutorTest {
   protected Metadata getMetadata(String kekName, DekFormat algorithm) {
     Map<String, String> properties = new HashMap<>();
     properties.put(EncryptionExecutor.ENCRYPT_KEK_NAME, kekName);
-    properties.put(EncryptionExecutor.ENCRYPT_KMS_TYPE, fieldEncryptionProps.getKmsType());
-    properties.put(EncryptionExecutor.ENCRYPT_KMS_KEY_ID, fieldEncryptionProps.getKmsKeyId());
+    properties.put(EncryptionExecutor.ENCRYPT_KMS_TYPE, encryptionProps.getKmsType());
+    properties.put(EncryptionExecutor.ENCRYPT_KMS_KEY_ID, encryptionProps.getKmsKeyId());
     if (algorithm != null) {
       properties.put(EncryptionExecutor.ENCRYPT_DEK_ALGORITHM, algorithm.name());
     }
@@ -522,219 +506,6 @@ public abstract class EncryptionExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(pii);
-    }
-  }
-
-  public static class AnnotatedOldWidget {
-    private String annotatedName;
-    private List<String> annotatedSsn = new ArrayList<>();
-    private List<AnnotatedOldPii> piiArray = new ArrayList<>();
-    private Map<String, AnnotatedOldPii> piiMap = new HashMap<>();
-    private int size;
-    private int version;
-
-    public AnnotatedOldWidget() {}
-    public AnnotatedOldWidget(String annotatedName) {
-      this.annotatedName = annotatedName;
-    }
-
-    @JsonProperty("name")
-    public String getAnnotatedName() {
-      return annotatedName;
-    }
-
-    @JsonProperty("name")
-    public void setAnnotatedName(String name) {
-      this.annotatedName = name;
-    }
-
-    @JsonProperty("ssn")
-    public List<String> getAnnotatedSsn() {
-      return annotatedSsn;
-    }
-
-    @JsonProperty("ssn")
-    public void setAnnotatedSsn(List<String> ssn) {
-      this.annotatedSsn = ssn;
-    }
-
-    public List<AnnotatedOldPii> getPiiArray() {
-      return piiArray;
-    }
-
-    public void setPiiArray(List<AnnotatedOldPii> pii) {
-      this.piiArray = pii;
-    }
-
-    public Map<String, AnnotatedOldPii> getPiiMap() {
-      return piiMap;
-    }
-
-    public void setPiiMap(Map<String, AnnotatedOldPii> pii) {
-      this.piiMap = pii;
-    }
-
-    public int getSize() {
-      return size;
-    }
-
-    public void setSize(int size) {
-      this.size = size;
-    }
-
-    public int getVersion() {
-      return version;
-    }
-
-    public void setVersion(int version) {
-      this.version = version;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-      OldWidget widget = (OldWidget) o;
-      return annotatedName.equals(widget.name)
-          && Objects.equals(annotatedSsn, widget.ssn)
-          && Objects.equals(piiArray, widget.piiArray)
-          && Objects.equals(piiMap, widget.piiMap)
-          && size == widget.size
-          && version == widget.version;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(annotatedName, annotatedSsn, piiArray, piiMap, size, version);
-    }
-  }
-
-  public static class AnnotatedOldPii {
-    @JsonProperty("pii")
-    private String annotatedPii;
-
-    public AnnotatedOldPii() {}
-    public AnnotatedOldPii(String annotatedPii) {
-      this.annotatedPii = annotatedPii;
-    }
-
-    public String getAnnotatedPii() {
-      return annotatedPii;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      AnnotatedOldPii pii1 = (AnnotatedOldPii) o;
-      return Objects.equals(annotatedPii, pii1.annotatedPii);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(annotatedPii);
-    }
-  }
-
-  public class Employee {
-    @JsonProperty(required = true)
-    private String id;
-    @JsonProperty(required = true)
-    private PaymentDetails paymentDetails;
-
-    // Getters and Setters
-    public String getId() {
-      return id;
-    }
-
-    public void setId(String id) {
-      this.id = id;
-    }
-
-    public PaymentDetails getPaymentDetails() {
-      return paymentDetails;
-    }
-
-    public void setPaymentDetails(PaymentDetails paymentDetails) {
-      this.paymentDetails = paymentDetails;
-    }
-  }
-
-  @JsonTypeInfo(
-      use = JsonTypeInfo.Id.NAME,
-      include = As.EXISTING_PROPERTY,
-      property = "paymentType"
-  )
-  @JsonSubTypes({
-      @JsonSubTypes.Type(value = BankingInfo.class, name = "BANK"),
-      @JsonSubTypes.Type(value = CreditCardInfo.class, name = "CC")
-  })
-  public static class PaymentDetails {
-    private String paymentType;
-
-    public PaymentDetails(String paymentType) {
-      this.paymentType = paymentType;
-    }
-
-    // Getters and Setters
-    public String getPaymentType() {
-      return paymentType;
-    }
-  }
-
-  public static class BankingInfo extends PaymentDetails {
-    private String accountId;
-    private String accountPassword;
-
-    public BankingInfo() {
-      super("BANK");
-    }
-
-    // Getters and Setters
-    public String getAccountId() {
-      return accountId;
-    }
-
-    public void setAccountId(String accountId) {
-      this.accountId = accountId;
-    }
-
-    public String getAccountPassword() {
-      return accountPassword;
-    }
-
-    public void setAccountPassword(String accountPassword) {
-      this.accountPassword = accountPassword;
-    }
-  }
-
-  public static class CreditCardInfo extends PaymentDetails {
-    private String cardNumber;
-    private String cardPin;
-
-    public CreditCardInfo() {
-      super("CC");
-    }
-
-    // Getters and Setters
-    public String getCardNumber() {
-      return cardNumber;
-    }
-
-    public void setCardNumber(String cardNumber) {
-      this.cardNumber = cardNumber;
-    }
-
-    public String getCardPin() {
-      return cardPin;
-    }
-
-    public void setCardPin(String cardPin) {
-      this.cardPin = cardPin;
     }
   }
 }
