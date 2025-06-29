@@ -395,13 +395,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       this.payload = payload;
       SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
       try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
-        ByteBuffer buf = schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
+        ByteBuffer buffer = schemaIdDeserializer.deserialize(
+            topic, isKey, headers, payload, schemaId);
         this.schemaId = schemaId;
-        buf = (ByteBuffer) executeRules(
+        Object buf = executeRules(
             getSubject(), topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
-            schemaFromRegistry(), buf
+            schemaFromRegistry(), buffer
         );
-        this.buffer = buf;
+        this.buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
       } catch (IOException e) {
         throw new SerializationException(
             "Error deserializing Avro message for id " + schemaId, e);

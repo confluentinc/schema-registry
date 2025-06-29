@@ -146,10 +146,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
-      buffer = (ByteBuffer) executeRules(
+      Object buf = executeRules(
           subject, topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
           schema, buffer
       );
+      buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
       ProtobufSchema readerSchema = null;
       if (metadata != null) {

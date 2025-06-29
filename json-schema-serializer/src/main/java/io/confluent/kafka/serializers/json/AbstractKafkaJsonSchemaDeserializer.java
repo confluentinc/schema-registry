@@ -138,10 +138,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
-      buffer = (ByteBuffer) executeRules(
+      Object buf = executeRules(
           subject, topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
           schema, buffer
       );
+      buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
       ParsedSchema readerSchema = null;
       if (metadata != null) {
