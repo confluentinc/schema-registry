@@ -130,8 +130,6 @@ public abstract class FieldEncryptionExecutorTest {
   protected final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   protected final KafkaAvroSerializer badSerializer;
   protected final KafkaAvroDeserializer badDeserializer;
-  protected final KafkaAvroSerializer goodDekSerializer;
-  protected final KafkaAvroSerializer badDekSerializer;
   protected final String topic;
   protected final FakeClock fakeClock = new FakeClock();
 
@@ -197,14 +195,6 @@ public abstract class FieldEncryptionExecutorTest {
     badClientProps.put(AbstractKafkaSchemaSerDeConfig.RULE_SERVICE_LOADER_ENABLE, false);
     badSerializer = new KafkaAvroSerializer(schemaRegistry, badClientProps);
     badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
-
-    FieldEncryptionProperties goodDekProps = getFieldEncryptionProperties(ruleNames, GoodDekGenerator.class);
-    Map<String, Object> goodDekClientProps = goodDekProps.getClientProperties("mock://");
-    goodDekSerializer = new KafkaAvroSerializer(schemaRegistry, goodDekClientProps);
-
-    FieldEncryptionProperties badDekProps = getFieldEncryptionProperties(ruleNames, BadDekGenerator.class);
-    Map<String, Object> badDekClientProps = badDekProps.getClientProperties("mock://");
-    badDekSerializer = new KafkaAvroSerializer(schemaRegistry, badDekClientProps);
   }
 
   protected abstract FieldEncryptionProperties getFieldEncryptionProperties(
@@ -222,7 +212,7 @@ public abstract class FieldEncryptionExecutorTest {
       executor = (FieldEncryptionExecutor) executorsByType.entrySet().iterator().next().getValue();
     }
     if (executor != null) {
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
+      Map<DekFormat, Cryptor> cryptors = executor.getEncryptionExecutor().getCryptors();
       Cryptor spy = spy(new Cryptor(dekFormat));
       cryptors.put(dekFormat, spy);
       return spy;
@@ -254,7 +244,7 @@ public abstract class FieldEncryptionExecutorTest {
     }
     if (executor != null) {
       // Check for existing cryptor
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
+      Map<DekFormat, Cryptor> cryptors = executor.getEncryptionExecutor().getCryptors();
       Cryptor cryptor = cryptors.get(dekFormat);
       if (cryptor != null) {
         return cryptor;
@@ -276,7 +266,7 @@ public abstract class FieldEncryptionExecutorTest {
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
             .iterator().next().getValue();
     if (executor != null) {
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
+      Map<DekFormat, Cryptor> cryptors = executor.getEncryptionExecutor().getCryptors();
       Cryptor spy = spy(new Cryptor(dekFormat));
       doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any(), any());
       doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any(), any());
@@ -1905,50 +1895,6 @@ public abstract class FieldEncryptionExecutorTest {
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 
-  @Test
-  public void testGoodDekGenerator() throws Exception {
-    IndexedRecord avroRecord = createUserRecord();
-    AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
-    Metadata metadata = getMetadata("kek1");
-    avroSchema = avroSchema.copy(metadata, ruleSet);
-    schemaRegistry.register(topic + "-value", avroSchema);
-
-
-    int expectedEncryptions = 1;
-    RecordHeaders headers = new RecordHeaders();
-    Cryptor cryptor = addSpyToCryptor(goodDekSerializer);
-    byte[] bytes = goodDekSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
-    cryptor = addSpyToCryptor(avroDeserializer);
-    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
-    assertEquals("testUser", record.get("name"));
-  }
-
-  @Test
-  public void testBadDekGenerator() throws Exception {
-    IndexedRecord avroRecord = createUserRecord();
-    AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
-    Metadata metadata = getMetadata("kek1");
-    avroSchema = avroSchema.copy(metadata, ruleSet);
-    schemaRegistry.register(topic + "-value", avroSchema);
-
-
-    RecordHeaders headers = new RecordHeaders();
-    try {
-      badDekSerializer.serialize(topic, headers, avroRecord);
-      fail();
-    } catch (Exception e) {
-      assertTrue(e instanceof SerializationException);
-    }
-  }
-
   protected Metadata getMetadata(String kekName) {
     return getMetadata(kekName, null);
   }
@@ -2190,24 +2136,6 @@ public abstract class FieldEncryptionExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(annotatedPii);
-    }
-  }
-
-  public static class GoodDekGenerator extends FieldEncryptionExecutor {
-
-    @Override
-    protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
-      // generate a valid dek
-      return new byte[32];
-    }
-  }
-
-  public static class BadDekGenerator extends FieldEncryptionExecutor {
-
-    @Override
-    protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
-      // generate an invalid dek
-      return new byte[15];
     }
   }
 
