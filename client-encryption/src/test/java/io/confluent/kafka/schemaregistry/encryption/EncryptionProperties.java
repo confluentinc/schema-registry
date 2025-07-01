@@ -17,17 +17,12 @@ package io.confluent.kafka.schemaregistry.encryption;
 import java.util.List;
 import java.util.Map;
 
-public abstract class FieldEncryptionProperties {
+public abstract class EncryptionProperties {
 
   private List<String> ruleNames;
   private Class<?> ruleExecutor;
 
-  public FieldEncryptionProperties(List<String> ruleNames) {
-    this.ruleNames = ruleNames;
-    this.ruleExecutor = FieldEncryptionExecutor.class;
-  }
-
-  public FieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public EncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     this.ruleNames = ruleNames;
     this.ruleExecutor = ruleExecutor;
   }
