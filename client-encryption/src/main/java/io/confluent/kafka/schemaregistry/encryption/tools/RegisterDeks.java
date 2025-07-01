@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.EncryptionExecutor.EncryptionExecutorTransform;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -121,6 +122,14 @@ public class RegisterDeks implements Callable<Integer> {
         }
         processRule(configs, parsedSchema, rules, i, rule);
       }
+      rules = parsedSchema.ruleSet().getEncodingRules();
+      for (int i = 0; i < rules.size(); i++) {
+        Rule rule = rules.get(i);
+        if (rule.isDisabled() || !EncryptionExecutor.TYPE.equals(rule.getType())) {
+          continue;
+        }
+        processRule(configs, parsedSchema, rules, i, rule);
+      }
       return 0;
     }
   }
@@ -135,12 +144,12 @@ public class RegisterDeks implements Callable<Integer> {
 
   private void processRule(Map<String, Object> configs, ParsedSchema parsedSchema, List<Rule> rules,
       int i, Rule rule) throws RuleException, GeneralSecurityException {
-    try (FieldEncryptionExecutor executor = new FieldEncryptionExecutor()) {
+    try (EncryptionExecutor executor = new EncryptionExecutor()) {
       Map<String, Object> ruleConfigs = configsWithoutPrefix(rule, configs);
       executor.configure(ruleConfigs);
       RuleContext ctx = new RuleContext(configs, null, parsedSchema,
           subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
-      EncryptionExecutorTransform transform = executor.getEncryptionExecutor().newTransform(ctx);
+      EncryptionExecutorTransform transform = executor.newTransform(ctx);
       transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);
     }
   }
