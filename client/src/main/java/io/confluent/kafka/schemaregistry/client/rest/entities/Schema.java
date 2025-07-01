@@ -446,14 +446,14 @@ public class Schema implements Comparable<Schema> {
     return result;
   }
 
-  public void updateHash(MessageDigest md) {
-    updateHash(md, schema, references, metadata, ruleSet);
-  }
-
   public void updateHashSimple(MessageDigest md) {
     if (schema != null) {
       md.update(schema.getBytes(StandardCharsets.UTF_8));
     }
+  }
+
+  public void updateHash(MessageDigest md) {
+    updateHash(md, schema, references, metadata, ruleSet);
   }
 
   public static void updateHash(

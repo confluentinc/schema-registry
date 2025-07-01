@@ -73,6 +73,13 @@ public class MD5 {
     }
   }
 
+  public static MD5 ofSchemaSimple(SchemaValue schema) {
+    byte[] bytes = schema.getMd5Bytes();
+    return bytes != null
+        ? new MD5(bytes)
+        : Schema.updateHashSimple(md, schema.getSchema());
+  }
+
   public static MD5 ofSchema(Schema schema) {
     try {
       MessageDigest md = MessageDigest.getInstance("MD5");
@@ -81,13 +88,6 @@ public class MD5 {
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);
     }
-  }
-
-  public static MD5 ofSchemaSimple(SchemaValue schema) {
-    byte[] bytes = schema.getMd5Bytes();
-    return bytes != null
-        ? new MD5(bytes)
-        : Schema.updateHashSimple(md, schema.getSchema());
   }
 
   public static MD5 ofSchema(SchemaValue schema) {
