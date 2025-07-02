@@ -110,7 +110,7 @@ public class RegisterDeks implements Callable<Integer> {
         return 1;
       }
       ParsedSchema parsedSchema = schema.get();
-      if (parsedSchema.ruleSet() == null || parsedSchema.ruleSet().getDomainRules() == null) {
+      if (parsedSchema.ruleSet() == null) {
         LOG.info("No rules found");
         return 0;
       }
