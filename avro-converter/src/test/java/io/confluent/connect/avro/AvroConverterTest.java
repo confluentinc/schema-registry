@@ -23,6 +23,8 @@ import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -30,6 +32,12 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
@@ -52,6 +60,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 // AvroConverter is a trivial combination of the serializers and the AvroData conversions, so
 // most testing is performed on AvroData since it is much easier to compare the results in Avro
@@ -461,5 +470,39 @@ public class AvroConverterTest {
 
     converted2 = converter.toConnectData("topic2", serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+    AvroConverter.Serializer serializer = mock(AvroConverter.Serializer.class);
+    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    when(serializer.serialize(anyString(), anyBoolean(), any(), any(), any())).thenThrow(serializationException);
+
+    try {
+      java.lang.reflect.Field serializerField = AvroConverter.class.getDeclaredField("serializer");
+      serializerField.setAccessible(true);
+      serializerField.set(converter, serializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, "value");
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+    AvroConverter.Deserializer deserializer = mock(AvroConverter.Deserializer.class);
+    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    when(deserializer.deserialize(anyString(), anyBoolean(), any(), any())).thenThrow(serializationException);
+
+    try {
+      java.lang.reflect.Field deserializerField = AvroConverter.class.getDeclaredField("deserializer");
+      deserializerField.setAccessible(true);
+      deserializerField.set(converter, deserializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.toConnectData(TOPIC, new byte[0]);
   }
 }
