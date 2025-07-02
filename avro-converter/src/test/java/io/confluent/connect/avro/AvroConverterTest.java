@@ -33,9 +33,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.powermock.reflect.Whitebox;
@@ -476,7 +473,13 @@ public class AvroConverterTest {
   public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
     AvroConverter.Serializer serializer = mock(AvroConverter.Serializer.class);
     SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
-    when(serializer.serialize(anyString(), anyBoolean(), any(), any(), any())).thenThrow(serializationException);
+    AvroData avroData = new AvroData(
+        new AvroDataConfig(Collections.singletonMap("schema.registry.url", "http://fake-url")));
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(Schema.STRING_SCHEMA);
+
+    when(serializer.serialize(TOPIC, false, null,
+        avroData.fromConnectData(Schema.STRING_SCHEMA, avroSchema, "value"),
+        new AvroSchema(avroSchema))).thenThrow(serializationException);
 
     try {
       java.lang.reflect.Field serializerField = AvroConverter.class.getDeclaredField("serializer");
@@ -493,7 +496,11 @@ public class AvroConverterTest {
   public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
     AvroConverter.Deserializer deserializer = mock(AvroConverter.Deserializer.class);
     SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
-    when(deserializer.deserialize(anyString(), anyBoolean(), any(), any())).thenThrow(serializationException);
+    SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
+    byte[] valueBytes =
+        converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
+    when(deserializer.deserialize(TOPIC, false, null, valueBytes)).thenThrow(
+        serializationException);
 
     try {
       java.lang.reflect.Field deserializerField = AvroConverter.class.getDeclaredField("deserializer");
@@ -503,6 +510,6 @@ public class AvroConverterTest {
       fail("Reflection failed: " + e);
     }
 
-    converter.toConnectData(TOPIC, new byte[0]);
+    converter.toConnectData(TOPIC, valueBytes);
   }
 }

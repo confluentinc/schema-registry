@@ -20,11 +20,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.ListValue;
+import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import io.confluent.connect.protobuf.test.KeyValueOptional.KeyValueOptionalMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
 import io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
@@ -64,9 +66,6 @@ import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -1405,7 +1404,11 @@ public class ProtobufConverterTest {
   public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
     ProtobufConverter.Serializer serializer = mock(ProtobufConverter.Serializer.class);
     SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
-    when(serializer.serialize(anyString(), anyBoolean(), any(), any(), any())).thenThrow(serializationException);
+    ProtobufData protobufData = new ProtobufData();
+    ProtobufSchemaAndValue schemaAndValue =
+        protobufData.fromConnectData(Schema.STRING_SCHEMA, "value");
+    when(serializer.serialize(TOPIC, false, null, (Message) schemaAndValue.getValue(),
+        schemaAndValue.getSchema())).thenThrow(serializationException);
 
     try {
       java.lang.reflect.Field serializerField = ProtobufConverter.class.getDeclaredField("serializer");
@@ -1422,7 +1425,11 @@ public class ProtobufConverterTest {
   public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
     ProtobufConverter.Deserializer deserializer = mock(ProtobufConverter.Deserializer.class);
     SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
-    when(deserializer.deserialize(anyString(), anyBoolean(), any(), any())).thenThrow(serializationException);
+    SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
+    byte[] valueBytes =
+        converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
+    when(deserializer.deserialize(TOPIC, false, null, valueBytes)).thenThrow(
+        serializationException);
 
     try {
       java.lang.reflect.Field deserializerField = ProtobufConverter.class.getDeclaredField("deserializer");
@@ -1432,7 +1439,7 @@ public class ProtobufConverterTest {
       fail("Reflection failed: " + e);
     }
 
-    converter.toConnectData(TOPIC, new byte[0]);
+    converter.toConnectData(TOPIC, valueBytes);
   }
 
   private static ProtobufSchema getSchema(Descriptor descriptor) {
