@@ -20,12 +20,12 @@ import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
@@ -112,7 +112,7 @@ public class ProtobufConverter implements Converter {
       ), e);
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException) {
-        throw new ConnectException(
+        throw new NetworkException(
             String.format("I/O error while serializing Protobuf data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
@@ -161,7 +161,7 @@ public class ProtobufConverter implements Converter {
       ), e);
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException) {
-        throw new ConnectException(
+        throw new NetworkException(
             String.format("I/O error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
@@ -179,7 +179,7 @@ public class ProtobufConverter implements Converter {
     }
   }
 
-  private static class Serializer extends AbstractKafkaProtobufSerializer {
+  static class Serializer extends AbstractKafkaProtobufSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -201,7 +201,7 @@ public class ProtobufConverter implements Converter {
     }
   }
 
-  private static class Deserializer extends AbstractKafkaProtobufDeserializer {
+  static class Deserializer extends AbstractKafkaProtobufDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;
