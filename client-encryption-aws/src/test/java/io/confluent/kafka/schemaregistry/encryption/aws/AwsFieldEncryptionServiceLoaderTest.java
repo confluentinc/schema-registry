@@ -19,7 +19,7 @@ package io.confluent.kafka.schemaregistry.encryption.aws;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionServiceLoaderTest;
 import java.util.List;
 
@@ -30,8 +30,8 @@ public class AwsFieldEncryptionServiceLoaderTest extends FieldEncryptionServiceL
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new AwsFieldEncryptionProperties(ImmutableList.of(DEFAULT_NAME), ruleExecutor);
+    return new AwsEncryptionProperties(ImmutableList.of(DEFAULT_NAME), ruleExecutor);
   }
 }

@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
@@ -448,7 +449,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         previous = current;
         continue;
       }
-      if (current.ruleSet() != null && current.ruleSet().hasRules(migrationMode)) {
+      if (current.ruleSet() != null
+          && current.ruleSet().hasRules(RulePhase.MIGRATION, migrationMode)) {
         Migration m;
         if (migrationMode == RuleMode.UPGRADE) {
           m = new Migration(migrationMode, previous, current);
@@ -685,6 +687,14 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected Object executeRules(
       String subject, String topic, Headers headers, Object original,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(
+        subject, topic, headers, original, ruleMode, RulePhase.DOMAIN, source, target, message);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RuleMode ruleMode, RulePhase rulePhase,
+      ParsedSchema source, ParsedSchema target, Object message) {
     if (message == null || target == null) {
       return message;
     }
@@ -701,7 +711,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       }
     } else {
       if (target.ruleSet() != null) {
-        rules = target.ruleSet().getDomainRules();
+        rules = rulePhase == RulePhase.ENCODING
+            ? target.ruleSet().getEncodingRules()
+            : target.ruleSet().getDomainRules();
         if (ruleMode == RuleMode.READ) {
           rules = new ArrayList<>(rules);
           // Execute read rules in reverse order for symmetry
