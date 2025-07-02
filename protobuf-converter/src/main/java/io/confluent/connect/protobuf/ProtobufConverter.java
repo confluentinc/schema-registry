@@ -179,7 +179,7 @@ public class ProtobufConverter implements Converter {
     }
   }
 
-  private static class Serializer extends AbstractKafkaProtobufSerializer {
+  static class Serializer extends AbstractKafkaProtobufSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -201,7 +201,7 @@ public class ProtobufConverter implements Converter {
     }
   }
 
-  private static class Deserializer extends AbstractKafkaProtobufDeserializer {
+  static class Deserializer extends AbstractKafkaProtobufDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;

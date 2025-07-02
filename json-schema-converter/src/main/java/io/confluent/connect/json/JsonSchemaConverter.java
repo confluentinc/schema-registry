@@ -173,7 +173,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
-  private static class Serializer extends AbstractKafkaJsonSchemaSerializer {
+  static class Serializer extends AbstractKafkaJsonSchemaSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -196,7 +196,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
-  private static class Deserializer extends AbstractKafkaJsonSchemaDeserializer {
+  static class Deserializer extends AbstractKafkaJsonSchemaDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;

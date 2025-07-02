@@ -173,7 +173,7 @@ public class AvroConverter implements Converter {
   }
 
 
-  private static class Serializer extends AbstractKafkaAvroSerializer {
+  static class Serializer extends AbstractKafkaAvroSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -200,7 +200,7 @@ public class AvroConverter implements Converter {
     }
   }
 
-  private static class Deserializer extends AbstractKafkaAvroDeserializer {
+  static class Deserializer extends AbstractKafkaAvroDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;
