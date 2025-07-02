@@ -681,8 +681,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected Object executeRules(
       String subject, String topic, Headers headers,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
-    return executeRules(
-        subject, topic, headers, message, ruleMode, RulePhase.MIGRATION, source, target, message);
+    return executeRules(subject, topic, headers, message, ruleMode, source, target, message);
   }
 
   protected Object executeRules(
