@@ -1,9 +1,0 @@
-repos:
-  - repo: local
-    hooks:
-      - id: spotless
-        name: spotless
-        entry: mvn
-        args: ['spotless:apply', '-DspotlessSetLicenseHeaderYearsFromGitHistory=true']
-        language: system
-        types: [java]

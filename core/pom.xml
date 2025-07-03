@@ -356,6 +356,9 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
+                        <excludes>
+                            <exclude>src/test/java/io/confluent/kafka/serializers/protobuf/test/*.java</exclude>
+                        </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/ccl-header.txt</file>
                         </licenseHeader>

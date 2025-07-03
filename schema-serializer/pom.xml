@@ -49,7 +49,7 @@
                 <configuration>
                     <java>
                         <licenseHeader>
-                            <file>${maven.multiModuleProjectDirectory}/../config/license-headers/apache-header.txt</file>
+                            <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
                         </licenseHeader>
                     </java>
                 </configuration>
