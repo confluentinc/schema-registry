@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Confluent Inc.
+ * Copyright 2021-2025 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/licenses/publicdomain
- *
- * Modified for https://jira.jboss.org/jira/browse/ISPN-299
- * Includes ideas described in http://portal.acm.org/citation.cfm?id=1547428
- *
- */
+
 package io.confluent.kafka.schemaregistry.utils;
 
 import static java.util.Collections.singletonMap;
