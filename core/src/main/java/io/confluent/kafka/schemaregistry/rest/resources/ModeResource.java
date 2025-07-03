@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2024 Confluent Inc.
+ * Copyright 2015-2025 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
