@@ -2785,13 +2785,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   private void logSchemaOp(Schema schema, String operation) {
     try {
-      MD5 md5 = MD5.ofSchema(schema);
-      ByteBuffer byteBuffer = ByteBuffer.wrap(md5.bytes());
-      long high = byteBuffer.getLong();
-      long low = byteBuffer.getLong();
-      UUID uuid = new UUID(high, low);
+      MD5 md5 = MD5.ofSchemaSimple(schema);
+      StringBuilder hexString = new StringBuilder();
+      for (byte b : md5.bytes()) {
+        hexString.append(String.format("%02x", b));
+      }
       log.info("Resource association log - (tenant, schemaHash, operation): ({}, {}, {})",
-          tenant(), uuid.toString(), operation);
+          tenant(), hexString.toString(), operation);
     } catch (Exception e) {
       log.warn("Error occurred while logging schema operation", e);
     }
