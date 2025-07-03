@@ -399,7 +399,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             topic, isKey, headers, payload, schemaId);
         this.schemaId = schemaId;
         Object buf = executeRules(
-            getSubject(), topic, headers, payload, RuleMode.READ, RulePhase.ENCODING, null,
+            getSubject(), topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
             schemaFromRegistry(), buffer
         );
         this.buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;

@@ -184,7 +184,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         }
         byte[] payload = baos.toByteArray();
         payload = (byte[]) executeRules(
-            subject, topic, headers, payload, RuleMode.WRITE, RulePhase.ENCODING, null,
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
             schema, payload
         );
         return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);

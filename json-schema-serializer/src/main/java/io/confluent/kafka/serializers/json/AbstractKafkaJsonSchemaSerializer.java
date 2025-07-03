@@ -176,7 +176,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
         byte[] payload = objectMapper.writeValueAsBytes(object);
         payload = (byte[]) executeRules(
-            subject, topic, headers, payload, RuleMode.WRITE, RulePhase.ENCODING, null,
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
             schema, payload
         );
         return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);

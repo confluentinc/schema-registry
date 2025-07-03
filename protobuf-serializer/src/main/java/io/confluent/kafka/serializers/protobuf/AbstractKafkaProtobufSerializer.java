@@ -170,7 +170,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         object.writeTo(baos);
         byte[] payload = baos.toByteArray();
         payload = (byte[]) executeRules(
-            subject, topic, headers, payload, RuleMode.WRITE, RulePhase.ENCODING, null,
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
             schema, payload
         );
         return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);

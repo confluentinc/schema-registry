@@ -671,7 +671,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         message = m.getSource().toJson(message);
       }
       message = executeRules(
-          subject, topic, headers, m.getRuleMode(),
+          subject, topic, headers, message, RulePhase.MIGRATION, m.getRuleMode(),
           m.getSource(), m.getTarget(), message
       );
     }
@@ -688,12 +688,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       String subject, String topic, Headers headers, Object original,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
     return executeRules(
-        subject, topic, headers, original, ruleMode, RulePhase.DOMAIN, source, target, message);
+        subject, topic, headers, original, RulePhase.DOMAIN, ruleMode, source, target, message);
   }
 
   protected Object executeRules(
       String subject, String topic, Headers headers, Object original,
-      RuleMode ruleMode, RulePhase rulePhase,
+      RulePhase rulePhase, RuleMode ruleMode,
       ParsedSchema source, ParsedSchema target, Object message) {
     if (message == null || target == null) {
       return message;
