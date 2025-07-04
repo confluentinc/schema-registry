@@ -207,14 +207,15 @@ public class RestService implements Closeable, Configurable {
 
   private UrlList baseUrls;
   private SSLSocketFactory sslSocketFactory;
-  private int httpConnectTimeoutMs;
-  private int httpReadTimeoutMs;
+  private volatile int httpConnectTimeoutMs;
+  private volatile int httpReadTimeoutMs;
   private HostnameVerifier hostnameVerifier;
   private BasicAuthCredentialProvider basicAuthCredentialProvider;
   private BearerAuthCredentialProvider bearerAuthCredentialProvider;
   private Map<String, String> httpHeaders;
   private Proxy proxy;
   private HttpHost clientProxy;
+  private boolean useApacheHttpClient;
   private HttpClient httpClient;
   private boolean isForward;
   private RetryExecutor retryExecutor;
@@ -239,26 +240,22 @@ public class RestService implements Closeable, Configurable {
     this(baseUrls, isForward, false);
   }
 
-  public RestService(String baseUrlConfig, boolean isForward, boolean apacheClient) {
-    this(new UrlList(parseBaseUrl(baseUrlConfig)), isForward, apacheClient);
+  public RestService(String baseUrlConfig, boolean isForward, boolean useApacheHttpClient) {
+    this(new UrlList(parseBaseUrl(baseUrlConfig)), isForward, useApacheHttpClient);
   }
 
-  public RestService(UrlList baseUrls, boolean isForward, boolean apacheClient) {
+  public RestService(UrlList baseUrls, boolean isForward, boolean useApacheHttpClient) {
     this.baseUrls = baseUrls;
     this.isForward = isForward;
     // ensure retry executor is set for tests
     this.retryExecutor = new RetryExecutor(0, 0, 0);
-
-    if (apacheClient) {
-      this.httpClient = HttpClients.createDefault();
-    }
+    this.useApacheHttpClient = useApacheHttpClient;
   }
 
   @Override
   public void configure(Map<String, ?> configs) {
-    if (SchemaRegistryClientConfig.getApacheClient(configs)) {
-      this.httpClient = HttpClients.createDefault();
-    }
+    this.useApacheHttpClient = SchemaRegistryClientConfig.useApacheHttpClient(configs);
+
     this.retryExecutor = new RetryExecutor(
         SchemaRegistryClientConfig.getMaxRetries(configs),
         SchemaRegistryClientConfig.getRetriesWaitMs(configs),
@@ -306,25 +303,21 @@ public class RestService implements Closeable, Configurable {
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
     }
-
-    reconfigureHttpClient();
   }
 
-  private void reconfigureHttpClient() {
-    if (this.httpClient == null) {
-      return;
-    } else {
-      try {
-        ((CloseableHttpClient) httpClient).close();
-      } catch (IOException e) {
-        log.warn("Error closing existing HTTP client", e);
+  HttpClient getApacheHttpClient() {
+    if (this.httpClient != null) {
+      return this.httpClient;
+    }
+    synchronized (this) {
+      if (this.useApacheHttpClient) {
+        this.httpClient = createNewHttpClient();
       }
     }
-
-    createNewHttpClient();
+    return this.httpClient;
   }
 
-  private void createNewHttpClient() {
+  private HttpClient createNewHttpClient() {
     RequestConfig requestConfig = RequestConfig.custom()
         .setConnectionRequestTimeout(Timeout.ofMilliseconds(
             this.httpConnectTimeoutMs))
@@ -360,8 +353,7 @@ public class RestService implements Closeable, Configurable {
     if (this.clientProxy != null) {
       httpClientBuilder.setProxy(clientProxy);
     }
-
-    this.httpClient = httpClientBuilder.build();
+    return httpClientBuilder.build();
   }
 
   private static boolean isNonEmpty(String s) {
@@ -374,22 +366,22 @@ public class RestService implements Closeable, Configurable {
 
   public void setSslSocketFactory(SSLSocketFactory sslSocketFactory) {
     this.sslSocketFactory = sslSocketFactory;
-    reconfigureHttpClient();
+    closeHttpClient();
   }
 
   public void setHostnameVerifier(HostnameVerifier hostnameVerifier) {
     this.hostnameVerifier = hostnameVerifier;
-    reconfigureHttpClient();
+    closeHttpClient();
   }
 
   public void setHttpConnectTimeoutMs(int httpConnectTimeoutMs) {
     this.httpConnectTimeoutMs = httpConnectTimeoutMs;
-    reconfigureHttpClient();
+    closeHttpClient();
   }
 
   public void setHttpReadTimeoutMs(int httpReadTimeoutMs) {
     this.httpReadTimeoutMs = httpReadTimeoutMs;
-    reconfigureHttpClient();
+    closeHttpClient();
   }
 
   /**
@@ -405,7 +397,7 @@ public class RestService implements Closeable, Configurable {
                                 Map<String, String> requestProperties,
                                 TypeReference<T> responseFormat)
       throws IOException, RestClientException {
-    if (httpClient != null) {
+    if (this.useApacheHttpClient) {
       return sendHttpRequestWithClient(requestUrl, method, requestBodyData,
           requestProperties, responseFormat);
     } else {
@@ -529,6 +521,7 @@ public class RestService implements Closeable, Configurable {
                                           Map<String, String> requestProperties,
                                           TypeReference<T> responseFormat)
       throws IOException, RestClientException {
+    HttpClient client = getApacheHttpClient();
     String requestData = requestBodyData == null ? "null"
         : new String(requestBodyData, StandardCharsets.UTF_8);
     log.debug(format("Sending %s with input %s to %s",
@@ -564,7 +557,7 @@ public class RestService implements Closeable, Configurable {
       setRequestHeaders(requestUrl, requestProperties, request);
 
       try (CloseableHttpResponse response = (CloseableHttpResponse)
-          httpClient.executeOpen(null, request, null)) {
+          client.executeOpen(null, request, null)) {
         int responseCode = response.getCode();
         if (responseCode == HttpURLConnection.HTTP_OK) {
           try {
@@ -1924,16 +1917,14 @@ public class RestService implements Closeable, Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
-    if (this.httpClient != null) {
-      try {
-        URI uri = new URI(proxyHost);
-        proxyHost = uri.getHost();
-      } catch (URISyntaxException e) {
-        proxyHost = proxyHost.replaceFirst("^https?://", "");
-      }
-      this.clientProxy = new HttpHost(proxyHost, proxyPort);
+    try {
+      URI uri = new URI(proxyHost);
+      proxyHost = uri.getHost();
+    } catch (URISyntaxException e) {
+      proxyHost = proxyHost.replaceFirst("^https?://", "");
     }
-    reconfigureHttpClient();
+    this.clientProxy = new HttpHost(proxyHost, proxyPort);
+    closeHttpClient();
   }
 
   /**
@@ -1948,18 +1939,22 @@ public class RestService implements Closeable, Configurable {
     return new URL(requestUrl);
   }
 
-  @Override
-  public void close() throws IOException {
+  private void closeHttpClient() {
     if (this.httpClient != null) {
       try {
         ((CloseableHttpClient) httpClient).close();
+        this.httpClient = null;
       } catch (IOException e) {
         log.warn("Error closing existing HTTP client", e);
       }
     }
+  }
 
+  @Override
+  public void close() throws IOException {
     if (this.bearerAuthCredentialProvider != null) {
       this.bearerAuthCredentialProvider.close();
     }
+    closeHttpClient();
   }
 }

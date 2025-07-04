@@ -114,6 +114,7 @@
         <commons.validator.version>1.9.0</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
         <log4j.version>2.24.3</log4j.version>
+        <apache.httpclient.version>5.5</apache.httpclient.version>
     </properties>
 
     <repositories>
@@ -383,6 +384,11 @@
                         <artifactId>guava</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.client5</groupId>
+                <artifactId>httpclient5</artifactId>
+                <version>${apache.httpclient.version}</version>
             </dependency>
 
             <!--children-->

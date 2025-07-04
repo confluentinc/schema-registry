@@ -73,6 +73,7 @@ public class RestApp {
     restConnect = restServer.getURI().toString();
     if (restConnect.endsWith("/"))
       restConnect = restConnect.substring(0, restConnect.length()-1);
+    // For testing with Apache Http Client
     // restClient = new RestService(restConnect, false, true);
     restClient = new RestService(restConnect);
   }

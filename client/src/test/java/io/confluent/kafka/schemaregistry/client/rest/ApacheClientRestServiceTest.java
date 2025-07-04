@@ -69,7 +69,7 @@ public class ApacheClientRestServiceTest {
 
   @Test
   public void testSetForwardHeader() throws Exception {
-    RestService restService = new RestService("http://localhost:8081", true);
+    RestService restService = new RestService("http://localhost:8081", true, true);
     RestService restServiceSpy = spy(restService);
 
     CloseableHttpClient httpClient = mock(CloseableHttpClient.class);
@@ -239,7 +239,9 @@ public class ApacheClientRestServiceTest {
     Map<String, Object> configs = new HashMap<>();
     configs.put("proxy.host", "http://localhost");
     configs.put("proxy.port", 8082);
+    configs.put("use.apache.http.client", "true");
     restService.configure(configs);
+    restService.getApacheHttpClient();
 
     Field httpClientField = RestService.class.getDeclaredField("httpClient");
     httpClientField.setAccessible(true);
