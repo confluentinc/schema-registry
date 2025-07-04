@@ -64,8 +64,8 @@ public class SchemaRegistryClientConfig {
   public static final String URL_RANDOMIZE = "url.randomize";
   public static final boolean URL_RANDOMIZE_DEFAULT = false;
 
-  public static final String APACHE_CLIENT = "apache.client";
-  public static final boolean APACHE_CLIENT_DEFAULT = false;
+  public static final String USE_APACHE_HTTP_CLIENT = "use.apache.http.client";
+  public static final boolean USE_APACHE_HTTP_CLIENT_DEFAULT = false;
 
   //OAuth AUTHORIZATION SERVER related configs
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
@@ -249,9 +249,14 @@ public class SchemaRegistryClientConfig {
     }
   }
 
-  public static boolean getApacheClient(Map<String, ?> configs) {
-    return configs != null && configs.containsKey(APACHE_CLIENT)
-        ? (Boolean) configs.get(APACHE_CLIENT)
-        : APACHE_CLIENT_DEFAULT;
+  public static boolean useApacheHttpClient(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(USE_APACHE_HTTP_CLIENT)) {
+      Object useApacheHttpClientVal = configs.get(USE_APACHE_HTTP_CLIENT);
+      return useApacheHttpClientVal instanceof String
+          ? Boolean.valueOf((String) useApacheHttpClientVal)
+          : (Boolean) useApacheHttpClientVal;
+    } else {
+      return USE_APACHE_HTTP_CLIENT_DEFAULT;
+    }
   }
 }
