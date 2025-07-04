@@ -23,7 +23,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;

@@ -20,7 +20,7 @@ import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;

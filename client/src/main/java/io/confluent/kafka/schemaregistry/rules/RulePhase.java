@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.client.rest.entities;
+package io.confluent.kafka.schemaregistry.rules;
 
 public enum RulePhase {
   MIGRATION,

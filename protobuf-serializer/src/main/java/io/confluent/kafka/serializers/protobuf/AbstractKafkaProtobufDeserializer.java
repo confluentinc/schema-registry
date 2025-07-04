@@ -23,7 +23,7 @@ import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RulePhase;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;

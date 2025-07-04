@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
