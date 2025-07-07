@@ -1734,6 +1734,31 @@ public class JsonSchemaTest {
     assertEquals(applicationDefSchema.rawSchema(), defs.get("ApplicationSchema"));
   }
 
+  @Test
+  public void testRecursiveDefinition() {
+    String schema = "{\n"
+        + "  \"$schema\" : \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"$defs\" : {\n"
+        + "    \"Permission\" : {\n"
+        + "      \"type\" : \"object\",\n"
+        + "      \"properties\" : {\n"
+        + "        \"service\" : {\n"
+        + "          \"$ref\" : \"#\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"type\" : \"object\",\n"
+        + "  \"properties\" : {\n"
+        + "    \"permission\" : {\n"
+        + "      \"$ref\" : \"#/$defs/Permission\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    ParsedSchema parsedSchema = new JsonSchema(schema);
+    parsedSchema.validate(true);
+  }
+
   private static Map<String, String> getJsonSchemaWithReferences(String draft) {
     Map<String, String> schemas = new HashMap<>();
     String reference = "{"
