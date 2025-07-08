@@ -475,7 +475,7 @@ public class RestService implements Closeable, Configurable {
   }
 
   protected HttpURLConnection buildConnection(URL url, String method, Map<String,
-      String> requestProperties)
+                                            String> requestProperties)
       throws IOException {
     HttpURLConnection connection = null;
     if (proxy == null) {
@@ -511,7 +511,7 @@ public class RestService implements Closeable, Configurable {
         configuredSslSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
       }
       ((HttpsURLConnection) connection).setSSLSocketFactory(
-          new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
+              new HostSslSocketFactory(configuredSslSocketFactory, url.getHost()));
       if (hostnameVerifier != null) {
         ((HttpsURLConnection) connection).setHostnameVerifier(hostnameVerifier);
       }
@@ -1549,7 +1549,7 @@ public class RestService implements Closeable, Configurable {
                                      String subjectPrefix,
                                      boolean deletedSubjects,
                                      boolean deletedOnlySubjects)
-          throws IOException, RestClientException {
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects");
     builder.queryParam("deleted", deletedSubjects);
     builder.queryParam("deletedOnly", deletedOnlySubjects);
@@ -1572,7 +1572,7 @@ public class RestService implements Closeable, Configurable {
           throws IOException, RestClientException {
     String url = "/subjects?limit=" + limit + "&offset=" + offset;
     List<String> response = httpRequest(url, "GET", null, requestProperties,
-        ALL_TOPICS_RESPONSE_TYPE);
+            ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1628,12 +1628,12 @@ public class RestService implements Closeable, Configurable {
   }
 
   public List<String> getAllSubjectsByIdWithPagination(Map<String, String> requestProperties,
-                                          int id,
-                                          String subject,
-                                          boolean lookupDeleted,
-                                          int limit,
-                                          int offset)
-      throws IOException, RestClientException {
+                                         int id,
+                                         String subject,
+                                         boolean lookupDeleted,
+                                         int limit,
+                                         int offset)
+          throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
     builder.queryParam("deleted", lookupDeleted);
     if (subject != null) {
@@ -1766,12 +1766,12 @@ public class RestService implements Closeable, Configurable {
   }
 
   public Integer deleteSchemaVersion(
-      Map<String, String> requestProperties,
-      String subject,
-      String version,
-      boolean permanentDelete
+          Map<String, String> requestProperties,
+          String subject,
+          String version,
+          boolean permanentDelete
   ) throws IOException,
-      RestClientException {
+          RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}");
     builder.queryParam("permanent", permanentDelete);
     String path = builder.build(subject, version).toString();
@@ -1785,7 +1785,7 @@ public class RestService implements Closeable, Configurable {
       Map<String, String> requestProperties,
       String subject
   ) throws IOException,
-      RestClientException {
+                                                            RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
     String path = builder.build(subject).toString();
 
@@ -1827,7 +1827,7 @@ public class RestService implements Closeable, Configurable {
   public ServerClusterId getClusterId(Map<String, String> requestProperties)
       throws IOException, RestClientException {
     return httpRequest("/v1/metadata/id", "GET", null,
-                              requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
+                         requestProperties, GET_CLUSTER_ID_RESPONSE_TYPE);
   }
 
   public SchemaRegistryServerVersion getSchemaRegistryServerVersion()
