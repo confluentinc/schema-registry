@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import java.util.Map;
 import org.apache.avro.Schema;
@@ -29,6 +31,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.Test;
 
 import java.util.Properties;
@@ -70,6 +73,23 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     props.put("auto.offset.reset", "earliest");
     props.put("key.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
     props.put("value.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
+    props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
+    return props;
+  }
+
+  private Properties createCompositeConsumerProps() {
+    Properties props = new Properties();
+    props.put("bootstrap.servers", brokerList);
+    props.put("group.id", "avroGroup");
+    props.put("session.timeout.ms", "6000"); // default value of group.min.session.timeout.ms.
+    props.put("heartbeat.interval.ms", "2000");
+    props.put("auto.commit.interval.ms", "1000");
+    props.put("auto.offset.reset", "earliest");
+    props.put("key.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
+    props.put("value.deserializer",
+        io.confluent.kafka.serializers.wrapper.CompositeDeserializer.class);
+    props.put("composite.old.deserializer", org.apache.kafka.common.serialization.StringDeserializer.class);
+    props.put("composite.confluent.deserializer", io.confluent.kafka.serializers.KafkaAvroDeserializer.class);
     props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
     return props;
   }
@@ -128,6 +148,14 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     return props;
   }
 
+  private Properties createBinaryProducerProps() {
+    Properties props = new Properties();
+    props.put("key.serializer", org.apache.kafka.common.serialization.StringSerializer.class);
+    props.put("value.serializer", org.apache.kafka.common.serialization.ByteArraySerializer.class);
+    props.put("bootstrap.servers", brokerList);
+    props.put(SCHEMA_REGISTRY_URL, restApp.restConnect);
+    return props;
+  }
   private Producer<String, Object> createProducer(Properties props) {
     return new KafkaProducer<>(props);
   }
@@ -153,6 +181,27 @@ public class CachedSchemaRegistryClientTest extends ClusterTestHarness {
     Consumer<String, Object> consumer = createConsumer(consumerProps);
     ArrayList<Object> recordList = consume(consumer, topic, objects.length);
     assertArrayEquals(objects, recordList.toArray());
+  }
+
+  @Test
+  public void testAvroProducerWithCompositeDeserializer() {
+    String topic = "testAvro";
+    IndexedRecord avroRecord = createAvroRecord();
+    Properties producerProps = createProducerProps();
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer();
+    KafkaAvroSerializerConfig config = new KafkaAvroSerializerConfig(producerProps);
+    serializer.configure(config.originals(), false);
+    byte[] bytes = serializer.serialize(topic, avroRecord);
+    byte[] bytes2 = new StringSerializer().serialize(topic, "testString");
+    Object[] objects = new Object[]{bytes, bytes2};
+    Properties binaryProducerProps = createBinaryProducerProps();
+    Producer<String, Object> producer = createProducer(binaryProducerProps);
+    produce(producer, topic, objects);
+
+    Properties consumerProps = createCompositeConsumerProps();
+    Consumer<String, Object> consumer = createConsumer(consumerProps);
+    ArrayList<Object> recordList = consume(consumer, topic, objects.length);
+    assertArrayEquals(new Object[]{avroRecord, "testString"}, recordList.toArray());
   }
 
   @Test

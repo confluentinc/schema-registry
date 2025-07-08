@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -82,6 +83,11 @@ public class ProtobufConverter implements Converter {
 
   @Override
   public byte[] fromConnectData(String topic, Schema schema, Object value) {
+    return fromConnectData(topic, null, schema, value);
+  }
+
+  @Override
+  public byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {
     try {
       ProtobufSchemaAndValue schemaAndValue = protobufData.fromConnectData(schema, value);
       Object v = schemaAndValue.getValue();
@@ -90,6 +96,7 @@ public class ProtobufConverter implements Converter {
       } else if (v instanceof Message) {
         return serializer.serialize(topic,
             isKey,
+            headers,
             (Message) v,
             schemaAndValue.getSchema()
         );
@@ -115,8 +122,13 @@ public class ProtobufConverter implements Converter {
 
   @Override
   public SchemaAndValue toConnectData(String topic, byte[] value) {
+    return toConnectData(topic, null, value);
+  }
+
+  @Override
+  public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
-      ProtobufSchemaAndValue deserialized = deserializer.deserialize(topic, isKey, value);
+      ProtobufSchemaAndValue deserialized = deserializer.deserialize(topic, isKey, headers, value);
 
       if (deserialized == null || deserialized.getValue() == null) {
         return SchemaAndValue.NULL;
@@ -161,12 +173,13 @@ public class ProtobufConverter implements Converter {
       configure(new KafkaProtobufSerializerConfig(configs));
     }
 
-    public byte[] serialize(String topic, boolean isKey, Message value, ProtobufSchema schema) {
+    public byte[] serialize(
+        String topic, boolean isKey, Headers headers, Message value, ProtobufSchema schema) {
       if (value == null) {
         return null;
       }
       return serializeImpl(getSubjectName(topic, isKey, value, schema),
-          topic, isKey, value, schema);
+          topic, isKey, headers, value, schema);
     }
   }
 
@@ -181,8 +194,9 @@ public class ProtobufConverter implements Converter {
       configure(new KafkaProtobufDeserializerConfig(configs), null);
     }
 
-    public ProtobufSchemaAndValue deserialize(String topic, boolean isKey, byte[] payload) {
-      return deserializeWithSchemaAndVersion(topic, isKey, payload);
+    public ProtobufSchemaAndValue deserialize(
+        String topic, boolean isKey, Headers headers, byte[] payload) {
+      return deserializeWithSchemaAndVersion(topic, isKey, headers, payload);
     }
   }
 }

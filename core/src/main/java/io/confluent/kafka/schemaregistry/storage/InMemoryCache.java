@@ -15,8 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -240,7 +240,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   private void addToSchemaHashToGuid(SchemaKey schemaKey, SchemaValue schemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
-    MD5 md5 = MD5.ofSchema(schemaValue.toSchemaEntity());
+    MD5 md5 = MD5.ofSchema(schemaValue);
     Map<String, Map<MD5, Integer>> ctxHashes =
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
@@ -249,28 +249,31 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   @SuppressWarnings("unchecked")
-  public CompatibilityLevel compatibilityLevel(String subject,
-                                               boolean returnTopLevelIfNotFound,
-                                               CompatibilityLevel defaultForTopLevel
+  public Config config(String subject,
+                       boolean returnTopLevelIfNotFound,
+                       Config defaultForTopLevel
   ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
-    ConfigValue config = (ConfigValue) get((K) subjectConfigKey);
-    if (config == null && subject == null) {
+    ConfigValue configValue = (ConfigValue) get((K) subjectConfigKey);
+    if (configValue == null && subject == null) {
       return defaultForTopLevel;
     }
-    if (config != null) {
-      return config.getCompatibilityLevel();
+    Config config = null;
+    if (configValue != null) {
+      config = configValue.toConfigEntity();
     } else if (returnTopLevelIfNotFound) {
       QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
       if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        config = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+        configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
       } else {
-        config = (ConfigValue) get((K) new ConfigKey(null));
+        configValue = (ConfigValue) get((K) new ConfigKey(null));
       }
-      return config != null ? config.getCompatibilityLevel() : defaultForTopLevel;
-    } else {
-      return null;
+      config = configValue != null ? configValue.toConfigEntity() : defaultForTopLevel;
     }
+    if (config != null && config.getCompatibilityLevel() == null) {
+      config.setCompatibilityLevel(defaultForTopLevel.getCompatibilityLevel());
+    }
+    return config;
   }
 
   @Override

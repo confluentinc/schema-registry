@@ -20,7 +20,7 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 
-public interface Store<K, V> {
+public interface Store<K, V> extends AutoCloseable {
 
   /**
    * Whether the store is persistent.

@@ -19,6 +19,7 @@ package io.confluent.kafka.formatter;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
+import java.util.Map;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.EncoderFactory;
@@ -29,6 +30,7 @@ import java.io.PrintStream;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 /**
@@ -72,24 +74,19 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
   /**
    * For testing only.
    */
-  AvroMessageFormatter(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    super(schemaRegistryClient, keyDeserializer);
+  AvroMessageFormatter(String url, Deserializer keyDeserializer) {
+    super(url, keyDeserializer);
   }
 
   @Override
-  protected SchemaMessageDeserializer<Object> createDeserializer(
-      SchemaRegistryClient schemaRegistryClient,
-      Deserializer keyDeserializer
-  ) {
-    return new AvroMessageDeserializer(schemaRegistryClient, keyDeserializer);
+  protected SchemaMessageDeserializer<Object> createDeserializer(Deserializer keyDeserializer) {
+    return new AvroMessageDeserializer(keyDeserializer);
   }
 
   @Override
-  protected void writeTo(String topic, byte[] data, PrintStream output) throws IOException {
-    Object object = deserializer.deserialize(topic, data);
+  protected void writeTo(String topic, Boolean isKey, Headers headers,
+      byte[] data, PrintStream output) throws IOException {
+    Object object = deserializer.deserialize(topic, isKey, headers, data);
     try {
       AvroSchemaUtils.toJson(object, output);
     } catch (AvroRuntimeException e) {
@@ -112,10 +109,13 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     /**
      * For testing only.
      */
-    AvroMessageDeserializer(SchemaRegistryClient schemaRegistryClient,
-                            Deserializer keyDeserializer) {
-      this.schemaRegistry = schemaRegistryClient;
+    AvroMessageDeserializer(Deserializer keyDeserializer) {
       this.keyDeserializer = keyDeserializer;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      configure(deserializerConfig(configs), null);
     }
 
     @Override
@@ -124,13 +124,19 @@ public class AvroMessageFormatter extends SchemaMessageFormatter<Object> {
     }
 
     @Override
-    public Object deserializeKey(String topic, byte[] payload) {
-      return keyDeserializer.deserialize(topic, payload);
+    public Object deserializeKey(String topic, Headers headers, byte[] payload) {
+      return keyDeserializer.deserialize(topic, headers, payload);
     }
 
     @Override
-    public Object deserialize(String topic, byte[] payload) throws SerializationException {
-      return super.deserialize(topic, isKey, payload, null);
+    public Object deserialize(String topic, Boolean isKey, Headers headers, byte[] payload)
+        throws SerializationException {
+      return super.deserialize(topic, isKey, headers, payload, null);
+    }
+
+    @Override
+    public SchemaRegistryClient getSchemaRegistryClient() {
+      return schemaRegistry;
     }
 
     @Override

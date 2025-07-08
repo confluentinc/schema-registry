@@ -1232,7 +1232,7 @@ public class AvroData {
           fieldName,
           schema,
           discardTypeDocDefault ? fieldSchema.doc() : fieldDoc);
-      log.warn("Ignoring invalid default for field " + fieldName, e);
+      log.warn("Ignoring invalid default for field {}", fieldName, e);
     }
     fields.add(field);
   }
@@ -1882,7 +1882,7 @@ public class AvroData {
           try {
             defaultVal = field.defaultVal();
           } catch (Exception e) {
-            log.warn("Ignoring invalid default for field " + field, e);
+            log.warn("Ignoring invalid default for field {}", field, e);
           }
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   defaultVal, field.doc(), toConnectContext);
@@ -2048,7 +2048,7 @@ public class AvroData {
         builder.defaultValue(
             defaultValueFromAvro(builder, schema, fieldDefaultVal, toConnectContext));
       } catch (DataException e) {
-        log.warn("Ignoring invalid default for schema " + schema.getName(), e);
+        log.warn("Ignoring invalid default for schema {}", schema.getName(), e);
       }
     }
 

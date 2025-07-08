@@ -21,15 +21,23 @@ import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
 import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.OneofDescriptorProto;
 
+import com.squareup.wire.schema.internal.parser.EnumElement;
+import com.squareup.wire.schema.internal.parser.MessageElement;
+import com.squareup.wire.schema.internal.parser.TypeElement;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.diff.Context.TypeElementInfo;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import kotlin.Pair;
 
 /**
  * MessageDefinition
@@ -72,34 +80,34 @@ public class MessageDefinition {
     }
 
     public Builder addField(
+        Context ctx,
         String label,
         String type,
         String name,
         int num,
         String defaultVal,
-        String doc,
-        Map<String, String> params
+        ProtobufMeta meta
     ) {
-      return addField(label, type, name, num, defaultVal,
-          null, doc, params, null, null, null, null);
+      return addField(ctx, label, type, name, num, defaultVal,
+          null, meta, null, null, null, null);
     }
 
     public Builder addField(
+        Context ctx,
         String label,
         String type,
         String name,
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
         Boolean isDeprecated
     ) {
-      doAddField(label, false, type, name, num,
-              defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated, null);
+      doAddField(ctx, label, false, type, name, num,
+              defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated, null);
       return this;
     }
 
@@ -162,6 +170,7 @@ public class MessageDefinition {
     }
 
     public Builder addExtendDefinition(
+        Context ctx,
         String extendee,
         String label,
         String type,
@@ -169,15 +178,14 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
         Boolean isDeprecated
     ) {
-      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(label, false,
-          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(ctx, label,
+          false, type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
           null);
       fieldBuilder.setExtendee(extendee);
       mMsgTypeBuilder.addExtension(fieldBuilder.build());
@@ -212,12 +220,12 @@ public class MessageDefinition {
     }
 
     // Note: added
-    public Builder setMeta(String doc, Map<String, String> params) {
-      Meta meta = toMeta(doc, params);
-      if (meta != null) {
+    public Builder setMeta(ProtobufMeta meta) {
+      Meta m = toMeta(meta);
+      if (m != null) {
         DescriptorProtos.MessageOptions.Builder optionsBuilder =
                 DescriptorProtos.MessageOptions.newBuilder();
-        optionsBuilder.setExtension(MetaProto.messageMeta, meta);
+        optionsBuilder.setExtension(MetaProto.messageMeta, m);
         mMsgTypeBuilder.mergeOptions(optionsBuilder.build());
       }
       return this;
@@ -235,6 +243,7 @@ public class MessageDefinition {
     }
 
     private void doAddField(
+        Context ctx,
         String label,
         boolean isProto3Optional,
         String type,
@@ -242,16 +251,15 @@ public class MessageDefinition {
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         Boolean isPacked,
         JSType jstype,
         Boolean isDeprecated,
         OneofBuilder oneofBuilder
     ) {
-      FieldDescriptorProto.Builder fieldBuilder = getFieldBuilder(label, isProto3Optional,
-          type, name, num, defaultVal, jsonName, doc, params, ctype, isPacked, jstype, isDeprecated,
+      FieldDescriptorProto.Builder fieldBuilder = getFieldBuilder(ctx, label, isProto3Optional,
+          type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype, isDeprecated,
           oneofBuilder);
       mMsgTypeBuilder.addField(fieldBuilder.build());
     }
@@ -267,41 +275,42 @@ public class MessageDefinition {
     // --- public ---
 
     public OneofBuilder addField(
+        Context ctx,
         String type,
         String name,
         int num,
         String defaultVal,
-        String doc,
-        Map<String, String> params) {
-      return addField(false, type, name, num, defaultVal, null, doc, params, null, null, false);
+        ProtobufMeta meta) {
+      return addField(ctx, false, type, name, num, defaultVal, null, meta, null, null, false);
     }
 
     public OneofBuilder addField(
+        Context ctx,
         boolean isProto3Optional,
         String type,
         String name,
         int num,
         String defaultVal,
-        String doc,
-        Map<String, String> params) {
+        ProtobufMeta meta) {
       return addField(
-          isProto3Optional, type, name, num, defaultVal, null, doc, params, null, null, false);
+          ctx, isProto3Optional, type, name, num, defaultVal, null, meta, null, null, false);
     }
 
     public OneofBuilder addField(
+        Context ctx,
         boolean isProto3Optional,
         String type,
         String name,
         int num,
         String defaultVal,
         String jsonName,
-        String doc,
-        Map<String, String> params,
+        ProtobufMeta meta,
         CType ctype,
         JSType jstype,
         Boolean deprecated
     ) {
       mMsgBuilder.doAddField(
+          ctx,
           "optional",
           isProto3Optional,
           type,
@@ -309,8 +318,7 @@ public class MessageDefinition {
           num,
           defaultVal,
           jsonName,
-          doc,
-          params,
+          meta,
           ctype,
           null,
           jstype,
@@ -340,6 +348,7 @@ public class MessageDefinition {
   }
 
   public static FieldDescriptorProto.Builder getFieldBuilder(
+      Context ctx,
       String label,
       boolean isProto3Optional,
       String type,
@@ -347,8 +356,7 @@ public class MessageDefinition {
       int num,
       String defaultVal,
       String jsonName,
-      String doc,
-      Map<String, String> params,
+      ProtobufMeta meta,
       CType ctype,
       Boolean isPacked,
       JSType jstype,
@@ -368,6 +376,16 @@ public class MessageDefinition {
     if (primType != null) {
       fieldBuilder.setType(primType);
     } else {
+      Pair<String, TypeElementInfo> entry =
+          ctx.resolveFull(ctx::getTypeForFullName, type, true);
+      if (entry != null) {
+        TypeElement elem = entry.getSecond().type();
+        if (elem instanceof MessageElement) {
+          fieldBuilder.setType(Type.TYPE_MESSAGE);
+        } else if (elem instanceof EnumElement) {
+          fieldBuilder.setType(Type.TYPE_ENUM);
+        }
+      }
       fieldBuilder.setTypeName(type);
     }
     fieldBuilder.setName(name).setNumber(num);
@@ -404,19 +422,19 @@ public class MessageDefinition {
       optionsBuilder.setDeprecated(isDeprecated);
       fieldBuilder.mergeOptions(optionsBuilder.build());
     }
-    setFieldMeta(fieldBuilder, doc, params);
+    setFieldMeta(fieldBuilder, meta);
     return fieldBuilder;
   }
 
   // --- private static ---
 
   private static void setFieldMeta(
-      FieldDescriptorProto.Builder fieldBuilder, String doc, Map<String, String> params) {
-    Meta meta = toMeta(doc, params);
-    if (meta != null) {
+      FieldDescriptorProto.Builder fieldBuilder, ProtobufMeta meta) {
+    Meta m = toMeta(meta);
+    if (m != null) {
       DescriptorProtos.FieldOptions.Builder optionsBuilder =
           DescriptorProtos.FieldOptions.newBuilder();
-      optionsBuilder.setExtension(MetaProto.fieldMeta, meta);
+      optionsBuilder.setExtension(MetaProto.fieldMeta, m);
       fieldBuilder.mergeOptions(optionsBuilder.build());
     }
   }
