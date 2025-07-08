@@ -325,8 +325,6 @@ public class RestService implements Closeable, Configurable {
 
   private HttpClient createNewHttpClient() {
     RequestConfig requestConfig = RequestConfig.custom()
-//        .setConnectionRequestTimeout(Timeout.ofMilliseconds(
-//            this.httpConnectTimeoutMs))
         .setResponseTimeout(Timeout.ofMilliseconds(
             this.httpReadTimeoutMs)).build();
 
@@ -348,18 +346,7 @@ public class RestService implements Closeable, Configurable {
           this.hostnameVerifier
       );
 
-      PoolingHttpClientConnectionManager connectionManager =
-          PoolingHttpClientConnectionManagerBuilder.create()
-              .setSSLSocketFactory(sslSf)
-              .setDefaultSocketConfig(SocketConfig.custom()
-                  .setSoTimeout(Timeout.ofSeconds(30))
-                  .build())
-              .build();
-
-      httpClientBuilder.setConnectionManager(connectionManager);
-    } else {
-      httpClientBuilder.setConnectionManager(
-          PoolingHttpClientConnectionManagerBuilder.create().build());
+      connectionManagerBuilder.setSSLSocketFactory(sslSf);
     }
 
     httpClientBuilder.setConnectionManager(connectionManagerBuilder.build());
