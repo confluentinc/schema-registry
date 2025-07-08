@@ -50,12 +50,10 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.ParseException;
-import org.apache.hc.core5.http.io.SocketConfig;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.util.Timeout;
@@ -219,7 +217,7 @@ public class RestService implements Closeable, Configurable {
   private Map<String, String> httpHeaders;
   private Proxy proxy;
   private HttpHost clientProxy;
-  private boolean useApacheHttpClient;
+  private volatile boolean useApacheHttpClient;
   private volatile HttpClient httpClient;
   private boolean isForward;
   private RetryExecutor retryExecutor;
@@ -337,8 +335,8 @@ public class RestService implements Closeable, Configurable {
     PoolingHttpClientConnectionManagerBuilder connectionManagerBuilder =
         PoolingHttpClientConnectionManagerBuilder.create();
 
-    connectionManagerBuilder.setDefaultConnectionConfig(ConnectionConfig.custom().
-        setConnectTimeout(Timeout.ofMilliseconds(this.httpConnectTimeoutMs)).build());
+    connectionManagerBuilder.setDefaultConnectionConfig(ConnectionConfig.custom()
+        .setConnectTimeout(Timeout.ofMilliseconds(this.httpConnectTimeoutMs)).build());
 
     if (this.sslSocketFactory != null) {
       SSLConnectionSocketFactory sslSf = new SSLConnectionSocketFactory(
@@ -1919,7 +1917,7 @@ public class RestService implements Closeable, Configurable {
 
   public void setProxy(String proxyHost, int proxyPort) {
     this.proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
-    if (this.useApacheHttpClient){
+    if (this.useApacheHttpClient) {
       try {
         URI uri = new URI(proxyHost);
         proxyHost = uri.getHost();
@@ -1949,7 +1947,7 @@ public class RestService implements Closeable, Configurable {
 
   private void closeHttpClient() {
     if (this.httpClient != null) {
-      synchronized (this){
+      synchronized (this) {
         try {
           if (this.httpClient != null) {
             ((CloseableHttpClient) httpClient).close();
