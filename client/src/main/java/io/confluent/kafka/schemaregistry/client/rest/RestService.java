@@ -220,7 +220,7 @@ public class RestService implements Closeable, Configurable {
   private Proxy proxy;
   private HttpHost clientProxy;
   private boolean useApacheHttpClient;
-  private HttpClient httpClient;
+  private volatile HttpClient httpClient;
   private boolean isForward;
   private RetryExecutor retryExecutor;
 
@@ -310,12 +310,14 @@ public class RestService implements Closeable, Configurable {
   }
 
   HttpClient getApacheHttpClient() {
-    if (this.httpClient != null) {
-      return this.httpClient;
+    if (!this.useApacheHttpClient) {
+      return null;
     }
-    synchronized (this) {
-      if (this.useApacheHttpClient) {
-        this.httpClient = createNewHttpClient();
+    if (httpClient == null) {
+      synchronized (this) {
+        if (this.httpClient == null) {
+          this.httpClient = createNewHttpClient();
+        }
       }
     }
     return this.httpClient;
@@ -1934,11 +1936,15 @@ public class RestService implements Closeable, Configurable {
       try {
         URI uri = new URI(proxyHost);
         proxyHost = uri.getHost();
+        String scheme = uri.getScheme();
+        if (scheme == null) {
+          scheme = "http";
+        }
+        this.clientProxy = new HttpHost(scheme, proxyHost, proxyPort);
+        closeHttpClient();
       } catch (URISyntaxException e) {
-        proxyHost = proxyHost.replaceFirst("^https?://", "");
+        throw new IllegalArgumentException("Invalid proxy host: " + proxyHost);
       }
-      this.clientProxy = new HttpHost(proxyHost, proxyPort);
-      closeHttpClient();
     }
   }
 
@@ -1956,11 +1962,16 @@ public class RestService implements Closeable, Configurable {
 
   private void closeHttpClient() {
     if (this.httpClient != null) {
-      try {
-        ((CloseableHttpClient) httpClient).close();
-        this.httpClient = null;
-      } catch (IOException e) {
-        log.warn("Error closing existing HTTP client", e);
+      synchronized (this){
+        try {
+          if (this.httpClient != null) {
+            ((CloseableHttpClient) httpClient).close();
+          }
+        } catch (IOException e) {
+          log.warn("Error closing existing HTTP client", e);
+        } finally {
+          this.httpClient = null;
+        }
       }
     }
   }
