@@ -2785,7 +2785,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   private void logSchemaOp(Schema schema, String operation) {
     try {
-      log.info("Resource association log - (tenant, guid, subject, operation): ({}, {}, {})",
+      log.info("Resource association log - (tenant, guid, subject, operation): ({}, {}, {}, {})",
           tenant(), schema.guid, schema.subject, operation);
     } catch (Exception e) {
       log.warn("Error occurred while logging schema operation", e);
