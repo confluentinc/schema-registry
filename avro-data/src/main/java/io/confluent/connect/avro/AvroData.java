@@ -2056,9 +2056,13 @@ public class AvroData {
       name = (String) connectNameJson;
 
     } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD
-        || schema.getType() == org.apache.avro.Schema.Type.ENUM
-        || schema.getType() == org.apache.avro.Schema.Type.FIXED) {
+        || schema.getType() == org.apache.avro.Schema.Type.ENUM) {
       name = schema.getFullName();
+    } else if (schema.getType() == org.apache.avro.Schema.Type.FIXED) {
+      // Ignore the fixed name if it is a decimal
+      if (!Decimal.LOGICAL_NAME.equals(builder.name())) {
+        name = schema.getFullName();
+      }
     }
     if (name != null && !name.startsWith(DEFAULT_SCHEMA_FULL_NAME)) {
       if (builder.name() != null) {
