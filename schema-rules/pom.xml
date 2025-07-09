@@ -150,6 +150,17 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
+                        <exclusions>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/ExpiringSpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewerSpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewSpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/SpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto2.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java</exclude>
+                        </exclusions>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
                         </licenseHeader>
