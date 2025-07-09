@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.6.7-0, 7.6.8-0)</version>
+        <version>[7.7.5-0, 7.7.6-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.6.7-0</version>
+    <version>7.7.5-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -90,7 +90,6 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
-        <aws.sdk.version>2.21.44</aws.sdk.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.4.5</cel-version>
@@ -106,10 +105,11 @@
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.6.7-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.7.5-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
+        <snappy.version>1.1.10.5</snappy.version>
         <spotless.maven.plugin.version>2.30.0</spotless.maven.plugin.version>
     </properties>
 
@@ -156,6 +156,11 @@
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-lang3</artifactId>
                 <version>${commons.lang3.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
@@ -292,22 +297,22 @@
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>aws-core</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>sdk-core</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>kms</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>sts</artifactId>
-                <version>${aws.sdk.version}</version>
+                <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.crypto.tink</groupId>

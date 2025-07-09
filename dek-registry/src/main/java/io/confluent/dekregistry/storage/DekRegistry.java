@@ -127,6 +127,13 @@ public class DekRegistry implements Closeable {
   private final KafkaSchemaRegistry schemaRegistry;
   private final MetricsManager metricsManager;
   private final DekRegistryConfig config;
+
+  private final int kekSearchDefaultLimit;
+  private final int kekSearchMaxLimit;
+  private final int dekSubjectSearchDefaultLimit;
+  private final int dekSubjectSearchMaxLimit;
+  private final int dekVersionSearchDefaultLimit;
+  private final int dekVersionSearchMaxLimit;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
   private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
@@ -150,6 +157,17 @@ public class DekRegistry implements Closeable {
           config.topic(), getCacheUpdateHandler(config));
       this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
       this.cryptors = new ConcurrentHashMap<>();
+      this.kekSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.KEK_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.kekSearchMaxLimit = config.getInt(DekRegistryConfig.KEK_SEARCH_MAX_LIMIT_CONFIG);
+      this.dekSubjectSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.dekSubjectSearchMaxLimit =
+              config.getInt(DekRegistryConfig.DEK_SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
+      this.dekVersionSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.DEK_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.dekVersionSearchMaxLimit =
+              config.getInt(DekRegistryConfig.DEK_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
     }
@@ -740,11 +758,11 @@ public class DekRegistry implements Closeable {
     if (key == null || key.isDeleted()) {
       return null;
     }
-    SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? new TreeMap<>(request.getKmsProps())
+    SortedMap<String, String> kmsProps = request.getOptionalKmsProps() != null
+        ? (request.getOptionalKmsProps().isPresent() ? new TreeMap<>(request.getKmsProps()) : null)
         : key.getKmsProps();
-    String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
-    boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
+    String doc = request.getOptionalDoc() != null ? request.getDoc() : key.getDoc();
+    boolean shared = request.isOptionalShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
     if (newKey.isEquivalent(key)) {
@@ -1198,6 +1216,26 @@ public class DekRegistry implements Closeable {
           oldKey.getAlgorithm(), oldKey.getVersion(), oldKey.getEncryptedKeyMaterial(), false);
       keys.put(id, newKey);
     }
+  }
+
+  public int normalizeLimit(int suppliedLimit, int defaultLimit, int maxLimit) {
+    int limit = defaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= maxLimit) {
+      limit = suppliedLimit;
+    }
+    return limit;
+  }
+
+  public int normalizeKekLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, kekSearchDefaultLimit, kekSearchMaxLimit);
+  }
+
+  public int normalizeDekSubjectLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, dekSubjectSearchDefaultLimit, dekSubjectSearchMaxLimit);
+  }
+
+  public int normalizeDekVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, dekVersionSearchDefaultLimit, dekVersionSearchMaxLimit);
   }
 
   @PreDestroy

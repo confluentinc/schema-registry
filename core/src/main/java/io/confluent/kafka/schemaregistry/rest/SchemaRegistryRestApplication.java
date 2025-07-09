@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionMapper;
 import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionWriterInterceptor;
@@ -33,6 +34,7 @@ import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -57,11 +59,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   @Override
+  protected ObjectMapper getJsonMapper() {
+    return JacksonMapper.INSTANCE;
+  }
+
+  @Override
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
-    context.insertHandler(new RequestIdHandler());
+    context.insertHandler(new RequestHeaderHandler());
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
