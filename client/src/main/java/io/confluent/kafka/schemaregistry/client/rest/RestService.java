@@ -101,6 +101,7 @@ import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCr
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import static java.lang.String.format;
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -1967,5 +1968,11 @@ public class RestService implements Closeable, Configurable {
       this.bearerAuthCredentialProvider.close();
     }
     closeHttpClient();
+  }
+
+  // Visible for testing only
+  @VisibleForTesting
+  public boolean isForward() {
+    return isForward;
   }
 }
