@@ -152,6 +152,11 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
+                        <excludes>
+                            <exclude>src/main/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsKmsAead.java</exclude>
+                            <exclude>src/main/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsKmsClient.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/FakeAwsKms.java</exclude>
+                        </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
                         </licenseHeader>

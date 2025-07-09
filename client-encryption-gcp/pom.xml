@@ -140,6 +140,9 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
+                        <excludes>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/encryption/gcp/FakeCloudKms.java</exclude>
+                        </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
                         </licenseHeader>
