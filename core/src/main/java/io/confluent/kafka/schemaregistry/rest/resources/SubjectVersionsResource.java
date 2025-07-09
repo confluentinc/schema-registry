@@ -132,7 +132,9 @@ public class SubjectVersionsResource {
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Find tagged entities for the given tags or * for all tags")
+      @QueryParam("findTags") List<String> tags) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
@@ -158,10 +160,15 @@ public class SubjectVersionsResource {
           throw Errors.versionNotFoundException(versionId.getVersionId());
         }
       }
+      if (tags != null && !tags.isEmpty()) {
+        schemaRegistry.extractSchemaTags(schema, tags);
+      }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         schema.setSchema(parsedSchema.formattedString(format));
       }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -209,7 +216,7 @@ public class SubjectVersionsResource {
       @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
-    return getSchemaByVersion(subject, version, format, lookupDeletedSchema).getSchema();
+    return getSchemaByVersion(subject, version, format, lookupDeletedSchema, null).getSchema();
   }
 
   @GET
@@ -246,7 +253,7 @@ public class SubjectVersionsResource {
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version) {
 
-    Schema schema = getSchemaByVersion(subject, version, "", true);
+    Schema schema = getSchemaByVersion(subject, version, "", true, null);
     if (schema == null) {
       return new ArrayList<>();
     }
@@ -396,7 +403,15 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subjectName, normalize, request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(
+          subjectName, normalize, request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while registering schema", e);
+    }
 
     if (request.getRuleSet() != null) {
       try {
@@ -412,17 +427,13 @@ public class SubjectVersionsResource {
 
     subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
 
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, schemaRegistry.config().whitelistHeaders());
-
-    Schema schema = new Schema(subjectName, request);
     RegisterSchemaResponse registerSchemaResponse;
     try {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
       Schema result =
-          schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+          schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
         result.setSchema(parsedSchema.formattedString(format));
@@ -639,12 +650,13 @@ public class SubjectVersionsResource {
           String.format("Error while getting schema of subject %s version %s",
               subjectName, version), e);
     }
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request);
-
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
+
+
     RegisterSchemaResponse registerSchemaResponse;
     try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request, headerProperties);
       if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
         if (request.getRuleSet() != null) {
           throw new RestInvalidRuleSetException(

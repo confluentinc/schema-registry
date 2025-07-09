@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import java.io.InterruptedIOException;
 import java.util.Collections;
@@ -189,12 +190,18 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
                                 AvroSchema schema,
                                 Object result) {
     try {
-      Integer version;
+      Integer version = null;
       if (isDeprecatedSubjectNameStrategy(isKey)) {
         subject = getSubjectName(topic, isKey, result, schema);
       }
       AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-      version = schemaRegistry.getVersion(subject, subjectSchema);
+      Metadata metadata = subjectSchema.metadata();
+      if (metadata != null) {
+        version = metadata.getConfluentVersionNumber();
+      }
+      if (version == null) {
+        version = schemaRegistry.getVersion(subject, subjectSchema);
+      }
       return version;
     } catch (InterruptedIOException e) {
       String errorMessage = "Error retrieving Avro "

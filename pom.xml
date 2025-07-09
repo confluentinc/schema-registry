@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.5.10-0, 7.5.11-0)</version>
+        <version>[7.6.7-0, 7.6.8-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.5.10-0</version>
+    <version>7.6.7-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -97,6 +97,7 @@
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.5</jsonata-version>
         <json-schema.version>1.14.6</json-schema.version>
+        <json-skema.version>0.22.0</json-skema.version>
         <kcache.version>4.0.11</kcache.version>
         <proto-google-common-protos.version>2.22.1</proto-google-common-protos.version>
         <protoc.jar.maven.plugin.version>3.11.4</protoc.jar.maven.plugin.version>
@@ -105,7 +106,7 @@
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>4.9.7</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.5.10-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.6.7-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
@@ -257,6 +258,11 @@
                 <groupId>com.github.erosb</groupId>
                 <artifactId>everit-json-schema</artifactId>
                 <version>${json-schema.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.erosb</groupId>
+                <artifactId>json-sKema</artifactId>
+                <version>${json-skema.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.yokota</groupId>
@@ -451,6 +457,11 @@
             </dependency>
             <dependency>
                 <groupId>io.confluent</groupId>
+                <artifactId>jacoco-aggregate-schema-registry</artifactId>
+                <version>${io.confluent.schema-registry.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.confluent</groupId>
                 <artifactId>kafka-streams-json-schema-serde</artifactId>
                 <version>${io.confluent.schema-registry.version}</version>
             </dependency>
@@ -576,6 +587,19 @@
                         <id>generate-code-coverage-report</id>
                         <goals>
                             <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
                         </goals>
                     </execution>
                 </executions>

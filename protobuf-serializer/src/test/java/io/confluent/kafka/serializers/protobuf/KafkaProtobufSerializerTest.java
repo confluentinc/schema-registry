@@ -23,6 +23,7 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -814,4 +815,41 @@ public class KafkaProtobufSerializerTest {
     protobufSerializer.configure(new HashMap(serializerConfig), false);
     testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
   }
+
+  @Test
+  public void testDependencyPreregisterRefWithNegativeOne() throws Exception {
+    String refSubject = "TestProto.proto";
+    String refSchemaString = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message TestMessage {\n"
+        + "  string test_string = 1;\n"
+        + "}\n";
+    schemaRegistry.register(refSubject, new ProtobufSchema(refSchemaString));
+    String subject = topic + "-value";
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "import \"TestProto.proto\";\n"
+        + "\n"
+        + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
+        + "\n"
+        + "message DependencyMessage {\n"
+        + "  TestMessage test_message = 1;\n"
+        + "  bool is_active = 2;\n"
+        + "}";
+    SchemaReference ref = new SchemaReference("TestProto.proto", "TestProto.proto", -1);
+    ParsedSchema parsedSchema = new ProtobufSchema(
+        schemaString, ImmutableList.of(ref), ImmutableMap.of(ref.getName(), refSchemaString), null, null);
+    schemaRegistry.register(subject, parsedSchema);
+
+    ParsedSchema schema = schemaRegistry.getSchemaBySubjectAndId("test-value", 2);
+    SchemaReference refCopy = new SchemaReference("TestProto.proto", "TestProto.proto", -1);
+    schema = schemaRegistry.parseSchema(ProtobufSchema.TYPE, schema.canonicalString(), ImmutableList.of(refCopy)).get();
+    int id = schemaRegistry.getId(subject, schema);
+    assertEquals(2, id);
+  }
+
 }

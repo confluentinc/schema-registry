@@ -40,6 +40,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   // Subject name under which global permissions are stored.
   public static final String GLOBAL_SUBJECT_NAME = "__GLOBAL";
 
+  // Subject name that represents empty string
+  public static final String EMPTY_SUBJECT_NAME = "__EMPTY";
+
   private final String tenant;
   private final String context;  // assumed to start with CONTEXT_SEPARATOR
   private final String subject;
@@ -127,18 +130,32 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   public String toQualifiedContext() {
-    String qualifiedContext = DEFAULT_CONTEXT.equals(context)
+    String unqualifiedContext = toUnqualifiedContext();
+    if (DEFAULT_TENANT.equals(tenant)) {
+      return unqualifiedContext;
+    } else {
+      return tenant + TENANT_DELIMITER + unqualifiedContext;
+    }
+  }
+
+  public String toUnqualifiedContext() {
+    return DEFAULT_CONTEXT.equals(context)
         ? ""
         : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
-    if (DEFAULT_TENANT.equals(tenant)) {
-      return qualifiedContext;
-    } else {
-      return tenant + TENANT_DELIMITER + qualifiedContext;
-    }
   }
 
   public String toQualifiedSubject() {
     return toQualifiedContext() + subject;
+  }
+
+  public String toUnqualifiedSubject() {
+    return toUnqualifiedContext() + subject;
+  }
+
+  public static boolean isQualified(String tenant, String subject) {
+    return !DEFAULT_TENANT.equals(tenant)
+        && subject != null
+        && subject.startsWith(tenant + TENANT_DELIMITER);
   }
 
   public static QualifiedSubject create(String tenant, String qualifiedSubject) {
@@ -175,6 +192,11 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static QualifiedSubject qualifySubjectWithParent(
       String tenant, String parent, String subjectWithoutTenant) {
+    return qualifySubjectWithParent(tenant, parent, subjectWithoutTenant, false);
+  }
+
+  public static QualifiedSubject qualifySubjectWithParent(
+      String tenant, String parent, String subjectWithoutTenant, boolean prefixTenant) {
     // Since the subject has no tenant, pass the default tenant
     QualifiedSubject qualifiedSubject =
         QualifiedSubject.create(DEFAULT_TENANT, subjectWithoutTenant);
@@ -191,6 +213,13 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
         qualifiedSubject = new QualifiedSubject(
             DEFAULT_TENANT, qualifiedParent.getContext(), subjectWithoutTenant);
       }
+    }
+    if (prefixTenant) {
+      // Prefix the tenant if prefixTenant is true.
+      // For example, references are stored without tenant prefixes,
+      // while alias replacements need the tenant.
+      qualifiedSubject = new QualifiedSubject(
+          tenant, qualifiedSubject.getContext(), qualifiedSubject.getSubject());
     }
     return qualifiedSubject;
   }
@@ -226,13 +255,19 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
+  public static boolean isDefaultContext(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
+  }
+
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     // For backward compatibility, we allow an empty subject
-    if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)) {
+    if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)
+        || qs.getSubject().equals(EMPTY_SUBJECT_NAME)) {
       return false;
     }
     return true;

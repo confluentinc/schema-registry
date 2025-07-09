@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -85,5 +87,62 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         schemas.put(reference.getName(), s.getSchema());
       }
     }
+  }
+
+  // Parking this method and the following ones here instead of in ParsedSchema as interfaces can't
+  // have private methods in Java 8.  Move these to ParsedSchema in 8.0.x
+  protected static boolean canLookupIgnoringVersion(
+      ParsedSchema current, ParsedSchema prev) {
+    Integer schemaVer = getConfluentVersionNumber(current.metadata());
+    Integer prevVer = getConfluentVersionNumber(prev.metadata());
+    if (schemaVer == null && prevVer != null) {
+      ParsedSchema newSchema = current.metadata() != null
+          ? current
+          : current.copy(new Metadata(null, null, null), current.ruleSet());
+      ParsedSchema newPrev = prev.copy(
+          Metadata.removeConfluentVersion(prev.metadata()), prev.ruleSet());
+      // This handles the case where current schema is without confluent:version
+      return newSchema.equivalent(newPrev);
+    } else if (schemaVer != null && prevVer == null) {
+      if (!schemaVer.equals(prev.version())) {
+        // The incoming confluent:version must match the actual version of the prev schema
+        return false;
+      }
+      ParsedSchema newPrev = prev.metadata() != null
+          ? prev
+          : prev.copy(new Metadata(null, null, null), prev.ruleSet());
+      ParsedSchema newSchema = current.copy(
+          Metadata.removeConfluentVersion(current.metadata()), current.ruleSet());
+      // This handles the case where prev schema is without confluent:version
+      return newSchema.equivalent(newPrev);
+    } else {
+      return current.equivalent(prev);
+    }
+  }
+
+  protected static boolean hasLatestVersion(List<SchemaReference> refs) {
+    return refs.stream().anyMatch(e -> e.getVersion() == -1);
+  }
+
+  protected static List<SchemaReference> replaceLatestVersion(
+      List<SchemaReference> refs, SchemaVersionFetcher fetcher) {
+    List<SchemaReference> result = new ArrayList<>();
+    for (SchemaReference ref : refs) {
+      if (ref.getVersion() == -1) {
+        Schema s = fetcher.getByVersion(ref.getSubject(), -1, false);
+        result.add(new SchemaReference(ref.getName(), ref.getSubject(), s.getVersion()));
+      } else {
+        result.add(ref);
+      }
+    }
+    return result;
+  }
+
+  protected static Integer getConfluentVersionNumber(Metadata metadata) {
+    return metadata != null ? metadata.getConfluentVersionNumber() : null;
+  }
+
+  protected static String getConfluentVersion(Metadata metadata) {
+    return metadata != null ? metadata.getConfluentVersion() : null;
   }
 }
