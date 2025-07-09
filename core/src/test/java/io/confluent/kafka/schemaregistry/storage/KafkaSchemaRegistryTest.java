@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -33,9 +34,6 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static org.junit.jupiter.api.Assertions.*;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
