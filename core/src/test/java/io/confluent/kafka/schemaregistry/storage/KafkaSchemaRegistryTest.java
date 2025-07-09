@@ -34,6 +34,9 @@ import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   private SchemaRegistryConfig config;
@@ -419,5 +422,26 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
             StoreUtils.avroSchemaString(2).replace("Foo", "Bar"));
     errors = kafkaSchemaRegistry.isCompatible("subject1", schema4, list, true);
     assertFalse(errors.isEmpty());
+  }
+
+  @Test
+  public void testLeaderRestServiceIsForwardIsTrue() throws Exception {
+    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    kafkaSchemaRegistry.init();
+
+    // Create a leader identity
+    SchemaRegistryIdentity leaderIdentity = new SchemaRegistryIdentity(
+        "test-host", 8081, true, "http");
+
+    // Set the leader
+    kafkaSchemaRegistry.setLeader(leaderIdentity);
+
+    // Get the leader rest service
+    RestService leaderRestService = kafkaSchemaRegistry.leaderRestService();
+    assertNotNull(leaderRestService, "Leader rest service should not be null");
+
+    // Verify that isForward is set to true - this ensures that requests to the leader
+    // will include the X-Forward header, which is critical for proper request forwarding
+    assertTrue(leaderRestService.isForward(), "isForward should be true for leaderRestService");
   }
 }
