@@ -164,4 +164,26 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.maven.plugin.version}</version>
+                <configuration>
+                    <java>
+                        <excludes>
+                            <exclude>src/main/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsKmsAead.java</exclude>
+                            <exclude>src/main/java/io/confluent/kafka/schemaregistry/encryption/aws/AwsKmsClient.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/encryption/aws/FakeAwsKms.java</exclude>
+                        </excludes>
+                        <licenseHeader>
+                            <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
+                        </licenseHeader>
+                    </java>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
