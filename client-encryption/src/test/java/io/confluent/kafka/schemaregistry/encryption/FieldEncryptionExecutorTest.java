@@ -124,6 +124,7 @@ public abstract class FieldEncryptionExecutorTest {
   protected final KafkaJsonSchemaSerializer<OldWidget> jsonSchemaSerializer;
   protected final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   protected final KafkaJsonSchemaSerializer<Employee> jsonSchemaSerializer3;
+  protected final KafkaJsonSchemaSerializer<SampleEvent> jsonSchemaSerializer4;
   protected final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   protected final KafkaProtobufSerializer<Widget> protobufSerializer;
   protected final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
@@ -186,6 +187,7 @@ public abstract class FieldEncryptionExecutorTest {
     jsonSchemaSerializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer3 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
+    jsonSchemaSerializer4 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, clientProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
@@ -1621,6 +1623,105 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerMissingProperty() throws Exception {
+    Address address = new Address();
+    address.doornumber = 1234;
+    address.doorpin = "1234";
+    address.street = "la rue";
+
+    SampleEvent test = new SampleEvent();
+    test.firstname = "bob";
+    test.lastname = "cool";
+    test.nas = "2012-12-12";
+    test.address = address;
+
+    String schemaStr = "{\n"
+        + "    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "    \"additionalProperties\": false,\n"
+        + "    \"definitions\": {\n"
+        + "        \"Address\": {\n"
+        + "            \"additionalProperties\": false,\n"
+        + "            \"properties\": {\n"
+        + "                \"doornumber\": {\n"
+        + "                    \"type\": \"integer\"\n"
+        + "                },\n"
+        + "                \"doorpin\": {\n"
+        + "                    \"confluent:tags\": [\n"
+        + "                        \"PII\"\n"
+        + "                    ],\n"
+        + "                    \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"state\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"street\": {\n"
+        + "                    \"type\": \"string\"\n"
+        + "                }\n"
+        + "            },\n"
+        + "            \"required\": [\n"
+        + "                \"doornumber\",\n"
+        + "                \"street\",\n"
+        + "                \"doorpin\"\n"
+        + "            ],\n"
+        + "            \"type\": \"object\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"properties\": {\n"
+        + "        \"address\": {\n"
+        + "            \"$ref\": \"#/definitions/Address\"\n"
+        + "        },\n"
+        + "        \"firstname\": {\n"
+        + "            \"type\": \"string\"\n"
+        + "        },\n"
+        + "        \"lastname\": {\n"
+        + "            \"type\": \"string\"\n"
+        + "        },\n"
+        + "        \"nas\": {\n"
+        + "            \"confluent:tags\": [\n"
+        + "                \"PII\"\n"
+        + "            ],\n"
+        + "            \"type\": \"string\"\n"
+        + "        }\n"
+        + "    },\n"
+        + "    \"required\": [\n"
+        + "        \"firstname\",\n"
+        + "        \"lastname\",\n"
+        + "        \"nas\",\n"
+        + "        \"address\"\n"
+        + "    ],\n"
+        + "    \"title\": \"Sample Event\",\n"
+        + "    \"type\": \"object\"\n"
+        + "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer4);
+    byte[] bytes = jsonSchemaSerializer4.serialize(topic, headers, test);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(jsonSchemaDeserializer);
+    Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be an an event ",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned value should be the password",
+        "1234",
+        ((JsonNode)obj).get("address").get("doorpin").textValue()
+    );
+  }
+
+  @Test
   public void testKafkaProtobufSerializer() throws Exception {
     Widget widget = Widget.newBuilder()
         .setName("alice")
@@ -2306,6 +2407,53 @@ public abstract class FieldEncryptionExecutorTest {
 
     public void setCardPin(String cardPin) {
       this.cardPin = cardPin;
+    }
+  }
+
+  public class SampleEvent {
+    @JsonProperty(required = true)
+    public String firstname;
+
+    @JsonProperty(required = true)
+    public String lastname;
+
+    @JsonProperty(required = true)
+    public String nas;
+
+    @JsonProperty(required = true)
+    public Address address;
+
+    @Override
+    public String toString() {
+      return "SampleEvent{" +
+          "firstname='" + firstname + '\'' +
+          ", lastname='" + lastname + '\'' +
+          ", nas='" + nas + '\'' +
+          ", Address='" + address.toString() + '\'' +
+          '}';
+    }
+  }
+
+  class Address {
+    @JsonProperty(required = true)
+    public Integer doornumber;
+    @JsonProperty(required = true)
+    public String street;
+
+    //@JsonProperty(required = true)
+    //public String state;
+
+    @JsonProperty(required = true)
+    public String doorpin;
+
+    @Override
+    public String toString() {
+      return "Address{" +
+          "doornumber='" + doornumber + '\'' +
+          ", street='" + street + '\'' +
+          // ", state='" + state + '\'' +
+          ", doorpin='" + doorpin + '\'' +
+          '}';
     }
   }
 }
