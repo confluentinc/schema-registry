@@ -201,6 +201,213 @@ public class SchemaValuesTest {
         MD5.ofSchema(schema.toSchemaEntity()));
   }
 
+  @Test
+  public void testSchemaValueComplexMD5() {
+    String schemaString = "{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"Complex\",\n"
+        + "  \"namespace\": \"io.confluent.avro\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"int8\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"int\",\n"
+        + "        \"connect.doc\": \"int8 field\",\n"
+        + "        \"connect.default\": 2,\n"
+        + "        \"connect.type\": \"int8\"\n"
+        + "      },\n"
+        + "      \"default\": 2\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"int16\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"int\",\n"
+        + "        \"connect.type\": \"int16\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"int32\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"int64\",\n"
+        + "      \"type\": \"long\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"float32\",\n"
+        + "      \"type\": \"float\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"float64\",\n"
+        + "      \"type\": \"double\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"boolean\",\n"
+        + "      \"type\": \"boolean\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"string\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"bytes\",\n"
+        + "      \"type\": \"bytes\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"array\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"array\",\n"
+        + "        \"items\": \"string\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"map\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"map\",\n"
+        + "        \"values\": \"int\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"mapNonStringKeys\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"array\",\n"
+        + "        \"items\": {\n"
+        + "          \"type\": \"record\",\n"
+        + "          \"name\": \"MapEntry\",\n"
+        + "          \"fields\": [\n"
+        + "            {\n"
+        + "              \"name\": \"key\",\n"
+        + "              \"type\": \"int\"\n"
+        + "            },\n"
+        + "            {\n"
+        + "              \"name\": \"value\",\n"
+        + "              \"type\": \"int\"\n"
+        + "            }\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n";
+
+    SchemaValue schema = new SchemaValue("subject", 1, 1, "AVRO", null, schemaString, false);
+
+    // Pin the MD5
+    MD5 md5 = MD5.fromString("c4ad6448-4d68-34d2-c8cf-7443afc25d54");
+
+    assertEquals("MD5 hash should be equal",
+        md5,
+        MD5.ofSchema(schema.toSchemaEntity()));
+  }
+
+  @Test
+  public void testSchemaValueComplexProtobufMD5() {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "\n"
+        + "message Complex {\n"
+        + "  int32 int32 = 1;\n"
+        + "  int64 int64 = 2;\n"
+        + "  float float32 = 3;\n"
+        + "  double float64 = 4;\n"
+        + "  bool boolean = 5;\n"
+        + "  string string = 6;\n"
+        + "  bytes bytes = 7;\n"
+        + "  repeated string array = 8;\n"
+        + "  repeated ComplexEntry map = 9;\n"
+        + "\n"
+        + "  message ComplexEntry {\n"
+        + "    string key = 1;\n"
+        + "    int32 value = 2;\n"
+        + "  }\n"
+        + "}\n";
+
+    SchemaValue schema = new SchemaValue("subject", 1, 1, "PROTOBUF", null, schemaString, false);
+
+    // Pin the MD5
+    MD5 md5 = MD5.fromString("d49cbf63-d35b-ba54-e1f7-0bdd51528a37");
+
+    assertEquals("MD5 hash should be equal",
+        md5,
+        MD5.ofSchema(schema.toSchemaEntity()));
+  }
+
+  @Test
+  public void testSchemaValueComplexJsonMD5() {
+    String schemaString = "\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"boolean\": {\n"
+        + "      \"connect.index\": 6,\n"
+        + "      \"type\": \"boolean\"\n"
+        + "    },\n"
+        + "    \"string\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"connect.index\": 7\n"
+        + "    },\n"
+        + "    \"int32\": {\n"
+        + "      \"type\": \"integer\",\n"
+        + "      \"connect.index\": 2,\n"
+        + "      \"connect.type\": \"int32\"\n"
+        + "    },\n"
+        + "    \"array\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"connect.index\": 9,\n"
+        + "      \"items\": {\n"
+        + "        \"type\": \"string\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"int64\": {\n"
+        + "      \"type\": \"integer\",\n"
+        + "      \"connect.index\": 3,\n"
+        + "      \"connect.type\": \"int64\"\n"
+        + "    },\n"
+        + "    \"bytes\": {\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"connect.index\": 8,\n"
+        + "      \"connect.type\": \"bytes\"\n"
+        + "    },\n"
+        +  "\"int8\": {\n"
+        + "      \"type\": \"integer\",\n"
+        + "      \"connect.index\": 0,\n"
+        + "      \"connect.type\": \"int8\"\n"
+        + "    },\n"
+        + "    \"float32\": {\n"
+        + "      \"type\": \"number\",\n"
+        + "      \"connect.index\": 4,\n"
+        + "      \"connect.type\": \"float32\"\n"
+        + "    },\n"
+        + "    \"float64\": {\n"
+        + "      \"type\": \"number\",\n"
+        + "      \"connect.index\": 5,\n"
+        + "      \"connect.type\": \"float64\"\n"
+        + "    },\n"
+        + "    \"map\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"connect.index\": 10,\n"
+        + "      \"connect.type\": \"map\",\n"
+        + "      \"additionalProperties\": {\n"
+        + "        \"type\": \"integer\",\n"
+        + "        \"connect.type\": \"int32\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"int16\": {\n"
+        + "      \"type\": \"integer\",\n"
+        + "      \"connect.index\": 1,\n"
+        + "      \"connect.type\": \"int16\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+
+    SchemaValue schema = new SchemaValue("subject", 1, 1, "JSON", null, schemaString, false);
+
+    // Pin the MD5
+    MD5 md5 = MD5.fromString("ae6f9592-621e-546e-45b2-dfb7ca884c15");
+
+    assertEquals("MD5 hash should be equal",
+        md5,
+        MD5.ofSchema(schema.toSchemaEntity()));
+  }
+
   private void assertSchemaValue(String subject, int version, int schemaId,
                                  String schema, String type, boolean deleted,
                                  SchemaValue schemaValue) {

@@ -141,6 +141,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  /**
+   * Returns the context without the tenant prefix.
+   */
   public String toUnqualifiedContext() {
     return DEFAULT_CONTEXT.equals(context)
         ? ""
@@ -151,6 +154,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return toQualifiedContext() + subject;
   }
 
+  /**
+   * Returns the context and subject without the tenant prefix.
+   */
   public String toUnqualifiedSubject() {
     return toUnqualifiedContext() + subject;
   }

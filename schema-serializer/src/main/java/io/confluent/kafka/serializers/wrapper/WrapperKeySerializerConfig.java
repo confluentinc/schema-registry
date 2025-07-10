@@ -14,31 +14,31 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.serializers;
+package io.confluent.kafka.serializers.wrapper;
 
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
-public class WrapperKeyDeserializerConfig extends AbstractConfig {
+public class WrapperKeySerializerConfig extends AbstractConfig {
 
-  public static final String WRAPPED_KEY_DESERIALIZER = "wrapped.key.deserializer";
-  public static final String WRAPPED_KEY_DESERIALIZER_DOC =
-      "Deserializer class to which calls will be delegated";
+  public static final String WRAPPED_KEY_SERIALIZER = "wrapped.key.serializer";
+  public static final String WRAPPED_KEY_SERIALIZER_DOC =
+      "Serializer class to which calls will be delegated";
 
   private static final ConfigDef config;
 
   static {
     config = new ConfigDef().define(
-        WRAPPED_KEY_DESERIALIZER,
+        WRAPPED_KEY_SERIALIZER,
         ConfigDef.Type.CLASS,
         Object.class,
         ConfigDef.Importance.HIGH,
-        WRAPPED_KEY_DESERIALIZER_DOC
+        WRAPPED_KEY_SERIALIZER_DOC
     );
   }
 
-  public WrapperKeyDeserializerConfig(Map<?, ?> props) {
+  public WrapperKeySerializerConfig(Map<?, ?> props) {
     super(config, props);
   }
 }

@@ -23,8 +23,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -437,32 +435,6 @@ public class JsonSchemaTest {
     JsonSchema schema2 = JsonSchemaUtils.getSchema(envelope);
     schema2.validate(true);
     assertEquals(schema, schema2);
-  }
-
-  @Test
-  public void testPrepopulatedMappings() throws Exception {
-    String schema = "{\n"
-        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
-        + "  \"$id\": \"task.schema.json\",\n"
-        + "  \"title\": \"Task\",\n"
-        + "  \"description\": \"A task\",\n"
-        + "  \"type\": [\"null\", \"object\"],\n"
-        + "  \"properties\": {\n"
-        + "    \"title\": {\n"
-        + "        \"description\": \"Task title\",\n"
-        + "        \"type\": \"string\"\n"
-        + "    }\n"
-        + "  }\n"
-        + "}";
-
-    Map<URI, String> mappings = spy(new HashMap<>(new JsonSchema("{}").getPrepopulatedMappings()));
-
-    JsonSchema jsonSchema = new JsonSchemaWithMappings(schema, mappings);
-    jsonSchema.validate(true);
-    // Verify that the mappings in the prepopulatedMetaSchemas are used
-    // The underlying JSON Schema library calls putMapEntries, which calls size and entrySet
-    verify(mappings).size();
-    verify(mappings).entrySet();
   }
 
   @Test(expected = ValidationException.class)

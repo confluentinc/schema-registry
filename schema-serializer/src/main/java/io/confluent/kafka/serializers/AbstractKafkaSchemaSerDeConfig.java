@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -278,12 +282,36 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Determines how to construct the subject name under which the key schema is registered "
       + "with the schema registry. By default, <topic>-key is used as subject.";
 
+  public static final String KEY_SCHEMA_ID_SERIALIZER = "key.schema.id.serializer";
+  public static final String KEY_SCHEMA_ID_SERIALIZER_DEFAULT =
+      PrefixSchemaIdSerializer.class.getName();
+  public static final String KEY_SCHEMA_ID_SERIALIZER_DOC =
+      "Determines how to serialize the ID for the key schema.";
+
+  public static final String KEY_SCHEMA_ID_DESERIALIZER = "key.schema.id.deserializer";
+  public static final String KEY_SCHEMA_ID_DESERIALIZER_DEFAULT =
+      DualSchemaIdDeserializer.class.getName();
+  public static final String KEY_SCHEMA_ID_DESERIALIZER_DOC =
+      "Determines how to deserialize the ID for the key schema.";
+
   public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT =
       TopicNameStrategy.class.getName();
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the value schema is registered "
       + "with the schema registry. By default, <topic>-value is used as subject.";
+
+  public static final String VALUE_SCHEMA_ID_SERIALIZER = "value.schema.id.serializer";
+  public static final String VALUE_SCHEMA_ID_SERIALIZER_DEFAULT =
+      PrefixSchemaIdSerializer.class.getName();
+  public static final String VALUE_SCHEMA_ID_SERIALIZER_DOC =
+      "Determines how to serialize the ID for the value schema.";
+
+  public static final String VALUE_SCHEMA_ID_DESERIALIZER = "value.schema.id.deserializer";
+  public static final String VALUE_SCHEMA_ID_DESERIALIZER_DEFAULT =
+      DualSchemaIdDeserializer.class.getName();
+  public static final String VALUE_SCHEMA_ID_DESERIALIZER_DOC =
+      "Determines how to deserialize the ID for the value schema.";
 
   public static final String SCHEMA_REFLECTION_CONFIG = "schema.reflection";
   public static final boolean SCHEMA_REFLECTION_DEFAULT = false;
@@ -375,8 +403,16 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
+        .define(KEY_SCHEMA_ID_SERIALIZER, Type.CLASS, KEY_SCHEMA_ID_SERIALIZER_DEFAULT,
+                Importance.MEDIUM, KEY_SCHEMA_ID_SERIALIZER_DOC)
+        .define(KEY_SCHEMA_ID_DESERIALIZER, Type.CLASS, KEY_SCHEMA_ID_DESERIALIZER_DEFAULT,
+                Importance.MEDIUM, KEY_SCHEMA_ID_DESERIALIZER_DOC)
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
+        .define(VALUE_SCHEMA_ID_SERIALIZER, Type.CLASS, VALUE_SCHEMA_ID_SERIALIZER_DEFAULT,
+                Importance.MEDIUM, VALUE_SCHEMA_ID_SERIALIZER_DOC)
+        .define(VALUE_SCHEMA_ID_DESERIALIZER, Type.CLASS, VALUE_SCHEMA_ID_DESERIALIZER_DEFAULT,
+                Importance.MEDIUM, VALUE_SCHEMA_ID_DESERIALIZER_DOC)
         .define(SCHEMA_REFLECTION_CONFIG, Type.BOOLEAN, SCHEMA_REFLECTION_DEFAULT,
                 Importance.LOW, SCHEMA_REFLECTION_DOC)
         .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
@@ -471,12 +507,28 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getConfiguredInstance(CONTEXT_NAME_STRATEGY, ContextNameStrategy.class);
   }
 
-  public Object keySubjectNameStrategy() {
+  public SubjectNameStrategy keySubjectNameStrategy() {
     return subjectNameStrategyInstance(KEY_SUBJECT_NAME_STRATEGY);
   }
 
-  public Object valueSubjectNameStrategy() {
+  public SchemaIdSerializer keySchemaIdSerializer() {
+    return this.getConfiguredInstance(KEY_SCHEMA_ID_SERIALIZER, SchemaIdSerializer.class);
+  }
+
+  public SchemaIdDeserializer keySchemaIdDeserializer() {
+    return this.getConfiguredInstance(KEY_SCHEMA_ID_DESERIALIZER, SchemaIdDeserializer.class);
+  }
+
+  public SubjectNameStrategy valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
+  }
+
+  public SchemaIdSerializer valueSchemaIdSerializer() {
+    return this.getConfiguredInstance(VALUE_SCHEMA_ID_SERIALIZER, SchemaIdSerializer.class);
+  }
+
+  public SchemaIdDeserializer valueSchemaIdDeserializer() {
+    return this.getConfiguredInstance(VALUE_SCHEMA_ID_DESERIALIZER, SchemaIdDeserializer.class);
   }
 
   public boolean useSchemaReflection() {
@@ -488,12 +540,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
   }
 
-  private Object subjectNameStrategyInstance(String config) {
-    Class subjectNameStrategyClass = this.getClass(config);
-    Class deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
-    if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
-      return this.getConfiguredInstance(config, deprecatedClass);
-    }
+  private SubjectNameStrategy subjectNameStrategyInstance(String config) {
     return this.getConfiguredInstance(config, SubjectNameStrategy.class);
   }
 
