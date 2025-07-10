@@ -199,4 +199,18 @@ public class QualifiedSubjectTest {
     assertFalse(QualifiedSubject.isValidSubject("default", "__GLOBAL"));
     assertFalse(QualifiedSubject.isValidSubject("default", "__EMPTY"));
   }
+
+  @Test
+  public void testSubjectInContextCheck() {
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", "foo", QualifiedSubject.create("default", ":.:")));
+    assertFalse(QualifiedSubject.isSubjectInContext(
+        "default", "foo", QualifiedSubject.create("default", ":.bar:")));
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", ":.bar:foo", QualifiedSubject.create("default", ":.bar:")));
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", "foo", QualifiedSubject.create("default", ":.__GLOBAL:")));
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", ":.bar:foo", QualifiedSubject.create("default", ":.__GLOBAL:")));
+  }
 }
