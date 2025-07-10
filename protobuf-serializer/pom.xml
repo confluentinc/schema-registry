@@ -142,6 +142,23 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.maven.plugin.version}</version>
+                <configuration>
+                    <java>
+                        <excludes>
+                            <exclude>src/test/java/io/confluent/kafka/serializers/protobuf/test/*.java</exclude>
+                            <exclude>src/test/java/com/acme/glup/*.java</exclude>
+                            <exclude>src/test/java/io/confluent/connect/protobuf/test/*.java</exclude>
+                        </excludes>
+                        <licenseHeader>
+                            <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
+                        </licenseHeader>
+                    </java>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

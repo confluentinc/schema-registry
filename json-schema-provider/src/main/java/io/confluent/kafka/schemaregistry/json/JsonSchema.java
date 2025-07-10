@@ -13,7 +13,6 @@
  * specific language governing permissions and limitations under the License.
  */
 
-
 package io.confluent.kafka.schemaregistry.json;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
