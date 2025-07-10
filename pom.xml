@@ -115,6 +115,7 @@
         <snappy.version>1.1.10.5</snappy.version>
         <log4j.version>2.24.3</log4j.version>
         <apache.httpclient5.version>5.5</apache.httpclient5.version>
+        <spotless.maven.plugin.version>2.45.0</spotless.maven.plugin.version>
     </properties>
 
     <repositories>
@@ -632,6 +633,20 @@
                         <id>attach-javadocs</id>
                         <goals>
                             <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.maven.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>
