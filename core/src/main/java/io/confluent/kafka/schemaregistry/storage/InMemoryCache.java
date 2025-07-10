@@ -430,8 +430,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return s -> qs == null
         || subject.equals(s)
         // check context match for a qualified subject with an empty subject
-        || (qs.getSubject().isEmpty() && qs.toQualifiedContext().equals(
-            QualifiedSubject.qualifiedContextFor(tenant(), s)));
+        || QualifiedSubject.isSubjectInContext(tenant(), s, qs);
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {
