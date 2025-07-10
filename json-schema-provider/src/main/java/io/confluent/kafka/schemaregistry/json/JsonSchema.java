@@ -614,7 +614,7 @@ public class JsonSchema implements ParsedSchema {
           PropertyAccessor propertyAccessor =
               getPropertyAccessor(ctx, message, propertyName);
           if (propertyAccessor == null) {
-            return message;
+            continue;
           }
           Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
