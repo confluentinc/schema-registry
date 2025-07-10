@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[7.7.5-0, 7.7.6-0)</version>
+        <version>[7.8.4-0, 7.8.5-0)</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>7.7.5-0</version>
+    <version>7.8.4-0</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -93,6 +93,8 @@
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.4.5</cel-version>
+        <google.api.client.version>2.4.0</google.api.client.version>
+        <google.auth.version>1.24.1</google.auth.version>
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.4.5</jsonata-version>
         <json-schema.version>1.14.6</json-schema.version>
@@ -103,9 +105,9 @@
         <okio.version>3.4.0</okio.version>
         <tink.version>1.15.0</tink.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
-        <wire.version>4.9.7</wire.version>
+        <wire.version>5.1.0</wire.version>
         <swagger.version>2.1.10</swagger.version>
-        <io.confluent.schema-registry.version>7.7.5-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>7.8.4-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.17.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
@@ -318,6 +320,16 @@
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-gcpkms</artifactId>
                 <version>${tink.gcp.kms.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.api-client</groupId>
+                <artifactId>google-api-client</artifactId>
+                <version>${google.api.client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.auth</groupId>
+                <artifactId>google-auth-library-credentials</artifactId>
+                <version>${google.auth.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.projectnessie.cel</groupId>

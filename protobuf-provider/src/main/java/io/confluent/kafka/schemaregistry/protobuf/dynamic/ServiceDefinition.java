@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 
 import com.google.protobuf.DescriptorProtos;
+import com.google.protobuf.DescriptorProtos.FeatureSet;
 import com.google.protobuf.DescriptorProtos.MethodDescriptorProto;
 import com.google.protobuf.DescriptorProtos.MethodOptions.IdempotencyLevel;
 import com.google.protobuf.DescriptorProtos.ServiceDescriptorProto;
@@ -63,7 +64,8 @@ public class ServiceDefinition {
         Boolean clientStreaming,
         Boolean serverStreaming,
         Boolean isDeprecated,
-        IdempotencyLevel idempotencyLevel
+        IdempotencyLevel idempotencyLevel,
+        FeatureSet features
     ) {
       MethodDescriptorProto.Builder methodBuilder = MethodDescriptorProto.newBuilder();
       methodBuilder.setName(name)
@@ -87,6 +89,12 @@ public class ServiceDefinition {
         optionsBuilder.setIdempotencyLevel(idempotencyLevel);
         methodBuilder.mergeOptions(optionsBuilder.build());
       }
+      if (features != null) {
+        DescriptorProtos.MethodOptions.Builder optionsBuilder =
+            DescriptorProtos.MethodOptions.newBuilder();
+        optionsBuilder.setFeatures(features);
+        methodBuilder.mergeOptions(optionsBuilder.build());
+      }
       mServiceTypeBuilder.addMethod(methodBuilder.build());
     }
 
@@ -94,6 +102,14 @@ public class ServiceDefinition {
       DescriptorProtos.ServiceOptions.Builder optionsBuilder =
           DescriptorProtos.ServiceOptions.newBuilder();
       optionsBuilder.setDeprecated(isDeprecated);
+      mServiceTypeBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    public Builder setFeatures(FeatureSet features) {
+      DescriptorProtos.ServiceOptions.Builder optionsBuilder =
+          DescriptorProtos.ServiceOptions.newBuilder();
+      optionsBuilder.setFeatures(features);
       mServiceTypeBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }

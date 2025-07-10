@@ -36,6 +36,7 @@ import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -727,7 +728,7 @@ public class ProtobufData {
       String fieldTag = fieldSchema.parameters() != null ? fieldSchema.parameters()
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : index++;
-      FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
+      FieldDefinition.Builder fieldDef = fieldDefinitionFromConnectSchema(
           ctx,
           schema,
           message,
@@ -736,29 +737,15 @@ public class ProtobufData {
           tag
       );
       if (fieldDef != null) {
-        boolean isProto3Optional = "optional".equals(fieldDef.getLabel());
+        boolean isProto3Optional = "optional".equals(getLabel(fieldSchema));
         if (isProto3Optional) {
           // Add a synthentic oneof
           MessageDefinition.OneofBuilder oneofBuilder = message.addOneof("_" + fieldDef.getName());
-          oneofBuilder.addField(
-              new Context(),
-              true,
-              fieldDef.getType(),
-              fieldDef.getName(),
-              fieldDef.getNum(),
-              fieldDef.getDefaultVal(),
-              fieldDef.getMeta()
-          );
+          fieldDef.setProto3Optional(true);
+          fieldDef.setOneofIndex(oneofBuilder.getIdx());
+          oneofBuilder.addField(fieldDef.build());
         } else {
-          message.addField(
-              new Context(),
-              fieldDef.getLabel(),
-              fieldDef.getType(),
-              fieldDef.getName(),
-              fieldDef.getNum(),
-              fieldDef.getDefaultVal(),
-              fieldDef.getMeta()
-          );
+          message.addField(fieldDef.build());
         }
       }
     }
@@ -778,7 +765,7 @@ public class ProtobufData {
       String fieldTag = fieldSchema.parameters() != null ? fieldSchema.parameters()
           .get(PROTOBUF_TYPE_TAG) : null;
       int tag = fieldTag != null ? Integer.parseInt(fieldTag) : 0;
-      FieldDefinition fieldDef = fieldDefinitionFromConnectSchema(
+      FieldDefinition.Builder fieldDef = fieldDefinitionFromConnectSchema(
           ctx,
           schema,
           message,
@@ -787,19 +774,13 @@ public class ProtobufData {
           tag
       );
       if (fieldDef != null) {
-        oneof.addField(
-            new Context(),
-            fieldDef.getType(),
-            fieldDef.getName(),
-            fieldDef.getNum(),
-            fieldDef.getDefaultVal(),
-            fieldDef.getMeta()
-        );
+        fieldDef.setOneofIndex(oneof.getIdx());
+        oneof.addField(fieldDef.build());
       }
     }
   }
 
-  private FieldDefinition fieldDefinitionFromConnectSchema(
+  private FieldDefinition.Builder fieldDefinitionFromConnectSchema(
       FromConnectContext ctx,
       DynamicSchema.Builder schema,
       MessageDefinition.Builder message,
@@ -807,14 +788,9 @@ public class ProtobufData {
       String name,
       int tag
   ) {
-    String label = null;
+    String label = getLabel(fieldSchema);
     if (fieldSchema.type() == Schema.Type.ARRAY) {
-      label = "repeated";
       fieldSchema = fieldSchema.valueSchema();
-    } else if (fieldSchema.type() == Schema.Type.MAP) {
-      label = "repeated";
-    } else if (useOptionalForNullables && fieldSchema.isOptional()) {
-      label = "optional";
     }
     Map<String, String> params = new HashMap<>();
     String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params);
@@ -858,14 +834,27 @@ public class ProtobufData {
         defaultVal = fieldSchema.defaultValue();
       }
     }
-    return new FieldDefinition(
-        label,
-        type,
-        name,
-        tag,
-        defaultVal != null ? defaultVal.toString() : null,
-        new ProtobufMeta(null, params, null)
-    );
+    FieldDefinition.Builder builder = FieldDefinition.newBuilder(new Context(), name, tag, type);
+    if (label != null) {
+      builder.setLabel(label);
+    }
+    if (defaultVal != null) {
+      builder.setDefaultValue(defaultVal.toString());
+    }
+    builder.setMeta(new ProtobufMeta(null, params, null));
+    return builder;
+  }
+
+  private String getLabel(Schema fieldSchema) {
+    String label = null;
+    if (fieldSchema.type() == Schema.Type.ARRAY) {
+      label = "repeated";
+    } else if (fieldSchema.type() == Schema.Type.MAP) {
+      label = "repeated";
+    } else if (useOptionalForNullables && fieldSchema.isOptional()) {
+      label = "optional";
+    }
+    return label;
   }
 
   private Descriptor typeToDescriptor(String type) {
@@ -924,77 +913,11 @@ public class ProtobufData {
     }
   }
 
-  static class FieldDefinition {
-
-    private final String label;
-    private final String type;
-    private final String name;
-    private final int num;
-    private final String defaultVal;
-    private final ProtobufMeta meta;
-
-    public FieldDefinition(String label, String type, String name, int num, String defaultVal,
-        ProtobufMeta meta) {
-      this.label = label;
-      this.type = type;
-      this.name = name;
-      this.num = num;
-      this.defaultVal = defaultVal;
-      this.meta = meta;
-    }
-
-    public String getType() {
-      return type;
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public int getNum() {
-      return num;
-    }
-
-    public String getDefaultVal() {
-      return defaultVal;
-    }
-
-    public String getLabel() {
-      return label;
-    }
-
-    public ProtobufMeta getMeta() {
-      return meta;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      FieldDefinition that = (FieldDefinition) o;
-      return num == that.num
-          && Objects.equals(label, that.label)
-          && Objects.equals(type, that.type)
-          && Objects.equals(name, that.name)
-          && Objects.equals(defaultVal, that.defaultVal)
-          && Objects.equals(meta, that.meta);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(label, type, name, num, defaultVal, meta);
-    }
-  }
-
   private MessageDefinition mapDefinitionFromConnectSchema(
       FromConnectContext ctx, DynamicSchema.Builder schema, String name, Schema mapElem
   ) {
     MessageDefinition.Builder map = MessageDefinition.newBuilder(name);
-    FieldDefinition key = fieldDefinitionFromConnectSchema(
+    FieldDefinition.Builder key = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
         map,
@@ -1002,9 +925,8 @@ public class ProtobufData {
         KEY_FIELD,
         1
     );
-    map.addField(new Context(), key.getLabel(), key.getType(), key.getName(), key.getNum(),
-        key.getDefaultVal(), null);
-    FieldDefinition val = fieldDefinitionFromConnectSchema(
+    map.addField(key.build());
+    FieldDefinition.Builder val = fieldDefinitionFromConnectSchema(
         ctx,
         schema,
         map,
@@ -1012,8 +934,7 @@ public class ProtobufData {
         VALUE_FIELD,
         2
     );
-    map.addField(new Context(), val.getLabel(), val.getType(), val.getName(), val.getNum(),
-        val.getDefaultVal(), null);
+    map.addField(val.build());
     return map.build();
   }
 

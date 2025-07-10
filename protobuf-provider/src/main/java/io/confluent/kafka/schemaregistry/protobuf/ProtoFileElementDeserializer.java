@@ -189,7 +189,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
     );
   }
 
-  private ExtensionsElement toExtensions(JsonNode node) {
+  private ExtensionsElement toExtensions(JsonNode node) throws JsonProcessingException {
     ImmutableList.Builder<Object> valueBuilder = ImmutableList.builder();
     for (JsonNode value : node.get("values")) {
       if (value.isInt()) {
@@ -200,10 +200,16 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       }
     }
 
+    ImmutableList.Builder<OptionElement> optionElementBuilder = ImmutableList.builder();
+    for (JsonNode optionNode : node.get("options")) {
+      optionElementBuilder.add(toOption(optionNode));
+    }
+
     return new ExtensionsElement(
       toLocation(node.get("location")),
       node.get("documentation").asText(),
-      valueBuilder.build()
+      valueBuilder.build(),
+      optionElementBuilder.build()
     );
   }
 
