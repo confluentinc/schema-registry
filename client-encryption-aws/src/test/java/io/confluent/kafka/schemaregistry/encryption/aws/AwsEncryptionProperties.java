@@ -14,44 +14,36 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.encryption.local;
+package io.confluent.kafka.schemaregistry.encryption.aws;
 
-import static io.confluent.kafka.schemaregistry.encryption.local.LocalKmsDriver.SECRET;
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
+public class AwsEncryptionProperties extends EncryptionProperties {
 
-  public LocalFieldEncryptionProperties(List<String> ruleNames) {
-    super(ruleNames);
-  }
-
-  public LocalFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public AwsEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     super(ruleNames, ruleExecutor);
   }
 
   @Override
   public String getKmsType() {
-    return "local-kms";
+    return "aws-kms";
   }
 
   @Override
   public String getKmsKeyId() {
-    return "mykey";
+    return "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab";
   }
 
   @Override
-  public Map<String, String> getKmsProps() {
-    return Collections.singletonMap(SECRET, "mysecret");
-  }
-
-  @Override
-  public Map<String, Object> getClientProperties(String baseUrls) {
+  public Map<String, Object> getClientProperties(String baseUrls)
+      throws Exception {
     List<String> ruleNames = getRuleNames();
     Map<String, Object> props = new HashMap<>();
     props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, baseUrls);
@@ -63,14 +55,15 @@ public class LocalFieldEncryptionProperties extends FieldEncryptionProperties {
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName + ".class",
           getRuleExecutor().getName());
       props.put(AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS + "." + ruleName
-          + ".param." + SECRET, "mysecret");
+              + ".param." + TEST_CLIENT,
+          getTestClient());
     }
     return props;
   }
 
   @Override
   public Object getTestClient() throws Exception {
-    return null;
+    return new FakeAwsKms(Collections.singletonList(getKmsKeyId()));
   }
 }
 
