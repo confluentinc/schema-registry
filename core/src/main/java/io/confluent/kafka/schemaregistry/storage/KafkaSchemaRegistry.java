@@ -2656,7 +2656,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
   private void logSchemaOp(Schema schema, String operation) {
     log.info("Resource association log - (tenant, id, subject, operation): ({}, {}, {}, {})", 
-        tenant(), schema.id, schema.subject, operation);
+        tenant(), schema.getId(), schema.getSubject(), operation);
   }
 
   @Override
