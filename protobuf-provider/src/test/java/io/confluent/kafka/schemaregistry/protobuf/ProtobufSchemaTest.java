@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -1536,7 +1537,9 @@ public class ProtobufSchemaTest {
   @Test
   public void testDefaultOmittedInProto3String() throws Exception {
     MessageDefinition.Builder message = MessageDefinition.newBuilder("msg1");
-    message.addField(new Context(), null, "string", "field1", 1, "defaultVal", null);
+    FieldDefinition.Builder field = FieldDefinition.newBuilder(new Context(), "field1", 1, "string");
+    field.setDefaultValue("defaultVal");
+    message.addField(field.build());
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     schema.setSyntax(PROTO3);
     schema.addMessageDefinition(message.build());
@@ -2444,6 +2447,47 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testContainedEnum() {
+    String sampleProtoFile = "syntax = \"proto2\";\n" +
+        "\n" +
+        "package sample;\n" +
+        "\n" +
+        "import \"withenum/imported.proto\";\n" +
+        "\n" +
+        "message SampleMessage {\n" +
+        "\n" +
+        "  optional uint64 timestamp = 1;\n" +
+        "  optional withenum.ContainingNestedEnum containing_nested_enum = 5;\n" +
+        "}\n" +
+        "\n" +
+        "message Action {\n" +
+        "  optional string id = 1;\n" +
+        "}";
+    String importedProto = "syntax = \"proto2\";\n" +
+        "\n" +
+        "package withenum;\n" +
+        "\n" +
+        "message ContainingNestedEnum {\n" +
+        "\n" +
+        "  optional Action action = 1;\n" +
+        "\n" +
+        "  enum Action {\n" +
+        "    TEST = 1;\n" +
+        "  }\n" +
+        "}";
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(sampleProtoFile,
+        Collections.singletonList(new SchemaReference("withenum/imported.proto", "withenum/imported.proto", 1)),
+        new HashMap<String, String>() {{
+          put("withenum/imported.proto", importedProto);
+        }},
+        1,
+        null);
+    assertEquals(protobufSchema.canonicalString(),
+        new ProtobufSchema(protobufSchema.toDescriptor()).canonicalString());
+  }
+
+  @Test
   public void testParseSchema() {
     SchemaProvider protobufSchemaProvider = new ProtobufSchemaProvider();
     ParsedSchema parsedSchema = protobufSchemaProvider.parseSchemaOrElseThrow(
@@ -3071,6 +3115,24 @@ public class ProtobufSchemaTest {
       assertEquals(parsedSchema, resultParsedSchema);
     } catch (IOException e) {
       fail("Error deserializing Json to ProtoFileElement.");
+    }
+  }
+
+  @Test
+  public void testGoogleDescriptor() throws Exception {
+    ResourceLoader resourceLoader = new ResourceLoader("/");
+    for (int i = 19; i < 28; i++) {
+      ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
+      ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
+      Descriptor desc = schema.toDescriptor();
+      ProtobufSchema schema2 = new ProtobufSchema(desc);
+      ProtobufSchema normalizedSchema = schema.normalize();
+      ProtobufSchema normalizedSchema2 = schema2.normalize();
+      // v24 has an incompatible change of edition string "2023" changing to edition enum EDITION_2023
+      // v27 introduced feature_support
+      if (i != 24 && i != 27) {
+        assertEquals(normalizedSchema.canonicalString(), normalizedSchema2.canonicalString());
+      }
     }
   }
 
