@@ -1092,7 +1092,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             .filter(r -> !rulesToRemove.contains(r.getName()))
             .collect(Collectors.toList());
       }
-      ruleSet = new RuleSet(migrationRules, domainRules);
+      List<Rule> encodingRules = ruleSet.getEncodingRules();
+      if (encodingRules != null) {
+        encodingRules = encodingRules.stream()
+            .filter(r -> !rulesToRemove.contains(r.getName()))
+            .collect(Collectors.toList());
+      }
+      ruleSet = new RuleSet(migrationRules, domainRules, encodingRules);
     }
     return ruleSet;
   }
