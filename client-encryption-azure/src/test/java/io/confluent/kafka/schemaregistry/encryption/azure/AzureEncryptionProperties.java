@@ -29,20 +29,15 @@ import com.azure.security.keyvault.keys.cryptography.models.EncryptionAlgorithm;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeyTemplates;
 import com.google.crypto.tink.KeysetHandle;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AzureFieldEncryptionProperties extends FieldEncryptionProperties {
+public class AzureEncryptionProperties extends EncryptionProperties {
 
-  public AzureFieldEncryptionProperties(List<String> ruleNames) {
-    super(ruleNames);
-  }
-
-  public AzureFieldEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
+  public AzureEncryptionProperties(List<String> ruleNames, Class<?> ruleExecutor) {
     super(ruleNames, ruleExecutor);
   }
 
