@@ -143,7 +143,6 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     // Reset the handler call tracking
     testHandler.reset();
 
-    // Now make an authenticated request that should pass security and reach our custom handler
     String schemaString = AvroUtils.parseSchema("{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
@@ -165,6 +164,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     // Reset for next test
     testHandler.reset();
 
+    // Now make an authenticated request that should pass security and reach our custom handler
     restApp.restClient.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
 
     restApp.restClient.registerSchema(schemaString, SUBJECT);
