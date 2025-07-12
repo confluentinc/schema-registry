@@ -77,7 +77,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     if (schemaRegistryCustomHandlers != null) {
       for (Handler.Singleton
               schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
-        context.insertHandler(schemaRegistryCustomHandler);
+        // add all custom handlers after the security handler.
+        // This is necessary for authentication to be applied before
+        // any of the custom handlers.
+        if (context.getSecurityHandler() != null) {
+          schemaRegistryCustomHandler
+              .setHandler(context.getSecurityHandler().getHandler());
+          context.getSecurityHandler().setHandler(schemaRegistryCustomHandler);
+        } else {
+          context.insertHandler(schemaRegistryCustomHandler);
+        }
       }
     }
   }
@@ -229,6 +238,52 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         }
       }
     }
+  }
+
+  // this is overridden mainly to log all handlers in the hierarchy
+  @Override
+  public Handler configureHandler() {
+    Handler handler = super.configureHandler();
+    logAllHandlers(handler);
+    return handler;
+  }
+
+  public static void logAllHandlers(Handler handler) {
+    StringBuilder handlerDetails = new StringBuilder();
+    logHandlerHierarchy(handler, handlerDetails, 0);
+    log.info("schema registry handler hierarchy:\n{}", handlerDetails);
+  }
+
+  private static void logHandlerHierarchy(
+      Handler handler, StringBuilder handlerDetails, int depth) {
+    if (handler == null) {
+      return;
+    }
+    // Add indentation based on depth
+    handlerDetails.append(createIndentation(depth));
+    handlerDetails.append("- ").append(handler.getClass().getName()).append("\n");
+    // If the handler is a wrapper, recurse
+    if (handler instanceof Handler.Singleton) {
+      Handler.Singleton wrapper = (Handler.Singleton) handler;
+      logHandlerHierarchy(wrapper.getHandler(), handlerDetails, depth + 1);
+    } else if (handler instanceof Handler.Sequence) {
+      // Recursively process each handler in the collection
+      for (Handler child : ((Handler.Sequence) handler).getHandlers()) {
+        logHandlerHierarchy(child, handlerDetails, depth + 1);
+      }
+    } else if (handler instanceof ServletContextHandler) {
+      // Print internal handlers of ServletContextHandler (if any)
+      ServletContextHandler contextHandler = (ServletContextHandler) handler;
+      if (contextHandler.getHandlers() != null) {
+        for (Handler child : contextHandler.getHandlers()) {
+          logHandlerHierarchy(child, handlerDetails, depth + 1);
+        }
+      }
+    }
+  }
+
+  private static String createIndentation(int depth) {
+    return "  ".repeat(Math.max(0, depth));
   }
 
   // for testing purpose only
