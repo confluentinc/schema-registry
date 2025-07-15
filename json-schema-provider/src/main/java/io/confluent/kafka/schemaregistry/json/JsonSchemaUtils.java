@@ -213,6 +213,9 @@ public class JsonSchemaUtils {
       case DRAFT_2019_09:
         draft = JsonSchemaDraft.DRAFT_2019_09;
         break;
+      case DRAFT_2020_12:
+        draft = JsonSchemaDraft.DRAFT_2020_12;
+        break;
       default:
         draft = JsonSchemaDraft.DRAFT_07;
         break;
