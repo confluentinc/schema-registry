@@ -1221,15 +1221,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         DeleteSubjectKey key = new DeleteSubjectKey(subject);
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
+        log.info("inside soft delete");
+      } else {
+        log.info("inside hard delete");
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
+        }
         if (getMode(subject) != null) {
           deleteMode(subject);
         }
         if (getConfig(subject) != null) {
           deleteConfig(subject);
-        }
-      } else {
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
         }
       }
       return deletedVersions;
