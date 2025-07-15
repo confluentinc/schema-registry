@@ -38,6 +38,8 @@ import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.util.Callback;
 import org.junit.jupiter.api.Test;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -662,5 +664,26 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals(
             mode,
             restApp.restClient.setMode(mode).getMode());
+  }
+
+  @Test
+  public void testSetForwardModeForNonGlobalContext() throws Exception {
+    // only support global context
+    String mode = "FORWARD";
+    restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME);
+    assertEquals(mode, restApp.restClient.getMode(CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME).getMode());
+
+    try {
+      restApp.restClient.setMode(mode, null);
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+    try {
+      restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + ":subject-name");
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
   }
 }
