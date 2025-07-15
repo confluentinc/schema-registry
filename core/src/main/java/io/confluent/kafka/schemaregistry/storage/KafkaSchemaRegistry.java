@@ -79,6 +79,7 @@ import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceE
 import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
+import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderServiceInterface;
 import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -140,7 +141,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
-  private final MetadataEncoderService metadataEncoder;
+  private final MetadataEncoderServiceInterface metadataEncoder;
   private RuleSetHandler ruleSetHandler;
   private final List<UpdateRequestHandler> updateRequestHandlers = new CopyOnWriteArrayList<>();
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
@@ -250,9 +251,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
-    this.metadataEncoder = new MetadataEncoderService(this);
+    this.metadataEncoder = createMetadataEncoderService();
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+  }
+
+  protected MetadataEncoderServiceInterface createMetadataEncoderService() {
+    return new MetadataEncoderService(this);
   }
 
   @VisibleForTesting
@@ -348,7 +353,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public MetadataEncoderService getMetadataEncoder() {
-    return metadataEncoder;
+    return (MetadataEncoderService) metadataEncoder;
   }
 
   public RuleSetHandler getRuleSetHandler() {
@@ -717,6 +722,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
 
       boolean modifiedSchema = false;
       if (mode != Mode.IMPORT) {
+        log.info("Is mode!=import triggering decode?");
         modifiedSchema = maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
@@ -1775,6 +1781,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   public Schema toSchemaEntity(SchemaValue schemaValue) throws SchemaRegistryStoreException {
+    log.info("toSchemaEntity triggered decode");
     metadataEncoder.decodeMetadata(schemaValue);
     return schemaValue.toSchemaEntity();
   }
@@ -2137,6 +2144,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       return filter(transform(kafkaStore.getAll(key1, key2), v -> {
         if (v instanceof SchemaValue) {
           try {
+            log.info("allVersions triggered decode");
             metadataEncoder.decodeMetadata(((SchemaValue) v));
           } catch (SchemaRegistryStoreException e) {
             log.error("Failed to decode metadata for schema id {}", ((SchemaValue) v).getId(), e);
