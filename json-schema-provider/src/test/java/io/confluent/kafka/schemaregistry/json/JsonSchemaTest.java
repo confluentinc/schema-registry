@@ -363,6 +363,18 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testSchemaWithDraft_2020_12() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual =
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_2020_12, true, null).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft/2020-12/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}}}";
+    assertEquals(expected, actual);
+  }
+
+  @Test
   public void testSchemaWithPackageScan() throws Exception {
     TestObj testObj = new TestObj();
     String actual =
