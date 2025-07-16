@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.NamedURI;
@@ -32,8 +33,7 @@ import java.util.*;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
-import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
-import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
+import static io.confluent.kafka.schemaregistry.storage.Mode.*;
 import static org.junit.Assert.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
@@ -213,29 +213,71 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
-    Schema expected = new Schema(
+    // Register two schemas for the same subject
+    Schema expected1 = new Schema(
             "subject1",
             -1,
             -1,
             AvroSchema.TYPE,
             Collections.emptyList(),
             StoreUtils.avroSchemaString(1));
-    kafkaSchemaRegistry.register("subject1", expected);
+    Schema expected2 = new Schema(
+            "subject1",
+            -1,
+            -1,
+            AvroSchema.TYPE,
+            Collections.emptyList(),
+            StoreUtils.avroSchemaString(2));
+    kafkaSchemaRegistry.register("subject1", expected1);
+    kafkaSchemaRegistry.register("subject1", expected2);
 
-    Schema schema = kafkaSchemaRegistry.get("subject1", 1, false);
-    assertEquals(expected, schema);
+    // Set mode and config for the subject
+    kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel("BACKWARD");
+    kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
-    // Soft deletion.
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema,false);
-    schema = kafkaSchemaRegistry.get("subject1", 1, false);
-    assertNull(schema);
-    schema = kafkaSchemaRegistry.get("subject1", 1, true);
-    assertEquals(expected, schema);
+    Schema schema1 = kafkaSchemaRegistry.get("subject1", 1, false);
+    assertEquals(expected1, schema1);
 
-    // Hard deletion.
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema,true);
-    schema = kafkaSchemaRegistry.get("subject1", 1, true);
-    assertNull(schema);
+    Schema schema2 = kafkaSchemaRegistry.get("subject1", 2, false);
+    assertEquals(expected2, schema2);
+
+    // Soft delete first version
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, false);
+    assertNull(kafkaSchemaRegistry.get("subject1", 1, false));
+    assertEquals(expected1, kafkaSchemaRegistry.get("subject1", 1, true));
+
+    // Mode and config should still exist
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
+    // Hard delete first version
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, true);
+    assertNull(kafkaSchemaRegistry.get("subject1", 1, true));
+
+    // Mode and config should still exist (since version 2 still exists)
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
+    // Soft delete second version
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, false);
+    assertNull(kafkaSchemaRegistry.get("subject1", 2, false));
+    assertEquals(expected2, kafkaSchemaRegistry.get("subject1", 2, true));
+
+    // Mode and config should still exist
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
+    // Hard delete second version
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, true);
+    assertNull(kafkaSchemaRegistry.get("subject1", 2, true));
+
+    // Now, mode and config should be deleted (since all versions are gone)
+    assertNull(kafkaSchemaRegistry.getMode("subject1"));
+    assertNull(kafkaSchemaRegistry.getConfig("subject1"));
   }
 
   @Test
@@ -252,6 +294,14 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
             StoreUtils.avroSchemaString(1));
     kafkaSchemaRegistry.register("subject1", expected);
 
+    // Set mode and config for the subject
+    kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel("BACKWARD");
+    kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
     Schema schema = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected, schema);
 
@@ -263,10 +313,18 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals(1, subjects.size());
     assertEquals("subject1", subjects.toArray()[0]);
 
+    // Mode and config should still exist after soft delete
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
     // Hard deletion.
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema,true);
+    kafkaSchemaRegistry.deleteSubject("subject1",true);
     subjects = kafkaSchemaRegistry.subjects("subject1",true);
     assertEquals(0, subjects.size());
+
+    // Mode and config should be deleted after hard delete
+    assertNull(kafkaSchemaRegistry.getMode("subject1"));
+    assertNull(kafkaSchemaRegistry.getConfig("subject1"));
   }
 
     @Test
