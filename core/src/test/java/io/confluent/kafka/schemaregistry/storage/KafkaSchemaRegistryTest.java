@@ -235,9 +235,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
     assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
-    configUpdateRequest.setCompatibilityLevel("BACKWARD");
+    configUpdateRequest.setCompatibilityLevel("FULL");
     kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
-    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+    assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     Schema schema1 = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected1, schema1);
@@ -252,7 +252,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Mode and config should still exist
     assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
-    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+    assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard delete first version
     kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, true);
@@ -260,7 +260,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Mode and config should still exist (since version 2 still exists)
     assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
-    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+    assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Soft delete second version
     kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, false);
@@ -269,7 +269,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Mode and config should still exist
     assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
-    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+    assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard delete second version
     kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, true);
@@ -298,9 +298,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
     assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
-    configUpdateRequest.setCompatibilityLevel("BACKWARD");
+    configUpdateRequest.setCompatibilityLevel("FULL");
     kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
-    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+    assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     Schema schema = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected, schema);
@@ -315,7 +315,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Mode and config should still exist after soft delete
     assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
-    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+    assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard deletion.
     kafkaSchemaRegistry.deleteSubject("subject1",true);
