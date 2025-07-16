@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -25,7 +27,19 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+import javax.security.auth.login.Configuration;
+import java.util.Map;
+import java.net.URL;
 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.Configurable;
@@ -35,6 +49,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 
@@ -53,14 +68,31 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   @Parameters(name = "{0}")
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][] {
-        { SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG },
-        { SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG },
-        { SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG}
+      { SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG },
+      { SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG },
+      { SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG}
     });
   }
 
   @Parameter
   public String resourceExtensionConfigName;
+  // Configure the client with authentication
+  BasicAuthCredentialProvider basicAuthCredentialProvider = new BasicAuthCredentialProvider() {
+    @Override
+    public String alias() {
+      return "TEST";
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+      // No configuration needed for test
+    }
+
+    @Override
+    public String getUserInfo(URL url) {
+      return "testuser:testpass";
+    }
+  };
 
   public SchemaRegistryExtensionTest() {
     super(1, true, CompatibilityLevel.BACKWARD.name);
@@ -70,10 +102,11 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   public void testAllowResource() throws Exception {
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+      + "\"name\":\"myrecord\","
+      + "\"fields\":"
+      + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
     int expectedIdSchema1 = 1;
+    restApp.restClient.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
     assertEquals(
       "Registering should succeed",
       expectedIdSchema1,
@@ -85,13 +118,14 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   @Test
   public void tesRejectResource() throws Exception {
     try {
+      restApp.restClient.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
       restApp.restClient.getLatestVersion(SUBJECT);
       fail("Getting all versions from non-existing subject1 should fail with 401");
     } catch (RestClientException rce) {
       assertEquals(
-          "Should get a 401 status for GET operations",
-          401,
-          rce.getStatus()
+        "Should get a 401 status for GET operations",
+        401,
+        rce.getStatus()
       );
     }
   }
@@ -100,27 +134,111 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   @Test
   public void testExtensionAddedHandler() throws Exception {
     KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
-    Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 1);
+    Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 2);
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+      + "\"name\":\"myrecord\","
+      + "\"fields\":"
+      + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    restApp.restClient.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
     restApp.restClient.registerSchema(schemaString1, SUBJECT);
     // verify extension added handler and it worked
-    Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 2);
+    Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 3);
 
   }
 
+  @Test
+  public void testSecurityHandlerBeforeCustomHandler() throws Exception {
+    // This test validates that the security handler is placed before custom handlers
+    // in the handler chain to ensure authentication happens before custom logic
+
+    AtomicReference<TestSecurityOrderHandler> testHandlerRef = new AtomicReference<>();
+    // Get the schema registry and find our test handler
+    KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    kafkaSchemaRegistry.getCustomHandler().forEach(handler -> {
+      if (handler instanceof TestSecurityOrderHandler) {
+        testHandlerRef.set((TestSecurityOrderHandler) handler);
+      }
+    });
+
+    TestSecurityOrderHandler testHandler = testHandlerRef.get();
+    Assert.assertNotNull("TestSecurityOrderHandler should be found in custom handlers", testHandler);
+
+    // Reset the handler call tracking
+    testHandler.reset();
+
+    String schemaString = AvroUtils.parseSchema("{\"type\":\"record\","
+      + "\"name\":\"myrecord\","
+      + "\"fields\":"
+      + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+
+    // Make a request without authentication - should be blocked by security handler
+    // before reaching the custom handler
+    try {
+      restApp.restClient.registerSchema(schemaString, SUBJECT);
+      fail("Request without authentication should be blocked by security handler");
+    } catch (RestClientException rce) {
+      assertEquals("Should get 401 from security handler", 401, rce.getStatus());
+
+      // Verify that our custom handler was NOT called because security blocked it first
+      Assert.assertFalse("Custom handler should not be called when security blocks request",
+        testHandler.wasHandlerCalled());
+    }
+
+    // Reset for next test
+    testHandler.reset();
+
+    // Now make an authenticated request that should pass security and reach our custom handler
+    restApp.restClient.setBasicAuthCredentialProvider(basicAuthCredentialProvider);
+
+    restApp.restClient.registerSchema(schemaString, SUBJECT);
+
+    // Verify that our custom handler was called for the authenticated request
+    Assert.assertTrue("Custom handler should be called for authenticated requests that pass security",
+      testHandler.wasHandlerCalled());
+  }
 
   @Override
   protected Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.put(
-        resourceExtensionConfigName,
-        TestSchemaRegistryExtension.class.getName()
-                + "," + TestSchemaRegistryHandlerExtension.class.getName()
+      resourceExtensionConfigName,
+      TestSchemaRegistryExtension.class.getName()
+        + "," + TestSchemaRegistryHandlerExtension.class.getName()
     );
+
+    // Add BASIC authentication for the security handler test
+    props.put(SchemaRegistryConfig.AUTHENTICATION_METHOD_CONFIG,
+      SchemaRegistryConfig.AUTHENTICATION_METHOD_BASIC);
+    props.put(SchemaRegistryConfig.AUTHENTICATION_REALM_CONFIG, "SchemaRegistry-Test");
+    props.put(SchemaRegistryConfig.AUTHENTICATION_ROLES_CONFIG, "admin");
+
+    try {
+      // Create a temporary JAAS config file for testing
+      File jaasConfigFile = File.createTempFile("test-jaas-", ".conf");
+      jaasConfigFile.deleteOnExit();
+
+      // Create a temporary user properties file
+      File userPropsFile = File.createTempFile("test-users-", ".properties");
+      userPropsFile.deleteOnExit();
+      Files.write(userPropsFile.toPath(),
+        "testuser: testpass,admin\n".getBytes(StandardCharsets.UTF_8));
+
+      // Create JAAS configuration
+      List<String> jaasLines = new ArrayList<>();
+      jaasLines.add("SchemaRegistry-Test {");
+      jaasLines.add("  org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule required");
+      jaasLines.add("  file=\"" + userPropsFile.getAbsolutePath() + "\";");
+      jaasLines.add("};");
+      Files.write(jaasConfigFile.toPath(), jaasLines, StandardCharsets.UTF_8);
+
+      System.setProperty("java.security.auth.login.config", jaasConfigFile.getAbsolutePath());
+      Configuration.setConfiguration(null); // Force reload
+
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to setup authentication", e);
+    }
+
     return props;
   }
 
@@ -128,9 +246,9 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
     @Override
     public void register(
-        Configurable<?> config,
-        SchemaRegistryConfig schemaRegistryConfig,
-        SchemaRegistry schemaRegistry
+      Configurable<?> config,
+      SchemaRegistryConfig schemaRegistryConfig,
+      SchemaRegistry schemaRegistry
     ) {
       config.register(new ContainerRequestFilter() {
 
@@ -138,9 +256,9 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
         public void filter(ContainerRequestContext requestContext) throws IOException {
           if (!requestContext.getMethod().equalsIgnoreCase("POST")) {
             requestContext.abortWith(
-                Response.status(Response.Status.UNAUTHORIZED)
-                    .entity("User cannot access the resource.")
-                    .build());
+              Response.status(Response.Status.UNAUTHORIZED)
+                .entity("User cannot access the resource.")
+                .build());
           }
         }
       });
@@ -157,18 +275,23 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
     @Override
     public void register(
-            Configurable<?> config,
-            SchemaRegistryConfig schemaRegistryConfig,
-            SchemaRegistry schemaRegistry
+      Configurable<?> config,
+      SchemaRegistryConfig schemaRegistryConfig,
+      SchemaRegistry schemaRegistry
     ) {
       KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
-      kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper() {
+      // Create a custom handler that tracks when it's called
+      TestSecurityOrderHandler testHandler = new TestSecurityOrderHandler();
+      kafkaSchemaRegistry.addCustomHandler(testHandler);
+      kafkaSchemaRegistry.addCustomHandler(new HandlerWrapper() {
         @Override
-        public boolean handle(Request request, org.eclipse.jetty.server.Response response, Callback callback) throws Exception {
+        public void handle(String target,
+                           Request baseRequest,
+                           HttpServletRequest request,
+                           HttpServletResponse response) throws java.io.IOException, javax.servlet.ServletException {
           // adding another handler so we can assert handler is indeed added into the handler chain based on number of handler
-          kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper());
-          super.handle(request, response, callback);
-          return true;
+          kafkaSchemaRegistry.addCustomHandler(new HandlerWrapper());
+          super.handle(target, baseRequest, request, response);
         }
       });
     }
@@ -176,6 +299,28 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
     @Override
     public void close() {
       // testing method, no need to implement
+    }
+  }
+
+  // Helper class to track whether a custom handler was called
+  public static class TestSecurityOrderHandler extends HandlerWrapper {
+    private volatile boolean handlerCalled = false;
+
+    @Override
+    public void handle(String target,
+                       Request baseRequest,
+                       HttpServletRequest request,
+                       HttpServletResponse response) throws ServletException, IOException {
+      handlerCalled = true;
+      super.handle(target, baseRequest, request, response);
+    }
+
+    public boolean wasHandlerCalled() {
+      return handlerCalled;
+    }
+
+    public void reset() {
+      handlerCalled = false;
     }
   }
 }
