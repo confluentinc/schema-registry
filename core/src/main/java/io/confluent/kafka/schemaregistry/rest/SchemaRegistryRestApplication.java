@@ -37,6 +37,8 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
+import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.resource.Resource;
@@ -75,7 +77,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     if (schemaRegistryCustomHandlers != null) {
       for (HandlerWrapper
               schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
-        context.insertHandler(schemaRegistryCustomHandler);
+        // add all custom handlers after the security handler.
+        // This is necessary for authentication to be applied before
+        // any of the custom handlers.
+        if (context.getSecurityHandler() != null) {
+          schemaRegistryCustomHandler
+              .setHandler(context.getSecurityHandler().getHandler());
+          context.getSecurityHandler().setHandler(schemaRegistryCustomHandler);
+        } else {
+          context.insertHandler(schemaRegistryCustomHandler);
+        }
       }
     }
   }
@@ -226,6 +237,60 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         }
       }
     }
+  }
+
+  // this is overridden mainly to log all handlers in the hierarchy
+  @Override
+  public Handler configureHandler() {
+    Handler handler = super.configureHandler();
+    logAllHandlers(handler);
+    return handler;
+  }
+
+  public static void logAllHandlers(Handler handler) {
+    StringBuilder handlerDetails = new StringBuilder();
+    logHandlerHierarchy(handler, handlerDetails, 0);
+    log.info("schema registry handler hierarchy:\n{}", handlerDetails);
+  }
+
+  private static void logHandlerHierarchy(
+      Handler handler, StringBuilder handlerDetails, int depth) {
+    if (handler == null) {
+      return;
+    }
+    // Add indentation based on depth
+    handlerDetails.append(createIndentation(depth));
+    handlerDetails.append("- ").append(handler.getClass().getName()).append("\n");
+    // If the handler is a wrapper, recurse
+    if (handler instanceof HandlerWrapper) {
+      HandlerWrapper wrapper = (HandlerWrapper) handler;
+      logHandlerHierarchy(wrapper.getHandler(), handlerDetails, depth + 1);
+    } else if (handler instanceof HandlerCollection) {
+      // Recursively process each handler in the collection
+      HandlerCollection collection = (HandlerCollection) handler;
+      Handler[] handlers = collection.getHandlers();
+      if (handlers != null) {
+        for (Handler child : handlers) {
+          logHandlerHierarchy(child, handlerDetails, depth + 1);
+        }
+      }
+    } else if (handler instanceof ServletContextHandler) {
+      // Print internal handlers of ServletContextHandler (if any)
+      ServletContextHandler contextHandler = (ServletContextHandler) handler;
+      if (contextHandler.getHandlers() != null) {
+        for (Handler child : contextHandler.getHandlers()) {
+          logHandlerHierarchy(child, handlerDetails, depth + 1);
+        }
+      }
+    }
+  }
+
+  private static String createIndentation(int depth) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < Math.max(0, depth); i++) {
+      sb.append("  ");
+    }
+    return sb.toString();
   }
 
   // for testing purpose only
