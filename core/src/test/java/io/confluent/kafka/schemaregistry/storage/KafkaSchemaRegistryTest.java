@@ -222,6 +222,14 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
             StoreUtils.avroSchemaString(1));
     kafkaSchemaRegistry.register("subject1", expected);
 
+    // Set mode and config for the subject
+    kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel("BACKWARD");
+    kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
     Schema schema = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected, schema);
 
@@ -232,10 +240,18 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     schema = kafkaSchemaRegistry.get("subject1", 1, true);
     assertEquals(expected, schema);
 
+    // Mode and config should still exist after soft delete
+    assertEquals(READWRITE, kafkaSchemaRegistry.getMode("subject1"));
+    assertEquals("BACKWARD", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
     // Hard deletion.
     kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema,true);
     schema = kafkaSchemaRegistry.get("subject1", 1, true);
     assertNull(schema);
+
+    // Mode and config should be deleted after hard delete of last version
+    assertNull(kafkaSchemaRegistry.getMode("subject1"));
+    assertNull(kafkaSchemaRegistry.getConfig("subject1"));
   }
 
   @Test

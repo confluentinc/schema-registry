@@ -1145,7 +1145,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
         logSchemaOp(schema, "DELETE");
-        if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
+      } else {
+        kafkaStore.put(key, null);
+
+        if (!getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
           }
@@ -1153,8 +1156,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             deleteConfig(subject);
           }
         }
-      } else {
-        kafkaStore.put(key, null);
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
