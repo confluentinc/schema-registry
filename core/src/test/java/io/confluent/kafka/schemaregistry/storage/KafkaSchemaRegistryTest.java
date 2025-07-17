@@ -300,6 +300,14 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
+    // Set global mode and config
+    ConfigUpdateRequest globalConfigUpdateRequest = new ConfigUpdateRequest();
+    globalConfigUpdateRequest.setCompatibilityLevel("FORWARD");
+    kafkaSchemaRegistry.updateConfig(null, globalConfigUpdateRequest);
+    assertEquals("FORWARD", kafkaSchemaRegistry.getConfig(null).getCompatibilityLevel());
+    kafkaSchemaRegistry.setMode(null, new ModeUpdateRequest(READONLY.name()));
+    assertEquals(READONLY, kafkaSchemaRegistry.getMode(null));
+
     Schema expected = new Schema(
             "subject1",
             -1,
@@ -307,7 +315,6 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
             AvroSchema.TYPE,
             Collections.emptyList(),
             StoreUtils.avroSchemaString(1));
-    kafkaSchemaRegistry.register("subject1", expected);
 
     // Set mode and config for the subject
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
@@ -317,6 +324,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
+    kafkaSchemaRegistry.register("subject1", expected);
     Schema schema = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected, schema);
 
@@ -340,6 +348,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     // Mode and config should be deleted after hard delete
     assertNull(kafkaSchemaRegistry.getMode("subject1"));
     assertNull(kafkaSchemaRegistry.getConfig("subject1"));
+
+    // Global mode and config should remain unchanged after hard delete
+    assertEquals(READONLY, kafkaSchemaRegistry.getMode(null));
+    assertEquals("FORWARD", kafkaSchemaRegistry.getConfig(null).getCompatibilityLevel());
   }
 
     @Test
