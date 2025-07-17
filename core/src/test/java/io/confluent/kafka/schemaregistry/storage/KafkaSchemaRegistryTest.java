@@ -33,7 +33,9 @@ import java.util.*;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
-import static io.confluent.kafka.schemaregistry.storage.Mode.*;
+import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
 import static org.junit.Assert.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
@@ -213,6 +215,14 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
+    // Set global mode and config
+    ConfigUpdateRequest globalConfigUpdateRequest = new ConfigUpdateRequest();
+    globalConfigUpdateRequest.setCompatibilityLevel("FORWARD");
+    kafkaSchemaRegistry.updateConfig(null, globalConfigUpdateRequest);
+    assertEquals("FORWARD", kafkaSchemaRegistry.getConfig(null).getCompatibilityLevel());
+    kafkaSchemaRegistry.setMode(null, new ModeUpdateRequest(READONLY.name()));
+    assertEquals(READONLY, kafkaSchemaRegistry.getMode(null));
+
     // Register two schemas for the same subject
     Schema expected1 = new Schema(
             "subject1",
@@ -228,8 +238,6 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
             AvroSchema.TYPE,
             Collections.emptyList(),
             StoreUtils.avroSchemaString(2));
-    kafkaSchemaRegistry.register("subject1", expected1);
-    kafkaSchemaRegistry.register("subject1", expected2);
 
     // Set mode and config for the subject
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READWRITE.name()));
@@ -238,6 +246,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     configUpdateRequest.setCompatibilityLevel("FULL");
     kafkaSchemaRegistry.updateConfig("subject1", configUpdateRequest);
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
+
+    kafkaSchemaRegistry.register("subject1", expected1);
+    kafkaSchemaRegistry.register("subject1", expected2);
 
     Schema schema1 = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected1, schema1);
@@ -278,6 +289,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     // Now, mode and config should be deleted (since all versions are gone)
     assertNull(kafkaSchemaRegistry.getMode("subject1"));
     assertNull(kafkaSchemaRegistry.getConfig("subject1"));
+
+    // Global mode and config should remain unchanged
+    assertEquals(READONLY, kafkaSchemaRegistry.getMode(null));
+    assertEquals("FORWARD", kafkaSchemaRegistry.getConfig(null).getCompatibilityLevel());
   }
 
   @Test
