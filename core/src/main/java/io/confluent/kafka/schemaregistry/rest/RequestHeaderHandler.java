@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.apache.logging.log4j.ThreadContext;
 import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.StringUtil;
@@ -27,7 +28,6 @@ import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
 
@@ -38,8 +38,8 @@ public class RequestHeaderHandler extends Handler.Wrapper {
 
   @Override
   public boolean handle(Request request, Response response, Callback callback) throws Exception {
-    // Clear MDC at the beginning of each request to remove stale values
-    MDC.clear();
+    // Clear ThreadContext at the beginning of each request to remove stale values
+    ThreadContext.clearAll();
     MutableRequest mutableRequest = new MutableRequest(request);
     addXRequestIdToRequest(mutableRequest, response);
     addXForwardedForToRequest(mutableRequest, request);
@@ -53,10 +53,10 @@ public class RequestHeaderHandler extends Handler.Wrapper {
     List<String> inputHeaders = Collections.list(mutableRequest.getHeaders(X_REQUEST_ID_HEADER));
     String requestId = getRequestId(inputHeaders);
 
-    // Add request ID to request and response header and MDC
+    // Add request ID to request and response header and ThreadContext
     mutableRequest.putHeader(X_REQUEST_ID_HEADER, requestId);
     response.getHeaders().add(X_REQUEST_ID_HEADER, requestId);
-    MDC.put("requestId", requestId);
+    ThreadContext.put("requestId", requestId);
   }
 
   protected void addXForwardedForToRequest(MutableRequest mutableRequest,
