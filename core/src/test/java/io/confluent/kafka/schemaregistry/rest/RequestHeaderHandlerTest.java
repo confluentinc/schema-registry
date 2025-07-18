@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 
+import org.apache.logging.log4j.ThreadContext;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Response;
@@ -30,9 +31,7 @@ import java.util.Collections;
 import java.util.UUID;
 
 import org.mockito.Mock;
-import org.mockito.ArgumentCaptor;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.slf4j.MDC;
 
 import static io.confluent.kafka.schemaregistry.client.rest.RestService.X_FORWARD_HEADER;
 import static org.mockito.Mockito.doReturn;
@@ -56,7 +55,7 @@ public class RequestHeaderHandlerTest {
   @Before
   public void setup(){
     reset(request, response);
-    MDC.clear();
+    ThreadContext.clearAll();
   }
 
   @Test
@@ -64,69 +63,70 @@ public class RequestHeaderHandlerTest {
     RequestHeaderHandler requestHeaderHandlerSpy = spy(new RequestHeaderHandler());
     HttpFields.Mutable headers = HttpFields.build().add(RequestHeaderHandler.X_REQUEST_ID_HEADER, "request-ID-4329");
     when(request.getHeaders()).thenReturn(headers);
-    headers = HttpFields.build();
-    when(response.getHeaders()).thenReturn(headers);
+    HttpFields.Mutable responseHeaders = HttpFields.build();
+    when(response.getHeaders()).thenReturn(responseHeaders);
     doReturn("127.0.0.1").when(requestHeaderHandlerSpy).getRemoteAddr(request);
 
     requestHeaderHandlerSpy.handle(request, response, callback);
 
     verify(requestHeaderHandlerSpy, times(1)).getRequestId(Collections.singletonList("request-ID-4329"));
     verify(request, times(2)).getHeaders();
-    //verify(response, times(1)).setHeader(RequestHeaderHandler.X_REQUEST_ID_HEADER, "request-ID-4329");
+    verify(response, times(1)).getHeaders();
 
-    // Validate that the MDC.requestId was set
-    Assert.assertEquals("request-ID-4329", MDC.get("requestId"));
+    // Verify that the request ID was added to the response headers
+    String responseRequestId = responseHeaders.get(RequestHeaderHandler.X_REQUEST_ID_HEADER);
+    Assert.assertEquals("request-ID-4329", responseRequestId);
+
+    // Validate that the ThreadContext.requestId was set
+    Assert.assertEquals("request-ID-4329", ThreadContext.get("requestId"));
   }
 
   @Test
   public void testRequestHandlerWithoutRequestId() throws Exception {
-    ArgumentCaptor<String> requestIdCaptor = ArgumentCaptor.forClass(String.class);;
-
     RequestHeaderHandler requestHeaderHandlerSpy = spy(new RequestHeaderHandler());
     HttpFields.Mutable headers = HttpFields.build();
     when(request.getHeaders()).thenReturn(headers);
-    when(response.getHeaders()).thenReturn(headers);
+    HttpFields.Mutable responseHeaders = HttpFields.build();
+    when(response.getHeaders()).thenReturn(responseHeaders);
     doReturn("127.0.0.1").when(requestHeaderHandlerSpy).getRemoteAddr(request);
 
     requestHeaderHandlerSpy.handle(request, response, callback);
 
     verify(requestHeaderHandlerSpy, times(1)).getRequestId(Collections.emptyList());
     verify(request, times(2)).getHeaders();
-    //verify(response, times(1)).setHeader(eq(RequestHeaderHandler.X_REQUEST_ID_HEADER), requestIdCaptor.capture());
+    verify(response, times(1)).getHeaders();
 
-    /*
-    String generatedRequestId = requestIdCaptor.getValue();
-    // Validate that the MDC.requestId was set
-    Assert.assertEquals(generatedRequestId, MDC.get("requestId"));
+    // Verify that a request ID was added to the response headers
+    String generatedRequestId = responseHeaders.get(RequestHeaderHandler.X_REQUEST_ID_HEADER);
+    Assert.assertNotNull("Request ID should be added to response headers", generatedRequestId);
+    // Validate that the ThreadContext.requestId was set
+    Assert.assertEquals(generatedRequestId, ThreadContext.get("requestId"));
     validateUuid(generatedRequestId);
-    */
   }
 
   @Test
   public void testRequestHandlerWithMultipleRequestId() throws Exception {
-    ArgumentCaptor<String> requestIdCaptor = ArgumentCaptor.forClass(String.class);;
-
     RequestHeaderHandler requestHeaderHandlerSpy = spy(new RequestHeaderHandler());
     HttpFields.Mutable headers = HttpFields.build()
         .add(RequestHeaderHandler.X_REQUEST_ID_HEADER, "request-ID6")
         .add(RequestHeaderHandler.X_REQUEST_ID_HEADER, "request-ID4");
     when(request.getHeaders()).thenReturn(headers);
-    headers = HttpFields.build();
-    when(response.getHeaders()).thenReturn(headers);
+    HttpFields.Mutable responseHeaders = HttpFields.build();
+    when(response.getHeaders()).thenReturn(responseHeaders);
     doReturn("127.0.0.1").when(requestHeaderHandlerSpy).getRemoteAddr(request);
 
     requestHeaderHandlerSpy.handle(request, response, callback);
 
     verify(requestHeaderHandlerSpy, times(1)).getRequestId(Arrays.asList("request-ID6", "request-ID4"));
     verify(request, times(2)).getHeaders();
-    //verify(response, times(1)).setHeader(eq(RequestHeaderHandler.X_REQUEST_ID_HEADER), requestIdCaptor.capture());
+    verify(response, times(1)).getHeaders();
 
-    /*
-    String generatedRequestId = requestIdCaptor.getValue();
-    // Validate that the MDC.requestId was set
-    Assert.assertEquals(generatedRequestId, MDC.get("requestId"));
+    // Verify that a request ID was added to the response headers
+    String generatedRequestId = responseHeaders.get(RequestHeaderHandler.X_REQUEST_ID_HEADER);
+    Assert.assertNotNull("Request ID should be added to response headers", generatedRequestId);
+    // Validate that the ThreadContext.requestId was set
+    Assert.assertEquals(generatedRequestId, ThreadContext.get("requestId"));
     validateUuid(generatedRequestId);
-    */
   }
 
   @Test
@@ -135,19 +135,24 @@ public class RequestHeaderHandlerTest {
 
     HttpFields.Mutable headers = HttpFields.build().add(RequestHeaderHandler.X_REQUEST_ID_HEADER, "request-ID-4329");
     when(request.getHeaders()).thenReturn(headers);
-    headers = HttpFields.build();
-    when(response.getHeaders()).thenReturn(headers);
+    HttpFields.Mutable responseHeaders = HttpFields.build();
+    when(response.getHeaders()).thenReturn(responseHeaders);
 
     RequestHeaderHandler requestHeaderHandler = new RequestHeaderHandler();
     requestHeaderHandler.addXRequestIdToRequest(mutableRequest, response);
 
     verify(request, times(1)).getHeaders();
-    //verify(response, times(1)).setHeader(RequestHeaderHandler.X_REQUEST_ID_HEADER, "request-ID-4329");
+    verify(response, times(1)).getHeaders();
+    
+    // Verify that the request ID was added to the response headers
+    String responseRequestId = responseHeaders.get(RequestHeaderHandler.X_REQUEST_ID_HEADER);
+    Assert.assertEquals("request-ID-4329", responseRequestId);
+    
     String requestId = mutableRequest.getHeader(RequestHeaderHandler.X_REQUEST_ID_HEADER);
     Assert.assertEquals("request-ID-4329", requestId);
 
-    // Validate that the MDC.requestId was set
-    Assert.assertEquals("request-ID-4329", MDC.get("requestId"));
+    // Validate that the ThreadContext.requestId was set
+    Assert.assertEquals("request-ID-4329", ThreadContext.get("requestId"));
   }
 
   @Test
