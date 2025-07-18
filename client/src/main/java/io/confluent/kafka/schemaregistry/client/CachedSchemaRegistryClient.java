@@ -776,6 +776,16 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
+  public String getGuid(String subject, ParsedSchema schema) throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  public String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponse(subject, schema, normalize).getGuid();
+  }
+
   @Override
   public RegisterSchemaResponse getIdWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
