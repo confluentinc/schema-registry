@@ -288,10 +288,10 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static boolean isGlobalContext(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    if (qs == null) {
+    if (qs == null || qs.getContext() == null) {
       return false;
     }
-    return qs.getContext().equals(GLOBAL_CONTEXT_NAME) && qs.getSubject().isEmpty();
+    return qs.getContext().equals(GLOBAL_CONTEXT_NAME) && (qs.getSubject().isEmpty() || qs.getSubject() == null);
   }
 
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
