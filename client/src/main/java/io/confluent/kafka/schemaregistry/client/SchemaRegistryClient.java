@@ -314,7 +314,8 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
-  default String getGuid(String subject, ParsedSchema schema) throws IOException, RestClientException {
+  default String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
     return getGuid(subject, schema, false);
   }
 
