@@ -196,6 +196,8 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("subject1", dek.getSubject());
         assertEquals("kekName1", dek.getKekName());
         assertEquals(KeyType.DEK, dek.getType());
+        // Key material should be populated since KEK is shared.
+        assertNotNull(dek.getKeyMaterial());
     }
 
     @Test
@@ -216,6 +218,8 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("kekName1", dek.getKekName());
         assertEquals(KeyType.DEK, dek.getType());
         assertEquals(2, dek.getVersion());
+        // Key material should be populated since KEK is shared.
+        assertNotNull(dek.getKeyMaterial());
     }
 
     @Test
