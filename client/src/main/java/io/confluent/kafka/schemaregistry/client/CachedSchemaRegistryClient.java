@@ -75,6 +75,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
   private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
   private final Map<String, ParsedSchema> guidToSchemaCache;
+  private final Map<String, Map<ParsedSchema, String>> schemaToGuidCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
   private final Map<String, Map<Integer, Schema>> versionToSchemaCache;
   private final Cache<String, SchemaMetadata> latestVersionCache;
@@ -211,6 +212,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     this.schemaToResponseCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.schemaToIdCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.idToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaToGuidCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.guidToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.schemaToVersionCache = new BoundedConcurrentHashMap<>(cacheCapacity);
     this.versionToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
@@ -437,6 +439,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private int getIdFromRegistry(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     return getIdWithResponseFromRegistry(subject, schema, normalize, false).getId();
+  }
+
+  private String getGuidFromRegistry(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponseFromRegistry(subject, schema, normalize, false).getGuid();
   }
 
   private RegisterSchemaResponse getIdWithResponseFromRegistry(
@@ -773,6 +780,34 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           context, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
       idSchemaMap.put(retrievedId, schema);
       return retrievedId;
+    }
+  }
+
+  public String getGuid(String subject, ParsedSchema schema) throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  public String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    final Map<ParsedSchema, String> guidMap = schemaToGuidCache.computeIfAbsent(
+        subject, k -> new BoundedConcurrentHashMap<>(cacheCapacity));
+
+    String cachedGuid = guidMap.get(schema);
+    if (cachedGuid != null) {
+      return cachedGuid;
+    }
+
+    synchronized (this) {
+      cachedGuid = guidMap.get(schema);
+      if (cachedGuid != null) {
+        return cachedGuid;
+      }
+
+      final String retrievedGuid = getGuidFromRegistry(subject, schema, normalize);
+      guidMap.put(schema, retrievedGuid);
+      guidToSchemaCache.put(retrievedGuid, schema);
+      return retrievedGuid;
     }
   }
 
