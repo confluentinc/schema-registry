@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
