@@ -783,7 +783,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  public String getGuid(String subject, ParsedSchema schema) throws IOException, RestClientException {
+  public String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
     return getGuid(subject, schema, false);
   }
 

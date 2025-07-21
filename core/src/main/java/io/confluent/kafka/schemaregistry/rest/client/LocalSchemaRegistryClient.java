@@ -534,7 +534,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     return getIdWithResponse(subject, schema, normalize).getId();
   }
 
-  public String getGuid(String subject, ParsedSchema schema) throws IOException, RestClientException {
+  public String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
     return getGuid(subject, schema, false);
   }
 
