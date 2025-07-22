@@ -38,6 +38,7 @@ import io.confluent.rest.exceptions.RestConstraintViolationException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 public class RestApiModeTest extends ClusterTestHarness {
@@ -1047,9 +1048,13 @@ public class RestApiModeTest extends ClusterTestHarness {
       assertEquals(42204, e.getErrorCode());
       assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
     }
-    assertEquals(
-            mode,
-            restApp.restClient.setMode(mode).getMode());
+
+    try {
+      restApp.restClient.setMode(mode).getMode();
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
   }
 
   @Test
@@ -1065,6 +1070,14 @@ public class RestApiModeTest extends ClusterTestHarness {
       assertEquals(42204, e.getErrorCode());
       assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
     }
+
+    try {
+      restApp.restClient.setMode(mode, CONTEXT_DELIMITER + DEFAULT_CONTEXT);
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+
     try {
       restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + ":subject-name");
     } catch (RestClientException e) {
