@@ -35,7 +35,6 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
-//import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
