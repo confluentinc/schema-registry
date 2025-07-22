@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import org.junit.Test;
 
 import java.util.Collections;
 
@@ -28,9 +27,10 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RestApiModeTest extends ClusterTestHarness {
 
@@ -112,9 +112,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering during read-only mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 
@@ -134,15 +136,19 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
   }
 
   @Test
@@ -157,9 +163,11 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register a valid avro schema
     int expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
   }
 
   @Test
@@ -178,9 +186,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering a schema without ID should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 
@@ -211,18 +221,22 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register a valid avro schema
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     try {
       restApp.restClient.setMode(mode).getMode();
       fail("Setting import mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
 
     // set subject mode to import with force=true
@@ -256,14 +270,18 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
     // register same schema with no id
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
   }
 
   @Test
@@ -277,9 +295,11 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -293,9 +313,11 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register same schema with different id
     expectedIdSchema1 = 2;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
   }
 
   @Test
@@ -309,9 +331,11 @@ public class RestApiModeTest extends ClusterTestHarness {
             restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -325,22 +349,28 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register same schema with same id
     expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
     // delete subject again
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
 
     // register same schema with same id
     expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
-            SCHEMA_STRING,
-            restApp.restClient.getVersion(subject, 1).getSchema());
+    assertEquals(
+        SCHEMA_STRING,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -354,9 +384,11 @@ public class RestApiModeTest extends ClusterTestHarness {
             restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -375,13 +407,17 @@ public class RestApiModeTest extends ClusterTestHarness {
     request.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
     request.setVersion(1);
     request.setId(expectedIdSchema1);
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_STRING,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
 
     // delete subject again
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -393,13 +429,17 @@ public class RestApiModeTest extends ClusterTestHarness {
     request.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
     request.setVersion(1);
     request.setId(expectedIdSchema1);
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_STRING,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -413,23 +453,31 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
 
     // register equivalent schema with different id
     expectedIdSchema1 = 200;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL2, subject, 2, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL2, subject, 2, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL2,
-        restApp.restClient.getVersion(subject, 2).getSchema());
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -443,23 +491,31 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
 
     // register equivalent schema with different id
     expectedIdSchema1 = 200;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
-        restApp.restClient.getVersion(subject, 2).getSchema());
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -516,9 +572,11 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -532,19 +590,25 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register same schema with same id
     expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
     // register same schema with same id
     expectedIdSchema1 = 2;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA2_STRING, subject, 2, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA2_STRING, subject, 2, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA2_STRING,
-        restApp.restClient.getVersion(subject, 2).getSchema());
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -566,9 +630,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering during read-only mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 

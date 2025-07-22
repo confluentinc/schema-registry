@@ -69,6 +69,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
   private final Map<String, Map<ParsedSchema, Integer>> registeredSchemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
+  private final Map<String, ParsedSchema> guidToSchemaCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
   private final Map<String, Config> configCache;
   private final Map<String, String> modes;
@@ -85,6 +86,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     schemaToIdCache = new ConcurrentHashMap<>();
     registeredSchemaCache = new ConcurrentHashMap<>();
     idToSchemaCache = new ConcurrentHashMap<>();
+    guidToSchemaCache = new ConcurrentHashMap<>();
     schemaToVersionCache = new ConcurrentHashMap<>();
     configCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
@@ -250,13 +252,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
     Integer schemaId = schemaIdMap.get(schema);
     if (schemaId != null && (id < 0 || id == schemaId)) {
-      return new RegisterSchemaResponse(schemaId);
+      return new RegisterSchemaResponse(new Schema(subject, version, schemaId, schema));
     }
 
     synchronized (this) {
       schemaId = schemaIdMap.get(schema);
       if (schemaId != null && (id < 0 || id == schemaId)) {
-        return new RegisterSchemaResponse(schemaId);
+        return new RegisterSchemaResponse(new Schema(subject, version, schemaId, schema));
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
@@ -265,7 +267,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      return new RegisterSchemaResponse(retrievedId);
+      Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
+      guidToSchemaCache.put(schemaEntity.getGuid(), schema);
+      return new RegisterSchemaResponse(schemaEntity);
     }
   }
 
@@ -299,6 +303,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap.put(id, retrievedSchema);
       return retrievedSchema;
     }
+  }
+
+  @Override
+  public ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    return guidToSchemaCache.get(guid);
   }
 
   private Stream<ParsedSchema> getSchemasForSubject(
@@ -552,6 +562,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    return getIdWithResponse(subject, schema, normalize).getId();
+  }
+
+  @Override
+  public RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
     if (normalize) {
       schema = schema.normalize();
     }
@@ -560,13 +577,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
     Integer schemaId = schemaIdMap.get(schema);
     if (schemaId != null) {
-      return schemaId;
+      Schema schemaEntity = new Schema(subject, null, schemaId, schema);
+      return new RegisterSchemaResponse(schemaEntity);
     }
 
     synchronized (this) {
       schemaId = schemaIdMap.get(schema);
       if (schemaId != null) {
-        return schemaId;
+        Schema schemaEntity = new Schema(subject, null, schemaId, schema);
+        return new RegisterSchemaResponse(schemaEntity);
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
@@ -575,7 +594,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      return retrievedId;
+      Schema schemaEntity = new Schema(subject, null, retrievedId, schema);
+      return new RegisterSchemaResponse(schemaEntity);
     }
   }
 
@@ -742,6 +762,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     schemaToIdCache.clear();
     registeredSchemaCache.clear();
     idToSchemaCache.clear();
+    guidToSchemaCache.clear();
     schemaToVersionCache.clear();
     configCache.clear();
     modes.clear();

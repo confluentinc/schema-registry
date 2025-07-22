@@ -23,6 +23,7 @@ import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto.Type;
 import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.EditionDefault;
+import com.google.protobuf.DescriptorProtos.FieldOptions.FeatureSupport;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
@@ -203,6 +204,14 @@ public class FieldDefinition {
       DescriptorProtos.FieldOptions.Builder optionsBuilder =
           DescriptorProtos.FieldOptions.newBuilder();
       optionsBuilder.setFeatures(features);
+      mFieldTypeBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    public Builder setFeatureSupport(FeatureSupport featureSupport) {
+      DescriptorProtos.FieldOptions.Builder optionsBuilder =
+          DescriptorProtos.FieldOptions.newBuilder();
+      optionsBuilder.setFeatureSupport(featureSupport);
       mFieldTypeBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }

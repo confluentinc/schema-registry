@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.HttpHeaders;
 
 import io.confluent.kafka.schemaregistry.rest.resources.RequestHeaderBuilder;
 
