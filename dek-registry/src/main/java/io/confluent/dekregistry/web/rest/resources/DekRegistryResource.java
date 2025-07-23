@@ -385,14 +385,17 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "The create request", required = true)
       @NotNull CreateDekRequest request) {
 
-    log.debug("Creating dek {} for kek {}", request.getSubject(), kekName);
 
-    if (!subject.equals(request.getSubject())) {
+    log.debug("Creating dek {} for kek {}", subject, kekName);
+
+    if (request.getSubject() != null
+        && !request.getSubject().isEmpty()
+        && !subject.equals(request.getSubject())) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo("subject");
     }
 
     checkName(kekName);
-    checkSubject(request.getSubject());
+    checkSubject(subject);
 
     KeyEncryptionKey kek = dekRegistry.getKek(kekName, request.isDeleted());
     if (kek == null) {
