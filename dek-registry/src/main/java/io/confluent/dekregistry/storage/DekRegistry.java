@@ -592,8 +592,8 @@ public class DekRegistry implements Closeable {
     RestService leaderRestService = schemaRegistry.leaderRestService();
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks");
-    String path = builder.build(kekName).toString();
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
+    String path = builder.build(kekName, request.getSubject()).toString();
 
     log.debug(String.format("Forwarding create key request to %s", baseUrl));
     try {
