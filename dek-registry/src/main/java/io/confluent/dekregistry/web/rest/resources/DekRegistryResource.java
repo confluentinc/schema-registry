@@ -337,6 +337,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
     }
   }
 
+  // The following method is deprecated in favor of the API that takes subject as a path parameter.
+  @Deprecated
   @POST
   @Path("/{name}/deks")
   @Operation(summary = "Create a dek.", responses = {
@@ -357,8 +359,37 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @PathParam("name") String kekName,
       @Parameter(description = "The create request", required = true)
       @NotNull CreateDekRequest request) {
+    createDekWithSubject(asyncResponse, headers, kekName, request.getSubject(), request);
+  }
+
+  @POST
+  @Path("/{name}/deks/{subject}")
+  @Operation(summary = "Create a dek.", responses = {
+      @ApiResponse(responseCode = "200", description = "The create response",
+          content = @Content(schema = @Schema(implementation = Dek.class))),
+      @ApiResponse(responseCode = "409", description = "Conflict. "
+          + "Error code 40971 -- Key already exists. "
+          + "Error code 40972 -- Too many keys."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
+  })
+  @PerformanceMetric("deks.create")
+  @DocumentedName("registerDekWithSubject")
+  public void createDekWithSubject(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName,
+      @Parameter(description = "Subject of the dek", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "The create request", required = true)
+      @NotNull CreateDekRequest request) {
 
     log.debug("Creating dek {} for kek {}", request.getSubject(), kekName);
+
+    if (!subject.equals(request.getSubject())) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("subject");
+    }
 
     checkName(kekName);
     checkSubject(request.getSubject());
