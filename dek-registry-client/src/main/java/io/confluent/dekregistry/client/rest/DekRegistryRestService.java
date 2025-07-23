@@ -264,8 +264,8 @@ public class DekRegistryRestService extends RestService implements Configurable 
       String kekName,
       CreateDekRequest request)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks");
-    String path = builder.build(kekName).toString();
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
+    String path = builder.build(kekName, request.getSubject()).toString();
 
     return httpRequest(
         path, "POST",
