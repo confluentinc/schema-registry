@@ -313,9 +313,13 @@ public class CachedSchemaRegistryClientTest {
     // Expect only one call to getId (the rest should hit the cache)
 
     SchemaString result = new SchemaString(SCHEMA_STR_0);
-    String guid = new Schema(null, null, null, result).getGuid();
+    String guid = new Schema(SUBJECT_0, 1, ID_25, result).getGuid();
     expect(restService.getByGuid(guid, null)).andReturn(result);
 
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, 1, ID_25, result))
+        .once();
     replay(restService);
 
     assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
@@ -327,6 +331,9 @@ public class CachedSchemaRegistryClientTest {
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
     ); // hit the cache
+
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0)); // Hit cache
 
     verify(restService);
   }
