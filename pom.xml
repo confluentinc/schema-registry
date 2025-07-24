@@ -73,8 +73,8 @@
     </modules>
 
     <properties>
-        <apache.directory.server.version>2.0.0.AM26</apache.directory.server.version>
-        <apache.directory.api.version>2.0.0.AM26</apache.directory.api.version>
+        <apache.directory.server.version>2.0.0.AM27</apache.directory.server.version>
+        <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
         <podam.version>6.0.2.RELEASE</podam.version>
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
