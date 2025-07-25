@@ -36,6 +36,8 @@ public class SchemaString {
   private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
+  private Metadata metadata = null;
+  private RuleSet ruleSet = null;
   private Integer maxId;
 
   public SchemaString() {
@@ -50,6 +52,8 @@ public class SchemaString {
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
+    this.metadata = schema.getMetadata();
+    this.ruleSet = schema.getRuleSet();
   }
 
   public static SchemaString fromJson(String json) throws IOException {
@@ -92,6 +96,29 @@ public class SchemaString {
     this.references = references;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.METADATA_DESC)
+  @JsonProperty("metadata")
+  public Metadata getMetadata() {
+    return this.metadata;
+  }
+
+  @JsonProperty("metadata")
+  public void setMetadata(Metadata metadata) {
+    this.metadata = metadata;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.RULESET_DESC)
+  @JsonProperty("ruleSet")
+  public RuleSet getRuleSet() {
+    return this.ruleSet;
+  }
+
+  @JsonProperty("ruleSet")
+  public void setRuleSet(RuleSet ruleSet) {
+    this.ruleSet = ruleSet;
+  }
+
+
   @io.swagger.v3.oas.annotations.media.Schema(description = "Maximum ID", example = "1")
   @JsonProperty("maxId")
   public Integer getMaxId() {
@@ -119,11 +146,13 @@ public class SchemaString {
     return Objects.equals(schemaType, that.schemaType)
         && Objects.equals(schemaString, that.schemaString)
         && Objects.equals(references, that.references)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet)
         && Objects.equals(maxId, that.maxId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, schemaString, references, maxId);
+    return Objects.hash(schemaType, schemaString, references, metadata, ruleSet, maxId);
   }
 }

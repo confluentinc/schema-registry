@@ -64,6 +64,7 @@ public class Errors {
   public static final int ID_DOES_NOT_MATCH_ERROR_CODE = 42207;
   public static final int INVALID_SUBJECT_ERROR_CODE = 42208;
   public static final int SCHEMA_TOO_LARGE_ERROR_CODE = 42209;
+  public static final int INVALID_RULESET_ERROR_CODE = 42210;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;

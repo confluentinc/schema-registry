@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -38,6 +39,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,6 +108,8 @@ public class SubjectsResource {
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to normalize the given schema")
       @QueryParam("normalize") boolean normalize,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to lookup deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Schema", required = true)
@@ -119,6 +123,9 @@ public class SubjectsResource {
     Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
     try {
+      if (!normalize) {
+        normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
+      }
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
           subject, schema, normalize, lookupDeletedSchema);
       if (matchingSchema == null) {
@@ -128,11 +135,74 @@ public class SubjectsResource {
           throw Errors.schemaNotFoundException();
         }
       }
+      if (format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        matchingSchema.setSchema(parsedSchema.formattedString(format));
+      }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
                                            e);
+    }
+    asyncResponse.resume(matchingSchema);
+  }
+
+  @GET
+  @DocumentedName("getLatestWithMetadata")
+  @Path("/{subject}/metadata")
+  @Operation(summary = "Retrieve the latest version with the given metadata.",
+      description = "Retrieve the latest version with the given metadata.",
+      responses = {
+          @ApiResponse(responseCode = "200", description = "The schema", content = @Content(schema =
+          @io.swagger.v3.oas.annotations.media.Schema(implementation = Schema.class))),
+          @ApiResponse(responseCode = "404", description = "Error code 40401 -- Subject not found\n"
+              + "Error code 40403 -- Schema not found"),
+          @ApiResponse(responseCode = "500", description = "Internal server error")
+      })
+  @PerformanceMetric("subjects.get-latest-with-metadata")
+  public void getLatestWithMetadata(
+      final @Suspended AsyncResponse asyncResponse,
+      @Parameter(description = "Subject under which the schema will be registered", required = true)
+      @PathParam("subject") String subject,
+      @Parameter(description = "The metadata key")
+      @QueryParam("key") List<String> keys,
+      @Parameter(description = "The metadata value")
+      @QueryParam("value") List<String> values,
+      @Parameter(description = "Desired output format, dependent on schema type")
+      @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Whether to lookup deleted schemas")
+      @QueryParam("deleted") boolean lookupDeletedSchema) {
+    log.info("Latest with metadata under subject {}, keys {}, values {}, deleted {}",
+        subject, keys, values, lookupDeletedSchema);
+
+    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
+    // returns version if the schema exists. Otherwise returns 404
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
+    Map<String, String> metadata = new HashMap<>();
+    for (int i = 0; i < Math.min(keys.size(), values.size()); i++) {
+      metadata.put(keys.get(i), values.get(i));
+    }
+    try {
+      matchingSchema = schemaRegistry.getLatestWithMetadata(
+          subject, metadata, lookupDeletedSchema);
+      if (matchingSchema == null) {
+        if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.schemaNotFoundException();
+        }
+      }
+      if (format != null && !format.trim().isEmpty()) {
+        ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        matchingSchema.setSchema(parsedSchema.formattedString(format));
+      }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
+          e);
     }
     asyncResponse.resume(matchingSchema);
   }

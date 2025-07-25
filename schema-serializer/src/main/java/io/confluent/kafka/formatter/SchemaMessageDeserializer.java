@@ -16,7 +16,10 @@
 
 package io.confluent.kafka.formatter;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import java.util.Map;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.Closeable;
@@ -24,11 +27,16 @@ import java.io.IOException;
 
 public interface SchemaMessageDeserializer<T> extends Closeable {
 
+  void configure(Map<String, ?> configs, boolean isKey);
+
   Deserializer getKeyDeserializer();
 
-  Object deserializeKey(String topic, byte[] payload);
+  Object deserializeKey(String topic, Headers headers, byte[] payload);
 
-  T deserialize(String topic, byte[] payload) throws SerializationException;
+  T deserialize(String topic, Boolean isKey, Headers headers, byte[] payload)
+      throws SerializationException;
+
+  SchemaRegistryClient getSchemaRegistryClient();
 
   @Override
   default void close() throws IOException {}

@@ -129,7 +129,7 @@ public class TestUtils {
         AvroSchema.TYPE,
         references,
         subject
-    );
+    ).getId();
     assertEquals("Registering a new schema should succeed", expectedId, registeredId);
 
     // the newly registered schema should be immediately readable on the leader

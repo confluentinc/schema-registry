@@ -18,7 +18,10 @@ package io.confluent.kafka.schemaregistry.client;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -199,6 +202,43 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
     id = client.getId("test2", schema2);
     assertEquals(2, id);
+  }
+
+  @Test
+  public void testGetAllVersionsById() throws Exception {
+    AvroSchema avroSchema = new AvroSchema("{\"type\":\"record\",\"name\":\"ts1\","
+        + "\"fields\":[{\"name\": \"fld1\",\"type\": \"int\"}]}");
+    MockSchemaRegistryClient client =
+        new MockSchemaRegistryClient(Collections.singletonList(new AvroSchemaProvider()));
+    int id = client.register("test-value", avroSchema);
+    Collection<SubjectVersion> versions = client.getAllVersionsById(id);
+    assertEquals(new SubjectVersion("test-value", 1), versions.iterator().next());
+  }
+
+  @Test
+  public void testGetAllContexts() throws Exception {
+    AvroSchema avroSchema = new AvroSchema("{\"type\":\"record\",\"name\":\"ts1\","
+        + "\"fields\":[{\"name\": \"fld1\",\"type\": \"int\"}]}");
+    MockSchemaRegistryClient client =
+        new MockSchemaRegistryClient(Collections.singletonList(new AvroSchemaProvider()));
+    int id = client.register(":.context2:test-value", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register(":.context1:test-value", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register(":.context1:test-value2", avroSchema);
+    assertEquals(1, id);
+
+    id = client.register("test-value", avroSchema);
+    id = client.register("test-value", avroSchema);
+    assertEquals(1, id);
+
+    Collection<String> contexts = client.getAllContexts();
+    Iterator<String> iter = contexts.iterator();
+    assertEquals(".", iter.next());
+    assertEquals(".context1", iter.next());
+    assertEquals(".context2", iter.next());
   }
 }
 

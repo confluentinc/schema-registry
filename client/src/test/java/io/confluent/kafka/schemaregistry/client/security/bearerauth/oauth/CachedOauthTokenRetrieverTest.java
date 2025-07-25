@@ -25,10 +25,10 @@ import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.except
 import java.io.IOException;
 import java.util.Collections;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.secured.BasicOAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

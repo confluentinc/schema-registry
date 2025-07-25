@@ -17,6 +17,7 @@
 package io.confluent.kafka.streams.serdes.avro;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
@@ -60,10 +61,15 @@ public class SpecificAvroDeserializer<T extends org.apache.avro.specific.Specifi
         isDeserializerForRecordKeys);
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public T deserialize(final String topic, final byte[] bytes) {
-    return (T) inner.deserialize(topic, bytes);
+    return deserialize(topic, null, bytes);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public T deserialize(final String topic, final Headers headers, final byte[] bytes) {
+    return (T) inner.deserialize(topic, headers, bytes);
   }
 
   @Override
