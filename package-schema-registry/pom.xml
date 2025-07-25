@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.3-0</version>
+        <version>8.0.1-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry-package</artifactId>
@@ -16,11 +16,6 @@
 
     <!-- Dependencies are required only to ensure this module is built last. -->
     <dependencies>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-reload4j</artifactId>
-            <scope>compile</scope>
-        </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>logredactor</artifactId>

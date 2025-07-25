@@ -34,21 +34,23 @@ public class ExtendedSchema extends Schema {
 
   @JsonCreator
   public ExtendedSchema(@JsonProperty("subject") String subject,
-                @JsonProperty("version") Integer version,
-                @JsonProperty("id") Integer id,
-                @JsonProperty("schemaType") String schemaType,
-                @JsonProperty("references") List<SchemaReference> references,
-                @JsonProperty("metadata") Metadata metadata,
-                @JsonProperty("ruleset") RuleSet ruleSet,
-                @JsonProperty("schema") String schema,
-                @JsonProperty("aliases") List<String> aliases) {
-    super(subject, version, id, schemaType, references, metadata, ruleSet, schema);
+      @JsonProperty("version") Integer version,
+      @JsonProperty("id") Integer id,
+      @JsonProperty("guid") String guid,
+      @JsonProperty("schemaType") String schemaType,
+      @JsonProperty("references") List<SchemaReference> references,
+      @JsonProperty("metadata") Metadata metadata,
+      @JsonProperty("ruleset") RuleSet ruleSet,
+      @JsonProperty("schema") String schema,
+      @JsonProperty("aliases") List<String> aliases) {
+    super(subject, version, id, guid, schemaType, references, metadata, ruleSet, schema);
     this.aliases = aliases;
   }
 
   public ExtendedSchema(Schema schema, List<String> aliases) {
-    super(schema.getSubject(), schema.getVersion(), schema.getId(), schema.getSchemaType(),
-        schema.getReferences(), schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
+    super(schema.getSubject(), schema.getVersion(), schema.getId(), schema.getGuid(),
+        schema.getSchemaType(), schema.getReferences(), schema.getMetadata(), schema.getRuleSet(),
+        schema.getSchema());
     this.aliases = aliases;
   }
 
@@ -93,6 +95,7 @@ public class ExtendedSchema extends Schema {
     sb.append("{subject=" + getSubject() + ",");
     sb.append("version=" + getVersion() + ",");
     sb.append("id=" + getId() + ",");
+    sb.append("guid=" + getGuid() + ",");
     sb.append("schemaType=" + getSchemaType() + ",");
     sb.append("references=" + getReferences() + ",");
     sb.append("metadata=" + getMetadata() + ",");

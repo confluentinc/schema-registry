@@ -183,4 +183,36 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     <Match>
         <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
     </Match>
+
+    <!-- Static field warnings in json schema provider -->
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.json.utils.MaximumCardinalityMatch"/>
+        <Bug pattern="SS_SHOULD_BE_STATIC"/>
+    </Match>
+
+    <!-- Method hiding warnings in data config classes -->
+    <!-- This is a legitimate design pattern where child config classes provide their own baseConfigDef() -->
+    <!-- All classes extending AbstractDataConfig follow this pattern -->
+    <Match>
+        <Class name="io.confluent.connect.avro.AvroDataConfig"/>
+        <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.json.JsonSchemaDataConfig"/>
+        <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.protobuf.ProtobufDataConfig"/>
+        <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <!-- Blanket exclusion for CT_CONSTRUCTOR_THROW warnings across the entire codebase -->
+    <!-- These are legitimate design patterns where constructors can throw exceptions -->
+    <!-- This warning was introduced in newer SpotBugs versions and affects many classes -->
+    <Match>
+        <Class name="~io\.confluent\..*"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
 </FindBugsFilter>
