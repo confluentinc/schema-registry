@@ -97,6 +97,9 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
+                        <excludes>
+                            <exclude>src/main/java/io/confluent/kafka/schemaregistry/protobuf/dynamic/*.java</exclude>
+                        </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/ccl-header.txt</file>
                         </licenseHeader>
