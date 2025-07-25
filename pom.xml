@@ -107,7 +107,7 @@
         <swagger.version>2.1.10</swagger.version>
         <io.confluent.schema-registry.version>7.7.5-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
-        <commons.lang3.version>3.17.0</commons.lang3.version>
+        <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
         <snappy.version>1.1.10.5</snappy.version>
         <spotless.maven.plugin.version>2.30.0</spotless.maven.plugin.version>
