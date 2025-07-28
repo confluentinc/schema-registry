@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import kotlin.Pair;
 
 public class Context {
   private final Set<Difference.Type> compatibleChanges;
@@ -229,11 +230,26 @@ public class Context {
   }
 
   public <T> String resolve(Resolver<T> resolver, String name, boolean isOriginal) {
+    Pair<String, T> entry = resolveFull(resolver, name, isOriginal);
+    return entry != null ? entry.getFirst() : null;
+  }
+
+  public <T> Pair<String, T> resolveFull(
+      Resolver<T> resolver, String name, boolean isOriginal) {
+    if (isOriginal) {
+      if (originalTypes.isEmpty()) {
+        return null;
+      }
+    } else {
+      if (updateTypes.isEmpty()) {
+        return null;
+      }
+    }
     if (name.startsWith(".")) {
       String n = name.substring(1);
       T elem = resolver.resolve(n, isOriginal);
       if (elem != null) {
-        return n;
+        return new Pair<>(n, elem);
       }
     } else {
       Deque<String> prefix = new ArrayDeque<>();
@@ -253,13 +269,13 @@ public class Context {
         String n = String.join(".", prefix) + "." + name;
         T elem = resolver.resolve(n, isOriginal);
         if (elem != null) {
-          return n;
+          return new Pair<>(n, elem);
         }
         prefix.removeLast();
       }
       T elem = resolver.resolve(name, isOriginal);
       if (elem != null) {
-        return name;
+        return new Pair<>(name, elem);
       }
     }
     return null;
@@ -324,6 +340,7 @@ public class Context {
       fullPath.addLast(path);
     }
 
+    @Override
     public void close() {
       fullPath.removeLast();
     }
@@ -335,6 +352,7 @@ public class Context {
       fullName.addLast(name);
     }
 
+    @Override
     public void close() {
       fullName.removeLast();
       super.close();
@@ -349,6 +367,7 @@ public class Context {
       schemas.add(schema);
     }
 
+    @Override
     public void close() {
       schemas.remove(schema);
     }

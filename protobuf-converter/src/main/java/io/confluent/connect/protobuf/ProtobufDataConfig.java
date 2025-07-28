@@ -68,6 +68,10 @@ public class ProtobufDataConfig extends AbstractDataConfig {
   public static final String GENERATE_INDEX_FOR_UNIONS_DOC = "Whether to suffix union"
       + "names with an underscore followed by an index";
 
+  public static final String FLATTEN_UNIONS_CONFIG = "flatten.unions";
+  public static final boolean FLATTEN_UNIONS_DEFAULT = false;
+  public static final String FLATTEN_UNIONS_DOC = "Whether to flatten unions (oneofs)";
+
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef()
         .define(ENHANCED_PROTOBUF_SCHEMA_SUPPORT_CONFIG,
@@ -111,7 +115,12 @@ public class ProtobufDataConfig extends AbstractDataConfig {
             ConfigDef.Type.BOOLEAN,
             GENERATE_INDEX_FOR_UNIONS_DEFAULT,
             ConfigDef.Importance.LOW,
-            GENERATE_INDEX_FOR_UNIONS_DOC
+            GENERATE_INDEX_FOR_UNIONS_DOC)
+        .define(FLATTEN_UNIONS_CONFIG,
+            ConfigDef.Type.BOOLEAN,
+            FLATTEN_UNIONS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            FLATTEN_UNIONS_DOC
         );
   }
 
@@ -153,6 +162,10 @@ public class ProtobufDataConfig extends AbstractDataConfig {
 
   public boolean generateIndexForUnions() {
     return this.getBoolean(GENERATE_INDEX_FOR_UNIONS_CONFIG);
+  }
+
+  public boolean flattenUnions() {
+    return this.getBoolean(FLATTEN_UNIONS_CONFIG);
   }
 
   public static class Builder {

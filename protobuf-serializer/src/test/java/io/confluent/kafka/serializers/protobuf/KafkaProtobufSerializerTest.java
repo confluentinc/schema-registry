@@ -16,17 +16,23 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.test.CustomOptions.CustomMessageOptions;
 import io.confluent.kafka.serializers.protobuf.test.CustomOptions2;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.DecimalValuePb2;
 import io.confluent.kafka.serializers.protobuf.test.Ranges;
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -52,6 +58,8 @@ import static org.junit.Assert.assertEquals;
 
 public class KafkaProtobufSerializerTest {
 
+  private final Properties serializerConfig;
+  private final Properties deserializerConfig;
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaProtobufSerializer protobufSerializer;
   private final KafkaProtobufDeserializer protobufDeserializer;
@@ -120,12 +128,12 @@ public class KafkaProtobufSerializerTest {
           .build();
 
   public KafkaProtobufSerializerTest() {
-    Properties serializerConfig = new Properties();
+    serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_FORMAT, "ignore_extensions");
-    schemaRegistry = new MockSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(new ProtobufSchemaProvider()));
     protobufSerializer = new KafkaProtobufSerializer(schemaRegistry, new HashMap(serializerConfig));
 
     protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
@@ -145,69 +153,44 @@ public class KafkaProtobufSerializerTest {
         null
     );
 
-    Properties testMessageDeserializerConfig = new Properties();
-    testMessageDeserializerConfig.put(
+    deserializerConfig = new Properties();
+    deserializerConfig.put(
         KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "bogus"
     );
     testMessageDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
-        new HashMap(testMessageDeserializerConfig),
+        new HashMap(deserializerConfig),
         TestMessage.class
     );
 
-    Properties nestedMessageDeserializerConfig = new Properties();
-    nestedMessageDeserializerConfig.put(
-        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        "bogus"
-    );
     nestedMessageDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
-        new HashMap(nestedMessageDeserializerConfig),
+        new HashMap(deserializerConfig),
         NestedMessage.class
     );
 
-    Properties dependencyMessageDeserializerConfig = new Properties();
-    dependencyMessageDeserializerConfig.put(
-        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        "bogus"
-    );
     dependencyMessageDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
-        new HashMap(dependencyMessageDeserializerConfig),
+        new HashMap(deserializerConfig),
         DependencyMessage.class
     );
 
-    Properties enumRefDeserializerConfig = new Properties();
-    enumRefDeserializerConfig.put(
-        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        "bogus"
-    );
     enumRefDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
-        new HashMap(enumRefDeserializerConfig),
+        new HashMap(deserializerConfig),
         EnumReference.class
     );
 
-    Properties innerMessageDeserializerConfig = new Properties();
-    innerMessageDeserializerConfig.put(
-        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        "bogus"
-    );
     innerMessageDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
-        new HashMap(innerMessageDeserializerConfig),
+        new HashMap(deserializerConfig),
         NestedMessage.InnerMessage.class
     );
 
-    Properties optionalMessageDeserializerConfig = new Properties();
-    optionalMessageDeserializerConfig.put(
-        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        "bogus"
-    );
     optionalMessageDeserializer = new KafkaProtobufDeserializer(
         schemaRegistry,
-        new HashMap(optionalMessageDeserializerConfig),
+        new HashMap(deserializerConfig),
         TestMessageOptionalProtos.TestMessageOptional.class
     );
 
@@ -665,7 +648,7 @@ public class KafkaProtobufSerializerTest {
         + "}\n"
         + "\n"
         + "extend .google.protobuf.MessageOptions {\n"
-        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50001;\n"
+        + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar my_message_option = 50099;\n"
         + "}\n"
         + "extend .io.confluent.kafka.serializers.protobuf.test.FooBar {\n"
         + "  optional .io.confluent.kafka.serializers.protobuf.test.FooBar.FooBarBazEnum ext = 101;\n"
@@ -780,7 +763,7 @@ public class KafkaProtobufSerializerTest {
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "\n"
-        + "message FooBar {\n"
+        + "message FooBar2 {\n"
         + "  reserved 5000 to 6000;\n"
         + "  reserved 10000 to 10001;\n"
         + "  reserved 20000;\n"
@@ -796,17 +779,39 @@ public class KafkaProtobufSerializerTest {
         + "    reserved 100 to 200;\n"
         + "    reserved 1000 to 1001;\n"
         + "    reserved 2000;\n"
-        + "    NONE = 0;\n"
-        + "    FOO = 1;\n"
-        + "    BAR = 2;\n"
-        + "    BAZ = 3;\n"
+        + "    BUG = 0;\n"
+        + "    ZAP = 1;\n"
         + "  }\n"
         + "}\n";
-    ProtobufSchema schema = new ProtobufSchema(Ranges.FooBar.getDescriptor());
+    ProtobufSchema schema = new ProtobufSchema(Ranges.FooBar2.getDescriptor());
     schema = schema.normalize();
     assertEquals(expected, schema.canonicalString());
     schema = new ProtobufSchema(schema.canonicalString());
     assertEquals(expected, schema.canonicalString());
+  }
 
+  @Test
+  public void testKafkaProtobufDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
+      throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaProtobufSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaProtobufSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName()
+    );
+    protobufSerializer.configure(configs, false);
+    testMessageDeserializer.configure(configs, false);
+    ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
+    schemaRegistry.register("io.confluent.kafka.serializers.protobuf.test.TestMessage", schema);
+    byte[] bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, bytes));
+
+    // restore configs
+    protobufSerializer.configure(new HashMap(serializerConfig), false);
+    testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
   }
 }

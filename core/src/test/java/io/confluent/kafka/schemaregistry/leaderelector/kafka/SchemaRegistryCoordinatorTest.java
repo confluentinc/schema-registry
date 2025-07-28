@@ -321,7 +321,7 @@ public class SchemaRegistryCoordinatorTest {
             .setProtocolName(SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0)
             .setMemberId(memberId)
             .setLeader(memberId)
-            .setMembers(metadata));
+            .setMembers(metadata), (short) 0);
   }
 
   private JoinGroupResponse joinGroupFollowerResponse(
@@ -336,7 +336,8 @@ public class SchemaRegistryCoordinatorTest {
         .setProtocolName(SchemaRegistryCoordinator.SR_SUBPROTOCOL_V0)
         .setMemberId(memberId)
         .setLeader(leaderId)
-        .setMembers(Collections.emptyList())
+        .setMembers(Collections.emptyList()),
+        (short) 0
     );
   }
 

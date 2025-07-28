@@ -48,6 +48,10 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final String SCHEMA_SPEC_VERSION_DOC = "The specification version to use for JSON "
       + "schemas derived from objects, one of 'draft_4', 'draft_6', 'draft_7', or 'draft_2019_09'";
 
+  public static final String SCHEMA_SCAN_PACKAGES = "json.schema.scan.packages";
+  public static final String SCHEMA_SCAN_PACKAGES_DOC = "A list of packages to scan for Jackson "
+      + "annotations when deriving schemas from objects";
+
   public static final String ONEOF_FOR_NULLABLES = "json.oneof.for.nullables";
   public static final boolean ONEOF_FOR_NULLABLES_DEFAULT = true;
   public static final String ONEOF_FOR_NULLABLES_DOC = "Whether JSON schemas derived from objects "
@@ -86,6 +90,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         EnumRecommender.in(SpecificationVersion.values()),
         ConfigDef.Importance.MEDIUM,
         SCHEMA_SPEC_VERSION_DOC
+    ).define(SCHEMA_SCAN_PACKAGES,
+        ConfigDef.Type.LIST,
+        "",
+        ConfigDef.Importance.LOW,
+        SCHEMA_SCAN_PACKAGES_DOC
     ).define(ONEOF_FOR_NULLABLES,
         ConfigDef.Type.BOOLEAN,
         ONEOF_FOR_NULLABLES_DEFAULT,

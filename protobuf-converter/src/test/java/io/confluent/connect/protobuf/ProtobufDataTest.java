@@ -49,7 +49,6 @@ import io.confluent.kafka.serializers.protobuf.test.DateValueOuterClass.DateValu
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.EnumUnion;
-import io.confluent.kafka.serializers.protobuf.test.EnumUnionOuter.Status;
 import io.confluent.kafka.serializers.protobuf.test.Int16ValueOuterClass.Int16Value;
 import io.confluent.kafka.serializers.protobuf.test.Int8ValueOuterClass.Int8Value;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos;
@@ -170,14 +169,14 @@ public class ProtobufDataTest {
   private EnumUnion createEnumUnionWithString() throws ParseException {
     EnumUnion.Builder message = EnumUnion.newBuilder();
     message.setOneId("ID");
-    message.setStatus(Status.INACTIVE);
+    message.setStatus(NestedTestProto.Status.INACTIVE);
     return message.build();
   }
 
   private EnumUnion createEnumUnionWithSomeStatus() throws ParseException {
     EnumUnion.Builder message = EnumUnion.newBuilder();
-    message.setSomeStatus(Status.INACTIVE);
-    message.setStatus(Status.INACTIVE);
+    message.setSomeStatus(NestedTestProto.Status.INACTIVE);
+    message.setStatus(NestedTestProto.Status.INACTIVE);
     return message.build();
   }
 
@@ -300,6 +299,42 @@ public class ProtobufDataTest {
     return enumUnionBuilder;
   }
 
+  private SchemaBuilder getEnumUnionSchemaBuilderFlattened() {
+    final SchemaBuilder enumUnionBuilder = SchemaBuilder.struct();
+    enumUnionBuilder.name("EnumUnion");
+    enumUnionBuilder.field(
+        "one_id",
+        SchemaBuilder.string().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(1)).build()
+    );
+    enumUnionBuilder.field(
+        "other_id",
+        SchemaBuilder.int32().optional().parameter(PROTOBUF_TYPE_TAG, String.valueOf(2)).build()
+    );
+    enumUnionBuilder.field(
+        "some_status",
+        SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(3))
+            .parameter(PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(PROTOBUF_TYPE_ENUM + ".ACTIVE", "0")
+            .parameter(PROTOBUF_TYPE_ENUM + ".INACTIVE", "1")
+            .build()
+    );
+    enumUnionBuilder.field(
+        "status",
+        SchemaBuilder.string()
+            .name("Status")
+            .optional()
+            .parameter(PROTOBUF_TYPE_TAG, String.valueOf(4))
+            .parameter(PROTOBUF_TYPE_ENUM, "Status")
+            .parameter(PROTOBUF_TYPE_ENUM + ".ACTIVE", "0")
+            .parameter(PROTOBUF_TYPE_ENUM + ".INACTIVE", "1")
+            .build()
+    );
+    return enumUnionBuilder;
+  }
+
   private SchemaBuilder getEnumUnionSchemaBuilderWithGeneralizedSumTypeSupport() {
     final SchemaBuilder enumUnionBuilder = SchemaBuilder.struct();
     enumUnionBuilder.name("EnumUnion");
@@ -356,6 +391,14 @@ public class ProtobufDataTest {
     Struct union = new Struct(schema.field("some_val").schema());
     union.put("one_id", "ID");
     result.put("some_val", union);
+    result.put("status", "INACTIVE");
+    return result;
+  }
+
+  private Struct getEnumUnionWithStringFlattened() throws ParseException {
+    Schema schema = getEnumUnionSchemaBuilderFlattened().build();
+    Struct result = new Struct(schema.schema());
+    result.put("one_id", "ID");
     result.put("status", "INACTIVE");
     return result;
   }
@@ -768,6 +811,20 @@ public class ProtobufDataTest {
     Schema expectedSchema = getEnumUnionSchemaBuilderWithoutIndex().build();
     assertSchemasEqual(expectedSchema, result.schema());
     Struct expected = getEnumUnionWithStringWithoutIndex();
+    assertEquals(expected, result.value());
+  }
+
+  @Test
+  public void testToConnectEnumUnionWithStringFlattened() throws Exception {
+    EnumUnion message = createEnumUnionWithString();
+    ProtobufDataConfig protobufDataConfig = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.FLATTEN_UNIONS_CONFIG, "true")
+        .build();
+    ProtobufData protobufData = new ProtobufData(protobufDataConfig);
+    SchemaAndValue result = getSchemaAndValue(protobufData, message);
+    Schema expectedSchema = getEnumUnionSchemaBuilderFlattened().build();
+    assertSchemasEqual(expectedSchema, result.schema());
+    Struct expected = getEnumUnionWithStringFlattened();
     assertEquals(expected, result.value());
   }
 
@@ -2389,7 +2446,7 @@ public class ProtobufDataTest {
 
   @Test
   public void testToConnectOptionalProto2() {
-    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+    KeyValueProto2.KeyValueMessage2 message = KeyValueProto2.KeyValueMessage2.newBuilder()
         .setKey(123)
         .build();
 
@@ -2403,7 +2460,7 @@ public class ProtobufDataTest {
 
   @Test
   public void testToConnectOptionalProto2Disabled() {
-    KeyValueProto2.KeyValueMessage message = KeyValueProto2.KeyValueMessage.newBuilder()
+    KeyValueProto2.KeyValueMessage2 message = KeyValueProto2.KeyValueMessage2.newBuilder()
         .setKey(123)
         .build();
 

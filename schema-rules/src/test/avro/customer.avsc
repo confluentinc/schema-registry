@@ -1,0 +1,47 @@
+{
+  "type": "record",
+  "name": "Customer",
+  "namespace": "io.confluent.kafka.schemaregistry.rules",
+  "fields": [
+    {
+      "name": "ssn",
+      "type": "string",
+      "confluent:tags": [
+        "PII"
+      ]
+    },
+    {
+      "name": "address",
+      "type": "string"
+    },
+    {
+      "name": "mail",
+      "type": "string"
+    },
+    {
+      "name": "user_id",
+      "type": "string"
+    },
+    {
+      "name": "age",
+      "type": "int"
+    },
+    {
+      "name": "IBAN",
+      "type": "string"
+    },
+    {
+      "name": "active",
+      "type": "boolean"
+    },
+    {
+      "name": "balance",
+      "type": "float"
+    },
+    {
+      "name": "mode",
+      "type": "string"
+    }
+  ]
+}
+
