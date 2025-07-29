@@ -211,12 +211,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
       return;
     }
 
-    try {
-      schemaRegistry.close();
-    } catch (IOException e) {
-      log.error("Error closing schema registry", e);
-    }
-
     List<SchemaRegistryResourceExtension> schemaRegistryResourceExtensions =
         schemaRegistry.getResourceExtensions();
     if (schemaRegistryResourceExtensions != null) {
@@ -228,6 +222,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
           log.error("Error closing the extension resource", e);
         }
       }
+    }
+
+    try {
+      schemaRegistry.close();
+    } catch (IOException e) {
+      log.error("Error closing schema registry", e);
     }
   }
 
