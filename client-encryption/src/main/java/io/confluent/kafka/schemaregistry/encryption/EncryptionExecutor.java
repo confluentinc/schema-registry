@@ -645,7 +645,7 @@ public class EncryptionExecutor implements RuleExecutor {
       return kmsKeyIds;
     }
 
-    private Aead getAead(Map<String, ?> configs, String kmsType, String kmsKeyId)
+    private static Aead getAead(Map<String, ?> configs, String kmsType, String kmsKeyId)
         throws GeneralSecurityException {
       String kekUrl = kmsType + KMS_TYPE_SUFFIX + kmsKeyId;
       KmsClient kmsClient = getKmsClient(configs, kekUrl);
