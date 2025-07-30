@@ -257,6 +257,8 @@ public class RestService implements Closeable, Configurable {
   @Override
   public void configure(Map<String, ?> configs) {
     this.useApacheHttpClient = SchemaRegistryClientConfig.useApacheHttpClient(configs);
+    log.debug(format("Usings configs %s and useApacheHttpClient: %s",
+        configs, this.useApacheHttpClient));
 
     this.retryExecutor = new RetryExecutor(
         SchemaRegistryClientConfig.getMaxRetries(configs),
@@ -403,7 +405,7 @@ public class RestService implements Closeable, Configurable {
       String requestData = requestBodyData == null
           ? "null"
           : new String(requestBodyData, StandardCharsets.UTF_8);
-      log.debug(format("Sending %s with input %s to %s",
+      log.debug(format("Sending %s with input %s to %s with HttpUrlConnection",
           method, requestData,
           requestUrl));
 
@@ -523,7 +525,7 @@ public class RestService implements Closeable, Configurable {
     HttpClient client = getApacheHttpClient();
     String requestData = requestBodyData == null ? "null"
         : new String(requestBodyData, StandardCharsets.UTF_8);
-    log.debug(format("Sending %s with input %s to %s",
+    log.debug(format("Sending %s with input %s to %s using Apache Http Client",
         method, requestData,
         requestUrl));
     try {
