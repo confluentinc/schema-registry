@@ -257,8 +257,7 @@ public class RestService implements Closeable, Configurable {
   @Override
   public void configure(Map<String, ?> configs) {
     this.useApacheHttpClient = SchemaRegistryClientConfig.useApacheHttpClient(configs);
-    log.debug(format("Usings configs %s and useApacheHttpClient: %s",
-        configs, this.useApacheHttpClient));
+    log.debug(format("useApacheHttpClient config: %s", this.useApacheHttpClient));
 
     this.retryExecutor = new RetryExecutor(
         SchemaRegistryClientConfig.getMaxRetries(configs),
