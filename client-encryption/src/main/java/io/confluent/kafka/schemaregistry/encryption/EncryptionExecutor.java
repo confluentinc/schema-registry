@@ -580,16 +580,17 @@ public class EncryptionExecutor implements RuleExecutor {
   static class AeadWrapper implements Aead {
     private final Map<String, ?> configs;
     private final Kek kek;
+    private final List<String> kmsKeyIds;
 
     public AeadWrapper(Map<String, ?> configs, Kek kek) {
       this.configs = configs;
       this.kek = kek;
+      this.kmsKeyIds = getKmsKeyIds();
     }
 
     @Override
     public byte[] encrypt(byte[] plaintext, byte[] associatedData)
         throws GeneralSecurityException {
-      List<String> kmsKeyIds = getKmsKeyIds();
       for (int i = 0; i < kmsKeyIds.size(); i++) {
         try {
           Aead aead = getAead(configs, kek.getKmsType(), kmsKeyIds.get(i));
@@ -610,7 +611,6 @@ public class EncryptionExecutor implements RuleExecutor {
     @Override
     public byte[] decrypt(byte[] ciphertext, byte[] associatedData)
         throws GeneralSecurityException {
-      List<String> kmsKeyIds = getKmsKeyIds();
       for (int i = 0; i < kmsKeyIds.size(); i++) {
         try {
           Aead aead = getAead(configs, kek.getKmsType(), kmsKeyIds.get(i));
@@ -645,7 +645,7 @@ public class EncryptionExecutor implements RuleExecutor {
       return kmsKeyIds;
     }
 
-    private Aead getAead(Map<String, ?> configs, String kmsType, String kmsKeyId)
+    private static Aead getAead(Map<String, ?> configs, String kmsType, String kmsKeyId)
         throws GeneralSecurityException {
       String kekUrl = kmsType + KMS_TYPE_SUFFIX + kmsKeyId;
       KmsClient kmsClient = getKmsClient(configs, kekUrl);
