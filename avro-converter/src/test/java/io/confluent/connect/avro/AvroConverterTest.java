@@ -330,28 +330,6 @@ public class AvroConverterTest {
   }
 
   @Test
-  public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForValue() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
-    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
-    Map<String, ?> converterConfig = ImmutableMap.of(
-        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
-        AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
-    avroConverter.configure(converterConfig, false);
-    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, false);
-  }
-
-  @Test
-  public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForKey() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
-    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
-    Map<String, ?> converterConfig = ImmutableMap.of(
-        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
-        AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
-    avroConverter.configure(converterConfig, true);
-    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
-  }
-
-  @Test
   public void testExplicitlyNamedNestedMapsWithNonStringKeys() {
     final Schema schema = SchemaBuilder.map(
         Schema.OPTIONAL_STRING_SCHEMA,

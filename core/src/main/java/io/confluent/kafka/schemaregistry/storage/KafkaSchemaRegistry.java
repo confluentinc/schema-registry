@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -90,6 +91,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import java.io.IOException;
 import java.security.KeyStore;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -119,6 +121,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
+import org.eclipse.jetty.server.Handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,6 +140,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
+  private final List<Handler.Singleton> customHandler;
+
   private final Map<String, Object> props;
   private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
@@ -256,6 +261,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+    this.customHandler = new ArrayList<>();
   }
 
   @VisibleForTesting
@@ -718,9 +724,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Config config = getConfigInScope(subject);
       Mode mode = getModeInScope(subject);
 
-      boolean modifiedSchema = false;
       if (mode != Mode.IMPORT) {
-        modifiedSchema = maybePopulateFromPrevious(
+        maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
 
@@ -736,10 +741,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
               && schemaIdAndSubjects.hasSubject(subject)
               && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
             // return only if the schema was previously registered under the input subject
-            return modifiedSchema
-                ? schema.copy(
-                    schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId())
-                : new Schema(subject, schemaIdAndSubjects.getSchemaId());
+            return schema.copy(
+                schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId());
           } else {
             // need to register schema under the input subject
             schemaId = schemaIdAndSubjects.getSchemaId();
@@ -757,9 +760,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
               && parsedSchema.canLookup(undeletedSchema, this)) {
             // This handles the case where a schema is sent with all references resolved
             // or without confluent:version
-            return modifiedSchema
-                ? schema.copy(schemaValue.getVersion(), schemaValue.getId())
-                : new Schema(subject, schemaValue.getId());
+            return schema.copy(schemaValue.getVersion(), schemaValue.getId());
           }
         }
       }
@@ -830,9 +831,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         }
         kafkaStore.put(schemaKey, schemaValue);
         logSchemaOp(schema, "REGISTER");
-        return modifiedSchema
-            ? schema
-            : new Schema(subject, schema.getId());
+        return schema;
       } else {
         throw new IncompatibleSchemaException(compatibilityErrorLogs.toString());
       }
@@ -992,7 +991,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
               || schema.getId() < 0
               || schema.getId().equals(existingSchema.getId())
           ) {
-            return new Schema(subject, existingSchema.getId());
+            return existingSchema;
           }
         } else if (existingSchema.getId().equals(schema.getId())) {
           if (existingSchema.getVersion().equals(schema.getVersion())) {
@@ -1090,7 +1089,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             .filter(r -> !rulesToRemove.contains(r.getName()))
             .collect(Collectors.toList());
       }
-      ruleSet = new RuleSet(migrationRules, domainRules);
+      List<Rule> encodingRules = ruleSet.getEncodingRules();
+      if (encodingRules != null) {
+        encodingRules = encodingRules.stream()
+            .filter(r -> !rulesToRemove.contains(r.getName()))
+            .collect(Collectors.toList());
+      }
+      ruleSet = new RuleSet(migrationRules, domainRules, encodingRules);
     }
     return ruleSet;
   }
@@ -1264,6 +1269,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  public void deleteContext(String delimitedContext) throws SchemaRegistryException {
+    try {
+      // Strip the context delimiters
+      String rawContext = QualifiedSubject.contextFor(tenant(), delimitedContext);
+      ContextKey contextKey = new ContextKey(tenant(), rawContext);
+      this.kafkaStore.delete(contextKey);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while deleting the context in the"
+                                             + " backend Kafka store", e);
+    }
+  }
+
+  public void deleteContextOrForward(
+      Map<String, String> requestProperties,
+      String delimitedContext) throws SchemaRegistryException {
+    kafkaStore.lockFor(delimitedContext).lock();
+    try {
+      if (isLeader()) {
+        deleteContext(delimitedContext);
+      } else {
+        // forward registering request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteContextRequestToLeader(requestProperties, delimitedContext);
+        } else {
+          throw new UnknownLeaderException("Register schema request failed since leader is "
+                                           + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(delimitedContext).unlock();
     }
   }
 
@@ -1528,7 +1569,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       boolean permanentDelete) throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    log.debug(String.format("Forwarding delete subject request for  %s to %s",
+    log.debug(String.format("Forwarding delete subject request for %s to %s",
                             subject, baseUrl));
     try {
       return leaderRestService.deleteSubject(requestProperties, subject, permanentDelete);
@@ -1537,6 +1578,25 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           String.format(
               "Unexpected error while forwarding delete subject "
               + "request %s to %s", subject, baseUrl), e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void forwardDeleteContextRequestToLeader(
+      Map<String, String> requestProperties,
+      String delimitedContext) throws SchemaRegistryRequestForwardingException {
+    UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding delete context request for %s to %s",
+        delimitedContext, baseUrl));
+    try {
+      leaderRestService.deleteContext(requestProperties, delimitedContext);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format(
+              "Unexpected error while forwarding delete context "
+                  + "request %s to %s", delimitedContext, baseUrl), e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }
@@ -1765,7 +1825,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
     Schema schemaEntity = toSchemaEntity(schema);
     logSchemaOp(schemaEntity, "READ");
-    SchemaString schemaString = new SchemaString(schemaEntity);
+    SchemaString schemaString = subject != null
+        ? new SchemaString(schemaEntity)
+        : new SchemaString(null, null, schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
       ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
       schemaString.setSchemaString(parsedSchema.formattedString(format));
@@ -1830,6 +1892,72 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
               "Error from the backend Kafka store", e);
+    }
+  }
+
+  public SchemaString getByGuid(String guid, String format) throws SchemaRegistryException {
+    try {
+      Map.Entry<Integer, String> id = getIdUsingContexts(guid);
+      if (id == null) {
+        return null;
+      }
+      SchemaString schema = get(id.getKey(), id.getValue(), format, false);
+      schema.setSubject(null);
+      schema.setVersion(null);
+      return schema;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving schema with guid "
+              + guid
+              + " from the backend Kafka"
+              + " store", e);
+    }
+  }
+
+  private Map.Entry<Integer, String> getIdUsingContexts(String guid)
+      throws StoreException, SchemaRegistryException {
+    Integer id = lookupCache.idByGuid(guid, DEFAULT_CONTEXT);
+    if (id != null) {
+      return new AbstractMap.SimpleEntry<>(id, DEFAULT_CONTEXT);
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
+        String ctx = qualSub.toQualifiedContext();
+        id = lookupCache.idByGuid(guid, ctx);
+        if (id != null) {
+          return new AbstractMap.SimpleEntry<>(id, ctx);
+        }
+      }
+    }
+    return null;
+  }
+
+  public List<ContextId> listIdsForGuid(String guid)
+      throws SchemaRegistryException {
+    try {
+      List<ContextId> ids = new ArrayList<>();
+      Integer id = lookupCache.idByGuid(guid, DEFAULT_CONTEXT);
+      if (id != null) {
+        ids.add(new ContextId(DEFAULT_CONTEXT, id));
+      }
+      try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+        while (iter.hasNext()) {
+          ContextValue v = (ContextValue) iter.next();
+          QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
+          String ctx = qualSub.toQualifiedContext();
+          id = lookupCache.idByGuid(guid, ctx);
+          if (id != null) {
+            ids.add(new ContextId(qualSub.getContext(), id));
+          }
+        }
+      }
+      Collections.sort(ids);
+      return ids;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with guid "
+          + guid + " from the backend Kafka store", e);
     }
   }
 
@@ -2708,6 +2836,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public void onTruststoreCreated(KeyStore truststore) {
     metricsContainer.emitCertificateExpirationMetric(
         truststore, metricsContainer.getCertificateExpirationTruststore());
+  }
+
+  public List<Handler.Singleton> getCustomHandler() {
+    return customHandler;
+  }
+
+  public void addCustomHandler(Handler.Singleton handler) {
+    customHandler.add(handler);
+  }
+
+  public void removeCustomHandler(Handler.Singleton handler) {
+    customHandler.remove(handler);
   }
 
   private static class RawSchema {

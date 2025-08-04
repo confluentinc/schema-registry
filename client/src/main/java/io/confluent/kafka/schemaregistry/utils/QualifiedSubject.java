@@ -141,6 +141,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  /**
+   * Returns the context without the tenant prefix.
+   */
   public String toUnqualifiedContext() {
     return DEFAULT_CONTEXT.equals(context)
         ? ""
@@ -151,6 +154,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return toQualifiedContext() + subject;
   }
 
+  /**
+   * Returns the context and subject without the tenant prefix.
+   */
   public String toUnqualifiedSubject() {
     return toUnqualifiedContext() + subject;
   }
@@ -191,6 +197,23 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   public static String qualifiedContextFor(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.toQualifiedContext() : "";
+  }
+
+  /**
+   * Checks if the given qualified subject is a context for the given qualified subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the qualified subject
+   * @param qualifiedContext the qualified context, which must not specify a subject
+   * @return true if the subject is in the context, false otherwise
+   */
+  public static boolean isSubjectInContext(
+      String tenant, String qualifiedSubject, QualifiedSubject qualifiedContext) {
+    return qualifiedContext != null
+        && qualifiedContext.getSubject().isEmpty() // must be a context without a subject
+        && (qualifiedContext.getContext().equals(GLOBAL_CONTEXT_NAME)
+        || qualifiedContext.toQualifiedContext().equals(
+            QualifiedSubject.qualifiedContextFor(tenant, qualifiedSubject)));
   }
 
   public static QualifiedSubject qualifySubjectWithParent(

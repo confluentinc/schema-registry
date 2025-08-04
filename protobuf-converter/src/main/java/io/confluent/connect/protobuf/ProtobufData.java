@@ -18,11 +18,14 @@ package io.confluent.connect.protobuf;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos;
+import com.google.protobuf.DescriptorProtos.Edition;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
@@ -1307,7 +1310,27 @@ public class ProtobufData {
 
   private boolean isOptional(FieldDescriptor fieldDescriptor) {
     return fieldDescriptor.toProto().getProto3Optional()
-        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
+        || (supportOptionalForProto2 && hasOptionalKeyword(fieldDescriptor));
+  }
+
+  // copied from Descriptors.java since it is not public
+  private boolean hasOptionalKeyword(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (getEdition(fieldDescriptor.getFile()) == Edition.EDITION_PROTO2
+        && fieldDescriptor.isOptional()
+        && fieldDescriptor.getContainingOneof() == null);
+  }
+
+  // copied from Descriptors.java since it is not public
+  private DescriptorProtos.Edition getEdition(FileDescriptor file) {
+    switch (file.toProto().getSyntax()) {
+      case "editions":
+        return file.toProto().getEdition();
+      case "proto3":
+        return Edition.EDITION_PROTO3;
+      default:
+        return Edition.EDITION_PROTO2;
+    }
   }
 
   private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
@@ -1529,7 +1552,7 @@ public class ProtobufData {
     }
 
     if (useOptionalForNullables) {
-      if (descriptor.hasOptionalKeyword()) {
+      if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }
     } else if (!useWrapperForNullables) {
