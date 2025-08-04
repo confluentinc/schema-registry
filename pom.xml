@@ -98,7 +98,7 @@
         <guice.version>5.1.0</guice.version>
         <jsonata-version>2.5.1</jsonata-version>
         <json-schema.version>1.14.6</json-schema.version>
-        <json-skema.version>0.22.0</json-skema.version>
+        <json-skema.version>0.24.0</json-skema.version>
         <kcache.version>5.2.0</kcache.version>
         <proto-google-common-protos.version>2.53.0</proto-google-common-protos.version>
         <protobuf.version>4.29.3</protobuf.version>
