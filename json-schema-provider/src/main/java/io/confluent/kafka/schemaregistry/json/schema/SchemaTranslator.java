@@ -80,6 +80,7 @@ import com.github.erosb.jsonsKema.UnevaluatedPropertiesSchema;
 import com.github.erosb.jsonsKema.UniqueItemsSchema;
 import com.github.erosb.jsonsKema.WriteOnlySchema;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -89,8 +90,8 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
-import kotlin.Pair;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.ConditionalSchema;
@@ -107,6 +108,36 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   private static final Object NONE_MARKER = new Object();
 
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+
+  private static class Pair<A, B> implements Serializable {
+    private final A a;
+    private final B b;
+
+    public Pair(A a, B b) {
+      this.a = a;
+      this.b = b;
+    }
+
+    public A component1() {
+      return a;
+    }
+
+    public B component2() {
+      return b;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == null || getClass() != o.getClass()) return false;
+      Pair<?, ?> pair = (Pair<?, ?>) o;
+      return Objects.equals(a, pair.a) && Objects.equals(b, pair.b);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(a, b);
+    }
+  }
 
   private final Map<Schema, org.everit.json.schema.Schema.Builder<?>> schemaMapping;
   private final Deque<Pair<org.everit.json.schema.ReferenceSchema, Schema>> refMapping;
