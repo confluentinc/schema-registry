@@ -135,12 +135,8 @@ public class SubjectsResource {
       if (matchingSchema == null && !normalize) {
         log.debug("No matching schema found with normalize = false,"
                 + " retrying with normalize = true");
-        try {
-          matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
-                subject, schema, true, lookupDeletedSchema);
-        } catch (SchemaRegistryException e) {
-          throw e;
-        }
+      matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
+            subject, schema, true, lookupDeletedSchema);
       }
 
       if (matchingSchema == null) {
