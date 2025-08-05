@@ -133,7 +133,8 @@ public class SubjectsResource {
 
       // If first attempt failed with normalize=false, try again with normalize=true
       if (matchingSchema == null && !normalize) {
-        log.debug("No matching schema found with normalize = false, retrying with normalize = true");
+        log.debug("No matching schema found with normalize = false,"
+                + " retrying with normalize = true");
         try {
           matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
                 subject, schema, true, lookupDeletedSchema);
