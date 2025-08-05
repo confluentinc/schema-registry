@@ -124,7 +124,6 @@ public class SubjectsResource {
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
-    log.info("normalize = {}", normalize);
     try {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subject).isNormalize());
@@ -132,10 +131,9 @@ public class SubjectsResource {
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
           subject, schema, normalize, lookupDeletedSchema);
 
-      log.info("Is matchingSchema null? = {}", matchingSchema == null);
       // If first attempt failed with normalize=false, try again with normalize=true
       if (matchingSchema == null && !normalize) {
-        log.info("No matching schema found with normalize = false, retrying with normalize = true");
+        log.debug("No matching schema found with normalize = false, retrying with normalize = true");
         try {
           matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
                 subject, schema, true, lookupDeletedSchema);
@@ -143,9 +141,6 @@ public class SubjectsResource {
           throw e;
         }
       }
-
-      log.info("we have a matching schema with normalize : {} and {}",
-              matchingSchema, normalize);
 
       if (matchingSchema == null) {
         if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
