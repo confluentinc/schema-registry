@@ -119,103 +119,69 @@ public class SchemaRegistryClientConfig {
   }
 
   public static Integer getHttpConnectTimeoutMs(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(HTTP_CONNECT_TIMEOUT_MS)) {
-      Object httpConnectTimeoutMsVal
-          = configs.get(SchemaRegistryClientConfig.HTTP_CONNECT_TIMEOUT_MS);
-      return httpConnectTimeoutMsVal instanceof String
-          ? Integer.valueOf((String) httpConnectTimeoutMsVal)
-          : (Integer) httpConnectTimeoutMsVal;
-    } else {
-      return HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
-    }
+    return configs != null && configs.containsKey(HTTP_CONNECT_TIMEOUT_MS)
+        ? Integer.parseInt(configs.get(HTTP_CONNECT_TIMEOUT_MS).toString())
+        : HTTP_CONNECT_TIMEOUT_MS_DEFAULT;
   }
 
   public static Integer getHttpReadTimeoutMs(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(HTTP_READ_TIMEOUT_MS)) {
-      Object httpReadTimeoutMsVal
-          = configs.get(SchemaRegistryClientConfig.HTTP_READ_TIMEOUT_MS);
-      return httpReadTimeoutMsVal instanceof String
-          ? Integer.valueOf((String) httpReadTimeoutMsVal)
-          : (Integer) httpReadTimeoutMsVal;
-    } else {
-      return HTTP_READ_TIMEOUT_MS_DEFAULT;
-    }
-  }
+    return configs != null && configs.containsKey(HTTP_READ_TIMEOUT_MS)
+        ? Integer.parseInt(configs.get(HTTP_READ_TIMEOUT_MS).toString())
+        : HTTP_READ_TIMEOUT_MS_DEFAULT;
+  } 
 
   public static Integer getMaxRetries(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(MAX_RETRIES_CONFIG)) {
-      Object maxRetriesVal
-          = configs.get(SchemaRegistryClientConfig.MAX_RETRIES_CONFIG);
-      return maxRetriesVal instanceof String
-          ? Integer.valueOf((String) maxRetriesVal)
-          : (Integer) maxRetriesVal;
-    } else {
-      return MAX_RETRIES_DEFAULT;
-    }
+    return configs != null && configs.containsKey(MAX_RETRIES_CONFIG)
+        ? Integer.parseInt(configs.get(MAX_RETRIES_CONFIG).toString())
+        : MAX_RETRIES_DEFAULT;
   }
 
   public static Integer getRetriesWaitMs(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(RETRIES_WAIT_MS_CONFIG)) {
-      Object retriesWaitMsVal
-          = configs.get(SchemaRegistryClientConfig.RETRIES_WAIT_MS_CONFIG);
-      return retriesWaitMsVal instanceof String
-          ? Integer.valueOf((String) retriesWaitMsVal)
-          : (Integer) retriesWaitMsVal;
-    } else {
-      return RETRIES_WAIT_MS_DEFAULT;
-    }
+    return configs != null && configs.containsKey(RETRIES_WAIT_MS_CONFIG)
+        ? Integer.parseInt(configs.get(RETRIES_WAIT_MS_CONFIG).toString())
+        : RETRIES_WAIT_MS_DEFAULT;
   }
 
   public static Integer getRetriesMaxWaitMs(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(RETRIES_MAX_WAIT_MS_CONFIG)) {
-      Object retriesMaxWaitMsVal
-          = configs.get(SchemaRegistryClientConfig.RETRIES_MAX_WAIT_MS_CONFIG);
-      return retriesMaxWaitMsVal instanceof String
-          ? Integer.valueOf((String) retriesMaxWaitMsVal)
-          : (Integer) retriesMaxWaitMsVal;
-    } else {
-      return RETRIES_MAX_WAIT_MS_DEFAULT;
-    }
+    return configs != null && configs.containsKey(RETRIES_MAX_WAIT_MS_CONFIG)
+        ? Integer.parseInt(configs.get(RETRIES_MAX_WAIT_MS_CONFIG).toString())
+        : RETRIES_MAX_WAIT_MS_DEFAULT;
   }
 
   public static long getLatestTTL(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)) {
-      Object latestVal = configs.get(LATEST_CACHE_TTL_CONFIG);
-      return latestVal instanceof String
-          ? Long.parseLong((String) latestVal)
-          : ((Number) latestVal).longValue();
-    } else {
-      return LATEST_CACHE_TTL_DEFAULT;
-    }
+    return configs != null && configs.containsKey(LATEST_CACHE_TTL_CONFIG)
+        ? Long.parseLong(configs.get(LATEST_CACHE_TTL_CONFIG).toString())
+        : LATEST_CACHE_TTL_DEFAULT;
   }
 
   public static long getMissingIdTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_ID_CACHE_TTL_CONFIG)
-        ? (Long) configs.get(MISSING_ID_CACHE_TTL_CONFIG)
+        ? Long.parseLong(configs.get(MISSING_ID_CACHE_TTL_CONFIG).toString())
         : 0L;
   }
 
   public static long getMissingVersionTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_VERSION_CACHE_TTL_CONFIG)
-        ? (Long) configs.get(MISSING_VERSION_CACHE_TTL_CONFIG)
+        ? Long.parseLong(configs.get(MISSING_VERSION_CACHE_TTL_CONFIG).toString())
         : 0L;
   }
 
   public static long getMissingSchemaTTL(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_SCHEMA_CACHE_TTL_CONFIG)
-        ? (Long) configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG)
+        ? Long.parseLong((configs.get(MISSING_SCHEMA_CACHE_TTL_CONFIG).toString()))
         : 0L;
   }
 
   public static int getMaxMissingCacheSize(Map<String, ?> configs) {
     return configs != null && configs.containsKey(MISSING_CACHE_SIZE_CONFIG)
-        ? (Integer) configs.get(MISSING_CACHE_SIZE_CONFIG)
+        ? Integer.parseInt(configs.get(MISSING_CACHE_SIZE_CONFIG).toString())
         : 10000;
   }
 
   public static short getBearerAuthCacheExpiryBufferSeconds(Map<String, ?> configs) {
     return configs != null && configs.containsKey(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS)
-        ? (Short) configs.get(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS)
+        ? Short.parseShort(((Short) 
+        configs.get(BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS)).toString())
         : BEARER_AUTH_CACHE_EXPIRY_BUFFER_SECONDS_DEFAULT;
   }
 
@@ -238,25 +204,14 @@ public class SchemaRegistryClientConfig {
   }
 
   public static boolean getUrlRandomize(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(URL_RANDOMIZE)) {
-      Object randomizeStartingUrlVal
-          = configs.get(URL_RANDOMIZE);
-      return randomizeStartingUrlVal instanceof String
-          ? Boolean.parseBoolean((String) randomizeStartingUrlVal)
-          : (Boolean) randomizeStartingUrlVal;
-    } else {
-      return URL_RANDOMIZE_DEFAULT;
-    }
+    return configs != null && configs.containsKey(URL_RANDOMIZE)
+        ? Boolean.parseBoolean(configs.get(URL_RANDOMIZE).toString())
+        : URL_RANDOMIZE_DEFAULT;
   }
 
   public static boolean useApacheHttpClient(Map<String, ?> configs) {
-    if (configs != null && configs.containsKey(USE_APACHE_HTTP_CLIENT)) {
-      Object useApacheHttpClientVal = configs.get(USE_APACHE_HTTP_CLIENT);
-      return useApacheHttpClientVal instanceof String
-          ? Boolean.valueOf((String) useApacheHttpClientVal)
-          : (Boolean) useApacheHttpClientVal;
-    } else {
-      return USE_APACHE_HTTP_CLIENT_DEFAULT;
-    }
+    return configs != null && configs.containsKey(USE_APACHE_HTTP_CLIENT)
+        ? Boolean.parseBoolean(configs.get(USE_APACHE_HTTP_CLIENT).toString())
+        : USE_APACHE_HTTP_CLIENT_DEFAULT;
   }
 }
