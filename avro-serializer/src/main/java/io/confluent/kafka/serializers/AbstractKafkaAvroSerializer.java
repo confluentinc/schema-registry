@@ -209,13 +209,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
-    DatumWriter<Object> writer = getDatumWriter();
+    DatumWriter<Object> writer = getDatumWriter(value, rawSchema);
     writer.write(value, encoder);
     encoder.flush();
   }
 
-  protected DatumWriter<?> getDatumWriter(Schema rawSchema)
-            throws ExecutionException, IOException {
+  protected DatumWriter<Object> getDatumWriter(Object value, Schema rawSchema)
+            throws ExecutionException {
     return datumWriterCache.get(rawSchema,
         () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
