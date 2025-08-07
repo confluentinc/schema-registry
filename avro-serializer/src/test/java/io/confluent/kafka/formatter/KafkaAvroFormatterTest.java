@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
@@ -101,8 +102,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -157,8 +158,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
-        serializedValue.length, serializedKey, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -186,8 +187,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, timestamp, timestampType, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, timestamp, timestampType, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -229,8 +230,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
-        serializedValue.length, serializedKey, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -261,8 +262,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-            "topic1", 0, 200, timestamp, timestampType, 0, serializedKey.length,
-            serializedValue.length, serializedKey, serializedValue);
+            "topic1", 0, 200, timestamp, timestampType, serializedKey.length,
+            serializedValue.length, serializedKey, serializedValue, new RecordHeaders(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -286,8 +287,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -337,8 +338,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-            "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-            null, serializedValue);
+            "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME,  0, serializedValue.length,
+            null, serializedValue, new RecordHeaders(), Optional.empty());
 
     avroMessageFormatter.writeTo(crecord, ps);
 
@@ -383,8 +384,8 @@ public class KafkaAvroFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length, serializedValue.length,
-        serializedKey, serializedValue);
+        topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length, serializedValue.length,
+        serializedKey, serializedValue, new RecordHeaders(), Optional.empty());
 
     avroMessageFormatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
@@ -430,7 +431,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length, serializedValue.length,
         serializedKey, serializedValue, message.headers(), Optional.empty());
 
@@ -480,7 +481,7 @@ public class KafkaAvroFormatterTest {
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
-    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<byte[], byte[]>(
         topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0,
         serializedKey, serializedValue, message.headers(), Optional.empty());
 

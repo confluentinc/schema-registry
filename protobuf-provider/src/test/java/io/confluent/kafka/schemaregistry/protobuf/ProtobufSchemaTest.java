@@ -1718,7 +1718,6 @@ public class ProtobufSchemaTest {
         + "option cc_generic_services = false;\n"
         + "option java_generic_services = true;\n"
         + "option py_generic_services = false;\n"
-        + "option php_generic_services = true;\n"
         + "option cc_enable_arenas = true;\n"
         + "option objc_class_prefix = \"objc\";\n"
         + "option csharp_namespace = \"csharp\";\n"
@@ -1821,7 +1820,6 @@ public class ProtobufSchemaTest {
         + "option objc_class_prefix = \"objc\";\n"
         + "option optimize_for = CODE_SIZE;\n"
         + "option php_class_prefix = \"php\";\n"
-        + "option php_generic_services = true;\n"
         + "option php_metadata_namespace = \"php_md_ns\";\n"
         + "option php_namespace = \"php_ns\";\n"
         + "option py_generic_services = false;\n"
@@ -3121,7 +3119,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testGoogleDescriptor() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader("/");
-    for (int i = 19; i < 28; i++) {
+    for (int i = 19; i < 30; i++) {
       ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
       ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
       Descriptor desc = schema.toDescriptor();
@@ -3129,8 +3127,7 @@ public class ProtobufSchemaTest {
       ProtobufSchema normalizedSchema = schema.normalize();
       ProtobufSchema normalizedSchema2 = schema2.normalize();
       // v24 has an incompatible change of edition string "2023" changing to edition enum EDITION_2023
-      // v27 introduced feature_support
-      if (i != 24 && i != 27) {
+      if (i != 24) {
         assertEquals(normalizedSchema.canonicalString(), normalizedSchema2.canonicalString());
       }
     }

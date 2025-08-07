@@ -254,7 +254,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     Set<String> topics = Collections.singleton(topic);
     Map<String, TopicDescription> topicDescription = admin.describeTopics(topics)
-        .all().get(initTimeout, TimeUnit.MILLISECONDS);
+        .allTopicNames().get(initTimeout, TimeUnit.MILLISECONDS);
 
     TopicDescription description = topicDescription.get(topic);
     final int numPartitions = description.partitions().size();

@@ -15,13 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import org.eclipse.jetty.http.HttpFields;
+import org.eclipse.jetty.server.Request;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import javax.servlet.http.HttpServletRequest;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -35,15 +35,15 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.class)
 public class MutableHttpServletRequestTest {
 
-  MutableHttpServletRequest mutableRequest;
+  MutableRequest mutableRequest;
 
   @Mock
-  HttpServletRequest httpServletRequest;
+  Request httpServletRequest;
 
   @Before
   public void setup(){
     reset(httpServletRequest);
-    mutableRequest = new MutableHttpServletRequest(httpServletRequest);
+    mutableRequest = new MutableRequest(httpServletRequest);
   }
 
   @Test
@@ -53,9 +53,7 @@ public class MutableHttpServletRequestTest {
     Enumeration<String> headerNames;
 
     // Mock no header return values from HttpServletRequest
-    when(httpServletRequest.getHeader("header-key-0")).thenReturn(null);
-    when(httpServletRequest.getHeaders("header-key-0")).thenReturn(Collections.emptyEnumeration());
-    when(httpServletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+    when(httpServletRequest.getHeaders()).thenReturn(HttpFields.build());
 
     // Validate gets
     headerValue = mutableRequest.getHeader("header-key-0");
@@ -75,9 +73,7 @@ public class MutableHttpServletRequestTest {
     List<String> headerNamesList;
 
     // Mock no header return values from HttpServletRequest
-    when(httpServletRequest.getHeader("header-key-0")).thenReturn(null);
-    when(httpServletRequest.getHeaders("header-key-0")).thenReturn(Collections.emptyEnumeration());
-    when(httpServletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+    when(httpServletRequest.getHeaders()).thenReturn(HttpFields.build());
 
     // Add a "header-key-0" header
     mutableRequest.putHeader("header-key-0", "new-header-value-98");
@@ -131,18 +127,12 @@ public class MutableHttpServletRequestTest {
     List<String> headerNamesList;
 
     // Mock HttpServletRequest with two headers
-    when(httpServletRequest.getHeader("header-key-0")).thenReturn("header-value-78.1");
-    when(httpServletRequest.getHeaders("header-key-0")).thenReturn(
-        Collections.enumeration(Arrays.asList("header-value-78.1", "header-value-78.2")));
-
-    when(httpServletRequest.getHeader("header-key-2")).thenReturn("header-value-62.1");
-    when(httpServletRequest.getHeaders("header-key-2")).thenReturn(
-        Collections.enumeration(Arrays.asList("header-value-62.1", "header-value-62.2")));
-
-    // Include "header-KEY-0" here to make sure that getHeaderNames() filters it out.
-    when(httpServletRequest.getHeaderNames()).thenReturn(
-        Collections.enumeration(Arrays.asList("header-key-0", "header-KEY-0", "header-key-2")));
-
+    HttpFields headers = HttpFields.build()
+        .add("header-key-0", "header-value-78.1")
+        .add("header-key-0", "header-value-78.2")
+        .add("header-key-2", "header-value-62.1")
+        .add("header-key-2", "header-value-62.2");
+    when(httpServletRequest.getHeaders()).thenReturn(headers);
 
     // Test getting header values from HttpServletRequest (should match the mock values above)
     Assert.assertEquals("header-value-78.1", mutableRequest.getHeader("header-key-0"));
