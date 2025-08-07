@@ -17,7 +17,6 @@
 package io.confluent.kafka.schemaregistry.encryption;
 
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.proto.AesGcmKey;
 import com.google.crypto.tink.proto.AesSivKey;
 import com.google.protobuf.ByteString;
@@ -26,12 +25,12 @@ import io.confluent.dekregistry.client.CachedDekRegistryClient.KekId;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleClientException;
@@ -46,13 +45,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -386,7 +384,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         }
         byte[] encryptedDek = null;
         if (!kek.isShared()) {
-          aead = new AeadWrapper(configs, kek);
+          Map<String, Object> aeadConfigs = new HashMap<>(configs);
+          aeadConfigs.putAll(kek.getKmsProps());
+          aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kek.getKmsKeyId());
           // Generate new dek
           byte[] rawDek = generateKey(dekId.getDekFormat());
           encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -404,7 +404,9 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
       }
       if (dek.getKeyMaterialBytes() == null) {
         if (aead == null) {
-          aead = new AeadWrapper(configs, kek);
+          Map<String, Object> aeadConfigs = new HashMap<>(configs);
+          aeadConfigs.putAll(kek.getKmsProps());
+          aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kek.getKmsKeyId());
         }
         byte[] rawDek = aead.decrypt(dek.getEncryptedKeyMaterialBytes(), EMPTY_AAD);
         dek.setKeyMaterial(rawDek);
@@ -564,94 +566,6 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
 
     @Override
     public void close() {
-    }
-  }
-
-  private static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
-      throws GeneralSecurityException {
-    try {
-      return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
-    } catch (GeneralSecurityException e) {
-      return KmsDriverManager.getDriver(kekUrl).registerKmsClient(configs, Optional.of(kekUrl));
-    }
-  }
-
-  static class AeadWrapper implements Aead {
-    private final Map<String, ?> configs;
-    private final Kek kek;
-
-    public AeadWrapper(Map<String, ?> configs, Kek kek) {
-      this.configs = configs;
-      this.kek = kek;
-    }
-
-    @Override
-    public byte[] encrypt(byte[] plaintext, byte[] associatedData)
-        throws GeneralSecurityException {
-      List<String> kmsKeyIds = getKmsKeyIds();
-      for (int i = 0; i < kmsKeyIds.size(); i++) {
-        try {
-          Aead aead = getAead(configs, kek.getKmsType(), kmsKeyIds.get(i));
-          return aead.encrypt(plaintext, associatedData);
-        } catch (Exception e) {
-          log.warn("Failed to encrypt with kek {} and kms key id {}: {}",
-              kek.getName(), kmsKeyIds.get(i), e.getMessage());
-          if (i == kmsKeyIds.size() - 1) {
-            throw e instanceof GeneralSecurityException
-                ? (GeneralSecurityException) e
-                : new GeneralSecurityException("Failed to encrypt with all KEKs", e);
-          }
-        }
-      }
-      return null;
-    }
-
-    @Override
-    public byte[] decrypt(byte[] ciphertext, byte[] associatedData)
-        throws GeneralSecurityException {
-      List<String> kmsKeyIds = getKmsKeyIds();
-      for (int i = 0; i < kmsKeyIds.size(); i++) {
-        try {
-          Aead aead = getAead(configs, kek.getKmsType(), kmsKeyIds.get(i));
-          return aead.decrypt(ciphertext, associatedData);
-        } catch (Exception e) {
-          log.warn("Failed to decrypt with kek {} and kms key id {}: {}",
-              kek.getName(), kmsKeyIds.get(i), e.getMessage());
-          if (i == kmsKeyIds.size() - 1) {
-            throw e instanceof GeneralSecurityException
-                ? (GeneralSecurityException) e
-                : new GeneralSecurityException("Failed to decrypt with all KEKs", e);
-          }
-        }
-      }
-      return null;
-    }
-
-    private List<String> getKmsKeyIds() {
-      List<String> kmsKeyIds = new ArrayList<>();
-      kmsKeyIds.add(kek.getKmsKeyId());
-      if (kek.getKmsProps() != null) {
-        String alternateKmsKeyIds = kek.getKmsProps().get(ENCRYPT_ALTERNATE_KMS_KEY_IDS);
-        if (alternateKmsKeyIds != null && !alternateKmsKeyIds.isEmpty()) {
-          String[] ids = alternateKmsKeyIds.split("\\s*,\\s*");
-          for (String id : ids) {
-            if (!id.isEmpty()) {
-              kmsKeyIds.add(id);
-            }
-          }
-        }
-      }
-      return kmsKeyIds;
-    }
-
-    private Aead getAead(Map<String, ?> configs, String kmsType, String kmsKeyId)
-        throws GeneralSecurityException {
-      String kekUrl = kmsType + KMS_TYPE_SUFFIX + kmsKeyId;
-      KmsClient kmsClient = getKmsClient(configs, kekUrl);
-      if (kmsClient == null) {
-        throw new GeneralSecurityException("No kms client found for " + kekUrl);
-      }
-      return kmsClient.getAead(kekUrl);
     }
   }
 }
