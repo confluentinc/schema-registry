@@ -1,3 +1,9 @@
+confluent-schema-registry (7.3.14~0-1) unstable; urgency=low
+
+  * Release version 7.3.14-0
+
+ -- Confluent Packaging <packages@confluent.io>  Wed, 06 Aug 2025 09:38:42 +0000
+
 confluent-schema-registry (0.1~SNAPSHOT-1) unstable; urgency=low
 
   * Initial release.
