@@ -1,0 +1,7 @@
+diff --git a/version.txt b/version.txt
+index addce8bcd97..e69de29bb2d 100644
+--- a/version.txt
++++ b/version.txt
+@@ -1,2 +0,0 @@
+-##This file must be updated at package time to have a valid package##
+-invalid
