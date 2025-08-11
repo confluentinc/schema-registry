@@ -388,6 +388,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     log.debug("Creating dek {} for kek {}", subject, kekName);
 
+    // Ensure request uses subject from path param
+    request.setSubject(subject);
+
     checkName(kekName);
     checkSubject(subject);
 
