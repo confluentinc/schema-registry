@@ -388,12 +388,6 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     log.debug("Creating dek {} for kek {}", subject, kekName);
 
-    if (request.getSubject() != null
-        && !request.getSubject().isEmpty()
-        && !subject.equals(request.getSubject())) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo("subject");
-    }
-
     checkName(kekName);
     checkSubject(subject);
 
