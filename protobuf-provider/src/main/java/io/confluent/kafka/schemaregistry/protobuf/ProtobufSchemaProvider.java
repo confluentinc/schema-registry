@@ -37,7 +37,7 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
       return new ProtobufSchema(
               schema.getSchema(),
               schema.getReferences(),
-              resolveReferences(schema),
+              resolveReferences(schema, isNew),
               schema.getMetadata(),
               schema.getRuleSet(),
               null,
