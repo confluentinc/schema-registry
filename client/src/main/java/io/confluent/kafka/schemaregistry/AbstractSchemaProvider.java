@@ -45,17 +45,23 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
   }
 
   protected Map<String, String> resolveReferences(Schema schema) {
+    return resolveReferences(schema, false);
+  }
+
+  protected Map<String, String> resolveReferences(Schema schema, boolean isNew) {
     List<SchemaReference> references = schema.getReferences();
     if (references == null) {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
     Set<String> visited = new HashSet<>();
-    resolveReferences(schema, result, visited);
+    resolveReferences(schema, result, visited, isNew);
     return result;
   }
 
-  private void resolveReferences(Schema schema, Map<String, String> schemas, Set<String> visited) {
+  private void resolveReferences(
+      Schema schema, Map<String, String> schemas, Set<String> visited, boolean isNew) {
+    boolean lookupDeletedSchema = !isNew;
     List<SchemaReference> references = schema.getReferences();
     for (SchemaReference reference : references) {
       if (reference.getName() == null
@@ -72,7 +78,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
             schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
         Schema s = schemaVersionFetcher().getByVersion(refSubject.toQualifiedSubject(),
-            reference.getVersion(), true);
+            reference.getVersion(), lookupDeletedSchema);
         if (s == null) {
           throw new IllegalStateException("No schema reference found for subject \""
               + refSubject
@@ -83,7 +89,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
           // Update the version with the latest
           reference.setVersion(s.getVersion());
         }
-        resolveReferences(s, schemas, visited);
+        resolveReferences(s, schemas, visited, isNew);
         schemas.put(reference.getName(), s.getSchema());
       }
     }
