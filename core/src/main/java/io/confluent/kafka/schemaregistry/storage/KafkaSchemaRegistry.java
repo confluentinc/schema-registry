@@ -210,7 +210,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
     this.newSchemaCache = Caffeine.newBuilder()
-        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
         .expireAfterAccess(
             config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
@@ -220,7 +220,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           }
         });
     this.oldSchemaCache = Caffeine.newBuilder()
-        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
         .expireAfterAccess(
             config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
