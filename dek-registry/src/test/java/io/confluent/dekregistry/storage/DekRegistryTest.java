@@ -223,6 +223,16 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals(2, dek.getVersion());
         // Key material should be populated since KEK is shared.
         assertNotNull(dek.getKeyMaterial());
+
+        // Get latest DEK without key material
+        dek = dekRegistry.getLatestDek("kekName1", "subject1", DekFormat.AES256_GCM, true, false);
+        assertEquals(DekFormat.AES256_GCM, dek.getAlgorithm());
+        assertEquals("subject1", dek.getSubject());
+        assertEquals("kekName1", dek.getKekName());
+        assertEquals(KeyType.DEK, dek.getType());
+        assertEquals(2, dek.getVersion());
+        // Key material should not be populated since KEK is shared.
+        assertNull(dek.getKeyMaterial());
     }
 
     @Test
