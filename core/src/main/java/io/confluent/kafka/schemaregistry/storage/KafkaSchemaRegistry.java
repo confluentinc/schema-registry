@@ -498,11 +498,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           && (schemaId < 0 || schemaId == schemaIdAndSubjects.getSchemaId())) {
         if (schemaIdAndSubjects.hasSubject(subject)
             && !isSubjectVersionDeleted(subject, schemaIdAndSubjects.getVersion(subject))) {
+          // validate that all references still exist before returning the existing schema ID
+          validateReferences(schema);
           // return only if the schema was previously registered under the input subject
           return schemaIdAndSubjects.getSchemaId();
         } else {
           // need to register schema under the input subject
           schemaId = schemaIdAndSubjects.getSchemaId();
+          // validate that all references still exist before re-registering the schema
+          validateReferences(schema);
         }
       }
 
@@ -1119,12 +1123,46 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
     final String type = schemaType;
 
+    // Validate that all references exist before parsing the schema
+    validateReferences(schema);
+
     try {
       return provider.parseSchemaOrElseThrow(schema, isNew, normalize);
     } catch (Exception e) {
       throw new InvalidSchemaException("Invalid schema " + schema
               + " with refs " + schema.getReferences()
               + " of type " + type + ", details: " + e.getMessage());
+    }
+  }
+
+  private void validateReferences(Schema schema) throws InvalidSchemaException {
+    if (schema.getReferences() == null || schema.getReferences().isEmpty()) {
+      return;
+    }
+
+    for (io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference ref : schema.getReferences()) {
+      if (ref.getSubject() == null || ref.getSubject().trim().isEmpty()) {
+        throw new InvalidSchemaException("Reference subject cannot be empty: " + ref);
+      }
+      if (ref.getVersion() == null || ref.getVersion() < 0) {
+        throw new InvalidSchemaException("Reference version cannot be negative: " + ref);
+      }
+
+      try {
+        // check if the referenced schema exists and is not deleted
+        QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+            tenant(), "", ref.getSubject());
+        SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
+        SchemaRegistryValue refValue = lookupCache.get(refKey);
+        
+        if (refValue == null || !(refValue instanceof SchemaValue) || ((SchemaValue) refValue).isDeleted()) {
+          throw new InvalidSchemaException(
+              "No schema reference found for " + ref.getName() + " in subject " + ref.getSubject());
+        }
+      } catch (SchemaRegistryException | StoreException e) {
+        throw new InvalidSchemaException(
+            "Failed to validate reference " + ref.getName() + " in subject " + ref.getSubject(), e);
+      }
     }
   }
 
