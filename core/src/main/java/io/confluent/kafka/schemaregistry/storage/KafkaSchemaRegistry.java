@@ -1007,6 +1007,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         }
       } else {
         kafkaStore.put(key, null);
+        // Invalidate the parsed schemas so that re-registration of dangling references will fail
+        schemaCache.invalidateAll();
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1081,6 +1083,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         for (Integer version : deletedVersions) {
           kafkaStore.put(new SchemaKey(subject, version), null);
         }
+        // Invalidate the parsed schemas so that re-registration of dangling references will fail
+        schemaCache.invalidateAll();
       }
       return deletedVersions;
 
