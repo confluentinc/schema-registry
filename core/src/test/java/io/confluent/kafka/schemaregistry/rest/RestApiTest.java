@@ -1523,6 +1523,47 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testDeleteAndCreateWithDanglingReference() throws Exception {
+    int parentId = 2;
+    testSchemaReferencesInContext("", "", parentId);
+
+    String subject = "my_reference";
+    String subject2 = "my_referrer";
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemas.get(1));
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", subject, 1);
+    request.setReferences(Collections.singletonList(ref));
+    try {
+      restApp.restClient.registerSchema(request, subject2, false).getId();
+      fail("Registration should fail with " +
+          + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      // Registering a schema with dangling reference should fail
+      assertEquals(
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // Hard delete reference
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", true));
+
+    try {
+      restApp.restClient.registerSchema(request, subject2, false).getId();
+      fail("Registration should fail with " +
+          + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      // Registering a schema with dangling reference should fail
+      assertEquals(
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testGetLatestVersionNonExistentSubject() throws Exception {
     String subject = "non_existent_subject";
 
