@@ -635,7 +635,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(kekName);
       }
-      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true);
+      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true, false);
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
@@ -785,7 +785,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(kekName);
       }
-      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true);
+      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true, false);
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
