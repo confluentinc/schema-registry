@@ -159,3 +159,9 @@ RELEASE_%:
 	echo 0 > $@
 
 check:
+
+debian-control:
+	@echo "Generating debian/control from debian/control.in with VERSION=$(DEB_VERSION)"
+	sed 's/##VERSION##/$(DEB_VERSION)/g' debian/control.in > debian/control
+	git add debian/control
+	git commit -m "Add control file."
