@@ -1527,17 +1527,30 @@ public class RestApiTest extends ClusterTestHarness {
     String subject2 = "my_referrer";
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
 
-    // Hard delete reference
-    assertEquals((Integer) 1, restApp.restClient
-        .deleteSchemaVersion
-            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", true));
-
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get(1));
     SchemaReference ref = new SchemaReference("otherns.Subrecord", subject, 1);
     request.setReferences(Collections.singletonList(ref));
     try {
-      int registeredId = restApp.restClient.registerSchema(request, subject2, false).getId();
+      restApp.restClient.registerSchema(request, subject2, false).getId();
+      fail("Registration should fail with " +
+          + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      // Registering a schema with dangling reference should fail
+      assertEquals(
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // Hard delete reference
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1", true));
+
+    try {
+      restApp.restClient.registerSchema(request, subject2, false).getId();
+      fail("Registration should fail with " +
+          + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
       // Registering a schema with dangling reference should fail
       assertEquals(
