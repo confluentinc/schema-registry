@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdat
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
@@ -1140,7 +1141,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       return;
     }
 
-    for (io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference ref : schema.getReferences()) {
+    for (SchemaReference ref : schema.getReferences()) {
       if (ref.getSubject() == null || ref.getSubject().trim().isEmpty()) {
         throw new InvalidSchemaException("Reference subject cannot be empty: " + ref);
       }
@@ -1155,7 +1156,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
         SchemaRegistryValue refValue = lookupCache.get(refKey);
         
-        if (refValue == null || !(refValue instanceof SchemaValue) || ((SchemaValue) refValue).isDeleted()) {
+        if (refValue == null || !(refValue instanceof SchemaValue) 
+            || ((SchemaValue) refValue).isDeleted()) {
           throw new InvalidSchemaException(
               "No schema reference found for " + ref.getName() + " in subject " + ref.getSubject());
         }
