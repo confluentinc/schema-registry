@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
-import io.confluent.kafka.schemaregistry.entities.SchemaRegistryType;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryType;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.Props;
@@ -90,6 +90,6 @@ public class ServerMetadataResource {
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("metadata.type")
   public SchemaRegistryType getSchemaRegistryType() {
-    return Props.GetSchemaRegistryType(this.schemaRegistry.properties());
+    return Props.getSchemaRegistryType(this.schemaRegistry.properties());
   }
 }

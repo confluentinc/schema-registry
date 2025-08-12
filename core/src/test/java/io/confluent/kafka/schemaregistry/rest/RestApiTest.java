@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -1956,6 +1957,12 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals(AppInfoParser.getVersion(), srVersion.getVersion());
       assertEquals(AppInfoParser.getCommitId(), srVersion.getCommitId());
   }
+
+//  @Test
+//  public void testGetSchemaRegistryServerType() {
+//    SchemaRegistryType srType = restApp.restClient.getSchemaRegistryType();
+//    assertEquals(SchemaRegistryServerType.type, srType);
+//  }
 
   @Test
   public void testHttpResponseHeaders() throws Exception {
