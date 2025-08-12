@@ -38,6 +38,7 @@ class ClientConfig extends AbstractConfig {
   public static final long RECONNECT_BACKOFF_MS_DEFAULT = 50L;
   public static final long RECONNECT_BACKOFF_MAX_MS_DEFAULT = 1000L;
   public static final long RETRY_BACKOFF_MS_DEFAULT = 100L;
+  public static final long RETRY_BACKOFF_MAX_MS_DEFAULT = 1000L;
   public static final int REQUEST_TIMEOUT_MS_DEFAULT = 305000;
   public static final long CONNECTIONS_MAX_IDLE_MS_DEFAULT = 9 * 60 * 1000;
 
@@ -86,6 +87,14 @@ class ClientConfig extends AbstractConfig {
                 atLeast(0L),
                 ConfigDef.Importance.LOW,
                 CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+        .define(
+                CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG,
+                ConfigDef.Type.LONG,
+                RETRY_BACKOFF_MAX_MS_DEFAULT,
+                atLeast(0L),
+                ConfigDef.Importance.LOW,
+                CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC
+        )
         .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
                 // chosen to be higher than the default of max.poll.interval.ms

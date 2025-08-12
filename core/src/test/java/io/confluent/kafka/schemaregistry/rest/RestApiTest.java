@@ -58,6 +58,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectExcep
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -110,6 +111,16 @@ public class RestApiTest extends ClusterTestHarness {
         Collections.singletonList(DEFAULT_CONTEXT),
         restApp.restClient.getAllContexts());
 
+    // test getAllContextsWithPagination limit=1 offset=0
+    assertEquals("Getting all subjects should return default context",
+            Collections.singletonList(DEFAULT_CONTEXT),
+            restApp.restClient.getAllContextsWithPagination(1, 0));
+
+    // test getAllContextsWithPagination limit=1 offset=0
+    assertEquals("Getting all subjects should return default context",
+            Collections.emptyList(),
+            restApp.restClient.getAllContextsWithPagination(1, 1));
+
     // test getAllSubjects with no existing data
     assertEquals("Getting all subjects should return empty",
                  allSubjects,
@@ -159,6 +170,14 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Getting all subjects should match all registered subjects",
                  allSubjects,
                  restApp.restClient.getAllSubjects());
+
+    // test pagination with limit of 1
+    assertEquals("Getting all subjects with pagination offset=0, limit=1 should return first registered subject",
+            ImmutableList.of(allSubjects.get(0)),
+            restApp.restClient.getAllSubjectsWithPagination(0, 1));
+    assertEquals("Getting all subjects with pagination offset=1, limit=1 should return second registered subject",
+            ImmutableList.of(allSubjects.get(1)),
+            restApp.restClient.getAllSubjectsWithPagination(1, 1));
 
     List<Schema> latestSchemas = restApp.restClient.getSchemas(null, false, true);
     assertEquals("Getting latest schemas should return two schemas",
@@ -707,8 +726,7 @@ public class RestApiTest extends ClusterTestHarness {
             .getCompatibilityLevel()
     );
 
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(IMPORT.name());
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(IMPORT.name());
     assertEquals(
         modeUpdateRequest,
         restApp.restClient.setMode(IMPORT.name(), null));
@@ -720,8 +738,7 @@ public class RestApiTest extends ClusterTestHarness {
             .getMode()
     );
 
-    modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(READONLY.name());
+    modeUpdateRequest = new ModeUpdateRequest(READONLY.name());
     assertEquals(
         modeUpdateRequest,
         restApp.restClient.setMode(READONLY.name(), defaultContext));
@@ -980,6 +997,9 @@ public class RestApiTest extends ClusterTestHarness {
             (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1"));
 
     refs = restApp.restClient.getReferencedBy(subject, 1);
+    assertTrue(refs.isEmpty());
+
+    refs = restApp.restClient.getReferencedByWithPagination(subject, 1, 0, 1);
     assertTrue(refs.isEmpty());
 
     assertEquals((Integer) 1, restApp.restClient
@@ -1263,10 +1283,21 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 1);
     assertEquals(Collections.singletonList(subject1), associatedSubjects);
 
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+    assertEquals(Collections.emptyList(), associatedSubjects);
+
     associatedSubjects = restApp.restClient.getAllSubjectsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertEquals(Arrays.asList(subject1, subject2), associatedSubjects);
+
+    associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 0);
+    assertEquals(associatedSubjects.size(), 1);
+    assertEquals(Collections.singletonList(subject1), associatedSubjects);
+
   }
 
   @Test
@@ -1304,10 +1335,19 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(associatedSubjects.size(), 1);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
 
+    associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, false, 1, 1);
+    assertEquals(associatedSubjects.size(), 0);
+
     associatedSubjects = restApp.restClient.getAllVersionsById(
         RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true);
     assertEquals(associatedSubjects.size(), 2);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject1, 1)));
+    assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
+
+    associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES, 1, null, true, 1, 1);
+    assertEquals(associatedSubjects.size(), 1);
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)));
   }
 
@@ -1478,6 +1518,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals(Arrays.asList(1,2), restApp.restClient.getAllVersions(
             RestService.DEFAULT_REQUEST_PROPERTIES,
             subject, true));
+    // test with pagination
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersionsWithPagination(
+            RestService.DEFAULT_REQUEST_PROPERTIES,
+            subject, true, 0, 1));
     //soft delete again
     try {
       restApp.restClient
@@ -2134,6 +2178,9 @@ public class RestApiTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
 
+    // default context for error message
+    String context = ".";
+
     try {
       restApp.restClient.getMode(subject).getMode();
       fail(String.format("Subject %s should not be found when there's no mode override", subject));
@@ -2156,9 +2203,10 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("READONLY_OVERRIDE", restApp.restClient.getMode(subject).getMode());
     try {
       restApp.restClient.registerSchema(schema, "testSubject2");
-      fail(String.format("Subject %s is in read-only mode", "testSubject2"));
+      fail(String.format("Subject %s in context %s is in read-only mode", "testSubject2", context));
     } catch (RestClientException rce) {
-      assertEquals("Subject is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
+      assertEquals("Subject testSubject2 in context " 
+      + context + " is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
           .getErrorCode());
     }
   }

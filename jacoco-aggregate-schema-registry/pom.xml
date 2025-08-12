@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.6.7-0</version>
+        <version>7.7.5-0</version>
     </parent>
 
     <artifactId>jacoco-aggregate-schema-registry</artifactId>
@@ -24,6 +24,11 @@
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>dek-registry</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

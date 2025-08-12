@@ -8,15 +8,14 @@ semaphore:
   pipeline_type: cp
   nano_version: true
   execution_time_limit: {"hours": 2}
-  downstream_projects: ["kafka-rest", "ksql",
-    "confluent-security-plugins", "kafka-connect-replicator",
-    "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
+  downstream_projects: ["kafka-rest", "ksql", "confluent-security-plugins", "kafka-connect-replicator", "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 sonarqube:
   enable: true
   coverage_exclusions:
     - "**/*.pb.*"
     - "**/mk-include/**/*"
     - "protobuf-serializer/**"
+    - "client/src/main/java/io/confluent/kafka/schemaregistry/utils/BoundedConcurrentHashMap.java"
 git:
   enable: true
 code_artifact:
@@ -33,3 +32,4 @@ code_artifact:
     - maven-snapshots/maven/io.confluent/kafka-schema-*
     - maven-snapshots/maven/io.confluent/kafka-avro-serializer
     - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry
+    - pypi-internal/pypi//confluent-ci-tools

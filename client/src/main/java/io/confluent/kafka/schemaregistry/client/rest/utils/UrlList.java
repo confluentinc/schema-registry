@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.utils;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,12 +40,16 @@ public class UrlList {
       throw new IllegalArgumentException("Expected at least one URL to be passed in constructor");
     }
 
-    this.urls = new ArrayList<String>(urls);
-    this.index = new AtomicInteger(random.nextInt(urls.size()));
+    this.urls = new ArrayList<>(urls);
+    this.index = new AtomicInteger(0);
   }
 
   public UrlList(String url) {
-    this(Arrays.asList(url));
+    this(Collections.singletonList(url));
+  }
+
+  public void randomizeIndex() {
+    this.index.set(random.nextInt(urls.size()));
   }
 
   public List<String> urls() {
