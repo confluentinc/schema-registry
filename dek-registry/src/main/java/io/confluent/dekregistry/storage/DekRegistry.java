@@ -434,11 +434,20 @@ public class DekRegistry implements Closeable {
 
   public DataEncryptionKey getLatestDek(String kekName, String subject, DekFormat algorithm,
       boolean lookupDeleted) throws SchemaRegistryException {
+    return getLatestDek(kekName, subject, algorithm, lookupDeleted, true);
+  }
+
+  public DataEncryptionKey getLatestDek(String kekName, String subject, DekFormat algorithm,
+      boolean lookupDeleted, boolean maybeGenerateRawDek) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     List<KeyValue<EncryptionKeyId, EncryptionKey>> deks =
         getDeks(tenant, kekName, subject, algorithm, lookupDeleted);
     Collections.reverse(deks);
-    return deks.isEmpty() ? null : maybeGenerateRawDek((DataEncryptionKey) deks.get(0).value);
+    if (deks.isEmpty()) {
+      return null;
+    }
+    DataEncryptionKey dek = (DataEncryptionKey) deks.get(0).value;
+    return maybeGenerateRawDek ? maybeGenerateRawDek(dek) : dek;
   }
 
   public DataEncryptionKey getDek(String kekName, String subject, int version,
