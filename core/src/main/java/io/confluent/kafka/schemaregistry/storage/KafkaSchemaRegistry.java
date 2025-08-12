@@ -136,7 +136,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
   private final Map<String, Object> props;
-  private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
+  private final LoadingCache<RawSchema, ParsedSchema> newSchemaCache;
+  private final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -227,8 +228,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
-    this.schemaCache = Caffeine.newBuilder()
-        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+    this.newSchemaCache = Caffeine.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
+        .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
+            TimeUnit.SECONDS)
+        .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+    this.oldSchemaCache = Caffeine.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
@@ -1150,8 +1156,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             deleteConfig(subject);
           }
         }
+        newSchemaCache.invalidateAll();
       } else {
         kafkaStore.put(key, null);
+        // Invalidate the parsed schemas so that re-registration of dangling references will fail
+        oldSchemaCache.invalidateAll();
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1224,10 +1233,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (getConfig(subject) != null) {
           deleteConfig(subject);
         }
+        newSchemaCache.invalidateAll();
       } else {
         for (Integer version : deletedVersions) {
           kafkaStore.put(new SchemaKey(subject, version), null);
         }
+        // Invalidate the parsed schemas so that re-registration of dangling references will fail
+        oldSchemaCache.invalidateAll();
       }
       return deletedVersions;
 
@@ -1642,7 +1654,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           boolean isNew,
           boolean normalize) throws InvalidSchemaException {
     try {
-      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema.copy(), isNew, normalize));
+      ParsedSchema parsedSchema = isNew
+          ? newSchemaCache.get(new RawSchema(schema.copy(), isNew, normalize))
+          : oldSchemaCache.get(new RawSchema(schema.copy(), isNew, normalize));
       if (schema.getVersion() != null) {
         parsedSchema = parsedSchema.copy(schema.getVersion());
       }

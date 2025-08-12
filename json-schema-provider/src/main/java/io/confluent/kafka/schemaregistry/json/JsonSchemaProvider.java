@@ -37,7 +37,7 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
       return new JsonSchema(
               schema.getSchema(),
               schema.getReferences(),
-              resolveReferences(schema),
+              resolveReferences(schema, isNew),
               schema.getMetadata(),
               schema.getRuleSet(),
               null
