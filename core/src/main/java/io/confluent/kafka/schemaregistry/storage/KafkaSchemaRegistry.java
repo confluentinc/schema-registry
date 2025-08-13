@@ -1155,8 +1155,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         schemaValue.setDeleted(true);
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
-
-        newSchemaCache.invalidateAll();
         logSchemaOp(schema, "DELETE");
       } else {
         kafkaStore.put(key, null);
@@ -1169,9 +1167,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             deleteConfig(subject);
           }
         }
-
-        // Invalidate the parsed schemas so that re-registration of dangling references will fail
-        oldSchemaCache.invalidateAll();
+      } else {
+        kafkaStore.put(key, null);
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1238,8 +1235,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         DeleteSubjectKey key = new DeleteSubjectKey(subject);
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
-
-        newSchemaCache.invalidateAll();
       } else {
         for (Integer version : deletedVersions) {
           kafkaStore.put(new SchemaKey(subject, version), null);
@@ -1250,9 +1245,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         if (getConfig(subject) != null) {
           deleteConfig(subject);
         }
-
-        // Invalidate the parsed schemas so that re-registration of dangling references will fail
-        oldSchemaCache.invalidateAll();
+      } else {
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
+        }
       }
       return deletedVersions;
 
@@ -2330,6 +2326,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       }
     }
     return new DelegatingIterator<>(versions.iterator());
+  }
+
+  public void clearNewSchemaCache() {
+    newSchemaCache.invalidateAll();
+  }
+
+  public void clearOldSchemaCache() {
+    oldSchemaCache.invalidateAll();
   }
 
   @Override
