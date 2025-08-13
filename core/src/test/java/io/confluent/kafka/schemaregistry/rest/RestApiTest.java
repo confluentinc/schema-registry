@@ -2015,6 +2015,64 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testReviveSchemaWithDanglingReference() throws Exception {
+    // Step 1: Register a schema ref
+    String refSchema = "{\"type\":\"record\",\"name\":\"Ref\",\"namespace\":\"com.example\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
+    int refId = restApp.restClient.registerSchema(refSchema, "ref");
+    assertEquals(1, refId);
+
+    // Step 2: Register a schema base with reference to ref
+    String baseSchema = "{\"type\":\"record\",\"name\":\"Base\",\"namespace\":\"com.example\",\"fields\":[{\"name\":\"refField\",\"type\":\"com.example.Ref\"}]}";
+    RegisterSchemaRequest baseRequest = new RegisterSchemaRequest();
+    baseRequest.setSchema(baseSchema);
+    SchemaReference ref = new SchemaReference("com.example.Ref", "ref", 1);
+    baseRequest.setReferences(Collections.singletonList(ref));
+
+    RegisterSchemaResponse response = restApp.restClient.registerSchema(baseRequest, "base", false);
+    assertEquals(2, response.getId());
+
+    // Step 3: Soft delete base
+    assertEquals(
+        (Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "base", "1"));
+
+    // Step 4: Soft delete ref
+    assertEquals(
+        (Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "ref", "1"));
+
+    // Step 5: Hard delete ref
+    assertEquals(
+        (Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "ref", "1", true));
+
+    // Step 6: Re-register base to "revive" it
+    // BUG FIXED - so now fail validation
+    try {
+      restApp.restClient.registerSchema(baseRequest, "base", false);
+      fail("Re-registering base schema with dangling reference should fail");
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+    // Step 7: Try to register a modified version of base - this should fail
+    String modifiedBaseSchema = "{\"type\":\"record\",\"name\":\"Base\",\"namespace\":\"com.example\",\"fields\":[{\"name\":\"refField\",\"type\":\"com.example.Ref\"},{\"name\":\"newField\",\"type\":\"string\"}]}";
+    RegisterSchemaRequest modifiedRequest = new RegisterSchemaRequest();
+    modifiedRequest.setSchema(modifiedBaseSchema);
+    modifiedRequest.setReferences(Collections.singletonList(ref));
+
+    try {
+      restApp.restClient.registerSchema(modifiedRequest, "base", false);
+      fail("Registering modified schema with dangling reference should fail");
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testGetLatestVersionNonExistentSubject() throws Exception {
     String subject = "non_existent_subject";
 

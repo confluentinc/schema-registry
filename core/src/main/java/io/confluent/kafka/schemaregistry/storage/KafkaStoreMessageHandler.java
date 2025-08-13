@@ -161,6 +161,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
         log.error("Failed to delete subject {} in the local cache", subject, e);
       }
     }
+    schemaRegistry.clearNewSchemaCache();
   }
 
   private void handleClearSubject(ClearSubjectValue clearSubjectValue) {
@@ -170,6 +171,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
     } catch (StoreException e) {
       log.error("Failed to clear subject {} in the local cache", subject, e);
     }
+    schemaRegistry.clearNewSchemaCache();
+    schemaRegistry.clearOldSchemaCache();
   }
 
   private void handleSchemaUpdate(SchemaKey schemaKey,
@@ -182,6 +185,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
       if (schemaValue.isDeleted()) {
         lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
+        schemaRegistry.clearNewSchemaCache();
         updateMetrics(metricsContainer.getSchemasDeleted(),
                       metricsContainer.getSchemasDeleted(getSchemaType(schemaValue)));
       } else {
@@ -191,6 +195,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
+      schemaRegistry.clearOldSchemaCache();
     }
   }
 
