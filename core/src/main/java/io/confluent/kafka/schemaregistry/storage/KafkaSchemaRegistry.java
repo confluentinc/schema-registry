@@ -1016,11 +1016,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             deleteConfig(subject);
           }
         }
-        newSchemaCache.invalidateAll();
       } else {
         kafkaStore.put(key, null);
-        // Invalidate the parsed schemas so that re-registration of dangling references will fail
-        oldSchemaCache.invalidateAll();
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1091,13 +1088,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         if (getConfig(subject) != null) {
           deleteConfig(subject);
         }
-        newSchemaCache.invalidateAll();
       } else {
         for (Integer version : deletedVersions) {
           kafkaStore.put(new SchemaKey(subject, version), null);
         }
-        // Invalidate the parsed schemas so that re-registration of dangling references will fail
-        oldSchemaCache.invalidateAll();
       }
       return deletedVersions;
 
@@ -1916,6 +1910,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
     }
     return new DelegatingIterator<>(versions.iterator());
+  }
+
+  public void clearNewSchemaCache() {
+    newSchemaCache.invalidateAll();
+  }
+
+  public void clearOldSchemaCache() {
+    oldSchemaCache.invalidateAll();
   }
 
   @Override
