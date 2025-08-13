@@ -7,7 +7,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>0.7.9.3.44-0</version>
+        <version>0.7.9.3.44-2</version>
     </parent>
 
     <groupId>io.confluent</groupId>
