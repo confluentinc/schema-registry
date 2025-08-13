@@ -81,8 +81,8 @@ public abstract class ClusterTestHarness {
     return choosePorts(1)[0];
   }
 
-  private int numBrokers;
-  private boolean setupRestApp;
+  private final int numBrokers;
+  private final boolean setupRestApp;
   protected String compatibilityType;
 
   // ZK Config
@@ -141,7 +141,7 @@ public abstract class ClusterTestHarness {
     for(int i = 0; i < servers.size(); i++) {
       serverUrls[i] = getSecurityProtocol() + "://" +
                       Utils.formatAddress(
-                          servers.get(i).config().effectiveAdvertisedListeners().head().host(),
+                          servers.get(i).config().effectiveAdvertisedBrokerListeners().head().host(),
                           servers.get(i).boundPort(listenerType)
                       );
     }

@@ -1151,7 +1151,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
         logSchemaOp(schema, "DELETE");
-        if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
+      } else {
+        kafkaStore.put(key, null);
+
+        if (!getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
           }
@@ -1227,6 +1230,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         DeleteSubjectKey key = new DeleteSubjectKey(subject);
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
+      } else {
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
+        }
         if (getMode(subject) != null) {
           deleteMode(subject);
         }

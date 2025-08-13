@@ -18,7 +18,7 @@ package io.confluent.kafka.formatter.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
-import java.util.Collections;
+import java.io.InputStream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
@@ -27,15 +27,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializerConfig;
 
@@ -75,12 +71,11 @@ public class KafkaJsonSchemaFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     JsonSchemaMessageReader jsonSchemaReader =
-        new JsonSchemaMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new JsonSchemaMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -102,12 +97,11 @@ public class KafkaJsonSchemaFormatterTest {
     formatter.init(props);
 
     String inputJson = "10\t{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     JsonSchemaMessageReader jsonSchemaReader =
-        new JsonSchemaMessageReader(url, keySchema, recordSchema, "topic1", true, reader,
+        new JsonSchemaMessageReader(url, keySchema, recordSchema, "topic1", true,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = jsonSchemaReader.readRecords(is).next();
 
     byte[] serializedKey = message.key();
     byte[] serializedValue = message.value();
@@ -127,13 +121,12 @@ public class KafkaJsonSchemaFormatterTest {
   @Test
   public void testInvalidFormat() {
     String inputJson = "{\"invalid-field-name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     JsonSchemaMessageReader jsonSchemaReader =
-        new JsonSchemaMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new JsonSchemaMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
     try {
-      jsonSchemaReader.readMessage();
+      jsonSchemaReader.readRecords(is).next();
       fail("Registering an invalid schema should fail");
     } catch (SerializationException e) {
       assertTrue("The cause of the exception should be json schema",
