@@ -1167,8 +1167,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             deleteConfig(subject);
           }
         }
-      } else {
-        kafkaStore.put(key, null);
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1244,10 +1242,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         }
         if (getConfig(subject) != null) {
           deleteConfig(subject);
-        }
-      } else {
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
         }
       }
       return deletedVersions;
