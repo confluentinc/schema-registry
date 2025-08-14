@@ -25,7 +25,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Props {
-  public static final String PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES = "schema.registry.metadata.type.attributes";
+  public static final String PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES
+      = "schema.registry.metadata.type.attributes";
   private static final Logger log = LoggerFactory.getLogger(Props.class);
 
   public static SchemaRegistryType getSchemaRegistryType(Map<String, Object> props) {
@@ -45,8 +46,8 @@ public class Props {
             processedList.add(type.trim().toLowerCase());
           }
         } else if (item != null) {
-          throw new IllegalArgumentException("Invalid schema registry type attribute: " + item +
-              ". Expected List<String> but got " + item.getClass().getSimpleName());
+          throw new IllegalArgumentException("Invalid schema registry type attribute: " + item
+              + ". Expected List<String> but got " + item.getClass().getSimpleName());
         }
       }
       return new SchemaRegistryType(processedList);

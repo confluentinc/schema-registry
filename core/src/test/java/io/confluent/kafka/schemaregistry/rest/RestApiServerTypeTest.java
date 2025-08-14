@@ -19,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryType;
+import io.confluent.kafka.schemaregistry.utils.Props;
 import java.util.Properties;
 import org.junit.Test;
 
@@ -31,7 +32,7 @@ public class RestApiServerTypeTest extends ClusterTestHarness {
   @Override
   protected Properties getSchemaRegistryProperties() throws Exception {
     Properties props = new Properties();
-    props.setProperty("schema.registry.metadata.type", "enterprise");
+    props.setProperty(Props.PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES, "enterprise");
     return props;
   }
 
