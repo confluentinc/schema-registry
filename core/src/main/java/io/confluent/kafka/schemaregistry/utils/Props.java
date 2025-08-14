@@ -33,7 +33,6 @@ public class Props {
     Object srType = props.getOrDefault(PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES,
         Arrays.asList(SchemaRegistryType.DEFAULT_ATTRIBUTE));
     if (srType == null) {
-      log.warn("Schema registry type not specified, defaulting to 'opensource'");
       return new SchemaRegistryType();
     } else if (srType instanceof List) {
       List<?> srTypeList = (List<?>) srType;
@@ -41,13 +40,13 @@ public class Props {
       List<String> processedList = new ArrayList<>();
       for (Object item : srTypeList) {
         if (item instanceof String) {
-          String type = (String) item;
-          if (type != null) {
-            processedList.add(type.trim().toLowerCase());
+          String attributeStr = (String) item;
+          if (attributeStr != null) {
+            processedList.add(attributeStr.trim().toLowerCase());
           }
         } else if (item != null) {
           throw new IllegalArgumentException("Invalid schema registry type attribute: " + item
-              + ". Expected List<String> but got " + item.getClass().getSimpleName());
+              + ". Expected String but got " + item.getClass().getSimpleName());
         }
       }
       return new SchemaRegistryType(processedList);
