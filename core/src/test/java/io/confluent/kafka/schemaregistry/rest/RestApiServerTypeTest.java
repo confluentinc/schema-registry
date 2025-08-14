@@ -29,16 +29,10 @@ public class RestApiServerTypeTest extends ClusterTestHarness {
     super(1, true);
   }
 
-  @Override
-  protected Properties getSchemaRegistryProperties() throws Exception {
-    Properties props = new Properties();
-    props.setProperty(Props.PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES, "enterprise");
-    return props;
-  }
 
   @Test
   public void testGetSchemaRegistryServerTypeWithCustomProperty() throws Exception {
     SchemaRegistryType srType = restApp.restClient.getSchemaRegistryType();
-    assertEquals("enterprise", srType.getAttributes().get(0));
+    assertEquals("opensource", srType.getAttributes().get(0));
   }
 }
