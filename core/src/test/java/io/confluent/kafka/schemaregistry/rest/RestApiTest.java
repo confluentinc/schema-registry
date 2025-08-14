@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -2058,6 +2059,12 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetSchemaRegistryServerType() throws Exception {
+    SchemaRegistryType srType = restApp.restClient.getSchemaRegistryType();
+    assertEquals(SchemaRegistryType.DEFAULT_ATTRIBUTE, srType.getAttributes().get(0));
+  }
+
+  @Test
   public void testHttpResponseHeaders() throws Exception {
     String baseUrl = restApp.restClient.getBaseUrls().current();
     String requestUrl = buildRequestUrl(baseUrl, "/v1/metadata/id");
@@ -2200,4 +2207,3 @@ public class RestApiTest extends ClusterTestHarness {
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 }
-
