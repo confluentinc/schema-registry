@@ -17,24 +17,41 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryType;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Props {
-  public static final String PROPERTY_SCHEMA_REGISTRY_TYPE = "schema.registry.metadata.type";
+  public static final String PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES = "schema.registry.metadata.type.attributes";
   private static final Logger log = LoggerFactory.getLogger(Props.class);
 
   public static SchemaRegistryType getSchemaRegistryType(Map<String, Object> props) {
-    Object srType = props.getOrDefault(PROPERTY_SCHEMA_REGISTRY_TYPE, null);
+    Object srType = props.getOrDefault(PROPERTY_SCHEMA_REGISTRY_TYPE_ATTRIBUTES,
+        Arrays.asList(SchemaRegistryType.DEFAULT_ATTRIBUTE));
     if (srType == null) {
       log.warn("Schema registry type not specified, defaulting to 'opensource'");
       return new SchemaRegistryType();
-    } else if (srType instanceof String) {
-      String srTypeString = ((String) srType).trim().toLowerCase();
-      return new SchemaRegistryType(srTypeString);
+    } else if (srType instanceof List) {
+      List<?> srTypeList = (List<?>) srType;
+      // Validate and process each element
+      List<String> processedList = new ArrayList<>();
+      for (Object item : srTypeList) {
+        if (item instanceof String) {
+          String type = (String) item;
+          if (type != null) {
+            processedList.add(type.trim().toLowerCase());
+          }
+        } else if (item != null) {
+          throw new IllegalArgumentException("Invalid schema registry type attribute: " + item +
+              ". Expected List<String> but got " + item.getClass().getSimpleName());
+        }
+      }
+      return new SchemaRegistryType(processedList);
     } else {
-      log.error("Schema registry type not specified, defaulting to 'opensource'");
+      log.error("Schema registry type unexpected, defaulting to 'opensource'");
       throw new IllegalArgumentException("Invalid schema registry type: " + srType);
     }
   }

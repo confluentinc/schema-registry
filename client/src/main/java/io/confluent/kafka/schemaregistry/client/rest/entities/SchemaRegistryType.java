@@ -21,25 +21,51 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaRegistryType {
-  public static final String DEFAULT_TYPE = "opensource";
+  public static final String DEFAULT_ATTRIBUTE = "opensource";
 
-  private final String type;
+  private final List<String> attributes;
 
   @JsonCreator
   public SchemaRegistryType() {
-    this.type = DEFAULT_TYPE;
+    this.attributes = new ArrayList<>();
+    this.attributes.add(DEFAULT_ATTRIBUTE);
   }
 
   public SchemaRegistryType(String type) {
-    this.type = type;
+    this.attributes = new ArrayList<>();
+    this.attributes.add(type);
   }
 
-  @JsonProperty("type")
-  public String getType() {
-    return type;
+  public SchemaRegistryType(List<String> attributes) {
+    this.attributes = new ArrayList<>(attributes);
+  }
+
+  @JsonProperty("attributes")
+  public List<String> getAttributes() {
+    return attributes;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SchemaRegistryType that = (SchemaRegistryType) o;
+    return Objects.equals(attributes, that.attributes);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(attributes);
   }
 }

@@ -1958,11 +1958,11 @@ public class RestApiTest extends ClusterTestHarness {
       assertEquals(AppInfoParser.getCommitId(), srVersion.getCommitId());
   }
 
-//  @Test
-//  public void testGetSchemaRegistryServerType() {
-//    SchemaRegistryType srType = restApp.restClient.getSchemaRegistryType();
-//    assertEquals(SchemaRegistryServerType.type, srType);
-//  }
+  @Test
+  public void testGetSchemaRegistryServerType() throws Exception {
+    SchemaRegistryType srType = restApp.restClient.getSchemaRegistryType();
+    assertEquals(SchemaRegistryType.DEFAULT_ATTRIBUTE, srType.getAttributes().get(0));
+  }
 
   @Test
   public void testHttpResponseHeaders() throws Exception {
@@ -2107,4 +2107,3 @@ public class RestApiTest extends ClusterTestHarness {
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 }
-

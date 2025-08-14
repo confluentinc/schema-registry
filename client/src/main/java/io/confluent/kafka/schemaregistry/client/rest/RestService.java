@@ -1408,7 +1408,7 @@ public class RestService implements Closeable, Configurable {
             DEFAULT_REQUEST_PROPERTIES, GET_SR_VERSION_RESPONSE_TYPE);
   }
 
-  public SchemaRegistryType getGetSrVersionResponseType()
+  public SchemaRegistryType getSchemaRegistryType()
           throws IOException, RestClientException {
     return httpRequest("/v1/metadata/type", "GET", null,
             DEFAULT_REQUEST_PROPERTIES, GET_SR_TYPE_RESPONSE_TYPE);
