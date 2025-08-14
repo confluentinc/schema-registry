@@ -132,7 +132,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
   private final Map<String, Object> props;
-  private final LoadingCache<RawSchema, ParsedSchema> schemaCache;
+  private final LoadingCache<RawSchema, ParsedSchema> newSchemaCache;
+  private final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
@@ -212,8 +213,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.metricsContainer = new MetricsContainer(config, this.kafkaClusterId);
     this.providers = initProviders(config);
-    this.schemaCache = Caffeine.newBuilder()
-        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG))
+    this.newSchemaCache = Caffeine.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
+        .expireAfterAccess(
+            config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
+        .build(new CacheLoader<RawSchema, ParsedSchema>() {
+          @Override
+          public ParsedSchema load(RawSchema s) throws Exception {
+            return loadSchema(s.getSchema(), s.isNew(), s.isNormalize());
+          }
+        });
+    this.oldSchemaCache = Caffeine.newBuilder()
+        .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
         .expireAfterAccess(
             config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG), TimeUnit.SECONDS)
         .build(new CacheLoader<RawSchema, ParsedSchema>() {
@@ -1457,7 +1468,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           boolean isNew,
           boolean normalize) throws InvalidSchemaException {
     try {
-      ParsedSchema parsedSchema = schemaCache.get(new RawSchema(schema.copy(), isNew, normalize));
+      ParsedSchema parsedSchema = isNew
+          ? newSchemaCache.get(new RawSchema(schema.copy(), isNew, normalize))
+          : oldSchemaCache.get(new RawSchema(schema.copy(), isNew, normalize));
       if (schema.getVersion() != null) {
         parsedSchema = parsedSchema.copy(schema.getVersion());
       }
@@ -1901,6 +1914,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       }
     }
     return new DelegatingIterator<>(versions.iterator());
+  }
+
+  public void clearNewSchemaCache() {
+    newSchemaCache.invalidateAll();
+  }
+
+  public void clearOldSchemaCache() {
+    oldSchemaCache.invalidateAll();
   }
 
   @Override
