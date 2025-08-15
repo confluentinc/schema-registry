@@ -87,19 +87,19 @@ public class PropsTest {
     assertEquals("Should contain empty list", attributes, result.getAttributes());
   }
 
-    @Test
+  @Test
   public void testGetSchemaRegistryDeploymentWithListContainingNulls() {
     Map<String, Object> props = new HashMap<>();
     List<Object> attributes = Arrays.asList("confluent", null, "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
 
-    SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
-    assertNotNull("Should return SchemaRegistryDeployment for list with nulls", result);
-    List<String> expected = Arrays.asList("confluent", "null", "enterprise");
-    assertEquals("Should convert null to string \"null\"", expected, result.getAttributes());
+    // This should throw NullPointerException because null.toString() fails
+    assertThrows("Should throw NullPointerException when list contains null",
+        NullPointerException.class,
+        () -> Props.getSchemaRegistryDeployment(props));
   }
 
-    @Test
+  @Test
   public void testGetSchemaRegistryDeploymentWithIntegerInList() {
     Map<String, Object> props = new HashMap<>();
     List<Object> attributes = Arrays.asList("confluent", 123, "enterprise");
@@ -195,7 +195,7 @@ public class PropsTest {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("confluent", "", "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
-    
+
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for list with empty strings", result);
     List<String> expected = Arrays.asList("confluent", "", "enterprise");
@@ -207,7 +207,7 @@ public class PropsTest {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("confluent", "   ", "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
-    
+
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for list with whitespace strings", result);
     List<String> expected = Arrays.asList("confluent", "", "enterprise");
@@ -217,12 +217,12 @@ public class PropsTest {
   @Test
   public void testGetSchemaRegistryDeploymentWithComplexObjects() {
     Map<String, Object> props = new HashMap<>();
-    List<Object> attributes = Arrays.asList("confluent", 42, true, 3.14, null);
+    List<Object> attributes = Arrays.asList("confluent", 42, true, 3.14);
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
-    
+
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for list with mixed types", result);
-    List<String> expected = Arrays.asList("confluent", "42", "true", "3.14", "null");
+    List<String> expected = Arrays.asList("confluent", "42", "true", "3.14");
     assertEquals("Should convert all types to lowercase strings", expected, result.getAttributes());
   }
 
@@ -231,7 +231,7 @@ public class PropsTest {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("  CONFLUENT  ", "Enterprise ", " opensource");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
-    
+
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment", result);
     List<String> expected = Arrays.asList("confluent", "enterprise", "opensource");

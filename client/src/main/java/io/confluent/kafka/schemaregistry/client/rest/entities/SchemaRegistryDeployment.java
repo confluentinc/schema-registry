@@ -35,7 +35,6 @@ public class SchemaRegistryDeployment {
   @JsonCreator
   public SchemaRegistryDeployment() {
     this.attributes = new ArrayList<>();
-    this.attributes.add(DEFAULT_ATTRIBUTE);
   }
 
   public SchemaRegistryDeployment(String attribute) {
