@@ -177,8 +177,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         config.definedResourceExtensionConfigName(),
         SchemaRegistryResourceExtension.class);
     this.props = new ConcurrentHashMap<>();
-    this.props.computeIfAbsent(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES,
-        k -> Arrays.asList(SchemaRegistryDeployment.DEFAULT_ATTRIBUTE));
     Boolean leaderEligibility = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);

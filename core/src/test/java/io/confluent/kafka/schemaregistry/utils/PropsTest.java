@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -31,21 +31,27 @@ import static org.junit.Assert.assertThrows;
 
 public class PropsTest {
 
-  @Test
+    @Test
   public void testGetSchemaRegistryDeploymentWithNullProperty() {
     Map<String, Object> props = new HashMap<>();
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
-    assertNull("Should return null when property is not present", result);
+    assertNotNull("Should return default SchemaRegistryDeployment when property is not present", result);
+    assertEquals("Should contain default attribute",
+        SchemaRegistryDeployment.DEFAULT_ATTRIBUTE,
+        result.getAttributes().get(0));
   }
 
-  @Test
+    @Test
   public void testGetSchemaRegistryDeploymentWithExplicitNullProperty() {
     Map<String, Object> props = new HashMap<>();
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, null);
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
-    assertNull("Should return null when property is explicitly null", result);
+    assertNotNull("Should return default SchemaRegistryDeployment when property is explicitly null", result);
+    assertEquals("Should contain default attribute",
+        SchemaRegistryDeployment.DEFAULT_ATTRIBUTE,
+        result.getAttributes().get(0));
   }
 
   @Test
@@ -81,7 +87,7 @@ public class PropsTest {
     assertEquals("Should contain empty list", attributes, result.getAttributes());
   }
 
-  @Test
+    @Test
   public void testGetSchemaRegistryDeploymentWithListContainingNulls() {
     Map<String, Object> props = new HashMap<>();
     List<Object> attributes = Arrays.asList("confluent", null, "enterprise");
@@ -89,42 +95,32 @@ public class PropsTest {
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for list with nulls", result);
-    List<String> expected = Arrays.asList("confluent", null, "enterprise");
-    assertEquals("Should preserve null values in the list", expected, result.getAttributes());
+    List<String> expected = Arrays.asList("confluent", "null", "enterprise");
+    assertEquals("Should convert null to string \"null\"", expected, result.getAttributes());
   }
 
-  @Test
-  public void testGetSchemaRegistryDeploymentWithInvalidAttributeTypeInList() {
+    @Test
+  public void testGetSchemaRegistryDeploymentWithIntegerInList() {
     Map<String, Object> props = new HashMap<>();
     List<Object> attributes = Arrays.asList("confluent", 123, "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
 
-    IllegalArgumentException exception = assertThrows(
-        "Should throw IllegalArgumentException for invalid attribute type in list",
-        IllegalArgumentException.class,
-        () -> Props.getSchemaRegistryDeployment(props)
-    );
-
-    assertEquals("Should have proper error message",
-        "Invalid schema registry deployment attribute: 123. Expected String but got Integer",
-        exception.getMessage());
+    SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
+    assertNotNull("Should return SchemaRegistryDeployment for list with integer", result);
+    List<String> expected = Arrays.asList("confluent", "123", "enterprise");
+    assertEquals("Should convert integer to string", expected, result.getAttributes());
   }
 
-  @Test
+    @Test
   public void testGetSchemaRegistryDeploymentWithBooleanInList() {
     Map<String, Object> props = new HashMap<>();
     List<Object> attributes = Arrays.asList("confluent", true, "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
 
-    IllegalArgumentException exception = assertThrows(
-        "Should throw IllegalArgumentException for boolean attribute in list",
-        IllegalArgumentException.class,
-        () -> Props.getSchemaRegistryDeployment(props)
-    );
-
-    assertEquals("Should have proper error message",
-        "Invalid schema registry deployment attribute: true. Expected String but got Boolean",
-        exception.getMessage());
+    SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
+    assertNotNull("Should return SchemaRegistryDeployment for list with boolean", result);
+    List<String> expected = Arrays.asList("confluent", "true", "enterprise");
+    assertEquals("Should convert boolean to string", expected, result.getAttributes());
   }
 
   @Test
@@ -182,7 +178,7 @@ public class PropsTest {
         Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES);
   }
 
-  @Test
+    @Test
   public void testGetSchemaRegistryDeploymentWithMixedCaseStrings() {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("CONFLUENT", "Enterprise", "opensource");
@@ -190,7 +186,8 @@ public class PropsTest {
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for mixed case strings", result);
-    assertEquals("Should preserve case in attributes", attributes, result.getAttributes());
+    List<String> expected = Arrays.asList("confluent", "enterprise", "opensource");
+    assertEquals("Should convert to lowercase", expected, result.getAttributes());
   }
 
   @Test
@@ -198,10 +195,11 @@ public class PropsTest {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("confluent", "", "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
-
+    
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for list with empty strings", result);
-    assertEquals("Should preserve empty strings", attributes, result.getAttributes());
+    List<String> expected = Arrays.asList("confluent", "", "enterprise");
+    assertEquals("Should preserve empty strings after trimming and lowercasing", expected, result.getAttributes());
   }
 
   @Test
@@ -209,9 +207,34 @@ public class PropsTest {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("confluent", "   ", "enterprise");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
-
+    
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for list with whitespace strings", result);
-    assertEquals("Should preserve whitespace strings", attributes, result.getAttributes());
+    List<String> expected = Arrays.asList("confluent", "", "enterprise");
+    assertEquals("Should trim whitespace", expected, result.getAttributes());
+  }
+
+  @Test
+  public void testGetSchemaRegistryDeploymentWithComplexObjects() {
+    Map<String, Object> props = new HashMap<>();
+    List<Object> attributes = Arrays.asList("confluent", 42, true, 3.14, null);
+    props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
+    
+    SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
+    assertNotNull("Should return SchemaRegistryDeployment for list with mixed types", result);
+    List<String> expected = Arrays.asList("confluent", "42", "true", "3.14", "null");
+    assertEquals("Should convert all types to lowercase strings", expected, result.getAttributes());
+  }
+
+  @Test
+  public void testGetSchemaRegistryDeploymentTrimsAndLowercase() {
+    Map<String, Object> props = new HashMap<>();
+    List<String> attributes = Arrays.asList("  CONFLUENT  ", "Enterprise ", " opensource");
+    props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
+    
+    SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
+    assertNotNull("Should return SchemaRegistryDeployment", result);
+    List<String> expected = Arrays.asList("confluent", "enterprise", "opensource");
+    assertEquals("Should trim whitespace and convert to lowercase", expected, result.getAttributes());
   }
 }

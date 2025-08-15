@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDepl
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,13 +36,12 @@ public class Props {
     } else if (srDeployment instanceof List) {
       List<?> srDeploymentList = (List<?>) srDeployment;
       // Validate and process each element
-      List<String> processedList = new ArrayList<>(srDeploymentList.size());
-      srDeploymentList.stream().map(
-          item -> item.toString().trim().toLowerCase()
-      ).forEach(processedList::add);
+      List<String> processedList = srDeploymentList.stream().map(
+        item -> item.toString().trim().toLowerCase()
+      ).collect(Collectors.toList());
       return new SchemaRegistryDeployment(processedList);
     } else {
-      log.error("Schema registry deployment unexpected, defaulting to 'opensource'");
+      log.error("Schema registry deployment attribute type unexpected");
       throw new IllegalArgumentException("Invalid schema registry deployment: " + srDeployment);
     }
   }
