@@ -35,16 +35,10 @@ public class Props {
     } else if (srDeployment instanceof List) {
       List<?> srDeploymentList = (List<?>) srDeployment;
       // Validate and process each element
-      List<String> processedList = new ArrayList<>();
-      srDeploymentList.stream().map(item -> {
-        if (item instanceof String) {
-          return (String) item;
-        } else if (item != null) {
-          throw new IllegalArgumentException("Invalid schema registry deployment attribute: " + item
-              + ". Expected String but got " + item.getClass().getSimpleName());
-        }
-        return null;
-      }).forEach(processedList::add);
+      List<String> processedList = new ArrayList<>(srDeploymentList.size());
+      srDeploymentList.stream().map(
+          item -> item.toString().trim().toLowerCase()
+      ).forEach(processedList::add);
       return new SchemaRegistryDeployment(processedList);
     } else {
       log.error("Schema registry deployment unexpected, defaulting to 'opensource'");
