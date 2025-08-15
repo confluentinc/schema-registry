@@ -28,27 +28,24 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 
 import org.apache.avro.Schema.Parser;
 import org.apache.avro.SchemaParseException;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.*;
@@ -2058,6 +2055,12 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetSchemaRegistryServerDeployment() throws Exception {
+    SchemaRegistryDeployment srDeployment = restApp.restClient.getSchemaRegistryDeployment();
+    assertEquals(SchemaRegistryDeployment.DEFAULT_ATTRIBUTE, srDeployment.getAttributes().get(0));
+  }
+
+  @Test
   public void testHttpResponseHeaders() throws Exception {
     String baseUrl = restApp.restClient.getBaseUrls().current();
     String requestUrl = buildRequestUrl(baseUrl, "/v1/metadata/id");
@@ -2200,4 +2203,3 @@ public class RestApiTest extends ClusterTestHarness {
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
 }
-

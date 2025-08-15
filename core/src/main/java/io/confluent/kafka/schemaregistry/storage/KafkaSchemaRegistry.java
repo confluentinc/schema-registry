@@ -72,6 +72,8 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
+import io.confluent.kafka.schemaregistry.utils.Props;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
@@ -175,6 +177,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         config.definedResourceExtensionConfigName(),
         SchemaRegistryResourceExtension.class);
     this.props = new ConcurrentHashMap<>();
+    this.props.computeIfAbsent(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES,
+        k -> Arrays.asList(SchemaRegistryDeployment.DEFAULT_ATTRIBUTE));
     Boolean leaderEligibility = config.getBoolean(SchemaRegistryConfig.MASTER_ELIGIBILITY);
     if (leaderEligibility == null) {
       leaderEligibility = config.getBoolean(SchemaRegistryConfig.LEADER_ELIGIBILITY);
