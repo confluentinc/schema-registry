@@ -31,7 +31,7 @@ public class Props {
     Object srDeployment = props.getOrDefault(PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES,
         null);
     if (srDeployment == null) {
-      return null;
+      return new SchemaRegistryDeployment();
     } else if (srDeployment instanceof List) {
       List<?> srDeploymentList = (List<?>) srDeployment;
       // Validate and process each element
