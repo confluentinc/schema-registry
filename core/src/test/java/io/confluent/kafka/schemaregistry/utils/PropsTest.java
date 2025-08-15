@@ -31,27 +31,23 @@ import static org.junit.Assert.assertThrows;
 
 public class PropsTest {
 
-    @Test
+      @Test
   public void testGetSchemaRegistryDeploymentWithNullProperty() {
     Map<String, Object> props = new HashMap<>();
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return default SchemaRegistryDeployment when property is not present", result);
-    assertEquals("Should contain default attribute",
-        SchemaRegistryDeployment.DEFAULT_ATTRIBUTE,
-        result.getAttributes().get(0));
+    assertEquals("Should contain empty list as default", 0, result.getAttributes().size());
   }
 
-    @Test
+      @Test
   public void testGetSchemaRegistryDeploymentWithExplicitNullProperty() {
     Map<String, Object> props = new HashMap<>();
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, null);
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return default SchemaRegistryDeployment when property is explicitly null", result);
-    assertEquals("Should contain default attribute",
-        SchemaRegistryDeployment.DEFAULT_ATTRIBUTE,
-        result.getAttributes().get(0));
+    assertEquals("Should contain empty list as default", 0, result.getAttributes().size());
   }
 
   @Test

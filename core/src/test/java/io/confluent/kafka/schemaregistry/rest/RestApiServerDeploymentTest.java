@@ -29,8 +29,8 @@ public class RestApiServerDeploymentTest extends ClusterTestHarness {
 
 
   @Test
-  public void testGetSchemaRegistryServerDeploymentWithCustomProperty() throws Exception {
+  public void testGetSchemaRegistryServerDeploymentDefault() throws Exception {
     SchemaRegistryDeployment srDeployment = restApp.restClient.getSchemaRegistryDeployment();
-    assertEquals("opensource", srDeployment.getAttributes().get(0));
+    assertEquals("Should return empty attributes list by default", 0, srDeployment.getAttributes().size());
   }
 }

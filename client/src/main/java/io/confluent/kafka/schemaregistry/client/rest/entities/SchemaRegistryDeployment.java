@@ -28,8 +28,6 @@ import java.util.Objects;
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SchemaRegistryDeployment {
-  public static final String DEFAULT_ATTRIBUTE = "opensource";
-
   private final List<String> attributes;
 
   @JsonCreator
