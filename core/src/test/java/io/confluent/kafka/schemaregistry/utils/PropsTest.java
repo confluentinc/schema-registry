@@ -170,7 +170,7 @@ public class PropsTest {
   @Test
   public void testPropertyConstantValue() {
     assertEquals("Property constant should have correct value",
-        "schema.registry.metadata.type.attributes",
+        "schema.registry.metadata.deployment.attributes",
         Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES);
   }
 

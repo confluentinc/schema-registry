@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,7 +36,7 @@ public class Props {
       List<?> srDeploymentList = (List<?>) srDeployment;
       // Validate and process each element
       List<String> processedList = srDeploymentList.stream().map(
-        item -> item.toString().trim().toLowerCase()
+          item -> item.toString().trim().toLowerCase()
       ).collect(Collectors.toList());
       return new SchemaRegistryDeployment(processedList);
     } else {
