@@ -18,8 +18,10 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.Props;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -76,5 +78,18 @@ public class ServerMetadataResource {
   @PerformanceMetric("metadata.version")
   public SchemaRegistryServerVersion getSchemaRegistryVersion() {
     return new SchemaRegistryServerVersion(AppInfoParser.getVersion(), AppInfoParser.getCommitId());
+  }
+
+  @GET
+  @Path("/deployment")
+  @DocumentedName("getSchemaRegistryServerDeployment")
+  @Operation(summary = "Get Schema Registry deployment", responses = {
+      @ApiResponse(responseCode = "500",
+          description = "Error code 50001 -- Error in the backend data store\n")
+  })
+  @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("metadata.deployment")
+  public SchemaRegistryDeployment getSchemaRegistryDeployment() {
+    return Props.getSchemaRegistryDeployment(this.schemaRegistry.properties());
   }
 }
