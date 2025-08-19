@@ -22,6 +22,7 @@ import com.google.common.base.Ticker;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
 import java.io.IOException;
@@ -73,7 +74,7 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   /**
    * @deprecated use {@link #register(String, ParsedSchema)} instead;
-   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema} 
+   *     for example, you can convert a {@link Schema} into a {@link ParsedSchema}
    *     via {@code new AvroSchema(schema)}
    */
   @Deprecated
@@ -281,6 +282,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   default Collection<String> getAllContexts() throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default SchemaRegistryDeployment getSchemaRegistryDeployment() 
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
