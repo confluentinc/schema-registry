@@ -1,5 +1,24 @@
 [
   {
+    "description": "Allow addition of un-reserved property",
+    "original_metadata": {
+      "properties": {
+        "confluent:reserved": "cost,status"
+      }
+    },
+    "update_metadata": {
+      "properties": {
+        "confluent:reserved": "cost,status"
+      }
+    },
+    "original_schema": "syntax = \"proto3\";\npackage foo;\nmessage TestMessage {\n    string test_string = 1;\n    .foo.TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
+    "update_schema": "syntax = \"proto3\";\npackage foo;\n\nmessage TestMessage {\n  string test_string = 1;\n  .foo.TestMessage.Status test_int = 2;\n  float test_float = 3;\n\n  message Status {\n    string test_string = 1;\n  }\n}\n",
+    "changes": [
+      "FIELD_ADDED #/TestMessage/3"
+    ],
+    "compatible": true
+  },
+  {
     "description": "Detect package change",
     "original_schema": "syntax = \"proto3\";\npackage foo;\nmessage TestMessage {\n    string test_string = 1;\n    .foo.TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",
     "update_schema": "syntax = \"proto3\";\npackage bar;\nmessage TestMessage {\n    string test_string = 1;\n    .bar.TestMessage.Status test_int = 2;\n    message Status {\n    string test_string = 1;\n    }\n}",

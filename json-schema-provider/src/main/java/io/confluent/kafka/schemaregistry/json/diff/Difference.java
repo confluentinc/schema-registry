@@ -54,6 +54,7 @@ public class Difference {
     PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
     PROPERTY_ADDED_IS_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
     PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL,
+    RESERVED_PROPERTY_REMOVED, RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY,
 
     MAX_ITEMS_ADDED, MAX_ITEMS_REMOVED, MAX_ITEMS_INCREASED, MAX_ITEMS_DECREASED, MIN_ITEMS_ADDED,
     MIN_ITEMS_REMOVED, MIN_ITEMS_INCREASED, MIN_ITEMS_DECREASED, UNIQUE_ITEMS_ADDED,
@@ -132,6 +133,7 @@ public class Difference {
     return message;
   }
 
+  @SuppressWarnings("CyclomaticComplexity")
   private String propertyOrItemError() {
     if (type == Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL
           || type == Type.ITEM_ADDED_TO_OPEN_CONTENT_MODEL) {
@@ -153,6 +155,12 @@ public class Difference {
           || type == Type.ITEM_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL) {
       return "The %s schema has a property or item at path '" + jsonPath + "' which is "
                + "missing in the %s schema and is not covered by its partially open content model";
+    } else if (type == Type.RESERVED_PROPERTY_REMOVED) {
+      return "The %s schema has reserved property '" + jsonPath + "' removed from its metadata "
+              + "which is present in the %s schema.";
+    } else if (type == Type.RESERVED_PROPERTY_CONFLICTS_WITH_PROPERTY) {
+      return "The %s schema has property at path '" + jsonPath + "' that conflicts with the "
+              + "reserved properties which is missing in the %s schema.";
     }
     return "";
   }
