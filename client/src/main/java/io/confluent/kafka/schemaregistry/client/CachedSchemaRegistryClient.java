@@ -50,6 +50,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -848,6 +849,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Collection<String> getAllContexts() throws IOException, RestClientException {
     return restService.getAllContexts();
+  }
+
+  @Override
+  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+      throws IOException, RestClientException {
+    return restService.getSchemaRegistryDeployment();
   }
 
   @Override

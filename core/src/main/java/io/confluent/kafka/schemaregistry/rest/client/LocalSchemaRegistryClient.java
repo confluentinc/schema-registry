@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -49,6 +50,7 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
+import io.confluent.kafka.schemaregistry.utils.Props;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
@@ -659,6 +661,12 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
     return schema.getVersion();
+  }
+
+  @Override
+  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+      throws IOException, RestClientException {
+    return Props.getSchemaRegistryDeployment(schemaRegistry.properties());
   }
 
   @Override

@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
@@ -720,6 +721,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         .distinct()
         .collect(Collectors.toList());
     return results;
+  }
+
+  @Override
+  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+      throws IOException, RestClientException {
+    // For the mock client, return an empty deployment (default behavior)
+    return new SchemaRegistryDeployment();
   }
 
   @Override
