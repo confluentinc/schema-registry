@@ -17,6 +17,8 @@ package io.confluent.connect.protobuf;
 
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
+import java.io.IOException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -110,7 +112,8 @@ public class ProtobufConverter implements Converter {
           topic
       ), e);
     } catch (SerializationException e) {
-      if (e.getCause() instanceof java.io.IOException) {
+      if (e.getCause() instanceof java.io.IOException &&
+          ExceptionUtils.isNetworkConnectionException((IOException) e.getCause())) {
         throw new NetworkException(
             String.format("I/O error while serializing Protobuf data for topic %s: %s",
                 topic, e.getCause().getMessage()),
@@ -159,7 +162,8 @@ public class ProtobufConverter implements Converter {
           topic
       ), e);
     } catch (SerializationException e) {
-      if (e.getCause() instanceof java.io.IOException) {
+      if (e.getCause() instanceof java.io.IOException &&
+          ExceptionUtils.isNetworkConnectionException((IOException) e.getCause())) {
         throw new NetworkException(
             String.format("I/O error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),

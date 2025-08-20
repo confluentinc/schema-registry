@@ -20,12 +20,14 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.GenericContainerWithVersion;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
+import java.io.IOException;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.config.ConfigException;
@@ -104,7 +106,8 @@ public class AvroConverter implements Converter {
           e
       );
     } catch (SerializationException e) {
-      if (e.getCause() instanceof java.io.IOException) {
+      if (e.getCause() instanceof java.io.IOException &&
+          ExceptionUtils.isNetworkConnectionException((IOException) e.getCause())) {
         throw new NetworkException(
             String.format("I/O error while serializing Avro data for topic %s: %s",
                 topic, e.getCause().getMessage()),
@@ -153,7 +156,8 @@ public class AvroConverter implements Converter {
           e
       );
     } catch (SerializationException e) {
-      if (e.getCause() instanceof java.io.IOException) {
+      if (e.getCause() instanceof java.io.IOException &&
+          ExceptionUtils.isNetworkConnectionException((IOException) e.getCause())) {
         throw new NetworkException(
             String.format("I/O error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),

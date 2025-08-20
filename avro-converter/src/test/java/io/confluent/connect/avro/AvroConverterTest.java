@@ -23,6 +23,8 @@ import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
@@ -470,9 +472,9 @@ public class AvroConverterTest {
   }
 
   @Test(expected = NetworkException.class)
-  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
     AvroConverter.Serializer serializer = mock(AvroConverter.Serializer.class);
-    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SerializationException serializationException = new SerializationException("fail", new SocketException("io fail"));
     AvroData avroData = new AvroData(
         new AvroDataConfig(Collections.singletonMap("schema.registry.url", "http://fake-url")));
     org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(Schema.STRING_SCHEMA);
@@ -493,9 +495,9 @@ public class AvroConverterTest {
   }
 
   @Test(expected = NetworkException.class)
-  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
     AvroConverter.Deserializer deserializer = mock(AvroConverter.Deserializer.class);
-    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SerializationException serializationException = new SerializationException("fail", new UnknownHostException("io fail"));
     SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
     byte[] valueBytes =
         converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
