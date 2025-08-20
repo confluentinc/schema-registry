@@ -29,6 +29,8 @@ import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
 import io.confluent.kafka.serializers.protobuf.test.KeyTimestampValueOuterClass.KeyTimestampValue;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.List;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -1400,9 +1402,9 @@ public class ProtobufConverterTest {
   }
 
   @Test(expected = NetworkException.class)
-  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
     ProtobufConverter.Serializer serializer = mock(ProtobufConverter.Serializer.class);
-    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SerializationException serializationException = new SerializationException("fail", new SocketException("io fail"));
     ProtobufData protobufData = new ProtobufData();
     ProtobufSchemaAndValue schemaAndValue =
         protobufData.fromConnectData(Schema.STRING_SCHEMA, "value");
@@ -1421,9 +1423,9 @@ public class ProtobufConverterTest {
   }
 
   @Test(expected = NetworkException.class)
-  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
     ProtobufConverter.Deserializer deserializer = mock(ProtobufConverter.Deserializer.class);
-    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SerializationException serializationException = new SerializationException("fail", new UnknownHostException("io fail"));
     SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
     byte[] valueBytes =
         converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
