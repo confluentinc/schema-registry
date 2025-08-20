@@ -113,7 +113,7 @@ public class ProtobufConverter implements Converter {
       ), e);
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException &&
-          ExceptionUtils.IsNetworkConnectionException((IOException) e.getCause())) {
+          ExceptionUtils.isNetworkConnectionException((IOException) e.getCause())) {
         throw new NetworkException(
             String.format("I/O error while serializing Protobuf data for topic %s: %s",
                 topic, e.getCause().getMessage()),
@@ -163,7 +163,7 @@ public class ProtobufConverter implements Converter {
       ), e);
     } catch (SerializationException e) {
       if (e.getCause() instanceof java.io.IOException &&
-          ExceptionUtils.IsNetworkConnectionException((IOException) e.getCause())) {
+          ExceptionUtils.isNetworkConnectionException((IOException) e.getCause())) {
         throw new NetworkException(
             String.format("I/O error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),

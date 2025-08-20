@@ -443,9 +443,10 @@ public class RestService implements Closeable, Configurable {
             requestProperties,
             responseFormat));
       } catch (IOException | RestClientException e) {
-        if ((e instanceof RestClientException && !isRetriable((RestClientException) e)) ||
-            (e instanceof IOException &&
-                !ExceptionUtils.IsNetworkConnectionException((IOException) e))) {          throw e;
+        if ((e instanceof RestClientException && !isRetriable((RestClientException) e))
+            || (e instanceof IOException
+            && !ExceptionUtils.isNetworkConnectionException((IOException) e))) {
+          throw e;
         }
         log.warn("Request to URL {} failed with error: {}."
                 + "Failing over to next URL if available...",
