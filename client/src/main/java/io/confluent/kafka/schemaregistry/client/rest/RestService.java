@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -442,7 +443,8 @@ public class RestService implements Closeable, Configurable {
             requestProperties,
             responseFormat));
       } catch (IOException | RestClientException e) {
-        if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {
+        if ((e instanceof RestClientException && !isRetriable((RestClientException) e))
+            || !ExceptionUtils.isNetworkConnectionException(e)) {
           throw e;
         }
         log.warn("Request to URL {} failed with error: {}."
