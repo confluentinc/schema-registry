@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
 import java.io.IOException;
@@ -280,6 +281,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   default SchemaRegistryDeployment getSchemaRegistryDeployment() 
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default SchemaRegistryServerVersion getSchemaRegistryServerVersion()
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
