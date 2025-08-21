@@ -107,7 +107,7 @@ public class AvroConverter implements Converter {
     } catch (SerializationException e) {
       if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
         throw new NetworkException(
-            String.format("I/O error while serializing Avro data for topic %s: %s",
+            String.format("Network connection error while serializing Avro data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
         );
@@ -156,7 +156,7 @@ public class AvroConverter implements Converter {
     } catch (SerializationException e) {
       if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
         throw new NetworkException(
-            String.format("I/O error while deserializing data for topic %s: %s",
+            String.format("Network connection error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
         );

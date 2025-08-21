@@ -33,10 +33,6 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
 
   @Override
   public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
-    System.out.println("schema");
-    System.out.println(isNew);
-    System.out.println(normalize);
-    System.out.println(schema.getSchema());
     try {
       return new ProtobufSchema(
               schema.getSchema(),
