@@ -662,6 +662,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     return Props.getSchemaRegistryDeployment(schemaRegistry.properties());
   }
 
+  @Override
   public SchemaRegistryServerVersion getSchemaRegistryServerVersion()
       throws IOException, RestClientException {
     return new SchemaRegistryServerVersion(AppInfoParser.getVersion(), AppInfoParser.getCommitId());
