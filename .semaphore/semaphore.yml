@@ -69,7 +69,7 @@ blocks:
     task:
       agent:
         machine:
-          type: s1-prod-ubuntu24-04-arm64-0
+          type: s1-prod-ubuntu24-04-arm64-00
       env_vars:
         - name: COMPONENT_NAME
           value: schema-registry
@@ -94,7 +94,7 @@ after_pipeline:
   task:
     agent:
       machine:
-        type: s1-prod-ubuntu24-04-arm64-0
+        type: s1-prod-ubuntu24-04-arm64-00
     jobs:
       - name: Metrics
         commands:
