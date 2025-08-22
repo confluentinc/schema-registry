@@ -179,7 +179,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
               schemaRegistryResourceExtension.getClass().getCanonicalName())) {
             fipsExtensionProvided = true;
           }
-          if (securityPluginResourceExtensionClassName.equals(
+          if (securityPluginResourceExtensionClassName.equalsIgnoreCase(
               schemaRegistryResourceExtension.getClass().getCanonicalName())) {
             securityPluginProvided = true;
           }
