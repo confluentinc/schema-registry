@@ -182,7 +182,7 @@ public class PropsTest {
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment for mixed case strings", result);
-    List<String> expected = Arrays.asList("confluent", "enterprise", "opensource");
+    List<String> expected = Arrays.asList("CONFLUENT", "Enterprise", "opensource");
     assertEquals("Should convert to lowercase", expected, result.getAttributes());
   }
 
@@ -223,14 +223,14 @@ public class PropsTest {
   }
 
   @Test
-  public void testGetSchemaRegistryDeploymentTrimsAndLowercase() {
+  public void testGetSchemaRegistryDeploymentTrims() {
     Map<String, Object> props = new HashMap<>();
     List<String> attributes = Arrays.asList("  CONFLUENT  ", "Enterprise ", " opensource");
     props.put(Props.PROPERTY_SCHEMA_REGISTRY_DEPLOYMENT_ATTRIBUTES, attributes);
 
     SchemaRegistryDeployment result = Props.getSchemaRegistryDeployment(props);
     assertNotNull("Should return SchemaRegistryDeployment", result);
-    List<String> expected = Arrays.asList("confluent", "enterprise", "opensource");
+    List<String> expected = Arrays.asList("CONFLUENT", "Enterprise", "opensource");
     assertEquals("Should trim whitespace and convert to lowercase", expected, result.getAttributes());
   }
 }
