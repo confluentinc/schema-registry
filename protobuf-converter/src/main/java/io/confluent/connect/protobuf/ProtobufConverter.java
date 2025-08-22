@@ -113,7 +113,8 @@ public class ProtobufConverter implements Converter {
     } catch (SerializationException e) {
       if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
         throw new NetworkException(
-            String.format("Network connection error while serializing Protobuf data for topic %s: %s",
+            String.format(
+                "Network connection error while serializing Protobuf data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
         );
