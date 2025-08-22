@@ -15,6 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest.client;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -23,6 +26,8 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
@@ -30,16 +35,17 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.RestOperationNotPermitt
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.StoreUtils;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
-
-import java.io.IOException;
-import java.util.*;
-
 import io.confluent.rest.exceptions.RestNotFoundException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
 import org.junit.Before;
 import org.junit.Test;
-
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
 
 public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
 
@@ -213,4 +219,25 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         Schema s2 = client.getByVersion(SUBJECT2, 1, false);
         assertEquals(id2, s2.getId().intValue());
     }
+
+      @Test
+  public void testGetSchemaRegistryDeployment() throws Exception {
+    // Test with default empty deployment attributes
+    // Since we're using the real schema registry without mocks,
+    // and no deployment attributes are configured by default
+    SchemaRegistryDeployment deployment = client.getSchemaRegistryDeployment();
+
+    assertNotNull(deployment);
+    assertEquals("Should return empty attributes list by default",
+        0, deployment.getAttributes().size());
+  }
+
+  @Test
+  public void testGetSchemaRegistryServerVersion() throws Exception {
+    SchemaRegistryServerVersion version = client.getSchemaRegistryServerVersion();
+
+    assertNotNull(version);
+    assertNotNull(version.getVersion());
+    assertNotNull(version.getCommitId());
+  }
 }
