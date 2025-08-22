@@ -96,6 +96,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -150,9 +151,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private final Mode defaultMode;
   private final int kafkaStoreTimeoutMs;
   private final int initTimeout;
+  private final boolean initWaitForReader;
   private final int kafkaStoreMaxRetries;
-  private final int searchDefaultLimit;
-  private final int searchMaxLimit;
+  private final int schemaSearchDefaultLimit;
+  private final int schemaSearchMaxLimit;
+  private final int subjectVersionSearchDefaultLimit;
+  private final int subjectVersionSearchMaxLimit;
+  private final int subjectSearchDefaultLimit;
+  private final int contextSearchMaxLimit;
+  private final int contextSearchDefaultLimit;
+  private final int subjectSearchMaxLimit;
   private final boolean delayLeaderElection;
   private final boolean allowModeChanges;
   private final boolean enableStoreHealthCheck;
@@ -207,6 +215,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
+    this.initWaitForReader =
+        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG);
     this.kafkaStoreMaxRetries =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_WRITE_MAX_RETRIES_CONFIG);
     this.serializer = serializer;
@@ -228,9 +238,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                 TimeUnit.SECONDS)
         .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
-    this.searchDefaultLimit =
-        config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
-    this.searchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.contextSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.contextSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_MAX_LIMIT_CONFIG);
+    this.schemaSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.schemaSearchMaxLimit = config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectVersionSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectVersionSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectSearchDefaultLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectSearchMaxLimit =
+            config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
@@ -539,12 +561,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           // The new leader may not know the exact last offset in the Kafka log. So, mark the
           // last offset invalid here
           kafkaStore.markLastWrittenOffsetInvalid();
-          //ensure the new leader catches up with the offsets before it gets nextid and assigns
-          // leader
-          try {
-            kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
-          } catch (StoreException e) {
-            throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+          if (initWaitForReader) {
+            //ensure the new leader catches up with the offsets before it gets nextid and assigns
+            // leader
+            try {
+              kafkaStore.waitUntilKafkaReaderReachesLastOffset(initTimeout);
+            } catch (StoreException e) {
+              throw new SchemaRegistryStoreException("Exception getting latest offset ", e);
+            }
           }
           idGenerator.init();
         }
@@ -600,12 +624,29 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return providers.get(schemaType);
   }
 
-  public int normalizeLimit(int suppliedLimit) {
-    int limit = searchDefaultLimit;
-    if (suppliedLimit > 0 && suppliedLimit <= searchMaxLimit) {
+  public int normalizeLimit(int suppliedLimit, int defaultLimit, int maxLimit) {
+    int limit = defaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= maxLimit) {
       limit = suppliedLimit;
     }
     return limit;
+  }
+
+  public int normalizeSchemaLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, schemaSearchDefaultLimit, schemaSearchMaxLimit);
+  }
+
+  public int normalizeSubjectLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
+  }
+
+  public int normalizeContextLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, contextSearchDefaultLimit, contextSearchMaxLimit);
+  }
+
+  public int normalizeSubjectVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit,
+            subjectVersionSearchDefaultLimit, subjectVersionSearchMaxLimit);
   }
 
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
@@ -791,7 +832,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           }
         }
         kafkaStore.put(schemaKey, schemaValue);
-
+        logSchemaOp(schema, "REGISTER");
         return modifiedSchema
             ? schema
             : new Schema(subject, schema.getId());
@@ -816,18 +857,22 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   private void checkRegisterMode(
       String subject, Schema schema
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
+    String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+      throw new OperationNotPermittedException("Subject " + subject 
+      + " in context " + context + " is in read-only mode");
     }
 
     if (schema.getId() >= 0) {
       if (getModeInScope(subject) != Mode.IMPORT) {
-        throw new OperationNotPermittedException("Subject " + subject + " is not in import mode");
+        throw new OperationNotPermittedException("Subject " + subject 
+        + " in context " + context + " is not in import mode");
       }
     } else {
       if (getModeInScope(subject) != Mode.READWRITE) {
         throw new OperationNotPermittedException(
-            "Subject " + subject + " is not in read-write mode"
+            "Subject " + subject + " in context "
+            + context + " is not in read-write mode"
         );
       }
     }
@@ -1083,7 +1128,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws SchemaRegistryException {
     try {
       if (isReadOnlyMode(subject)) {
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+        String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+        + context + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
       if (!lookupCache.referencesSchema(key).isEmpty()) {
@@ -1100,6 +1147,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schemaValue.setDeleted(true);
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
+        logSchemaOp(schema, "DELETE");
         if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
@@ -1148,7 +1196,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     // Ensure cache is up-to-date before any potential writes
     try {
       if (isReadOnlyMode(subject)) {
-        throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+        String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+        + context + " is in read-only mode");
       }
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
@@ -1225,6 +1275,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     Schema matchingSchema =
         lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
     if (matchingSchema != null) {
+      logSchemaOp(matchingSchema, "READ");
       return matchingSchema;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
@@ -1247,6 +1298,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           // ignore
         }
         if (matchingSchema != null) {
+          logSchemaOp(matchingSchema, "READ");
           return matchingSchema;
         }
       }
@@ -1349,6 +1401,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     for (SchemaKey schemaKey : allVersions) {
       Schema schema = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
       if (schema != null) {
+        logSchemaOp(schema, "READ");
         if (schema.getMetadata() != null) {
           Map<String, String> props = schema.getMetadata().getProperties();
           if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
@@ -1375,8 +1428,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         schemaCopy.setSubject(existingSchema.getSubject());
         schemaCopy.setVersion(existingSchema.getVersion());
         if (!existingSchema.equals(schemaCopy)) {
+          String context = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
           throw new OperationNotPermittedException(
-              String.format("Overwrite new schema with id %s is not permitted.", id)
+              String.format("Overwrite new schema with id %s in context" 
+              + " %s is not permitted.",
+              id, context)
           );
         }
       }
@@ -1425,17 +1481,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  private void forwardUpdateConfigRequestToLeader(
-      String subject, Config config,
+  private Config forwardUpdateConfigRequestToLeader(
+      String subject, ConfigUpdateRequest configUpdateRequest,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest(config);
     log.debug(String.format("Forwarding update config request %s to %s",
                             configUpdateRequest, baseUrl));
     try {
-      leaderRestService.updateConfig(headerProperties, configUpdateRequest, subject);
+      return new Config(
+          leaderRestService.updateConfig(headerProperties, configUpdateRequest, subject)
+      );
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update config request %s to %s",
@@ -1509,13 +1565,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   }
 
   private void forwardSetModeRequestToLeader(
-      String subject, Mode mode, boolean force,
+      String subject, ModeUpdateRequest modeUpdateRequest, boolean force,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(mode.name());
     log.debug(String.format("Forwarding update mode request %s to %s",
         modeUpdateRequest, baseUrl));
     try {
@@ -1642,6 +1695,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       returnDeletedSchema) throws SchemaRegistryException {
     Schema schema = get(subject, version, returnDeletedSchema);
     if (schema != null) {
+      logSchemaOp(schema, "READ");
       return schema;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
@@ -1657,6 +1711,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
             new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
         schema = get(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
         if (schema != null) {
+          logSchemaOp(schema, "READ");
           return schema;
         }
       }
@@ -1713,6 +1768,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
           + " store", e);
     }
     Schema schemaEntity = toSchemaEntity(schema);
+    logSchemaOp(schemaEntity, "READ");
     SchemaString schemaString = new SchemaString(schemaEntity);
     if (format != null && !format.trim().isEmpty()) {
       ParsedSchema parsedSchema = parseSchema(schemaEntity, false, false);
@@ -1855,9 +1911,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (schema == null) {
         return null;
       }
+      Schema schemaEntity = toSchemaEntity(schema);
+      logSchemaOp(schemaEntity, "READ");
 
       SchemaIdAndSubjects schemaIdAndSubjects =
-          this.lookupCache.schemaIdAndSubjects(toSchemaEntity(schema));
+          this.lookupCache.schemaIdAndSubjects(schemaEntity);
       if (schemaIdAndSubjects == null) {
         return null;
       }
@@ -2143,46 +2201,49 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   @Override
   public void close() throws IOException {
     log.info("Shutting down schema registry");
-    kafkaStore.close();
-    metadataEncoder.close();
     if (leaderElector != null) {
       leaderElector.close();
     }
     if (leaderRestService != null) {
       leaderRestService.close();
     }
+    kafkaStore.close();
+    metadataEncoder.close();
   }
 
-  public void updateConfig(String subject, Config config)
+  public Config updateConfig(String subject, ConfigUpdateRequest config)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+      + context + " is in read-only mode");
     }
     ConfigKey configKey = new ConfigKey(subject);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       ConfigValue oldConfig = (ConfigValue) kafkaStore.get(configKey);
-      ConfigValue newConfig = new ConfigValue(subject, config, ruleSetHandler);
-      kafkaStore.put(configKey, ConfigValue.update(oldConfig, newConfig));
+      ConfigValue newConfig = ConfigValue.update(subject, oldConfig, config, ruleSetHandler);
+      kafkaStore.put(configKey, newConfig);
       log.debug("Wrote new config: {} to the Kafka data store with key {}", config, configKey);
+      return newConfig.toConfigEntity();
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store",
                                              e);
     }
   }
 
-  public void updateConfigOrForward(String subject, Config newConfig,
-                                    Map<String, String> headerProperties)
+  public Config updateConfigOrForward(String subject, ConfigUpdateRequest newConfig,
+                                      Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       UnknownLeaderException, OperationNotPermittedException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        updateConfig(subject, newConfig);
+        return updateConfig(subject, newConfig);
       } else {
         // forward update config request to the leader
         if (leaderIdentity != null) {
-          forwardUpdateConfigRequestToLeader(subject, newConfig, headerProperties);
+          return forwardUpdateConfigRequestToLeader(subject, newConfig, headerProperties);
         } else {
           throw new UnknownLeaderException("Update config request failed since leader is "
                                            + "unknown");
@@ -2196,7 +2257,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public void deleteSubjectConfig(String subject)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+      + context + " is in read-only mode");
     }
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
@@ -2403,14 +2466,19 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void setMode(String subject, Mode mode) throws SchemaRegistryException {
+  public void setMode(String subject, ModeUpdateRequest mode) throws SchemaRegistryException {
     setMode(subject, mode, false);
   }
 
-  public void setMode(String subject, Mode mode, boolean force)
+  public void setMode(String subject, ModeUpdateRequest request, boolean force)
       throws SchemaRegistryException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
+    }
+    Mode mode = null;
+    if (request.getOptionalMode().isPresent()) {
+      mode = Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
+          request.getMode().toUpperCase(Locale.ROOT));
     }
     ModeKey modeKey = new ModeKey(subject);
     try {
@@ -2442,8 +2510,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         // Write an event to clear deleted schemas from the caches.
         kafkaStore.put(new ClearSubjectKey(subject), new ClearSubjectValue(subject));
       }
-      kafkaStore.put(modeKey, new ModeValue(subject, mode));
-      log.debug("Wrote new mode: {} to the Kafka data store with key {}", mode.name(), modeKey);
+      kafkaStore.put(modeKey, mode != null ? new ModeValue(subject, mode) : null);
+      log.debug("Wrote new mode: {} to the Kafka data store with key {}", mode, modeKey);
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
@@ -2451,7 +2519,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     }
   }
 
-  public void setModeOrForward(String subject, Mode mode, boolean force,
+  public void setModeOrForward(String subject, ModeUpdateRequest mode, boolean force,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
@@ -2600,6 +2668,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       default:
         return false;
     }
+  }
+
+  private void logSchemaOp(Schema schema, String operation) {
+    log.info("Resource association log - (tenant, id, subject, operation): ({}, {}, {}, {})", 
+        tenant(), schema.getId(), schema.getSubject(), operation);
   }
 
   @Override

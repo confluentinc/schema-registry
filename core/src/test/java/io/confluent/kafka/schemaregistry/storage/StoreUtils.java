@@ -118,4 +118,17 @@ public class StoreUtils {
     kafkaStore.init();
     return kafkaStore;
   }
+
+
+  // Generates an avro schema string with the given number of fields with a default value of "null".
+  public static String avroSchemaString(final int numFields) {
+    StringBuilder s = new StringBuilder("{\"type\": \"record\", \"name\": \"Foo\", " + "\"fields\": [");
+
+    for (int i = 0; i < numFields; i++) {
+      s.append(String.format("{\"name\": \"field%s\", \"type\": \"string\", \"default\": \"null\"}", i));
+      if (i < numFields - 1) s.append(",");
+    }
+    s.append("]}");
+    return s.toString();
+  }
 }

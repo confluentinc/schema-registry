@@ -299,11 +299,23 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 0, 1);
+    assertEquals(ImmutableList.of(1), versions);
+
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 1, 1);
+    assertEquals(ImmutableList.of(2), versions);
+
     List<String> kekNames = client.listKeks(Collections.singletonList(subject), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
 
     kekNames = client.listKeks(Collections.singletonList(subject2), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 0, 1);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 1, 1);
+    assertEquals(Collections.emptyList(), kekNames);
 
     try {
       client.deleteKek(headers, kekName, false);
@@ -337,6 +349,11 @@ public class RestApiTest extends ClusterTestHarness {
 
     deks = client.listDeks(kekName, true);
     assertEquals(ImmutableList.of(subject, subject2), deks);
+
+    deks = client.listDeksWithPagination(kekName, true, 0, 1);
+    assertEquals(ImmutableList.of(subject), deks);
+    deks = client.listDeksWithPagination(kekName, true, 1, 1);
+    assertEquals(ImmutableList.of(subject2), deks);
 
     client.deleteDekVersion(headers, kekName, subject2, 2, null, false);
 

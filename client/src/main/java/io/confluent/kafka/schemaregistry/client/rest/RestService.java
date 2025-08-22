@@ -265,6 +265,10 @@ public class RestService implements Closeable, Configurable {
     if (isValidProxyConfig(proxyHost, proxyPort)) {
       setProxy(proxyHost, proxyPort);
     }
+
+    if (SchemaRegistryClientConfig.getUrlRandomize(configs)) {
+      baseUrls.randomizeIndex();
+    }
   }
 
   private static boolean isNonEmpty(String s) {
@@ -833,8 +837,7 @@ public class RestService implements Closeable, Configurable {
 
   public ModeUpdateRequest setMode(String mode, String subject, boolean force)
       throws IOException, RestClientException {
-    ModeUpdateRequest request = new ModeUpdateRequest();
-    request.setMode(mode);
+    ModeUpdateRequest request = new ModeUpdateRequest(Optional.ofNullable(mode));
     return setMode(DEFAULT_REQUEST_PROPERTIES, request, subject, force);
   }
 
@@ -1201,6 +1204,19 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<Integer> getReferencedByWithPagination(String subject, int version,
+                                                     int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build(subject, version).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            GET_REFERENCED_BY_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getAllVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject);
@@ -1234,6 +1250,24 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<Integer> getAllVersionsWithPagination(Map<String, String> requestProperties,
+                                                    String subject,
+                                                    boolean lookupDeletedSchema,
+                                                    int offset,
+                                                    int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions");
+    builder.queryParam("deleted", lookupDeletedSchema);
+    builder.queryParam("deletedOnly", false);
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build(subject).toString();
+
+    List<Integer> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            ALL_VERSIONS_RESPONSE_TYPE);
+    return response;
+  }
+
   public List<Integer> getDeletedOnlyVersions(String subject)
       throws IOException, RestClientException {
     return getAllVersions(DEFAULT_REQUEST_PROPERTIES, subject, false, true);
@@ -1250,6 +1284,17 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build().toString();
     List<String> response = httpRequest(path, "GET", null, requestProperties,
         ALL_CONTEXTS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<String> getAllContextsWithPagination(int limit, int offset)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/contexts");
+    builder.queryParam("limit", limit);
+    builder.queryParam("offset", offset);
+    String path = builder.build().toString();
+    List<String> response = httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES,
+            ALL_CONTEXTS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1296,6 +1341,20 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build().toString();
     List<String> response = httpRequest(path, "GET", null, requestProperties,
         ALL_TOPICS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<String> getAllSubjectsWithPagination(int offset, int limit)
+          throws IOException, RestClientException {
+    return getAllSubjectsWithPagination(DEFAULT_REQUEST_PROPERTIES, offset, limit);
+  }
+
+  public List<String> getAllSubjectsWithPagination(Map<String, String> requestProperties,
+                                                   int offset, int limit)
+          throws IOException, RestClientException {
+    String url = "/subjects?limit=" + limit + "&offset=" + offset;
+    List<String> response = httpRequest(url, "GET", null, requestProperties,
+            ALL_TOPICS_RESPONSE_TYPE);
     return response;
   }
 
@@ -1350,6 +1409,28 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<String> getAllSubjectsByIdWithPagination(Map<String, String> requestProperties,
+                                         int id,
+                                         String subject,
+                                         boolean lookupDeleted,
+                                         int limit,
+                                         int offset)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/subjects");
+    builder.queryParam("deleted", lookupDeleted);
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
+    builder.queryParam("limit", limit);
+    builder.queryParam("offset", offset);
+    String path = builder.build(id).toString();
+
+    List<String> response = httpRequest(path, "GET", null, requestProperties,
+            ALL_TOPICS_RESPONSE_TYPE);
+
+    return response;
+  }
+
   public List<SubjectVersion> getAllVersionsById(int id)
       throws IOException, RestClientException {
     return getAllVersionsById(DEFAULT_REQUEST_PROPERTIES, id, null);
@@ -1392,6 +1473,29 @@ public class RestService implements Closeable, Configurable {
 
     List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,
         GET_VERSIONS_RESPONSE_TYPE);
+
+    return response;
+  }
+
+  public List<SubjectVersion> getAllVersionsByIdWithPagination(
+          Map<String, String> requestProperties,
+          int id,
+          String subject,
+          boolean lookupDeleted,
+          int offset,
+          int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas/ids/{id}/versions");
+    builder.queryParam("deleted", lookupDeleted);
+    if (subject != null) {
+      builder.queryParam("subject", subject);
+    }
+    builder.queryParam("limit", limit);
+    builder.queryParam("offset", offset);
+    String path = builder.build(id).toString();
+
+    List<SubjectVersion> response = httpRequest(path, "GET", null, requestProperties,
+            GET_VERSIONS_RESPONSE_TYPE);
 
     return response;
   }
