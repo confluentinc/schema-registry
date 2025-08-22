@@ -151,12 +151,12 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
           schemaValue.setDeleted(true);
           SchemaValue oldSchemaValue = (SchemaValue) lookupCache.put(schemaKey, schemaValue);
           lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
+          schemaRegistry.invalidateFromNewSchemaCache(schemaValue.toHashKey());
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject {} in the local cache", subject, e);
       }
     }
-    schemaRegistry.clearNewSchemaCache();
   }
 
   private void handleClearSubject(ClearSubjectValue clearSubjectValue) {
@@ -180,7 +180,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
       if (schemaValue.isDeleted()) {
         lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
-        schemaRegistry.clearNewSchemaCache();
+        schemaRegistry.invalidateFromNewSchemaCache(schemaValue.toHashKey());
         updateMetrics(metricsContainer.getSchemasDeleted(),
                       metricsContainer.getSchemasDeleted(getSchemaType(schemaValue)));
       } else {
@@ -190,6 +190,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
+      // Need to clear entire cache has we don't prevent hard deleting referenced schemas
       schemaRegistry.clearOldSchemaCache();
     }
   }
