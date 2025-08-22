@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
@@ -151,12 +152,12 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
           schemaValue.setDeleted(true);
           SchemaValue oldSchemaValue = (SchemaValue) lookupCache.put(schemaKey, schemaValue);
           lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
+          schemaRegistry.invalidateFromNewSchemaCache(schemaValue.toHashKey());
         }
       } catch (StoreException e) {
         log.error("Failed to delete subject {} in the local cache", subject, e);
       }
     }
-    schemaRegistry.clearNewSchemaCache();
   }
 
   private void handleClearSubject(ClearSubjectValue clearSubjectValue) {
@@ -180,7 +181,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
       if (schemaValue.isDeleted()) {
         lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
-        schemaRegistry.clearNewSchemaCache();
+        schemaRegistry.invalidateFromNewSchemaCache(schemaValue.toHashKey());
         updateMetrics(metricsContainer.getSchemasDeleted(),
                       metricsContainer.getSchemasDeleted(getSchemaType(schemaValue)));
       } else {
@@ -190,7 +191,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
-      schemaRegistry.clearOldSchemaCache();
+      schemaRegistry.invalidateFromOldSchemaCache(oldSchemaValue.toHashKey());
     }
   }
 
