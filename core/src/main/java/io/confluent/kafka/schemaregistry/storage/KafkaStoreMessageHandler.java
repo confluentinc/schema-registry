@@ -190,7 +190,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
-      // Need to clear entire cache has we don't prevent hard deleting referenced schemas
+      // Need to clear entire cache until we can prevent hard deleting referenced schemas
       schemaRegistry.clearOldSchemaCache();
     }
   }
