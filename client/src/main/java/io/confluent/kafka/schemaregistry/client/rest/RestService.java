@@ -465,12 +465,12 @@ public class RestService implements Closeable, Configurable {
    */
   private boolean isNonRetriableException(Exception e) {
     if (e instanceof RestClientException) {
-      return !isRetriable((RestClientException) e);
+      return !isRestClientExceptionRetriable((RestClientException) e);
     }
     return !ExceptionUtils.isNetworkConnectionException(e);
   }
 
-  public static boolean isRetriable(RestClientException e) {
+  public static boolean isRestClientExceptionRetriable(RestClientException e) {
     int status = e.getStatus();
     boolean isClientErrorToIgnore =
         status == 408 || status == 429;
