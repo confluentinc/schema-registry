@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.metrics.SchemaRegistryMetric;
@@ -191,7 +190,8 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       }
     } else {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
-      schemaRegistry.invalidateFromOldSchemaCache(oldSchemaValue.toHashKey());
+      // Need to clear entire cache has we don't prevent hard deleting referenced schemas
+      schemaRegistry.clearOldSchemaCache();
     }
   }
 
