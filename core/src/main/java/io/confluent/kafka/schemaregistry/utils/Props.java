@@ -36,7 +36,7 @@ public class Props {
       List<?> srDeploymentList = (List<?>) srDeployment;
       // Validate and process each element
       List<String> processedList = srDeploymentList.stream().map(
-          item -> item.toString().trim().toLowerCase()
+          item -> item.toString().trim()
       ).collect(Collectors.toList());
       return new SchemaRegistryDeployment(processedList);
     } else {
