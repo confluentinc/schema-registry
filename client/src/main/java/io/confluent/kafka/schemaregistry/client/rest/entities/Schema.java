@@ -185,6 +185,10 @@ public class Schema implements Comparable<Schema> {
     return new Schema(subject, version, id, schemaType, references, metadata, ruleSet, schema);
   }
 
+  public Schema toHashKey() {
+    return new Schema(subject, null, null, schemaType, references, metadata, ruleSet, schema);
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
   @JsonProperty("subject")
   public String getSubject() {
