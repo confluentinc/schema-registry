@@ -167,6 +167,9 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     boolean fipsExtensionProvided = false;
     final String fipsResourceExtensionClassName =
         "io.confluent.kafka.schemaregistry.security.SchemaRegistryFipsResourceExtension";
+    boolean securityPluginProvided = false;
+    final String securityPluginResourceExtensionClassName =
+        "io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension";
     if (preInitResourceExtensions != null) {
       try {
         for (SchemaRegistryResourceExtension
@@ -175,6 +178,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
           if (fipsResourceExtensionClassName.equals(
               schemaRegistryResourceExtension.getClass().getCanonicalName())) {
             fipsExtensionProvided = true;
+          }
+          if (securityPluginResourceExtensionClassName.equalsIgnoreCase(
+              schemaRegistryResourceExtension.getClass().getCanonicalName())) {
+            securityPluginProvided = true;
           }
         }
       } catch (SchemaRegistryException e) {
@@ -188,6 +195,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
           + "`init.resource.extension.class` config is either not configured or does not contain \""
           + fipsResourceExtensionClassName + "\"");
       System.exit(1);
+    }
+    if (!securityPluginProvided) {
+      log.warn("Unable to detect an Enterprise license without the Security Plugin. "
+          + "If an Enterprise license is expected to be configured, please install and activate "
+          + "the security plugins component following instructions on this website: "
+          + "https://docs.confluent.io/platform/current/confluent-security-plugins/"
+          + "schema-registry/install.html#activate-the-plugins. "
+          + "Confluent does not offer Enterprise support for any self-managed "
+          + "(Confluent Platform) components without a valid Enterprise license. "
+          + "Please ignore this warning if not using an Enterprise edition of this software.");
     }
   }
 
