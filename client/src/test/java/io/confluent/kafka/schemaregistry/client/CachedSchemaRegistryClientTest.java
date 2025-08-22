@@ -22,6 +22,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import java.util.ArrayList;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -833,6 +836,44 @@ public class CachedSchemaRegistryClientTest {
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+  }
+
+  @Test
+  public void testGetSchemaRegistryDeployment() throws Exception {
+    List<String> deploymentAttributes = new ArrayList<>(Collections.singleton("deploymentScope:opensource"));
+    SchemaRegistryDeployment expectedDeployment = new SchemaRegistryDeployment(deploymentAttributes);
+
+    expect(restService.getSchemaRegistryDeployment())
+        .andReturn(expectedDeployment);
+
+    replay(restService);
+
+    SchemaRegistryDeployment deployment = client.getSchemaRegistryDeployment();
+
+    assertNotNull(deployment);
+    assertEquals(expectedDeployment.getAttributes(), deployment.getAttributes());
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetSchemaRegistryServerVersion() throws Exception {
+    String version = "7.5.0";
+    String commitId = "abc123def456";
+    SchemaRegistryServerVersion expectedVersion = new SchemaRegistryServerVersion(version, commitId);
+
+    expect(restService.getSchemaRegistryServerVersion())
+        .andReturn(expectedVersion);
+
+    replay(restService);
+
+    SchemaRegistryServerVersion serverVersion = client.getSchemaRegistryServerVersion();
+
+    assertNotNull(serverVersion);
+    assertEquals(version, serverVersion.getVersion());
+    assertEquals(commitId, serverVersion.getCommitId());
+
+    verify(restService);
   }
 
 

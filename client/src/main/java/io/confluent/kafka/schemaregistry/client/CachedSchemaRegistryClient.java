@@ -22,6 +22,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -864,6 +865,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public SchemaRegistryDeployment getSchemaRegistryDeployment() 
       throws IOException, RestClientException {
     return restService.getSchemaRegistryDeployment();
+  }
+
+  @Override
+  public SchemaRegistryServerVersion getSchemaRegistryServerVersion()
+      throws IOException, RestClientException {
+    return restService.getSchemaRegistryServerVersion();
   }
 
   @Override
