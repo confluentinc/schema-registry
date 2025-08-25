@@ -2190,14 +2190,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     return new DelegatingIterator<>(versions.iterator());
   }
 
-  public void invalidateFromNewSchemaCache(Schema schema) {
-    newSchemaCache.invalidate(new RawSchema(schema, true, false));
-    newSchemaCache.invalidate(new RawSchema(schema, true, true));
+  /**
+   * Invalidate the cached parsed schema for a new schema.
+   *
+   * @param schemaKey a schema key obtained by {@link Schema#toHashKey()}
+   */
+  public void invalidateFromNewSchemaCache(Schema schemaKey) {
+    newSchemaCache.invalidate(new RawSchema(schemaKey, true, false));
+    newSchemaCache.invalidate(new RawSchema(schemaKey, true, true));
   }
 
-  public void invalidateFromOldSchemaCache(Schema schema) {
-    oldSchemaCache.invalidate(new RawSchema(schema, false, false));
-    oldSchemaCache.invalidate(new RawSchema(schema, false, true));
+  /**
+   * Invalidate the cached parsed schema for an old schema.
+   *
+   * @param schemaKey a schema key obtained by {@link Schema#toHashKey()}
+   */
+  public void invalidateFromOldSchemaCache(Schema schemaKey) {
+    oldSchemaCache.invalidate(new RawSchema(schemaKey, false, false));
+    oldSchemaCache.invalidate(new RawSchema(schemaKey, false, true));
   }
 
   public void clearNewSchemaCache() {
