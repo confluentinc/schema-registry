@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
@@ -630,7 +631,7 @@ public class RestService implements Closeable, Configurable {
             requestProperties,
             responseFormat));
       } catch (IOException | RestClientException e) {
-        if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {
+        if (isNonRetriableException(e)) {
           throw e;
         }
         log.warn("Request to URL {} failed with error: {}."
@@ -645,7 +646,19 @@ public class RestService implements Closeable, Configurable {
     throw new IOException("Internal HTTP retry error"); // Can't get here
   }
 
-  public static boolean isRetriable(RestClientException e) {
+  /**
+   * Check if the given exception should not be retried.
+   * For RestClientException, determine whether to retry based on its HTTP status code.
+   * For other exceptions, check if it is a network connection exception.
+   */
+  private boolean isNonRetriableException(Exception e) {
+    if (e instanceof RestClientException) {
+      return !isRestClientExceptionRetriable((RestClientException) e);
+    }
+    return !ExceptionUtils.isNetworkConnectionException(e);
+  }
+
+  public static boolean isRestClientExceptionRetriable(RestClientException e) {
     int status = e.getStatus();
     boolean isClientErrorToIgnore =
         status == 408 || status == 429;
