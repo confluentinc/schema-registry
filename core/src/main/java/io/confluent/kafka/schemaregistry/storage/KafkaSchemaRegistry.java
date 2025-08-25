@@ -1713,8 +1713,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           boolean normalize) throws InvalidSchemaException {
     try {
       ParsedSchema parsedSchema = isNew
-          ? newSchemaCache.get(new RawSchema(schema.copy(), isNew, normalize))
-          : oldSchemaCache.get(new RawSchema(schema.copy(), isNew, normalize));
+          ? newSchemaCache.get(new RawSchema(schema.toHashKey(), isNew, normalize))
+          : oldSchemaCache.get(new RawSchema(schema.toHashKey(), isNew, normalize));
       if (schema.getVersion() != null) {
         parsedSchema = parsedSchema.copy(schema.getVersion());
       }
@@ -2320,6 +2320,16 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       }
     }
     return new DelegatingIterator<>(versions.iterator());
+  }
+
+  public void invalidateFromNewSchemaCache(Schema schema) {
+    newSchemaCache.invalidate(new RawSchema(schema, true, false));
+    newSchemaCache.invalidate(new RawSchema(schema, true, true));
+  }
+
+  public void invalidateFromOldSchemaCache(Schema schema) {
+    oldSchemaCache.invalidate(new RawSchema(schema, false, false));
+    oldSchemaCache.invalidate(new RawSchema(schema, false, true));
   }
 
   public void clearNewSchemaCache() {
