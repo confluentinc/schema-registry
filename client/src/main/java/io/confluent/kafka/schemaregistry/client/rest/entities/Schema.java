@@ -259,7 +259,14 @@ public class Schema implements Comparable<Schema> {
   }
 
   public Schema toHashKey() {
-    return new Schema(subject, null, null, schemaType, references, metadata, ruleSet, schema);
+    // Deep copy the references list if it's not null
+    List<SchemaReference> referencesCopy = references != null
+        ? references.stream()
+        .map(SchemaReference::copy)
+        .collect(Collectors.toList())
+        : null;
+
+    return new Schema(subject, null, null, schemaType, referencesCopy, metadata, ruleSet, schema);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
