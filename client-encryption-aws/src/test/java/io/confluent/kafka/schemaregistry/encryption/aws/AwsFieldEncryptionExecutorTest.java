@@ -27,9 +27,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,9 +47,9 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new AwsFieldEncryptionProperties(ruleNames, ruleExecutor);
+    return new AwsEncryptionProperties(ruleNames, ruleExecutor);
   }
 
   @Test

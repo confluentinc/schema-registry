@@ -45,7 +45,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
 
@@ -78,10 +79,10 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         id2 = client.register(SUBJECT2, schema2);
     }
 
-    @Test (expected = RestInvalidSchemaException.class)
-    public void testRegister_InvalidVersion() throws RestClientException, IOException {
+    @Test
+    public void testRegister_InvalidVersion() {
         // Version is not one more than previous version
-        id1 = client.register(SUBJECT1, schema1, 100, -1);
+        assertThrows(RestInvalidSchemaException.class, ()->client.register(SUBJECT1, schema1, 100, -1));
     }
 
     @Test
@@ -127,10 +128,10 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         assertEquals(1, versions.get(0).intValue());
     }
 
-    @Test (expected = RestNotFoundException.class)
-    public void testGetAllVersions_NotFound() throws RestClientException, IOException {
+    @Test
+    public void testGetAllVersions_NotFound() {
         // Subject doesn't exist.
-        client.getAllVersions("subject123");
+        assertThrows(RestNotFoundException.class, () -> client.getAllVersions("subject123"));
     }
 
     @Test
@@ -177,14 +178,14 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         assertEquals("FULL", client.getConfig(SUBJECT1).getCompatibilityLevel());
     }
 
-    @Test(expected = RestNotFoundException.class)
+    @Test
     public void testDeleteConfig() throws Exception {
         Config config = new Config("FULL");
         client.updateConfig(SUBJECT1, config);
         assertEquals("FULL", client.getConfig(SUBJECT1).getCompatibilityLevel());
         client.deleteConfig(SUBJECT1);
         // Should throw RestNotFoundException exception.
-        client.getConfig(SUBJECT1);
+        assertThrows(RestNotFoundException.class, ()->client.getConfig(SUBJECT1));
     }
 
     @Test
@@ -193,10 +194,10 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
         assertEquals("READONLY", client.getMode(SUBJECT1));
     }
 
-    @Test (expected = RestOperationNotPermittedException.class)
-    public void testSetMode_NotPermitted() throws Exception {
+    @Test
+    public void testSetMode_NotPermitted() {
         // Can't set to IMPORT mode as there is an existing schema.
-        assertEquals("IMPORT", client.setMode("IMPORT", SUBJECT1, false));
+        assertThrows(RestOperationNotPermittedException.class, ()->client.setMode("IMPORT", SUBJECT1, false));
     }
 
     @Test
@@ -215,7 +216,7 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
     @Test
     public void testGetByVersion() throws Exception {
         Schema s1 = client.getByVersion(SUBJECT1, 1, false);
-        assertEquals(id1, s1.getId().intValue());
+        assertEquals(id1, s1.   getId().intValue());
         Schema s2 = client.getByVersion(SUBJECT2, 1, false);
         assertEquals(id2, s2.getId().intValue());
     }

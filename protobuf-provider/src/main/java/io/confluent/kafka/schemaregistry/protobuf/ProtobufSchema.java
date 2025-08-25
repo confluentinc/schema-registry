@@ -53,6 +53,7 @@ import com.google.protobuf.DescriptorProtos.FeatureSet.Utf8Validation;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.EditionDefault;
+import com.google.protobuf.DescriptorProtos.FieldOptions.FeatureSupport;
 import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionRetention;
 import com.google.protobuf.DescriptorProtos.FieldOptions.OptionTargetType;
@@ -76,7 +77,7 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EmptyProto;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.FieldMaskProto;
-import com.google.protobuf.GeneratedMessageV3.ExtendableMessage;
+import com.google.protobuf.GeneratedMessage.ExtendableMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.SourceContextProto;
 import com.google.protobuf.StructProto;
@@ -156,6 +157,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -205,7 +207,6 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String CC_GENERIC_SERVICES = "cc_generic_services";
   private static final String JAVA_GENERIC_SERVICES = "java_generic_services";
   private static final String PY_GENERIC_SERVICES = "py_generic_services";
-  private static final String PHP_GENERIC_SERVICES = "php_generic_services";
   private static final String DEPRECATED = "deprecated";
   private static final String DEBUG_REDACT = "debug_redact";
   private static final String RETENTION = "retention";
@@ -247,6 +248,12 @@ public class ProtobufSchema implements ParsedSchema {
   private static final String UTF8_VALIDATION = "utf8_validation";
   private static final String MESSAGE_ENCODING = "message_encoding";
   private static final String JSON_FORMAT = "json_format";
+
+  private static final String FEATURE_SUPPORT = "feature_support";
+  private static final String EDITION_INTRODUCED = "edition_introduced";
+  private static final String EDITION_DEPRECATED = "edition_deprecated";
+  private static final String DEPRECATION_WARNING = "deprecation_warning";
+  private static final String EDITION_REMOVED = "edition_removed";
 
   private static final String VERIFICATION = "verification";
 
@@ -726,12 +733,16 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
+    ImmutableList.Builder<String> weakImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
     Set<Integer> publicDependencyList = new HashSet<>(file.getPublicDependencyList());
+    Set<Integer> weakDependencyList = new HashSet<>(file.getWeakDependencyList());
     for (int i = 0; i < dependencyList.size(); i++) {
       String depName = dependencyList.get(i);
       if (publicDependencyList.contains(i)) {
         publicImports.add(depName);
+      } else if (weakDependencyList.contains(i)) {
+        weakImports.add(depName);
       } else {
         imports.add(depName);
       }
@@ -777,10 +788,6 @@ public class ProtobufSchema implements ParsedSchema {
     if (file.getOptions().hasPyGenericServices()) {
       options.add(new OptionElement(
           PY_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPyGenericServices(), false));
-    }
-    if (file.getOptions().hasPhpGenericServices()) {
-      options.add(new OptionElement(
-          PHP_GENERIC_SERVICES, Kind.BOOLEAN, file.getOptions().getPhpGenericServices(), false));
     }
     if (file.getOptions().hasDeprecated()) {
       options.add(new OptionElement(
@@ -837,6 +844,7 @@ public class ProtobufSchema implements ParsedSchema {
         syntax,
         imports.build(),
         publicImports.build(),
+        weakImports.build(),
         types.build(),
         services.build(),
         extendElements.build(),
@@ -1123,6 +1131,10 @@ public class ProtobufSchema implements ParsedSchema {
         FeatureSet featureSet = ev.getOptions().getFeatures();
         options.add(toFeaturesOption(featureSet));
       }
+      if (ev.getOptions().hasFeatureSupport()) {
+        FeatureSupport featureSupport = ev.getOptions().getFeatureSupport();
+        options.add(toFeatureSupportOption(featureSupport));
+      }
       if (ev.getOptions().hasExtension(MetaProto.enumValueMeta)) {
         Meta meta = ev.getOptions().getExtension(MetaProto.enumValueMeta);
         OptionElement option = toOption(CONFLUENT_ENUM_VALUE_META, meta);
@@ -1268,6 +1280,23 @@ public class ProtobufSchema implements ParsedSchema {
     return new OptionElement(FEATURES, Kind.MAP, map, false);
   }
 
+  private static OptionElement toFeatureSupportOption(FeatureSupport featureSupport) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    if (featureSupport.hasEditionIntroduced()) {
+      map.put(EDITION_INTRODUCED, toOptionValue(featureSupport.getEditionIntroduced(), true));
+    }
+    if (featureSupport.hasEditionDeprecated()) {
+      map.put(EDITION_DEPRECATED, toOptionValue(featureSupport.getEditionDeprecated(), true));
+    }
+    if (featureSupport.hasDeprecationWarning()) {
+      map.put(DEPRECATION_WARNING, toOptionValue(featureSupport.getDeprecationWarning(), true));
+    }
+    if (featureSupport.hasEditionRemoved()) {
+      map.put(EDITION_REMOVED, toOptionValue(featureSupport.getEditionRemoved(), true));
+    }
+    return new OptionElement(FEATURE_SUPPORT, Kind.MAP, map, false);
+  }
+
   private static ServiceElement toService(ServiceDescriptorProto sd) {
     String name = sd.getName();
     log.trace("*** service name: {}", name);
@@ -1378,6 +1407,10 @@ public class ProtobufSchema implements ParsedSchema {
     if (fd.getOptions().hasFeatures()) {
       FeatureSet featureSet = fd.getOptions().getFeatures();
       options.add(toFeaturesOption(featureSet));
+    }
+    if (fd.getOptions().hasFeatureSupport()) {
+      FeatureSupport featureSupport = fd.getOptions().getFeatureSupport();
+      options.add(toFeatureSupportOption(featureSupport));
     }
     if (fd.getOptions().hasExtension(MetaProto.fieldMeta)) {
       Meta meta = fd.getOptions().getExtension(MetaProto.fieldMeta);
@@ -1601,11 +1634,6 @@ public class ProtobufSchema implements ParsedSchema {
       OptionElement pyGenericServices = options.get(PY_GENERIC_SERVICES);
       if (pyGenericServices != null) {
         schema.setPyGenericServices(Boolean.parseBoolean(pyGenericServices.getValue().toString()));
-      }
-      OptionElement phpGenericServices = options.get(PHP_GENERIC_SERVICES);
-      if (phpGenericServices != null) {
-        schema.setPhpGenericServices(
-            Boolean.parseBoolean(phpGenericServices.getValue().toString()));
       }
       OptionElement isDeprecated = options.get(DEPRECATED);
       if (isDeprecated != null) {
@@ -1962,6 +1990,43 @@ public class ProtobufSchema implements ParsedSchema {
     return builder.build();
   }
 
+  public static FeatureSupport toFeatureSupport(OptionElement option) {
+    if (option.getKind() != Kind.MAP) {
+      throw new IllegalStateException("Expected option of kind MAP");
+    }
+    Map<String, ?> map = (Map<String, ?>) option.getValue();
+    FeatureSupport.Builder builder = FeatureSupport.newBuilder();
+    Object editionIntroduced = map.get(EDITION_INTRODUCED);
+    if (editionIntroduced != null) {
+      try {
+        builder.setEditionIntroduced(Edition.valueOf((String) toPrimitiveValue(editionIntroduced)));
+      } catch (IllegalArgumentException e) {
+        builder.setEditionIntroduced(Edition.EDITION_UNKNOWN);
+      }
+    }
+    Object editionDeprecated = map.get(EDITION_DEPRECATED);
+    if (editionDeprecated != null) {
+      try {
+        builder.setEditionDeprecated(Edition.valueOf((String) toPrimitiveValue(editionDeprecated)));
+      } catch (IllegalArgumentException e) {
+        builder.setEditionDeprecated(Edition.EDITION_UNKNOWN);
+      }
+    }
+    Object deprecationWarning = map.get(DEPRECATION_WARNING);
+    if (deprecationWarning != null) {
+      builder.setDeprecationWarning((String) toPrimitiveValue(deprecationWarning));
+    }
+    Object editionRemoved = map.get(EDITION_REMOVED);
+    if (editionRemoved != null) {
+      try {
+        builder.setEditionRemoved(Edition.valueOf((String) toPrimitiveValue(editionRemoved)));
+      } catch (IllegalArgumentException e) {
+        builder.setEditionRemoved(Edition.EDITION_UNKNOWN);
+      }
+    }
+    return builder.build();
+  }
+
   public static EditionDefault toEditionDefault(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
       throw new IllegalStateException("Expected option of kind MAP");
@@ -2092,9 +2157,13 @@ public class ProtobufSchema implements ParsedSchema {
     if (!editionDefaults.isEmpty()) {
       field.addEditionDefaults(editionDefaults);
     }
-    OptionElement option = options.get(FEATURES);
-    if (option != null) {
-      field.setFeatures(toFeatures(option));
+    OptionElement features = options.get(FEATURES);
+    if (features != null) {
+      field.setFeatures(toFeatures(features));
+    }
+    OptionElement featureSupport = options.get(FEATURE_SUPPORT);
+    if (featureSupport != null) {
+      field.setFeatureSupport(toFeatureSupport(featureSupport));
     }
     ProtobufMeta meta = findMeta(CONFLUENT_FIELD_META, options);
     if (meta != null) {
@@ -2217,9 +2286,11 @@ public class ProtobufSchema implements ParsedSchema {
           .map(o -> Boolean.valueOf(o.getValue().toString())).orElse(null);
       FeatureSet constFeatures = findOption(FEATURES, constantOptions)
           .map(ProtobufSchema::toFeatures).orElse(null);
+      FeatureSupport constFeatureSupport = findOption(FEATURE_SUPPORT, constantOptions)
+          .map(ProtobufSchema::toFeatureSupport).orElse(null);
       ProtobufMeta meta = findMeta(CONFLUENT_ENUM_VALUE_META, constantOptions);
       enumer.addValue(constant.getName(), constant.getTag(),
-          meta, isConstDeprecated, isDebugRedact, constFeatures);
+          meta, isConstDeprecated, isDebugRedact, constFeatures, constFeatureSupport);
     }
     ProtobufMeta meta = findMeta(CONFLUENT_ENUM_META, enumOptions);
     enumer.setMeta(meta);
@@ -3080,7 +3151,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {
