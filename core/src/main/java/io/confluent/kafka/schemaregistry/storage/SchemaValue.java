@@ -333,4 +333,19 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
         isDeleted()
     );
   }
+
+  public Schema toHashKey() {
+    return new Schema(
+        getSubject(),
+        null,
+        null,
+        getSchemaType(),
+        getReferences() == null ? null : getReferences().stream()
+            .map(SchemaReference::toRefEntity)
+            .collect(Collectors.toList()),
+        getMetadata() == null ? null : getMetadata().toMetadataEntity(),
+        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
+        getSchema()
+    );
+  }
 }
