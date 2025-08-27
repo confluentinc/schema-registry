@@ -35,8 +35,10 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -104,6 +106,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -1482,6 +1485,55 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         }
       }
     }
+  }
+
+  public Association createAssociation(String subject, Association association)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+    if (isReadOnlyMode(subject)) {
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+          + context + " is in read-only mode");
+    }
+
+    // TODO
+    // Check that at least one schema exists
+    // If this association is strong, check no other associations exist
+    // If this association is weak, check no strong associations exist
+
+    String type = association.getType();
+    if (type == null || type.isEmpty()) {
+      throw new IllegalArgumentException("Associaton type cannot be null or empty");
+    }
+    String resourceName = association.getResourceName();
+    if (resourceName == null || resourceName.isEmpty()) {
+      throw new IllegalArgumentException("Resource name cannot be null or empty");
+    }
+    String resourceNamespace = association.getResourceNamespace();
+    if (resourceNamespace == null) {
+      resourceNamespace = "";  // the null namespace is the empty string
+    }
+    String resourceId = association.getResourceId();
+    LifecyclePolicy lifecyclePolicy = association.getLifecycle();
+    Lifecycle lifecycle = lifecyclePolicy == LifecyclePolicy.STRONG
+        ? Lifecycle.STRONG
+        : Lifecycle.WEAK;
+    String guid = UUID.randomUUID().toString();
+    boolean frozen = association.isFrozen();
+    AssociationValue associationValue =
+        new AssociationValue(subject, guid, tenant(), type, resourceNamespace, resourceName,
+            resourceId, lifecycle, frozen);
+    AssociationKey associationKey = associationValue.toKey();
+    try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.put(associationKey, associationValue);
+      log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
+          associationValue, associationKey);
+      return associationValue.toAssociationEntity();
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+          e);
+    }
+
   }
 
   private Schema forwardRegisterRequestToLeader(
