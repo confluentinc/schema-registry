@@ -57,6 +57,4 @@ public abstract class SubjectValue extends SchemaRegistryValue {
   public int hashCode() {
     return Objects.hashCode(subject);
   }
-
-  public abstract SubjectKey toKey();
 }
