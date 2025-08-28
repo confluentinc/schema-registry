@@ -25,18 +25,21 @@ import java.util.Objects;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonPropertyOrder(value = {"keytype", "tenant", "type", "resourceName", "resourceNamespace"})
+@JsonPropertyOrder(value = {"keytype", "tenant", "associationType", "resourceType",
+    "resourceName", "resourceNamespace"})
 public class AssociationKey extends SchemaRegistryKey {
 
   private static final int MAGIC_BYTE = 0;
   @NotEmpty
   private String tenant;
-  private String type;
+  private String associationType;
+  private String resourceType;
   private String resourceName;
   private String resourceNamespace;
 
   public AssociationKey(@JsonProperty("tenant") String tenant,
-      @JsonProperty("type") String type,
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("resourceType") String resourceType,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace) {
     super(SchemaRegistryKeyType.ASSOC);
@@ -51,12 +54,20 @@ public class AssociationKey extends SchemaRegistryKey {
     this.tenant = tenant;
   }
 
-  public String getType() {
-    return type;
+  public String getAssociationType() {
+    return associationType;
   }
 
-  public void setType(String type) {
-    this.type = type;
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
+  }
+
+  public String getResourceType() {
+    return resourceType;
+  }
+
+  public void setResourceType(String resourceType) {
+    this.resourceType = resourceType;
   }
 
   public String getResourceName() {
@@ -85,21 +96,24 @@ public class AssociationKey extends SchemaRegistryKey {
     }
     AssociationKey that = (AssociationKey) o;
     return Objects.equals(tenant, that.tenant)
-        && Objects.equals(type, that.type)
+        && Objects.equals(associationType, that.associationType)
+        && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), tenant, type, resourceName, resourceNamespace);
+    return Objects.hash(super.hashCode(), tenant, associationType, resourceType,
+        resourceName, resourceNamespace);
   }
 
   @Override
   public String toString() {
     return "AssociationKey{"
         + "tenant='" + tenant + '\''
-        + ", type='" + type + '\''
+        + ", associationType='" + associationType + '\''
+        + ", resourceType='" + resourceType + '\''
         + ", resourceName='" + resourceName + '\''
         + ", resourceNamespace='" + resourceNamespace + '\''
         + '}';

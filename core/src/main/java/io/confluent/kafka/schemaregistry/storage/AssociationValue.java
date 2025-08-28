@@ -31,7 +31,8 @@ public class AssociationValue extends SubjectValue {
   @NotEmpty
   private String guid;
   private String tenant;
-  private String type;
+  private String associationType;
+  private String resourceType;
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
@@ -43,7 +44,8 @@ public class AssociationValue extends SubjectValue {
   public AssociationValue(@JsonProperty("subject") String subject,
       @JsonProperty("guid") String guid,
       @JsonProperty("tenant") String tenant,
-      @JsonProperty("type") String type,
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("resourceType") String resourceType,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
@@ -52,7 +54,8 @@ public class AssociationValue extends SubjectValue {
     super(subject);
     this.guid = guid;
     this.tenant = tenant;
-    this.type = type;
+    this.associationType = associationType;
+    this.resourceType = resourceType;
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
@@ -81,14 +84,24 @@ public class AssociationValue extends SubjectValue {
     this.tenant = tenant;
   }
 
-  @JsonProperty("type")
-  public String getType() {
-    return type;
+  @JsonProperty("associationType")
+  public String getAssociationType() {
+    return associationType;
   }
 
-  @JsonProperty("type")
-  public void setType(String type) {
-    this.type = type;
+  @JsonProperty("associationType")
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
+  }
+
+  @JsonProperty("resourceType")
+  public String getResourceType() {
+    return resourceType;
+  }
+
+  @JsonProperty("resourceType")
+  public void setResourceType(String resourceType) {
+    this.resourceType = resourceType;
   }
 
   @JsonProperty("resourceName")
@@ -153,7 +166,8 @@ public class AssociationValue extends SubjectValue {
     return frozen == that.frozen
         && Objects.equals(guid, that.guid)
         && Objects.equals(tenant, that.tenant)
-        && Objects.equals(type, that.type)
+        && Objects.equals(associationType, that.associationType)
+        && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
@@ -163,8 +177,8 @@ public class AssociationValue extends SubjectValue {
   @Override
   public int hashCode() {
     return Objects.hash(
-        super.hashCode(), guid, tenant, type, resourceName, resourceNamespace, resourceId,
-        lifecycle, frozen);
+        super.hashCode(), guid, tenant, associationType, resourceType,
+        resourceName, resourceNamespace, resourceId, lifecycle, frozen);
   }
 
   @Override
@@ -172,7 +186,8 @@ public class AssociationValue extends SubjectValue {
     return "AssociationValue{"
         + "guid='" + guid + '\''
         + ", tenant='" + tenant + '\''
-        + ", type='" + type + '\''
+        + ", associationType='" + associationType + '\''
+        + ", resourceType='" + resourceType + '\''
         + ", resourceName='" + resourceName + '\''
         + ", resourceNamespace='" + resourceNamespace + '\''
         + ", resourceId='" + resourceId + '\''
@@ -183,14 +198,16 @@ public class AssociationValue extends SubjectValue {
 
   @Override
   public AssociationKey toKey() {
-    return new AssociationKey(tenant, type, resourceName, resourceNamespace);
+    return new AssociationKey(tenant, associationType, resourceType,
+        resourceName, resourceNamespace);
   }
 
   public Association toAssociationEntity() {
     return new Association(
         getSubject(),
         guid,
-        type,
+        associationType,
+        resourceType,
         resourceName,
         resourceNamespace,
         resourceId,
