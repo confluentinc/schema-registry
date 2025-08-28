@@ -1500,9 +1500,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     // If this association is strong, check no other associations exist
     // If this association is weak, check no strong associations exist
 
-    String type = association.getType();
-    if (type == null || type.isEmpty()) {
+    String associationType = association.getAssociationType();
+    if (associationType == null || associationType.isEmpty()) {
       throw new IllegalArgumentException("Associaton type cannot be null or empty");
+    }
+    String resourceType = association.getResourceType();
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = "topic"; // default resource type
     }
     String resourceName = association.getResourceName();
     if (resourceName == null || resourceName.isEmpty()) {
@@ -1520,8 +1524,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     String guid = UUID.randomUUID().toString();
     boolean frozen = association.isFrozen();
     AssociationValue associationValue =
-        new AssociationValue(subject, guid, tenant(), type, resourceNamespace, resourceName,
-            resourceId, lifecycle, frozen);
+        new AssociationValue(subject, guid, tenant(), associationType, resourceType,
+            resourceNamespace, resourceName, resourceId, lifecycle, frozen);
     AssociationKey associationKey = associationValue.toKey();
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);

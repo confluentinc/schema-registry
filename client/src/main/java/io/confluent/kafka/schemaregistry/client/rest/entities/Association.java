@@ -28,17 +28,19 @@ public class Association {
 
   private String subject;
   private String guid;
+  private String associationType;
+  private String resourceType;
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
-  private String type;
   private LifecyclePolicy lifecycle;
   private boolean frozen;
 
   @JsonCreator
   public Association(@JsonProperty("subject") String subject,
       @JsonProperty("guid") String guid,
-      @JsonProperty("type") String type,
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("resourceType") String resourceType,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
@@ -46,7 +48,8 @@ public class Association {
       @JsonProperty("frozen") boolean frozen) {
     this.subject = subject;
     this.guid = guid;
-    this.type = type;
+    this.associationType = associationType;
+    this.resourceType = resourceType;
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
@@ -74,14 +77,24 @@ public class Association {
     this.guid = guid;
   }
 
-  @JsonProperty("type")
-  public String getType() {
-    return type;
+  @JsonProperty("associationType")
+  public String getAssociationType() {
+    return associationType;
   }
 
-  @JsonProperty("type")
-  public void setType(String type) {
-    this.type = type;
+  @JsonProperty("associationType")
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
+  }
+
+  @JsonProperty("resourceType")
+  public String getResourceType() {
+    return resourceType;
+  }
+
+  @JsonProperty("resourceType")
+  public void setResourceType(String resourceType) {
+    this.resourceType = resourceType;
   }
 
   @JsonProperty("resourceName")
@@ -143,7 +156,8 @@ public class Association {
     return frozen == that.frozen
         && Objects.equals(subject, that.subject)
         && Objects.equals(guid, that.guid)
-        && Objects.equals(type, that.type)
+        && Objects.equals(associationType, that.associationType)
+        && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
@@ -153,7 +167,7 @@ public class Association {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, guid, type, resourceName, resourceNamespace, resourceId,
-        lifecycle, frozen);
+        subject, guid, associationType, resourceType,
+        resourceName, resourceNamespace, resourceId, lifecycle, frozen);
   }
 }
