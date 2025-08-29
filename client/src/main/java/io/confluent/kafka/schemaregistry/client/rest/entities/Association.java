@@ -28,31 +28,31 @@ public class Association {
 
   private String subject;
   private String guid;
-  private String associationType;
-  private String resourceType;
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
+  private String resourceType;
+  private String associationType;
   private LifecyclePolicy lifecycle;
   private boolean frozen;
 
   @JsonCreator
   public Association(@JsonProperty("subject") String subject,
       @JsonProperty("guid") String guid,
-      @JsonProperty("associationType") String associationType,
-      @JsonProperty("resourceType") String resourceType,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
+      @JsonProperty("resourceType") String resourceType,
+      @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
       @JsonProperty("frozen") boolean frozen) {
     this.subject = subject;
     this.guid = guid;
-    this.associationType = associationType;
-    this.resourceType = resourceType;
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
+    this.resourceType = resourceType;
+    this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
   }
@@ -75,26 +75,6 @@ public class Association {
   @JsonProperty("guid")
   public void setGuid(String guid) {
     this.guid = guid;
-  }
-
-  @JsonProperty("associationType")
-  public String getAssociationType() {
-    return associationType;
-  }
-
-  @JsonProperty("associationType")
-  public void setAssociationType(String associationType) {
-    this.associationType = associationType;
-  }
-
-  @JsonProperty("resourceType")
-  public String getResourceType() {
-    return resourceType;
-  }
-
-  @JsonProperty("resourceType")
-  public void setResourceType(String resourceType) {
-    this.resourceType = resourceType;
   }
 
   @JsonProperty("resourceName")
@@ -127,6 +107,26 @@ public class Association {
     this.resourceId = resourceId;
   }
 
+  @JsonProperty("resourceType")
+  public String getResourceType() {
+    return resourceType;
+  }
+
+  @JsonProperty("resourceType")
+  public void setResourceType(String resourceType) {
+    this.resourceType = resourceType;
+  }
+
+  @JsonProperty("associationType")
+  public String getAssociationType() {
+    return associationType;
+  }
+
+  @JsonProperty("associationType")
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
+  }
+
   @JsonProperty("lifecycle")
   public LifecyclePolicy getLifecycle() {
     return lifecycle;
@@ -156,18 +156,18 @@ public class Association {
     return frozen == that.frozen
         && Objects.equals(subject, that.subject)
         && Objects.equals(guid, that.guid)
-        && Objects.equals(associationType, that.associationType)
-        && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
+        && Objects.equals(resourceType, that.resourceType)
+        && Objects.equals(associationType, that.associationType)
         && lifecycle == that.lifecycle;
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, guid, associationType, resourceType,
-        resourceName, resourceNamespace, resourceId, lifecycle, frozen);
+        subject, guid, resourceName, resourceNamespace, resourceId,
+        resourceType, associationType, lifecycle, frozen);
   }
 }

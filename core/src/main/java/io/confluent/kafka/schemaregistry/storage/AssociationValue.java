@@ -31,11 +31,11 @@ public class AssociationValue extends SubjectValue {
   @NotEmpty
   private String guid;
   private String tenant;
-  private String associationType;
-  private String resourceType;
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
+  private String resourceType;
+  private String associationType;
   private Lifecycle lifecycle;
   @NotEmpty
   private boolean frozen;
@@ -44,21 +44,21 @@ public class AssociationValue extends SubjectValue {
   public AssociationValue(@JsonProperty("subject") String subject,
       @JsonProperty("guid") String guid,
       @JsonProperty("tenant") String tenant,
-      @JsonProperty("associationType") String associationType,
-      @JsonProperty("resourceType") String resourceType,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
+      @JsonProperty("resourceType") String resourceType,
+      @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") Lifecycle lifecycle,
       @JsonProperty("frozen") boolean frozen) {
     super(subject);
     this.guid = guid;
     this.tenant = tenant;
-    this.associationType = associationType;
-    this.resourceType = resourceType;
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
+    this.resourceType = resourceType;
+    this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
   }
@@ -82,26 +82,6 @@ public class AssociationValue extends SubjectValue {
   @JsonProperty("tenant")
   public void setTenant(String tenant) {
     this.tenant = tenant;
-  }
-
-  @JsonProperty("associationType")
-  public String getAssociationType() {
-    return associationType;
-  }
-
-  @JsonProperty("associationType")
-  public void setAssociationType(String associationType) {
-    this.associationType = associationType;
-  }
-
-  @JsonProperty("resourceType")
-  public String getResourceType() {
-    return resourceType;
-  }
-
-  @JsonProperty("resourceType")
-  public void setResourceType(String resourceType) {
-    this.resourceType = resourceType;
   }
 
   @JsonProperty("resourceName")
@@ -132,6 +112,26 @@ public class AssociationValue extends SubjectValue {
   @JsonProperty("resourceId")
   public void setResourceId(String resourceId) {
     this.resourceId = resourceId;
+  }
+
+  @JsonProperty("resourceType")
+  public String getResourceType() {
+    return resourceType;
+  }
+
+  @JsonProperty("resourceType")
+  public void setResourceType(String resourceType) {
+    this.resourceType = resourceType;
+  }
+
+  @JsonProperty("associationType")
+  public String getAssociationType() {
+    return associationType;
+  }
+
+  @JsonProperty("associationType")
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
   }
 
   @JsonProperty("lifecycle")
@@ -166,19 +166,19 @@ public class AssociationValue extends SubjectValue {
     return frozen == that.frozen
         && Objects.equals(guid, that.guid)
         && Objects.equals(tenant, that.tenant)
-        && Objects.equals(associationType, that.associationType)
-        && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
+        && Objects.equals(resourceType, that.resourceType)
+        && Objects.equals(associationType, that.associationType)
         && lifecycle == that.lifecycle;
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        super.hashCode(), guid, tenant, associationType, resourceType,
-        resourceName, resourceNamespace, resourceId, lifecycle, frozen);
+        super.hashCode(), guid, tenant, resourceName, resourceNamespace, resourceId,
+        resourceType, associationType, lifecycle, frozen);
   }
 
   @Override
@@ -186,11 +186,11 @@ public class AssociationValue extends SubjectValue {
     return "AssociationValue{"
         + "guid='" + guid + '\''
         + ", tenant='" + tenant + '\''
-        + ", associationType='" + associationType + '\''
-        + ", resourceType='" + resourceType + '\''
         + ", resourceName='" + resourceName + '\''
         + ", resourceNamespace='" + resourceNamespace + '\''
         + ", resourceId='" + resourceId + '\''
+        + ", resourceType='" + resourceType + '\''
+        + ", associationType='" + associationType + '\''
         + ", lifecycle=" + lifecycle
         + ", frozen=" + frozen
         + '}';
@@ -198,19 +198,19 @@ public class AssociationValue extends SubjectValue {
 
   @Override
   public AssociationKey toKey() {
-    return new AssociationKey(tenant, associationType, resourceType,
-        resourceName, resourceNamespace);
+    return new AssociationKey(tenant,
+        resourceName, resourceNamespace, resourceType, associationType);
   }
 
   public Association toAssociationEntity() {
     return new Association(
         getSubject(),
         guid,
-        associationType,
-        resourceType,
         resourceName,
         resourceNamespace,
         resourceId,
+        resourceType,
+        associationType,
         lifecycle == Lifecycle.STRONG
             ? LifecyclePolicy.STRONG
             : LifecyclePolicy.WEAK,

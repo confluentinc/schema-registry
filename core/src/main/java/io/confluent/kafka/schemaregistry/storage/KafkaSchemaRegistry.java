@@ -1500,14 +1500,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     // If this association is strong, check no other associations exist
     // If this association is weak, check no strong associations exist
 
-    String associationType = association.getAssociationType();
-    if (associationType == null || associationType.isEmpty()) {
-      throw new IllegalArgumentException("Associaton type cannot be null or empty");
-    }
-    String resourceType = association.getResourceType();
-    if (resourceType == null || resourceType.isEmpty()) {
-      resourceType = "topic"; // default resource type
-    }
     String resourceName = association.getResourceName();
     if (resourceName == null || resourceName.isEmpty()) {
       throw new IllegalArgumentException("Resource name cannot be null or empty");
@@ -1517,6 +1509,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       resourceNamespace = "";  // the null namespace is the empty string
     }
     String resourceId = association.getResourceId();
+    String resourceType = association.getResourceType();
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = "topic"; // default resource type
+    }
+    String associationType = association.getAssociationType();
+    if (associationType == null || associationType.isEmpty()) {
+      throw new IllegalArgumentException("Associaton type cannot be null or empty");
+    }
     LifecyclePolicy lifecyclePolicy = association.getLifecycle();
     Lifecycle lifecycle = lifecyclePolicy == LifecyclePolicy.STRONG
         ? Lifecycle.STRONG
@@ -1524,8 +1524,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     String guid = UUID.randomUUID().toString();
     boolean frozen = association.isFrozen();
     AssociationValue associationValue =
-        new AssociationValue(subject, guid, tenant(), associationType, resourceType,
-            resourceNamespace, resourceName, resourceId, lifecycle, frozen);
+        new AssociationValue(subject, guid, tenant(), resourceNamespace, resourceName, resourceId,
+            resourceType, associationType, lifecycle, frozen);
     AssociationKey associationKey = associationValue.toKey();
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
@@ -1537,7 +1537,87 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       throw new SchemaRegistryStoreException("Failed to write new config value to the store",
           e);
     }
+  }
 
+  public Association updateAssociation(String subject, Association association)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+    if (isReadOnlyMode(subject)) {
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+          + context + " is in read-only mode");
+    }
+
+    // TODO
+    // Check that the association is not frozen
+    // If the new association is strong, check no other associations exist
+
+    String resourceName = association.getResourceName();
+    if (resourceName == null || resourceName.isEmpty()) {
+      throw new IllegalArgumentException("Resource name cannot be null or empty");
+    }
+    String resourceNamespace = association.getResourceNamespace();
+    if (resourceNamespace == null) {
+      resourceNamespace = "";  // the null namespace is the empty string
+    }
+    String resourceId = association.getResourceId();
+    String resourceType = association.getResourceType();
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = "topic"; // default resource type
+    }
+    String associationType = association.getAssociationType();
+    if (associationType == null || associationType.isEmpty()) {
+      throw new IllegalArgumentException("Associaton type cannot be null or empty");
+    }
+    LifecyclePolicy lifecyclePolicy = association.getLifecycle();
+    Lifecycle lifecycle = lifecyclePolicy == LifecyclePolicy.STRONG
+        ? Lifecycle.STRONG
+        : Lifecycle.WEAK;
+    String guid = UUID.randomUUID().toString();
+    boolean frozen = association.isFrozen();
+    AssociationValue associationValue =
+        new AssociationValue(subject, guid, tenant(), resourceNamespace, resourceName, resourceId,
+            resourceType, associationType, lifecycle, frozen);
+    AssociationKey associationKey = associationValue.toKey();
+    try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.put(associationKey, associationValue);
+      log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
+          associationValue, associationKey);
+      return associationValue.toAssociationEntity();
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+          e);
+    }
+  }
+
+  public Association getAssociationByGuid(String guid)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+    // TODO
+    String tenant = tenant();
+    return null;
+  }
+
+  public List<Association> getAssociationsBySubject(String associationType, String subject)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+    // TODO
+    String tenant = tenant();
+    return null;
+  }
+
+  public List<Association> getAssociationsByResourceId(String associationType,
+      String resourceType, String resourceId)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+    // TODO
+    String tenant = tenant();
+    return null;
+  }
+
+  public List<Association> getAssociationsByResourceName(String associationType,
+      String resourceType, String resourceName, String resourceNamespace)
+      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+    // TODO
+    String tenant = tenant();
+    return null;
   }
 
   private Schema forwardRegisterRequestToLeader(
