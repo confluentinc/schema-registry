@@ -1597,23 +1597,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     return null;
   }
 
-  public List<Association> getAssociationsBySubject(String associationType, String subject)
+  public List<Association> getAssociationsBySubject(String subject, List<String> associationTypes)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     // TODO
     String tenant = tenant();
     return null;
   }
 
-  public List<Association> getAssociationsByResourceId(String associationType,
-      String resourceType, String resourceId)
+  public List<Association> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     // TODO
     String tenant = tenant();
     return null;
   }
 
-  public List<Association> getAssociationsByResourceName(String associationType,
-      String resourceType, String resourceName, String resourceNamespace)
+  public List<Association> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     // TODO
     String tenant = tenant();
