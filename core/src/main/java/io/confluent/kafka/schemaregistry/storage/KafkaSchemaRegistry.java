@@ -49,10 +49,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
@@ -104,6 +106,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -1487,7 +1490,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public Association createAssociation(String subject, Association association)
+  public Association createAssociation(String subject, AssociationCreateRequest association)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
     if (isReadOnlyMode(subject)) {
       String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
@@ -1505,8 +1508,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       throw new IllegalArgumentException("Resource name cannot be null or empty");
     }
     String resourceNamespace = association.getResourceNamespace();
-    if (resourceNamespace == null) {
-      resourceNamespace = "";  // the null namespace is the empty string
+    if (resourceNamespace == null || resourceNamespace.isEmpty()) {
+      throw new IllegalArgumentException("Resource namespace cannot be null or empty");
     }
     String resourceId = association.getResourceId();
     String resourceType = association.getResourceType();
@@ -1539,14 +1542,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public Association updateAssociation(String subject, Association association)
+  public Association updateAssociation(AssociationUpdateRequest association)
       throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
-    if (isReadOnlyMode(subject)) {
-      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " in context "
-          + context + " is in read-only mode");
-    }
-
     // TODO
     // Check that the association is not frozen
     // If the new association is strong, check no other associations exist
@@ -1557,9 +1554,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
     String resourceNamespace = association.getResourceNamespace();
     if (resourceNamespace == null) {
-      resourceNamespace = "";  // the null namespace is the empty string
+      throw new IllegalArgumentException("Resource namespace cannot be null or empty");
     }
-    String resourceId = association.getResourceId();
     String resourceType = association.getResourceType();
     if (resourceType == null || resourceType.isEmpty()) {
       resourceType = "topic"; // default resource type
@@ -1568,15 +1564,35 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     if (associationType == null || associationType.isEmpty()) {
       throw new IllegalArgumentException("Associaton type cannot be null or empty");
     }
-    LifecyclePolicy lifecyclePolicy = association.getLifecycle();
-    Lifecycle lifecycle = lifecyclePolicy == LifecyclePolicy.STRONG
-        ? Lifecycle.STRONG
-        : Lifecycle.WEAK;
-    String guid = UUID.randomUUID().toString();
-    boolean frozen = association.isFrozen();
+    List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
+        resourceType, Collections.singletonList(associationType));
+    if (associations.isEmpty()) {
+      // TODO fix error
+      throw new IllegalArgumentException("No existing associations found for resource: "
+          + resourceNamespace + "/" + resourceName + " of type " + resourceType
+          + " and association type " + associationType);
+    }
+    Association oldValue = associations.get(0);
+    String subject = oldValue.getSubject();
+
+    if (isReadOnlyMode(subject)) {
+      String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+      throw new OperationNotPermittedException("Subject " + subject + " in context "
+          + context + " is in read-only mode");
+    }
+
+    Optional<LifecyclePolicy> optLifecyclePolicy = association.getLifecycle();
+    LifecyclePolicy lifecycle = optLifecyclePolicy.isPresent()
+        ? optLifecyclePolicy.get()
+        : oldValue.getLifecycle();
+    Optional<Boolean> optFrozen = association.getFrozen();
+    boolean frozen = optFrozen.isPresent() ? optFrozen.get() : oldValue.isFrozen();
     AssociationValue associationValue =
-        new AssociationValue(subject, guid, tenant(), resourceNamespace, resourceName, resourceId,
-            resourceType, associationType, lifecycle, frozen);
+        new AssociationValue(subject, oldValue.getGuid(), tenant(),
+            resourceNamespace, resourceName, oldValue.getResourceId(),
+            resourceType, associationType,
+            lifecycle == LifecyclePolicy.STRONG ? Lifecycle.STRONG : Lifecycle.WEAK,
+            frozen);
     AssociationKey associationKey = associationValue.toKey();
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
