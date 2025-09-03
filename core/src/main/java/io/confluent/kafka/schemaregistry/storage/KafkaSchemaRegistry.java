@@ -1735,6 +1735,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       boolean isNew,
       boolean normalize)
       throws InvalidSchemaException {
+    assert schema != null && schema.getVersion() == null && schema.getId() == null;
+
     String schemaType = schema.getSchemaType();
     if (schemaType == null) {
       schemaType = AvroSchema.TYPE;
@@ -2329,6 +2331,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
    * @param schemaKey a schema key obtained by {@link Schema#toHashKey()}
    */
   public void invalidateFromNewSchemaCache(Schema schemaKey) {
+    assert schemaKey != null && schemaKey.getVersion() == null && schemaKey.getId() == null;
+
     newSchemaCache.invalidate(new RawSchema(schemaKey, true, false));
     newSchemaCache.invalidate(new RawSchema(schemaKey, true, true));
   }
@@ -2339,6 +2343,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
    * @param schemaKey a schema key obtained by {@link Schema#toHashKey()}
    */
   public void invalidateFromOldSchemaCache(Schema schemaKey) {
+    assert schemaKey != null && schemaKey.getVersion() == null && schemaKey.getId() == null;
+    
     oldSchemaCache.invalidate(new RawSchema(schemaKey, false, false));
     oldSchemaCache.invalidate(new RawSchema(schemaKey, false, true));
   }
