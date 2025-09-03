@@ -49,13 +49,12 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
+import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.util.Utf8;
 import org.slf4j.Logger;
@@ -531,7 +530,11 @@ public class AvroSchema implements ParsedSchema {
   public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     try {
-      return toTransformedMessage(ctx, this.rawSchema(), message, transform);
+      // Use the schema from the message if it exists, so schema evolution works properly
+      Schema schema = message instanceof GenericContainer
+          ? ((GenericContainer) message).getSchema()
+          : this.rawSchema();
+      return toTransformedMessage(ctx, schema, message, transform);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof RuleException) {
         throw (RuleException) e.getCause();
