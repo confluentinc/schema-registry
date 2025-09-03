@@ -144,7 +144,7 @@ public class DeriveProtobufSchema extends DeriveSchema {
     }
     schemaBuilder.append(schemaForRecord);
     ProtobufSchema protobufSchema = new ProtobufSchema(schemaBuilder.toString());
-    protobufSchema.validate();
+    protobufSchema.validate(false);
     return mapper.convertValue(protobufSchema.toString(), TextNode.class);
   }
 

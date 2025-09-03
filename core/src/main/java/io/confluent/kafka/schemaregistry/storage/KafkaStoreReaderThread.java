@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
 import io.confluent.kafka.schemaregistry.storage.StoreUpdateHandler.ValidationStatus;
+import io.confluent.kafka.schemaregistry.utils.ShutdownableThread;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,7 +50,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationExcepti
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
-import kafka.utils.ShutdownableThread;
 
 /**
  * Thread that reads schema registry state from the Kafka compacted topic and modifies
