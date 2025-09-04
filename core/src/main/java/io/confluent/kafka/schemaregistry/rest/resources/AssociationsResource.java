@@ -285,13 +285,9 @@ public class AssociationsResource {
     if (resourceType == null || resourceType.isEmpty()) {
       resourceType = DEFAULT_RESOURCE_TYPE;
     }
-    if (request.getLifecycle() == null) {
-      throw Errors.invalidAssociation("lifecycle", "cannot be null");
-    }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
-
 
     try {
       List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
