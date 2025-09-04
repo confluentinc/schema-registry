@@ -20,13 +20,10 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
-import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
-import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.AssociationAlreadyExistsException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.TooManyAssociationsException;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -55,8 +52,6 @@ import jakarta.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,9 +128,9 @@ public class AssociationsResource {
   @DocumentedName("getAssociationsByResourceName")
   public List<Association> getAssociationsByResourceName(
       @Parameter(description = "Resource name")
-      @PathParam("reourceName") String resourceName,
+      @PathParam("resourceName") String resourceName,
       @Parameter(description = "Resource namespace")
-      @PathParam("reourceNamespace") String resourceNamespace,
+      @PathParam("resourceNamespace") String resourceNamespace,
       @Parameter(description = "Resource type")
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
@@ -174,7 +169,7 @@ public class AssociationsResource {
   @DocumentedName("getAssociationsByResourceId")
   public List<Association> getAssociationsByResourceId(
       @Parameter(description = "Resource ID")
-      @PathParam("reourceId") String resourceId,
+      @PathParam("resourceId") String resourceId,
       @Parameter(description = "Resource type")
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")

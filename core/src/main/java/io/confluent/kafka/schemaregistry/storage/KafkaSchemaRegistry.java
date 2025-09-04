@@ -1498,7 +1498,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           + context + " is in read-only mode");
     }
 
-    // TODO
+    // TODO RAY
     // Check that at least one schema exists
     // Check that the resource does not already have an association
     // If this association is strong, check no other associations exist
@@ -1554,14 +1554,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public Association updateAssociation(String resourceName, String resourceNamespace,
       String resourceType, String associationType, AssociationUpdateRequest request)
       throws SchemaRegistryException {
-    // TODO
+    // TODO RAY
     // Check that the association is not frozen
     // If the new association is strong, check no other associations exist
 
     List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
         resourceType, Collections.singletonList(associationType));
     if (associations.isEmpty()) {
-      // TODO fix error
+      // TODO RAY fix error
       throw new IllegalArgumentException("No existing associations found for resource: "
           + resourceNamespace + "/" + resourceName + " of type " + resourceType
           + " and association type " + associationType);
@@ -1628,7 +1628,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public Association getAssociationByGuid(String guid)
       throws SchemaRegistryException {
-    // TODO
+    // TODO RAY
     String tenant = tenant();
     return null;
   }
@@ -1636,7 +1636,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public List<Association> getAssociationsBySubject(
       String subject, String resourceType, List<String> associationTypes)
       throws SchemaRegistryException {
-    // TODO
+    // TODO RAY
     String tenant = tenant();
     return null;
   }
@@ -1644,7 +1644,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public List<Association> getAssociationsByResourceId(
       String resourceId, String resourceType, List<String> associationTypes)
       throws SchemaRegistryException {
-    // TODO
+    // TODO RAY
     String tenant = tenant();
     return null;
   }
@@ -1653,8 +1653,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       String resourceName, String resourceNamespace,
       String resourceType, List<String> associationTypes)
       throws SchemaRegistryException {
-    // TODO
-    // TODO handle "unspecified" namespace
+    // TODO RAY
+    // TODO RAY handle "unspecified" namespace
     String tenant = tenant();
     return null;
   }
@@ -1675,7 +1675,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
         resourceType, Collections.singletonList(associationType));
     if (associations.isEmpty()) {
-      // TODO 404?
+      // TODO RAY 404?
       return;
     }
     Association oldValue = associations.get(0);
