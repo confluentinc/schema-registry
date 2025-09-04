@@ -48,8 +48,16 @@ public class Errors {
   public static final String SUBJECT_LEVEL_MODE_NOT_CONFIGURED_MESSAGE_FORMAT = "Subject '%s' does not have "
           + "subject-level mode configured";
   public static final int SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE = 40409;
+  public static final String ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT = "Association for '%s' not found.";
+  public static final int ASSOCIATION_NOT_FOUND_ERROR_CODE = 40410;
 
+  public static final String ASSOCIATION_ALREADY_EXISTS_MESSAGE_FORMAT =
+      "An association already exists for resource '%s'";
+  public static final int ASSOCIATION_ALREADY_EXISTS_ERROR_CODE = 40911;
 
+  public static final String TOO_MANY_ASSOCIATIONS_MESSAGE_FORMAT =
+      "A maximum of %d association already exist";
+  public static final int TOO_MANY_ASSOCIATIONS_ERROR_CODE = 40912;
 
   // HTTP 409
   public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = Response.Status.CONFLICT.getStatusCode();
@@ -66,6 +74,7 @@ public class Errors {
   public static final int SCHEMA_TOO_LARGE_ERROR_CODE = 42209;
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
+  public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -195,5 +204,28 @@ public class Errors {
 
   public static RestException unknownLeaderException(String message, Throwable cause) {
     return new RestUnknownLeaderException(message, cause);
+  }
+
+  public static RestException associationNotFoundException(String subject) {
+    return new RestNotFoundException(
+        String.format(ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT, subject),
+        ASSOCIATION_NOT_FOUND_ERROR_CODE);
+  }
+
+  public static RestException associationAlreadyExistsException(String resourceName) {
+    return new RestConflictException(
+        String.format(ASSOCIATION_ALREADY_EXISTS_MESSAGE_FORMAT, resourceName),
+        ASSOCIATION_ALREADY_EXISTS_ERROR_CODE);
+  }
+
+  public static RestException tooManyAssociationsException(int max) {
+    return new RestConflictException(
+        String.format(TOO_MANY_ASSOCIATIONS_MESSAGE_FORMAT, max),
+        TOO_MANY_ASSOCIATIONS_ERROR_CODE);
+  }
+
+  public static RestInvalidAssociationException invalidAssociation(
+      String propertyName, String reason) {
+    return new RestInvalidAssociationException(propertyName, reason);
   }
 }

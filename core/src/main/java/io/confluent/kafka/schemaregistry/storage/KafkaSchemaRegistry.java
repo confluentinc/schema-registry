@@ -1491,7 +1491,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   public Association createAssociation(String subject, AssociationCreateRequest association)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+      throws SchemaRegistryException {
     if (isReadOnlyMode(subject)) {
       String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
       throw new OperationNotPermittedException("Subject " + subject + " in context "
@@ -1500,26 +1500,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
     // TODO
     // Check that at least one schema exists
+    // Check that the resource does not already have an association
     // If this association is strong, check no other associations exist
     // If this association is weak, check no strong associations exist
 
     String resourceName = association.getResourceName();
-    if (resourceName == null || resourceName.isEmpty()) {
-      throw new IllegalArgumentException("Resource name cannot be null or empty");
-    }
     String resourceNamespace = association.getResourceNamespace();
-    if (resourceNamespace == null || resourceNamespace.isEmpty()) {
-      throw new IllegalArgumentException("Resource namespace cannot be null or empty");
-    }
     String resourceId = association.getResourceId();
     String resourceType = association.getResourceType();
-    if (resourceType == null || resourceType.isEmpty()) {
-      resourceType = "topic"; // default resource type
-    }
     String associationType = association.getAssociationType();
-    if (associationType == null || associationType.isEmpty()) {
-      throw new IllegalArgumentException("Associaton type cannot be null or empty");
-    }
     LifecyclePolicy lifecyclePolicy = association.getLifecycle();
     Lifecycle lifecycle = lifecyclePolicy == LifecyclePolicy.STRONG
         ? Lifecycle.STRONG
@@ -1527,7 +1516,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     String guid = UUID.randomUUID().toString();
     boolean frozen = association.isFrozen();
     AssociationValue associationValue =
-        new AssociationValue(subject, guid, tenant(), resourceNamespace, resourceName, resourceId,
+        new AssociationValue(subject, guid, tenant(), resourceName, resourceNamespace, resourceId,
             resourceType, associationType, lifecycle, frozen);
     AssociationKey associationKey = associationValue.toKey();
     try {
@@ -1542,28 +1531,33 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public Association updateAssociation(AssociationUpdateRequest association)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+  public Association createAssociationOrForward(String subject, AssociationCreateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        return createAssociation(subject, request);
+      } else {
+        if (leaderIdentity != null) {
+          return forwardCreateAssociationRequestToLeader(subject, request, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Create association request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  public Association updateAssociation(String resourceName, String resourceNamespace,
+      String resourceType, String associationType, AssociationUpdateRequest request)
+      throws SchemaRegistryException {
     // TODO
     // Check that the association is not frozen
     // If the new association is strong, check no other associations exist
 
-    String resourceName = association.getResourceName();
-    if (resourceName == null || resourceName.isEmpty()) {
-      throw new IllegalArgumentException("Resource name cannot be null or empty");
-    }
-    String resourceNamespace = association.getResourceNamespace();
-    if (resourceNamespace == null) {
-      throw new IllegalArgumentException("Resource namespace cannot be null or empty");
-    }
-    String resourceType = association.getResourceType();
-    if (resourceType == null || resourceType.isEmpty()) {
-      resourceType = "topic"; // default resource type
-    }
-    String associationType = association.getAssociationType();
-    if (associationType == null || associationType.isEmpty()) {
-      throw new IllegalArgumentException("Associaton type cannot be null or empty");
-    }
     List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
         resourceType, Collections.singletonList(associationType));
     if (associations.isEmpty()) {
@@ -1581,15 +1575,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           + context + " is in read-only mode");
     }
 
-    Optional<LifecyclePolicy> optLifecyclePolicy = association.getLifecycle();
+    Optional<LifecyclePolicy> optLifecyclePolicy = request.getLifecycle();
     LifecyclePolicy lifecycle = optLifecyclePolicy.isPresent()
         ? optLifecyclePolicy.get()
         : oldValue.getLifecycle();
-    Optional<Boolean> optFrozen = association.getFrozen();
+    Optional<Boolean> optFrozen = request.getFrozen();
     boolean frozen = optFrozen.isPresent() ? optFrozen.get() : oldValue.isFrozen();
     AssociationValue associationValue =
         new AssociationValue(subject, oldValue.getGuid(), tenant(),
-            resourceNamespace, resourceName, oldValue.getResourceId(),
+            resourceName, resourceNamespace, oldValue.getResourceId(),
             resourceType, associationType,
             lifecycle == LifecyclePolicy.STRONG ? Lifecycle.STRONG : Lifecycle.WEAK,
             frozen);
@@ -1606,15 +1600,42 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  public Association updateAssociationOrForward(String subject,
+      String resourceName, String resourceNamespace, String resourceType, String associationType,
+      AssociationUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        return updateAssociation(
+            resourceName, resourceNamespace, resourceType, associationType, request);
+      } else {
+        // forward update config request to the leader
+        if (leaderIdentity != null) {
+          return forwardUpdateAssociationRequestToLeader(
+              resourceName, resourceNamespace, resourceType, associationType,
+              request, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Update association request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
   public Association getAssociationByGuid(String guid)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+      throws SchemaRegistryException {
     // TODO
     String tenant = tenant();
     return null;
   }
 
-  public List<Association> getAssociationsBySubject(String subject, List<String> associationTypes)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+  public List<Association> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes)
+      throws SchemaRegistryException {
     // TODO
     String tenant = tenant();
     return null;
@@ -1622,7 +1643,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public List<Association> getAssociationsByResourceId(
       String resourceId, String resourceType, List<String> associationTypes)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+      throws SchemaRegistryException {
     // TODO
     String tenant = tenant();
     return null;
@@ -1631,10 +1652,77 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public List<Association> getAssociationsByResourceName(
       String resourceName, String resourceNamespace,
       String resourceType, List<String> associationTypes)
-      throws SchemaRegistryStoreException, OperationNotPermittedException, UnknownLeaderException {
+      throws SchemaRegistryException {
     // TODO
+    // TODO handle "unspecified" namespace
     String tenant = tenant();
     return null;
+  }
+
+  public void deleteAssociations(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes)
+      throws SchemaRegistryException {
+    for (String associationType : associationTypes) {
+      deleteAssociation(resourceName, resourceNamespace, resourceType, associationType);
+    }
+  }
+
+  public void deleteAssociation(
+      String resourceName, String resourceNamespace,
+      String resourceType, String associationType)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
+        resourceType, Collections.singletonList(associationType));
+    if (associations.isEmpty()) {
+      // TODO 404?
+      return;
+    }
+    Association oldValue = associations.get(0);
+    String subject = oldValue.getSubject();
+    try {
+      if (isReadOnlyMode(subject)) {
+        String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+            + context + " is in read-only mode");
+      }
+      AssociationKey key = new AssociationKey(tenant(), resourceName, resourceNamespace,
+          resourceType, associationType);
+      // Ensure cache is up-to-date before any potential writes
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.put(key, null);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while deleting the association for subject '"
+          + subject + "' in the backend Kafka store", e);
+    }
+  }
+
+  public void deleteAssociationsOrForward(
+      String subject,  // subject is only used for locking per tenant
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        deleteAssociations(resourceName, resourceNamespace,
+            resourceType, associationTypes);
+      } else {
+        // forward update config request to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteAssociationsRequestToLeader(resourceName, resourceNamespace,
+              resourceType, associationTypes, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Delete association request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
   }
 
   private Schema forwardRegisterRequestToLeader(
@@ -1815,6 +1903,72 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           String.format(
               "Unexpected error while forwarding delete subject mode"
                   + "request %s to %s", subject, baseUrl), e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private Association forwardCreateAssociationRequestToLeader(
+      String subject, AssociationCreateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding create association request to %s", baseUrl));
+    try {
+      Association response = leaderRestService.createAssociation(
+          headerProperties, subject, request);
+      return response;
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the create association request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private Association forwardUpdateAssociationRequestToLeader(
+      String resourceName, String resourceNamespace,
+      String resourceType, String associationType,
+      AssociationUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding update association request to %s", baseUrl));
+    try {
+      Association response = leaderRestService.updateAssociation(
+          headerProperties, resourceName, resourceNamespace,
+          resourceType, associationType, request);
+      return response;
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the update association request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private void forwardDeleteAssociationsRequestToLeader(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding delete associations request to %s", baseUrl));
+    try {
+      leaderRestService.deleteAssociations(
+          headerProperties, resourceName, resourceNamespace, resourceType, associationTypes);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the delete association request to %s",
+              baseUrl),
+          e);
     } catch (RestClientException e) {
       throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }

@@ -21,6 +21,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
+import java.io.IOException;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -143,5 +145,9 @@ public class AssociationCreateRequest {
     return Objects.hash(
         resourceName, resourceNamespace, resourceId,
         resourceType, associationType, lifecycle, frozen);
+  }
+
+  public String toJson() throws IOException {
+    return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 }

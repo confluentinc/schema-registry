@@ -1,0 +1,386 @@
+/*
+ * Copyright 2023 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.rest.resources;
+
+import com.google.common.base.CharMatcher;
+import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.exceptions.AssociationAlreadyExistsException;
+import io.confluent.kafka.schemaregistry.storage.exceptions.TooManyAssociationsException;
+import io.confluent.rest.annotations.PerformanceMetric;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Path("/associations")
+@Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
+    Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
+    Versions.JSON_WEIGHTED})
+@Consumes({Versions.SCHEMA_REGISTRY_V1_JSON,
+    Versions.SCHEMA_REGISTRY_DEFAULT_JSON,
+    Versions.JSON, Versions.GENERIC_REQUEST})
+public class AssociationsResource {
+
+  public static final String apiTag = "Association (v1)";
+  private static final Logger log = LoggerFactory.getLogger(AssociationsResource.class);
+  private final KafkaSchemaRegistry schemaRegistry;
+
+  public static final String DEFAULT_RESOURCE_TYPE = "topic";
+  public static final int NAME_MAX_LENGTH = 256;
+
+  private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
+
+  public AssociationsResource(KafkaSchemaRegistry schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
+  }
+
+  @Path("/subjects/{subject}")
+  @GET
+  @Operation(summary = "Get a list of associations by subject.", responses = {
+      @ApiResponse(responseCode = "200",
+          description = "List of associations", content = @Content(
+          array = @ArraySchema(schema = @Schema(implementation = Association.class)))),
+  })
+  @PerformanceMetric("associations.by-subject")
+  @DocumentedName("getAssociationsBySubject")
+  public List<Association> getAssociationsBySubject(
+      @Parameter(description = "Subject")
+      @PathParam("subject") String subject,
+      @Parameter(description = "Resource type")
+      @QueryParam("resourceType") String resourceType,
+      @Parameter(description = "Association type")
+      @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    String errorMessage = "Error while getting associations for subject " + subject;
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = DEFAULT_RESOURCE_TYPE;
+    }
+    try {
+      limit = schemaRegistry.normalizeSchemaLimit(limit);
+      List<Association> associations = schemaRegistry.getAssociationsBySubject(
+          subject, resourceType, associationTypes);
+      return associations.stream()
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @Path("/resources/{resourceNamespace}/{resourceName}")
+  @GET
+  @Operation(summary = "Get a list of associations by resource name.", responses = {
+      @ApiResponse(responseCode = "200",
+          description = "List of associations", content = @Content(
+          array = @ArraySchema(schema = @Schema(implementation = Association.class)))),
+  })
+  @PerformanceMetric("associations.by-resource-name")
+  @DocumentedName("getAssociationsByResourceName")
+  public List<Association> getAssociationsByResourceName(
+      @Parameter(description = "Resource name")
+      @PathParam("reourceName") String resourceName,
+      @Parameter(description = "Resource namespace")
+      @PathParam("reourceNamespace") String resourceNamespace,
+      @Parameter(description = "Resource type")
+      @QueryParam("resourceType") String resourceType,
+      @Parameter(description = "Association type")
+      @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    String errorMessage = "Error while getting associations for resource name " + resourceName;
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = DEFAULT_RESOURCE_TYPE;
+    }
+    try {
+      limit = schemaRegistry.normalizeSchemaLimit(limit);
+      List<Association> associations = schemaRegistry.getAssociationsByResourceName(
+          resourceName, resourceNamespace, resourceType, associationTypes);
+      return associations.stream()
+          .skip(offset)
+          .limit(limit)
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @Path("/resources/{resourceId}")
+  @GET
+  @Operation(summary = "Get a list of associations by resource ID.", responses = {
+      @ApiResponse(responseCode = "200",
+          description = "List of associations", content = @Content(
+          array = @ArraySchema(schema = @Schema(implementation = Association.class)))),
+  })
+  @PerformanceMetric("associations.by-resource-id")
+  @DocumentedName("getAssociationsByResourceId")
+  public List<Association> getAssociationsByResourceId(
+      @Parameter(description = "Resource ID")
+      @PathParam("reourceId") String resourceId,
+      @Parameter(description = "Resource type")
+      @QueryParam("resourceType") String resourceType,
+      @Parameter(description = "Association type")
+      @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    String errorMessage = "Error while getting associations for resource ID " + resourceId;
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = DEFAULT_RESOURCE_TYPE;
+    }
+    try {
+      limit = schemaRegistry.normalizeSchemaLimit(limit);
+      List<Association> associations = schemaRegistry.getAssociationsByResourceId(
+          resourceId, resourceType, associationTypes);
+      return associations.stream()
+          .skip(offset)
+          .limit(limit)
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @Path("/subjects/{subject}")
+  @POST
+  @Operation(summary = "Create an association.", responses = {
+      @ApiResponse(responseCode = "200", description = "The create response",
+          content = @Content(schema = @Schema(implementation = Association.class))),
+      @ApiResponse(responseCode = "409", description = "Conflict. "
+          + "Error code 40911 -- Association already exists. "
+          + "Error code 40912 -- Too many associations."),
+      @ApiResponse(responseCode = "422", description = "Error code 42212 -- Invalid association")
+  })
+  @PerformanceMetric("association.create")
+  @DocumentedName("createAssociation")
+  public void createAssociation(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Subject")
+      @QueryParam("subject") String subject,
+      @Parameter(description = "The create request", required = true)
+      @NotNull AssociationCreateRequest request) {
+
+    log.debug("Creating association {}", subject);
+
+    checkSubject(subject);
+    checkName(request.getResourceName(), "resourceName");
+    checkName(request.getResourceNamespace(), "resourceNamespace");
+    if (request.getResourceId() != null && !request.getResourceId().isEmpty()) {
+      checkName(request.getResourceId(), "resourceId");
+    }
+    if (request.getResourceType() != null && !request.getResourceType().isEmpty()) {
+      checkName(request.getResourceType(), "resourceType");
+    } else {
+      request.setResourceType(DEFAULT_RESOURCE_TYPE);
+    }
+    checkName(request.getAssociationType(), "associationType");
+    if (request.getLifecycle() == null) {
+      throw Errors.invalidAssociation("lifecycle", "cannot be null");
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    try {
+      Association association = schemaRegistry.createAssociationOrForward(
+          subject, request, headerProperties);
+      asyncResponse.resume(association);
+    } catch (AssociationAlreadyExistsException e) {
+      throw Errors.associationAlreadyExistsException(e.getMessage());
+    } catch (TooManyAssociationsException e) {
+      // TODO maxKeys
+      //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while creating association: " + e.getMessage(), e);
+    }
+  }
+
+  @Path("/resources/{resourceNamespace}/{resourceName}")
+  @PUT
+  @Operation(summary = "Update an association.", responses = {
+      @ApiResponse(responseCode = "200", description = "The update response",
+          content = @Content(schema = @Schema(implementation = Association.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42212 -- Invalid association")
+  })
+  @PerformanceMetric("association.update")
+  @DocumentedName("updateAssociation")
+  public void updateAssociation(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Resource name")
+      @PathParam("resourceName") String resourceName,
+      @Parameter(description = "Resource namespace")
+      @PathParam("resourceNamespace") String resourceNamespace,
+      @Parameter(description = "Resource type")
+      @QueryParam("resourceType") String resourceType,
+      @Parameter(description = "Association type")
+      @QueryParam("associationType") String associationType,
+      @Parameter(description = "The update request", required = true)
+      @NotNull AssociationUpdateRequest request) {
+
+    log.debug("Updating association {}", resourceName);
+
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = DEFAULT_RESOURCE_TYPE;
+    }
+    if (request.getLifecycle() == null) {
+      throw Errors.invalidAssociation("lifecycle", "cannot be null");
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+
+    try {
+      List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
+          resourceName, resourceNamespace, resourceType,
+          Collections.singletonList(associationType));
+      if (oldAssociations.isEmpty()) {
+        throw Errors.associationNotFoundException(resourceName);
+      }
+
+      String subject = oldAssociations.get(0).getSubject();
+      Association association = schemaRegistry.updateAssociationOrForward(subject,
+          resourceName, resourceNamespace, resourceType, associationType,
+          request, headerProperties);
+      asyncResponse.resume(association);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating association: " + e.getMessage(), e);
+    }
+  }
+
+  @Path("/resources/{resourceNamespace}/{resourceName}")
+  @DELETE
+  @Operation(summary = "Delete associations.", responses = {
+      @ApiResponse(responseCode = "200", description = "The delete response",
+          content = @Content(schema = @Schema(implementation = Association.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42212 -- Invalid association")
+  })
+  @PerformanceMetric("associations.delete")
+  @DocumentedName("deleteAssociations")
+  public void deleteAssociations(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      @Parameter(description = "Resource name")
+      @PathParam("resourceName") String resourceName,
+      @Parameter(description = "Resource namespace")
+      @PathParam("resourceNamespace") String resourceNamespace,
+      @Parameter(description = "Resource type")
+      @QueryParam("resourceType") String resourceType,
+      @Parameter(description = "Association type")
+      @QueryParam("associationType") List<String> associationTypes) {
+
+    log.debug("Deleting association {}", resourceName);
+
+    if (resourceType == null || resourceType.isEmpty()) {
+      resourceType = DEFAULT_RESOURCE_TYPE;
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    try {
+      List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
+          resourceName, resourceNamespace, resourceType, associationTypes);
+      if (oldAssociations.isEmpty()) {
+        throw Errors.associationNotFoundException(resourceName);
+      }
+
+      String subject = oldAssociations.get(0).getSubject();
+      schemaRegistry.deleteAssociationsOrForward(subject,
+          resourceName, resourceNamespace, resourceType, associationTypes,
+          headerProperties);
+      asyncResponse.resume(Response.status(204).build());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while deleting association: " + e.getMessage(), e);
+    }
+  }
+
+  private static void checkName(String name, String propertyName) {
+    if (name == null || name.isEmpty()) {
+      throw Errors.invalidAssociation(propertyName, "cannot be null or empty");
+    }
+    if (name.length() > NAME_MAX_LENGTH) {
+      throw Errors.invalidAssociation(propertyName, "exceeds max length of " + NAME_MAX_LENGTH);
+    }
+    char first = name.charAt(0);
+    if (!(Character.isLetter(first) || first == '_')) {
+      throw Errors.invalidAssociation(propertyName, "must start with a letter or underscore");
+    }
+    for (int i = 1; i < name.length(); i++) {
+      char c = name.charAt(i);
+      if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
+        throw Errors.invalidAssociation(propertyName, "illegal character '" + c + "'");
+      }
+    }
+  }
+
+  private static void checkSubject(String subject) {
+    if (subject == null || subject.isEmpty()
+        || CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
+      throw Errors.invalidAssociation(subject, "must not be empty");
+    }
+  }
+}

@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
 import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -35,6 +36,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
@@ -186,6 +189,12 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
+      };
+  private static final TypeReference<Association> ASSOCIATION_RESPONSE_TYPE =
+      new TypeReference<Association>() {
+      };
+  private static final TypeReference<List<Association>> ASSOCIATIONS_RESPONSE_TYPE =
+      new TypeReference<List<Association>>() {
       };
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
@@ -1824,6 +1833,61 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(delimitedContext).toString();
 
     httpRequest(path, "DELETE", null, requestProperties, VOID_RESPONSE_TYPE);
+  }
+
+  public Association createAssociation(
+      Map<String, String> requestProperties,
+      String subject, AssociationCreateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations/subjects/{subject}");
+    String path = builder.build(subject).toString();
+
+    Association response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_RESPONSE_TYPE);
+    return response;
+  }
+
+  public Association updateAssociation(
+      Map<String, String> requestProperties,
+      String resourceName, String resourceNamespace,
+      String resourceType, String associationType,
+      AssociationUpdateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceNamespace}/{resourceName");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    builder.queryParam("associationType", associationType);
+    String path = builder.build(resourceNamespace, resourceName).toString();
+
+    Association response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_RESPONSE_TYPE);
+    return response;
+  }
+
+  public void deleteAssociations(
+      Map<String, String> requestProperties,
+      String resourceName, String resourceNamespace, String resourceType,
+      List<String> associationTypes
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceNamespace}/{resourceName");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    String path = builder.build(resourceNamespace, resourceName).toString();
+
+    httpRequest(path, "DELETE", null,
+        requestProperties, VOID_RESPONSE_TYPE);
   }
 
   public ServerClusterId getClusterId() throws IOException, RestClientException {
