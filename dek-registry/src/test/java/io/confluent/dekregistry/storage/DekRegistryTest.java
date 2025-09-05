@@ -30,10 +30,12 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.kcache.KeyValue;
-
-import java.util.*;
+import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
 import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.*;
 
@@ -47,6 +49,7 @@ public class DekRegistryTest extends ClusterTestHarness {
 
     private KeyEncryptionKey kek;
 
+    @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -89,12 +92,12 @@ public class DekRegistryTest extends ClusterTestHarness {
         KeyEncryptionKey kek2 = dekRegistry.createKek(kRequest2);
         // Test get without a subject prefix.
         // Includes deleted ones.
-        assertEquals(Arrays.asList("kekName1", "kekName2"), dekRegistry.getKekNames(null, true));
+        assertEquals(List.of("kekName1", "kekName2"), dekRegistry.getKekNames(null, true));
         // Ignores deleted ones.
-        assertEquals(Collections.singletonList("kekName1"), dekRegistry.getKekNames(Collections.emptyList(), false));
+        assertEquals(List.of("kekName1"), dekRegistry.getKekNames(List.of(), false));
 
         // Test get with a non-existing subject prefix.
-        assertEquals(Collections.emptyList(), dekRegistry.getKekNames(Collections.singletonList("non_exist_prefix"), false));
+        assertEquals(List.of(), dekRegistry.getKekNames(List.of("non_exist_prefix"), false));
 
         // Test get by subject prefix with Dek.
         TestKmsDriver t = new TestKmsDriver();
@@ -105,9 +108,9 @@ public class DekRegistryTest extends ClusterTestHarness {
         CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
         );
         dekRegistry.createDek(kek2.getName(), dekRequest);
-        assertEquals(Arrays.asList("kekName1", "kekName2"), dekRegistry.getKekNames(Collections.singletonList("sub"), true));
-        assertEquals(Collections.singletonList("kekName1"), dekRegistry.getKekNames(Collections.singletonList("subject1"), true));
-        assertEquals(Collections.emptyList(), dekRegistry.getKekNames(Collections.singletonList("subject1"), false));
+        assertEquals(List.of("kekName1", "kekName2"), dekRegistry.getKekNames(List.of("sub"), true));
+        assertEquals(List.of("kekName1"), dekRegistry.getKekNames(List.of("subject1"), true));
+        assertEquals(List.of(), dekRegistry.getKekNames(List.of("subject1"), false));
     }
 
     @Test

@@ -17,7 +17,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import org.eclipse.jetty.util.StringUtil;
 
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

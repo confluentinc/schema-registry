@@ -20,16 +20,14 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 
 import java.util.Base64;
 import java.util.Objects;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Min;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -186,7 +184,6 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   }
 
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }
@@ -307,17 +304,33 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   }
 
   public Schema toSchemaEntity() {
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references =
+        getReferences() == null
+            ? null
+            : getReferences().stream()
+                .map(SchemaReference::toRefEntity)
+                .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        getMetadata() == null ? null : getMetadata().toMetadataEntity();
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
+        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity();
+    byte[] bytes = getMd5Bytes();
+    MD5 md5 = bytes != null
+        ? new MD5(bytes)
+        : MD5.ofSchema(getSchema(), references, metadata, ruleSet);
     return new Schema(
         getSubject(),
         getVersion(),
         getId(),
+        md5.toString(),
         getSchemaType(),
-        getReferences() == null ? null : getReferences().stream()
-            .map(SchemaReference::toRefEntity)
-            .collect(Collectors.toList()),
-        getMetadata() == null ? null : getMetadata().toMetadataEntity(),
-        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
-        getSchema()
+        references,
+        metadata,
+        ruleSet,
+        getSchema(),
+        null,
+        getTimestamp(),
+        isDeleted()
     );
   }
 

@@ -20,18 +20,20 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -63,32 +65,61 @@ public class Schema implements Comparable<Schema> {
   private String subject;
   private Integer version;
   private Integer id;
+  private String guid;
   private String schemaType;
   private List<SchemaReference> references;
   private Metadata metadata;
   private RuleSet ruleSet;
   private String schema;
   private List<SchemaTags> schemaTags;
+  private Long timestamp;
+  private Boolean deleted;
 
   @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
-                @JsonProperty("version") Integer version,
-                @JsonProperty("id") Integer id,
-                @JsonProperty("schemaType") String schemaType,
-                @JsonProperty("references") List<SchemaReference> references,
-                @JsonProperty("metadata") Metadata metadata,
-                @JsonProperty("ruleset") RuleSet ruleSet,
-                @JsonProperty("schema") String schema,
-                @JsonProperty("schemaTags") List<SchemaTags> schemaTags) {
+      @JsonProperty("version") Integer version,
+      @JsonProperty("id") Integer id,
+      @JsonProperty("guid") String guid,
+      @JsonProperty("schemaType") String schemaType,
+      @JsonProperty("references") List<SchemaReference> references,
+      @JsonProperty("metadata") Metadata metadata,
+      @JsonProperty("ruleset") RuleSet ruleSet,
+      @JsonProperty("schema") String schema,
+      @JsonProperty("schemaTags") List<SchemaTags> schemaTags,
+      @JsonProperty("ts") Long timestamp,
+      @JsonProperty("deleted") Boolean deleted) {
     this.subject = subject;
     this.version = version;
     this.id = id;
+    this.guid = guid;
     this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
     this.references = references != null ? references : Collections.emptyList();
     this.metadata = metadata;
     this.ruleSet = ruleSet;
     this.schema = schema;
     this.schemaTags = schemaTags;
+    this.timestamp = timestamp;
+    this.deleted = deleted;
+  }
+
+  public Schema(@JsonProperty("subject") String subject,
+      @JsonProperty("version") Integer version,
+      @JsonProperty("id") Integer id,
+      @JsonProperty("guid") String guid,
+      @JsonProperty("schemaType") String schemaType,
+      @JsonProperty("references") List<SchemaReference> references,
+      @JsonProperty("metadata") Metadata metadata,
+      @JsonProperty("ruleset") RuleSet ruleSet,
+      @JsonProperty("schema") String schema) {
+    this.subject = subject;
+    this.version = version;
+    this.id = id;
+    this.guid = guid;
+    this.schemaType = schemaType != null ? schemaType : AvroSchema.TYPE;
+    this.references = references != null ? references : Collections.emptyList();
+    this.metadata = metadata;
+    this.ruleSet = ruleSet;
+    this.schema = schema;
   }
 
   public Schema(@JsonProperty("subject") String subject,
@@ -129,6 +160,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
     this.version = schemaMetadata.getVersion();
     this.id = schemaMetadata.getId();
+    this.guid = schemaMetadata.getGuid();
     this.schemaType = schemaMetadata.getSchemaType() != null
         ? schemaMetadata.getSchemaType() : AvroSchema.TYPE;
     this.references = schemaMetadata.getReferences() != null
@@ -136,12 +168,15 @@ public class Schema implements Comparable<Schema> {
     this.metadata = schemaMetadata.getMetadata();
     this.ruleSet = schemaMetadata.getRuleSet();
     this.schema = schemaMetadata.getSchema();
+    this.timestamp = schemaMetadata.getTimestamp();
+    this.deleted = schemaMetadata.getDeleted();
   }
 
   public Schema(String subject, Integer version, Integer id, SchemaString schemaString) {
     this.subject = subject;
     this.version = version;
     this.id = id;
+    this.guid = schemaString.getGuid();
     this.schemaType = schemaString.getSchemaType() != null
         ? schemaString.getSchemaType() : AvroSchema.TYPE;
     this.references = schemaString.getReferences() != null
@@ -149,6 +184,8 @@ public class Schema implements Comparable<Schema> {
     this.metadata = schemaString.getMetadata();
     this.ruleSet = schemaString.getRuleSet();
     this.schema = schemaString.getSchemaString();
+    this.timestamp = schemaString.getTimestamp();
+    this.deleted = schemaString.getDeleted();
   }
 
   public Schema(String subject, Integer version, Integer id, ParsedSchema schema) {
@@ -192,6 +229,7 @@ public class Schema implements Comparable<Schema> {
     this.subject = subject;
     this.version = response.getVersion() != null ? response.getVersion() : 0;
     this.id = response.getId();
+    this.guid = response.getGuid();
     this.schemaType = response.getSchemaType() != null
         ? response.getSchemaType() : AvroSchema.TYPE;
     this.references = response.getReferences() != null
@@ -199,6 +237,8 @@ public class Schema implements Comparable<Schema> {
     this.metadata = response.getMetadata();
     this.ruleSet = response.getRuleSet();
     this.schema = response.getSchema();
+    this.timestamp = response.getTimestamp();
+    this.deleted = response.getDeleted();
   }
 
   public Schema copy() {
@@ -213,8 +253,9 @@ public class Schema implements Comparable<Schema> {
                                                      .collect(Collectors.toList())
                                                : null;
 
-    return new Schema(subject, version, id, schemaType, referencesCopy, metadata, ruleSet, schema,
-        schemaTags);
+    return new Schema(
+        subject, version, id, guid, schemaType, referencesCopy, metadata,
+        ruleSet, schema, schemaTags, timestamp, deleted);
   }
 
   public Schema toHashKey() {
@@ -261,9 +302,27 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
+  @JsonProperty("guid")
+  public String getGuid() {
+    if (guid == null) {
+      try {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        updateHash(md);
+        byte[] md5 = md.digest();
+        ByteBuffer byteBuffer = ByteBuffer.wrap(md5);
+        long high = byteBuffer.getLong();
+        long low = byteBuffer.getLong();
+        UUID uuid = new UUID(high, low);
+        guid = uuid.toString();
+      } catch (NoSuchAlgorithmException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return guid;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC, example = TYPE_EXAMPLE)
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }
@@ -328,6 +387,26 @@ public class Schema implements Comparable<Schema> {
     this.schemaTags = schemaTags;
   }
 
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
+
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -363,7 +442,9 @@ public class Schema implements Comparable<Schema> {
                + "metadata=" + this.metadata + ","
                + "ruleSet=" + this.ruleSet + ","
                + "schema=" + this.schema + ","
-               + "schemaTags=" + this.schemaTags + "}";
+               + "schemaTags=" + this.schemaTags + ","
+               + "ts=" + this.timestamp + ","
+               + "deleted=" + this.deleted + "}";
   }
 
   @Override
@@ -377,6 +458,16 @@ public class Schema implements Comparable<Schema> {
   }
 
   public void updateHash(MessageDigest md) {
+    updateHash(md, schema, references, metadata, ruleSet);
+  }
+
+  public static void updateHash(
+      MessageDigest md,
+      String schema,
+      List<SchemaReference> references,
+      Metadata metadata,
+      RuleSet ruleSet
+  ) {
     if (schema != null) {
       md.update(schema.getBytes(StandardCharsets.UTF_8));
     }
