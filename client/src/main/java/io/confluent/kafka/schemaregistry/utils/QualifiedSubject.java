@@ -24,12 +24,12 @@ import java.util.Objects;
  * The qualification refers to the context and subject being qualified with a tenant.
  * The qualified subject string has the following format:
  *
- *   [tenant_][:<context>:]subject
+ * <p>[tenant_][:.context:]subject
  *
- * where tenant is optional and defaults to "default", context is optional
+ * <p>where tenant is optional and defaults to "default", context is optional
  * and defaults to ".", and subject is required and may be empty.
  *
- * The special context name ".__GLOBAL" is used for global configuration and mode settings.
+ * <p>The special context name ".__GLOBAL" is used for global configuration and mode settings.
  * The special subject name "__GLOBAL" is used to store global permissions.
  * The special subject name "__EMPTY" represents an empty string.
  */
