@@ -19,6 +19,20 @@ package io.confluent.kafka.schemaregistry.utils;
 import com.google.common.base.CharMatcher;
 import java.util.Objects;
 
+/**
+ * A qualified subject consists of a tenant, a context, and a subject name.
+ * The qualification refers to the context and subject being qualified with a tenant.
+ * The qualified subject string has the following format:
+ *
+ * <p>[tenant_][:.context:]subject
+ *
+ * <p>where tenant is optional and defaults to "default", context is optional
+ * and defaults to ".", and subject is required and may be empty.
+ *
+ * <p>The special context name ".__GLOBAL" is used for global configuration and mode settings.
+ * The special subject name "__GLOBAL" is used to store global permissions.
+ * The special subject name "__EMPTY" represents an empty string.
+ */
 public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String DEFAULT_TENANT = "default";
@@ -150,6 +164,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
         : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
+  /**
+   * Returns the context and subject with the tenant prefix.
+   */
   public String toQualifiedSubject() {
     return toQualifiedContext() + subject;
   }
@@ -161,12 +178,26 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return toUnqualifiedContext() + subject;
   }
 
-  public static boolean isQualified(String tenant, String subject) {
+  /**
+   * Checks if the given subject is qualified with the given tenant.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the subject is qualified with the tenant, false otherwise
+   */
+  public static boolean isQualified(String tenant, String qualifiedSubject) {
     return !DEFAULT_TENANT.equals(tenant)
-        && subject != null
-        && subject.startsWith(tenant + TENANT_DELIMITER);
+        && qualifiedSubject != null
+        && qualifiedSubject.startsWith(tenant + TENANT_DELIMITER);
   }
 
+  /**
+   * Creates a QualifiedSubject from the given tenant and qualified subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return the QualifiedSubject, or null if the qualified subject is null or invalid
+   */
   public static QualifiedSubject create(String tenant, String qualifiedSubject) {
     try {
       return qualifiedSubject != null ? new QualifiedSubject(tenant, qualifiedSubject) : null;
@@ -175,6 +206,13 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  /**
+   * Creates a QualifiedSubject from the given tenant and unqualified subject.
+   *
+   * @param tenant the tenant
+   * @param unqualifiedSubject the subject without a tenant prefix
+   * @return the QualifiedSubject, or null if the unqualified subject is null or invalid
+   */
   public static QualifiedSubject createFromUnqualified(String tenant, String unqualifiedSubject) {
     try {
       if (unqualifiedSubject == null) {
@@ -189,11 +227,25 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 
+  /**
+   * Returns the context for the given qualified subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return the context, or DEFAULT_CONTEXT if the qualified subject is null or invalid
+   */
   public static String contextFor(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.getContext() : DEFAULT_CONTEXT;
   }
 
+  /**
+   * Returns the qualified context for the given qualified subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return the qualified context, or empty string if the qualified subject is null or invalid
+   */
   public static String qualifiedContextFor(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs != null ? qs.toQualifiedContext() : "";
@@ -203,8 +255,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    * Checks if the given qualified subject is a context for the given qualified subject.
    *
    * @param tenant the tenant
-   * @param qualifiedSubject the qualified subject
-   * @param qualifiedContext the qualified context, which must not specify a subject
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @param qualifiedContext the context with a tenant prefix, which must not specify a subject
    * @return true if the subject is in the context, false otherwise
    */
   public static boolean isSubjectInContext(
@@ -216,11 +268,32 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
             QualifiedSubject.qualifiedContextFor(tenant, qualifiedSubject)));
   }
 
+  /**
+   * Qualifies the given subject (which has no tenant) with the given parent context
+   * (which may have a tenant). If the parent has a context, it is used as the context
+   * for the subject. If the parent has no context, the subject is placed in the default context.
+   *
+   * @param tenant the tenant to use if the parent has no tenant
+   * @param parent the parent context, which may have a tenant
+   * @param subjectWithoutTenant the subject without a tenant
+   * @return the qualified subject, or null if the subjectWithoutTenant is null or invalid
+   */
   public static QualifiedSubject qualifySubjectWithParent(
       String tenant, String parent, String subjectWithoutTenant) {
     return qualifySubjectWithParent(tenant, parent, subjectWithoutTenant, false);
   }
 
+  /**
+   * Qualifies the given subject (which has no tenant) with the given parent context
+   * (which may have a tenant). If the parent has a context, it is used as the context
+   * for the subject. If the parent has no context, the subject is placed in the default context.
+   *
+   * @param tenant the tenant to use if the parent has no tenant
+   * @param parent the parent context, which may have a tenant
+   * @param subjectWithoutTenant the subject without a tenant
+   * @param prefixTenant if true, the returned qualified subject will have the tenant prefixed
+   * @return the qualified subject, or null if the subjectWithoutTenant is null or invalid
+   */
   public static QualifiedSubject qualifySubjectWithParent(
       String tenant, String parent, String subjectWithoutTenant, boolean prefixTenant) {
     // Since the subject has no tenant, pass the default tenant
@@ -254,7 +327,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    * Normalizes the given qualified subject name.
    *
    * @param tenant the tenant
-   * @param qualifiedSubject the qualified subject name
+   * @param qualifiedSubject the subject with a tenant prefix
    * @return the normalized subject name
    */
   public static String normalize(String tenant, String qualifiedSubject) {
@@ -262,6 +335,13 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return qs != null ? qs.toQualifiedSubject() : null;
   }
 
+  /**
+   * Normalizes the given context name.
+   *
+   * @param context the context name
+   * @return the normalized context name, or null if the context is null
+   * @throws IllegalArgumentException if the context name is invalid
+   */
   public static String normalizeContext(String context) {
     if (context == null) {
       return null;
@@ -281,15 +361,44 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
+  /**
+   * Checks if the given qualified subject is the default context for the given tenant.
+   * The default context is the context with name "." and an empty subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the qualified subject is the default context, false otherwise
+   */
   public static boolean isDefaultContext(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
   }
 
+  /**
+   * Validates the given qualified subject for the given tenant.
+   * A valid subject must not be null, must not contain control characters,
+   * must not be "__GLOBAL" or "__EMPTY", and must not be in the global context
+   * unless isConfigOrMode is true.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the qualified subject is valid, false otherwise
+   */
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
     return isValidSubject(tenant, qualifiedSubject, false);
   }
 
+  /**
+   * Validates the given qualified subject for the given tenant.
+   * A valid subject must not be null, must not contain control characters,
+   * must not be "__GLOBAL" or "__EMPTY", and must not be in the global context
+   * unless isConfigOrMode is true.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @param isConfigOrMode true if the subject is for config or mode settings
+   * @return true if the qualified subject is valid, false otherwise
+   */
   public static boolean isValidSubject(
       String tenant, String qualifiedSubject, boolean isConfigOrMode) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
