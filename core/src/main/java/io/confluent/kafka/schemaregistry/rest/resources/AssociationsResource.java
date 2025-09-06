@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
@@ -94,6 +95,8 @@ public class AssociationsResource {
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Lifecycle")
+      @QueryParam("lifecycle") LifecyclePolicy lifecycle,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -135,6 +138,8 @@ public class AssociationsResource {
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Lifecycle")
+      @QueryParam("lifecycle") LifecyclePolicy lifecycle,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -174,6 +179,8 @@ public class AssociationsResource {
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Lifecycle")
+      @QueryParam("lifecycle") LifecyclePolicy lifecycle,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
