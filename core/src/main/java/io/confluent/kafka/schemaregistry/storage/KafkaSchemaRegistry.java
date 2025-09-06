@@ -2893,6 +2893,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     private final boolean normalize;
 
     public RawSchema(Schema schema, boolean isNew, boolean normalize) {
+      assert schema != null && schema.getVersion() == null && schema.getId() == null;
+
       this.schema = schema;
       this.isNew = isNew;
       this.normalize = normalize;
