@@ -128,6 +128,14 @@ public class ModeResource {
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
+
+    if (io.confluent.kafka.schemaregistry.storage.Mode.FORWARD.toString()
+            .equals(request.getMode()) 
+        && !QualifiedSubject.isGlobalContext(schemaRegistry.tenant(), subject)) {
+      throw new RestInvalidModeException("Forward mode only supported on global level");
+    }
+
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
