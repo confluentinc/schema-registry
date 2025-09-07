@@ -532,10 +532,7 @@ public class AvroSchema implements ParsedSchema {
   public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     try {
-      // Use the schema from the message if it exists, so schema evolution works properly
-      Schema schema = message instanceof GenericContainer
-          ? ((GenericContainer) message).getSchema()
-          : this.rawSchema();
+      Schema schema = this.rawSchema();
       return toTransformedMessage(ctx, schema, message, transform);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof RuleException) {
@@ -584,11 +581,18 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return message;
         }
-        data = AvroSchemaUtils.getData(schema, message, false, false);
-        for (Schema.Field f : schema.getFields()) {
-          String fullName = schema.getFullName() + "." + f.name();
+        Schema fieldsSchema = schema;
+        if (message instanceof GenericContainer) {
+          // Use the schema from the message if it exists, so schema evolution works properly
+          fieldsSchema = ((GenericContainer) message).getSchema();
+        }
+        data = AvroSchemaUtils.getData(fieldsSchema, message, false, false);
+        for (Schema.Field f : fieldsSchema.getFields()) {
+          // Use tags from the original schema
+          Schema.Field taggedField = schema.getField(f.name());
+          String fullName = fieldsSchema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
-              message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
+              message, fullName, f.name(), getType(f.schema()), getInlineTags(taggedField))) {
             Object value = data.getField(message, f.name(), f.pos());
             if (value instanceof Utf8) {
               value = value.toString();
