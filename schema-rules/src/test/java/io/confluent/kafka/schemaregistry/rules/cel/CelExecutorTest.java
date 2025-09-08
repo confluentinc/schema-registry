@@ -811,6 +811,51 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerSpecificFieldTransformWithTag() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String schemaStr = "{\n"
+        + "  \"namespace\": \"io.confluent.kafka.schemaregistry.rules\",\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"SpecificWidget\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"confluent:tags\": [ \"PII\" ]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"size\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"version\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Schema schema = new Schema.Parser().parse(schemaStr);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITEREAD,
+        CelFieldExecutor.TYPE, Collections.singleton("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    SpecificWidget widget = new SpecificWidget("alice", 5, 1);
+    bytes = specificAvroSerializer.serialize(topic, widget);
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        SpecificWidget.class.isInstance(obj)
+    );
+    assertEquals("alice-suffix-suffix", ((SpecificWidget)obj).getName().toString());
+  }
+
+  @Test
   public void testKafkaAvroSerializerSpecificFieldTransformWithMissingProp() throws Exception {
     byte[] bytes;
     Object obj;
