@@ -560,10 +560,7 @@ public class AvroSchema implements ParsedSchema {
   public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     try {
-      // Use the schema from the message if it exists, so schema evolution works properly
-      Schema schema = message instanceof GenericContainer
-          ? ((GenericContainer) message).getSchema()
-          : this.rawSchema();
+      Schema schema = this.rawSchema();
       return toTransformedMessage(ctx, schema, message, transform);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof RuleException) {
@@ -612,16 +609,27 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return null;
         }
-        data = AvroSchemaUtils.getData(schema, message, false, false);
-        for (Schema.Field f : schema.getFields()) {
-          String fullName = schema.getFullName() + "." + f.name();
+        Schema recordSchema = schema;
+        if (message instanceof GenericContainer) {
+          // Use the schema from the message if it exists, so schema evolution works properly
+          recordSchema = ((GenericContainer) message).getSchema();
+        }
+        data = AvroSchemaUtils.getData(recordSchema, message, false, false);
+        for (Schema.Field f : recordSchema.getFields()) {
+          // The original field has tags needed for inline tag matching
+          Schema.Field originalField = schema.getField(f.name());
+          if (originalField == null) {
+            originalField = f;
+          }
+          String fullName = recordSchema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
-              message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
+              message, fullName, f.name(),
+              getType(originalField.schema()), getInlineTags(originalField))) {
             Object value = data.getField(message, f.name(), f.pos());
             if (value instanceof Utf8) {
               value = value.toString();
             }
-            Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
+            Object newValue = toTransformedMessage(ctx, originalField.schema(), value, transform);
             if (ctx.rule().getKind() == RuleKind.CONDITION) {
               if (Boolean.FALSE.equals(newValue)) {
                 throw new RuntimeException(new RuleConditionException(ctx.rule()));
