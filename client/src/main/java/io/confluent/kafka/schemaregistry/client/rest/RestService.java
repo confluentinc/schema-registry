@@ -57,7 +57,7 @@ import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 import org.apache.hc.core5.util.Timeout;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
@@ -542,15 +542,13 @@ public class RestService implements Closeable, Configurable {
         case "POST":
           request = new HttpPost(requestUrl);
           if (requestBodyData != null) {
-            request.setEntity(new StringEntity(
-                new String(requestBodyData, StandardCharsets.UTF_8)));
+            request.setEntity(new ByteArrayEntity(requestBodyData, null));
           }
           break;
         case "PUT":
           request = new HttpPut(requestUrl);
           if (requestBodyData != null) {
-            request.setEntity(new StringEntity(
-                new String(requestBodyData, StandardCharsets.UTF_8)));
+            request.setEntity(new ByteArrayEntity(requestBodyData, null));
           }
           break;
         case "DELETE":
@@ -635,9 +633,9 @@ public class RestService implements Closeable, Configurable {
         if (isNonRetriableException(e)) {
           throw e;
         }
-        log.warn("Request to URL {} failed with error: {}."
+        log.warn("Request to URL {} failed with error: {}. "
                 + "Failing over to next URL if available...",
-            requestUrl, e.getMessage());
+            requestUrl, e.toString());
         baseUrls.fail(baseUrl);
         if (i == n - 1) {
           throw e; // Raise the exception since we have no more urls to try
