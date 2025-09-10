@@ -43,15 +43,20 @@ import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProvider;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ApacheClientRestServiceTest {
@@ -312,5 +317,98 @@ public class ApacheClientRestServiceTest {
     } catch (RestClientException exception) {
       verify(baseUrlSpy, never()).fail(any());
     }
+  }
+
+  @Test
+  public void testByteArrayEntitySetForPostRequest() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", false, true);
+    RestService restServiceSpy = spy(restService);
+
+    CloseableHttpClient httpClient = mock(CloseableHttpClient.class);
+    CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+    HttpEntity entity = mock(HttpEntity.class);
+
+    when(httpClient.executeOpen(any(), any(), any())).thenReturn(response);
+    when(response.getCode()).thenReturn(200);
+    when(response.getEntity()).thenReturn(entity);
+    when(entity.getContent()).thenReturn(new ByteArrayInputStream("{\"id\":1}".getBytes()));
+
+    Field httpClientField = RestService.class.getDeclaredField("httpClient");
+    httpClientField.setAccessible(true);
+    httpClientField.set(restServiceSpy, httpClient);
+
+    String testSchema = "{\"type\":\"record\",\"name\":\"Test\",\"fields\":[{\"name\":\"field1\",\"type\":\"string\"}]}";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(testSchema);
+
+    restServiceSpy.registerSchema(request, "test-subject", false);
+
+    ArgumentCaptor<HttpPost> requestCaptor = ArgumentCaptor.forClass(HttpPost.class);
+    verify(httpClient).executeOpen(any(), requestCaptor.capture(), any());
+    HttpPost capturedRequest = requestCaptor.getValue();
+    
+    assertTrue("Request entity should be set", capturedRequest.getEntity() != null);
+    assertTrue("Request entity should be ByteArrayEntity", 
+               capturedRequest.getEntity() instanceof ByteArrayEntity);
+  }
+
+  @Test
+  public void testByteArrayEntitySetForPutRequest() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", false, true);
+    RestService restServiceSpy = spy(restService);
+
+    CloseableHttpClient httpClient = mock(CloseableHttpClient.class);
+    CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+    HttpEntity entity = mock(HttpEntity.class);
+
+    when(httpClient.executeOpen(any(), any(), any())).thenReturn(response);
+    when(response.getCode()).thenReturn(200);
+    when(response.getEntity()).thenReturn(entity);
+    when(entity.getContent()).thenReturn(new ByteArrayInputStream("{\"compatibilityLevel\":\"FULL\"}".getBytes()));
+
+    Field httpClientField = RestService.class.getDeclaredField("httpClient");
+    httpClientField.setAccessible(true);
+    httpClientField.set(restServiceSpy, httpClient);
+
+    // Create a test config update request (uses PUT method)
+    ConfigUpdateRequest request = new ConfigUpdateRequest();
+    request.setCompatibilityLevel("FULL");
+
+    restServiceSpy.updateConfig(request, "test-subject");
+
+    ArgumentCaptor<HttpPut> requestCaptor = ArgumentCaptor.forClass(HttpPut.class);
+    verify(httpClient).executeOpen(any(), requestCaptor.capture(), any());
+    HttpPut capturedRequest = requestCaptor.getValue();
+    
+    assertTrue("Request entity should be set", capturedRequest.getEntity() != null);
+    assertTrue("Request entity should be ByteArrayEntity", 
+               capturedRequest.getEntity() instanceof ByteArrayEntity);
+  }
+
+  @Test
+  public void testByteArrayEntityNotSetWhenRequestBodyDataIsNull() throws Exception {
+    RestService restService = new RestService("http://localhost:8081", false, true);
+    RestService restServiceSpy = spy(restService);
+
+    CloseableHttpClient httpClient = mock(CloseableHttpClient.class);
+    CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+    HttpEntity entity = mock(HttpEntity.class);
+
+    when(httpClient.executeOpen(any(), any(), any())).thenReturn(response);
+    when(response.getCode()).thenReturn(200);
+    when(response.getEntity()).thenReturn(entity);
+    when(entity.getContent()).thenReturn(new ByteArrayInputStream("[\"abc\"]".getBytes()));
+
+    Field httpClientField = RestService.class.getDeclaredField("httpClient");
+    httpClientField.setAccessible(true);
+    httpClientField.set(restServiceSpy, httpClient);
+
+    restServiceSpy.getAllSubjects();
+
+    ArgumentCaptor<HttpGet> requestCaptor = ArgumentCaptor.forClass(HttpGet.class);
+    verify(httpClient).executeOpen(any(), requestCaptor.capture(), any());
+    HttpGet capturedRequest = requestCaptor.getValue();
+    
+    assertTrue("GET request should not have entity set", capturedRequest.getEntity() == null);
   }
 }
