@@ -141,25 +141,12 @@ public interface LookupCache<K,V> extends Store<K,V> {
 
   /**
    * Callback that is invoked when an association is registered.
-   * This can be used to update any internal data structure.
-   * This is invoked synchronously during register.
    *
    * @param key   the registered AssociationKey; never {@code null}
    * @param value the registered AssociationValue; never {@code null}
    * @param oldValue the previous AssociationValue
    */
   void associationRegistered(AssociationKey key, AssociationValue value, AssociationValue oldValue);
-
-  /**
-   * Callback that is invoked when an association is deleted.
-   * This can be used to update any internal data structure.
-   * This is invoked synchronously during delete.
-   *
-   * @param key   the deleted AssociationKey; never {@code null}
-   * @param value the deleted AssociationValue; never {@code null}
-   * @param oldValue the previous AssociationValue
-   */
-  void associationDeleted(AssociationKey key, AssociationValue value, AssociationValue oldValue);
 
   /**
    * Callback that is invoked when an association is tombstoned.

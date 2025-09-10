@@ -255,7 +255,8 @@ public class AssociationsResource {
       // TODO maxKeys
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating association: " + e.getMessage(), e);
+      throw Errors.schemaRegistryException(
+          "Error while creating association: " + e.getMessage(), e);
     }
   }
 
@@ -305,7 +306,8 @@ public class AssociationsResource {
           request, headerProperties);
       asyncResponse.resume(association);
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while updating association: " + e.getMessage(), e);
+      throw Errors.schemaRegistryException(
+          "Error while updating association: " + e.getMessage(), e);
     }
   }
 
@@ -352,7 +354,8 @@ public class AssociationsResource {
           headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting association: " + e.getMessage(), e);
+      throw Errors.schemaRegistryException(
+          "Error while deleting association: " + e.getMessage(), e);
     }
   }
 
