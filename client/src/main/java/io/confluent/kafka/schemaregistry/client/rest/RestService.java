@@ -445,9 +445,9 @@ public class RestService implements Closeable, Configurable {
         if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {
           throw e;
         }
-        log.warn("Request to URL {} failed with error: {}."
+        log.warn("Request to URL {} failed with error: {}. "
                 + "Failing over to next URL if available...",
-            requestUrl, e.getMessage());
+            requestUrl, e.toString());
         baseUrls.fail(baseUrl);
         if (i == n - 1) {
           throw e; // Raise the exception since we have no more urls to try
