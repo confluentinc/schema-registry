@@ -44,6 +44,7 @@ public class AssociationKey extends SchemaRegistryKey {
       @JsonProperty("associationType") String associationType) {
     super(SchemaRegistryKeyType.ASSOC);
     this.magicByte = MAGIC_BYTE;
+    this.tenant = tenant;
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceType = resourceType;

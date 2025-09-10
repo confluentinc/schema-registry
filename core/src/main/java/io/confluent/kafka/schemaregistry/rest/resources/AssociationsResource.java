@@ -108,7 +108,7 @@ public class AssociationsResource {
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
       List<Association> associations = schemaRegistry.getAssociationsBySubject(
-          subject, resourceType, associationTypes);
+          subject, resourceType, associationTypes, lifecycle);
       return associations.stream()
         .skip(offset)
         .limit(limit)
@@ -151,7 +151,7 @@ public class AssociationsResource {
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
       List<Association> associations = schemaRegistry.getAssociationsByResourceName(
-          resourceName, resourceNamespace, resourceType, associationTypes);
+          resourceName, resourceNamespace, resourceType, associationTypes, lifecycle);
       return associations.stream()
           .skip(offset)
           .limit(limit)
@@ -192,7 +192,7 @@ public class AssociationsResource {
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
       List<Association> associations = schemaRegistry.getAssociationsByResourceId(
-          resourceId, resourceType, associationTypes);
+          resourceId, resourceType, associationTypes, lifecycle);
       return associations.stream()
           .skip(offset)
           .limit(limit)
@@ -294,7 +294,7 @@ public class AssociationsResource {
     try {
       List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
           resourceName, resourceNamespace, resourceType,
-          Collections.singletonList(associationType));
+          Collections.singletonList(associationType), null);
       if (oldAssociations.isEmpty()) {
         throw Errors.associationNotFoundException(resourceName);
       }
@@ -341,7 +341,7 @@ public class AssociationsResource {
 
     try {
       List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
-          resourceName, resourceNamespace, resourceType, associationTypes);
+          resourceName, resourceNamespace, resourceType, associationTypes, null);
       if (oldAssociations.isEmpty()) {
         throw Errors.associationNotFoundException(resourceName);
       }

@@ -1559,7 +1559,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     // If the new association is strong, check no other associations exist
 
     List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
-        resourceType, Collections.singletonList(associationType));
+        resourceType, Collections.singletonList(associationType), null);
     if (associations.isEmpty()) {
       // TODO RAY fix error
       throw new IllegalArgumentException("No existing associations found for resource: "
@@ -1628,35 +1628,99 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public Association getAssociationByGuid(String guid)
       throws SchemaRegistryException {
-    // TODO RAY
     String tenant = tenant();
-    return null;
+    try {
+      AssociationValue associationValue = lookupCache.associationByGuid(tenant, guid);
+      return associationValue != null ? associationValue.toAssociationEntity() : null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting association for guid '"
+          + guid + "' in the backend Kafka store", e);
+    }
   }
 
   public List<Association> getAssociationsBySubject(
-      String subject, String resourceType, List<String> associationTypes)
-      throws SchemaRegistryException {
-    // TODO RAY
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
     String tenant = tenant();
-    return null;
+    List<Association> associations = new ArrayList<>();
+    try (CloseableIterator<AssociationValue> iter =
+        lookupCache.associationsBySubject(tenant, subject)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for subject '"
+          + subject + "' in the backend Kafka store", e);
+    }
+    return associations;
   }
 
   public List<Association> getAssociationsByResourceId(
-      String resourceId, String resourceType, List<String> associationTypes)
-      throws SchemaRegistryException {
-    // TODO RAY
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
     String tenant = tenant();
-    return null;
+    List<Association> associations = new ArrayList<>();
+    try (CloseableIterator<AssociationValue> iter =
+        lookupCache.associationsByResourceId(tenant, resourceId)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for resource id '"
+          + resourceId + "' in the backend Kafka store", e);
+    }
+    return associations;
   }
 
   public List<Association> getAssociationsByResourceName(
       String resourceName, String resourceNamespace,
-      String resourceType, List<String> associationTypes)
+      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
       throws SchemaRegistryException {
-    // TODO RAY
-    // TODO RAY handle "unspecified" namespace
     String tenant = tenant();
-    return null;
+    String minResourceNamespace = resourceNamespace != null
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = resourceNamespace != null
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+
+    List<Association> associations = new ArrayList<>();
+    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
+        minResourceType, minAssociationType);
+    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType);
+    try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving schema from the backend Kafka"
+              + " store", e);
+    }
+    return associations;
   }
 
   public void deleteAssociations(
@@ -1673,7 +1737,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       String resourceType, String associationType)
       throws SchemaRegistryException {
     List<Association> associations = getAssociationsByResourceName(resourceName, resourceNamespace,
-        resourceType, Collections.singletonList(associationType));
+        resourceType, Collections.singletonList(associationType), null);
     if (associations.isEmpty()) {
       // TODO RAY 404?
       return;

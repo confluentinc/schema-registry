@@ -265,6 +265,32 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     hashes.put(md5, schemaValue.getId());
   }
 
+  public AssociationValue associationByGuid(String tenant, String guid)
+      throws StoreException {
+    return null;
+  }
+
+  public CloseableIterator<AssociationValue> associationsBySubject(String tenant, String subject)
+      throws StoreException {
+    return null;
+  }
+
+  public CloseableIterator<AssociationValue> associationsByResourceId(
+      String tenant, String resourceId) throws StoreException {
+    return null;
+  }
+
+  public void associationRegistered(
+      AssociationKey key, AssociationValue value, AssociationValue oldValue) {
+  }
+
+  public void associationDeleted(
+      AssociationKey key, AssociationValue value, AssociationValue oldValue) {
+  }
+
+  public void associationTombstoned(AssociationKey key, AssociationValue value) {
+  }
+
   @Override
   @SuppressWarnings("unchecked")
   public Config config(String subject,

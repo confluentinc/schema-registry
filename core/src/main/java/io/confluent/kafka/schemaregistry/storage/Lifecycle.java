@@ -15,7 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+
 public enum Lifecycle {
   STRONG,
-  WEAK
+  WEAK;
+
+  public LifecyclePolicy toLifecyclePolicy() {
+    return LifecyclePolicy.valueOf(this.name());
+  }
 }
