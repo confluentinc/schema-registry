@@ -3119,7 +3119,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testGoogleDescriptor() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader("/");
-    for (int i = 19; i < 30; i++) {
+    for (int i = 19; i < 33; i++) {
       ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
       ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
       Descriptor desc = schema.toDescriptor();
