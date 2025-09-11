@@ -71,6 +71,8 @@ public class AssociationsResource {
   private final KafkaSchemaRegistry schemaRegistry;
 
   public static final String DEFAULT_RESOURCE_TYPE = "topic";
+  public static final String DEFAULT_ASSOCIATION_TYPE = "value";
+  public static final LifecyclePolicy DEFAULT_LIFECYCLE = LifecyclePolicy.STRONG;
   public static final int NAME_MAX_LENGTH = 256;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
@@ -220,7 +222,7 @@ public class AssociationsResource {
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
       @Parameter(description = "Subject")
-      @QueryParam("subject") String subject,
+      @PathParam("subject") String subject,
       @Parameter(description = "The create request", required = true)
       @NotNull AssociationCreateRequest request) {
 
@@ -237,9 +239,13 @@ public class AssociationsResource {
     } else {
       request.setResourceType(DEFAULT_RESOURCE_TYPE);
     }
-    checkName(request.getAssociationType(), "associationType");
+    if (request.getAssociationType() != null && !request.getAssociationType().isEmpty()) {
+      checkName(request.getAssociationType(), "associationType");
+    } else {
+      request.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
+    }
     if (request.getLifecycle() == null) {
-      throw Errors.invalidAssociation("lifecycle", "cannot be null");
+      request.setLifecycle(DEFAULT_LIFECYCLE);
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
@@ -381,7 +387,7 @@ public class AssociationsResource {
   private static void checkSubject(String subject) {
     if (subject == null || subject.isEmpty()
         || CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
-      throw Errors.invalidAssociation(subject, "must not be empty");
+      throw Errors.invalidAssociation("subject", "must not be empty");
     }
   }
 }

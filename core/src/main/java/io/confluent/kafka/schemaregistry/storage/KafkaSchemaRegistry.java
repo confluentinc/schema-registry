@@ -1526,7 +1526,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           associationValue, associationKey);
       return associationValue.toAssociationEntity();
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+      throw new SchemaRegistryStoreException("Failed to write new association value to the store",
           e);
     }
   }
@@ -1595,7 +1595,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
           associationValue, associationKey);
       return associationValue.toAssociationEntity();
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store",
+      throw new SchemaRegistryStoreException("Failed to write new association value to the store",
           e);
     }
   }
