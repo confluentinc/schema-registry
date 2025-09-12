@@ -18,27 +18,23 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+
+import javax.net.ssl.SSLSocketFactory;
+import javax.security.auth.login.AppConfigurationEntry;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import javax.net.ssl.SSLSocketFactory;
-import javax.security.auth.login.AppConfigurationEntry;
-
-import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 
 @SuppressWarnings("checkstyle:ClassDataAbstractionCoupling")
 public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider {
@@ -106,7 +102,8 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
     return new OauthTokenCache(cacheExpiryBufferSeconds);
   }
 
-  private AccessTokenRetriever getTokenRetriever(ConfigurationUtils cu, JaasOptionsUtils jou) {
+  private TokenAdapter.TokenRetriever getTokenRetriever(ConfigurationUtils cu,
+                                                        JaasOptionsUtils jou) {
     // if the schema registry oauth configs are set it is given higher preference
     String clientId = cu.get(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID) != null
         ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID)
@@ -120,7 +117,7 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
         ? cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE)
         : jou.validateString(OAuthBearerLoginCallbackHandler.SCOPE_CONFIG, false);
 
-    //Keeping following configs needed by HttpAccessTokenRetriever as constants and not exposed to
+    //Keeping following configs needed by token retriever as constants and not exposed to
     //users for modifications
     long retryBackoffMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS;
     long retryBackoffMaxMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
@@ -137,12 +134,13 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
       sslSocketFactory = new HostSslSocketFactory(jou.createSSLSocketFactory(), url.getHost());
     }
 
-    return new HttpAccessTokenRetriever(clientId, clientSecret, scope, sslSocketFactory,
-        url.toString(), retryBackoffMs, retryBackoffMaxMs, loginConnectTimeoutMs,
-        loginReadTimeoutMs, false);
+    return new TokenAdapter.TokenRetrieverImpl(clientId, clientSecret, scope,
+      sslSocketFactory, url.toString(), retryBackoffMs, retryBackoffMaxMs,
+      loginConnectTimeoutMs, loginReadTimeoutMs, false);
   }
 
-  private AccessTokenValidator getTokenValidator(ConfigurationUtils cu, Map<String, ?> configs) {
+  private TokenAdapter.TokenValidator getTokenValidator(ConfigurationUtils cu,
+                                                        Map<String, ?> configs) {
     // if the schema registry oauth configs are set it is given higher preference
     String scopeClaimName = cu.get(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME) != null
         ? cu.validateString(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
@@ -152,7 +150,7 @@ public class SaslOauthCredentialProvider implements BearerAuthCredentialProvider
         ? cu.validateString(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME)
         : SchemaRegistryClientConfig.getBearerAuthSubClaimName(configs);
 
-    return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
+    return new TokenAdapter.TokenValidatorImpl(scopeClaimName, subClaimName);
   }
 
   Map<String, Object> getConfigsForJaasUtil(Map<String, ?> configs) {

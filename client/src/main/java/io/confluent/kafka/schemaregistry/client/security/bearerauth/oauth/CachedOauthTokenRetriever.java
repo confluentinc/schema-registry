@@ -18,15 +18,14 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions.SchemaRegistryOauthTokenRetrieverException;
-import java.io.IOException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+
+import java.io.IOException;
 
 /**
  * <p>
- * <code>CachedOauthTokenRetriever</code> is an wrapper around {@link AccessTokenRetriever} that
+ * <code>CachedOauthTokenRetriever</code> is an wrapper around TokenRetriever that
  * will communicate with an OAuth/OIDC provider directly via HTTP to post client credentials ({@link
  * SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_ID}/
  * {@link SchemaRegistryClientConfig#BEARER_AUTH_CLIENT_SECRET})
@@ -35,7 +34,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
  * inorder to fetch an access token.
  * </p>
  * <p>
- * This class adds caching mechanism over {@link AccessTokenRetriever} using {@link
+ * This class adds caching mechanism over TokenRetriever using {@link
  * OauthTokenCache}
  * </p>
  *
@@ -44,13 +43,15 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
 
 public class CachedOauthTokenRetriever {
 
-  private AccessTokenRetriever accessTokenRetriever;
-  private AccessTokenValidator accessTokenValidator;
+  private TokenAdapter.TokenRetriever accessTokenRetriever;
+  private TokenAdapter.TokenValidator accessTokenValidator;
   private OauthTokenCache oauthTokenCache;
 
 
-  public void configure(AccessTokenRetriever accessTokenRetriever,
-      AccessTokenValidator accessTokenValidator, OauthTokenCache oauthTokenCache) {
+  public void configure(TokenAdapter.TokenRetriever accessTokenRetriever,
+                        TokenAdapter.TokenValidator accessTokenValidator,
+                        OauthTokenCache oauthTokenCache
+  ) {
     this.accessTokenRetriever = accessTokenRetriever;
     this.accessTokenValidator = accessTokenValidator;
     this.oauthTokenCache = oauthTokenCache;
