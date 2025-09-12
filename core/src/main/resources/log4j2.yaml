@@ -1,0 +1,26 @@
+Configuration:
+  name: Log4j2
+  Appenders:
+    Console:
+      name: stdout
+      target: SYSTEM_OUT
+      PatternLayout:
+        pattern: "[%d] %p %m (%c:%L)%n"
+  Loggers:
+    Root:
+      level: INFO
+      AppenderRef:
+        - ref: stdout
+    Logger:
+      - name: org.apache.kafka
+        level: ERROR
+        AppenderRef:
+          - ref: stdout
+      - name: org.apache.directory
+        level: ERROR
+        AppenderRef:
+          - ref: stdout
+      - name: kafka
+        level: ERROR
+        AppenderRef:
+          - ref: stdout

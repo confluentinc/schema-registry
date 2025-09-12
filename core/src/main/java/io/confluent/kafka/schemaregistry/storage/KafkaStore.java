@@ -69,6 +69,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
   private final AtomicBoolean initialized = new AtomicBoolean(false);
   private final CountDownLatch initLatch = new CountDownLatch(1);
   private final int initTimeout;
+  private final boolean initWaitForReader;
   private final int timeout;
   private final String bootstrapBrokers;
   private final boolean skipSchemaTopicValidation;
@@ -99,6 +100,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
                         config.getString(SchemaRegistryConfig.HOST_NAME_CONFIG), port)
                    : config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG);
     initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
+    initWaitForReader =
+        config.getBoolean(SchemaRegistryConfig.KAFKASTORE_INIT_WAIT_FOR_READER_CONFIG);
     timeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.storeUpdateHandler = storeUpdateHandler;
     this.serializer = serializer;
@@ -130,8 +133,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
-    props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
     producer = new KafkaProducer<byte[], byte[]>(props);
 
@@ -146,10 +148,12 @@ public class KafkaStore<K, V> implements Store<K, V> {
     final Map<TopicPartition, Long> checkpoints = new HashMap<>(kafkaTopicReader.checkpoints());
     this.kafkaTopicReader.start();
 
-    try {
-      waitUntilKafkaReaderReachesLastOffset(initTimeout);
-    } catch (StoreException e) {
-      throw new StoreInitializationException(e);
+    if (initWaitForReader) {
+      try {
+        waitUntilKafkaReaderReachesLastOffset(initTimeout);
+      } catch (StoreException e) {
+        throw new StoreInitializationException(e);
+      }
     }
 
     boolean isInitialized = initialized.compareAndSet(false, true);
@@ -250,7 +254,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     Set<String> topics = Collections.singleton(topic);
     Map<String, TopicDescription> topicDescription = admin.describeTopics(topics)
-        .all().get(initTimeout, TimeUnit.MILLISECONDS);
+        .allTopicNames().get(initTimeout, TimeUnit.MILLISECONDS);
 
     TopicDescription description = topicDescription.get(topic);
     final int numPartitions = description.partitions().size();

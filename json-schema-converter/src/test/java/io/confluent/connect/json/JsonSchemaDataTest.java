@@ -1499,6 +1499,15 @@ public class JsonSchemaDataTest {
   }
 
   @Test
+  public void testToConnectSingletonUnion() {
+    StringSchema firstSchema = StringSchema.builder().build();
+    CombinedSchema schema = CombinedSchema.oneOf(ImmutableList.of(firstSchema)).build();
+    Schema expectedSchema = SchemaBuilder.string().build();
+
+    checkNonObjectConversion(expectedSchema, "bar", schema, TextNode.valueOf("bar"));
+  }
+
+  @Test
   public void testToConnectUnionWithGeneralizedSumTypeSupport() {
     jsonSchemaData =
         new JsonSchemaData(new JsonSchemaDataConfig(
@@ -2114,7 +2123,147 @@ public class JsonSchemaDataTest {
     Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
     assertTrue(connectSchema.field("assetMetadata").schema().isOptional());
   }
-  
+
+  @Test
+  public void testIgnoreModernDialects() {
+    String schema = "{ \n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "   \"object_details\": {\n"
+        + "      \"additionalProperties\": true,\n"
+        + "      \"properties\": {\n"
+        + "        \"object_parents\": {\n"
+        + "          \"items\": {\n"
+        + "            \"properties\": {\n"
+        + "              \"object_parents_file_location\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              },\n"
+        + "              \"object_parents_id\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              }\n"
+        + "            },\n"
+        + "            \"type\": [\n"
+        + "              \"object\",\n"
+        + "              \"null\"\n"
+        + "            ]\n"
+        + "          },\n"
+        + "          \"type\": [\n"
+        + "            \"array\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.IGNORE_MODERN_DIALECTS_CONFIG, "true")));
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertNotNull(connectSchema.field("object_details").schema());
+  }
+
+  @Test
+  public void testUseModernDialects() {
+    String schema = "{ \n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "   \"object_details\": {\n"
+        + "      \"additionalProperties\": true,\n"
+        + "      \"properties\": {\n"
+        + "        \"object_parents\": {\n"
+        + "          \"items\": {\n"
+        + "            \"properties\": {\n"
+        + "              \"object_parents_file_location\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              },\n"
+        + "              \"object_parents_id\": {\n"
+        + "                \"type\": [\n"
+        + "                  \"string\",\n"
+        + "                  \"null\"\n"
+        + "                ]\n"
+        + "              }\n"
+        + "            },\n"
+        + "            \"type\": [\n"
+        + "              \"object\",\n"
+        + "              \"null\"\n"
+        + "            ]\n"
+        + "          },\n"
+        + "          \"type\": [\n"
+        + "            \"array\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData =
+        new JsonSchemaData(new JsonSchemaDataConfig(
+            Collections.singletonMap(JsonSchemaDataConfig.IGNORE_MODERN_DIALECTS_CONFIG, "false")));
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertNotNull(connectSchema.field("object_details").schema());
+  }
+
+  @Test
+  public void testAnyOfWithArray() {
+    String schema = "{\n"
+        + "  \"$defs\": {\n"
+        + "    \"review\": {\n"
+        + "      \"properties\": {\n"
+        + "        \"created_on\": {\n"
+        + "          \"type\": [\n"
+        + "            \"string\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        },\n"
+        + "        \"reason_code\": {\n"
+        + "          \"type\": [\n"
+        + "            \"string\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"required\": [],\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"properties\": {\n"
+        + "    \"change_operation\": {\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    \"reviews\": {\n"
+        + "      \"items\": {\n"
+        + "        \"$ref\": \"#/$defs/review\"\n"
+        + "      },\n"
+        + "      \"required\": [],\n"
+        + "      \"type\": [\n"
+        + "        \"array\",\n"
+        + "        \"null\"\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    Schema connectSchema = jsonSchemaData.toConnectSchema(jsonSchema);
+    assertTrue(connectSchema.field("reviews").schema().type() == Schema.Type.ARRAY);
+  }
+
   @Test
   public void testToConnectRecursiveSchema() {
     JsonSchema jsonSchema = getRecursiveJsonSchema();

@@ -21,19 +21,22 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Priority;
-import javax.ws.rs.Priorities;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.container.PreMatching;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.annotation.Priority;
+import jakarta.ws.rs.Priorities;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.PreMatching;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import java.io.IOException;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
@@ -110,7 +113,7 @@ public class ContextFilter implements ContainerRequestFilter {
       }
 
       if (subjectPathFound) {
-        if (!uriPathStr.startsWith(CONTEXT_PREFIX) && !uriPathStr.startsWith(CONTEXT_WILDCARD)) {
+        if (!startsWithContext(uriPathStr)) {
           modifiedUriPathStr = QualifiedSubject.normalizeContext(context) + uriPathStr;
         }
 
@@ -140,6 +143,10 @@ public class ContextFilter implements ContainerRequestFilter {
     } else if (contextPathFound) {
       // Must be a root contexts only
       modifiedPath.append("contexts").append("/");
+    } else if ((modifiedPath.isEmpty() || modifiedPath.toString().equals("/"))
+        && !DEFAULT_CONTEXT.equals(context)) {
+      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      modifiedPath.append("contexts").append("/").append(normalizedContext).append("/");
     }
 
     return new ContextAndPath(context, modifiedPath.toString());
@@ -167,20 +174,35 @@ public class ContextFilter implements ContainerRequestFilter {
       if (subject == null) {
         subject = "";
       }
-      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
+      if (!startsWithContext(subject)) {
         subject = QualifiedSubject.normalizeContext(context) + subject;
         builder.replaceQueryParam("subject", subject);
       }
-    } else if (path.equals("schemas") || path.equals("subjects")) {
-      String subject = queryParams.getFirst("subjectPrefix");
-      if (subject == null) {
-        subject = "";
+    } else if (path.equals("schemas") || path.equals("subjects") || path.startsWith("keks")) {
+      List<String> subjectPrefixes = queryParams.get("subjectPrefix");
+      if (subjectPrefixes == null || subjectPrefixes.isEmpty()) {
+        // Ensure context is used as subjectPrefix
+        subjectPrefixes = Collections.singletonList("");
       }
-      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
-        subject = QualifiedSubject.normalizeContext(context) + subject;
-        builder.replaceQueryParam("subjectPrefix", subject);
-      }
+      Object[] newSubjectPrefixes = subjectPrefixes.stream()
+          .map(prefix -> {
+            if (!startsWithContext(prefix)) {
+              return QualifiedSubject.normalizeContext(context) + prefix;
+            }
+            return prefix;
+          })
+          .toArray();
+      builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
     }
+  }
+
+  private static boolean startsWithContext(String path) {
+    try {
+      path = URLDecoder.decode(path, "UTF-8");
+    } catch (Exception e) {
+      // ignore
+    }
+    return path.startsWith(CONTEXT_PREFIX) || path.startsWith(CONTEXT_WILDCARD);
   }
 
   public static String getErrorResponse(Response.Status status,
@@ -196,8 +218,8 @@ public class ContextFilter implements ContainerRequestFilter {
   }
 
   static class ContextAndPath {
-    private String context;
-    private String path;
+    private final String context;
+    private final String path;
 
     public ContextAndPath(String context, String path) {
       this.context = context;

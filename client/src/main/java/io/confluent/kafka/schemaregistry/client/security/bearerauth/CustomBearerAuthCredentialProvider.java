@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+
+import java.io.IOException;
 import java.net.URL;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigException;
@@ -74,4 +76,11 @@ public class CustomBearerAuthCredentialProvider implements BearerAuthCredentialP
         SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, false);
     this.customBearerAuthCredentialProvider.configure(map);
   }
+
+  @Override
+  public void close() throws IOException {
+    this.customBearerAuthCredentialProvider.close();
+  }
 }
+
+

@@ -100,6 +100,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       Syntax.valueOf(node.get("syntax").asText()),
       Arrays.asList(mapper.convertValue(node.get("imports"), String[].class)),
       Arrays.asList(mapper.convertValue(node.get("publicImports"), String[].class)),
+      Arrays.asList(mapper.convertValue(node.get("weakImports"), String[].class)),
       typeElementBuilder.build(),
       serviceElementBuilder.build(),
       extendElementBuilder.build(),
@@ -189,7 +190,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
     );
   }
 
-  private ExtensionsElement toExtensions(JsonNode node) {
+  private ExtensionsElement toExtensions(JsonNode node) throws JsonProcessingException {
     ImmutableList.Builder<Object> valueBuilder = ImmutableList.builder();
     for (JsonNode value : node.get("values")) {
       if (value.isInt()) {
@@ -200,10 +201,16 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       }
     }
 
+    ImmutableList.Builder<OptionElement> optionElementBuilder = ImmutableList.builder();
+    for (JsonNode optionNode : node.get("options")) {
+      optionElementBuilder.add(toOption(optionNode));
+    }
+
     return new ExtensionsElement(
       toLocation(node.get("location")),
       node.get("documentation").asText(),
-      valueBuilder.build()
+      valueBuilder.build(),
+      optionElementBuilder.build()
     );
   }
 

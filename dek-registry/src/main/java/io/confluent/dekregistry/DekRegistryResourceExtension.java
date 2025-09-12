@@ -25,7 +25,7 @@ import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceE
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.dekregistry.web.rest.resources.DekRegistryResource;
 import java.io.IOException;
-import javax.ws.rs.core.Configurable;
+import jakarta.ws.rs.core.Configurable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

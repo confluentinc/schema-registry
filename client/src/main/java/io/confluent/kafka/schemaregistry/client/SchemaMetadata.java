@@ -24,16 +24,21 @@ import java.util.List;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import java.util.Objects;
 
 public class SchemaMetadata {
 
+  private String subject;
   private int id;
   private int version;
+  private String guid;
   private String schemaType;
   private String schema;
   private List<SchemaReference> references;
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
+  private Long timestamp = null;
+  private Boolean deleted = null;
 
   public SchemaMetadata(int id,
                         int version,
@@ -56,13 +61,22 @@ public class SchemaMetadata {
   }
 
   public SchemaMetadata(Schema schema) {
+    this.subject = schema.getSubject();
     this.id = schema.getId();
+    this.guid = schema.getGuid();
     this.version = schema.getVersion();
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.schema = schema.getSchema();
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
+    this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
+  }
+
+  public String getSubject() {
+    return subject;
   }
 
   public int getId() {
@@ -71,6 +85,10 @@ public class SchemaMetadata {
 
   public int getVersion() {
     return version;
+  }
+
+  public String getGuid() {
+    return guid;
   }
 
   public String getSchemaType() {
@@ -91,5 +109,36 @@ public class SchemaMetadata {
 
   public RuleSet getRuleSet() {
     return this.ruleSet;
+  }
+
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SchemaMetadata that = (SchemaMetadata) o;
+    return Objects.equals(subject, that.subject)
+        && id == that.id
+        && version == that.version
+        && Objects.equals(guid, that.guid)
+        && Objects.equals(schemaType, that.schemaType)
+        && Objects.equals(schema, that.schema)
+        && Objects.equals(references, that.references)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        subject, id, version, guid, schemaType, schema, references, metadata, ruleSet);
   }
 }

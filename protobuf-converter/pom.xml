@@ -6,7 +6,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.4.11-0</version>
+        <version>8.0.1-0</version>
     </parent>
 
     <licenses>
@@ -103,8 +103,8 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>com.github.os72</groupId>
-                <artifactId>protoc-jar-maven-plugin</artifactId>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
             </plugin>
             <plugin>
                 <groupId>io.confluent</groupId>

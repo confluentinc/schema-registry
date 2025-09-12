@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.DynamicSchema;
+import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -67,7 +68,7 @@ import static org.junit.Assert.fail;
 
 public class ProtobufSchemaTest {
 
-  private static ObjectMapper objectMapper = new ObjectMapper();
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   private static final String recordSchemaString = "syntax = \"proto3\";\n"
       + "\n"
@@ -223,6 +224,28 @@ public class ProtobufSchemaTest {
       + "}\n";
 
   @Test
+  public void testHasTopLevelField() {
+    ParsedSchema parsedSchema = new ProtobufSchema(recordSchemaString);
+    assertTrue(parsedSchema.hasTopLevelField("test_string"));
+    assertFalse(parsedSchema.hasTopLevelField("doesNotExist"));
+  }
+
+  @Test
+  public void testGetReservedFields() {
+    Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "name, city"),
+        Collections.emptySet());
+    ParsedSchema parsedSchema = new ProtobufSchema(recordSchemaString,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        reservedFieldMetadata,
+        null,
+        null,
+        null);
+    assertEquals(ImmutableSet.of("name", "city"), parsedSchema.getReservedFields());
+  }
+
+  @Test
   public void testRecordToProtobuf() throws Exception {
     String json = "{\n"
         + "    \"test_string\": \"string\",\n"
@@ -340,14 +363,14 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testOptionEscape() throws Exception {
+  public void testOptionEscape() {
     String optionSchemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "option java_package = \"io.confluent.kafka.serializers.protobuf.test\";\n"
         + "option java_outer_classname = \"TestOptionEscape\";\n"
         + "option testBackslash = \"backslash\\\\backslash\";\n"
         + "option testDoubleQuote = \"\\\"something\\\"\";\n"
-        + "option testSingleQuote = \"\\\'something\\\'\";\n"
+        + "option testSingleQuote = \"\\'something\\'\";\n"
         + "option testNewline = \"newline\\n\";\n"
         + "option testBell = \"bell\\a\";\n"
         + "option testBackspace = \"backspace\\b\";\n"
@@ -369,7 +392,7 @@ public class ProtobufSchemaTest {
 
     assertTrue(parsed.contains("backslash\\\\backslash"));
     assertTrue(parsed.contains("\\\"something\\\""));
-    assertTrue(parsed.contains("\\\'something\\\'"));
+    assertTrue(parsed.contains("\\'something\\'"));
     assertTrue(parsed.contains("newline\\n"));
     assertTrue(parsed.contains("bell\\a"));
     assertTrue(parsed.contains("backspace\\b"));
@@ -1084,7 +1107,7 @@ public class ProtobufSchemaTest {
 
 
   @Test
-  public void testRanges() throws Exception {
+  public void testRanges() {
     String schemaString = "\nmessage Money {\n"
         + "  reserved 5000 to 6000;\n"
         + "  reserved 10000 to 10001;\n"
@@ -1152,7 +1175,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testComplexEnum() throws Exception {
+  public void testComplexEnum() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package acme.api.items;\n"
         + "\n"
@@ -1338,7 +1361,7 @@ public class ProtobufSchemaTest {
     assertTrue(result.get("test_str").isTextual());
     assertEquals("string", result.get("test_str").textValue());
     assertTrue(result.get("testBool").isBoolean());
-    assertEquals(true, result.get("testBool").booleanValue());
+    assertTrue(result.get("testBool").booleanValue());
     assertTrue(result.get("testBytes").isTextual());
     assertEquals("aGVsbG8=", result.get("testBytes").textValue());
     assertTrue(result.get("testDouble").isDouble());
@@ -1454,7 +1477,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testNativeDependencies() throws Exception {
+  public void testNativeDependencies() {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "import \"confluent/meta.proto\";\n"
@@ -1514,7 +1537,9 @@ public class ProtobufSchemaTest {
   @Test
   public void testDefaultOmittedInProto3String() throws Exception {
     MessageDefinition.Builder message = MessageDefinition.newBuilder("msg1");
-    message.addField(new Context(), null, "string", "field1", 1, "defaultVal", null);
+    FieldDefinition.Builder field = FieldDefinition.newBuilder(new Context(), "field1", 1, "string");
+    field.setDefaultValue("defaultVal");
+    message.addField(field.build());
     DynamicSchema.Builder schema = DynamicSchema.newBuilder();
     schema.setSyntax(PROTO3);
     schema.addMessageDefinition(message.build());
@@ -1528,7 +1553,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testRoundTrip() throws Exception {
+  public void testRoundTrip() {
     ProtobufSchema schema = new ProtobufSchema(readFile("NestedNoMapTestProto.proto"),
         Collections.emptyList(), Collections.emptyMap(), null, null);
     String canonical = schema.canonicalString();
@@ -1536,7 +1561,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testSameMessageName() throws Exception {
+  public void testSameMessageName() {
     List<SchemaReference> refs = new ArrayList<>();
     refs.add(new SchemaReference("TestProto.proto", "test1", 1));
     refs.add(new SchemaReference("TestProto2.proto", "test1", 1));
@@ -1554,7 +1579,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testNativeTypeImports() throws Exception {
+  public void testNativeTypeImports() {
     String schemaString = "syntax = \"proto3\";\n"
         + "\n"
         + "import \"confluent/meta.proto\";\n"
@@ -1693,7 +1718,6 @@ public class ProtobufSchemaTest {
         + "option cc_generic_services = false;\n"
         + "option java_generic_services = true;\n"
         + "option py_generic_services = false;\n"
-        + "option php_generic_services = true;\n"
         + "option cc_enable_arenas = true;\n"
         + "option objc_class_prefix = \"objc\";\n"
         + "option csharp_namespace = \"csharp\";\n"
@@ -1796,7 +1820,6 @@ public class ProtobufSchemaTest {
         + "option objc_class_prefix = \"objc\";\n"
         + "option optimize_for = CODE_SIZE;\n"
         + "option php_class_prefix = \"php\";\n"
-        + "option php_generic_services = true;\n"
         + "option php_metadata_namespace = \"php_md_ns\";\n"
         + "option php_namespace = \"php_ns\";\n"
         + "option py_generic_services = false;\n"
@@ -2175,7 +2198,6 @@ public class ProtobufSchemaTest {
         + "    optional string foobar_string = 71001;\n"
         + "  }\n"
         + "\n"
-        + ""
         + "  message More {\n"
         + "    option (my_message_option) = {\n"
         + "      [FooBar.More2.more2_string]: \"foobar\",\n"
@@ -2416,10 +2438,51 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testEnumAfterMessage() throws Exception {
+  public void testEnumAfterMessage() {
     assertEquals(enumAfterMessageSchemaString, enumBeforeMessageSchema.canonicalString());
     assertEquals(enumAfterMessageSchemaString,
         new ProtobufSchema(enumBeforeMessageSchema.toDescriptor()).canonicalString());
+  }
+
+  @Test
+  public void testContainedEnum() {
+    String sampleProtoFile = "syntax = \"proto2\";\n" +
+        "\n" +
+        "package sample;\n" +
+        "\n" +
+        "import \"withenum/imported.proto\";\n" +
+        "\n" +
+        "message SampleMessage {\n" +
+        "\n" +
+        "  optional uint64 timestamp = 1;\n" +
+        "  optional withenum.ContainingNestedEnum containing_nested_enum = 5;\n" +
+        "}\n" +
+        "\n" +
+        "message Action {\n" +
+        "  optional string id = 1;\n" +
+        "}";
+    String importedProto = "syntax = \"proto2\";\n" +
+        "\n" +
+        "package withenum;\n" +
+        "\n" +
+        "message ContainingNestedEnum {\n" +
+        "\n" +
+        "  optional Action action = 1;\n" +
+        "\n" +
+        "  enum Action {\n" +
+        "    TEST = 1;\n" +
+        "  }\n" +
+        "}";
+
+    ProtobufSchema protobufSchema = new ProtobufSchema(sampleProtoFile,
+        Collections.singletonList(new SchemaReference("withenum/imported.proto", "withenum/imported.proto", 1)),
+        new HashMap<String, String>() {{
+          put("withenum/imported.proto", importedProto);
+        }},
+        1,
+        null);
+    assertEquals(protobufSchema.canonicalString(),
+        new ProtobufSchema(protobufSchema.toDescriptor()).canonicalString());
   }
 
   @Test
@@ -2458,7 +2521,7 @@ public class ProtobufSchemaTest {
   }
 
   @Test
-  public void testNumberFormats() throws Exception {
+  public void testNumberFormats() {
     FormatContext ctx = new FormatContext(false, true);
     checkNumber(ctx, "123", "123");
     checkNumber(ctx, "0123", "83"); // octal
@@ -2655,6 +2718,20 @@ public class ProtobufSchemaTest {
     ParsedSchema schema = new ProtobufSchema(schemaString).copy(tagsToAdd, Collections.emptyMap());
     assertEquals(expectedString, schema.canonicalString());
     assertEquals(ImmutableSet.of("FILE", "OTHER", "PII", "PRIVATE", "ENUM", "CONST"), schema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tagsToAdd);
+    expectedTags.put(new SchemaEntity(
+        "SampleRecord",
+        SchemaEntity.EntityType.SR_RECORD),
+        ImmutableSet.of("OTHER", "PII"));
+    expectedTags.put(new SchemaEntity(
+        "SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("OTHER", "PRIVATE", "PII"));
+    expectedTags.put(new SchemaEntity(
+        "SampleRecord.my_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PRIVATE", "PII"));
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
 
     Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
     tagsToRemove.put(new SchemaEntity(".SampleRecord.my_field1",
@@ -3036,6 +3113,23 @@ public class ProtobufSchemaTest {
       assertEquals(parsedSchema, resultParsedSchema);
     } catch (IOException e) {
       fail("Error deserializing Json to ProtoFileElement.");
+    }
+  }
+
+  @Test
+  public void testGoogleDescriptor() throws Exception {
+    ResourceLoader resourceLoader = new ResourceLoader("/");
+    for (int i = 19; i < 30; i++) {
+      ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
+      ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
+      Descriptor desc = schema.toDescriptor();
+      ProtobufSchema schema2 = new ProtobufSchema(desc);
+      ProtobufSchema normalizedSchema = schema.normalize();
+      ProtobufSchema normalizedSchema2 = schema2.normalize();
+      // v24 has an incompatible change of edition string "2023" changing to edition enum EDITION_2023
+      if (i != 24) {
+        assertEquals(normalizedSchema.canonicalString(), normalizedSchema2.canonicalString());
+      }
     }
   }
 

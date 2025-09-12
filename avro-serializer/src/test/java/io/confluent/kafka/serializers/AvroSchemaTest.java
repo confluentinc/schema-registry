@@ -16,21 +16,37 @@
 
 package io.confluent.kafka.serializers;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Optional;
-
-import io.swagger.v3.oas.annotations.links.Link;
+import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -40,27 +56,9 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 public class AvroSchemaTest {
 
-  private static ObjectMapper objectMapper = new ObjectMapper();
+  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   private static final Schema.Parser parser = new Schema.Parser();
 
@@ -259,9 +257,31 @@ public class AvroSchemaTest {
       + "}");
 
   @Test
+  public void testHasTopLevelField() {
+    ParsedSchema parsedSchema = new AvroSchema(recordSchema);
+    assertTrue(parsedSchema.hasTopLevelField("null"));
+    assertFalse(parsedSchema.hasTopLevelField("doesNotExist"));
+  }
+
+  @Test
+  public void testGetReservedFields() {
+    Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
+        Collections.singletonMap(ParsedSchema.RESERVED, "null, boolean"),
+        Collections.emptySet());
+    ParsedSchema parsedSchema = new AvroSchema(recordSchema.toString(),
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        reservedFieldMetadata,
+        null,
+        null,
+        false);
+    assertEquals(ImmutableSet.of("null", "boolean"), parsedSchema.getReservedFields());
+  }
+
+  @Test
   public void testPrimitiveTypesToAvro() throws Exception {
     Object result = AvroSchemaUtils.toObject((JsonNode) null, createPrimitiveSchema("null"));
-    assertTrue(result == null);
+    assertNull(result);
 
     result = AvroSchemaUtils.toObject(jsonTree("true"), createPrimitiveSchema("boolean"));
     assertEquals(true, result);
@@ -307,7 +327,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testPrimitiveTypeToAvroSchemaMismatches() throws Exception {
+  public void testPrimitiveTypeToAvroSchemaMismatches() {
     expectConversionException(jsonTree("12"), createPrimitiveSchema("null"));
 
     expectConversionException(jsonTree("12"), createPrimitiveSchema("boolean"));
@@ -354,7 +374,7 @@ public class AvroSchemaTest {
     Object result = AvroSchemaUtils.toObject(jsonTree(json), new AvroSchema(recordSchema));
     assertTrue(result instanceof GenericRecord);
     GenericRecord resultRecord = (GenericRecord) result;
-    assertEquals(null, resultRecord.get("null"));
+    assertNull(resultRecord.get("null"));
     assertEquals(true, resultRecord.get("boolean"));
     assertEquals(12, resultRecord.get("int"));
     assertEquals(5000000000L, resultRecord.get("long"));
@@ -375,7 +395,7 @@ public class AvroSchemaTest {
     Object result = AvroSchemaUtils.toObject(jsonTree(json), new AvroSchema(arraySchema));
     assertTrue(result instanceof GenericArray);
     assertArrayEquals(new Utf8[]{new Utf8("one"), new Utf8("two"), new Utf8("three")},
-        ((GenericArray) result).toArray()
+        ((GenericArray<?>) result).toArray()
     );
   }
 
@@ -393,7 +413,6 @@ public class AvroSchemaTest {
     Object result = AvroSchemaUtils.toObject(jsonTree("{\"union\":{\"string\":\"test string\"}}"),
         new AvroSchema(unionSchema)
     );
-    Object foo = ((GenericRecord) result).get("union");
     assertTrue(((GenericRecord) result).get("union") instanceof Utf8);
 
     result = AvroSchemaUtils.toObject(jsonTree("{\"union\":{\"int\":12}}"),
@@ -428,7 +447,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testPrimitiveTypesToJson() throws Exception {
-    JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson((int) 0));
+    JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson(0));
     assertTrue(result.isNumber());
 
     result = objectMapper.readTree(AvroSchemaUtils.toJson((long) 0));
@@ -458,7 +477,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testUnsupportedJavaPrimitivesToJson() throws Exception {
+  public void testUnsupportedJavaPrimitivesToJson() {
     expectConversionException((byte) 0);
     expectConversionException((char) 0);
     expectConversionException((short) 0);
@@ -480,7 +499,7 @@ public class AvroSchemaTest {
     assertTrue(result.isObject());
     assertTrue(result.get("null").isNull());
     assertTrue(result.get("boolean").isBoolean());
-    assertEquals(true, result.get("boolean").booleanValue());
+    assertTrue(result.get("boolean").booleanValue());
     assertTrue(result.get("int").isIntegralNumber());
     assertEquals(12, result.get("int").intValue());
     assertTrue(result.get("long").isIntegralNumber());
@@ -499,7 +518,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testArrayToJson() throws Exception {
-    GenericData.Array<String> data = new GenericData.Array(arraySchema,
+    GenericData.Array<String> data = new GenericData.Array<>(arraySchema,
         Arrays.asList("one", "two", "three")
     );
     JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson(data));
@@ -513,7 +532,7 @@ public class AvroSchemaTest {
 
   @Test
   public void testMapToJson() throws Exception {
-    Map<String, Object> data = new HashMap<String, Object>();
+    Map<String, Object> data = new HashMap<>();
     data.put("first", "one");
     data.put("second", "two");
     JsonNode result = objectMapper.readTree(AvroSchemaUtils.toJson(data));
@@ -537,7 +556,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testInvalidDefault() throws Exception {
+  public void testInvalidDefault() {
     AvroSchemaProvider provider = new AvroSchemaProvider();
     Map<String, String> configs = Collections.singletonMap(AvroSchemaProvider.AVRO_VALIDATE_DEFAULTS, "false");
     provider.configure(configs);
@@ -551,14 +570,14 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testInvalidDefaultDuringNormalize() throws Exception {
+  public void testInvalidDefaultDuringNormalize() {
     AvroSchemaProvider provider = new AvroSchemaProvider();
     Optional<ParsedSchema> schema = provider.parseSchema(recordInvalidDefaultSchema, Collections.emptyList(), true, true);
     assertFalse(schema.isPresent());
   }
 
   @Test
-  public void testMetaInequalities() throws Exception {
+  public void testMetaInequalities() {
     AvroSchema schema = new AvroSchema(recordSchema);
     AvroSchema schema1 = new AvroSchema(recordWithDocSchema);
     AvroSchema schema2 = new AvroSchema(recordWithAliasesSchema);
@@ -571,7 +590,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testNormalization() throws Exception {
+  public void testNormalization() {
     String schemaString = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"doc\":\"hi\\\"there\","
@@ -591,7 +610,7 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testNormalizationPreservesMetadataForPrimitiveTypes() throws Exception {
+  public void testNormalizationPreservesMetadataForPrimitiveTypes() {
     String schemaString = "{"
         + "\"connect.name\": \"some.scope.Envelope\","
         + "\"fields\": ["
@@ -684,22 +703,22 @@ public class AvroSchemaTest {
   }
 
   @Test
-  public void testArrayWithDefault() throws Exception {
+  public void testArrayWithDefault() {
     assertNotEquals(new AvroSchema(mapSchema), new AvroSchema(mapSchemaWithDefault));
   }
 
   @Test
-  public void testMapWithDefault() throws Exception {
+  public void testMapWithDefault() {
     assertNotEquals(new AvroSchema(arraySchema), new AvroSchema(arraySchemaWithDefault));
   }
 
   @Test
-  public void testUnionWithDefault() throws Exception {
+  public void testUnionWithDefault() {
     assertNotEquals(new AvroSchema(unionSchema), new AvroSchema(unionSchemaWithDefault));
   }
 
   @Test
-  public void testEnumWithDefault() throws Exception {
+  public void testEnumWithDefault() {
     assertNotEquals(new AvroSchema(enumSchema), new AvroSchema(enumSchemaWithDefault));
   }
 
@@ -767,8 +786,8 @@ public class AvroSchemaTest {
       "    },\n" +
       "    {\n" +
       "      \"name\": \"my_field2\",\n" +
-      "      \"namespace\": \"com.example.mynamespace.nested\",\n" +
       "      \"type\": {\n" +
+      "        \"namespace\": \"com.example.mynamespace.nested\",\n" +
       "        \"name\": \"nestedRecordWithNamespace\",\n" +
       "        \"type\": \"record\",\n" +
       "        \"fields\": [\n" +
@@ -818,6 +837,7 @@ public class AvroSchemaTest {
       "    \"name\" : \"my_field2\",\n" +
       "    \"type\" : {\n" +
       "      \"type\" : \"record\",\n" +
+      "      \"namespace\" : \"com.example.mynamespace.nested\",\n" +
       "      \"name\" : \"nestedRecordWithNamespace\",\n" +
       "      \"fields\" : [ {\n" +
       "        \"name\" : \"nested_field1\",\n" +
@@ -829,8 +849,7 @@ public class AvroSchemaTest {
       "        \"confluent:tags\" : [ \"PRIVATE\",\"PII\" ]\n" +
       "      } ],\n" +
       "      \"confluent:tags\": [ \"PII\" ]\n" +
-      "    },\n" +
-      "    \"namespace\" : \"com.example.mynamespace.nested\"\n" +
+      "    }\n" +
       "  }, {\n" +
       "    \"name\" : \"my_field3\",\n" +
       "    \"type\" : \"double\",\n" +
@@ -866,6 +885,16 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nestedRecordWithoutNamespace.nested_field2",
+            SchemaEntity.EntityType.SR_FIELD),
+        Collections.singleton("PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+            "com.example.mynamespace.nested.nestedRecordWithNamespace.nested_field2",
+            SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    assertEquals(expectedTags, resultSchema.inlineTaggedEntities());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
@@ -1085,10 +1114,108 @@ public class AvroSchemaTest {
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PII", "PRIVATE"), resultSchema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
+    expectedTags.put(new SchemaEntity(
+        "nestedRecord3.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nestedRecord.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PRIVATE"));
+    expectedTags.put(new SchemaEntity(
+        "com.example.mynamespace.nested.nestedRecord2.nested_field2",
+        SchemaEntity.EntityType.SR_FIELD),
+        ImmutableSet.of("PII", "PRIVATE"));
+    assertEquals(expectedTags, resultSchema.inlineTaggedEntities());
 
     resultSchema = resultSchema.copy(Collections.emptyMap(), tags);
     assertEquals(schema.canonicalString(), resultSchema.canonicalString());
     assertEquals(ImmutableSet.of("PRIVATE"), resultSchema.inlineTags());
+  }
+
+  @Test
+  public void testRecursiveFindTags() {
+    String schemaString = "{\n"
+        + "  \"confluent:tags\": [\n"
+        + "    \"PII\"\n"
+        + "  ],\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"age\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"default\": null,\n"
+        + "      \"name\": \"parent\",\n"
+        + "      \"type\": [\n"
+        + "        \"null\",\n"
+        + "        \"Person\"\n"
+        + "      ]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"default\": [],\n"
+        + "      \"name\": \"children\",\n"
+        + "      \"type\": {\n"
+        + "        \"items\": \"Person\",\n"
+        + "        \"type\": \"array\"\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"attributes\",\n"
+        + "      \"type\": {\n"
+        + "        \"type\": \"map\",\n"
+        + "        \"values\": [\n"
+        + "          \"null\",\n"
+        + "          \"int\",\n"
+        + "          \"long\",\n"
+        + "          \"float\",\n"
+        + "          \"double\",\n"
+        + "          \"string\",\n"
+        + "          \"boolean\",\n"
+        + "          {\n"
+        + "            \"fields\": [\n"
+        + "              {\n"
+        + "                \"name\": \"id\",\n"
+        + "                \"type\": \"int\"\n"
+        + "              },\n"
+        + "              {\n"
+        + "                \"name\": \"value\",\n"
+        + "                \"type\": \"string\"\n"
+        + "              }\n"
+        + "            ],\n"
+        + "            \"name\": \"NestedAttribute\",\n"
+        + "            \"type\": \"record\"\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"fixedSizeData\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"FixedData\",\n"
+        + "        \"size\": 16,\n"
+        + "        \"type\": \"fixed\"\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ],\n"
+        + "  \"name\": \"Person\",\n"
+        + "  \"namespace\": \"com.example\",\n"
+        + "  \"type\": \"record\"\n"
+        + "}";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    assertEquals(ImmutableSet.of("PII"), schema.inlineTags());
+    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>();
+    expectedTags.put(new SchemaEntity(
+            "com.example.Person",
+            SchemaEntity.EntityType.SR_RECORD),
+        Collections.singleton("PII"));
+    assertEquals(expectedTags, schema.inlineTaggedEntities());
   }
 
   @Test
@@ -1226,7 +1353,7 @@ public class AvroSchemaTest {
       AvroSchemaUtils.getSchema(obj);
       fail("Expected conversion of "
           + (
-          obj == null ? "null" : (obj.toString() + " (" + obj.getClass().getName() + ")"))
+          obj == null ? "null" : (obj + " (" + obj.getClass().getName() + ")"))
           + " to fail");
     } catch (Exception e) {
       // Expected

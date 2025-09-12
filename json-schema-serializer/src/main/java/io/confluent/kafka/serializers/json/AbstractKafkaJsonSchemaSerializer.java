@@ -23,7 +23,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.List;
 import java.util.Optional;
@@ -34,9 +39,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.everit.json.schema.ValidationException;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -49,6 +52,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
 
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean propagateSchemaTags;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
@@ -63,6 +67,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     configureClientProperties(config, new JsonSchemaProvider());
     this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.propagateSchemaTags = config.propagateSchemaTags();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
@@ -128,11 +133,11 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     }
     String restClientErrorMsg = "";
     try {
-      int id;
+      SchemaId schemaId;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering JSON schema: ";
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
-            registerWithResponse(subject, schema, normalizeSchema);
+            registerWithResponse(subject, schema, normalizeSchema, propagateSchemaTags);
         if (s.getSchema() != null) {
           Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
           if (optSchema.isPresent()) {
@@ -140,37 +145,43 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
             schema = schema.copy(s.getVersion());
           }
         }
-        id = s.getId();
+        schemaId = new SchemaId(JsonSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (JsonSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = useSchemaId;
+        Schema schemaEntity = new Schema(subject, null, useSchemaId, schema);
+        schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, schemaEntity.getGuid());
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (JsonSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            JsonSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (JsonSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            JsonSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else {
         restClientErrorMsg = "Error retrieving JSON schema: ";
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response =
+            schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
+        schemaId = new SchemaId(JsonSchema.TYPE, response.getId(), response.getGuid());
       }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
       if (validate) {
-        validateJson(object, schema);
+        object = validateJson(object, schema);
       }
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      out.write(MAGIC_BYTE);
-      out.write(ByteBuffer.allocate(idSize).putInt(id).array());
-      out.write(objectMapper.writeValueAsBytes(object));
-      byte[] bytes = out.toByteArray();
-      out.close();
-      return bytes;
+      try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
+        byte[] payload = objectMapper.writeValueAsBytes(object);
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
+        return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
+      }
     } catch (InterruptedIOException e) {
       throw new TimeoutException("Error serializing JSON message", e);
     } catch (IOException | RuntimeException e) {
@@ -182,12 +193,18 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     }
   }
 
-  protected void validateJson(T object,
-                              JsonSchema schema)
+  @SuppressWarnings("unchecked")
+  protected T validateJson(T object,
+                           JsonSchema schema)
       throws SerializationException {
     try {
-      JsonNode jsonNode = objectMapper.convertValue(object, JsonNode.class);
-      schema.validate(jsonNode);
+      JsonNode jsonNode = object instanceof JsonNode
+          ? (JsonNode) object
+          : objectMapper.convertValue(object, JsonNode.class);
+      jsonNode = schema.validate(jsonNode);
+      return object instanceof JsonNode
+          ? object
+          : (T) objectMapper.convertValue(jsonNode, object.getClass());
     } catch (JsonProcessingException e) {
       throw new SerializationException("JSON "
           + object

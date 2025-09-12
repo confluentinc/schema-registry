@@ -17,11 +17,14 @@
 package io.confluent.connect.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -29,6 +32,9 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import org.powermock.reflect.Whitebox;
 
 import java.io.IOException;
@@ -51,6 +57,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 // AvroConverter is a trivial combination of the serializers and the AvroData conversions, so
 // most testing is performed on AvroData since it is much easier to compare the results in Avro
@@ -200,7 +207,15 @@ public class AvroConverterTest {
 
     avroConverter.configure(configs, false);
     testVersionExtracted(subject, serializer, avroConverter);
+  }
 
+  @Test
+  public void testVersionExtractedFromMetadata() throws Exception {
+    String subject = TOPIC + "-value";
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
+    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
+    avroConverter.configure(Collections.singletonMap("schema.registry.url", "http://fake-url"), false);
+    testVersionExtractedFromMetadata(subject, serializer, avroConverter);
   }
 
   private void testVersionExtracted(String subject, KafkaAvroSerializer serializer, AvroConverter avroConverter) throws IOException, RestClientException {
@@ -234,6 +249,42 @@ public class AvroConverterTest {
 
     SchemaAndValue converted2 = avroConverter.toConnectData(TOPIC, serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  private void testVersionExtractedFromMetadata(String subject, KafkaAvroSerializer serializer,
+      AvroConverter avroConverter) throws IOException, RestClientException {
+    // Pre-register to ensure ordering
+    org.apache.avro.Schema avroSchema1 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .endRecord();
+    schemaRegistry.register(subject, new AvroSchema(avroSchema1).copy(
+        new Metadata(null, ImmutableMap.of("confluent:version", "2"), null), null));
+
+    org.apache.avro.Schema avroSchema2 = org.apache.avro.SchemaBuilder
+        .record("Foo").fields()
+        .requiredInt("key")
+        .requiredString("value")
+        .endRecord();
+    schemaRegistry.register(subject, new AvroSchema(avroSchema2).copy(
+        new Metadata(null, ImmutableMap.of("confluent:version", "200"), null), null));
+
+
+    // Get serialized data
+    org.apache.avro.generic.GenericRecord avroRecord1
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema1).set("key", 15).build();
+    byte[] serializedRecord1 = serializer.serialize(TOPIC, avroRecord1);
+    org.apache.avro.generic.GenericRecord avroRecord2
+        = new org.apache.avro.generic.GenericRecordBuilder(avroSchema2).set("key", 15).set
+        ("value", "bar").build();
+    byte[] serializedRecord2 = serializer.serialize(TOPIC, avroRecord2);
+
+
+    SchemaAndValue converted1 = avroConverter.toConnectData(TOPIC, serializedRecord1);
+    assertEquals(2L, (long) converted1.schema().version());
+
+    SchemaAndValue converted2 = avroConverter.toConnectData(TOPIC, serializedRecord2);
+    assertEquals(200L, (long) converted2.schema().version());
   }
 
 
@@ -275,28 +326,6 @@ public class AvroConverterTest {
     SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
     AvroConverter avroConverter = new AvroConverter(schemaRegistry);
     avroConverter.configure(SR_CONFIG, true);
-    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
-  }
-
-  @Test
-  public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForValue() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
-    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
-    Map<String, ?> converterConfig = ImmutableMap.of(
-        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
-        AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
-    avroConverter.configure(converterConfig, false);
-    assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, false);
-  }
-
-  @Test
-  public void testSameSchemaMultipleTopicWithDeprecatedSubjectNameStrategyForKey() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
-    AvroConverter avroConverter = new AvroConverter(schemaRegistry);
-    Map<String, ?> converterConfig = ImmutableMap.of(
-        AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "localhost",
-        AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, DeprecatedTestTopicNameStrategy.class.getName());
-    avroConverter.configure(converterConfig, true);
     assertSameSchemaMultipleTopic(avroConverter, schemaRegistry, true);
   }
 
@@ -416,5 +445,49 @@ public class AvroConverterTest {
 
     converted2 = converter.toConnectData("topic2", serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+    AvroConverter.Serializer serializer = mock(AvroConverter.Serializer.class);
+    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    AvroData avroData = new AvroData(
+        new AvroDataConfig(Collections.singletonMap("schema.registry.url", "http://fake-url")));
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(Schema.STRING_SCHEMA);
+
+    when(serializer.serialize(TOPIC, false, null,
+        avroData.fromConnectData(Schema.STRING_SCHEMA, avroSchema, "value"),
+        new AvroSchema(avroSchema))).thenThrow(serializationException);
+
+    try {
+      java.lang.reflect.Field serializerField = AvroConverter.class.getDeclaredField("serializer");
+      serializerField.setAccessible(true);
+      serializerField.set(converter, serializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, "value");
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+    AvroConverter.Deserializer deserializer = mock(AvroConverter.Deserializer.class);
+    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
+    byte[] valueBytes =
+        converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
+    when(deserializer.deserialize(TOPIC, false, null, valueBytes)).thenThrow(
+        serializationException);
+
+    try {
+      java.lang.reflect.Field deserializerField = AvroConverter.class.getDeclaredField("deserializer");
+      deserializerField.setAccessible(true);
+      deserializerField.set(converter, deserializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.toConnectData(TOPIC, valueBytes);
   }
 }

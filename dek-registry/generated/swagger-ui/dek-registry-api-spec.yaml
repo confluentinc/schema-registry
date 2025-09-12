@@ -6,7 +6,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks:
     get:
       summary: Get a list of dek subjects.
-      operationId: getDekSubjects
+      operationId: getDekSubjects_1
       parameters:
       - name: name
         in: path
@@ -19,6 +19,20 @@ paths:
         description: Whether to include deleted keys
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of dek subjects
@@ -47,7 +61,7 @@ paths:
           description: Error code 42271 -- Invalid key
     post:
       summary: Create a dek.
-      operationId: createDek
+      operationId: createDek_1
       parameters:
       - name: name
         in: path
@@ -60,16 +74,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
         required: true
       responses:
         "200":
@@ -77,13 +91,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
         "409":
           description: Conflict. Error code 40971 -- Key already exists. Error code
             40972 -- Too many keys.
@@ -94,13 +108,34 @@ paths:
   /dek-registry/v1/keks:
     get:
       summary: Get a list of kek names.
-      operationId: getKekNames
+      operationId: getKekNames_1
       parameters:
+      - name: subjectPrefix
+        in: query
+        description: Subject name prefix
+        schema:
+          type: array
+          items:
+            type: string
       - name: deleted
         in: query
         description: Whether to include deleted keys
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of kek names
@@ -125,22 +160,28 @@ paths:
                   example: mykek
     post:
       summary: Create a kek.
-      operationId: createKek
+      operationId: createKek_1
+      parameters:
+      - name: testSharing
+        in: query
+        description: Whether to test kek sharing
+        schema:
+          type: boolean
       requestBody:
         description: The create request
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
         required: true
       responses:
         "200":
@@ -148,13 +189,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "409":
           description: Conflict. Error code 40971 -- Key already exists. Error code
             40972 -- Too many keys.
@@ -163,7 +204,7 @@ paths:
   /dek-registry/v1/keks/{name}:
     get:
       summary: Get a kek by name.
-      operationId: getKek
+      operationId: getKek_1
       parameters:
       - name: name
         in: path
@@ -182,20 +223,20 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "404":
           description: Error code 40470 -- Key not found
         "422":
           description: Error code 42271 -- Invalid key
     put:
       summary: Alters a kek.
-      operationId: putKek
+      operationId: putKek_1
       parameters:
       - name: name
         in: path
@@ -203,21 +244,26 @@ paths:
         required: true
         schema:
           type: string
+      - name: testSharing
+        in: query
+        description: Whether to test kek sharing
+        schema:
+          type: boolean
       requestBody:
         description: The update request
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
         required: true
       responses:
         "200":
@@ -225,13 +271,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "404":
           description: Error code 40470 -- Key not found
         "409":
@@ -240,7 +286,7 @@ paths:
           description: Error code 42271 -- Invalid key
     delete:
       summary: Delete a kek.
-      operationId: deleteKek
+      operationId: deleteKek_1
       parameters:
       - name: name
         in: path
@@ -265,7 +311,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}:
     get:
       summary: Get a dek by subject.
-      operationId: getDek
+      operationId: getDek_1
       parameters:
       - name: name
         in: path
@@ -299,13 +345,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
         "404":
           description: Error code 40470 -- Key not found
         "422":
@@ -314,7 +360,7 @@ paths:
           description: Error code 50070 -- Dek generation error
     delete:
       summary: Delete all versions of a dek.
-      operationId: deleteDekVersions
+      operationId: deleteDekVersions_1
       parameters:
       - name: name
         in: path
@@ -353,7 +399,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}:
     get:
       summary: Get a dek by subject and version.
-      operationId: getDekByVersion
+      operationId: getDekByVersion_1
       parameters:
       - name: name
         in: path
@@ -393,13 +439,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
         "404":
           description: Error code 40470 -- Key not found
         "422":
@@ -409,7 +455,7 @@ paths:
           description: Error code 50070 -- Dek generation error
     delete:
       summary: Delete a dek version.
-      operationId: deleteDekVersion
+      operationId: deleteDekVersion_1
       parameters:
       - name: name
         in: path
@@ -455,7 +501,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/versions:
     get:
       summary: List versions of dek.
-      operationId: getDekVersions
+      operationId: getDekVersions_1
       parameters:
       - name: name
         in: path
@@ -483,6 +529,20 @@ paths:
         description: Whether to include deleted keys
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of version numbers for dek
@@ -515,7 +575,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/versions/{version}/undelete:
     post:
       summary: Undelete a dek version.
-      operationId: undeleteDekVersion
+      operationId: undeleteDekVersion_1
       parameters:
       - name: name
         in: path
@@ -556,7 +616,7 @@ paths:
   /dek-registry/v1/keks/{name}/deks/{subject}/undelete:
     post:
       summary: Undelete all versions of a dek.
-      operationId: undeleteDekVersions
+      operationId: undeleteDekVersions_1
       parameters:
       - name: name
         in: path
@@ -590,7 +650,7 @@ paths:
   /dek-registry/v1/keks/{name}/undelete:
     post:
       summary: Undelete a kek.
-      operationId: undeleteKek
+      operationId: undeleteKek_1
       parameters:
       - name: name
         in: path
@@ -606,6 +666,34 @@ paths:
         "422":
           description: Unprocessable entity. Error code 42271 -- Invalid key. Error
             code 42272 -- References to key exist.
+  /dek-registry/v1/keks/{name}/test:
+    post:
+      summary: Test a kek.
+      operationId: testKek
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The test response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/Kek"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/Kek"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/Kek"
+        "422":
+          description: Error code 42271 -- Invalid key
+        "500":
+          description: Error code 50070 -- Dek generation error
 components:
   schemas:
     Dek:

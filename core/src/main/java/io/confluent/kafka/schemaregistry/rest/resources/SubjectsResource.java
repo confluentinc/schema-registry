@@ -40,27 +40,30 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Path("/subjects")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -118,7 +121,6 @@ public class SubjectsResource {
              subject, lookupDeletedSchema, request.getSchemaType());
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
-
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
@@ -128,6 +130,15 @@ public class SubjectsResource {
       }
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
           subject, schema, normalize, lookupDeletedSchema);
+
+      // If first attempt failed with normalize=false, try again with normalize=true
+      if (matchingSchema == null && !normalize) {
+        log.debug("No matching schema found with normalize = false,"
+                + " retrying with normalize = true");
+        matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
+              subject, schema, true, lookupDeletedSchema);
+      }
+
       if (matchingSchema == null) {
         if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
           throw Errors.subjectNotFoundException(subject);
@@ -229,6 +240,10 @@ public class SubjectsResource {
       @DefaultValue(QualifiedSubject.CONTEXT_WILDCARD)
       @Parameter(description = "Subject name prefix")
       @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit,
       @Parameter(description = "Whether to look up deleted subjects")
       @QueryParam("deleted") boolean lookupDeletedSubjects,
       @Parameter(description = "Whether to return deleted subjects only")
@@ -242,8 +257,15 @@ public class SubjectsResource {
       filter = LookupFilter.INCLUDE_DELETED;
     }
     try {
-      return schemaRegistry.listSubjectsWithPrefix(
-          subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD, filter);
+      Set<String> subjects = schemaRegistry.listSubjectsWithPrefix(
+              subjectPrefix != null ? subjectPrefix : QualifiedSubject.CONTEXT_WILDCARD, filter);
+      Stream<String> stream = subjects.stream();
+
+      limit = schemaRegistry.normalizeSubjectLimit(limit);
+      return stream
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toCollection(LinkedHashSet::new)); // preserve order
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Error while listing subjects", e);
     } catch (SchemaRegistryException e) {

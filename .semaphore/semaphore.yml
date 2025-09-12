@@ -24,7 +24,7 @@ global_job_config:
   prologue:
     commands:
       - checkout
-      - sem-version java 11
+      - sem-version java 17
       - . cache-maven restore
 
 blocks:
@@ -37,6 +37,7 @@ blocks:
       jobs:
         - name: Test
           commands:
+            - . sem-pint -c
             - ci-tools ci-update-version
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cache-maven store
@@ -59,13 +60,18 @@ blocks:
             - ci-tools ci-push-tag
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
               -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
-
   - name: CP Jar Build CI Gating
-    dependencies: [ ]
+    dependencies: []
     run:
       # Run this block only for pull requests
       when: "pull_request =~ '.*'"
     task:
+      agent:
+        machine:
+          type: s1-prod-ubuntu24-04-arm64-0
+      env_vars:
+        - name: COMPONENT_NAME
+          value: schema-registry
       jobs:
         - name: Trigger and wait for CP Jar Build Task
           commands:
@@ -77,7 +83,7 @@ blocks:
                   sem-trigger -p packaging \
                     -t cp-jar-build \
                     -b $SEMAPHORE_GIT_BRANCH \
-                    -d "|" -i "CUSTOM_BRANCH_COMPONENTS|schema-registry=${SEMAPHORE_GIT_WORKING_BRANCH}" \
+                    -d "|" -i "CUSTOM_BRANCH_COMPONENTS|${COMPONENT_NAME}=${SEMAPHORE_GIT_WORKING_BRANCH}" \
                     -w; \
               else \
                   echo "PR is targeted to ${SEMAPHORE_GIT_BRANCH} branch which is not CP nightly or master branch. Skipping cp-jar-build task."; \

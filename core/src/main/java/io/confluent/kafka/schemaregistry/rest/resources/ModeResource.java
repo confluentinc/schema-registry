@@ -20,9 +20,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
@@ -39,19 +41,19 @@ import io.swagger.v3.oas.annotations.tags.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Locale;
 import java.util.Map;
 
@@ -107,32 +109,44 @@ public class ModeResource {
       @QueryParam("force") boolean force
   ) {
 
-    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
       throw Errors.invalidSubjectException(subject);
     }
 
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      subject = null;
+    } else {
+      subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    }
 
-    io.confluent.kafka.schemaregistry.storage.Mode mode;
     try {
-      mode = Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
-          request.getMode().toUpperCase(Locale.ROOT));
+      if (request.getOptionalMode().isPresent()) {
+        Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
+            request.getMode().toUpperCase(Locale.ROOT));
+      }
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.setModeOrForward(subject, mode, force, headerProperties);
+      schemaRegistry.setModeOrForward(subject, request, force, headerProperties);
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update mode", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Update mode operation timed out", e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Failed to update mode", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding update mode request"
                                                     + " to the leader", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating the mode", e);
     }
 
     return request;
@@ -161,7 +175,11 @@ public class ModeResource {
       @Parameter(description = "Whether to return the global mode if subject mode not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      subject = null;
+    } else {
+      subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+    }
 
     try {
       io.confluent.kafka.schemaregistry.storage.Mode mode = defaultToGlobal
@@ -219,8 +237,10 @@ public class ModeResource {
       })
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("mode.get-global")
-  public Mode getTopLevelMode() {
-    return getMode(null, false);
+  public Mode getTopLevelMode(
+      @Parameter(description = "Whether to return the global mode if subject mode not found")
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+    return getMode(null, defaultToGlobal);
   }
 
   @DELETE
@@ -247,6 +267,10 @@ public class ModeResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.debug("Deleting mode for subject {}", subject);
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      throw Errors.invalidSubjectException(subject);
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

@@ -110,6 +110,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   default RegisterSchemaResponse registerWithResponse(
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    return registerWithResponse(subject, schema, normalize, false);
+  }
+
+  default RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -153,6 +159,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
+
+  default ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public default List<ParsedSchema> getSchemas(
       String subjectPrefix,
@@ -311,6 +322,23 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
   default int getId(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  default String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }

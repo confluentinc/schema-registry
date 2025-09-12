@@ -20,7 +20,10 @@ import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Optional;
@@ -30,7 +33,6 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +54,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean propagateSchemaTags;
   protected boolean onlyLookupReferencesBySchema;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
@@ -64,6 +67,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     configureClientProperties(config, new ProtobufSchemaProvider());
     this.normalizeSchema = config.normalizeSchema();
     this.autoRegisterSchema = config.autoRegisterSchema();
+    this.propagateSchemaTags = config.propagateSchemaTags();
     this.onlyLookupReferencesBySchema = config.onlyLookupReferencesBySchema();
     this.useSchemaId = config.useSchemaId();
     this.idCompatStrict = config.getIdCompatibilityStrict();
@@ -111,7 +115,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
           useLatestForDeps, latestCompatStrict, latestVersionsCache(),
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
-      int id;
+      SchemaId schemaId;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
         if (schemaFormat != null) {
@@ -119,7 +123,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           schema = schema.copyWithSchema(formatted);
         }
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
-            registerWithResponse(subject, schema, normalizeSchema);
+            registerWithResponse(subject, schema, normalizeSchema, propagateSchemaTags);
         if (s.getSchema() != null) {
           Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
           if (optSchema.isPresent()) {
@@ -127,7 +131,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
             schema = schema.copy(s.getVersion());
           }
         }
-        id = s.getId();
+        schemaId = new SchemaId(ProtobufSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         if (schemaFormat != null) {
@@ -136,32 +140,41 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         }
         schema = (ProtobufSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = useSchemaId;
+        Schema schemaEntity = new Schema(subject, null, useSchemaId, schema);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, schemaEntity.getGuid());
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (ProtobufSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            ProtobufSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (ProtobufSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            ProtobufSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response =
+            schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, response.getId(), response.getGuid());
       }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      out.write(MAGIC_BYTE);
-      out.write(ByteBuffer.allocate(idSize).putInt(id).array());
+
       MessageIndexes indexes = schema.toMessageIndexes(
           object.getDescriptorForType().getFullName(), normalizeSchema);
-      out.write(indexes.toByteArray());
-      object.writeTo(out);
-      byte[] bytes = out.toByteArray();
-      out.close();
-      return bytes;
+      schemaId.setMessageIndexes(indexes.indexes());
+      try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey);
+          ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+        object.writeTo(baos);
+        byte[] payload = baos.toByteArray();
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
+        return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
+      }
     } catch (InterruptedIOException e) {
       throw new TimeoutException("Error serializing Protobuf message", e);
     } catch (IOException | RuntimeException e) {
@@ -256,27 +269,58 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     );
   }
 
+  public static ProtobufSchema resolveDependencies(
+      SchemaRegistryClient schemaRegistry,
+      boolean normalizeSchema,
+      boolean autoRegisterSchema,
+      boolean useLatestVersion,
+      boolean latestCompatStrict,
+      Map<SubjectSchema, ExtendedSchema> latestVersions,
+      boolean skipKnownTypes,
+      ReferenceSubjectNameStrategy strategy,
+      String topic,
+      boolean isKey,
+      ProtobufSchema schema
+  ) throws IOException, RestClientException {
+    return resolveDependencies(
+        schemaRegistry,
+        normalizeSchema,
+        autoRegisterSchema,
+        false,
+        useLatestVersion,
+        latestCompatStrict,
+        latestVersions,
+        skipKnownTypes,
+        strategy,
+        topic,
+        isKey,
+        schema
+    );
+  }
+
   /**
    * Resolve schema dependencies recursively.
    *
-   * @param schemaRegistry     schema registry client
-   * @param normalizeSchema    whether to normalized the schema
-   * @param autoRegisterSchema whether to automatically register schemas
-   * @param useLatestVersion   whether to use the latest subject version for serialization
-   * @param latestCompatStrict whether to check that the latest subject version is backward
-   *                           compatible with the schema of the object
-   * @param latestVersions     an optional cache of latest subject versions, may be null
-   * @param skipKnownTypes     whether to skip known types when resolving schema dependencies
-   * @param strategy           the strategy for determining the subject name for a reference
-   * @param topic              the topic
-   * @param isKey              whether the object is the record key
-   * @param schema             the schema
+   * @param schemaRegistry      schema registry client
+   * @param normalizeSchema     whether to normalized the schema
+   * @param autoRegisterSchema  whether to automatically register schemas
+   * @param propagateSchemaTags whether to propagate tags during registration
+   * @param useLatestVersion    whether to use the latest subject version for serialization
+   * @param latestCompatStrict  whether to check that the latest subject version is backward
+   *                            compatible with the schema of the object
+   * @param latestVersions      an optional cache of latest subject versions, may be null
+   * @param skipKnownTypes      whether to skip known types when resolving schema dependencies
+   * @param strategy            the strategy for determining the subject name for a reference
+   * @param topic               the topic
+   * @param isKey               whether the object is the record key
+   * @param schema              the schema
    * @return the schema with resolved dependencies
    */
   public static ProtobufSchema resolveDependencies(
       SchemaRegistryClient schemaRegistry,
       boolean normalizeSchema,
       boolean autoRegisterSchema,
+      boolean propagateSchemaTags,
       boolean useLatestVersion,
       boolean latestCompatStrict,
       Map<SubjectSchema, ExtendedSchema> latestVersions,
@@ -294,6 +338,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     Schema s = resolveDependencies(schemaRegistry,
         normalizeSchema,
         autoRegisterSchema,
+        propagateSchemaTags,
         useLatestVersion,
         latestCompatStrict,
         latestVersions,
@@ -312,6 +357,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       SchemaRegistryClient schemaRegistry,
       boolean normalizeSchema,
       boolean autoRegisterSchema,
+      boolean propagateSchemaTags,
       boolean useLatestVersion,
       boolean latestCompatStrict,
       Map<SubjectSchema, ExtendedSchema> latestVersions,
@@ -332,6 +378,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       Schema subschema = resolveDependencies(schemaRegistry,
           normalizeSchema,
           autoRegisterSchema,
+          propagateSchemaTags,
           useLatestVersion,
           latestCompatStrict,
           latestVersions,
@@ -353,6 +400,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       Schema subschema = resolveDependencies(schemaRegistry,
           normalizeSchema,
           autoRegisterSchema,
+          propagateSchemaTags,
           useLatestVersion,
           latestCompatStrict,
           latestVersions,
@@ -372,8 +420,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     String subject = name != null ? strategy.subjectName(name, topic, isKey, schema) : null;
     if (subject != null) {
       if (autoRegisterSchema) {
-        RegisterSchemaResponse response =
-            schemaRegistry.registerWithResponse(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response = schemaRegistry.registerWithResponse(
+            subject, schema, normalizeSchema, propagateSchemaTags);
         if (response.getSchema() != null) {
           Optional<ParsedSchema> optSchema =
               schemaRegistry.parseSchema(new Schema(subject, response));

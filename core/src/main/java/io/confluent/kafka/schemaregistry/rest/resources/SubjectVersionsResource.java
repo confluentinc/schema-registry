@@ -15,10 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
+import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
@@ -51,27 +55,28 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
-import javax.ws.rs.DefaultValue;
+import jakarta.ws.rs.DefaultValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Path("/subjects/{subject}/versions")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
@@ -131,8 +136,12 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Desired output format for references")
+      @DefaultValue("") @QueryParam("referenceFormat") String referenceFormat,
       @Parameter(description = "Whether to include deleted schema")
-      @QueryParam("deleted") boolean lookupDeletedSchema) {
+      @QueryParam("deleted") boolean lookupDeletedSchema,
+      @Parameter(description = "Find tagged entities for the given tags or * for all tags")
+      @QueryParam("findTags") List<String> tags) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
@@ -158,10 +167,34 @@ public class SubjectVersionsResource {
           throw Errors.versionNotFoundException(versionId.getVersionId());
         }
       }
+      if (tags != null && !tags.isEmpty()) {
+        schemaRegistry.extractSchemaTags(schema, tags);
+      }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         schema.setSchema(parsedSchema.formattedString(format));
       }
+      QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
+      boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+      List<SchemaReference> refs = schema.getReferences();
+      boolean hasRefs = refs != null && !refs.isEmpty();
+      if (isQualifiedSubject
+          && hasRefs
+          && referenceFormat != null
+          && referenceFormat.equals("qualified")) {
+        // Convert references to be qualified with the parent subject
+        List<SchemaReference> qualifiedRefs = refs.stream()
+            .map(ref -> {
+              QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+                  schemaRegistry.tenant(), qs.toQualifiedSubject(), ref.getSubject());
+              return new SchemaReference(
+                  ref.getName(), refSubject.toUnqualifiedSubject(), ref.getVersion());
+            })
+            .collect(Collectors.toList());
+        schema.setReferences(qualifiedRefs);
+      }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -209,7 +242,7 @@ public class SubjectVersionsResource {
       @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
-    return getSchemaByVersion(subject, version, format, lookupDeletedSchema).getSchema();
+    return getSchemaByVersion(subject, version, format, "", lookupDeletedSchema, null).getSchema();
   }
 
   @GET
@@ -244,9 +277,13 @@ public class SubjectVersionsResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
-      @PathParam("version") String version) {
+      @PathParam("version") String version,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
-    Schema schema = getSchemaByVersion(subject, version, "", true);
+    Schema schema = getSchemaByVersion(subject, version, "", "", true, null);
     if (schema == null) {
       return new ArrayList<>();
     }
@@ -262,7 +299,12 @@ public class SubjectVersionsResource {
         + version
         + " from the schema registry";
     try {
-      return schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      limit = schemaRegistry.normalizeSchemaLimit(limit);
+      List<Integer> schemas = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      return schemas.stream()
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
@@ -301,13 +343,16 @@ public class SubjectVersionsResource {
       @Parameter(description = "Whether to include deleted schemas")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Whether to return deleted schemas only")
-      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema) {
+      @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     // check if subject exists. If not, throw 404
     Iterator<SchemaKey> resultSchemas;
-    List<Integer> allVersions = new ArrayList<>();
     String errorMessage = "Error while validating that subject "
                           + subject
                           + " exists in the registry";
@@ -336,11 +381,13 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
-    while (resultSchemas.hasNext()) {
-      SchemaKey schema = resultSchemas.next();
-      allVersions.add(schema.getVersion());
-    }
-    return allVersions;
+
+    limit = schemaRegistry.normalizeSubjectVersionLimit(limit);
+    return Streams.stream(resultSchemas)
+            .skip(offset)
+            .limit(limit)
+            .map(SchemaKey::getVersion)
+            .collect(Collectors.toList());
   }
 
   @POST
@@ -396,7 +443,15 @@ public class SubjectVersionsResource {
              subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
             request.getSchema() == null ? 0 : request.getSchema().length());
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subjectName, normalize, request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(
+          subjectName, normalize, request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while registering schema", e);
+    }
 
     if (request.getRuleSet() != null) {
       try {
@@ -412,17 +467,13 @@ public class SubjectVersionsResource {
 
     subjectName = QualifiedSubject.normalize(schemaRegistry.tenant(), subjectName);
 
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, schemaRegistry.config().whitelistHeaders());
-
-    Schema schema = new Schema(subjectName, request);
     RegisterSchemaResponse registerSchemaResponse;
     try {
       if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
       Schema result =
-          schemaRegistry.registerOrForward(subjectName, schema, normalize, headerProperties);
+          schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
         result.setSchema(parsedSchema.formattedString(format));
@@ -639,12 +690,13 @@ public class SubjectVersionsResource {
           String.format("Error while getting schema of subject %s version %s",
               subjectName, version), e);
     }
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request);
-
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
+
+
     RegisterSchemaResponse registerSchemaResponse;
     try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(schema, request, headerProperties);
       if (request.getRulesToMerge() != null || request.getRulesToRemove() != null) {
         if (request.getRuleSet() != null) {
           throw new RestInvalidRuleSetException(

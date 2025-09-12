@@ -91,7 +91,7 @@ public class EncryptionUpdateRequestHandler implements UpdateRequestHandler {
           rule.getOnSuccess(), rule.getOnFailure(), rule.isDisabled());
       newDomainRules.add(newRule);
     }
-    return new RuleSet(ruleSet.getMigrationRules(), newDomainRules);
+    return new RuleSet(ruleSet.getMigrationRules(), newDomainRules, ruleSet.getEncodingRules());
   }
 
   private static String scrub(String kmsKeyId) {

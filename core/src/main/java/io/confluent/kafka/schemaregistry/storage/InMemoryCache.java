@@ -37,7 +37,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 
 /**
@@ -159,6 +161,22 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Integer idByGuid(String guid, String context) throws StoreException {
+    MD5 md5;
+    try {
+      md5 = MD5.fromString(guid);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context);
+    String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+    Map<String, Map<MD5, Integer>> ctxIds =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> ids = ctxIds.getOrDefault(ctx, Collections.emptyMap());
+    return ids.get(md5);
+  }
+
+  @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
@@ -255,23 +273,35 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue configValue = (ConfigValue) get((K) subjectConfigKey);
-    if (configValue == null && subject == null) {
-      return defaultForTopLevel;
-    }
-    Config config = null;
     if (configValue != null) {
-      config = configValue.toConfigEntity();
-    } else if (returnTopLevelIfNotFound) {
-      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
-      } else {
-        configValue = (ConfigValue) get((K) new ConfigKey(null));
-      }
-      config = configValue != null ? configValue.toConfigEntity() : defaultForTopLevel;
+      return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
     }
-    if (config != null && config.getCompatibilityLevel() == null) {
-      config.setCompatibilityLevel(defaultForTopLevel.getCompatibilityLevel());
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!returnTopLevelIfNotFound) {
+      return subject == null || qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+          ? defaultForTopLevel
+          : null;
+    }
+    if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+      configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+    } else {
+      configValue = (ConfigValue) get((K) new ConfigKey(null));
+    }
+    if (configValue != null) {
+      return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
+    }
+    qs = QualifiedSubject.createFromUnqualified(tenant(),
+        CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER);
+    configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+    if (configValue != null) {
+      return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
+    }
+    return defaultForTopLevel;
+  }
+
+  private Config populateCompatibilityLevel(Config config, Config defaultConfig) {
+    if (config != null && config.getCompatibilityLevel() == null && defaultConfig != null) {
+      config.setCompatibilityLevel(defaultConfig.getCompatibilityLevel());
     }
     return config;
   }
@@ -284,22 +314,30 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   ) throws StoreException {
     ModeKey modeKey = new ModeKey(subject);
     ModeValue modeValue = (ModeValue) get((K) modeKey);
-    if (modeValue == null && subject == null) {
-      return defaultForTopLevel;
+    if (modeValue != null) {
+      return modeValue.getMode();
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!returnTopLevelIfNotFound) {
+      return subject == null || qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+          ? defaultForTopLevel
+          : null;
+    }
+    if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+      modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
+    } else {
+      modeValue = (ModeValue) get((K) new ModeKey(null));
     }
     if (modeValue != null) {
       return modeValue.getMode();
-    } else if (returnTopLevelIfNotFound) {
-      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
-      } else {
-        modeValue = (ModeValue) get((K) new ModeKey(null));
-      }
-      return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
-    } else {
-      return null;
     }
+    qs = QualifiedSubject.createFromUnqualified(tenant(),
+        CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER);
+    modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
+    if (modeValue != null) {
+      return modeValue.getMode();
+    }
+    return defaultForTopLevel;
   }
 
   @Override
@@ -392,8 +430,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return s -> qs == null
         || subject.equals(s)
         // check context match for a qualified subject with an empty subject
-        || (qs.getSubject().isEmpty() && qs.toQualifiedContext().equals(
-            QualifiedSubject.qualifiedContextFor(tenant(), s)));
+        || QualifiedSubject.isSubjectInContext(tenant(), s, qs);
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {

@@ -1,19 +1,45 @@
 name: schema-registry
 lang: java
-lang_version: 11
+lang_version: 17
 codeowners:
   enable: true
 semaphore:
   enable: true
   pipeline_type: cp
   nano_version: true
+  pr_ci_gating:
+    enable: true
+    project_name: schema-registry
+  status_level: block
+  branches:
+    - master
+    - main
+    - /^\d+\.\d+\.x$/
+    - /^gh-readonly-queue.*/
+    - /^cc-sr-v0\..+/
+    - /^cc-sc-v0\..+/
   execution_time_limit: {"hours": 2}
-  downstream_projects: ["kafka-rest", "ksql",
-    "confluent-security-plugins", "kafka-connect-replicator",
-    "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
+  downstream_projects: ["kafka-rest", "ksql", "confluent-security-plugins", "kafka-connect-replicator", "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 sonarqube:
   enable: true
   coverage_exclusions:
-    - protobuf-serializer/**
+    - "**/*.pb.*"
+    - "**/mk-include/**/*"
+    - "protobuf-serializer/**"
+    - "client/src/main/java/io/confluent/kafka/schemaregistry/utils/BoundedConcurrentHashMap.java"
 git:
   enable: true
+code_artifact:
+  enable: true
+  package_paths:
+    - maven-snapshots/maven/io.confluent/schema-registry-console-scripts
+    - maven-snapshots/maven/io.confluent/client-console-scripts
+    - maven-snapshots/maven/io.confluent/kafka-serde-tools-package
+    - maven-snapshots/maven/io.confluent/kafka-streams-*
+    - maven-snapshots/maven/io.confluent/kafka-connect-*
+    - maven-snapshots/maven/io.confluent/dek-registry*
+    - maven-snapshots/maven/io.confluent/kafka-protobuf-*
+    - maven-snapshots/maven/io.confluent/kafka-json-*
+    - maven-snapshots/maven/io.confluent/kafka-schema-*
+    - maven-snapshots/maven/io.confluent/kafka-avro-serializer
+    - maven-snapshots/maven/io.confluent/jacoco-aggregate-schema-registry

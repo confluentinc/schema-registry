@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.FakeTicker;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
@@ -27,6 +29,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -144,6 +147,27 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRandomizeConfiguration() {
+    reset(restService);
+
+    Map<String, ?> configs = Collections.singletonMap(
+        SchemaRegistryClientConfig.URL_RANDOMIZE, "true");
+    restService.configure(configs);
+    expectLastCall();
+    replay(restService);
+
+    Map<String, ?> clientConfigs = Collections.singletonMap(
+        "schema.registry.url.randomize", "true");
+    new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        clientConfigs
+    );
+
+    verify(restService);
+  }
+
+  @Test
   public void testDuplicateClientNamespaceConfiguration() {
     Map<String, String> configs = Collections.singletonMap("key", "value");
     restService.configure(configs);
@@ -216,6 +240,25 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterFollowedByLookupWillSkipCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25))
+        .once();
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, ID_25))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
+    assertEquals(ID_25, client.getIdWithResponse(SUBJECT_0, SCHEMA_WITH_DECIMAL, false).getId());
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterOverCapacity() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         anyString(), anyBoolean()))
@@ -260,6 +303,40 @@ public class CachedSchemaRegistryClientTest {
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
     ); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGuidCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+
+    // Expect only one call to getId (the rest should hit the cache)
+
+    SchemaString result = new SchemaString(SCHEMA_STR_0);
+    String guid = new Schema(SUBJECT_0, 1, ID_25, result).getGuid();
+    expect(restService.getByGuid(guid, null)).andReturn(result);
+
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, 1, ID_25, result))
+        .once();
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    ); // hit the cache
+
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0)); // Hit cache
 
     verify(restService);
   }
@@ -337,6 +414,46 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testLookUpEmptyRuleSetMetadataSchema() throws Exception {
+    Metadata emptyMetadata = new Metadata(new HashMap<>(), new HashMap<>(), Collections.emptySet());
+    RuleSet emptyRuleset = new RuleSet(Collections.emptyList(), Collections.emptyList());
+
+    AvroSchema schemaWithEmptyFields = new AvroSchema(
+        AVRO_SCHEMA_0.canonicalString(),
+        new ArrayList<>(),
+        new HashMap<>(),
+        emptyMetadata,
+        emptyRuleset,
+        1,
+        true
+    );
+
+    String subjectOne = "subjectOne";
+    io.confluent.kafka.schemaregistry.client.rest.entities.Schema emptySchemaDetails
+        = new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+        SUBJECT_0, 1, ID_25, AvroSchema.TYPE, Collections.emptyList(), schemaWithEmptyFields.canonicalString());
+
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(subjectOne), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class), eq(subjectOne), anyBoolean(), anyBoolean()))
+        .andReturn(emptySchemaDetails);
+    expect(restService.getId(ID_25, subjectOne))
+        .andReturn(new SchemaString(schemaWithEmptyFields.canonicalString()));
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(subjectOne, schemaWithEmptyFields));
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaBySubjectAndId(subjectOne, ID_25)).rawSchema()
+    );
+    assertEquals(ID_25, client.getId(subjectOne, schemaWithEmptyFields, false));
+
+    verify(restService);
+  }
+
+  @Test
   public void testDeleteSchemaCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         eq(SUBJECT_0), anyBoolean()))
@@ -404,8 +521,7 @@ public class CachedSchemaRegistryClientTest {
 
     reset(restService);
 
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(mode);
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(mode);
     expect(restService.setMode(eq(mode))).andReturn(modeUpdateRequest);
 
     replay(restService);
@@ -675,6 +791,55 @@ public class CachedSchemaRegistryClientTest {
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     assertNotNull(client.getSchemaBySubjectAndId(SUBJECT_0, ID_25));
+  }
+
+  @Test
+  public void testMissingSubjectCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_ID_CACHE_TTL_CONFIG, 60L);
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+
+    FakeTicker fakeTicker = new FakeTicker();
+    client = new CachedSchemaRegistryClient(
+            restService,
+            CACHE_CAPACITY,
+            null,
+            configs,
+            null,
+            fakeTicker
+    );
+
+    int version = 7;
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+            eq(SUBJECT_0), anyBoolean(),
+            eq(false)))
+            .andThrow(new RestClientException("Subject not found",
+                    404, 40401))
+            .andReturn(
+                    new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, version,
+                            ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+
+    replay(restService);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Subject not found; error code: 40401", rce.getMessage());
+    }
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+
+    try {
+      client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+      fail();
+    } catch (RestClientException rce) {
+      assertEquals("Schema not found; error code: 40403", rce.getMessage());
+    }
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    client.getId(SUBJECT_0, AVRO_SCHEMA_0);
   }
 
   @Test

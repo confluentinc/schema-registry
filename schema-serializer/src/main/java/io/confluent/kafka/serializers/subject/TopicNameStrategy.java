@@ -27,8 +27,7 @@ import java.util.Map;
  * the subject name &lt;topic&gt;-key, and the message value is registered
  * under the subject name &lt;topic&gt;-value.
  */
-public class TopicNameStrategy implements SubjectNameStrategy,
-    io.confluent.kafka.serializers.subject.SubjectNameStrategy {
+public class TopicNameStrategy implements SubjectNameStrategy {
 
   @Override
   public void configure(Map<String, ?> config) {
@@ -40,11 +39,5 @@ public class TopicNameStrategy implements SubjectNameStrategy,
       return null;
     }
     return isKey ? topic + "-key" : topic + "-value";
-  }
-
-  @Override
-  @Deprecated
-  public String getSubjectName(String topic, boolean isKey, Object value) {
-    return subjectName(topic, isKey, null);
   }
 }

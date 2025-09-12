@@ -52,23 +52,27 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,9 +109,20 @@ public class DekRegistryResource extends SchemaRegistryResource {
   @PerformanceMetric("keks.list")
   @DocumentedName("getKekNames")
   public List<String> getKekNames(
+      @Parameter(description = "Subject name prefix")
+      @QueryParam("subjectPrefix") List<String> subjectPrefix,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
-    return dekRegistry.getKekNames(lookupDeleted);
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
+    limit = dekRegistry.normalizeKekLimit(limit);
+    List<String> kekNames = dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
+    return kekNames.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
@@ -151,7 +166,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Name of the kek", required = true)
       @PathParam("name") String kekName,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     checkName(kekName);
 
@@ -159,7 +178,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(kekName);
     }
-    return dekRegistry.getDekSubjects(kekName, lookupDeleted);
+    limit = dekRegistry.normalizeDekSubjectLimit(limit);
+    List<String> dekSubjects = dekRegistry.getDekSubjects(kekName, lookupDeleted);
+    return dekSubjects.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
@@ -225,7 +249,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Algorithm of the dek")
       @QueryParam("algorithm") DekFormat algorithm,
       @Parameter(description = "Whether to include deleted keys")
-      @QueryParam("deleted") boolean lookupDeleted) {
+      @QueryParam("deleted") boolean lookupDeleted,
+      @Parameter(description = "Pagination offset for results")
+      @DefaultValue("0") @QueryParam("offset") int offset,
+      @Parameter(description = "Pagination size for results. Ignored if negative")
+      @DefaultValue("-1") @QueryParam("limit") int limit) {
 
     checkName(kekName);
     checkSubject(subject);
@@ -234,7 +262,13 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (kek == null) {
       throw DekRegistryErrors.keyNotFoundException(kekName);
     }
-    return dekRegistry.getDekVersions(kekName, subject, algorithm, lookupDeleted);
+    limit = dekRegistry.normalizeDekVersionLimit(limit);
+    List<Integer> dekVersions = dekRegistry.getDekVersions(
+            kekName, subject, algorithm, lookupDeleted);
+    return dekVersions.stream()
+      .skip(offset)
+      .limit(limit)
+      .collect(Collectors.toList());
   }
 
   @GET
@@ -303,6 +337,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
   public void createKek(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
+      @Parameter(description = "Whether to test kek sharing")
+      @QueryParam("testSharing") boolean testSharing,
       @Parameter(description = "The create request", required = true)
       @NotNull CreateKekRequest request) {
 
@@ -326,6 +362,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      if (request.isShared() && testSharing) {
+        KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
+            request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
+        dekRegistry.testKek(kek);
+      }
+
       Kek kek = dekRegistry.createKekOrForward(request, headerProperties);
       asyncResponse.resume(kek);
     } catch (AlreadyExistsException e) {
@@ -333,7 +375,43 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key", e);
+      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
+    }
+  }
+
+  @POST
+  @Path("/{name}/test")
+  @Operation(summary = "Test a kek.", responses = {
+      @ApiResponse(responseCode = "200", description = "The test response",
+          content = @Content(schema = @Schema(implementation = Kek.class))),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
+      @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
+  })
+  @PerformanceMetric("keks.test")
+  @DocumentedName("testKek")
+  public void testKek(
+      final @Suspended AsyncResponse asyncResponse,
+      @Parameter(description = "Name of the kek", required = true)
+      @PathParam("name") String kekName) {
+
+    log.debug("Testing kek {}", kekName);
+
+    checkName(kekName);
+
+    KeyEncryptionKey kek = dekRegistry.getKek(kekName, false);
+    if (kek == null) {
+      throw DekRegistryErrors.keyNotFoundException(kekName);
+    }
+
+    try {
+      dekRegistry.testKek(kek);
+      asyncResponse.resume(kek);
+    } catch (DekGenerationException e) {
+      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+    } catch (InvalidKeyException e) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while testing key", e);
     }
   }
 
@@ -414,7 +492,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key", e);
+      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
   }
 
@@ -434,6 +512,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
       final @Context HttpHeaders headers,
       @Parameter(description = "Name of the kek", required = true)
       @PathParam("name") String name,
+      @Parameter(description = "Whether to test kek sharing")
+      @QueryParam("testSharing") boolean testSharing,
       @Parameter(description = "The update request", required = true)
       @NotNull UpdateKekRequest request) {
 
@@ -441,10 +521,24 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(name);
 
+    KeyEncryptionKey oldKek = dekRegistry.getKek(name, false);
+    if (oldKek == null) {
+      throw DekRegistryErrors.keyNotFoundException(name);
+    }
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
+      if (shared && testSharing) {
+        SortedMap<String, String> kmsProps = request.getKmsProps() != null
+            ? new TreeMap<>(request.getKmsProps())
+            : oldKek.getKmsProps();
+        KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
+            oldKek.getKmsKeyId(), kmsProps, null, true, false);
+        dekRegistry.testKek(newKek);
+      }
+
       Kek kek = dekRegistry.putKekOrForward(name, request, headerProperties);
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(name);
@@ -453,7 +547,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key", e);
+      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
     }
   }
 
@@ -538,7 +632,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(kekName);
       }
-      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true);
+      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true, false);
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }
@@ -688,7 +782,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(kekName);
       }
-      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true);
+      DataEncryptionKey key = dekRegistry.getLatestDek(kekName, subject, algorithm, true, false);
       if (key == null) {
         throw DekRegistryErrors.keyNotFoundException(subject);
       }

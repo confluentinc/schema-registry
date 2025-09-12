@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.protobuf;
 
-import static com.squareup.wire.schema.internal.UtilKt.MAX_TAG_VALUE;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.CONFLUENT_PREFIX;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.DEFAULT_LOCATION;
 import static io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.transform;
@@ -74,6 +73,8 @@ import kotlin.ranges.IntRange;
 import org.apache.commons.lang3.math.NumberUtils;
 
 public class ProtobufSchemaUtils {
+
+  private static final long MAX_TAG_VALUE = 536_870_911;
 
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
@@ -624,7 +625,8 @@ public class ProtobufSchemaUtils {
                 .map(o -> new ExtensionsElement(
                     r.getLocation(),
                     r.getDocumentation(),
-                    Collections.singletonList(o))
+                    Collections.singletonList(o),
+                    r.getOptions())
                 )
             )
             .collect(Collectors.toList());
@@ -757,6 +759,12 @@ public class ProtobufSchemaUtils {
       } else {
         throw new IllegalArgumentException();
       }
+    }
+
+    List<OptionElement> options = ctx.filterOptions(type.getOptions());
+    if (!options.isEmpty()) {
+      sb.append(" ");
+      appendOptions(ctx, sb, options);
     }
     sb.append(";\n");
     return sb.toString();

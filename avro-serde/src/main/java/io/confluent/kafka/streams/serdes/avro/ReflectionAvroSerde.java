@@ -18,7 +18,6 @@ package io.confluent.kafka.streams.serdes.avro;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import java.util.Map;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -39,35 +38,30 @@ import org.apache.kafka.common.serialization.Serializer;
  * <p>Example for configuring this serde as a Kafka Streams application's default serde for both
  * record keys and record values:</p>
  *
- * <p>
  * <pre>{@code
  * Properties streamsConfiguration = new Properties();
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, ReflectionAvroSerde.class);
  * streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, ReflectionAvroSerde.class);
  * streamsConfiguration.put(
- *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *     AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
- * </p>
  *
  * <p>Example for explicitly overriding the application's default serdes (whatever they were
  * configured to) so that only specific operations such as {@code KStream#to()} use this serde:</p>
  *
- * <p>
  * <pre>{@code
  * Serde<MyJavaClassGeneratedFromAvroSchema> reflectionAvroSerde = new ReflectionAvroSerde<>();
  * boolean isKeySerde = false;
  * reflectionAvroSerde.configure(
  *     Collections.singletonMap(
- *         AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *         "http://confluent-schema-registry-server:8081/"),
  *     isKeySerde);
  * KStream<String, MyJavaClassGeneratedFromAvroSchema> stream = ...;
  * stream.to(Serdes.String(), reflectionAvroSerde, "my-output-topic");
  * }</pre>
- * </p>
  */
-@InterfaceStability.Unstable
 public class ReflectionAvroSerde<T> implements Serde<T> {
 
   private final Serde<T> inner;
