@@ -16,7 +16,18 @@
       "version": 2
     }
   ],
-  "metadata": "Metadata{tags={environment=[production, staging], team=[data-engineering]}, properties={description=Person schema for user management, owner=data-team, version=1.0.0}, sensitive=[credit-card, ssn]}",
+  "metadata": {
+    "tags": {
+      "environment": ["production", "staging"],
+      "team": ["data-engineering"]
+    },
+    "properties": {
+      "description": "Person schema for user management",
+      "owner": "data-team",
+      "version": "1.0.0"
+    },
+    "sensitive": ["credit-card", "ssn"]
+  },
   "rules": {
     "migrationRules": [
       {
