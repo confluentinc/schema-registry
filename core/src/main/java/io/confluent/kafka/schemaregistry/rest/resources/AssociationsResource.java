@@ -223,6 +223,9 @@ public class AssociationsResource {
       final @Context HttpHeaders headers,
       @Parameter(description = "Subject")
       @PathParam("subject") String subject,
+      // TODO
+      @Parameter(description = "Dry run")
+      @PathParam("dryRun") boolean dryRUn,
       @Parameter(description = "The create request", required = true)
       @NotNull AssociationCreateRequest request) {
 
@@ -286,6 +289,9 @@ public class AssociationsResource {
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
       @QueryParam("associationType") String associationType,
+      // TODO
+      @Parameter(description = "Dry run")
+      @PathParam("dryRun") boolean dryRUn,
       @Parameter(description = "The update request", required = true)
       @NotNull AssociationUpdateRequest request) {
 
@@ -336,7 +342,10 @@ public class AssociationsResource {
       @Parameter(description = "Resource type")
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
-      @QueryParam("associationType") List<String> associationTypes) {
+      @QueryParam("associationType") List<String> associationTypes,
+      // TODO
+      @Parameter(description = "Cascade lifecycle")
+      @QueryParam("cascadeLifecycle") boolean cascadeLifecycle) {
 
     log.debug("Deleting association {}", resourceName);
 
