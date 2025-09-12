@@ -264,14 +264,30 @@ public class DekRegistryRestService extends RestService implements Configurable 
       String kekName,
       CreateDekRequest request)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
-    String path = builder.build(kekName, request.getSubject()).toString();
+    try {
+      UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
+      String path = builder.build(kekName, request.getSubject()).toString();
 
-    return httpRequest(
-        path, "POST",
-        request.toJson().getBytes(StandardCharsets.UTF_8),
-        requestProperties,
-        DEK_TYPE);
+      return httpRequest(
+          path, "POST",
+          request.toJson().getBytes(StandardCharsets.UTF_8),
+          requestProperties,
+          DEK_TYPE);
+    } catch (RestClientException e) {
+      if (e.getErrorCode() == 405) {
+        // Try fallback to older API that does not have subject in the path
+        UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks");
+        String path = builder.build(kekName).toString();
+
+        return httpRequest(
+            path, "POST",
+            request.toJson().getBytes(StandardCharsets.UTF_8),
+            requestProperties,
+            DEK_TYPE);
+      } else {
+        throw e;
+      }
+    }
   }
 
   public Kek updateKek(String name, UpdateKekRequest request)
