@@ -231,7 +231,7 @@ public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
 
     assertNotNull(deployment);
     assertEquals(deployment.getAttributes(),
-        new ArrayList<String>(Collections.singleton("deploymentScope:opensource"))
+        new ArrayList<String>()
     );
   }
 
