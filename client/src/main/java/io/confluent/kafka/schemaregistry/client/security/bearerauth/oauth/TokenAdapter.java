@@ -122,11 +122,11 @@ public class TokenAdapter {
                                                             String.class,
                                                             SSLSocketFactory.class,
                                                             String.class,
-                                                            Long.class,
-                                                            Long.class,
+                                                            long.class,
+                                                            long.class,
                                                             Integer.class,
                                                             Integer.class,
-                                                            Boolean.class);
+                                                            boolean.class);
         Object[] args = new Object[]{clientId, clientSecret, scope,
           sslSocketFactory, tokenEndpointUrl, loginRetryBackoffMaxMs,
           loginRetryBackoffMs, loginConnectTimeoutMs, loginReadTimeoutMs,
