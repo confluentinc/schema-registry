@@ -165,10 +165,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       MessageIndexes indexes = schema.toMessageIndexes(
           object.getDescriptorForType().getFullName(), normalizeSchema);
       schemaId.setMessageIndexes(indexes.indexes());
-      try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey);
-          ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-        object.writeTo(baos);
-        byte[] payload = baos.toByteArray();
+      try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
+        byte[] payload = object.toByteArray();
         payload = (byte[]) executeRules(
             subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
             schema, payload
