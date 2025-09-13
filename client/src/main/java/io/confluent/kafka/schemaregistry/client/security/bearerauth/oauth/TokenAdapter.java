@@ -166,7 +166,7 @@ public class TokenAdapter {
         Object[] args = new Object[]{con, headers, requestBody, connectTimeoutMs, readTimeoutMs};
         return (String) m.invoke(null, args);
       } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e1) {
-        log.error("Could not call post method.", e1);
+        log.debug("Could not call post method.", e1);
         throw new IOException("Could not call post method.", e1);
       }
     }
