@@ -59,15 +59,16 @@ public class TokenAdapter {
 
     public TokenValidatorImpl(String scopeClaimName,
                               String subClaimName) {
-      Objects.requireNonNull(delegateClass);
+      Objects.requireNonNull(delegateClass, "Could not load validator class.");
+      log.info("Using validator class {}", delegateClass.getName());
       try {
         Constructor<?> cons = delegateClass.getConstructor(String.class, String.class);
         Object[] args = new Object[]{scopeClaimName, subClaimName};
         delegate = cons.newInstance(args);
       } catch (Exception e) {
-        log.debug("failed to create token validator instance", e);
+        log.debug("Failed to create token validator instance", e);
       }
-      Objects.requireNonNull(delegate);
+      Objects.requireNonNull(delegate, "Could not instantiate token validator object.");
     }
 
     @Override
@@ -115,7 +116,8 @@ public class TokenAdapter {
                               Integer loginConnectTimeoutMs,
                               Integer loginReadTimeoutMs,
                               boolean urlencodeHeader) {
-      Objects.requireNonNull(delegateClass);
+      Objects.requireNonNull(delegateClass, "Could not load retriever class.");
+      log.info("Using retriever class {}", delegateClass.getName());
       try {
         Constructor<?> cons = delegateClass.getConstructor(String.class,
                                                             String.class,
@@ -133,9 +135,9 @@ public class TokenAdapter {
           urlencodeHeader};
         delegate = cons.newInstance(args);
       } catch (Exception e) {
-        log.debug("failed to create http token retriever instance", e);
+        log.debug("Failed to create token retriever instance", e);
       }
-      Objects.requireNonNull(delegate);
+      Objects.requireNonNull(delegate, "Could not create retriever object.");
     }
 
     @Override
