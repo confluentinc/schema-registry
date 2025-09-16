@@ -206,7 +206,8 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
 
     // Check if target has subjects that don't exist in source (not acceptable)
     if (!onlyInTarget.isEmpty()) {
-      LOG.error("\n✗ Not compatible, target has subjects that don't exist in source: {}", onlyInTarget);
+      LOG.error("\n✗ Not compatible, target has subjects that don't exist in source: {}",
+          onlyInTarget);
       return false;
     }
 
