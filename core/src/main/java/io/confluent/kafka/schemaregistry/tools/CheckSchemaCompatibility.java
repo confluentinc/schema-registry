@@ -24,7 +24,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -49,6 +48,7 @@ import picocli.CommandLine.Option;
 public class CheckSchemaCompatibility implements Callable<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CheckSchemaCompatibility.class);
+  private static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
 
   @Option(names = {"--source-url", "-s"},
       description = "Source Schema Registry URL", paramLabel = "<url>", required = true)
@@ -122,7 +122,7 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
         ? new HashMap<>(this.configs)
         : new HashMap<>();
     
-    clientConfigs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, url);
+    clientConfigs.put(SCHEMA_REGISTRY_URL_CONFIG, url);
     
     // Add authentication if provided
     if (credential != null && !credential.trim().isEmpty()) {
@@ -204,9 +204,15 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       return true;
     }
 
-    if (sourceSet.size() != targetSet.size()) {
-      LOG.error("\n✓ Not compatible, number of subjects do not match");
+    // Check if target has subjects that don't exist in source (not acceptable)
+    if (!onlyInTarget.isEmpty()) {
+      LOG.error("\n✗ Not compatible, target has subjects that don't exist in source: {}", onlyInTarget);
       return false;
+    }
+
+    // If source has more subjects than target, that's acceptable (informational only)
+    if (!onlyInSource.isEmpty()) {
+      LOG.info("\nℹ Source has additional subjects (acceptable): {}", onlyInSource);
     }
 
 
@@ -236,29 +242,44 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       LOG.info("Source versions: {}", sourceVersions);
       LOG.info("Target versions: {}", targetVersions);
 
-      // Compare version counts
-      if (sourceVersions.size() != targetVersions.size()) {
-        LOG.error("✗ Version count mismatch for subject '{}': source={}, target={}",
-                 subject, sourceVersions.size(), targetVersions.size());
+      // Find versions that exist in both registries
+      Set<Integer> sourceVersionSet = new HashSet<>(sourceVersions);
+      Set<Integer> targetVersionSet = new HashSet<>(targetVersions);
+      Set<Integer> commonVersions = new HashSet<>(sourceVersionSet);
+      commonVersions.retainAll(targetVersionSet);
+      
+      // Find versions only in source or target
+      Set<Integer> onlyInSource = new HashSet<>(sourceVersionSet);
+      onlyInSource.removeAll(targetVersionSet);
+      Set<Integer> onlyInTarget = new HashSet<>(targetVersionSet);
+      onlyInTarget.removeAll(sourceVersionSet);
+      
+      // Log version differences
+      if (!onlyInSource.isEmpty()) {
+        LOG.info("ℹ Versions only in source (will be ignored): {}", onlyInSource);
+      }
+      if (!onlyInTarget.isEmpty()) {
+        LOG.error("✗ Target has versions that don't exist in source for subject '{}': {}", 
+                 subject, onlyInTarget);
         return false;
       }
       
-      // Sort versions to ensure consistent comparison
-      Collections.sort(sourceVersions);
-      Collections.sort(targetVersions);
-      
-      // Compare version numbers
-      if (!sourceVersions.equals(targetVersions)) {
-        LOG.error("✗ Version numbers don't match for subject '{}': source={}, target={}",
-                 subject, sourceVersions, targetVersions);
+      if (commonVersions.isEmpty()) {
+        LOG.error("✗ No common versions found for subject '{}'", subject);
         return false;
       }
+
+      LOG.info("Comparing {} common versions for subject '{}'", commonVersions.size(), subject);
       
       boolean allVersionsMatch = true;
       int mismatchCount = 0;
       
-      // Compare each version's schema content and metadata
-      for (Integer version : sourceVersions) {
+      // Sort common versions for consistent comparison
+      List<Integer> sortedCommonVersions = new ArrayList<>(commonVersions);
+      Collections.sort(sortedCommonVersions);
+      
+      // Compare each common version's schema content and metadata
+      for (Integer version : sortedCommonVersions) {
         if (!compareVersion(sourceClient, targetClient, subject, version)) {
           mismatchCount++;
           allVersionsMatch = false;
@@ -267,12 +288,12 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       
       // Summary for this subject
       if (allVersionsMatch) {
-        LOG.info("✓ All {} versions match perfectly for subject '{}'", 
-                sourceVersions.size(), subject);
+        LOG.info("✓ All {} common versions match perfectly for subject '{}'", 
+                commonVersions.size(), subject);
         return true;
       } else {
-        LOG.error("✗ Subject '{}' has {} mismatched version(s) out of {}",
-                 subject, mismatchCount, sourceVersions.size());
+        LOG.error("✗ Subject '{}' has {} mismatched version(s) out of {} common versions",
+                 subject, mismatchCount, commonVersions.size());
         return false;
       }
       
