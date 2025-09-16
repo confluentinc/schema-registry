@@ -370,7 +370,7 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       
       // Compare schema ID (informational - IDs can differ between registries)
       if (sourceSchema.getId() != targetSchema.getId()) {
-        LOG.info("ℹ Schema ID differs for subject '{}' version {}: source={}, target={}",
+        LOG.error("ℹ Schema ID differs for subject '{}' version {}: source={}, target={}",
                 subject, version, sourceSchema.getId(), targetSchema.getId());
         return false;
       }
