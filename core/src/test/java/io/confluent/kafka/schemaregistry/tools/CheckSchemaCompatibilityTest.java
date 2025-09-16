@@ -642,12 +642,11 @@ public class CheckSchemaCompatibilityTest {
     // Execute
     boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
 
-    // Verify - should still return true, just logs the ID difference
-    assertTrue(result);
+    // Verify - should return false to prevent potential id conflict
+    assertFalse(result);
   }
-
+  
   // Tests for different metadata, ruleSet, and references
-
   @Test
   void testCompareVersion_DifferentMetadata() throws Exception {
     // Setup
