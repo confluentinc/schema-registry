@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>0.7.9.3.50-0</version>
+        <version>0.7.9.3.50-1</version>
     </parent>
 
     <licenses>
@@ -97,16 +97,16 @@
                             <dockerNamespace>confluentinc</dockerNamespace>
                             <dockerName>cp-kafka-connect</dockerName>
                             <dockerTag>${io.confluent.schema-registry.version}</dockerTag>
-                            
+
                             <componentTypes>
                                 <componentType>converter</componentType>
                             </componentTypes>
-                            
+
                             <tags>
                                 <tag>avro</tag>
                                 <tag>schema registry</tag>
                             </tags>
-                            
+
                             <kafkaConnectApi>false</kafkaConnectApi>
                             <singleMessageTransforms>false</singleMessageTransforms>
                             <supportedEncodings>
@@ -132,31 +132,31 @@
                                 <![CDATA[The Kafka Connect Avro Converter integrates with <a href="https://docs.confluent.io/current/schema-registry/docs/intro.html">Schema Registry</a> to convert data for Kafka Connect to and from Avro format.]]>
                             </description>
                             <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
-                            
+
                             <supportProviderName>Confluent, Inc.</supportProviderName>
                             <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
                             <supportUrl>https://docs.confluent.io/current/</supportUrl>
                             <supportLogo>logos/confluent.png</supportLogo>
-                            
+
                             <ownerUsername>confluentinc</ownerUsername>
                             <ownerType>organization</ownerType>
                             <ownerName>Confluent, Inc.</ownerName>
                             <ownerUrl>https://confluent.io/</ownerUrl>
                             <ownerLogo>logos/confluent.png</ownerLogo>
-                            
+
                             <dockerNamespace>confluentinc</dockerNamespace>
                             <dockerName>cp-kafka-connect</dockerName>
                             <dockerTag>${project.version}</dockerTag>
-                            
+
                             <componentTypes>
                                 <componentType>converter</componentType>
                             </componentTypes>
-                            
+
                             <tags>
                                 <tag>avro</tag>
                                 <tag>schema registry</tag>
                             </tags>
-                            
+
                             <kafkaConnectApi>false</kafkaConnectApi>
                             <singleMessageTransforms>false</singleMessageTransforms>
                             <supportedEncodings>
