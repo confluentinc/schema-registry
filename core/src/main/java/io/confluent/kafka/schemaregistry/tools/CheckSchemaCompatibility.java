@@ -301,11 +301,6 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
                  subject, onlyInTarget);
         return false;
       }
-      
-      if (commonVersions.isEmpty()) {
-        LOG.error("✗ No common versions found for subject '{}'", subject);
-        return false;
-      }
 
       LOG.info("Comparing {} common versions for subject '{}'", commonVersions.size(), subject);
       
