@@ -644,7 +644,7 @@ public class CheckSchemaCompatibilityTest {
     // Verify - should return false to prevent potential id conflict
     assertFalse(result);
   }
-  
+
   // Tests for different metadata, ruleSet, and references
   @Test
   void testCompareVersion_DifferentMetadata() throws Exception {
@@ -929,5 +929,77 @@ public class CheckSchemaCompatibilityTest {
 
     // Verify - schemas with identical metadata, ruleSet, and references should be equivalent
     assertTrue(result);
+  }
+
+  @Test
+  void testCompareSubjects_SourceHasExtraVersionWithDuplicateSchemaId() throws Exception {
+    // Setup - both registries have subject1 and subject2
+    // Target: subject1 (v1-3, ids 1,3,5), subject2 (v1-3, ids 2,4,6)
+    // Source: subject1 (v1-4, ids 1,3,5,6), subject2 (v1-3, ids 2,4,6)
+    // Note: source subject1 v4 has schema id 6, which matches target subject2 v3
+    List<String> sourceSubjects = Arrays.asList("subject1", "subject2");
+    List<String> targetSubjects = Arrays.asList("subject1", "subject2");
+
+    // Setup target registry versions
+    when(targetClient.getAllVersions("subject1")).thenReturn(Arrays.asList(1, 2, 3));
+    when(targetClient.getAllVersions("subject2")).thenReturn(Arrays.asList(1, 2, 3));
+
+    // Setup source registry versions - subject1 has an extra version 4
+    when(sourceClient.getAllVersions("subject1")).thenReturn(Arrays.asList(1, 2, 3, 4));
+    when(sourceClient.getAllVersions("subject2")).thenReturn(Arrays.asList(1, 2, 3));
+
+    // Setup target metadata for subject1
+    when(targetClient.getSchemaMetadata("subject1", 1)).thenReturn(createSchemaMetadata(1, 1, SCHEMA_STRING_1));
+    when(targetClient.getSchemaMetadata("subject1", 2)).thenReturn(createSchemaMetadata(2, 3, SCHEMA_STRING_1));
+    when(targetClient.getSchemaMetadata("subject1", 3)).thenReturn(createSchemaMetadata(3, 5, SCHEMA_STRING_1));
+
+    // Setup target metadata for subject2
+    when(targetClient.getSchemaMetadata("subject2", 1)).thenReturn(createSchemaMetadata(1, 2, SCHEMA_STRING_2));
+    when(targetClient.getSchemaMetadata("subject2", 2)).thenReturn(createSchemaMetadata(2, 4, SCHEMA_STRING_2));
+    when(targetClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(3, 6, SCHEMA_STRING_2));
+    when(targetClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(4, 7, SCHEMA_STRING_2));
+
+    // Setup source metadata for subject1 - includes extra version 4 with schema id 6
+    when(sourceClient.getSchemaMetadata("subject1", 1)).thenReturn(createSchemaMetadata(1, 1, SCHEMA_STRING_1));
+    when(sourceClient.getSchemaMetadata("subject1", 2)).thenReturn(createSchemaMetadata(2, 3, SCHEMA_STRING_1));
+    when(sourceClient.getSchemaMetadata("subject1", 3)).thenReturn(createSchemaMetadata(3, 5, SCHEMA_STRING_1));
+    when(sourceClient.getSchemaMetadata("subject1", 4)).thenReturn(createSchemaMetadata(4, 7, SCHEMA_STRING_1)); // Schema id 7 duplicates target subject2 v4
+
+    // Setup source metadata for subject2
+    when(sourceClient.getSchemaMetadata("subject2", 1)).thenReturn(createSchemaMetadata(1, 2, SCHEMA_STRING_2));
+    when(sourceClient.getSchemaMetadata("subject2", 2)).thenReturn(createSchemaMetadata(2, 4, SCHEMA_STRING_2));
+    when(sourceClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(3, 6, SCHEMA_STRING_2));
+
+    // Setup parsed schemas - use real AvroSchema objects for proper comparison
+    ParsedSchema schema1 = new AvroSchema(SCHEMA_STRING_1);
+    ParsedSchema schema2 = new AvroSchema(SCHEMA_STRING_2);
+
+    // Mock parseSchema calls to return appropriate schemas based on the schema string
+    when(sourceClient.parseSchema(any(Schema.class))).thenAnswer(invocation -> {
+      Schema schema = invocation.getArgument(0);
+      if (SCHEMA_STRING_1.equals(schema.getSchema())) {
+        return Optional.of(schema1);
+      } else if (SCHEMA_STRING_2.equals(schema.getSchema())) {
+        return Optional.of(schema2);
+      }
+      return Optional.empty();
+    });
+
+    when(targetClient.parseSchema(any(Schema.class))).thenAnswer(invocation -> {
+      Schema schema = invocation.getArgument(0);
+      if (SCHEMA_STRING_1.equals(schema.getSchema())) {
+        return Optional.of(schema1);
+      } else if (SCHEMA_STRING_2.equals(schema.getSchema())) {
+        return Optional.of(schema2);
+      }
+      return Optional.empty();
+    });
+
+    // Execute
+    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+
+    // Verify - should return true since source having more versions is acceptable
+    // and all common versions match between registries
+    assertFalse(result);
   }
 }

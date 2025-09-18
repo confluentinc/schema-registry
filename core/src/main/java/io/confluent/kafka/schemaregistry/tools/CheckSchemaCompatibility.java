@@ -23,7 +23,10 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Collection;
@@ -32,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import org.slf4j.Logger;
@@ -42,46 +46,32 @@ import picocli.CommandLine.Option;
 
 @Command(name = "check-schema-compatibility", mixinStandardHelpOptions = true,
     description = "Compare subjects between two Schema Registry instances and check compatibility. "
-               + "Requires --source-url and --target-url to specify the Schema Registry endpoints.",
+               + "Requires --config to specify a configuration file with both source and target "
+               + "Schema Registry connection details using prefixed properties.",
     sortOptions = false, sortSynopsis = false)
 public class CheckSchemaCompatibility implements Callable<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CheckSchemaCompatibility.class);
   private static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
 
-  @Option(names = {"--source-url", "-s"},
-      description = "Source Schema Registry URL", paramLabel = "<url>", required = true)
+  @Option(names = {"--config", "-c"},
+      description = "Path to configuration file containing both source and target Schema Registry "
+                 + "connection details. Use prefixed properties like 'source.schema.registry.url' "
+                 + "and 'target.schema.registry.url'.", 
+      paramLabel = "<file>", required = true)
+  private String configFile;
+
+  @Option(names = {"--verbose", "-v"},
+      description = "Enable verbose output to show detailed subject and version information")
+  private boolean verbose = false;
+
+  // Configuration values loaded from configuration file
   private String sourceUrl;
-  
-  @Option(names = {"--target-url", "-t"},
-      description = "Target Schema Registry URL", paramLabel = "<url>", required = true)
   private String targetUrl;
-
-  @Option(names = {"--source-context"},
-      description = "Context for source Schema Registry (e.g., environment, tenant)",
-      paramLabel = "<context>")
   private String sourceContext = "default";
-
-  @Option(names = {"--target-context"},
-      description = "Context for target Schema Registry (e.g., environment, tenant)",
-      paramLabel = "<context>")
   private String targetContext = "default";
-
-  @Option(names = {"-sc", "--source-credential"},
-      description = "Credentials for source Schema Registry authentication "
-        + "(username:password)",
-      paramLabel = "<username:password>")
   private String sourceCredential;
-
-  @Option(names = {"-dc", "--target-credential"},
-      description = "Credentials for destination Schema Registry authentication "
-        +  "(username:password)",
-      paramLabel = "<username:password>")
   private String targetCredential;
-
-  @Option(names = {"-X", "--property"},
-      description = "Set configuration property.", paramLabel = "<prop=val>")
-  private Map<String, String> configs;
 
   public CheckSchemaCompatibility() {
 
@@ -90,6 +80,9 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
   @Override
   public Integer call() throws Exception {
     try {
+      // Load configuration from file
+      loadConfigurations();
+      
       LOG.info("Starting schema compatibility check between:");
       LOG.info("  Source: {} (context: {})", sourceUrl, sourceContext);
       LOG.info("  Target: {} (context: {})", targetUrl, targetContext);
@@ -116,10 +109,49 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
     }
   }
 
+  private void loadConfigurations() throws IOException {
+    LOG.info("Loading configuration from: {}", configFile);
+    Properties allProps = loadConfigFile(configFile);
+    
+    // Load configurations using prefixed property names
+    sourceUrl = getRequiredProperty(allProps, "source.schema.registry.url", "configuration file");
+    sourceContext = allProps.getProperty("source.context", "default");
+    sourceCredential = allProps.getProperty("source.credential");
+    
+    targetUrl = getRequiredProperty(allProps, "target.schema.registry.url", "configuration file");
+    targetContext = allProps.getProperty("target.context", "default");
+    targetCredential = allProps.getProperty("target.credential");
+    
+    LOG.info("Source configuration loaded - URL: {}, Context: {}, Has credentials: {}", 
+             sourceUrl, sourceContext, sourceCredential != null);
+    LOG.info("Target configuration loaded - URL: {}, Context: {}, Has credentials: {}", 
+             targetUrl, targetContext, targetCredential != null);
+  }
+
+  private Properties loadConfigFile(String configFile) throws IOException {
+    if (!Files.exists(Paths.get(configFile))) {
+      throw new IOException("Configuration file not found: " + configFile);
+    }
+    
+    Properties props = new Properties();
+    try (FileInputStream fis = new FileInputStream(configFile)) {
+      props.load(fis);
+    }
+    return props;
+  }
+
+
+  private String getRequiredProperty(Properties props, String key, String configFile) 
+      throws IOException {
+    String value = props.getProperty(key);
+    if (value == null || value.trim().isEmpty()) {
+      throw new IOException("Required property '" + key + "' not found in " + configFile);
+    }
+    return value.trim();
+  }
+
   private SchemaRegistryClient createClient(String url, String credential) {
-    Map<String, Object> clientConfigs = this.configs != null
-        ? new HashMap<>(this.configs)
-        : new HashMap<>();
+    Map<String, Object> clientConfigs = new HashMap<>();
     
     clientConfigs.put(SCHEMA_REGISTRY_URL_CONFIG, url);
     
@@ -144,8 +176,10 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
     List<String> subjects = new ArrayList<>(subjectsCollection);
     LOG.info("Found {} subjects in {} {} context", subjects.size(), url, contextName);
     
-    for (String subject : subjects) {
-      LOG.info("  {} subject: {}", contextName, subject);
+    if (verbose) {
+      for (String subject : subjects) {
+        LOG.info("  {} subject: {}", contextName, subject);
+      }
     }
     
     return subjects;
@@ -180,7 +214,7 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
 
 
 
-    if (!onlyInSource.isEmpty()) {
+    if (!onlyInSource.isEmpty() && verbose) {
       LOG.info("\nSubjects only in source ({}):", sourceContext);
       List<String> sortedOnlyInSource = new ArrayList<>(onlyInSource);
       Collections.sort(sortedOnlyInSource);
@@ -189,7 +223,7 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       }
     }
 
-    if (!onlyInTarget.isEmpty()) {
+    if (!onlyInTarget.isEmpty() && verbose) {
       LOG.info("\nSubjects only in target ({}):", targetContext);
       List<String> sortedOnlyInTarget = new ArrayList<>(onlyInTarget);
       Collections.sort(sortedOnlyInTarget);
@@ -217,9 +251,11 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
 
 
     if (!inBoth.isEmpty()) {
-      LOG.info("\nSubjects in both registries:");
       List<String> sortedInBoth = new ArrayList<>(inBoth);
       Collections.sort(sortedInBoth);
+      if (verbose) {
+        LOG.info("\nSubjects in both registries: {}", sortedInBoth);
+      }
       for (String subject : sortedInBoth) {
         if (!compareSubject(sourceClient, targetClient, subject)) {
           return false;
@@ -239,8 +275,10 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       List<Integer> sourceVersions = sourceClient.getAllVersions(subject);
       List<Integer> targetVersions = targetClient.getAllVersions(subject);
       
-      LOG.info("Source versions: {}", sourceVersions);
-      LOG.info("Target versions: {}", targetVersions);
+      if (verbose) {
+        LOG.info("Source versions: {}", sourceVersions);
+        LOG.info("Target versions: {}", targetVersions);
+      }
 
       // Find versions that exist in both registries
       Set<Integer> sourceVersionSet = new HashSet<>(sourceVersions);
@@ -255,7 +293,7 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       onlyInTarget.removeAll(sourceVersionSet);
       
       // Log version differences
-      if (!onlyInSource.isEmpty()) {
+      if (!onlyInSource.isEmpty() && verbose) {
         LOG.info("ℹ Versions only in source (will be ignored): {}", onlyInSource);
       }
       if (!onlyInTarget.isEmpty()) {
