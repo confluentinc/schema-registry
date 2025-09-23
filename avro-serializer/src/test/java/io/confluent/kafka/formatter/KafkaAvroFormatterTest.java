@@ -19,6 +19,8 @@ package io.confluent.kafka.formatter;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import java.util.Iterator;
 import java.util.Optional;
@@ -27,6 +29,7 @@ import org.apache.avro.Schema;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -46,6 +49,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -488,5 +492,77 @@ public class KafkaAvroFormatterTest {
     avroMessageFormatter.writeTo(crecord, ps);
     String output = baos.toString();
     assertEquals("Input value should match output value", input, output);
+  }
+
+  @Test
+  public void testKafkaAvroWithIdSerializers() throws Exception {
+    final Map<String, String> propertyMap = new HashMap<>();
+    final String topicName = "mytopic";
+    propertyMap.put("topic", topicName);
+    propertyMap.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://foo");
+    propertyMap.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, "false");
+    propertyMap.put(SchemaMessageReader.VALUE_SCHEMA, RECORD_VALUE_SCHEMA_STRING);
+    propertyMap.put(SchemaMessageReader.KEY_SCHEMA, RECORD_KEY_SCHEMA_STRING);
+    propertyMap.put("parse.key", "true");
+    propertyMap.put("print.key", "true");
+    propertyMap.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER, TestKeyIdSerializer.class.getName());
+    propertyMap.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER, TestValueIdSerializer.class.getName());
+
+    final AvroMessageFormatter avroMessageFormatter = new AvroMessageFormatter();
+    avroMessageFormatter.configure(propertyMap);
+
+    final SchemaRegistryClient schemaRegistryClient = MockSchemaRegistry.getClientForScope("foo");
+
+    Schema.Parser parser = new Schema.Parser();
+    Schema keySchema = parser.parse(RECORD_KEY_SCHEMA_STRING);
+    Schema valueSchema = parser.parse(RECORD_VALUE_SCHEMA_STRING);
+    schemaRegistryClient.register(topicName + "-key", new AvroSchema(keySchema));
+    schemaRegistryClient.register(topicName + "-value", new AvroSchema(valueSchema));
+
+    String inputJson = "{\"key_field\":\"1\"}\t{\"value_field\":\"1\"}\n";
+    final InputStream is = new ByteArrayInputStream(inputJson.getBytes());
+    AvroMessageReader avroReader = new AvroMessageReader();
+    // Initialize AvroMessageReader using the same approach that ConsoleProducer uses so we exercise that code
+    final Properties properties = new Properties();
+    properties.putAll(propertyMap);
+    avroReader.init(properties);
+
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
+    byte[] serializedKey = message.key();
+    byte[] serializedValue = message.value();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        topicName, 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length, serializedValue.length,
+        serializedKey, serializedValue, message.headers(), Optional.empty());
+
+    avroMessageFormatter.writeTo(crecord, ps);
+    String outputJson = baos.toString();
+    assertEquals("Input value json should match output value json", inputJson, outputJson);
+
+    assertTrue(TestKeyIdSerializer.isKey);
+    assertFalse(TestValueIdSerializer.isKey);
+  }
+
+  public static class TestKeyIdSerializer extends HeaderSchemaIdSerializer {
+    public static Boolean isKey;
+
+    @Override
+    public byte[] serialize(String topic, boolean isKey, Headers headers, byte[] payload, SchemaId schemaId)
+        throws SerializationException {
+      this.isKey = isKey;
+      return super.serialize(topic, isKey, headers, payload, schemaId);
+    }
+  }
+
+  public static class TestValueIdSerializer extends HeaderSchemaIdSerializer {
+    public static Boolean isKey;
+
+    @Override
+    public byte[] serialize(String topic, boolean isKey, Headers headers, byte[] payload, SchemaId schemaId)
+        throws SerializationException {
+      this.isKey = isKey;
+      return super.serialize(topic, isKey, headers, payload, schemaId);
+    }
   }
 }
