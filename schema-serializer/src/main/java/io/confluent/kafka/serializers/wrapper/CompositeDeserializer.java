@@ -22,6 +22,7 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
@@ -52,15 +53,33 @@ public class CompositeDeserializer implements Deserializer<Object> {
 
   protected void configure(CompositeDeserializerConfig config, boolean isKey) {
     this.isKey = isKey;
-    Map<String, Object> originals = config.originals();
     this.schemaIdDeserializer = new DualSchemaIdDeserializer();
+
+    Map<String, Object> oldParams = new HashMap<>();
+    oldParams.putAll(config.originals());
+    oldParams.putAll(config.originalsWithPrefix(
+        CompositeDeserializerConfig.COMPOSITE_OLD_DESERIALIZER + "."));
     this.oldDeserializer = config.getConfiguredInstance(
         CompositeDeserializerConfig.COMPOSITE_OLD_DESERIALIZER, Deserializer.class);
-    this.oldDeserializer.configure(originals, isKey);
+    this.oldDeserializer.configure(oldParams, isKey);
+
+    Map<String, Object> cfltParams = new HashMap<>();
+    cfltParams.putAll(config.originals());
+    cfltParams.putAll(config.originalsWithPrefix(
+        CompositeDeserializerConfig.COMPOSITE_CONFLUENT_DESERIALIZER + "."));
     this.confluentDeserializer = config.getConfiguredInstance(
         CompositeDeserializerConfig.COMPOSITE_CONFLUENT_DESERIALIZER, Deserializer.class);
-    this.confluentDeserializer.configure(originals, isKey);
+    this.confluentDeserializer.configure(cfltParams, isKey);
+
     this.schemaRegistryClient = getSchemaRegistryClient();
+  }
+
+  public Deserializer<?> getOldDeserializer() {
+    return oldDeserializer;
+  }
+
+  public Deserializer<?> getConfluentDeserializer() {
+    return confluentDeserializer;
   }
 
   @Override
