@@ -1,4 +1,4 @@
-/*nlohmann_json
+/*
  * Copyright 2024 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
