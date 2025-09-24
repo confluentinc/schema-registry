@@ -185,9 +185,9 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
     return subjects;
   }
 
-  private boolean compareSubjects(List<String> sourceSubjects, List<String> targetSubjects,
+  protected boolean compareSubjects(List<String> sourceSubjects, List<String> targetSubjects,
                                   SchemaRegistryClient sourceClient, 
-                                  SchemaRegistryClient targetClient) {
+                                  SchemaRegistryClient targetClient) throws RestClientException, IOException {
     Set<String> sourceSet = new HashSet<>(sourceSubjects);
     Set<String> targetSet = new HashSet<>(targetSubjects);
 
@@ -265,9 +265,9 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
     return true;
   }
 
-  private boolean compareSubject(SchemaRegistryClient sourceClient, 
+  protected boolean compareSubject(SchemaRegistryClient sourceClient, 
                                  SchemaRegistryClient targetClient, 
-                                 String subject) {
+                                 String subject) throws RestClientException, IOException {
     try {
       LOG.info("\n--- Comparing subject: {} ---", subject);
       
@@ -333,14 +333,14 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
     } catch (Exception e) {
       LOG.error("✗ Error comparing subject '{}': {}", subject, e.getMessage());
       LOG.error("  Exception details: ", e);
-      return false;
+      throw e;
     }
   }
 
-  private boolean compareVersion(SchemaRegistryClient sourceClient, 
+  protected boolean compareVersion(SchemaRegistryClient sourceClient, 
                                 SchemaRegistryClient targetClient, 
                                 String subject, 
-                                Integer version) {
+                                Integer version) throws RestClientException, IOException {
     try {
       LOG.info("  Comparing version {} for subject '{}'", version, subject);
       
@@ -415,7 +415,7 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
       LOG.error("✗ Error comparing version {} for subject '{}': {}",
                version, subject, e.getMessage());
       LOG.error("  Exception details: ", e);
-      return false;
+      throw e;
     }
   }
 

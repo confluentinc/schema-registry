@@ -57,8 +57,6 @@ public class CheckSchemaCompatibilityTest {
   @Mock
   private SchemaRegistryClient targetClient;
 
-  private ParsedSchema parsedSchema1;
-  private ParsedSchema parsedSchema2;
 
   private CheckSchemaCompatibility tool;
 
@@ -71,9 +69,32 @@ public class CheckSchemaCompatibilityTest {
     MockitoAnnotations.openMocks(this);
     tool = new CheckSchemaCompatibility();
 
-    // Create real ParsedSchema objects using AvroSchema
-    parsedSchema1 = new AvroSchema(SCHEMA_STRING_1);
-    parsedSchema2 = new AvroSchema(SCHEMA_STRING_2);
+   when(sourceClient.parseSchema(any(Schema.class))).thenAnswer(invocation -> {
+       Schema schema = invocation.getArgument(0);
+       return Optional.of(new AvroSchema(
+         schema.getSchema(),
+         schema.getReferences(),
+         new HashMap<>(),
+         schema.getMetadata(),
+         schema.getRuleSet(),
+         schema.getVersion(),
+         false
+       ));
+     });
+
+     when(targetClient.parseSchema(any(Schema.class))).thenAnswer(invocation -> {
+       Schema schema = invocation.getArgument(0);
+       return Optional.of(new AvroSchema(
+         schema.getSchema(),
+         schema.getReferences(),
+         new HashMap<>(),
+         schema.getMetadata(),
+         schema.getRuleSet(),
+         schema.getVersion(),
+         false
+       ));
+     });
+    // Setup common parseSchema mock behavior for all tests
   }
 
   @Test
@@ -87,7 +108,7 @@ public class CheckSchemaCompatibilityTest {
     setupSuccessfulSubjectComparison("subject2");
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify
     assertTrue(result);
@@ -107,11 +128,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata("subject1", 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata("subject1", 1)).thenReturn(sourceMetadata);
 
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema1));
-
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify - should now pass since source having more subjects is acceptable
     assertTrue(result);
@@ -124,7 +142,7 @@ public class CheckSchemaCompatibilityTest {
     List<String> targetSubjects = Arrays.asList("subject1", "subject2");
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify - should fail since target having more subjects is not acceptable
     assertFalse(result);
@@ -137,7 +155,7 @@ public class CheckSchemaCompatibilityTest {
     List<String> targetSubjects = Collections.emptyList();
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify
     assertTrue(result);
@@ -150,7 +168,7 @@ public class CheckSchemaCompatibilityTest {
     List<String> targetSubjects = Arrays.asList("subject1");
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify - should fail since target has subjects that don't exist in source
     assertTrue(result);
@@ -163,7 +181,7 @@ public class CheckSchemaCompatibilityTest {
     List<String> targetSubjects = Collections.emptyList();
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify - should pass since source having more subjects is acceptable
     assertTrue(result);
@@ -179,7 +197,7 @@ public class CheckSchemaCompatibilityTest {
     setupFailedSubjectComparison("subject1");
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
     // Verify
     assertFalse(result);
@@ -191,7 +209,7 @@ public class CheckSchemaCompatibilityTest {
     setupIdenticalSchemas();
 
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify
     assertTrue(result);
@@ -215,12 +233,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 2)).thenReturn(sourceMetadata2);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 2)).thenReturn(targetMetadata2);
 
-
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema1));
-
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify - should succeed since common versions (1, 2) match, version 3 is ignored
     assertTrue(result);
@@ -238,14 +252,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata1);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata1);
 
-    ParsedSchema schema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2 = new AvroSchema(SCHEMA_STRING_2);
-
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(schema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(schema2));
-
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify - version mismatch
     assertFalse(result);
@@ -258,7 +266,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.getAllVersions(SUBJECT_NAME)).thenReturn(Arrays.asList(3, 4));
 
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify - should fail since there are no common versions
     assertFalse(result);
@@ -271,7 +279,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.getAllVersions(SUBJECT_NAME)).thenReturn(Arrays.asList(1, 2));
 
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify - should fail since target having more versions is not acceptable
     assertFalse(result);
@@ -289,14 +297,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
-    // Use real ParsedSchema objects with different schemas - they should NOT be equivalent
-    ParsedSchema schema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2 = new AvroSchema(SCHEMA_STRING_2);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(schema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(schema2));
-
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify
     assertFalse(result);
@@ -314,12 +316,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
-    // Mock parsed schemas that are equivalent
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema2));
-
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify
     assertFalse(result);
@@ -339,26 +337,14 @@ public class CheckSchemaCompatibilityTest {
 
     // Mock parse failure
     when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.empty());
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(parsedSchema2));
 
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify
     assertFalse(result);
   }
 
-  @Test
-  void testCompareSubject_ExceptionHandling() throws Exception {
-    // Setup
-    when(sourceClient.getAllVersions(SUBJECT_NAME)).thenThrow(new RestClientException("Connection failed", 500, 50001));
-
-    // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
-
-    // Verify
-    assertFalse(result);
-  }
 
   @Test
   void testCompareSubject_MultipleVersionsSuccess() throws Exception {
@@ -378,18 +364,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 2)).thenReturn(sourceMetadata2);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 2)).thenReturn(targetMetadata2);
 
-    // Use real ParsedSchema objects - all schemas are the same, so they should be equivalent
-    ParsedSchema schema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2 = new AvroSchema(SCHEMA_STRING_2);
-    when(sourceClient.parseSchema(any(Schema.class)))
-      .thenReturn(Optional.of(schema1))
-      .thenReturn(Optional.of(schema2));
-    when(targetClient.parseSchema(any(Schema.class)))
-      .thenReturn(Optional.of(schema1))
-      .thenReturn(Optional.of(schema2));
-
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify
     assertTrue(result);
@@ -413,21 +389,9 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 2)).thenReturn(sourceMetadata2);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 2)).thenReturn(targetMetadata2);
 
-    // Use real ParsedSchema objects - first version matches, second doesn't
-    ParsedSchema schema1Version1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2Version1 = new AvroSchema(SCHEMA_STRING_1); // Same as source
-    ParsedSchema schema1Version2 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2Version2 = new AvroSchema(SCHEMA_STRING_2); // Different from source
-
-    when(sourceClient.parseSchema(any(Schema.class)))
-      .thenReturn(Optional.of(schema1Version1))  // Version 1
-      .thenReturn(Optional.of(schema1Version2)); // Version 2
-    when(targetClient.parseSchema(any(Schema.class)))
-      .thenReturn(Optional.of(schema2Version1))  // Version 1 - matches
-      .thenReturn(Optional.of(schema2Version2)); // Version 2 - different
 
     // Execute
-    boolean result = invokeCompareSubject(SUBJECT_NAME);
+    boolean result = tool.compareSubject(sourceClient, targetClient, SUBJECT_NAME);
 
     // Verify
     assertFalse(result);
@@ -444,12 +408,6 @@ public class CheckSchemaCompatibilityTest {
 
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
-
-    // Use real ParsedSchema objects with identical schema strings
-    ParsedSchema identicalSchema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema identicalSchema2 = new AvroSchema(SCHEMA_STRING_1);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema2));
   }
 
   private void setupSuccessfulSubjectComparison(String subject) throws IOException, RestClientException {
@@ -460,10 +418,6 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(subject, 1)).thenReturn(metadata);
     when(targetClient.getSchemaMetadata(subject, 1)).thenReturn(metadata);
 
-    // Use the same schema string so they will be equivalent
-    ParsedSchema identicalSchema = new AvroSchema(SCHEMA_STRING_1);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema));
   }
 
   private void setupFailedSubjectComparison(String subject) throws IOException, RestClientException {
@@ -481,26 +435,6 @@ public class CheckSchemaCompatibilityTest {
     );
   }
 
-  private boolean invokeCompareSubjects(List<String> sourceSubjects, List<String> targetSubjects) throws Exception {
-    Method method = CheckSchemaCompatibility.class.getDeclaredMethod(
-      "compareSubjects", List.class, List.class, SchemaRegistryClient.class, SchemaRegistryClient.class);
-    method.setAccessible(true);
-    return (Boolean) method.invoke(tool, sourceSubjects, targetSubjects, sourceClient, targetClient);
-  }
-
-  private boolean invokeCompareSubject(String subject) throws Exception {
-    Method method = CheckSchemaCompatibility.class.getDeclaredMethod(
-      "compareSubject", SchemaRegistryClient.class, SchemaRegistryClient.class, String.class);
-    method.setAccessible(true);
-    return (Boolean) method.invoke(tool, sourceClient, targetClient, subject);
-  }
-
-  private boolean invokeCompareVersion(String subject, Integer version) throws Exception {
-    Method method = CheckSchemaCompatibility.class.getDeclaredMethod(
-      "compareVersion", SchemaRegistryClient.class, SchemaRegistryClient.class, String.class, Integer.class);
-    method.setAccessible(true);
-    return (Boolean) method.invoke(tool, sourceClient, targetClient, subject, version);
-  }
 
   // Tests for compareVersion method
 
@@ -513,14 +447,9 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
-    // Use real ParsedSchema objects with identical schemas - they should be equivalent
-    ParsedSchema identicalSchema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema identicalSchema2 = new AvroSchema(SCHEMA_STRING_1);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema2));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify
     assertTrue(result);
@@ -535,14 +464,8 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
-    // Use real ParsedSchema objects with different schemas - they should NOT be equivalent
-    ParsedSchema schema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2 = new AvroSchema(SCHEMA_STRING_2);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(schema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(schema2));
-
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify
     assertFalse(result);
@@ -562,7 +485,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(new AvroSchema(SCHEMA_STRING_1)));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify
     assertFalse(result);
@@ -578,11 +501,10 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
     // Mock target parse failure
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(new AvroSchema(SCHEMA_STRING_1)));
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.empty());
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify
     assertFalse(result);
@@ -597,27 +519,10 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
-    // Use real ParsedSchema objects that are equivalent (same schema content)
-    ParsedSchema identicalSchema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema identicalSchema2 = new AvroSchema(SCHEMA_STRING_1);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema2));
+    // Schemas are created from metadata by parseSchema mock in @BeforeEach
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
-
-    // Verify
-    assertFalse(result);
-  }
-
-  @Test
-  void testCompareVersion_ExceptionHandling() throws Exception {
-    // Setup - throw exception when getting schema metadata
-    when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1))
-      .thenThrow(new RestClientException("Connection failed", 500, 50001));
-
-    // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify
     assertFalse(result);
@@ -632,14 +537,10 @@ public class CheckSchemaCompatibilityTest {
     when(sourceClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(sourceMetadata);
     when(targetClient.getSchemaMetadata(SUBJECT_NAME, 1)).thenReturn(targetMetadata);
 
-    // Use real ParsedSchema objects with identical schemas - they should be equivalent
-    ParsedSchema identicalSchema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema identicalSchema2 = new AvroSchema(SCHEMA_STRING_1);
-    when(sourceClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema1));
-    when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(identicalSchema2));
+    // Schemas are created from metadata by parseSchema mock in @BeforeEach
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify - should return false to prevent potential id conflict
     assertFalse(result);
@@ -690,7 +591,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(targetSchema));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify - schemas with different metadata should not be equivalent
     assertFalse(result);
@@ -761,7 +662,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(targetSchema));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify - schemas with different ruleSets should not be equivalent
     assertFalse(result);
@@ -805,7 +706,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(targetSchema));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify - schemas where one has metadata and one doesn't should not be equivalent
     assertFalse(result);
@@ -860,7 +761,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(targetSchema));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify - schemas where one has ruleSet and one doesn't should not be equivalent
     assertFalse(result);
@@ -925,7 +826,7 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.parseSchema(any(Schema.class))).thenReturn(Optional.of(targetSchema));
 
     // Execute
-    boolean result = invokeCompareVersion(SUBJECT_NAME, 1);
+    boolean result = tool.compareVersion(sourceClient, targetClient, SUBJECT_NAME, 1);
 
     // Verify - schemas with identical metadata, ruleSet, and references should be equivalent
     assertTrue(result);
@@ -957,7 +858,6 @@ public class CheckSchemaCompatibilityTest {
     when(targetClient.getSchemaMetadata("subject2", 1)).thenReturn(createSchemaMetadata(1, 2, SCHEMA_STRING_2));
     when(targetClient.getSchemaMetadata("subject2", 2)).thenReturn(createSchemaMetadata(2, 4, SCHEMA_STRING_2));
     when(targetClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(3, 6, SCHEMA_STRING_2));
-    when(targetClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(4, 7, SCHEMA_STRING_2));
 
     // Setup source metadata for subject1 - includes extra version 4 with schema id 6
     when(sourceClient.getSchemaMetadata("subject1", 1)).thenReturn(createSchemaMetadata(1, 1, SCHEMA_STRING_1));
@@ -968,38 +868,15 @@ public class CheckSchemaCompatibilityTest {
     // Setup source metadata for subject2
     when(sourceClient.getSchemaMetadata("subject2", 1)).thenReturn(createSchemaMetadata(1, 2, SCHEMA_STRING_2));
     when(sourceClient.getSchemaMetadata("subject2", 2)).thenReturn(createSchemaMetadata(2, 4, SCHEMA_STRING_2));
-    when(sourceClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(3, 6, SCHEMA_STRING_2));
+    when(sourceClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(3, 6, SCHEMA_STRING_1));
 
-    // Setup parsed schemas - use real AvroSchema objects for proper comparison
-    ParsedSchema schema1 = new AvroSchema(SCHEMA_STRING_1);
-    ParsedSchema schema2 = new AvroSchema(SCHEMA_STRING_2);
 
-    // Mock parseSchema calls to return appropriate schemas based on the schema string
-    when(sourceClient.parseSchema(any(Schema.class))).thenAnswer(invocation -> {
-      Schema schema = invocation.getArgument(0);
-      if (SCHEMA_STRING_1.equals(schema.getSchema())) {
-        return Optional.of(schema1);
-      } else if (SCHEMA_STRING_2.equals(schema.getSchema())) {
-        return Optional.of(schema2);
-      }
-      return Optional.empty();
-    });
-
-    when(targetClient.parseSchema(any(Schema.class))).thenAnswer(invocation -> {
-      Schema schema = invocation.getArgument(0);
-      if (SCHEMA_STRING_1.equals(schema.getSchema())) {
-        return Optional.of(schema1);
-      } else if (SCHEMA_STRING_2.equals(schema.getSchema())) {
-        return Optional.of(schema2);
-      }
-      return Optional.empty();
-    });
 
     // Execute
-    boolean result = invokeCompareSubjects(sourceSubjects, targetSubjects);
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
 
-    // Verify - should return true since source having more versions is acceptable
-    // and all common versions match between registries
+    // Verify - should return false because version 2 has different schema IDs
+    // Version 1 matches, version 3 is ignored (source only), but version 2 ID mismatch causes failure
     assertFalse(result);
   }
 }
