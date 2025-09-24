@@ -187,7 +187,8 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
 
   protected boolean compareSubjects(List<String> sourceSubjects, List<String> targetSubjects,
                                   SchemaRegistryClient sourceClient, 
-                                  SchemaRegistryClient targetClient) throws RestClientException, IOException {
+                                  SchemaRegistryClient targetClient)
+      throws RestClientException, IOException {
     Set<String> sourceSet = new HashSet<>(sourceSubjects);
     Set<String> targetSet = new HashSet<>(targetSubjects);
 

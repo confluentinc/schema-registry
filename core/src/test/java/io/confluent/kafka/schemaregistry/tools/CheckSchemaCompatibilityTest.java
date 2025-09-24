@@ -33,7 +33,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -63,6 +62,7 @@ public class CheckSchemaCompatibilityTest {
   private static final String SUBJECT_NAME = "test-subject";
   private static final String SCHEMA_STRING_1 = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}";
   private static final String SCHEMA_STRING_2 = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"name\",\"type\":\"string\"}]}";
+  private static final String SCHEMA_STRING_TEMPLATE = "{\"type\":\"record\",\"name\":\"%s\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"}]}";
 
   @BeforeEach
   void setUp() {
@@ -877,6 +877,48 @@ public class CheckSchemaCompatibilityTest {
 
     // Verify - should return false because version 2 has different schema IDs
     // Version 1 matches, version 3 is ignored (source only), but version 2 ID mismatch causes failure
+    assertFalse(result);
+  }
+
+
+  @Test
+  void testCompareSubjects_withMismatchId() throws Exception {
+    // Setup - both registries have subject1 and subject2
+    // Target: subject1 (v1-3, ids 1,3,5), subject2 (v1-3, ids 2,4,6)
+    // Source: subject1 (v1-4, ids 1,3,5,6), subject2 (v1-3, ids 2,4,6)
+    // Note: source subject1 v4 has schema id 6, which matches target subject2 v3
+    List<String> sourceSubjects = Arrays.asList("subject1", "subject2");
+    List<String> targetSubjects = Arrays.asList("subject1", "subject2");
+
+    // Setup target registry versions
+    when(targetClient.getAllVersions("subject1")).thenReturn(Arrays.asList(1, 2, 3));
+    when(targetClient.getAllVersions("subject2")).thenReturn(Arrays.asList(1, 2));
+
+    // Setup source registry versions - subject1 has an extra version 4
+    when(sourceClient.getAllVersions("subject1")).thenReturn(Arrays.asList(1, 2));
+    when(sourceClient.getAllVersions("subject2")).thenReturn(Arrays.asList(1, 2, 3));
+
+    // Setup target metadata for subject1
+    when(targetClient.getSchemaMetadata("subject1", 1)).thenReturn(createSchemaMetadata(1, 1, SCHEMA_STRING_1));
+    when(targetClient.getSchemaMetadata("subject1", 2)).thenReturn(createSchemaMetadata(2, 3, SCHEMA_STRING_1));
+    when(targetClient.getSchemaMetadata("subject1", 2)).thenReturn(createSchemaMetadata(3, 5, SCHEMA_STRING_1));
+
+    // Setup target metadata for subject2
+    when(targetClient.getSchemaMetadata("subject2", 1)).thenReturn(createSchemaMetadata(1, 2, SCHEMA_STRING_2));
+    when(targetClient.getSchemaMetadata("subject2", 2)).thenReturn(createSchemaMetadata(2, 4, SCHEMA_STRING_2));
+
+    // Setup source metadata for subject1 - includes extra version 4 with schema id 6
+    when(sourceClient.getSchemaMetadata("subject1", 1)).thenReturn(createSchemaMetadata(1, 1, SCHEMA_STRING_1));
+    when(sourceClient.getSchemaMetadata("subject1", 2)).thenReturn(createSchemaMetadata(2, 3, SCHEMA_STRING_1));
+
+    // Setup source metadata for subject2
+    when(sourceClient.getSchemaMetadata("subject2", 1)).thenReturn(createSchemaMetadata(1, 2, SCHEMA_STRING_2));
+    when(sourceClient.getSchemaMetadata("subject2", 2)).thenReturn(createSchemaMetadata(2, 4, SCHEMA_STRING_2));
+    when(sourceClient.getSchemaMetadata("subject2", 3)).thenReturn(createSchemaMetadata(3, 5, String.format(SCHEMA_STRING_TEMPLATE, "user5")));
+
+    // Execute
+    boolean result = tool.compareSubjects(sourceSubjects, targetSubjects, sourceClient, targetClient);
+
     assertFalse(result);
   }
 }
