@@ -58,7 +58,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
@@ -2838,7 +2837,7 @@ public class RestApiTest extends ClusterTestHarness {
   @Test
   public void testInvalidSchema() {
     assertThrows(InvalidSchemaException.class, () ->
-        ((KafkaSchemaRegistry) restApp.schemaRegistry()).parseSchema(null));
+        restApp.schemaRegistry().parseSchema(null));
   }
 
   @Test

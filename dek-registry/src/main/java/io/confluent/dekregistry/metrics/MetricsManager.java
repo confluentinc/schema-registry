@@ -18,7 +18,6 @@ package io.confluent.dekregistry.metrics;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import java.io.Closeable;
 import java.util.LinkedHashMap;
@@ -55,7 +54,7 @@ public class MetricsManager implements Closeable {
 
   @Inject
   public MetricsManager(SchemaRegistry schemaRegistry) {
-    this.metrics = ((KafkaSchemaRegistry) schemaRegistry).getMetricsContainer().getMetrics();
+    this.metrics = schemaRegistry.getMetricsContainer().getMetrics();
     // for testing
     schemaRegistry.properties().put(KEY, this);
   }
