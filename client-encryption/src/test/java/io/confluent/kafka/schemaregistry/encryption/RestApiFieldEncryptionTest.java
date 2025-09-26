@@ -45,7 +45,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -96,7 +95,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
 
