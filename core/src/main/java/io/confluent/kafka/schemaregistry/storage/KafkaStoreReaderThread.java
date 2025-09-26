@@ -119,6 +119,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
         throw new IllegalStateException("Failed to read checkpoints", e);
       }
       log.info("Successfully read checkpoints");
+
+      this.storeUpdateHandler.preBootstrap(checkpointFileCache);
     }
 
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, consumerProps);
