@@ -206,7 +206,6 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/subjects/{subject}")
   @POST
   @Operation(summary = "Create an association.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
@@ -221,21 +220,22 @@ public class AssociationsResource {
   public void createAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      @Parameter(description = "Subject")
-      @PathParam("subject") String subject,
+      // TODO
+      @Parameter(description = "Context")
+      @QueryParam("context") String context,
       // TODO
       @Parameter(description = "Dry run")
-      @PathParam("dryRun") boolean dryRUn,
+      @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create request", required = true)
       @NotNull AssociationCreateRequest request) {
 
-    log.debug("Creating association {}", subject);
+    log.debug("Creating association {}", request);
 
-    checkSubject(subject);
+    checkSubject(request.getSubject());
     checkName(request.getResourceName(), "resourceName");
     checkName(request.getResourceNamespace(), "resourceNamespace");
-    if (request.getResourceId() != null && !request.getResourceId().isEmpty()) {
-      checkName(request.getResourceId(), "resourceId");
+    if (request.getResourceId() == null || request.getResourceId().isEmpty()) {
+      throw Errors.invalidAssociation("resourceId", "cannot be null or empty");
     }
     if (request.getResourceType() != null && !request.getResourceType().isEmpty()) {
       checkName(request.getResourceType(), "resourceType");
@@ -256,7 +256,7 @@ public class AssociationsResource {
 
     try {
       Association association = schemaRegistry.createAssociationOrForward(
-          subject, request, headerProperties);
+          context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
     } catch (AssociationAlreadyExistsException e) {
       throw Errors.associationAlreadyExistsException(e.getMessage());
@@ -281,40 +281,51 @@ public class AssociationsResource {
   public void updateAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      @Parameter(description = "Resource name")
-      @PathParam("resourceName") String resourceName,
-      @Parameter(description = "Resource namespace")
-      @PathParam("resourceNamespace") String resourceNamespace,
-      @Parameter(description = "Resource type")
-      @QueryParam("resourceType") String resourceType,
-      @Parameter(description = "Association type")
-      @QueryParam("associationType") String associationType,
+      // TODO
+      @Parameter(description = "Context")
+      @QueryParam("context") String context,
       // TODO
       @Parameter(description = "Dry run")
-      @PathParam("dryRun") boolean dryRUn,
+      @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The update request", required = true)
       @NotNull AssociationUpdateRequest request) {
 
-    log.debug("Updating association {}", resourceName);
+    log.debug("Updating association {}", request);
 
-    if (resourceType == null || resourceType.isEmpty()) {
-      resourceType = DEFAULT_RESOURCE_TYPE;
+    if (request.getResourceName() != null && !request.getResourceName().isEmpty()) {
+      checkName(request.getResourceName(), "resourceName");
+      checkName(request.getResourceNamespace(), "resourceNamespace");
+    } else if (request.getResourceId() == null || request.getResourceId().isEmpty()) {
+      throw Errors.invalidAssociation("resourceId", "cannot be null or empty");
+    }
+    if (request.getResourceType() != null && !request.getResourceType().isEmpty()) {
+      checkName(request.getResourceType(), "resourceType");
+    } else {
+      request.setResourceType(DEFAULT_RESOURCE_TYPE);
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
-      List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
-          resourceName, resourceNamespace, resourceType,
-          Collections.singletonList(associationType), null);
-      if (oldAssociations.isEmpty()) {
-        throw Errors.associationNotFoundException(resourceName);
+      List<Association> oldAssociations;
+      if (request.getResourceName() != null && !request.getResourceName().isEmpty()) {
+        oldAssociations = schemaRegistry.getAssociationsByResourceName(
+            request.getResourceName(), request.getResourceNamespace(), request.getResourceType(),
+            Collections.singletonList(request.getAssociationType()), null);
+        if (oldAssociations.isEmpty()) {
+          throw Errors.associationNotFoundException(request.getResourceName());
+        }
+      } else {
+        oldAssociations = schemaRegistry.getAssociationsByResourceId(
+            request.getResourceId(), request.getResourceType(),
+            Collections.singletonList(request.getAssociationType()), null);
+        if (oldAssociations.isEmpty()) {
+          throw Errors.associationNotFoundException(request.getResourceId());
+        }
       }
 
-      String subject = oldAssociations.get(0).getSubject();
-      Association association = schemaRegistry.updateAssociationOrForward(subject,
-          resourceName, resourceNamespace, resourceType, associationType,
+      Association association = schemaRegistry.updateAssociationOrForward(context, dryRun,
           request, headerProperties);
       asyncResponse.resume(association);
     } catch (SchemaRegistryException e) {
@@ -323,7 +334,7 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/resources/{resourceNamespace}/{resourceName}")
+  @Path("/resources/{resourceId}")
   @DELETE
   @Operation(summary = "Delete associations.", responses = {
       @ApiResponse(responseCode = "200", description = "The delete response",
@@ -335,10 +346,7 @@ public class AssociationsResource {
   public void deleteAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      @Parameter(description = "Resource name")
-      @PathParam("resourceName") String resourceName,
-      @Parameter(description = "Resource namespace")
-      @PathParam("resourceNamespace") String resourceNamespace,
+      @PathParam("resourceId") String resourceId,
       @Parameter(description = "Resource type")
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
@@ -347,7 +355,7 @@ public class AssociationsResource {
       @Parameter(description = "Cascade lifecycle")
       @QueryParam("cascadeLifecycle") boolean cascadeLifecycle) {
 
-    log.debug("Deleting association {}", resourceName);
+    log.debug("Deleting association for resource {}", resourceId);
 
     if (resourceType == null || resourceType.isEmpty()) {
       resourceType = DEFAULT_RESOURCE_TYPE;
@@ -357,15 +365,15 @@ public class AssociationsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
-      List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceName(
-          resourceName, resourceNamespace, resourceType, associationTypes, null);
+      List<Association> oldAssociations = schemaRegistry.getAssociationsByResourceId(
+          resourceId, resourceType, associationTypes, null);
       if (oldAssociations.isEmpty()) {
-        throw Errors.associationNotFoundException(resourceName);
+        throw Errors.associationNotFoundException(resourceId);
       }
 
       String subject = oldAssociations.get(0).getSubject();
       schemaRegistry.deleteAssociationsOrForward(subject,
-          resourceName, resourceNamespace, resourceType, associationTypes,
+          resourceId, resourceType, associationTypes,
           headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {

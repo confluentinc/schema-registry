@@ -30,6 +30,7 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationCreateRequest {
 
+  private String subject;
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
@@ -42,6 +43,7 @@ public class AssociationCreateRequest {
 
   @JsonCreator
   public AssociationCreateRequest(
+      @JsonProperty("subject") String subject,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
@@ -49,6 +51,7 @@ public class AssociationCreateRequest {
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
       @JsonProperty("frozen") boolean frozen) {
+    this.subject = subject;
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
@@ -56,6 +59,16 @@ public class AssociationCreateRequest {
     this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
+  }
+
+  @JsonProperty("subject")
+  public String getSubject() {
+    return subject;
+  }
+
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
   }
 
   @JsonProperty("resourceName")
@@ -135,6 +148,7 @@ public class AssociationCreateRequest {
     }
     AssociationCreateRequest that = (AssociationCreateRequest) o;
     return frozen == that.frozen
+        && Objects.equals(subject, that.subject)
         && Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
@@ -146,7 +160,7 @@ public class AssociationCreateRequest {
   @Override
   public int hashCode() {
     return Objects.hash(
-        resourceName, resourceNamespace, resourceId,
+        subject, resourceName, resourceNamespace, resourceId,
         resourceType, associationType, lifecycle, frozen);
   }
 

@@ -1837,11 +1837,17 @@ public class RestService implements Closeable, Configurable {
 
   public Association createAssociation(
       Map<String, String> requestProperties,
-      String subject, AssociationCreateRequest request
+      String context, Boolean dryRun, AssociationCreateRequest request
   ) throws IOException,
       RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/associations/subjects/{subject}");
-    String path = builder.build(subject).toString();
+    UriBuilder builder = UriBuilder.fromPath("/associations");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
 
     Association response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
@@ -1851,18 +1857,17 @@ public class RestService implements Closeable, Configurable {
 
   public Association updateAssociation(
       Map<String, String> requestProperties,
-      String resourceName, String resourceNamespace,
-      String resourceType, String associationType,
-      AssociationUpdateRequest request
+      String context, Boolean dryRun, AssociationUpdateRequest request
   ) throws IOException,
       RestClientException {
-    UriBuilder builder =
-        UriBuilder.fromPath("/associations/resources/{resourceNamespace}/{resourceName");
-    if (resourceType != null) {
-      builder.queryParam("resourceType", resourceType);
+    UriBuilder builder = UriBuilder.fromPath("/associations");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
     }
-    builder.queryParam("associationType", associationType);
-    String path = builder.build(resourceNamespace, resourceName).toString();
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
 
     Association response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
@@ -1872,19 +1877,18 @@ public class RestService implements Closeable, Configurable {
 
   public void deleteAssociations(
       Map<String, String> requestProperties,
-      String resourceName, String resourceNamespace, String resourceType,
-      List<String> associationTypes
+      String resourceId, String resourceType, List<String> associationTypes
   ) throws IOException,
       RestClientException {
     UriBuilder builder =
-        UriBuilder.fromPath("/associations/resources/{resourceNamespace}/{resourceName");
+        UriBuilder.fromPath("/associations/resources/{resourceId}");
     if (resourceType != null) {
       builder.queryParam("resourceType", resourceType);
     }
     for (String associationType : associationTypes) {
       builder.queryParam("associationType", associationType);
     }
-    String path = builder.build(resourceNamespace, resourceName).toString();
+    String path = builder.build(resourceId).toString();
 
     httpRequest(path, "DELETE", null,
         requestProperties, VOID_RESPONSE_TYPE);

@@ -30,15 +30,75 @@ import java.util.Optional;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationUpdateRequest {
 
+  private String resourceName;
+  private String resourceNamespace;
+  private String resourceId;
+  private String resourceType;
+  private String associationType;
   private Optional<LifecyclePolicy> lifecycle;
   private Optional<Boolean> frozen;
 
   @JsonCreator
   public AssociationUpdateRequest(
+      @JsonProperty("resourceName") String resourceName,
+      @JsonProperty("resourceNamespace") String resourceNamespace,
+      @JsonProperty("resourceId") String resourceId,
+      @JsonProperty("resourceType") String resourceType,
+      @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") Optional<LifecyclePolicy> lifecycle,
       @JsonProperty("frozen") Optional<Boolean> frozen) {
     this.lifecycle = lifecycle;
     this.frozen = frozen;
+  }
+
+  @JsonProperty("resourceName")
+  public String getResourceName() {
+    return resourceName;
+  }
+
+  @JsonProperty("resourceName")
+  public void setResourceName(String resourceName) {
+    this.resourceName = resourceName;
+  }
+
+  @JsonProperty("resourceNamespace")
+  public String getResourceNamespace() {
+    return resourceNamespace;
+  }
+
+  @JsonProperty("resourceNamespace")
+  public void setResourceNamespace(String resourceNamespace) {
+    this.resourceNamespace = resourceNamespace;
+  }
+
+  @JsonProperty("resourceId")
+  public String getResourceId() {
+    return resourceId;
+  }
+
+  @JsonProperty("resourceId")
+  public void setResourceId(String resourceId) {
+    this.resourceId = resourceId;
+  }
+
+  @JsonProperty("resourceType")
+  public String getResourceType() {
+    return resourceType;
+  }
+
+  @JsonProperty("resourceType")
+  public void setResourceType(String resourceType) {
+    this.resourceType = resourceType;
+  }
+
+  @JsonProperty("associationType")
+  public String getAssociationType() {
+    return associationType;
+  }
+
+  @JsonProperty("associationType")
+  public void setAssociationType(String associationType) {
+    this.associationType = associationType;
   }
 
   @JsonProperty("lifecycle")
@@ -68,12 +128,19 @@ public class AssociationUpdateRequest {
     }
     AssociationUpdateRequest that = (AssociationUpdateRequest) o;
     return Objects.equals(frozen, that.frozen)
+        && Objects.equals(resourceName, that.resourceName)
+        && Objects.equals(resourceNamespace, that.resourceNamespace)
+        && Objects.equals(resourceId, that.resourceId)
+        && Objects.equals(resourceType, that.resourceType)
+        && Objects.equals(associationType, that.associationType)
         && Objects.equals(lifecycle, that.lifecycle);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(lifecycle, frozen);
+    return Objects.hash(
+        resourceName, resourceNamespace, resourceId,
+        resourceType, associationType, lifecycle, frozen);
   }
 
   public String toJson() throws IOException {
