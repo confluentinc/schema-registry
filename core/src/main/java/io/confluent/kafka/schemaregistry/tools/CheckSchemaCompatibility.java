@@ -57,7 +57,13 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
   @Option(names = {"--config", "-c"},
       description = "Path to configuration file containing both source and target Schema Registry "
                  + "connection details. Use prefixed properties like 'source.schema.registry.url' "
-                 + "and 'target.schema.registry.url'.", 
+                 + "and 'target.schema.registry.url'.\n"
+                  + "example config file: \nsource.schema.registry.url=<sr-url>\n" +
+                  "source.context=:.custom_context\n" +
+                  "source.credential=apikey:secret\n" +
+                  "target.schema.registry.url=<sr-url>\n" +
+                  "target.context=:.custom_context\n" +
+                  "target.credential=apikey:secret",
       paramLabel = "<file>", required = true)
   private String configFile;
 
@@ -68,8 +74,8 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
   // Configuration values loaded from configuration file
   private String sourceUrl;
   private String targetUrl;
-  private String sourceContext = "default";
-  private String targetContext = "default";
+  private String sourceContext = ":.:";
+  private String targetContext = ":.:";
   private String sourceCredential;
   private String targetCredential;
 
@@ -115,11 +121,11 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
     
     // Load configurations using prefixed property names
     sourceUrl = getRequiredProperty(allProps, "source.schema.registry.url", "configuration file");
-    sourceContext = allProps.getProperty("source.context", "default");
+    sourceContext = allProps.getProperty("source.context", ":.:");
     sourceCredential = allProps.getProperty("source.credential");
     
     targetUrl = getRequiredProperty(allProps, "target.schema.registry.url", "configuration file");
-    targetContext = allProps.getProperty("target.context", "default");
+    targetContext = allProps.getProperty("target.context", ":.:");
     targetCredential = allProps.getProperty("target.credential");
     
     LOG.info("Source configuration loaded - URL: {}, Context: {}, Has credentials: {}", 
