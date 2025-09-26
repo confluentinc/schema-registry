@@ -1303,7 +1303,8 @@ public class ProtobufConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForValue() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new ProtobufSchemaProvider()));
     ProtobufConverter protobufConverter = new ProtobufConverter(schemaRegistry);
     protobufConverter.configure(SR_CONFIG, false);
     assertSameSchemaMultipleTopic(protobufConverter, schemaRegistry, false);
@@ -1311,7 +1312,8 @@ public class ProtobufConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForKey() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new ProtobufSchemaProvider()));
     ProtobufConverter protobufConverter = new ProtobufConverter(schemaRegistry);
     protobufConverter.configure(SR_CONFIG, true);
     assertSameSchemaMultipleTopic(protobufConverter, schemaRegistry, true);
@@ -1342,7 +1344,8 @@ public class ProtobufConverterTest {
         .version(1)
         .build();
     final ProtobufConverter protobufConverter =
-        new ProtobufConverter(new MockSchemaRegistryClient());
+        new ProtobufConverter(new MockSchemaRegistryClient(
+            ImmutableList.of(new ProtobufSchemaProvider())));
     protobufConverter.configure(Collections.singletonMap(
         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "localhost"

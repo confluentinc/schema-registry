@@ -18,7 +18,9 @@ package io.confluent.connect.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.SocketException;
@@ -71,7 +73,7 @@ public class JsonSchemaConverterTest {
   private final JsonSchemaConverter converter;
 
   public JsonSchemaConverterTest() {
-    schemaRegistry = new MockSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(new JsonSchemaProvider()));
     converter = new JsonSchemaConverter(schemaRegistry);
   }
 
@@ -290,7 +292,8 @@ public class JsonSchemaConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForValue() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     JsonSchemaConverter jsonConverter = new JsonSchemaConverter(schemaRegistry);
     jsonConverter.configure(SR_CONFIG, false);
     assertSameSchemaMultipleTopic(jsonConverter, schemaRegistry, false);
@@ -298,7 +301,8 @@ public class JsonSchemaConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForKey() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     JsonSchemaConverter jsonConverter = new JsonSchemaConverter(schemaRegistry);
     jsonConverter.configure(SR_CONFIG, true);
     assertSameSchemaMultipleTopic(jsonConverter, schemaRegistry, true);
@@ -312,7 +316,8 @@ public class JsonSchemaConverterTest {
             .build()
     ).name("biz.baz").version(1).build();
     final JsonSchemaConverter jsonConverter =
-        new JsonSchemaConverter(new MockSchemaRegistryClient());
+        new JsonSchemaConverter(new MockSchemaRegistryClient(
+            ImmutableList.of(new JsonSchemaProvider())));
     jsonConverter.configure(Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "localhost"
     ), false);
