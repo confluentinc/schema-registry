@@ -17,7 +17,9 @@
 package io.confluent.kafka.formatter.protobuf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import java.io.InputStream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -71,7 +73,8 @@ public class KafkaProtobufFormatterTest {
     String snakeCaseSchema = "syntax = \"proto3\"; message Foo { string first_field = 1;"
             + "string second_field = 2; }";
     this.snakeCaseSchema = new ProtobufSchema(snakeCaseSchema);
-    schemaRegistry = MockSchemaRegistry.getClientForScope("test");
+    schemaRegistry = MockSchemaRegistry.getClientForScope("test",
+        ImmutableList.of(new ProtobufSchemaProvider()));
     formatter = new ProtobufMessageFormatter(url, null);
   }
 

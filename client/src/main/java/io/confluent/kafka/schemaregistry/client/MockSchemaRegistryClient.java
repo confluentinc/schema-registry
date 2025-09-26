@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.client;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
@@ -30,6 +33,7 @@ import java.util.LinkedHashSet;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,10 +68,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final Logger log = LoggerFactory.getLogger(MockSchemaRegistryClient.class);
 
+  private static final int DEFAULT_CAPACITY = 1000;
   private static final String WILDCARD = "*";
 
   private Config defaultConfig = new Config("BACKWARD");
-  private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
+  private final Map<String, Map<ParsedSchema, RegisterSchemaResponse>> schemaToResponseCache;
   private final Map<String, Map<ParsedSchema, Integer>> registeredSchemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
   private final Map<String, ParsedSchema> guidToSchemaCache;
@@ -75,6 +80,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Config> configCache;
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
+  private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers;
 
   private static final String NO_SUBJECT = "";
@@ -84,7 +90,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public MockSchemaRegistryClient(List<SchemaProvider> providers) {
-    schemaToIdCache = new ConcurrentHashMap<>();
+    schemaToResponseCache = new ConcurrentHashMap<>();
     registeredSchemaCache = new ConcurrentHashMap<>();
     idToSchemaCache = new ConcurrentHashMap<>();
     guidToSchemaCache = new ConcurrentHashMap<>();
@@ -101,6 +107,28 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     for (SchemaProvider provider : this.providers.values()) {
       provider.configure(schemaProviderConfigs);
     }
+
+    final Map<String, SchemaProvider> schemaProviders = this.providers;
+    this.parsedSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CAPACITY)
+        .build(new CacheLoader<Schema, ParsedSchema>() {
+          @Override
+          public ParsedSchema load(Schema schema) throws Exception {
+            String schemaType = schema.getSchemaType();
+            if (schemaType == null) {
+              schemaType = AvroSchema.TYPE;
+            }
+            SchemaProvider schemaProvider = schemaProviders.get(schemaType);
+            if (schemaProvider == null) {
+              log.error("Invalid schema type {}", schemaType);
+              throw new IllegalStateException("Invalid schema type " + schemaType);
+            }
+            return schemaProvider.parseSchema(schema, false, false).orElseThrow(
+                () -> new IOException("Invalid schema " + schema.getSchema()
+                    + " with refs " + schema.getReferences()
+                    + " of type " + schema.getSchemaType()));
+          }
+        });
   }
 
   @Override
@@ -108,29 +136,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String schemaType,
       String schemaString,
       List<SchemaReference> references) {
-    if (schemaType == null) {
-      schemaType = AvroSchema.TYPE;
-    }
-    SchemaProvider schemaProvider = providers.get(schemaType);
-    if (schemaProvider == null) {
-      log.error("No provider found for schema type {}", schemaType);
-      return Optional.empty();
-    }
-    return schemaProvider.parseSchema(schemaString, references);
+    return parseSchema(new Schema(null, null, null, schemaType, references, schemaString));
   }
 
   @Override
   public Optional<ParsedSchema> parseSchema(Schema schema) {
-    String schemaType = schema.getSchemaType();
-    if (schemaType == null) {
-      schemaType = AvroSchema.TYPE;
-    }
-    SchemaProvider schemaProvider = providers.get(schemaType);
-    if (schemaProvider == null) {
-      log.error("Invalid schema type {}", schemaType);
+    try {
+      return Optional.of(parsedSchemaCache.get(schema));
+    } catch (ExecutionException e) {
       return Optional.empty();
     }
-    return schemaProvider.parseSchema(schema, false, false);
   }
 
   private int getIdFromRegistry(
@@ -248,29 +263,30 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (normalize) {
       schema = schema.normalize();
     }
-    Map<ParsedSchema, Integer> schemaIdMap =
-        schemaToIdCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    Map<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
+        schemaToResponseCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
-    Integer schemaId = schemaIdMap.get(schema);
-    if (schemaId != null && (id < 0 || id == schemaId)) {
-      return new RegisterSchemaResponse(new Schema(subject, version, schemaId, schema));
+    RegisterSchemaResponse schemaResponse = schemaResponseMap.get(schema);
+    if (schemaResponse != null && (id < 0 || id == schemaResponse.getId())) {
+      return schemaResponse;
     }
 
     synchronized (this) {
-      schemaId = schemaIdMap.get(schema);
-      if (schemaId != null && (id < 0 || id == schemaId)) {
-        return new RegisterSchemaResponse(new Schema(subject, version, schemaId, schema));
+      schemaResponse = schemaResponseMap.get(schema);
+      if (schemaResponse != null && (id < 0 || id == schemaResponse.getId())) {
+        return schemaResponse;
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
-      schemaIdMap.put(schema, retrievedId);
+      Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
+      schemaResponse = new RegisterSchemaResponse(schemaEntity);
+      schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
       guidToSchemaCache.put(schemaEntity.getGuid(), schema);
-      return new RegisterSchemaResponse(schemaEntity);
+      return schemaResponse;
     }
   }
 
@@ -584,30 +600,29 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (normalize) {
       schema = schema.normalize();
     }
-    Map<ParsedSchema, Integer> schemaIdMap =
-        schemaToIdCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    Map<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
+        schemaToResponseCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
-    Integer schemaId = schemaIdMap.get(schema);
-    if (schemaId != null) {
-      Schema schemaEntity = new Schema(subject, null, schemaId, schema);
-      return new RegisterSchemaResponse(schemaEntity);
+    RegisterSchemaResponse schemaResponse = schemaResponseMap.get(schema);
+    if (schemaResponse != null) {
+      return schemaResponse;
     }
 
     synchronized (this) {
-      schemaId = schemaIdMap.get(schema);
-      if (schemaId != null) {
-        Schema schemaEntity = new Schema(subject, null, schemaId, schema);
-        return new RegisterSchemaResponse(schemaEntity);
+      schemaResponse = schemaResponseMap.get(schema);
+      if (schemaResponse != null) {
+        return schemaResponse;
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
-      schemaIdMap.put(schema, retrievedId);
+      Schema schemaEntity = new Schema(subject, null, retrievedId, schema);
+      schemaResponse = new RegisterSchemaResponse(schemaEntity);
+      schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      Schema schemaEntity = new Schema(subject, null, retrievedId, schema);
-      return new RegisterSchemaResponse(schemaEntity);
+      return schemaResponse;
     }
   }
 
@@ -623,7 +638,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String subject,
       boolean isPermanent)
       throws IOException, RestClientException {
-    schemaToIdCache.remove(subject);
+    schemaToResponseCache.remove(subject);
     idToSchemaCache.remove(subject);
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.remove(subject);
     configCache.remove(subject);
@@ -653,7 +668,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
           if (isPermanent) {
             idToSchemaCache.get(subject).remove(entry.getValue());
-            schemaToIdCache.get(subject).remove(entry.getKey());
+            schemaToResponseCache.get(subject).remove(entry.getKey());
           }
           return Integer.valueOf(version);
         }
@@ -746,7 +761,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Collection<String> getAllContexts() throws IOException, RestClientException {
-    List<String> results = new ArrayList<>(schemaToIdCache.keySet()).stream()
+    List<String> results = new ArrayList<>(schemaToResponseCache.keySet()).stream()
         .map(s -> QualifiedSubject.create(DEFAULT_TENANT, s).getContext())
         .sorted()
         .distinct()
@@ -763,7 +778,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
-    List<String> results = new ArrayList<>(schemaToIdCache.keySet());
+    List<String> results = new ArrayList<>(schemaToResponseCache.keySet());
     Collections.sort(results);
     return results;
   }
@@ -778,7 +793,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public synchronized void reset() {
-    schemaToIdCache.clear();
+    schemaToResponseCache.clear();
     registeredSchemaCache.clear();
     idToSchemaCache.clear();
     guidToSchemaCache.clear();

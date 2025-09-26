@@ -16,10 +16,12 @@
 
 package io.confluent.kafka.streams.serde.protobuf;
 
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -102,7 +104,8 @@ public class KafkaProtobufSerdeTest {
   }
 
   private static KafkaProtobufSerde<Message> createConfiguredSerdeForRecordValues() {
-    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient(
+        ImmutableList.of(new ProtobufSchemaProvider()));
     KafkaProtobufSerde<Message> serde = new KafkaProtobufSerde<>(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
