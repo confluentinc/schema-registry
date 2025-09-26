@@ -54,17 +54,21 @@ public class CheckSchemaCompatibility implements Callable<Integer> {
   private static final Logger LOG = LoggerFactory.getLogger(CheckSchemaCompatibility.class);
   private static final String SCHEMA_REGISTRY_URL_CONFIG = "schema.registry.url";
 
-  @Option(names = {"--config", "-c"},
+  @Option(
+      names = {"--config", "-c"},
       description = "Path to configuration file containing both source and target Schema Registry "
-                 + "connection details. Use prefixed properties like 'source.schema.registry.url' "
-                 + "and 'target.schema.registry.url'.\n"
-                  + "example config file: \nsource.schema.registry.url=<sr-url>\n" +
-                  "source.context=:.custom_context\n" +
-                  "source.credential=apikey:secret\n" +
-                  "target.schema.registry.url=<sr-url>\n" +
-                  "target.context=:.custom_context\n" +
-                  "target.credential=apikey:secret",
-      paramLabel = "<file>", required = true)
+        + "connection details. Use prefixed properties like 'source.schema.registry.url' "
+        + "and 'target.schema.registry.url'.\n"
+        + "Example config file:\n"
+        + "source.schema.registry.url=<sr-url>\n"
+        + "source.context=:.custom_context\n"
+        + "source.credential=apikey:secret\n"
+        + "target.schema.registry.url=<sr-url>\n"
+        + "target.context=:.custom_context\n"
+        + "target.credential=apikey:secret",
+      paramLabel = "<file>",
+      required = true
+  )
   private String configFile;
 
   @Option(names = {"--verbose", "-v"},
