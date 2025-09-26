@@ -84,8 +84,7 @@ public class SerdeBenchmark {
     Object row;
     byte[] bytes;
 
-    //@Param({"AVRO", "JSON", "PROTOBUF"})
-    @Param({"AVRO"})
+    @Param({"AVRO", "JSON", "PROTOBUF"})
     public String serializationFormat;
 
     @Setup(Level.Iteration)
@@ -171,14 +170,11 @@ public class SerdeBenchmark {
     return serdeState.serializer.serialize(TOPIC_NAME, serdeState.row);
   }
 
-  /*
   @SuppressWarnings("MethodMayBeStatic") // Tests can not be static
   @Benchmark
   public Object deserialize(final SerdeState serdeState) {
     return serdeState.deserializer.deserialize(TOPIC_NAME, serdeState.bytes);
   }
-
-   */
 
   public static void main(final String[] args) throws Exception {
 
