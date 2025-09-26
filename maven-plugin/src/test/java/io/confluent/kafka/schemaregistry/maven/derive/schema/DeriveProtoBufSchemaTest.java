@@ -19,11 +19,13 @@ package io.confluent.kafka.schemaregistry.maven.derive.schema;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
@@ -45,7 +47,8 @@ public class DeriveProtoBufSchemaTest extends DeriveSchemaTest {
     derive = new DeriveProtobufSchema();
     Properties serializerConfig = new Properties();
     serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new ProtobufSchemaProvider()));
     protobufSerializer = new KafkaProtobufSerializer<DynamicMessage>(schemaRegistry, new HashMap(serializerConfig));
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry);
   }
