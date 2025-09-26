@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.rest;
 import java.io.IOException;
 import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Configurable;
@@ -79,7 +78,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
   @Test
   public void testExtensionAddedHandler() throws Exception {
-    KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    SchemaRegistry kafkaSchemaRegistry = restApp.schemaRegistry();
     Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 1);
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -141,7 +140,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
             SchemaRegistryConfig schemaRegistryConfig,
             SchemaRegistry schemaRegistry
     ) {
-      KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      SchemaRegistry kafkaSchemaRegistry = schemaRegistry;
       kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper() {
         @Override
         public boolean handle(Request request, org.eclipse.jetty.server.Response response, Callback callback) throws Exception {

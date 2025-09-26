@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestOperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.StoreUtils;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.exceptions.RestNotFoundException;
@@ -50,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class LocalSchemaRegistryClientTest extends ClusterTestHarness {
 
-    private KafkaSchemaRegistry schemaRegistry;
+    private SchemaRegistry schemaRegistry;
     private LocalSchemaRegistryClient client;
     private Metadata metadata = new Metadata(null, new HashMap<String, String>(){{put("key1", "value1");}}, null);
     private AvroSchema schema1 = new AvroSchema("{\"type\":\"record\",\"name\":\"myrecord1\", \"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}", Collections.emptyList(),  new HashMap<String, String>(), metadata, null, 2, true);

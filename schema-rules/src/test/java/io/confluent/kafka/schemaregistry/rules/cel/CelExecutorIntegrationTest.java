@@ -35,7 +35,6 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.Customer;
 import io.confluent.kafka.schemaregistry.rules.ResourceLoader;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
@@ -88,7 +87,7 @@ public class CelExecutorIntegrationTest extends ClusterTestHarness {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
 

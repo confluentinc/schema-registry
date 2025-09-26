@@ -23,19 +23,20 @@ import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import org.junit.jupiter.api.Test;
 
 public class RestApiMetadataEncoderTest extends ClusterTestHarness {
@@ -102,8 +103,8 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     );
 
     // Remove encoder
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).getMetadataEncoder().getEncoders()
-        .remove(KafkaSchemaRegistry.DEFAULT_TENANT);
+    restApp.schemaRegistry().getMetadataEncoder().getEncoders()
+        .remove(SchemaRegistry.DEFAULT_TENANT);
 
     assertThrows(
         RestClientException.class,

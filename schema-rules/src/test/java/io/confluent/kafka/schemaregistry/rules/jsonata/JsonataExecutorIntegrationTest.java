@@ -54,7 +54,6 @@ import io.confluent.kafka.schemaregistry.rules.SpecificWidgetProto;
 import io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest.NewWidget;
 import io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest.NewerWidget;
 import io.confluent.kafka.schemaregistry.rules.jsonata.JsonataExecutorTest.OldWidget;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
@@ -114,7 +113,7 @@ public class JsonataExecutorIntegrationTest extends ClusterTestHarness {
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
 

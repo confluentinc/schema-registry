@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.rest.resources.ServerMetadataResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
@@ -55,7 +56,7 @@ import java.util.Properties;
 public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
-  private KafkaSchemaRegistry schemaRegistry = null;
+  private SchemaRegistry schemaRegistry = null;
 
   public SchemaRegistryRestApplication(Properties props) throws RestConfigException {
     this(new SchemaRegistryConfig(props));
@@ -87,8 +88,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
 
-  protected KafkaSchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
-    KafkaSchemaRegistry kafkaSchemaRegistry = null;
+  protected SchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
+    SchemaRegistry kafkaSchemaRegistry = null;
     try {
       kafkaSchemaRegistry = new KafkaSchemaRegistry(
           config,
@@ -232,7 +233,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   }
 
   // for testing purpose only
-  public KafkaSchemaRegistry schemaRegistry() {
+  public SchemaRegistry schemaRegistry() {
     return schemaRegistry;
   }
 }

@@ -53,13 +53,14 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
-import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
-import io.confluent.kafka.schemaregistry.utils.Props;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.Props;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -81,15 +82,15 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final Logger log = LoggerFactory.getLogger(LocalSchemaRegistryClient.class);
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final Map<String, SchemaProvider> providers;
 
-  public LocalSchemaRegistryClient(KafkaSchemaRegistry schemaRegistry) {
+  public LocalSchemaRegistryClient(SchemaRegistry schemaRegistry) {
     this(schemaRegistry, null);
   }
 
   public LocalSchemaRegistryClient(
-      KafkaSchemaRegistry schemaRegistry, List<SchemaProvider> providers) {
+      SchemaRegistry schemaRegistry, List<SchemaProvider> providers) {
     this.schemaRegistry = schemaRegistry;
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))

@@ -17,12 +17,13 @@ package io.confluent.kafka.schemaregistry.rest.filters;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import jakarta.annotation.Priority;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
@@ -33,9 +34,10 @@ import jakarta.ws.rs.core.UriBuilder;
 @PreMatching
 @Priority(Priorities.USER + 100) // ensure runs after ContextFilter and MultiTenantSubjectFilter
 public class AliasFilter implements ContainerRequestFilter {
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
-  public AliasFilter(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public AliasFilter(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 

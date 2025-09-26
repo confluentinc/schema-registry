@@ -21,8 +21,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +34,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
@@ -65,10 +66,11 @@ public class ContextsResource {
 
   public static final String apiTag = "Contexts (v1)";
   private static final Logger log = LoggerFactory.getLogger(ContextsResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public ContextsResource(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public ContextsResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
