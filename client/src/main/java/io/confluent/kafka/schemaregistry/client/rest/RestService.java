@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
@@ -190,8 +191,8 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
       };
-  private static final TypeReference<Association> ASSOCIATION_RESPONSE_TYPE =
-      new TypeReference<Association>() {
+  private static final TypeReference<AssociationResponse> ASSOCIATION_RESPONSE_TYPE =
+      new TypeReference<AssociationResponse>() {
       };
   private static final TypeReference<List<Association>> ASSOCIATIONS_RESPONSE_TYPE =
       new TypeReference<List<Association>>() {
@@ -1835,7 +1836,7 @@ public class RestService implements Closeable, Configurable {
     httpRequest(path, "DELETE", null, requestProperties, VOID_RESPONSE_TYPE);
   }
 
-  public Association createAssociation(
+  public AssociationResponse createAssociation(
       Map<String, String> requestProperties,
       String context, Boolean dryRun, AssociationCreateRequest request
   ) throws IOException,
@@ -1849,13 +1850,13 @@ public class RestService implements Closeable, Configurable {
       builder.queryParam("dryRun", dryRun);
     }
 
-    Association response = httpRequest(path, "POST",
+    AssociationResponse response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
         requestProperties, ASSOCIATION_RESPONSE_TYPE);
     return response;
   }
 
-  public Association updateAssociation(
+  public AssociationResponse updateAssociation(
       Map<String, String> requestProperties,
       String context, Boolean dryRun, AssociationUpdateRequest request
   ) throws IOException,
@@ -1869,7 +1870,7 @@ public class RestService implements Closeable, Configurable {
       builder.queryParam("dryRun", dryRun);
     }
 
-    Association response = httpRequest(path, "POST",
+    AssociationResponse response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
         requestProperties, ASSOCIATION_RESPONSE_TYPE);
     return response;

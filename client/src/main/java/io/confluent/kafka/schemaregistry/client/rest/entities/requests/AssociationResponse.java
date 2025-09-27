@@ -27,21 +27,21 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AssociationCreateRequest {
+public class AssociationResponse {
 
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
   private String resourceType;
-  private List<AssociationCreateInfo> associations;
+  private List<AssociationInfo> associations;
 
   @JsonCreator
-  public AssociationCreateRequest(
+  public AssociationResponse(
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
       @JsonProperty("resourceType") String resourceType,
-      @JsonProperty("associations") List<AssociationCreateInfo> associations) {
+      @JsonProperty("associations") List<AssociationInfo> associations) {
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
@@ -90,12 +90,12 @@ public class AssociationCreateRequest {
   }
 
   @JsonProperty("associations")
-  public List<AssociationCreateInfo> getAssociations() {
+  public List<AssociationInfo> getAssociations() {
     return associations;
   }
 
   @JsonProperty("associations")
-  public void setAssociations(List<AssociationCreateInfo> associations) {
+  public void setAssociations(List<AssociationInfo> associations) {
     this.associations = associations;
   }
 
@@ -104,7 +104,7 @@ public class AssociationCreateRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    AssociationCreateRequest that = (AssociationCreateRequest) o;
+    AssociationResponse that = (AssociationResponse) o;
     return Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)

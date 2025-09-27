@@ -48,6 +48,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -106,10 +109,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -1490,19 +1491,21 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public Association createAssociation(
-      String context, boolean dryRun, AssociationCreateRequest association)
+  public AssociationResponse createAssociation(
+      String context, boolean dryRun, AssociationCreateRequest request)
       throws SchemaRegistryException {
-    String subject = association.getSubject();
-    if (context != null && !context.isEmpty() && !subject.startsWith(CONTEXT_PREFIX)) {
-      subject = QualifiedSubject.normalizeContext(context) + subject;
-    }
-    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
-    subject = qs.toQualifiedSubject();
-    if (isReadOnlyMode(subject)) {
-      String qualifiedContext = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " in context "
-          + qualifiedContext + " is in read-only mode");
+    for (AssociationCreateInfo info : request.getAssociations()) {
+      String subject = info.getSubject();
+      if (context != null && !context.isEmpty() && !subject.startsWith(CONTEXT_PREFIX)) {
+        subject = QualifiedSubject.normalizeContext(context) + subject;
+      }
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      subject = qs.toQualifiedSubject();
+      if (isReadOnlyMode(subject)) {
+        String qualifiedContext = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+            + qualifiedContext + " is in read-only mode");
+      }
     }
 
     // TODO RAY
@@ -1511,34 +1514,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     // If this association is strong, check no other associations exist
     // If this association is weak, check no strong associations exist
 
-    String resourceName = association.getResourceName();
-    String resourceNamespace = association.getResourceNamespace();
-    String resourceId = association.getResourceId();
-    String resourceType = association.getResourceType();
-    String associationType = association.getAssociationType();
-    LifecyclePolicy lifecyclePolicy = association.getLifecycle();
-    Lifecycle lifecycle = lifecyclePolicy == LifecyclePolicy.STRONG
-        ? Lifecycle.STRONG
-        : Lifecycle.WEAK;
-    String guid = UUID.randomUUID().toString();
-    boolean frozen = association.isFrozen();
-    AssociationValue associationValue =
-        new AssociationValue(subject, guid, tenant(), resourceName, resourceNamespace, resourceId,
-            resourceType, associationType, lifecycle, frozen);
-    AssociationKey associationKey = associationValue.toKey();
+    List<AssociationValue> associationValues =
+        AssociationValue.fromAssociationCreateRequest(tenant(), request);
     try {
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      kafkaStore.put(associationKey, associationValue);
-      log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
-          associationValue, associationKey);
-      return associationValue.toAssociationEntity();
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(context, kafkaStoreTimeoutMs);
+      for (AssociationValue associationValue : associationValues) {
+        AssociationKey associationKey = associationValue.toKey();
+        kafkaStore.put(associationKey, associationValue);
+        log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
+            associationValue, associationKey);
+      }
+      return AssociationValue.toAssociationResponse(associationValues);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new association value to the store",
           e);
     }
   }
 
-  public Association createAssociationOrForward(String context, boolean dryRun,
+  public AssociationResponse createAssociationOrForward(String context, boolean dryRun,
       AssociationCreateRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
@@ -1560,62 +1553,61 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  public Association updateAssociation(
+  public AssociationResponse updateAssociation(
       String context, boolean dryRun, AssociationUpdateRequest request)
       throws SchemaRegistryException {
     // TODO RAY
     // Check that the association is not frozen
     // If the new association is strong, check no other associations exist
 
+    List<String> associationTypes = request.getAssociations().stream()
+        .map(AssociationUpdateInfo::getAssociationType)
+        .collect(Collectors.toList());
     List<Association> associations;
     if (request.getResourceName() != null && !request.getResourceName().isEmpty()) {
       associations = getAssociationsByResourceName(
           request.getResourceName(), request.getResourceNamespace(), request.getResourceType(),
-          Collections.singletonList(request.getAssociationType()), null);
+          associationTypes, null);
     } else {
       associations = getAssociationsByResourceId(
           request.getResourceId(), request.getResourceType(),
-          Collections.singletonList(request.getAssociationType()), null);
+          associationTypes, null);
     }
-    if (associations.isEmpty()) {
-      // TODO RAY fix error
-      throw new IllegalArgumentException("No existing associations found for " + request);
+    Set<String> oldAssociationTypes = associations.stream()
+        .map(Association::getAssociationType)
+        .collect(Collectors.toSet());
+    for (String associationType : associationTypes) {
+      if (!oldAssociationTypes.contains(associationType)) {
+        throw new IllegalArgumentException("No existing association found for " + associationType);
+      }
     }
-    Association oldValue = associations.get(0);
-    String subject = oldValue.getSubject();
+    for (Association association : associations) {
+      String subject = association.getSubject();
+      if (isReadOnlyMode(subject)) {
+        String qualifiedContext = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+        throw new OperationNotPermittedException("Subject " + subject + " in context "
+            + qualifiedContext + " is in read-only mode");
+      }
+    }
 
-    if (isReadOnlyMode(subject)) {
-      String qualifiedContext = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " in context "
-          + qualifiedContext + " is in read-only mode");
-    }
-
-    Optional<LifecyclePolicy> optLifecyclePolicy = request.getLifecycle();
-    LifecyclePolicy lifecycle = optLifecyclePolicy.isPresent()
-        ? optLifecyclePolicy.get()
-        : oldValue.getLifecycle();
-    Optional<Boolean> optFrozen = request.getFrozen();
-    boolean frozen = optFrozen.isPresent() ? optFrozen.get() : oldValue.isFrozen();
-    AssociationValue associationValue =
-        new AssociationValue(subject, oldValue.getGuid(), tenant(),
-            oldValue.getResourceName(), oldValue.getResourceNamespace(),
-            oldValue.getResourceId(), oldValue.getResourceType(), oldValue.getAssociationType(),
-            lifecycle == LifecyclePolicy.STRONG ? Lifecycle.STRONG : Lifecycle.WEAK,
-            frozen);
-    AssociationKey associationKey = associationValue.toKey();
+    List<AssociationValue> associationValues =
+        AssociationValue.fromAssociationUpdateRequest(tenant(), request, associations);
     try {
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
-      kafkaStore.put(associationKey, associationValue);
-      log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
-          associationValue, associationKey);
-      return associationValue.toAssociationEntity();
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(context, kafkaStoreTimeoutMs);
+      for (AssociationValue associationValue : associationValues) {
+        AssociationKey associationKey = associationValue.toKey();
+        kafkaStore.put(associationKey, associationValue);
+        log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
+            associationValue, associationKey);
+      }
+      return AssociationValue.toAssociationResponse(associationValues);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new association value to the store",
           e);
     }
   }
 
-  public Association updateAssociationOrForward(String context, boolean dryRun,
+  public AssociationResponse updateAssociationOrForward(String context, boolean dryRun,
       AssociationUpdateRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryException {
     kafkaStore.lockFor(context).lock();
@@ -1979,7 +1971,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  private Association forwardCreateAssociationRequestToLeader(
+  private AssociationResponse forwardCreateAssociationRequestToLeader(
       String context, boolean dryRun, AssociationCreateRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
@@ -1987,7 +1979,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
     log.debug(String.format("Forwarding create association request to %s", baseUrl));
     try {
-      Association response = leaderRestService.createAssociation(
+      AssociationResponse response = leaderRestService.createAssociation(
           headerProperties, context, dryRun, request);
       return response;
     } catch (IOException e) {
@@ -2000,7 +1992,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  private Association forwardUpdateAssociationRequestToLeader(
+  private AssociationResponse forwardUpdateAssociationRequestToLeader(
       String context, boolean dryRun,
       AssociationUpdateRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
@@ -2008,7 +2000,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
     log.debug(String.format("Forwarding update association request to %s", baseUrl));
     try {
-      Association response = leaderRestService.updateAssociation(
+      AssociationResponse response = leaderRestService.updateAssociation(
           headerProperties, context, dryRun, request);
       return response;
     } catch (IOException e) {

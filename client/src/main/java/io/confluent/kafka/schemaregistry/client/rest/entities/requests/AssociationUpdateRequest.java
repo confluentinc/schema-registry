@@ -20,11 +20,10 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -34,9 +33,7 @@ public class AssociationUpdateRequest {
   private String resourceNamespace;
   private String resourceId;
   private String resourceType;
-  private String associationType;
-  private Optional<LifecyclePolicy> lifecycle;
-  private Optional<Boolean> frozen;
+  private List<AssociationUpdateInfo> associations;
 
   @JsonCreator
   public AssociationUpdateRequest(
@@ -44,11 +41,12 @@ public class AssociationUpdateRequest {
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
       @JsonProperty("resourceType") String resourceType,
-      @JsonProperty("associationType") String associationType,
-      @JsonProperty("lifecycle") Optional<LifecyclePolicy> lifecycle,
-      @JsonProperty("frozen") Optional<Boolean> frozen) {
-    this.lifecycle = lifecycle;
-    this.frozen = frozen;
+      @JsonProperty("associations") List<AssociationUpdateInfo> associations) {
+    this.resourceName = resourceName;
+    this.resourceNamespace = resourceNamespace;
+    this.resourceId = resourceId;
+    this.resourceType = resourceType;
+    this.associations = associations;
   }
 
   @JsonProperty("resourceName")
@@ -91,34 +89,14 @@ public class AssociationUpdateRequest {
     this.resourceType = resourceType;
   }
 
-  @JsonProperty("associationType")
-  public String getAssociationType() {
-    return associationType;
+  @JsonProperty("associations")
+  public List<AssociationUpdateInfo> getAssociations() {
+    return associations;
   }
 
-  @JsonProperty("associationType")
-  public void setAssociationType(String associationType) {
-    this.associationType = associationType;
-  }
-
-  @JsonProperty("lifecycle")
-  public Optional<LifecyclePolicy> getLifecycle() {
-    return lifecycle;
-  }
-
-  @JsonProperty("lifecycle")
-  public void setLifecycle(Optional<LifecyclePolicy> lifecycle) {
-    this.lifecycle = lifecycle;
-  }
-
-  @JsonProperty("frozen")
-  public Optional<Boolean> getFrozen() {
-    return frozen;
-  }
-
-  @JsonProperty("frozen")
-  public void setFrozen(Optional<Boolean> frozen) {
-    this.frozen = frozen;
+  @JsonProperty("associations")
+  public void setAssociations(List<AssociationUpdateInfo> associations) {
+    this.associations = associations;
   }
 
   @Override
@@ -127,20 +105,17 @@ public class AssociationUpdateRequest {
       return false;
     }
     AssociationUpdateRequest that = (AssociationUpdateRequest) o;
-    return Objects.equals(frozen, that.frozen)
-        && Objects.equals(resourceName, that.resourceName)
+    return Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
         && Objects.equals(resourceType, that.resourceType)
-        && Objects.equals(associationType, that.associationType)
-        && Objects.equals(lifecycle, that.lifecycle);
+        && Objects.equals(associations, that.associations);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        resourceName, resourceNamespace, resourceId,
-        resourceType, associationType, lifecycle, frozen);
+        resourceName, resourceNamespace, resourceId, resourceType, associations);
   }
 
   public String toJson() throws IOException {

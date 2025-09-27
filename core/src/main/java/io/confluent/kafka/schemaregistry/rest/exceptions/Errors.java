@@ -206,9 +206,9 @@ public class Errors {
     return new RestUnknownLeaderException(message, cause);
   }
 
-  public static RestException associationNotFoundException(String subject) {
+  public static RestException associationNotFoundException(String resource) {
     return new RestNotFoundException(
-        String.format(ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT, subject),
+        String.format(ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT, resource),
         ASSOCIATION_NOT_FOUND_ERROR_CODE);
   }
 

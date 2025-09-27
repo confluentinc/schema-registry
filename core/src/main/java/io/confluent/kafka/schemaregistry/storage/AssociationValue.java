@@ -21,8 +21,16 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import jakarta.validation.constraints.NotEmpty;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -218,4 +226,91 @@ public class AssociationValue extends SubjectValue {
     );
   }
 
+  public static List<AssociationValue> fromAssociationCreateRequest(
+      String tenant, AssociationCreateRequest request) {
+    return request.getAssociations().stream()
+        .map(info -> new AssociationValue(
+            info.getSubject(),
+            UUID.randomUUID().toString(),
+            tenant,
+            request.getResourceName(),
+            request.getResourceNamespace(),
+            request.getResourceId(),
+            request.getResourceType(),
+            info.getAssociationType(),
+            info.getLifecycle() == LifecyclePolicy.STRONG
+                ? Lifecycle.STRONG
+                : Lifecycle.WEAK,
+            info.isFrozen()))
+        .toList();
+  }
+
+  public static List<AssociationValue> fromAssociationUpdateRequest(
+      String tenant, AssociationUpdateRequest request, List<Association> oldAssociations) {
+    if (request.getAssociations().size() != oldAssociations.size()) {
+      throw new IllegalArgumentException("The number of associations in the update request must "
+          + "match the number of existing associations.");
+    }
+    Map<String, Association> oldMap = oldAssociations.stream()
+        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    return request.getAssociations().stream()
+        .map(info -> {
+          Association old = oldMap.get(info.getAssociationType());
+          if (old == null) {
+            throw new IllegalArgumentException("Association type " + info.getAssociationType()
+                + " does not exist in the existing associations.");
+          }
+          return new AssociationValue(
+              old.getSubject(),
+              old.getGuid(),
+              tenant,
+              old.getResourceName(),
+              old.getResourceNamespace(),
+              old.getResourceId(),
+              old.getResourceType(),
+              info.getAssociationType(),
+              info.getLifecycle().isPresent()
+                  ? (info.getLifecycle().get() == LifecyclePolicy.STRONG
+                      ? Lifecycle.STRONG
+                      : Lifecycle.WEAK)
+                  : old.getLifecycle() == LifecyclePolicy.STRONG
+                      ? Lifecycle.STRONG
+                      : Lifecycle.WEAK,
+              info.getFrozen().isPresent()
+                  ? info.getFrozen().get()
+                  : old.isFrozen());
+        })
+        .toList();
+  }
+
+  public static AssociationResponse toAssociationResponse(List<AssociationValue> associations) {
+    // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
+    for (int i = 1; i < associations.size(); i++) {
+      AssociationValue a1 = associations.get(i - 1);
+      AssociationValue a2 = associations.get(i);
+      if (!Objects.equals(a1.getResourceName(), a2.getResourceName())
+          || !Objects.equals(a1.getResourceNamespace(), a2.getResourceNamespace())
+          || !Objects.equals(a1.getResourceId(), a2.getResourceId())
+          || !Objects.equals(a1.getResourceType(), a2.getResourceType())) {
+        throw new IllegalArgumentException("All associations must have the same resourceName, "
+            + "resourceNamespace, resourceId, and resourceType.");
+      }
+    }
+    List<AssociationInfo> infos = associations.stream()
+        .map(a -> new AssociationInfo(
+            a.getSubject(),
+            a.getAssociationType(),
+            a.getLifecycle() == Lifecycle.STRONG
+                ? LifecyclePolicy.STRONG
+                : LifecyclePolicy.WEAK,
+            a.isFrozen()))
+        .toList();
+    return new AssociationResponse(
+        associations.get(0).getResourceName(),
+        associations.get(0).getResourceNamespace(),
+        associations.get(0).getResourceId(),
+        associations.get(0).getResourceType(),
+        infos);
+
+  }
 }

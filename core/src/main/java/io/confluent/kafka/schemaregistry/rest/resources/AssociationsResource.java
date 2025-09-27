@@ -19,7 +19,10 @@ import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -50,9 +53,9 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -209,7 +212,7 @@ public class AssociationsResource {
   @POST
   @Operation(summary = "Create an association.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
-          content = @Content(schema = @Schema(implementation = Association.class))),
+          content = @Content(schema = @Schema(implementation = AssociationResponse.class))),
       @ApiResponse(responseCode = "409", description = "Conflict. "
           + "Error code 40911 -- Association already exists. "
           + "Error code 40912 -- Too many associations."),
@@ -231,7 +234,6 @@ public class AssociationsResource {
 
     log.debug("Creating association {}", request);
 
-    checkSubject(request.getSubject());
     checkName(request.getResourceName(), "resourceName");
     checkName(request.getResourceNamespace(), "resourceNamespace");
     if (request.getResourceId() == null || request.getResourceId().isEmpty()) {
@@ -242,20 +244,23 @@ public class AssociationsResource {
     } else {
       request.setResourceType(DEFAULT_RESOURCE_TYPE);
     }
-    if (request.getAssociationType() != null && !request.getAssociationType().isEmpty()) {
-      checkName(request.getAssociationType(), "associationType");
-    } else {
-      request.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
-    }
-    if (request.getLifecycle() == null) {
-      request.setLifecycle(DEFAULT_LIFECYCLE);
+    for (AssociationCreateInfo info : request.getAssociations()) {
+      checkSubject(info.getSubject());
+      if (info.getAssociationType() != null && !info.getAssociationType().isEmpty()) {
+        checkName(info.getAssociationType(), "associationType");
+      } else {
+        info.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
+      }
+      if (info.getLifecycle() == null) {
+        info.setLifecycle(DEFAULT_LIFECYCLE);
+      }
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
-      Association association = schemaRegistry.createAssociationOrForward(
+      AssociationResponse association = schemaRegistry.createAssociationOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
     } catch (AssociationAlreadyExistsException e) {
@@ -273,7 +278,7 @@ public class AssociationsResource {
   @PUT
   @Operation(summary = "Update an association.", responses = {
       @ApiResponse(responseCode = "200", description = "The update response",
-          content = @Content(schema = @Schema(implementation = Association.class))),
+          content = @Content(schema = @Schema(implementation = AssociationResponse.class))),
       @ApiResponse(responseCode = "422", description = "Error code 42212 -- Invalid association")
   })
   @PerformanceMetric("association.update")
@@ -308,24 +313,32 @@ public class AssociationsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
+      List<String> associationTypes = request.getAssociations().stream()
+          .map(AssociationUpdateInfo::getAssociationType)
+          .collect(Collectors.toList());
+      String resource;
       List<Association> oldAssociations;
       if (request.getResourceName() != null && !request.getResourceName().isEmpty()) {
+        resource = request.getResourceName();
         oldAssociations = schemaRegistry.getAssociationsByResourceName(
             request.getResourceName(), request.getResourceNamespace(), request.getResourceType(),
-            Collections.singletonList(request.getAssociationType()), null);
-        if (oldAssociations.isEmpty()) {
-          throw Errors.associationNotFoundException(request.getResourceName());
-        }
+            associationTypes, null);
       } else {
+        resource = request.getResourceId();
         oldAssociations = schemaRegistry.getAssociationsByResourceId(
             request.getResourceId(), request.getResourceType(),
-            Collections.singletonList(request.getAssociationType()), null);
-        if (oldAssociations.isEmpty()) {
-          throw Errors.associationNotFoundException(request.getResourceId());
+            associationTypes, null);
+      }
+      Set<String> oldAssociationTypes = oldAssociations.stream()
+          .map(Association::getAssociationType)
+          .collect(Collectors.toSet());
+      for (String associationType : associationTypes) {
+        if (!oldAssociationTypes.contains(associationType)) {
+          throw Errors.associationNotFoundException(resource);
         }
       }
 
-      Association association = schemaRegistry.updateAssociationOrForward(context, dryRun,
+      AssociationResponse association = schemaRegistry.updateAssociationOrForward(context, dryRun,
           request, headerProperties);
       asyncResponse.resume(association);
     } catch (SchemaRegistryException e) {
