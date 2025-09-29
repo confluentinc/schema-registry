@@ -124,6 +124,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
 
     createOrVerifySchemaTopic();
 
+    this.storeUpdateHandler.preBootstrap();
+
     // set the producer properties and initialize a Kafka producer client
     Properties props = new Properties();
     addSchemaRegistryConfigsToClientProperties(this.config, props);
