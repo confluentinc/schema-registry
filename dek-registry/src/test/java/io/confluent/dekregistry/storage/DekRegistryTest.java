@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.kcache.KeyValue;
 import java.util.Base64;
@@ -41,7 +42,7 @@ import static org.junit.Assert.*;
 
 public class DekRegistryTest extends ClusterTestHarness {
 
-    private KafkaSchemaRegistry schemaRegistry;
+    private SchemaRegistry schemaRegistry;
 
     private MetricsManager metricsManager;
 
