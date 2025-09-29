@@ -1853,7 +1853,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     return schemaValue.toSchemaEntity();
   }
 
-  protected SchemaValue getSchemaValue(SchemaKey key)
+  public SchemaValue getSchemaValue(SchemaKey key)
       throws SchemaRegistryException {
     try {
       return (SchemaValue) kafkaStore.get(key);
