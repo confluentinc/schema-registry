@@ -20,11 +20,8 @@ import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.cluster.Broker;
-import kafka.Kafka;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
