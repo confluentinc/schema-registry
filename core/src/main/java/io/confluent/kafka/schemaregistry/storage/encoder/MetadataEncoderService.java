@@ -28,7 +28,6 @@ import com.google.crypto.tink.subtle.Hkdf;
 import com.google.protobuf.ByteString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.kafka.schemaregistry.storage.Metadata;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -70,7 +69,7 @@ public class MetadataEncoderService implements Closeable {
   private static final byte[] EMPTY_AAD = new byte[0];
   private static final String KEY_TEMPLATE_NAME = "AES128_GCM";
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private KeyTemplate keyTemplate;
   // visible for testing
   Cache<String, KeysetWrapper> encoders = null;
@@ -87,7 +86,7 @@ public class MetadataEncoderService implements Closeable {
 
   public MetadataEncoderService(SchemaRegistry schemaRegistry) {
     try {
-      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry = schemaRegistry;
       SchemaRegistryConfig config = schemaRegistry.config();
       String secret = encoderSecret(config);
       if (secret == null) {
@@ -107,7 +106,7 @@ public class MetadataEncoderService implements Closeable {
   protected MetadataEncoderService(
       SchemaRegistry schemaRegistry, Cache<String, KeysetWrapper> encoders) {
     try {
-      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry = schemaRegistry;
       SchemaRegistryConfig config = schemaRegistry.config();
       String secret = encoderSecret(config);
       if (secret == null) {
@@ -122,7 +121,7 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  public KafkaSchemaRegistry getSchemaRegistry() {
+  public SchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
   }
 

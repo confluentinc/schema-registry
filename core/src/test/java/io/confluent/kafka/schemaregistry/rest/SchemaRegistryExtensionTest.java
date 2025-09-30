@@ -27,7 +27,6 @@ import javax.security.auth.login.Configuration;
 import java.util.Map;
 import java.net.URL;
 
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Configurable;
@@ -109,7 +108,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
   @Test
   public void testExtensionAddedHandler() throws Exception {
-    KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    SchemaRegistry kafkaSchemaRegistry = restApp.schemaRegistry();
     Assert.assertEquals(kafkaSchemaRegistry.getCustomHandler().size(), 2);
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -130,7 +129,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
 
     AtomicReference<TestSecurityOrderHandler> testHandlerRef = new AtomicReference<>();
     // Get the schema registry and find our test handler
-    KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    SchemaRegistry kafkaSchemaRegistry = restApp.schemaRegistry();
     kafkaSchemaRegistry.getCustomHandler().forEach(handler -> {
       if (handler instanceof TestSecurityOrderHandler) {
         testHandlerRef.set((TestSecurityOrderHandler) handler);
@@ -255,7 +254,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
             SchemaRegistryConfig schemaRegistryConfig,
             SchemaRegistry schemaRegistry
     ) {
-      KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      SchemaRegistry kafkaSchemaRegistry = schemaRegistry;
       // Create a custom handler that tracks when it's called
       TestSecurityOrderHandler testHandler = new TestSecurityOrderHandler();
       kafkaSchemaRegistry.addCustomHandler(testHandler);
