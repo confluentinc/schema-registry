@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
@@ -259,6 +260,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   HostnameVerifier getHostnameVerifier() throws SchemaRegistryStoreException;
 
   SchemaRegistryIdentity myIdentity();
+
+  boolean initialized();
+
+  boolean healthy();
+
+  SslFactory getSslFactory();
 
   default void clearOldSchemaCache() {}
 
