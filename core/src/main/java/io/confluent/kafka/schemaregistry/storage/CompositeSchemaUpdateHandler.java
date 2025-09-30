@@ -35,6 +35,16 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   }
 
   /**
+   * Invoked before the cache is initialized.
+   */
+  @Override
+  public void preBootstrap(Map<TopicPartition, Long> checkpoints) {
+    for (SchemaUpdateHandler handler : handlers) {
+      handler.preBootstrap(checkpoints);
+    }
+  }
+
+  /**
    * Invoked after the cache is initialized.
    */
   @Override
