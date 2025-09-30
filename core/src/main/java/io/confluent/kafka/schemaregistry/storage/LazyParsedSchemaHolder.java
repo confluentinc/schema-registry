@@ -22,11 +22,11 @@ import java.lang.ref.SoftReference;
 
 public class LazyParsedSchemaHolder implements ParsedSchemaHolder {
 
-  private KafkaSchemaRegistry schemaRegistry;
+  private SchemaRegistry schemaRegistry;
   private SchemaKey schemaKey;
   private SoftReference<SchemaValue> schemaValueRef;
 
-  public LazyParsedSchemaHolder(KafkaSchemaRegistry schemaRegistry, SchemaKey schemaKey) {
+  public LazyParsedSchemaHolder(SchemaRegistry schemaRegistry, SchemaKey schemaKey) {
     this.schemaRegistry = schemaRegistry;
     this.schemaKey = schemaKey;
     this.schemaValueRef = new SoftReference<>(null);
