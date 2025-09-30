@@ -63,7 +63,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.context.NullContextNameStrategy;
@@ -389,14 +388,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     ExtendedSchema extendedSchema = latestWithMetadata.getIfPresent(subject);
     if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestWithMetadata(subject, metadata, true);
-      Optional<ParsedSchema> optSchema =
-          schemaRegistry.parseSchema(
+      ParsedSchema schema =
+          schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
-      ParsedSchema schema = optSchema.orElseThrow(
-          () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
-              + " with refs " + schemaMetadata.getReferences()
-              + " of type " + schemaMetadata.getSchemaType()));
       schema = schema.copy(schemaMetadata.getVersion());
       extendedSchema = new ExtendedSchema(
           schemaMetadata.getId(), schemaMetadata.getVersion(),
@@ -410,14 +405,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   private ParsedSchema getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException {
     SchemaMetadata schemaMetadata = schemaRegistry.getSchemaMetadata(subject, version, true);
-    Optional<ParsedSchema> optSchema =
-        schemaRegistry.parseSchema(
+    ParsedSchema schema =
+        schemaRegistry.parseSchemaOrElseThrow(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                 null, schemaMetadata));
-    ParsedSchema schema = optSchema.orElseThrow(
-        () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
-            + " with refs " + schemaMetadata.getReferences()
-            + " of type " + schemaMetadata.getSchemaType()));
     return schema.copy(schemaMetadata.getVersion());
   }
 
@@ -626,14 +617,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
-      Optional<ParsedSchema> optSchema =
-          schemaRegistry.parseSchema(
+      ParsedSchema latestVersion =
+          schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
-      ParsedSchema latestVersion = optSchema.orElseThrow(
-          () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
-              + " with refs " + schemaMetadata.getReferences()
-              + " of type " + schemaMetadata.getSchemaType()));
       latestVersion = latestVersion.copy(schemaMetadata.getVersion());
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
