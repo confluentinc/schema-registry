@@ -121,6 +121,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       log.info("Successfully read checkpoints");
     }
 
+    this.storeUpdateHandler.preBootstrap(checkpointFileCache);
+
     KafkaStore.addSchemaRegistryConfigsToClientProperties(config, consumerProps);
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
     consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
