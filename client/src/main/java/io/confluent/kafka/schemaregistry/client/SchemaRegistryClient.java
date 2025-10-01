@@ -73,6 +73,13 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     );
   }
 
+  default ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
+    return parseSchema(schema)
+        .orElseThrow(() -> new IOException("Invalid schema " + schema.getSchema()
+        + " with refs " + schema.getReferences()
+        + " of type " + schema.getSchemaType()));
+  }
+
   /**
    * @deprecated use {@link #register(String, ParsedSchema)} instead;
    *     for example, you can convert a {@link Schema} into a {@link ParsedSchema}
