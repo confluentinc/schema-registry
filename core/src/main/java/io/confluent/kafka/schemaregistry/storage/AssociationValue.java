@@ -303,7 +303,9 @@ public class AssociationValue extends SubjectValue {
             a.getLifecycle() == Lifecycle.STRONG
                 ? LifecyclePolicy.STRONG
                 : LifecyclePolicy.WEAK,
-            a.isFrozen()))
+            a.isFrozen(),
+            // TODO RAY
+            null))
         .toList();
     return new AssociationResponse(
         associations.get(0).getResourceName(),

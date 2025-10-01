@@ -42,11 +42,13 @@ public class AssociationCreateInfo {
       @JsonProperty("subject") String subject,
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
-      @JsonProperty("frozen") boolean frozen) {
+      @JsonProperty("frozen") boolean frozen,
+      @JsonProperty("schema") Schema schema) {
     this.subject = subject;
     this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
+    this.schema = schema;
   }
 
   @JsonProperty("subject")
@@ -89,6 +91,16 @@ public class AssociationCreateInfo {
     this.frozen = frozen;
   }
 
+  @JsonProperty("schema")
+  public Schema getSchema() {
+    return schema;
+  }
+
+  @JsonProperty("schema")
+  public void setSchema(Schema schema) {
+    this.schema = schema;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == null || getClass() != o.getClass()) {
@@ -98,13 +110,14 @@ public class AssociationCreateInfo {
     return frozen == that.frozen
         && Objects.equals(subject, that.subject)
         && Objects.equals(associationType, that.associationType)
-        && lifecycle == that.lifecycle;
+        && lifecycle == that.lifecycle
+        && Objects.equals(schema, that.schema);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, associationType, lifecycle, frozen);
+        subject, associationType, lifecycle, frozen, schema);
   }
 
   public String toJson() throws IOException {
