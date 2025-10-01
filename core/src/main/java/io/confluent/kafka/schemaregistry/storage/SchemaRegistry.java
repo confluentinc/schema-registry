@@ -106,6 +106,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Set<String> listSubjects(LookupFilter filter)
           throws SchemaRegistryException;
 
+  Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException;
+
   Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
       throws SchemaRegistryException;
 
@@ -266,6 +268,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   boolean healthy();
 
   SslFactory getSslFactory();
+
+  LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache();
 
   default void clearOldSchemaCache() {}
 
