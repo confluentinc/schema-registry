@@ -19,6 +19,9 @@ import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -53,6 +56,7 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,7 +64,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Path("/associations")
+@Path("/")
 @Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
     Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
     Versions.JSON_WEIGHTED})
@@ -84,7 +88,7 @@ public class AssociationsResource {
     this.schemaRegistry = schemaRegistry;
   }
 
-  @Path("/subjects/{subject}")
+  @Path("/associations/subjects/{subject}")
   @GET
   @Operation(summary = "Get a list of associations by subject.", responses = {
       @ApiResponse(responseCode = "200",
@@ -125,7 +129,7 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/resources/{resourceNamespace}/{resourceName}")
+  @Path("/associations/resources/{resourceNamespace}/{resourceName}")
   @GET
   @Operation(summary = "Get a list of associations by resource name.", responses = {
       @ApiResponse(responseCode = "200",
@@ -168,7 +172,7 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/resources/{resourceId}")
+  @Path("/associations/resources/{resourceId}")
   @GET
   @Operation(summary = "Get a list of associations by resource ID.", responses = {
       @ApiResponse(responseCode = "200",
@@ -209,6 +213,7 @@ public class AssociationsResource {
     }
   }
 
+  @Path("/associations")
   @POST
   @Operation(summary = "Create an association.", responses = {
       @ApiResponse(responseCode = "200", description = "The create response",
@@ -274,7 +279,33 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/resources/{resourceNamespace}/{resourceName}")
+  @Path("/associations:batchCreate")
+  @POST
+  @Operation(summary = "Create a batch of associations.", responses = {
+      @ApiResponse(responseCode = "207", description = "The create response",
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+  })
+  @PerformanceMetric("associations.create")
+  @DocumentedName("createAssociations")
+  public void createAssociations(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      // TODO
+      @Parameter(description = "Context")
+      @QueryParam("context") String context,
+      // TODO
+      @Parameter(description = "Dry run")
+      @QueryParam("dryRun") boolean dryRun,
+      @Parameter(description = "The create requests", required = true)
+      @NotNull AssociationBatchCreateRequest request) {
+
+
+    List<AssociationResponse> responses = new ArrayList<>();
+    for (AssociationCreateRequest req : request.getRequests()) {
+    }
+  }
+
+  @Path("/associations")
   @PUT
   @Operation(summary = "Update an association.", responses = {
       @ApiResponse(responseCode = "200", description = "The update response",
@@ -347,7 +378,29 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/resources/{resourceId}")
+  @Path("/associations:batchUpdate")
+  @PUT
+  @Operation(summary = "Update a batch of associations.", responses = {
+      @ApiResponse(responseCode = "207", description = "The update response",
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+  })
+  @PerformanceMetric("associations.update")
+  @DocumentedName("updateAssociations")
+  public void updateAssociations(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      // TODO
+      @Parameter(description = "Context")
+      @QueryParam("context") String context,
+      // TODO
+      @Parameter(description = "Dry run")
+      @QueryParam("dryRun") boolean dryRun,
+      @Parameter(description = "The update request", required = true)
+      @NotNull AssociationBatchUpdateRequest request) {
+
+  }
+
+  @Path("/associations/resources/{resourceId}")
   @DELETE
   @Operation(summary = "Delete associations.", responses = {
       @ApiResponse(responseCode = "200", description = "The delete response",
