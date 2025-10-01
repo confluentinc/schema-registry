@@ -293,10 +293,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
               log.error("Invalid schema type {}", schemaType);
               throw new IllegalStateException("Invalid schema type " + schemaType);
             }
-            return schemaProvider.parseSchema(schema, false, false).orElseThrow(
-                () -> new IOException("Invalid schema " + schema.getSchema()
-                    + " with refs " + schema.getReferences()
-                    + " of type " + schema.getSchemaType()));
+            return schemaProvider.parseSchemaOrElseThrow(schema, false, false);
           }
         });
 
@@ -361,6 +358,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
+  @Override
+  public ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
+    try {
+      return parsedSchemaCache.get(schema);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        throw new IOException(cause);
+      }
+      throw new IOException(e);
+    }
+  }
+
   public Map<String, SchemaProvider> getSchemaProviders() {
     return providers;
   }
@@ -404,10 +414,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
-    Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
-    return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
-            + " with refs " + restSchema.getReferences()
-            + " of type " + restSchema.getSchemaType()));
+    return parseSchemaOrElseThrow(new Schema(null, null, null, restSchema));
   }
 
   protected ParsedSchema getSchemaByGuidFromRegistry(String guid, String format)
