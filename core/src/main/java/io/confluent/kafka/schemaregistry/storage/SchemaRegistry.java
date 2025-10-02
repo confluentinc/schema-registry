@@ -257,6 +257,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   void deleteSubjectMode(String subject) throws SchemaRegistryStoreException,
           OperationNotPermittedException;
 
+  RuleSetHandler getRuleSetHandler();
+
   void setRuleSetHandler(RuleSetHandler ruleSetHandler);
 
   HostnameVerifier getHostnameVerifier() throws SchemaRegistryStoreException;
