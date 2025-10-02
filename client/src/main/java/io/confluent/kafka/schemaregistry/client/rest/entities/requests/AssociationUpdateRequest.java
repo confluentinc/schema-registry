@@ -16,10 +16,13 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import static io.confluent.kafka.schemaregistry.client.rest.utils.RestValidation.checkName;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.List;
@@ -28,6 +31,8 @@ import java.util.Objects;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationUpdateRequest {
+
+  private static final String DEFAULT_RESOURCE_TYPE = "topic";
 
   private String resourceName;
   private String resourceNamespace;
@@ -120,5 +125,19 @@ public class AssociationUpdateRequest {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  public void validate() {
+    if (getResourceName() != null && !getResourceName().isEmpty()) {
+      checkName(getResourceName(), "resourceName");
+      checkName(getResourceNamespace(), "resourceNamespace");
+    } else if (getResourceId() == null || getResourceId().isEmpty()) {
+      throw new IllegalPropertyException("resourceId", "cannot be null or empty");
+    }
+    if (getResourceType() != null && !getResourceType().isEmpty()) {
+      checkName(getResourceType(), "resourceType");
+    } else {
+      setResourceType(DEFAULT_RESOURCE_TYPE);
+    }
   }
 }

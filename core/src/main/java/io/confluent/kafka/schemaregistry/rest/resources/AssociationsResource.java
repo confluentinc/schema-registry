@@ -15,18 +15,17 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
-import com.google.common.base.CharMatcher;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -78,9 +77,6 @@ public class AssociationsResource {
   private final KafkaSchemaRegistry schemaRegistry;
 
   public static final String DEFAULT_RESOURCE_TYPE = "topic";
-  public static final String DEFAULT_ASSOCIATION_TYPE = "value";
-  public static final LifecyclePolicy DEFAULT_LIFECYCLE = LifecyclePolicy.STRONG;
-  public static final int NAME_MAX_LENGTH = 256;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
@@ -239,26 +235,10 @@ public class AssociationsResource {
 
     log.debug("Creating association {}", request);
 
-    checkName(request.getResourceName(), "resourceName");
-    checkName(request.getResourceNamespace(), "resourceNamespace");
-    if (request.getResourceId() == null || request.getResourceId().isEmpty()) {
-      throw Errors.invalidAssociation("resourceId", "cannot be null or empty");
-    }
-    if (request.getResourceType() != null && !request.getResourceType().isEmpty()) {
-      checkName(request.getResourceType(), "resourceType");
-    } else {
-      request.setResourceType(DEFAULT_RESOURCE_TYPE);
-    }
-    for (AssociationCreateInfo info : request.getAssociations()) {
-      checkSubject(info.getSubject());
-      if (info.getAssociationType() != null && !info.getAssociationType().isEmpty()) {
-        checkName(info.getAssociationType(), "associationType");
-      } else {
-        info.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
-      }
-      if (info.getLifecycle() == null) {
-        info.setLifecycle(DEFAULT_LIFECYCLE);
-      }
+    try {
+      request.validate();
+    } catch (IllegalPropertyException e) {
+      throw Errors.invalidAssociation(e.getPropertyName(), e.getDetail());
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
@@ -276,32 +256,6 @@ public class AssociationsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
           "Error while creating association: " + e.getMessage(), e);
-    }
-  }
-
-  @Path("/associations:batchCreate")
-  @POST
-  @Operation(summary = "Create a batch of associations.", responses = {
-      @ApiResponse(responseCode = "207", description = "The create response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
-  })
-  @PerformanceMetric("associations.create")
-  @DocumentedName("createAssociations")
-  public void createAssociations(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      // TODO
-      @Parameter(description = "Context")
-      @QueryParam("context") String context,
-      // TODO
-      @Parameter(description = "Dry run")
-      @QueryParam("dryRun") boolean dryRun,
-      @Parameter(description = "The create requests", required = true)
-      @NotNull AssociationBatchCreateRequest request) {
-
-
-    List<AssociationResponse> responses = new ArrayList<>();
-    for (AssociationCreateRequest req : request.getRequests()) {
     }
   }
 
@@ -328,16 +282,10 @@ public class AssociationsResource {
 
     log.debug("Updating association {}", request);
 
-    if (request.getResourceName() != null && !request.getResourceName().isEmpty()) {
-      checkName(request.getResourceName(), "resourceName");
-      checkName(request.getResourceNamespace(), "resourceNamespace");
-    } else if (request.getResourceId() == null || request.getResourceId().isEmpty()) {
-      throw Errors.invalidAssociation("resourceId", "cannot be null or empty");
-    }
-    if (request.getResourceType() != null && !request.getResourceType().isEmpty()) {
-      checkName(request.getResourceType(), "resourceType");
-    } else {
-      request.setResourceType(DEFAULT_RESOURCE_TYPE);
+    try {
+      request.validate();
+    } catch (IllegalPropertyException e) {
+      throw Errors.invalidAssociation(e.getPropertyName(), e.getDetail());
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
@@ -378,8 +326,41 @@ public class AssociationsResource {
     }
   }
 
+  @Path("/associations:batchCreate")
+  @POST
+  @Operation(summary = "Create a batch of associations.", responses = {
+      @ApiResponse(responseCode = "207", description = "The create response",
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+  })
+  @PerformanceMetric("associations.create")
+  @DocumentedName("createAssociations")
+  public void createAssociations(
+      final @Suspended AsyncResponse asyncResponse,
+      final @Context HttpHeaders headers,
+      // TODO
+      @Parameter(description = "Context")
+      @QueryParam("context") String context,
+      // TODO
+      @Parameter(description = "Dry run")
+      @QueryParam("dryRun") boolean dryRun,
+      @Parameter(description = "The create requests", required = true)
+      @NotNull AssociationBatchCreateRequest request) {
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    try {
+      AssociationBatchResponse response = schemaRegistry.createAssociationsOrForward(
+          context, dryRun, request, headerProperties);
+      asyncResponse.resume(response);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while creating associations: " + e.getMessage(), e);
+    }
+  }
+
   @Path("/associations:batchUpdate")
-  @PUT
+  @POST
   @Operation(summary = "Update a batch of associations.", responses = {
       @ApiResponse(responseCode = "207", description = "The update response",
           content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
@@ -398,6 +379,17 @@ public class AssociationsResource {
       @Parameter(description = "The update request", required = true)
       @NotNull AssociationBatchUpdateRequest request) {
 
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+
+    try {
+      AssociationBatchResponse response = schemaRegistry.updateAssociationsOrForward(
+          context, dryRun, request, headerProperties);
+      asyncResponse.resume(response);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(
+          "Error while creating associations: " + e.getMessage(), e);
+    }
   }
 
   @Path("/associations/resources/{resourceId}")
@@ -445,32 +437,6 @@ public class AssociationsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
           "Error while deleting association: " + e.getMessage(), e);
-    }
-  }
-
-  private static void checkName(String name, String propertyName) {
-    if (name == null || name.isEmpty()) {
-      throw Errors.invalidAssociation(propertyName, "cannot be null or empty");
-    }
-    if (name.length() > NAME_MAX_LENGTH) {
-      throw Errors.invalidAssociation(propertyName, "exceeds max length of " + NAME_MAX_LENGTH);
-    }
-    char first = name.charAt(0);
-    if (!(Character.isLetter(first) || first == '_')) {
-      throw Errors.invalidAssociation(propertyName, "must start with a letter or underscore");
-    }
-    for (int i = 1; i < name.length(); i++) {
-      char c = name.charAt(i);
-      if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
-        throw Errors.invalidAssociation(propertyName, "illegal character '" + c + "'");
-      }
-    }
-  }
-
-  private static void checkSubject(String subject) {
-    if (subject == null || subject.isEmpty()
-        || CharMatcher.javaIsoControl().matchesAnyOf(subject)) {
-      throw Errors.invalidAssociation("subject", "must not be empty");
     }
   }
 }

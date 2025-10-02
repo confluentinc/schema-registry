@@ -16,10 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import static io.confluent.kafka.schemaregistry.client.rest.utils.RestValidation.checkName;
+import static io.confluent.kafka.schemaregistry.client.rest.utils.RestValidation.checkSubject;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.List;
@@ -28,6 +33,10 @@ import java.util.Objects;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationCreateRequest {
+
+  private static final String DEFAULT_RESOURCE_TYPE = "topic";
+  private static final String DEFAULT_ASSOCIATION_TYPE = "value";
+  private static final LifecyclePolicy DEFAULT_LIFECYCLE = LifecyclePolicy.STRONG;
 
   private String resourceName;
   private String resourceNamespace;
@@ -120,5 +129,29 @@ public class AssociationCreateRequest {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  public void validate() {
+    checkName(getResourceName(), "resourceName");
+    checkName(getResourceNamespace(), "resourceNamespace");
+    if (getResourceId() == null || getResourceId().isEmpty()) {
+      throw new IllegalPropertyException("resourceId", "cannot be null or empty");
+    }
+    if (getResourceType() != null && !getResourceType().isEmpty()) {
+      checkName(getResourceType(), "resourceType");
+    } else {
+      setResourceType(DEFAULT_RESOURCE_TYPE);
+    }
+    for (AssociationCreateInfo info : getAssociations()) {
+      checkSubject(info.getSubject());
+      if (info.getAssociationType() != null && !info.getAssociationType().isEmpty()) {
+        checkName(info.getAssociationType(), "associationType");
+      } else {
+        info.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
+      }
+      if (info.getLifecycle() == null) {
+        info.setLifecycle(DEFAULT_LIFECYCLE);
+      }
+    }
   }
 }

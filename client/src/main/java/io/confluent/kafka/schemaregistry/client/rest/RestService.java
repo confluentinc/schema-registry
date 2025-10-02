@@ -36,6 +36,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
@@ -196,6 +199,9 @@ public class RestService implements Closeable, Configurable {
       };
   private static final TypeReference<List<Association>> ASSOCIATIONS_RESPONSE_TYPE =
       new TypeReference<List<Association>>() {
+      };
+  private static final TypeReference<AssociationBatchResponse> ASSOCIATION_BATCH_RESPONSE_TYPE =
+      new TypeReference<AssociationBatchResponse>() {
       };
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
@@ -1870,9 +1876,49 @@ public class RestService implements Closeable, Configurable {
       builder.queryParam("dryRun", dryRun);
     }
 
-    AssociationResponse response = httpRequest(path, "POST",
+    AssociationResponse response = httpRequest(path, "PUT",
         request.toJson().getBytes(StandardCharsets.UTF_8),
         requestProperties, ASSOCIATION_RESPONSE_TYPE);
+    return response;
+  }
+
+  public AssociationBatchResponse createAssociations(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, AssociationBatchCreateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchCreate");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+
+    AssociationBatchResponse response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_BATCH_RESPONSE_TYPE);
+    return response;
+  }
+
+  public AssociationBatchResponse updateAssociations(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, AssociationBatchUpdateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchUpdate");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+
+    AssociationBatchResponse response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_BATCH_RESPONSE_TYPE);
     return response;
   }
 

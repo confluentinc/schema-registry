@@ -48,8 +48,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
@@ -58,6 +62,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
@@ -1629,6 +1634,85 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  public AssociationBatchResponse batchCreateAssociations(
+      String context, boolean dryRun, AssociationBatchCreateRequest request) {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationCreateRequest req : request.getRequests()) {
+      kafkaStore.lockFor(context).lock();
+      try {
+        req.validate();
+        AssociationResponse response = createAssociation(context, dryRun, req);
+        results.add(new AssociationResult(200, null, response));
+      } catch (IllegalPropertyException e) {
+        results.add(new AssociationResult(422, e.getMessage(), null));
+      } catch (Exception e) {
+        // TODO RAY: differentiate between client and server errors
+        results.add(new AssociationResult(400, e.getMessage(), null));
+      } finally {
+        kafkaStore.lockFor(context).unlock();
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
+  public AssociationBatchResponse createAssociationsOrForward(String context, boolean dryRun,
+      AssociationBatchCreateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    // Don't obtain lock for the entire batch request
+    if (isLeader()) {
+      return batchCreateAssociations(context, dryRun, request);
+    } else {
+      if (leaderIdentity != null) {
+        return forwardCreateAssociationsRequestToLeader(
+            context, dryRun, request, headerProperties);
+      } else {
+        throw new UnknownLeaderException("Create associations request failed since leader is "
+            + "unknown");
+      }
+    }
+  }
+
+  public AssociationBatchResponse batchUpdateAssociations(
+      String context, boolean dryRun, AssociationBatchUpdateRequest request)
+      throws SchemaRegistryException {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationUpdateRequest req : request.getRequests()) {
+      kafkaStore.lockFor(context).lock();
+      try {
+        req.validate();
+        AssociationResponse response = updateAssociation(context, dryRun, req);
+        results.add(new AssociationResult(200, null, response));
+      } catch (IllegalPropertyException e) {
+        results.add(new AssociationResult(422, e.getMessage(), null));
+      } catch (Exception e) {
+        // TODO RAY: differentiate between client and server errors
+        results.add(new AssociationResult(400, e.getMessage(), null));
+      } finally {
+        kafkaStore.lockFor(context).unlock();
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
+  public AssociationBatchResponse updateAssociationsOrForward(String context, boolean dryRun,
+      AssociationBatchUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    // Don't obtain lock for the entire batch request
+    if (isLeader()) {
+      return batchUpdateAssociations(context, dryRun, request);
+    } else {
+      if (leaderIdentity != null) {
+        return forwardUpdateAssociationsRequestToLeader(
+            context, dryRun, request, headerProperties);
+      } else {
+        throw new UnknownLeaderException("Update associations request failed since leader is "
+            + "unknown");
+      }
+    }
+  }
+
   public Association getAssociationByGuid(String guid)
       throws SchemaRegistryException {
     String tenant = tenant();
@@ -2006,6 +2090,48 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the update association request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private AssociationBatchResponse forwardCreateAssociationsRequestToLeader(
+      String context, boolean dryRun, AssociationBatchCreateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding create associations request to %s", baseUrl));
+    try {
+      AssociationBatchResponse response = leaderRestService.createAssociations(
+          headerProperties, context, dryRun, request);
+      return response;
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the create associations request to %s",
+              baseUrl),
+          e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  private AssociationBatchResponse forwardUpdateAssociationsRequestToLeader(
+      String context, boolean dryRun, AssociationBatchUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryRequestForwardingException {
+    final UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug(String.format("Forwarding update associations request to %s", baseUrl));
+    try {
+      AssociationBatchResponse response = leaderRestService.updateAssociations(
+          headerProperties, context, dryRun, request);
+      return response;
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+          String.format("Unexpected error while forwarding the update associations request to %s",
               baseUrl),
           e);
     } catch (RestClientException e) {
