@@ -47,6 +47,7 @@ public class HcVaultKmsClient implements KmsClient {
   public static final String PREFIX = "hcvault://";
 
   private String keyUri;
+  private VaultConfig vaultConfig;
   private Logical vault;
 
   public HcVaultKmsClient() {
@@ -119,6 +120,7 @@ public class HcVaultKmsClient implements KmsClient {
 
       config = config.build();
 
+      this.vaultConfig = config;
       this.vault = new Vault(config).logical();
       return this;
     } catch (URISyntaxException | VaultException e) {
@@ -170,6 +172,7 @@ public class HcVaultKmsClient implements KmsClient {
 
       config = config.build();
 
+      this.vaultConfig = config;
       this.vault = new Vault(config).logical();
     } catch (URISyntaxException | VaultException e) {
       throw new GeneralSecurityException("unable to create config", e);
@@ -182,6 +185,7 @@ public class HcVaultKmsClient implements KmsClient {
    */
   public KmsClient withConfig(VaultConfig config)
       throws GeneralSecurityException {
+    this.vaultConfig = config;
     this.vault = new Vault(config).logical();
     return this;
   }
@@ -192,6 +196,10 @@ public class HcVaultKmsClient implements KmsClient {
   public KmsClient withVault(Logical vault) {
     this.vault = vault;
     return this;
+  }
+
+  public VaultConfig getVaultConfig() {
+    return this.vaultConfig;
   }
 
   @Override
