@@ -39,7 +39,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     int id1 = restApp.restClient.registerSchema(schema, "subject1");
 
-    KafkaSchemaRegistry sr = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    KafkaSchemaRegistry sr = restApp.schemaRegistry().getKafkaSchemaRegistry();
     KafkaStoreReaderThread readerThread = sr.getKafkaStore().getKafkaStoreReaderThread();
     try {
       readerThread.waitUntilOffset(50L, 500L, TimeUnit.MILLISECONDS);

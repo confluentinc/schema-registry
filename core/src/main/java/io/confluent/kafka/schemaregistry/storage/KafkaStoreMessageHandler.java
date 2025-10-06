@@ -42,10 +42,10 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   private final List<String> canonicalizeSchemaTypes;
   private final Map<TopicPartition, Long> offsets = new ConcurrentHashMap<>();
 
-  public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
+  public KafkaStoreMessageHandler(SchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator) {
-    this.schemaRegistry = schemaRegistry;
+    this.schemaRegistry = schemaRegistry.getKafkaSchemaRegistry();
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
     this.canonicalizeSchemaTypes = schemaRegistry.config().getList(
