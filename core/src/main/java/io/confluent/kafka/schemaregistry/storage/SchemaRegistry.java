@@ -273,6 +273,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache();
 
+  default KafkaSchemaRegistry getKafkaSchemaRegistry() {
+    return null;
+  }
+
   default void clearOldSchemaCache() {}
 
   default void clearNewSchemaCache() {}

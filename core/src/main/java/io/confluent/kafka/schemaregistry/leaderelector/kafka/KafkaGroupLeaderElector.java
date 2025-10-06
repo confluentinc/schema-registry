@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LeaderElector;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
@@ -82,10 +83,10 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
 
   public KafkaGroupLeaderElector(SchemaRegistryConfig config,
                                  SchemaRegistryIdentity myIdentity,
-                                 KafkaSchemaRegistry schemaRegistry
+                                 SchemaRegistry schemaRegistry
   ) throws SchemaRegistryInitializationException {
     try {
-      this.schemaRegistry = schemaRegistry;
+      this.schemaRegistry = schemaRegistry.getKafkaSchemaRegistry();
 
       clientId = "sr-" + SR_CLIENT_ID_SEQUENCE.getAndIncrement();
 

@@ -315,7 +315,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );
@@ -331,7 +331,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "none");
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );
@@ -347,7 +347,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );
@@ -363,7 +363,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "https");
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );
@@ -509,7 +509,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );
@@ -533,7 +533,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );
@@ -557,7 +557,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
-    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+    SchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
             config,
             new SchemaRegistrySerializer()
     );

@@ -2342,6 +2342,11 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     oldSchemaCache.invalidate(new RawSchema(schemaKey, false, true));
   }
 
+  @Override
+  public KafkaSchemaRegistry getKafkaSchemaRegistry() {
+    return this;
+  }
+
   public void clearNewSchemaCache() {
     newSchemaCache.invalidateAll();
   }
