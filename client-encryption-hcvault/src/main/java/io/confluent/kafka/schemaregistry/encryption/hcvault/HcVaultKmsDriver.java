@@ -18,11 +18,15 @@ package io.confluent.kafka.schemaregistry.encryption.hcvault;
 
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
+import io.github.jopenlibs.vault.EnvironmentLoader;
 import io.github.jopenlibs.vault.SslConfig;
+import io.github.jopenlibs.vault.VaultConfig;
 import io.github.jopenlibs.vault.VaultException;
+import io.github.jopenlibs.vault.api.Auth;
 import io.github.jopenlibs.vault.api.Logical;
 import java.io.File;
 import java.security.GeneralSecurityException;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Map;
 import java.util.Optional;
 
@@ -30,6 +34,8 @@ public class HcVaultKmsDriver implements KmsDriver {
 
   public static final String TOKEN_ID = "token.id";
   public static final String NAMESPACE = "namespace";
+  public static final String APPROLE_ROLE_ID = "approle.role.id";
+  public static final String APPROLE_SECRET_ID = "approle.secret.id";
   public static final String SSL_KEYSTORE_LOCATION = "ssl.keystore.location";
   public static final String SSL_KEYSTORE_PASSWORD = "ssl.keystore.password";
   public static final String SSL_TRUSTSTORE_LOCATION = "ssl.truststore.location";
@@ -38,6 +44,8 @@ public class HcVaultKmsDriver implements KmsDriver {
   public static final String VAULT_SSL_KEYSTORE_LOCATION = "VAULT_SSL_KEYSTORE_LOCATION";
   public static final String VAULT_SSL_KEYSTORE_PASSWORD = "VAULT_SSL_KEYSTORE_PASSWORD";
   public static final String VAULT_SSL_TRUSTSTORE_LOCATION = "VAULT_SSL_TRUSTSTORE_LOCATION";
+  public static final String VAULT_APPROLE_ROLE_ID = "VAULT_APPROLE_ROLE_ID";
+  public static final String VAULT_APPROLE_SECRET_ID = "VAULT_APPROLE_SECRET_ID";
 
   public HcVaultKmsDriver() {
   }
@@ -79,6 +87,21 @@ public class HcVaultKmsDriver implements KmsDriver {
     return (String) configs.get(TOKEN_ID);
   }
 
+  private Map.Entry<String, String> getRoleId(Map<String, ?> configs) {
+    String roleId = (String) configs.get(APPROLE_ROLE_ID);
+    String secretId = (String) configs.get(APPROLE_SECRET_ID);
+    if (roleId != null && secretId != null) {
+      return new SimpleEntry<>(roleId, secretId);
+    }
+    EnvironmentLoader envLoader = new EnvironmentLoader();
+    roleId = envLoader.loadVariable(VAULT_APPROLE_ROLE_ID);
+    secretId = envLoader.loadVariable(VAULT_APPROLE_SECRET_ID);
+    if (roleId != null && secretId != null) {
+      return new SimpleEntry<>(roleId, secretId);
+    }
+    return null;
+  }
+
   private String getNamespace(Map<String, ?> configs) {
     return (String) configs.get(NAMESPACE);
   }
@@ -86,13 +109,26 @@ public class HcVaultKmsDriver implements KmsDriver {
   @Override
   public KmsClient newKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
-    Logical testClient = (Logical) getTestClient(configs);
-    Optional<String> creds = testClient != null
-        ? Optional.empty()
-        : Optional.ofNullable(getToken(configs));
-    SslConfig sslConfig = getSslConfig(configs);
-    Optional<String> namespace = Optional.ofNullable(getNamespace(configs));
-    return newKmsClientWithHcVaultKms(kekUrl, sslConfig, creds, namespace, testClient);
+    try {
+      Logical testClient = (Logical) getTestClient(configs);
+      Optional<String> creds = testClient != null
+          ? Optional.empty()
+          : Optional.ofNullable(getToken(configs));
+      SslConfig sslConfig = getSslConfig(configs);
+      Optional<String> namespace = Optional.ofNullable(getNamespace(configs));
+      KmsClient client = newKmsClientWithHcVaultKms(kekUrl, sslConfig, creds, namespace,
+          testClient);
+      Map.Entry<String, String> roleId = getRoleId(configs);
+      if (testClient == null && roleId != null) {
+        VaultConfig config = ((HcVaultKmsClient) client).getVaultConfig();
+        Auth auth = new Auth(config);
+        String token = auth.loginByAppRole(roleId.getKey(), roleId.getValue()).getAuthClientToken();
+        client = newKmsClientWithHcVaultKms(kekUrl, sslConfig, Optional.of(token), namespace, null);
+      }
+      return client;
+    } catch (VaultException e) {
+      throw new GeneralSecurityException("unable to create vault client", e);
+    }
   }
 
   protected static KmsClient newKmsClientWithHcVaultKms(
