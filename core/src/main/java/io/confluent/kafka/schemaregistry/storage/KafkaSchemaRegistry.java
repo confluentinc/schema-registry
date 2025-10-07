@@ -1811,16 +1811,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   public void deleteAssociations(
-      String resourceId, String resourceType, List<String> associationTypes)
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
       throws SchemaRegistryException {
     for (String associationType : associationTypes) {
-      deleteAssociation(resourceId, resourceType, associationType);
+      deleteAssociation(resourceId, resourceType, associationType, cascadeLifecycle);
     }
   }
 
   public void deleteAssociation(
-      String resourceId, String resourceType, String associationType)
+      String resourceId, String resourceType, String associationType, boolean cascadeLifecycle)
       throws SchemaRegistryException {
+    // TODO cascadeLifecycle
     List<Association> associations = getAssociationsByResourceId(resourceId,
         resourceType, Collections.singletonList(associationType), null);
     if (associations.isEmpty()) {
@@ -1851,17 +1853,17 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public void deleteAssociationsOrForward(
       String subject,  // subject is only used for locking per tenant
       String resourceId, String resourceType, List<String> associationTypes,
-      Map<String, String> headerProperties)
+      boolean cascadeLifecycle, Map<String, String> headerProperties)
       throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteAssociations(resourceId, resourceType, associationTypes);
+        deleteAssociations(resourceId, resourceType, associationTypes, cascadeLifecycle);
       } else {
         // forward update config request to the leader
         if (leaderIdentity != null) {
           forwardDeleteAssociationsRequestToLeader(resourceId,
-              resourceType, associationTypes, headerProperties);
+              resourceType, associationTypes, cascadeLifecycle, headerProperties);
         } else {
           throw new UnknownLeaderException("Delete association request failed since leader is "
               + "unknown");
@@ -2141,14 +2143,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   private void forwardDeleteAssociationsRequestToLeader(
       String resourceId, String resourceType, List<String> associationTypes,
-      Map<String, String> headerProperties)
+      boolean cascadeLifecycle, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete associations request to %s", baseUrl));
     try {
       leaderRestService.deleteAssociations(
-          headerProperties, resourceId, resourceType, associationTypes);
+          headerProperties, resourceId, resourceType, associationTypes, cascadeLifecycle);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the delete association request to %s",

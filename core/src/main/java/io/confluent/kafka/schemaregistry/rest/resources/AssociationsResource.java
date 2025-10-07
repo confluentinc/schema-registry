@@ -430,7 +430,7 @@ public class AssociationsResource {
 
       String subject = oldAssociations.get(0).getSubject();
       schemaRegistry.deleteAssociationsOrForward(subject,
-          resourceId, resourceType, associationTypes,
+          resourceId, resourceType, associationTypes, cascadeLifecycle,
           headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (SchemaRegistryException e) {
