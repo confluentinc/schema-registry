@@ -27,7 +27,6 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -76,7 +75,7 @@ public class SchemaDiffTest {
 
       List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
-          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(diff.getType()))
           .collect(Collectors.toList());
       assertThat(description,
           differences.stream()
@@ -85,6 +84,17 @@ public class SchemaDiffTest {
           is(errorMessages)
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
+
+      boolean isCompatibleLenient = isCompatible;
+      if (testCase.has("compatible_lenient")) {
+        isCompatibleLenient = testCase.getBoolean("compatible_lenient");
+      }
+      List<Difference> differencesLenient = SchemaDiff.compare(SchemaDiff.COMPATIBLE_CHANGES_LENIENT,
+          original.rawSchema(), update.rawSchema());
+      final List<Difference> incompatibleDiffsLenient = differences.stream()
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_LENIENT.contains(diff.getType()))
+          .collect(Collectors.toList());
+      assertEquals(description, isCompatibleLenient, incompatibleDiffsLenient.isEmpty());
     }
   }
 
