@@ -54,7 +54,6 @@ import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -124,7 +123,7 @@ public class DekRegistry implements Closeable {
       new TypeReference<Void>() {
       };
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final MetricsManager metricsManager;
   private final DekRegistryConfig config;
 
@@ -148,7 +147,7 @@ public class DekRegistry implements Closeable {
       MetricsManager metricsManager
   ) {
     try {
-      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry = schemaRegistry;
       this.schemaRegistry.properties().put(KEY, this);
       this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
       this.metricsManager = metricsManager;
@@ -173,7 +172,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public KafkaSchemaRegistry getSchemaRegistry() {
+  public SchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
   }
 

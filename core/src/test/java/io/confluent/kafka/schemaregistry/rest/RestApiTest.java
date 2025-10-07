@@ -58,7 +58,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.IOException;
@@ -1421,39 +1420,6 @@ public class RestApiTest extends ClusterTestHarness {
     List<String> messages = restApp.restClient.testCompatibility(
         registerRequest, subject1, null, true, true);
     assertTrue(!messages.isEmpty() && messages.get(0).contains("Invalid schema"));
-  }
-
-  @Test
-  public void testLookUpSchemaWithNormalizationRetry() throws Exception {
-      String subject = "testSubject";
-
-      String schemaString1 = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"email4\",\"type\":\"string\"}]}";
-  
-      // Register the original schema
-      TestUtils.registerAndVerifySchema(restApp.restClient, schemaString1, 1, subject);
-  
-      // Same schema with different field ordering (semantically equivalent)
-      String schemaString2 = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"type\":\"int\",\"name\":\"id\"},{\"type\":\"string\",\"name\":\"email4\"}]}";
-  
-      RegisterSchemaRequest request = new RegisterSchemaRequest();
-      request.setSchema(schemaString2);
-
-      io.confluent.kafka.schemaregistry.client.rest.entities.Schema schema = 
-          restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
-      assertNotNull(schema);
-      assertEquals(1, schema.getVersion().intValue());
-
-      // Different schema with different field name (not semantically equivalent)
-      String invalidSchema = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"type\":\"int\",\"name\":\"id\"},{\"type\":\"string\",\"name\":\"email6\"}]}";
-      request.setSchema(invalidSchema);
-  
-      // Should fail since schemas are actually different
-      try {
-          restApp.restClient.lookUpSubjectVersion(request, subject, true, false);
-          fail("Should fail as schemas are not semantically equivalent");
-      } catch (RestClientException e) {
-          assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, e.getErrorCode());
-      }
   }
 
   @Test
@@ -2838,7 +2804,7 @@ public class RestApiTest extends ClusterTestHarness {
   @Test
   public void testInvalidSchema() {
     assertThrows(InvalidSchemaException.class, () ->
-        ((KafkaSchemaRegistry) restApp.schemaRegistry()).parseSchema(null));
+        restApp.schemaRegistry().parseSchema(null));
   }
 
   @Test

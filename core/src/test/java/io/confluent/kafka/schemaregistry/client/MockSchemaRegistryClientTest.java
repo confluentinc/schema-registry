@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -41,6 +42,7 @@ import java.util.Arrays;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -182,6 +184,8 @@ public class MockSchemaRegistryClientTest extends ClusterTestHarness {
 
     int id = client.register("test", schema);
     assertEquals(1, id);
+
+    assertThrows(RestClientException.class, () -> client.getVersion("test", schema2));
 
     id = client.register("test", schema2);
     assertEquals(2, id);

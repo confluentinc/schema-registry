@@ -28,8 +28,8 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,6 +41,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,10 +78,11 @@ public class SubjectsResource {
 
   public static final String apiTag = "Subjects (v1)";
   private static final Logger log = LoggerFactory.getLogger(SubjectsResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public SubjectsResource(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public SubjectsResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -121,6 +124,7 @@ public class SubjectsResource {
              subject, lookupDeletedSchema, request.getSchemaType());
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
+
     // returns version if the schema exists. Otherwise returns 404
     Schema schema = new Schema(subject, request);
     io.confluent.kafka.schemaregistry.client.rest.entities.Schema matchingSchema;
@@ -130,15 +134,6 @@ public class SubjectsResource {
       }
       matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
           subject, schema, normalize, lookupDeletedSchema);
-
-      // If first attempt failed with normalize=false, try again with normalize=true
-      if (matchingSchema == null && !normalize) {
-        log.debug("No matching schema found with normalize = false,"
-                + " retrying with normalize = true");
-        matchingSchema = schemaRegistry.lookUpSchemaUnderSubjectUsingContexts(
-              subject, schema, true, lookupDeletedSchema);
-      }
-
       if (matchingSchema == null) {
         if (!schemaRegistry.hasSubjects(subject, lookupDeletedSchema)) {
           throw Errors.subjectNotFoundException(subject);
