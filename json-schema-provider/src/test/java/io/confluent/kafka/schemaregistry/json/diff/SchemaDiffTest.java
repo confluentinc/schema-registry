@@ -84,6 +84,17 @@ public class SchemaDiffTest {
           is(errorMessages)
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
+
+      boolean isCompatibleLenient = isCompatible;
+      if (testCase.has("compatible_lenient")) {
+        isCompatibleLenient = testCase.getBoolean("compatible_lenient");
+      }
+      List<Difference> differencesLenient = SchemaDiff.compare(SchemaDiff.COMPATIBLE_CHANGES_LENIENT,
+          original.rawSchema(), update.rawSchema());
+      final List<Difference> incompatibleDiffsLenient = differences.stream()
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_LENIENT.contains(diff.getType()))
+          .collect(Collectors.toList());
+      assertEquals(description, isCompatibleLenient, incompatibleDiffsLenient.isEmpty());
     }
   }
 

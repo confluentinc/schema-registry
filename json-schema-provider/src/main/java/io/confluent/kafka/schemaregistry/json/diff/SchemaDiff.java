@@ -108,7 +108,7 @@ public class SchemaDiff {
     changes.add(Type.SUM_TYPE_EXTENDED);
     changes.add(Type.NOT_TYPE_NARROWED);
 
-    COMPATIBLE_CHANGES_STRICT = Collections.unmodifiableSet(changes);
+    COMPATIBLE_CHANGES_STRICT = Collections.unmodifiableSet(new HashSet<>(changes));
 
     changes.add(Type.ADDITIONAL_PROPERTIES_NARROWED);
     changes.add(Type.ADDITIONAL_PROPERTIES_REMOVED);
@@ -117,7 +117,7 @@ public class SchemaDiff {
     changes.add(Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
     changes.add(Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
 
-    COMPATIBLE_CHANGES_LENIENT = Collections.unmodifiableSet(changes);
+    COMPATIBLE_CHANGES_LENIENT = Collections.unmodifiableSet(new HashSet<>(changes));
   }
 
   public static List<Difference> compare(
