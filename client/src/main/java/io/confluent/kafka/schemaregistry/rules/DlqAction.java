@@ -55,7 +55,7 @@ public class DlqAction implements RuleAction {
   public static final String DLQ_TOPIC = "dlq.topic";
   public static final String DLQ_AUTO_FLUSH = "dlq.auto.flush";
   public static final String DLQ_REDACT_RULE_TYPES = "dlq.redact.rule.types";
-  public static final String DLQ_REDACT_RULE_TYPES_DEFAULT = "ENCRYPT,FULL_ENCRYPT";
+  public static final String DLQ_REDACT_RULE_TYPES_DEFAULT = "ENCRYPT";
   public static final String PRODUCER = "producer";  // for testing
 
   public static final String HEADER_PREFIX = "__rule.";
