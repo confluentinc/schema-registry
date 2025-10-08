@@ -124,9 +124,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
               throw new IllegalStateException("Invalid schema type " + schemaType);
             }
             return schemaProvider.parseSchema(schema, false, false).orElseThrow(
-                () -> new IOException("Invalid schema " + schema.getSchema()
-                    + " with refs " + schema.getReferences()
-                    + " of type " + schema.getSchemaType()));
+                () -> new IOException("Invalid schema of type " + schema.getSchemaType()));
           }
         });
   }
@@ -770,7 +768,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+  public SchemaRegistryDeployment getSchemaRegistryDeployment()
       throws IOException, RestClientException {
     // For the mock client, return an empty deployment (default behavior)
     return new SchemaRegistryDeployment();
