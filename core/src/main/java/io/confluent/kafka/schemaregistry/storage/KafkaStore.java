@@ -92,7 +92,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
     this.config = config;
-    int port = SchemaRegistry.getInterInstanceListener(config.getListeners(),
+    int port = AbstractSchemaRegistry.getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(),
         config.interInstanceProtocol()).getUri().getPort();
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()

@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private final IdGenerator idGenerator;
   private final List<String> canonicalizeSchemaTypes;
@@ -45,7 +45,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
   public KafkaStoreMessageHandler(SchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator) {
-    this.schemaRegistry = schemaRegistry.getKafkaSchemaRegistry();
+    this.schemaRegistry = schemaRegistry;
     this.lookupCache = lookupCache;
     this.idGenerator = idGenerator;
     this.canonicalizeSchemaTypes = schemaRegistry.config().getList(

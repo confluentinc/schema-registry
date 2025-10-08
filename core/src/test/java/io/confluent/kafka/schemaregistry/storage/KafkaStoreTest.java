@@ -25,8 +25,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
@@ -36,7 +34,6 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Iterator;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -48,8 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class KafkaStoreTest extends ClusterTestHarness {
 
-  private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
-
   private static final int ADMIN_TIMEOUT_SEC = 60;
   private static final TopicPartition tp = new TopicPartition("_schemas", 0);
 
@@ -60,30 +55,24 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testDoubleInitialization() throws Exception {
+  public void testDoubleInitialization() {
     assertThrows(StoreInitializationException.class, () -> {
-      KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
-          brokerList);
-      try {
-        kafkaStore.init();
-      } finally {
-        kafkaStore.close();
-      }
+        try (KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(
+                brokerList)) {
+            kafkaStore.init();
+        }
     });
   }
 
   @Test
   public void testSimplePut() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(brokerList);
-    String key = "Kafka";
-    String value = "Rocks";
-    try {
-      kafkaStore.put(key, value);
-      String retrievedValue = kafkaStore.get(key);
-      assertEquals(value, retrievedValue, "Retrieved value should match entered value");
-    } finally {
-      kafkaStore.close();
-    }
+      try (KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(brokerList)) {
+          String key = "Kafka";
+          String value = "Rocks";
+          kafkaStore.put(key, value);
+          String retrievedValue = kafkaStore.get(key);
+          assertEquals(value, retrievedValue, "Retrieved value should match entered value");
+      }
   }
 
   @Test
@@ -95,7 +84,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
     String key = "Kafka";
     String value = "Rocks";
-    String retrievedValue = null;
+    String retrievedValue;
     try {
       try {
         kafkaStore.put(key, value);
@@ -128,37 +117,34 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
   @Test
   public void testSimpleDelete() throws Exception {
-    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(brokerList);
-    String key = "Kafka";
-    String value = "Rocks";
-    try {
-      try {
-        kafkaStore.put(key, value);
-      } catch (StoreException e) {
-        throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+      try (KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(brokerList)) {
+          String key = "Kafka";
+          String value = "Rocks";
+          try {
+              kafkaStore.put(key, value);
+          } catch (StoreException e) {
+              throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+          }
+          String retrievedValue;
+          try {
+              retrievedValue = kafkaStore.get(key);
+          } catch (StoreException e) {
+              throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+          }
+          assertEquals(value, retrievedValue, "Retrieved value should match entered value");
+          try {
+              kafkaStore.delete(key);
+          } catch (StoreException e) {
+              throw new RuntimeException("Kafka store delete(Kafka) operation failed", e);
+          }
+          // verify that value is deleted
+          try {
+              retrievedValue = kafkaStore.get(key);
+          } catch (StoreException e) {
+              throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+          }
+          assertNull(retrievedValue, "Value should have been deleted");
       }
-      String retrievedValue = null;
-      try {
-        retrievedValue = kafkaStore.get(key);
-      } catch (StoreException e) {
-        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-      }
-      assertEquals(value, retrievedValue, "Retrieved value should match entered value");
-      try {
-        kafkaStore.delete(key);
-      } catch (StoreException e) {
-        throw new RuntimeException("Kafka store delete(Kafka) operation failed", e);
-      }
-      // verify that value is deleted
-      try {
-        retrievedValue = kafkaStore.get(key);
-      } catch (StoreException e) {
-        throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-      }
-      assertNull(retrievedValue, "Value should have been deleted");
-    } finally {
-      kafkaStore.close();
-    }
   }
 
   @Test
@@ -176,7 +162,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
       } catch (StoreException e) {
         throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
       }
-      String retrievedValue = null;
+      String retrievedValue;
       try {
         retrievedValue = kafkaStore.get(key);
       } catch (StoreException e) {
@@ -220,7 +206,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
     props.put(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG, groupId);
     KafkaStore kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(brokerList, inMemoryStore, props);
 
-    assertEquals(kafkaStore.getKafkaStoreReaderThread().getConsumerProperty(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG), groupId);
+    assertEquals(groupId, kafkaStore.getKafkaStoreReaderThread().getConsumerProperty(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG));
   }
 
 
@@ -234,7 +220,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testMandatoryCompactionPolicy() throws Exception {
+  public void testMandatoryCompactionPolicy() {
     assertThrows(StoreInitializationException.class, () -> {
       Properties kafkaProps = new Properties();
       Map<String, String> topicProps = new HashMap<>();
@@ -258,7 +244,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testTooManyPartitions() throws Exception {
+  public void testTooManyPartitions() {
     assertThrows(StoreInitializationException.class, () -> {
       Properties kafkaProps = new Properties();
       Map<String, String> topicProps = new HashMap<>();
@@ -394,9 +380,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
     int size = 0;
     try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
-      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+      for (; keys.hasNext(); ) {
         size++;
-        iter.next();
+        keys.next();
       }
     }
     assertEquals(1, size);
@@ -425,9 +411,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
     int size = 0;
     try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
-      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+      for (; keys.hasNext(); ) {
         size++;
-        iter.next();
+        keys.next();
       }
     }
     assertEquals(2, size);
@@ -459,9 +445,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
     int size = 0;
     try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
-      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+      for (; keys.hasNext(); ) {
         size++;
-        iter.next();
+        keys.next();
       }
     }
     assertEquals(1, size);
@@ -493,9 +479,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     );
     int size = 0;
     try (CloseableIterator<SchemaRegistryKey> keys = kafkaStore.getAllKeys()) {
-      for (Iterator<SchemaRegistryKey> iter = keys; iter.hasNext(); ) {
+      for (; keys.hasNext(); ) {
         size++;
-        iter.next();
+        keys.next();
       }
     }
     assertEquals(2, size);
