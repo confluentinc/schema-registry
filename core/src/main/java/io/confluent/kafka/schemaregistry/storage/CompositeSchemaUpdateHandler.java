@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.storage;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +40,7 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
    * Invoked before the cache is initialized.
    */
   @Override
-  public void init(Map<TopicPartition, Long> checkpoints) {
+  public void init(Map<TopicPartition, Long> checkpoints) throws StoreInitializationException {
     for (SchemaUpdateHandler handler : handlers) {
       handler.init(checkpoints);
     }
