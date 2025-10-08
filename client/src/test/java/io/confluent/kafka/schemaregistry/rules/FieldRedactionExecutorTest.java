@@ -98,4 +98,22 @@ public class FieldRedactionExecutorTest {
     JsonNode json = schema.toJson(message);
     assertEquals("<REDACTED>", json.get("lastName").get("string").asText());
   }
+
+  @Test
+  public void testNoRedaction() throws Exception {
+    ParsedSchema schema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("cel", null, RuleKind.CONDITION, RuleMode.WRITE, "CEL",
+        null, null, "message.name == 'hi'", null, null, false);
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
+        "test-value", "test", null,
+        null, null, false,
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+    List<String> redactRuleTypes = Collections.singletonList("ENCRYPT");
+    Object message = createUserRecord();
+    message = DlqAction.redactFields(ctx, message, redactRuleTypes);
+    JsonNode json = schema.toJson(message);
+    assertEquals("John", json.get("firstName").get("string").asText());
+    assertEquals("secret", json.get("binary").get("bytes").asText());
+  }
+
 }
