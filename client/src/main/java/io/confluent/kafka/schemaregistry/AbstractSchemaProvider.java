@@ -67,7 +67,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       if (reference.getName() == null
           || reference.getSubject() == null
           || reference.getVersion() == null) {
-        throw new IllegalStateException("Invalid reference: " + reference);
+        throw new IllegalStateException("Invalid schema reference");
       }
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
               schemaVersionFetcher().tenant(), schema.getSubject(), reference.getSubject());
