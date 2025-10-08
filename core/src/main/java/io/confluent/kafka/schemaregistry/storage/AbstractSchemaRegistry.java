@@ -19,6 +19,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
@@ -1087,6 +1088,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       errorMessages.addAll(validateReservedFields(parsedSchema, previousSchemaHolder));
     }
     CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
+    CompatibilityPolicy compatibilityPolicy =
+            CompatibilityPolicy.forName(config.getCompatibilityPolicy());
     String compatibilityGroup = config.getCompatibilityGroup();
     if (compatibilityGroup != null) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
@@ -1097,7 +1100,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                       getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
               .collect(Collectors.toList());
     }
-    errorMessages.addAll(parsedSchema.isCompatible(compatibility, previousSchemas));
+    errorMessages.addAll(
+            parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
     if (!errorMessages.isEmpty()) {
       try {
         errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
