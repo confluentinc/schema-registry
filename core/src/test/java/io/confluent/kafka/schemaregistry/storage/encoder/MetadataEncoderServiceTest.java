@@ -24,7 +24,6 @@ import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.kcache.Cache;
@@ -33,15 +32,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.SortedMap;
-import java.util.TreeMap;
+
 import org.junit.Test;
 
 public class MetadataEncoderServiceTest {
 
   @Test
   public void testEncoding() throws Exception {
-    SchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
