@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
@@ -155,7 +156,7 @@ public class SchemaRegistryConfigTest {
     props.setProperty("listener.name.alice." + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
-    NamedURI internalListener = SchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = AbstractSchemaRegistry.getInterInstanceListener(config.getListeners(),
       config.getString(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG),
       SchemaRegistryConfig.HTTPS);
     Map<String, Object> overrides = config.getOverriddenSslConfigs(internalListener);
