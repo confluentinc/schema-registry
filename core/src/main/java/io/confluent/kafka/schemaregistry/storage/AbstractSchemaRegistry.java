@@ -334,7 +334,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
 
     if (schema.getId() >= 0) {
-      if (getModeInScope(subject) != Mode.IMPORT) {
+      if (!getModeInScope(subject).isImportOrForwardMode()) {
         throw new OperationNotPermittedException("Subject " + subject
                 + " in context " + context + " is not in import mode");
       }
@@ -519,7 +519,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                                                        boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      Mode mode = getModeInScope(schema.getSubject());
+      if (!mode.isImportOrForwardMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
       }
       if (normalize) {
