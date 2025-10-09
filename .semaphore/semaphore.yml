@@ -58,7 +58,8 @@ blocks:
           commands:
             - ci-tools ci-update-version
             - ci-tools ci-push-tag
-            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/
+            - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode 
+              -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/ 
               -DrepositoryId=confluent-codeartifact-internal deploy -DskipTests
   - name: CP Jar Build CI Gating
     dependencies: []
@@ -68,7 +69,7 @@ blocks:
     task:
       agent:
         machine:
-          type: s1-prod-ubuntu24-04-arm64-0
+          type: s1-prod-ubuntu24-04-arm64-00
       env_vars:
         - name: COMPONENT_NAME
           value: schema-registry
@@ -93,7 +94,7 @@ after_pipeline:
   task:
     agent:
       machine:
-        type: s1-prod-ubuntu24-04-arm64-0
+        type: s1-prod-ubuntu24-04-arm64-00
     jobs:
       - name: Metrics
         commands:
