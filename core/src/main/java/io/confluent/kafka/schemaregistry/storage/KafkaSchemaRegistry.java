@@ -321,8 +321,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       if (leaderIdentity == null) {
         leaderRestService = null;
       } else {
-        leaderRestService = new RestService(leaderIdentity.getUrl(),
-            config.whitelistHeaders().contains(RestService.X_FORWARD_HEADER));
+        leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
         if (sslFactory != null && sslFactory.sslContext() != null) {
