@@ -32,8 +32,6 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_C
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.HashMultiset;
-import com.google.common.collect.Multiset;
 import com.google.common.collect.Sets;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -125,6 +123,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -1517,6 +1516,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       String context, boolean dryRun, AssociationCreateRequest request)
       throws SchemaRegistryException {
     // TODO RAY verify subject is qualified
+    // TODO RAY test idempotency
     for (AssociationCreateInfo info : request.getAssociations()) {
       String subject = info.getSubject();
       if (context != null && !context.isEmpty() && !subject.startsWith(CONTEXT_PREFIX)) {
@@ -1532,22 +1532,33 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
 
     // Check that association types are unique
-    Multiset<String> associationTypes = request.getAssociations().stream()
-        .map(AssociationCreateInfo::getAssociationType)
-        .collect(Collectors.toCollection(HashMultiset::create));
-    for (String associationType : associationTypes.elementSet()) {
-      if (associationTypes.count(associationType) > 1) {
+    Map<String, AssociationCreateInfo> infosByType = new HashMap<>();
+    for (AssociationCreateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      if (infosByType.containsKey(associationType)) {
         throw new InvalidAssociationException("Duplicate association type: " + associationType);
       }
+      infosByType.put(associationType, info);
     }
 
-    // Check that the resource does not already have an association
-    List<Association> assocsByResource = getAssociationsByResourceId(
+    List<Association> associations = getAssociationsByResourceId(
         request.getResourceId(), request.getResourceType(),
-        new ArrayList<>(associationTypes.elementSet()), null);
-    for (Association association : assocsByResource) {
-      if (associationTypes.contains(association.getAssociationType())) {
-        throw new AssociationForResourceExistsException(request.getResourceId());
+        new ArrayList<>(infosByType.keySet()), null);
+
+    // Check that the resource does not already have an association
+    Map<String, Association> assocsByType = associations.stream()
+        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    Set<String> assocTypesToSkip = new HashSet<>();
+    for (AssociationCreateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+      if (association != null) {
+        if (association.isEquivalent(info)) {
+          // Idempotent case - skip
+          assocTypesToSkip.add(info.getAssociationType());
+        } else {
+          throw new AssociationForResourceExistsException(request.getResourceId());
+        }
       }
     }
 
@@ -1606,7 +1617,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
 
     List<AssociationValue> associationValues =
-        AssociationValue.fromAssociationCreateRequest(tenant(), request);
+        AssociationValue.fromAssociationCreateRequest(tenant(), request, assocTypesToSkip);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(context, kafkaStoreTimeoutMs);
       for (AssociationValue associationValue : associationValues) {
@@ -1648,48 +1659,27 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       String context, boolean dryRun, AssociationUpdateRequest request)
       throws SchemaRegistryException {
     // TODO RAY verify subject is qualified
+    // TODO RAY test idempotency
 
     // Check that association types are unique
-    Multiset<String> associationTypes = request.getAssociations().stream()
-        .map(AssociationUpdateInfo::getAssociationType)
-        .collect(Collectors.toCollection(HashMultiset::create));
-    for (String associationType : associationTypes.elementSet()) {
-      if (associationTypes.count(associationType) > 1) {
+    Map<String, AssociationUpdateInfo> infosByType = new HashMap<>();
+    for (AssociationUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      if (infosByType.containsKey(associationType)) {
         throw new InvalidAssociationException("Duplicate association type: " + associationType);
       }
+      infosByType.put(associationType, info);
     }
 
     List<Association> associations;
     if (request.getResourceName() != null && !request.getResourceName().isEmpty()) {
       associations = getAssociationsByResourceName(
           request.getResourceName(), request.getResourceNamespace(), request.getResourceType(),
-          new ArrayList<>(associationTypes.elementSet()), null);
+          new ArrayList<>(infosByType.keySet()), null);
     } else {
       associations = getAssociationsByResourceId(
           request.getResourceId(), request.getResourceType(),
-          new ArrayList<>(associationTypes.elementSet()), null);
-    }
-
-    // Check that the association is not frozen
-    // If the new association is strong, check no other associations exist
-    Map<String, Association> associationsByType = associations.stream()
-        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
-    for (AssociationUpdateInfo info : request.getAssociations()) {
-      String associationType = info.getAssociationType();
-      Association association = associationsByType.get(associationType);
-      if (association == null) {
-        // TODO RAY better name?
-        throw new AssociationNotFoundException(associationType);
-      } else if (association.isFrozen()) {
-        throw new AssociationFrozenException(associationType);
-      } else if (info.getLifecycle().isPresent()
-          && info.getLifecycle().get() == LifecyclePolicy.STRONG) {
-        List<Association> assocsBySubject = getAssociationsBySubject(
-            association.getSubject(), association.getResourceType(), Collections.emptyList(), null);
-        if (!assocsBySubject.isEmpty()) {
-          throw new AssociationForSubjectExistsException(association.getSubject());
-        }
-      }
+          new ArrayList<>(infosByType.keySet()), null);
     }
 
     for (Association association : associations) {
@@ -1701,8 +1691,34 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       }
     }
 
+    // Check that the association is not frozen
+    // If the new association is strong, check no other associations exist
+    Map<String, Association> assocsByType = associations.stream()
+        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    Set<String> assocTypesToSkip = new HashSet<>();
+    for (AssociationUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+      if (association == null) {
+        // TODO RAY better name?
+        throw new AssociationNotFoundException(associationType);
+      } else if (association.isEquivalent(info)) {
+        // Idempotent case - skip
+        assocTypesToSkip.add(info.getAssociationType());
+      } else if (association.isFrozen() && info.getFrozen().orElse(true)) {
+        throw new AssociationFrozenException(associationType);
+      } else if (info.getLifecycle().orElse(LifecyclePolicy.WEAK) == LifecyclePolicy.STRONG) {
+        List<Association> assocsBySubject = getAssociationsBySubject(
+            association.getSubject(), association.getResourceType(), Collections.emptyList(), null);
+        if (!assocsBySubject.isEmpty()) {
+          throw new AssociationForSubjectExistsException(association.getSubject());
+        }
+      }
+    }
+
     List<AssociationValue> associationValues =
-        AssociationValue.fromAssociationUpdateRequest(tenant(), request, associations);
+        AssociationValue.fromAssociationUpdateRequest(
+            tenant(), request, associations, assocTypesToSkip);
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(context, kafkaStoreTimeoutMs);
       for (AssociationValue associationValue : associationValues) {
@@ -1951,6 +1967,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle)
       throws SchemaRegistryException {
+    // TODO RAY test idempotency
     for (String associationType : associationTypes) {
       deleteAssociation(resourceId, resourceType, associationType, cascadeLifecycle);
     }

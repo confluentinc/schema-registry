@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateInfo;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -169,5 +171,18 @@ public class Association {
     return Objects.hash(
         subject, guid, resourceName, resourceNamespace, resourceId,
         resourceType, associationType, lifecycle, frozen);
+  }
+
+  public boolean isEquivalent(AssociationCreateInfo info) {
+    return Objects.equals(subject, info.getSubject())
+        && Objects.equals(associationType, info.getAssociationType())
+        && lifecycle == info.getLifecycle()
+        && frozen == info.isFrozen();
+  }
+
+  public boolean isEquivalent(AssociationUpdateInfo info) {
+    return Objects.equals(associationType, info.getAssociationType())
+        && (info.getLifecycle().isEmpty() || info.getLifecycle().get() == getLifecycle())
+        && (info.getFrozen().isEmpty() || info.getFrozen().get() == isFrozen());
   }
 }

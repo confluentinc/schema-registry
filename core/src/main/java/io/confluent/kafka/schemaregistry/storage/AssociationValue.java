@@ -30,6 +30,7 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -228,8 +229,9 @@ public class AssociationValue extends SubjectValue {
   }
 
   public static List<AssociationValue> fromAssociationCreateRequest(
-      String tenant, AssociationCreateRequest request) {
+      String tenant, AssociationCreateRequest request, Set<String> assocTypesToSkip) {
     return request.getAssociations().stream()
+        .filter(info -> !assocTypesToSkip.contains(info.getAssociationType()))
         .map(info -> new AssociationValue(
             info.getSubject(),
             UUID.randomUUID().toString(),
@@ -247,14 +249,12 @@ public class AssociationValue extends SubjectValue {
   }
 
   public static List<AssociationValue> fromAssociationUpdateRequest(
-      String tenant, AssociationUpdateRequest request, List<Association> oldAssociations) {
-    if (request.getAssociations().size() != oldAssociations.size()) {
-      throw new IllegalArgumentException("The number of associations in the update request must "
-          + "match the number of existing associations.");
-    }
+      String tenant, AssociationUpdateRequest request,
+      List<Association> oldAssociations, Set<String> assocTypesToSkip) {
     Map<String, Association> oldMap = oldAssociations.stream()
         .collect(Collectors.toMap(Association::getAssociationType, a -> a));
     return request.getAssociations().stream()
+        .filter(info -> !assocTypesToSkip.contains(info.getAssociationType()))
         .map(info -> {
           Association old = oldMap.get(info.getAssociationType());
           if (old == null) {
