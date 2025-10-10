@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -13,25 +13,23 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+package io.confluent.kafka.schemaregistry.exceptions;
 
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+public class WeakAssociationForSubjectExistsException extends SchemaRegistryException {
 
-public class AssociationAlreadyExistsException extends SchemaRegistryException {
-
-  public AssociationAlreadyExistsException(String name, Throwable cause) {
+  public WeakAssociationForSubjectExistsException(String name, Throwable cause) {
     super(name, cause);
   }
 
-  public AssociationAlreadyExistsException(String name) {
+  public WeakAssociationForSubjectExistsException(String name) {
     super(name);
   }
 
-  public AssociationAlreadyExistsException(Throwable cause) {
+  public WeakAssociationForSubjectExistsException(Throwable cause) {
     super(cause);
   }
 
-  public AssociationAlreadyExistsException() {
+  public WeakAssociationForSubjectExistsException() {
     super();
   }
 }

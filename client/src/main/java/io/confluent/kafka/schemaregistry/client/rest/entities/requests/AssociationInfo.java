@@ -34,7 +34,6 @@ public class AssociationInfo {
   private String associationType;
   private LifecyclePolicy lifecycle;
   private boolean frozen;
-  // TODO
   private Schema schema;
 
   @JsonCreator

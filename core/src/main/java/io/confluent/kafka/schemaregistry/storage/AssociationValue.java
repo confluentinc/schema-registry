@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -283,7 +284,8 @@ public class AssociationValue extends SubjectValue {
         .toList();
   }
 
-  public static AssociationResponse toAssociationResponse(List<AssociationValue> associations) {
+  public static AssociationResponse toAssociationResponse(
+      List<AssociationValue> associations, Map<String, Schema> schemas) {
     // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
     for (int i = 1; i < associations.size(); i++) {
       AssociationValue a1 = associations.get(i - 1);
@@ -304,8 +306,7 @@ public class AssociationValue extends SubjectValue {
                 ? LifecyclePolicy.STRONG
                 : LifecyclePolicy.WEAK,
             a.isFrozen(),
-            // TODO RAY
-            null))
+            schemas.get(a.associationType)))
         .toList();
     return new AssociationResponse(
         associations.get(0).getResourceName(),

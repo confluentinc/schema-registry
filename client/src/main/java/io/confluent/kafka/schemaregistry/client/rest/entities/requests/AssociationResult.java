@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.Objects;
@@ -28,37 +29,24 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationResult {
 
-  private int status;
-  private String error;
+  private ErrorMessage error;
   private AssociationResponse result;
 
   @JsonCreator
   public AssociationResult(
-      @JsonProperty("status") int status,
-      @JsonProperty("error") String error,
+      @JsonProperty("error") ErrorMessage error,
       @JsonProperty("result") AssociationResponse result) {
-    this.status = status;
     this.error = error;
     this.result = result;
   }
 
-  @JsonProperty("status")
-  public int getStatus() {
-    return status;
-  }
-
-  @JsonProperty("status")
-  public void setStatus(int status) {
-    this.status = status;
-  }
-
   @JsonProperty("error")
-  public String getError() {
+  public ErrorMessage getError() {
     return error;
   }
 
   @JsonProperty("error")
-  public void setError(String error) {
+  public void setError(ErrorMessage error) {
     this.error = error;
   }
 
@@ -78,14 +66,13 @@ public class AssociationResult {
       return false;
     }
     AssociationResult that = (AssociationResult) o;
-    return status == that.status
-        && Objects.equals(error, that.error)
+    return Objects.equals(error, that.error)
         && Objects.equals(result, that.result);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(status, error, result);
+    return Objects.hash(error, result);
   }
 
   public String toJson() throws IOException {

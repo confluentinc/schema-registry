@@ -34,8 +34,8 @@ public class AssociationCreateInfo {
   private String associationType;
   private LifecyclePolicy lifecycle;
   private boolean frozen;
-  // TODO
   private Schema schema;
+  private boolean normalize;
 
   @JsonCreator
   public AssociationCreateInfo(
@@ -43,12 +43,14 @@ public class AssociationCreateInfo {
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
       @JsonProperty("frozen") boolean frozen,
-      @JsonProperty("schema") Schema schema) {
+      @JsonProperty("schema") Schema schema,
+      @JsonProperty("normalize") boolean normalize) {
     this.subject = subject;
     this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
     this.schema = schema;
+    this.normalize = normalize;
   }
 
   @JsonProperty("subject")
@@ -101,6 +103,16 @@ public class AssociationCreateInfo {
     this.schema = schema;
   }
 
+  @JsonProperty("normalize")
+  public boolean isNormalize() {
+    return normalize;
+  }
+
+  @JsonProperty("normalize")
+  public void setNormalize(boolean normalize) {
+    this.normalize = normalize;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == null || getClass() != o.getClass()) {
@@ -111,13 +123,14 @@ public class AssociationCreateInfo {
         && Objects.equals(subject, that.subject)
         && Objects.equals(associationType, that.associationType)
         && lifecycle == that.lifecycle
-        && Objects.equals(schema, that.schema);
+        && Objects.equals(schema, that.schema)
+        && normalize == that.normalize;
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, associationType, lifecycle, frozen, schema);
+        subject, associationType, lifecycle, frozen, schema, normalize);
   }
 
   public String toJson() throws IOException {

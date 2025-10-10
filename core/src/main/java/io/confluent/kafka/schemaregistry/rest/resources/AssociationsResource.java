@@ -30,8 +30,8 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.exceptions.AssociationAlreadyExistsException;
-import io.confluent.kafka.schemaregistry.storage.exceptions.TooManyAssociationsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -223,10 +223,10 @@ public class AssociationsResource {
   public void createAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create request", required = true)
@@ -247,10 +247,10 @@ public class AssociationsResource {
       AssociationResponse association = schemaRegistry.createAssociationOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
-    } catch (AssociationAlreadyExistsException e) {
+    } catch (AssociationForResourceExistsException e) {
       throw Errors.associationAlreadyExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
-      // TODO maxKeys
+      // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
@@ -270,10 +270,10 @@ public class AssociationsResource {
   public void updateAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The update request", required = true)
@@ -319,6 +319,11 @@ public class AssociationsResource {
       AssociationResponse association = schemaRegistry.updateAssociationOrForward(context, dryRun,
           request, headerProperties);
       asyncResponse.resume(association);
+    } catch (AssociationForResourceExistsException e) {
+      throw Errors.associationAlreadyExistsException(e.getMessage());
+    } catch (TooManyAssociationsException e) {
+      // TODO RAY max
+      //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
           "Error while updating association: " + e.getMessage(), e);
@@ -336,10 +341,10 @@ public class AssociationsResource {
   public void createAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create requests", required = true)
@@ -369,10 +374,10 @@ public class AssociationsResource {
   public void updateAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The update request", required = true)
@@ -408,7 +413,7 @@ public class AssociationsResource {
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
-      // TODO
+      // TODO RAY
       @Parameter(description = "Cascade lifecycle")
       @QueryParam("cascadeLifecycle") boolean cascadeLifecycle) {
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -13,25 +13,23 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.exceptions;
+package io.confluent.kafka.schemaregistry.exceptions;
 
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+public class AssociationForSubjectExistsException extends SchemaRegistryException {
 
-public class TooManyAssociationsException extends SchemaRegistryException {
-
-  public TooManyAssociationsException(String type, Throwable cause) {
-    super(type, cause);
+  public AssociationForSubjectExistsException(String name, Throwable cause) {
+    super(name, cause);
   }
 
-  public TooManyAssociationsException(String type) {
-    super(type);
+  public AssociationForSubjectExistsException(String name) {
+    super(name);
   }
 
-  public TooManyAssociationsException(Throwable cause) {
+  public AssociationForSubjectExistsException(Throwable cause) {
     super(cause);
   }
 
-  public TooManyAssociationsException() {
+  public AssociationForSubjectExistsException() {
     super();
   }
 }
