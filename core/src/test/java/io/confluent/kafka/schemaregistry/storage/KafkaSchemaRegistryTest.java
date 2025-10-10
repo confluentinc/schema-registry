@@ -523,10 +523,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Get the leader rest service
     RestService leaderRestService = kafkaSchemaRegistry.leaderRestService();
-    assertNotNull(leaderRestService, "Leader rest service should not be null");
+    assertNotNull("Leader rest service should not be null", leaderRestService);
 
     // Verify that isForward is set to true - this ensures that requests to the leader
     // will include the X-Forward header, which is critical for proper request forwarding
-    assertTrue(leaderRestService.isForward(), "isForward should be true for leaderRestService");
+    assertTrue("isForward should be true for leaderRestService", leaderRestService.isForward());
   }
 }
