@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>[8.2.0-0, 8.2.1-0)</version>
+        <version>8.2.0-728</version>
     </parent>
 
     <artifactId>kafka-schema-registry-parent</artifactId>
     <packaging>pom</packaging>
     <name>kafka-schema-registry-parent</name>
-    <version>8.2.0-0</version>
+    <version>8.2.0-545</version>
     <organization>
         <name>Confluent, Inc.</name>
         <url>http://confluent.io</url>
@@ -107,7 +107,7 @@
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>5.4.0</wire.version>
         <swagger.version>2.2.29</swagger.version>
-        <io.confluent.schema-registry.version>8.2.0-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version>8.2.0-545</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
