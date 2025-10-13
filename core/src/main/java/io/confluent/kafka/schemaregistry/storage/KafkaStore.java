@@ -146,8 +146,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // checkpoint could be updated once the reader thread starts. This could result in a
     // race condition where schemas after the checkpoint during startup would be double counted.
     final Map<TopicPartition, Long> checkpoints = new HashMap<>(kafkaTopicReader.checkpoints());
-    this.storeUpdateHandler.init(checkpoints);
-
     this.kafkaTopicReader.start();
 
     if (initWaitForReader) {

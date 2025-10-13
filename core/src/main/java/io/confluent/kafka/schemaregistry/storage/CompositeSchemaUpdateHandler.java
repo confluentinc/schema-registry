@@ -35,16 +35,6 @@ public class CompositeSchemaUpdateHandler implements SchemaUpdateHandler {
   }
 
   /**
-   * Invoked before the cache is initialized.
-   */
-  @Override
-  public void init(Map<TopicPartition, Long> checkpoints) {
-    for (SchemaUpdateHandler handler : handlers) {
-      handler.init(checkpoints);
-    }
-  }
-
-  /**
    * Invoked after the cache is initialized.
    */
   @Override
