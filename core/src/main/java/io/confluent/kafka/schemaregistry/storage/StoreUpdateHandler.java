@@ -17,8 +17,6 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import java.io.Closeable;
 import java.io.IOException;
-
-import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
 
@@ -41,7 +39,7 @@ public interface StoreUpdateHandler<K, V> extends Configurable, Closeable {
   /**
    * Invoked before the cache is initialized.
    */
-  default void init(Map<TopicPartition, Long> checkpoints) throws StoreInitializationException {
+  default void init(Map<TopicPartition, Long> checkpoints) {
   }
 
   /**
