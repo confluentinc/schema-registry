@@ -71,5 +71,7 @@ public class MetadataEncoderServiceTest {
     // the value of "sensitive" is decrypted
     assertEquals(schema2.getMetadata().getProperties().get("sensitive"), "foo");
     assertNull(schema2.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
+
+    encoderService.close();
   }
 }
