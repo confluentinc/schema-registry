@@ -354,8 +354,12 @@ public class MetadataEncoderService implements Closeable {
       if (isEncode) {
         schema.setMd5Bytes(MD5.ofSchema(schema.toSchemaEntity()).bytes());
         newProperties.put(SchemaValue.ENCODED_PROPERTY, "true");
+        log.info("Encoded sensitive metadata for tenant {}, qualified subject {}, schema id {}",
+            tenant, qualifiedSubject, schema.getId());
       } else {
         newProperties.remove(SchemaValue.ENCODED_PROPERTY);
+        log.info("Decoded sensitive metadata for tenant {}, qualified subject {}, schema id {}",
+            tenant, qualifiedSubject, schema.getId());
       }
 
       schema.setMetadata(
