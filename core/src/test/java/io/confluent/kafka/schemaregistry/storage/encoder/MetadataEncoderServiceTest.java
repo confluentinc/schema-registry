@@ -57,9 +57,9 @@ public class MetadataEncoderServiceTest {
         "mysubject", null, null, null, null, null,
         new io.confluent.kafka.schemaregistry.storage.Metadata(metadata), null, "true", false);
     encoderService.encodeMetadata(schema);
-    assertEquals(schema.getMetadata().getProperties().get("nonsensitive"), "foo");
+    assertEquals("foo", schema.getMetadata().getProperties().get("nonsensitive"));
     // the value of "sensitive" is encrypted
-    assertNotEquals(schema.getMetadata().getProperties().get("sensitive"), "foo");
+    assertNotEquals("foo", schema.getMetadata().getProperties().get("sensitive"));
     assertNotNull(schema.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
 
     SchemaValue schema2 = new SchemaValue(
@@ -67,9 +67,11 @@ public class MetadataEncoderServiceTest {
         new io.confluent.kafka.schemaregistry.storage.Metadata(
             schema.getMetadata().toMetadataEntity()), null, "true", false);
     encoderService.decodeMetadata(schema2);
-    assertEquals(schema2.getMetadata().getProperties().get("nonsensitive"), "foo");
+    assertEquals("foo", schema2.getMetadata().getProperties().get("nonsensitive"));
     // the value of "sensitive" is decrypted
-    assertEquals(schema2.getMetadata().getProperties().get("sensitive"), "foo");
+    assertEquals("foo", schema2.getMetadata().getProperties().get("sensitive"));
     assertNull(schema2.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
+
+    encoderService.close();
   }
 }
