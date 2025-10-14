@@ -129,7 +129,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                            TopicPartition tp,
                            long offset,
                            long timestamp) {
-    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+    if (key.getKeyType() == SchemaRegistryKeyType.ASSOC) {
+      handleAssociationUpdate((AssociationKey) key,
+          (AssociationValue) value,
+          (AssociationValue) oldValue);
+    } else if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value,
           (SchemaValue) oldValue);
@@ -197,6 +201,16 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
       // Need to clear entire cache until we can prevent hard deleting referenced schemas
       schemaRegistry.clearOldSchemaCache();
+    }
+  }
+
+  private void handleAssociationUpdate(AssociationKey key,
+      AssociationValue value,
+      AssociationValue oldValue) {
+    if (value != null) {
+      lookupCache.associationRegistered(key, value, oldValue);
+    } else {
+      lookupCache.associationTombstoned(key, oldValue);
     }
   }
 

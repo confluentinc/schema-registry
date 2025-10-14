@@ -15,8 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import jakarta.ws.rs.core.Response;
-
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
 
@@ -48,11 +46,32 @@ public class Errors {
   public static final String SUBJECT_LEVEL_MODE_NOT_CONFIGURED_MESSAGE_FORMAT = "Subject '%s' does not have "
           + "subject-level mode configured";
   public static final int SUBJECT_LEVEL_MODE_NOT_CONFIGURED_ERROR_CODE = 40409;
-
-
+  public static final String ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT = "Association for '%s' not found.";
+  public static final int ASSOCIATION_NOT_FOUND_ERROR_CODE = 40410;
 
   // HTTP 409
-  public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = Response.Status.CONFLICT.getStatusCode();
+  public static final int INCOMPATIBLE_SCHEMA_ERROR_CODE = 40901;
+  public static final String TOO_MANY_ASSOCIATIONS_MESSAGE_FORMAT =
+      "A maximum of %d associations already exist";
+  public static final int TOO_MANY_ASSOCIATIONS_ERROR_CODE = 40902;
+  public static final String ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT =
+      "An association already exists for resource '%s'";
+  public static final int ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE = 40903;
+  public static final String ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT =
+      "A strong association already exists for resource '%s'";
+  public static final int ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE = 40904;
+  public static final String STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT =
+      "A strong association already exists for resource '%s'";
+  public static final int STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE = 40905;
+  public static final String WEAK_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT =
+      "A strong association already exists for resource '%s'";
+  public static final int WEAK_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE = 40906;
+  public static final String NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT =
+      "No active (non-deleted) version exists for subject '%s'";
+  public static final int NO_ACTIVE_SUBJECT_VERSION_EXISTS_CODE = 40907;
+  public static final String ASSOCIATION_IS_FROZEN_MESSAGE_FORMAT =
+      "The strong association is frozen for subject '%s'";
+  public static final int ASSOCIATION_IS_FROZEN_ERROR_CODE = 40908;
 
   // HTTP 422
   public static final int INVALID_SCHEMA_ERROR_CODE = 42201;
@@ -66,6 +85,7 @@ public class Errors {
   public static final int SCHEMA_TOO_LARGE_ERROR_CODE = 42209;
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
+  public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -141,8 +161,8 @@ public class Errors {
   public static RestIncompatibleSchemaException incompatibleSchemaException(String message,
                                                                             Throwable cause) {
     return new RestIncompatibleSchemaException(message,
-                                                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
-                                                   cause);
+                                               INCOMPATIBLE_SCHEMA_ERROR_CODE,
+                                               cause);
   }
 
   public static RestIdDoesNotMatchException idDoesNotMatchException(Throwable cause) {
@@ -195,5 +215,28 @@ public class Errors {
 
   public static RestException unknownLeaderException(String message, Throwable cause) {
     return new RestUnknownLeaderException(message, cause);
+  }
+
+  public static RestException associationNotFoundException(String resource) {
+    return new RestNotFoundException(
+        String.format(ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT, resource),
+        ASSOCIATION_NOT_FOUND_ERROR_CODE);
+  }
+
+  public static RestException associationAlreadyExistsException(String resourceName) {
+    return new RestConflictException(
+        String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT, resourceName),
+        ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE);
+  }
+
+  public static RestException tooManyAssociationsException(int max) {
+    return new RestConflictException(
+        String.format(TOO_MANY_ASSOCIATIONS_MESSAGE_FORMAT, max),
+        TOO_MANY_ASSOCIATIONS_ERROR_CODE);
+  }
+
+  public static RestInvalidAssociationException invalidAssociation(
+      String propertyName, String reason) {
+    return new RestInvalidAssociationException(propertyName, reason);
   }
 }

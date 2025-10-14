@@ -46,4 +46,6 @@ public abstract class SchemaRegistryValue {
   public void setTimestamp(Long timestamp) {
     this.timestamp = timestamp;
   }
+
+  public abstract SchemaRegistryKey toKey();
 }
