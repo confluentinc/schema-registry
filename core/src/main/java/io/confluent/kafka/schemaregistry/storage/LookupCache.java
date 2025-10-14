@@ -110,6 +110,53 @@ public interface LookupCache<K,V> extends Store<K,V> {
   void schemaTombstoned(SchemaKey schemaKey, SchemaValue schemaValue);
 
   /**
+   * Returns the association for the given association guid.
+   *
+   * @param tenant the tenant; never {@code null}
+   * @param guid the association guid; never {@code null}
+   * @return the association for the association guid
+   */
+  AssociationValue associationByGuid(String tenant, String guid)
+      throws StoreException;
+
+  /**
+   * Returns associations for the given subject.
+   *
+   * @param tenant the tenant; never {@code null}
+   * @param subject the subject; never {@code null}
+   * @return the associations for the subject
+   */
+  CloseableIterator<AssociationValue> associationsBySubject(String tenant, String subject)
+      throws StoreException;
+
+  /**
+   * Returns associations for the given resource id.
+   *
+   * @param tenant the tenant; never {@code null}
+   * @param resourceId the resource id; never {@code null}
+   * @return the associations for the resource id
+   */
+  CloseableIterator<AssociationValue> associationsByResourceId(String tenant, String resourceId)
+      throws StoreException;
+
+  /**
+   * Callback that is invoked when an association is registered.
+   *
+   * @param key   the registered AssociationKey; never {@code null}
+   * @param value the registered AssociationValue; never {@code null}
+   * @param oldValue the previous AssociationValue
+   */
+  void associationRegistered(AssociationKey key, AssociationValue value, AssociationValue oldValue);
+
+  /**
+   * Callback that is invoked when an association is tombstoned.
+   *
+   * @param key   the tombstoned AssociationKey; never {@code null}
+   * @param value the tombstoned AssociationValue
+   */
+  void associationTombstoned(AssociationKey key, AssociationValue value);
+
+  /**
    * Retrieves the config for a subject.
    *
    * @param subject the subject

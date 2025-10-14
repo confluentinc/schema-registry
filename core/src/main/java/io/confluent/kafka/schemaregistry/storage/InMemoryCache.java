@@ -51,11 +51,18 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
   private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
 
+  private final Map<String, Map<String, AssociationValue>> associationsByGuid;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsBySubject;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsByResourceId;
+
   public InMemoryCache(Serializer<K, V> serializer) {
     this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
+    this.associationsByGuid = new ConcurrentHashMap<>();
+    this.associationsBySubject = new ConcurrentHashMap<>();
+    this.associationsByResourceId = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -263,6 +270,68 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     hashes.put(md5, schemaValue.getId());
+  }
+
+  public AssociationValue associationByGuid(String tenant, String guid)
+      throws StoreException {
+    Map<String, AssociationValue> tenantAssociations =
+        associationsByGuid.getOrDefault(tenant, Collections.emptyMap());
+    return tenantAssociations.get(guid);
+  }
+
+  public CloseableIterator<AssociationValue> associationsBySubject(String tenant, String subject)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsBySubject.getOrDefault(tenant, Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(subject, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  public CloseableIterator<AssociationValue> associationsByResourceId(
+      String tenant, String resourceId) throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsByResourceId.getOrDefault(tenant, Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(resourceId, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  public void associationRegistered(
+      AssociationKey key, AssociationValue value, AssociationValue oldValue) {
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.computeIfAbsent(key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByGuid.put(value.getGuid(), value);
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsBySubject.computeIfAbsent(
+        value.getSubject(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsBySubject.get(value.getSubject()).add(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByResourceId.computeIfAbsent(
+        value.getResourceId(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsByResourceId.get(value.getResourceId()).add(value);
+  }
+
+  public void associationTombstoned(AssociationKey key, AssociationValue value) {
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByGuid.remove(value.getGuid());
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsBySubject.get(value.getSubject()).remove(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByResourceId.get(value.getResourceId()).remove(value);
+    if (tenantAssociationsBySubject.get(value.getSubject()).isEmpty()) {
+      tenantAssociationsBySubject.remove(value.getSubject());
+    }
+    if (tenantAssociationsByResourceId.get(value.getResourceId()).isEmpty()) {
+      tenantAssociationsByResourceId.remove(value.getResourceId());
+    }
   }
 
   @Override
