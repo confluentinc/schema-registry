@@ -17,8 +17,18 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_NOT_FOUND_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
@@ -887,7 +897,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationCreateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
-        throw new InvalidAssociationException("Duplicate association type: " + associationType);
+        throw new InvalidAssociationException(
+            "associationType", "Duplicate association type: " + associationType);
       }
       infosByType.put(associationType, info);
     }
@@ -908,7 +919,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           // Idempotent case - skip
           assocTypesToSkip.add(info.getAssociationType());
         } else {
-          throw new AssociationForResourceExistsException(request.getResourceId());
+          throw new AssociationForResourceExistsException(
+              association.getSubject(), association.getResourceId());
         }
       }
     }
@@ -921,6 +933,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       if (info.getSchema() == null && getLatestVersion(subject) == null) {
         throw new NoActiveSubjectVersionExistsException(subject);
       }
+      String assocType = info.getAssociationType();
       List<Association> assocsBySubject = getAssociationsBySubject(
           subject, request.getResourceType(), Collections.emptyList(), null);
       switch (info.getLifecycle()) {
@@ -1017,7 +1030,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
-        throw new InvalidAssociationException("Duplicate association type: " + associationType);
+        throw new InvalidAssociationException(
+            "associationType", "Duplicate association type: " + associationType);
       }
       infosByType.put(associationType, info);
     }
@@ -1051,13 +1065,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
       if (association == null) {
-        // TODO RAY better name?
-        throw new AssociationNotFoundException(associationType);
+        throw new AssociationNotFoundException(request.getResourceName());
       } else if (association.isEquivalent(info)) {
         // Idempotent case - skip
         assocTypesToSkip.add(info.getAssociationType());
       } else if (association.isFrozen() && info.getFrozen().orElse(true)) {
-        throw new AssociationFrozenException(associationType);
+        throw new AssociationFrozenException(
+            association.getAssociationType(), association.getSubject());
       } else if (info.getLifecycle().orElse(LifecyclePolicy.WEAK) == LifecyclePolicy.STRONG) {
         List<Association> assocsBySubject = getAssociationsBySubject(
             association.getSubject(), association.getResourceType(), Collections.emptyList(), null);
@@ -1121,10 +1135,32 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             INVALID_ASSOCIATION_ERROR_CODE,
             String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
         results.add(new AssociationResult(errMsg, null));
+      } catch (InvalidAssociationException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
+        results.add(new AssociationResult(errMsg, null));
       } catch (AssociationForResourceExistsException e) {
         ErrorMessage errMsg = new ErrorMessage(
             ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
-            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getResource()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (NoActiveSubjectVersionExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
+            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
+                e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (StrongAssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
       } catch (TooManyAssociationsException e) {
         // TODO maxKeys
@@ -1179,10 +1215,26 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             INVALID_ASSOCIATION_ERROR_CODE,
             String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
         results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationForResourceExistsException e) {
+      } catch (InvalidAssociationException e) {
         ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
-            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+            INVALID_ASSOCIATION_ERROR_CODE,
+            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationFrozenException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FROZEN_ERROR_CODE,
+            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getSubject()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationNotFoundException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_NOT_FOUND_ERROR_CODE,
+            String.format(ASSOCIATION_NOT_FOUND_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
       } catch (TooManyAssociationsException e) {
         // TODO maxKeys
@@ -1342,7 +1394,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     if (!cascadeLifecycle
         && oldAssociation.getLifecycle() == LifecyclePolicy.STRONG
         && oldAssociation.isFrozen()) {
-      throw new AssociationFrozenException(oldAssociation.getAssociationType());
+      throw new AssociationFrozenException(
+          oldAssociation.getAssociationType(), oldAssociation.getSubject());
     }
   }
 

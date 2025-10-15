@@ -17,19 +17,20 @@ package io.confluent.kafka.schemaregistry.exceptions;
 
 public class AssociationForResourceExistsException extends SchemaRegistryException {
 
-  public AssociationForResourceExistsException(String name, Throwable cause) {
-    super(name, cause);
+  private final String assocType;
+  private final String resource;
+
+  public AssociationForResourceExistsException(final String assocType, final String resource) {
+    super("association type: " + assocType + "; resource: " + resource);
+    this.assocType = assocType;
+    this.resource = resource;
   }
 
-  public AssociationForResourceExistsException(String name) {
-    super(name);
+  public String getAssociationType() {
+    return assocType;
   }
 
-  public AssociationForResourceExistsException(Throwable cause) {
-    super(cause);
-  }
-
-  public AssociationForResourceExistsException() {
-    super();
+  public String getResource() {
+    return resource;
   }
 }

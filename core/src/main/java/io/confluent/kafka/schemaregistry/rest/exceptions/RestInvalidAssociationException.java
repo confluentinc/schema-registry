@@ -24,10 +24,10 @@ public class RestInvalidAssociationException extends RestConstraintViolationExce
 
   public static final int ERROR_CODE = Errors.INVALID_ASSOCIATION_ERROR_CODE;
   public static final String INVALID_ASSOCIATION_MESSAGE_FORMAT =
-      "The association specified an invalid value for property: '%s', reason: %s";
+      "The association specified an invalid value for property: '%s', detail: %s";
 
-  public RestInvalidAssociationException(String propertyName, String reason) {
-    super(String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, propertyName, reason), ERROR_CODE);
+  public RestInvalidAssociationException(String propertyName, String detail) {
+    super(String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, propertyName, detail), ERROR_CODE);
   }
 
 }

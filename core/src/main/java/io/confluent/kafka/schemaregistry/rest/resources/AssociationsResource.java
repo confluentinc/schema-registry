@@ -26,8 +26,15 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationNotFoundException;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidAssociationException;
+import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
@@ -237,7 +244,7 @@ public class AssociationsResource {
     try {
       request.validate();
     } catch (IllegalPropertyException e) {
-      throw Errors.invalidAssociation(e.getPropertyName(), e.getDetail());
+      throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
@@ -247,11 +254,21 @@ public class AssociationsResource {
       AssociationResponse association = schemaRegistry.createAssociationOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
+    } catch (InvalidAssociationException e) {
+      throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     } catch (AssociationForResourceExistsException e) {
-      throw Errors.associationAlreadyExistsException(e.getMessage());
+      throw Errors.associationForResourceExistsException(e.getAssociationType(), e.getResource());
+    } catch (AssociationForSubjectExistsException e) {
+      throw Errors.associationForSubjectExistsException(e.getMessage());
+    } catch (NoActiveSubjectVersionExistsException e) {
+      throw Errors.noActiveSubjectVersionExistsException(e.getMessage());
+    } catch (StrongAssociationForSubjectExistsException e) {
+      throw Errors.strongAssociationExistsException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+    } catch (IncompatibleSchemaException e) {
+      throw Errors.incompatibleSchemaException(e.getMessage(), e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
           "Error while creating association: " + e.getMessage(), e);
@@ -284,7 +301,7 @@ public class AssociationsResource {
     try {
       request.validate();
     } catch (IllegalPropertyException e) {
-      throw Errors.invalidAssociation(e.getPropertyName(), e.getDetail());
+      throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
@@ -319,8 +336,14 @@ public class AssociationsResource {
       AssociationResponse association = schemaRegistry.updateAssociationOrForward(context, dryRun,
           request, headerProperties);
       asyncResponse.resume(association);
-    } catch (AssociationForResourceExistsException e) {
-      throw Errors.associationAlreadyExistsException(e.getMessage());
+    } catch (InvalidAssociationException e) {
+      throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
+    } catch (AssociationForSubjectExistsException e) {
+      throw Errors.associationForSubjectExistsException(e.getMessage());
+    } catch (AssociationFrozenException e) {
+      throw Errors.associationFrozenException(e.getAssociationType(), e.getSubject());
+    } catch (AssociationNotFoundException e) {
+      throw Errors.associationNotFoundException(e.getMessage());
     } catch (TooManyAssociationsException e) {
       // TODO RAY max
       //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
@@ -438,6 +461,8 @@ public class AssociationsResource {
           resourceId, resourceType, associationTypes, cascadeLifecycle,
           headerProperties);
       asyncResponse.resume(Response.status(204).build());
+    } catch (AssociationFrozenException e) {
+      throw Errors.associationFrozenException(e.getAssociationType(), e.getSubject());
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
           "Error while deleting association: " + e.getMessage(), e);

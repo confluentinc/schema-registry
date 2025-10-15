@@ -1,5 +1,5 @@
 /*
- * Copyright 2053 Confluent Inc.
+ * Copyright 2025 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -17,19 +17,20 @@ package io.confluent.kafka.schemaregistry.exceptions;
 
 public class AssociationFrozenException extends SchemaRegistryException {
 
-  public AssociationFrozenException(String name, Throwable cause) {
-    super(name, cause);
+  private final String assocType;
+  private final String subject;
+
+  public AssociationFrozenException(final String assocType, final String subject) {
+    super("association type: " + assocType + "; subject: " + subject);
+    this.assocType = assocType;
+    this.subject = subject;
   }
 
-  public AssociationFrozenException(String name) {
-    super(name);
+  public String getAssociationType() {
+    return assocType;
   }
 
-  public AssociationFrozenException(Throwable cause) {
-    super(cause);
-  }
-
-  public AssociationFrozenException() {
-    super();
+  public String getSubject() {
+    return subject;
   }
 }

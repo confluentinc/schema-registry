@@ -17,19 +17,20 @@ package io.confluent.kafka.schemaregistry.exceptions;
 
 public class InvalidAssociationException extends SchemaRegistryException {
 
-  public InvalidAssociationException(String message, Throwable cause) {
-    super(message, cause);
+  private final String propertyName;
+  private final String detail;
+
+  public InvalidAssociationException(final String propertyName, final String detail) {
+    super("property: " + propertyName + "; detail: " + detail);
+    this.propertyName = propertyName;
+    this.detail = detail;
   }
 
-  public InvalidAssociationException(String message) {
-    super(message);
+  public String getPropertyName() {
+    return propertyName;
   }
 
-  public InvalidAssociationException(Throwable cause) {
-    super(cause);
-  }
-
-  public InvalidAssociationException() {
-    super();
+  public String getDetail() {
+    return detail;
   }
 }
