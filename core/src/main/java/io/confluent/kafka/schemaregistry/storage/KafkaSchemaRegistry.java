@@ -768,6 +768,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new OperationNotPermittedException("Subject " + subject + " in context "
         + context + " is in read-only mode");
       }
+
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
       int deleteWatermarkVersion = 0;
@@ -935,7 +936,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
       String assocType = info.getAssociationType();
       List<Association> assocsBySubject = getAssociationsBySubject(
-          subject, request.getResourceType(), Collections.emptyList(), null);
+          subject, null, Collections.emptyList(), null);
       switch (info.getLifecycle()) {
         case STRONG:
           if (!assocsBySubject.isEmpty()) {
@@ -1074,7 +1075,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             association.getAssociationType(), association.getSubject());
       } else if (info.getLifecycle().orElse(LifecyclePolicy.WEAK) == LifecyclePolicy.STRONG) {
         List<Association> assocsBySubject = getAssociationsBySubject(
-            association.getSubject(), association.getResourceType(), Collections.emptyList(), null);
+            association.getSubject(), null, Collections.emptyList(), null);
         if (!assocsBySubject.isEmpty()) {
           throw new AssociationForSubjectExistsException(association.getSubject());
         }
