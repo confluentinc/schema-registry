@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.IdDoesNotMatchException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
@@ -38,6 +39,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -598,6 +600,10 @@ public class SubjectVersionsResource {
               headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
               schema, permanentDelete);
+    } catch (AssociationForSubjectExistsException e) {
+      throw Errors.associationForSubjectExistsException(e.getMessage());
+    } catch (StrongAssociationForSubjectExistsException e) {
+      throw Errors.strongAssociationExistsException(e.getMessage());
     } catch (SchemaVersionNotSoftDeletedException e) {
       throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
               e.getVersion());

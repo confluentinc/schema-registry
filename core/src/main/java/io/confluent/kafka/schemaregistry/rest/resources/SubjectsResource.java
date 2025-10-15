@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
@@ -315,6 +316,8 @@ public class SubjectsResource {
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
               subject,
               permanentDelete);
+    } catch (AssociationForSubjectExistsException e) {
+      throw Errors.associationForSubjectExistsException(e.getMessage());
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (SubjectNotSoftDeletedException e) {

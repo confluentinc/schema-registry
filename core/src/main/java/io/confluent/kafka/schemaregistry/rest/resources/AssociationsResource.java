@@ -30,7 +30,6 @@ import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsE
 import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationNotFoundException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.InvalidAssociationException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
@@ -262,7 +261,7 @@ public class AssociationsResource {
       AssociationResponse association = schemaRegistry.createAssociationOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
-    } catch (InvalidAssociationException e) {
+    } catch (IllegalPropertyException e) {
       throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     } catch (AssociationForResourceExistsException e) {
       throw Errors.associationForResourceExistsException(e.getAssociationType(), e.getResource());
@@ -360,7 +359,7 @@ public class AssociationsResource {
       AssociationResponse association = schemaRegistry.updateAssociationOrForward(context, dryRun,
           request, headerProperties);
       asyncResponse.resume(association);
-    } catch (InvalidAssociationException e) {
+    } catch (IllegalPropertyException e) {
       throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     } catch (AssociationForSubjectExistsException e) {
       throw Errors.associationForSubjectExistsException(e.getMessage());

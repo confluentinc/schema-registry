@@ -149,7 +149,12 @@ public class AssociationCreateRequest {
       } else {
         info.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
       }
-      if (info.getLifecycle() == null) {
+      if (info.getLifecycle() == LifecyclePolicy.WEAK) {
+        if (info.isFrozen()) {
+          throw new IllegalPropertyException(
+              "frozen", "association with lifecycle of WEAK cannot be frozen");
+        }
+      } else if (info.getLifecycle() == null) {
         info.setLifecycle(DEFAULT_LIFECYCLE);
       }
     }

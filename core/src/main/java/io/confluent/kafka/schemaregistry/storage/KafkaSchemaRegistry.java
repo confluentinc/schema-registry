@@ -27,6 +27,7 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATI
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
@@ -65,7 +66,6 @@ import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationNotFoundException;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
-import io.confluent.kafka.schemaregistry.exceptions.InvalidAssociationException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
@@ -699,6 +699,29 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new OperationNotPermittedException("Subject " + subject + " in context "
         + context + " is in read-only mode");
       }
+
+      List<Association> assocsBySubject = getAssociationsBySubject(
+          subject, null, Collections.emptyList(), null);
+      if (!assocsBySubject.isEmpty()) {
+        if (permanentDelete) {
+          throw new AssociationForSubjectExistsException(subject);
+        } else {
+          boolean hasActive = false;
+          Iterator<SchemaKey> allVersions = getAllVersions(subject, LookupFilter.DEFAULT);
+          while (allVersions.hasNext()) {
+            SchemaKey key = allVersions.next();
+            // Check if there will still be an active version after the deletion
+            if (key.getVersion() != schema.getVersion()) {
+              hasActive = true;
+              break;
+            }
+          }
+          if (!hasActive) {
+            throw new NoActiveSubjectVersionExistsException(subject);
+          }
+        }
+      }
+
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
       if (!lookupCache.referencesSchema(key).isEmpty()) {
         throw new ReferenceExistsException(key.toString());
@@ -767,6 +790,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
         throw new OperationNotPermittedException("Subject " + subject + " in context "
         + context + " is in read-only mode");
+      }
+
+      List<Association> assocsBySubject = getAssociationsBySubject(
+          subject, null, Collections.emptyList(), null);
+      if (!assocsBySubject.isEmpty()) {
+        throw new AssociationForSubjectExistsException(subject);
       }
 
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
@@ -898,7 +927,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationCreateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
-        throw new InvalidAssociationException(
+        throw new IllegalPropertyException(
             "associationType", "Duplicate association type: " + associationType);
       }
       infosByType.put(associationType, info);
@@ -1031,7 +1060,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
-        throw new InvalidAssociationException(
+        throw new IllegalPropertyException(
             "associationType", "Duplicate association type: " + associationType);
       }
       infosByType.put(associationType, info);
@@ -1067,17 +1096,29 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       Association association = assocsByType.get(associationType);
       if (association == null) {
         throw new AssociationNotFoundException(request.getResourceName());
-      } else if (association.isEquivalent(info)) {
+      }
+      if (association.isEquivalent(info)) {
         // Idempotent case - skip
         assocTypesToSkip.add(info.getAssociationType());
-      } else if (association.isFrozen() && info.getFrozen().orElse(true)) {
+        continue;
+      }
+      if (association.isFrozen() && info.getFrozen().orElse(true)) {
         throw new AssociationFrozenException(
             association.getAssociationType(), association.getSubject());
-      } else if (info.getLifecycle().orElse(LifecyclePolicy.WEAK) == LifecyclePolicy.STRONG) {
-        List<Association> assocsBySubject = getAssociationsBySubject(
-            association.getSubject(), null, Collections.emptyList(), null);
-        if (!assocsBySubject.isEmpty()) {
-          throw new AssociationForSubjectExistsException(association.getSubject());
+      }
+      if (info.getLifecycle().isPresent()) {
+        LifecyclePolicy lifecycle = info.getLifecycle().get();
+        if (lifecycle == LifecyclePolicy.STRONG) {
+          List<Association> assocsBySubject = getAssociationsBySubject(
+              association.getSubject(), null, Collections.emptyList(), null);
+          if (!assocsBySubject.isEmpty()) {
+            throw new AssociationForSubjectExistsException(association.getSubject());
+          }
+        } else if (lifecycle == LifecyclePolicy.WEAK) {
+          if (info.getFrozen().orElse(false)) {
+            throw new IllegalPropertyException(
+                "frozen", "association with lifecycle of WEAK cannot be frozen");
+          }
         }
       }
     }
@@ -1136,11 +1177,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             INVALID_ASSOCIATION_ERROR_CODE,
             String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
         results.add(new AssociationResult(errMsg, null));
-      } catch (InvalidAssociationException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INVALID_ASSOCIATION_ERROR_CODE,
-            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
-        results.add(new AssociationResult(errMsg, null));
       } catch (AssociationForResourceExistsException e) {
         ErrorMessage errMsg = new ErrorMessage(
             ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
@@ -1166,6 +1202,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       } catch (TooManyAssociationsException e) {
         // TODO maxKeys
         //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+      } catch (InvalidSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (SchemaTooLargeException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            SCHEMA_TOO_LARGE_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
       } catch (IncompatibleSchemaException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INCOMPATIBLE_SCHEMA_ERROR_CODE,
@@ -1212,11 +1258,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         AssociationResponse response = updateAssociation(context, dryRun, req);
         results.add(new AssociationResult(null, response));
       } catch (IllegalPropertyException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INVALID_ASSOCIATION_ERROR_CODE,
-            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (InvalidAssociationException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INVALID_ASSOCIATION_ERROR_CODE,
             String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
