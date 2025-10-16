@@ -291,9 +291,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       return provider.parseSchemaOrElseThrow(schema, isNew, normalize);
     } catch (Exception e) {
-      throw new InvalidSchemaException("Invalid schema " + schema
-              + " with refs " + schema.getReferences()
-              + " of type " + type + ", details: " + e.getMessage());
+      throw new InvalidSchemaException("Invalid schema of type " + type
+              + ", details: " + e.getMessage());
     }
   }
 
