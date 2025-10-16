@@ -19,11 +19,9 @@ package io.confluent.kafka.schemaregistry.client;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
 import com.google.common.base.Ticker;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.*;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
 import java.io.IOException;
@@ -34,9 +32,6 @@ import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
@@ -403,4 +398,23 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   @Override
   default void close() throws IOException {}
+
+  public default AssociationResponse createAssociation(AssociationCreateRequest request) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default List<Association> getAssociationsBySubject(String subject, String resourceType, List<String> associationTypes,
+                                                    String lifecycle, int offset, int limit) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default List<Association> getAssociationsByResourceId(String resourceId, String resourceType, List<String> associationTypes,
+                                                       String lifecycle, int offset, int limit) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default void deleteAssociations(String resourceId, String resourceType, List<String> associationTypes, boolean cascadeLifecycle) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
 }
