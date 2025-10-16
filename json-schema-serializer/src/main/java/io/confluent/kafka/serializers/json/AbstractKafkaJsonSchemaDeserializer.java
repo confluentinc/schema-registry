@@ -187,10 +187,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
           }
           jsonNode = schema.validate(jsonNode);
         } catch (JsonProcessingException | ValidationException e) {
-          throw new SerializationException("JSON "
-              + jsonNode
-              + " does not match schema "
-              + schema.canonicalString(), e);
+          throw new SerializationException("JSON does not match schema of type "
+              + schema.schemaType(), e);
         }
       }
 

@@ -587,11 +587,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       throws IOException, RestClientException {
     ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
-      throw new IOException("Incompatible schema '" + lookupSchema.canonicalString()
-          + "' with refs '" + lookupSchema.references()
-          + "' of type '" + lookupSchema.schemaType()
-          + "' for schema '" + schema.canonicalString()
-          + "'. Set id.compatibility.strict=false to disable this check");
+      throw new IOException("Incompatible schema of type '" + lookupSchema.schemaType()
+          + ". Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
   }
@@ -627,13 +624,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       if (latestCompatStrict) {
         List<String> errorMessages = latestVersion.isBackwardCompatible(schema);
         if (!errorMessages.isEmpty()) {
-          String baseMsg = "Incompatible schema '" + schemaMetadata.getSchema()
-                  + "' with refs '" + schemaMetadata.getReferences()
-                  + "' of type '" + schemaMetadata.getSchemaType()
-                  + "' for schema '" + schema.canonicalString()
-                  + "'. Set latest.compatibility.strict=false to disable this check.";
-          log.error(baseMsg + " Error messages: " + String.join(",", errorMessages)
-                  + "; latestVersion=" + latestVersion + "; schema=" + schema);
+          String baseMsg = "Incompatible schema of type '" + schemaMetadata.getSchemaType()
+                  + ". Set latest.compatibility.strict=false to disable this check.";
+          log.error(baseMsg + " Error messages: " + String.join(",", errorMessages));
           throw new IOException(baseMsg + " See log file for more details.");
         }
       }
