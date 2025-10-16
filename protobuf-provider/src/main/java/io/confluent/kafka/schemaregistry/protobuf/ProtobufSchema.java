@@ -461,8 +461,7 @@ public class ProtobufSchema implements ParsedSchema {
       this.metadata = metadata;
       this.ruleSet = ruleSet;
     } catch (IllegalStateException e) {
-      log.error("Could not parse Protobuf schema {} with references {}", schemaString,
-          references, e);
+      log.error("Could not parse Protobuf schema with {} references", references.size(), e);
       throw e;
     }
   }
