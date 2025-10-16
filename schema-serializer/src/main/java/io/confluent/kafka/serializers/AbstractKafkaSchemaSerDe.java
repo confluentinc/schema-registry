@@ -588,7 +588,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
       throw new IOException("Incompatible schema of type '" + lookupSchema.schemaType()
-          + "' with " + lookupSchema.references().size() + " references"
           + ". Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
@@ -626,7 +625,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         List<String> errorMessages = latestVersion.isBackwardCompatible(schema);
         if (!errorMessages.isEmpty()) {
           String baseMsg = "Incompatible schema of type '" + schemaMetadata.getSchemaType()
-                  + "' with " + schemaMetadata.getReferences().size() + " references"
                   + ". Set latest.compatibility.strict=false to disable this check.";
           log.error(baseMsg + " Error messages: " + String.join(",", errorMessages));
           throw new IOException(baseMsg + " See log file for more details.");
