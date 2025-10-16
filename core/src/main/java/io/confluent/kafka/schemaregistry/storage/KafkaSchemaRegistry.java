@@ -950,7 +950,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           assocTypesToSkip.add(info.getAssociationType());
         } else {
           throw new AssociationForResourceExistsException(
-              association.getSubject(), association.getResourceId());
+              association.getAssociationType(), association.getResourceId());
         }
       }
     }
