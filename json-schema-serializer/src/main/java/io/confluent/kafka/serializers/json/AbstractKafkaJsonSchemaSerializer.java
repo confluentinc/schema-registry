@@ -206,13 +206,10 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
           ? object
           : (T) objectMapper.convertValue(jsonNode, object.getClass());
     } catch (JsonProcessingException e) {
-      throw new SerializationException("JSON "
-          + object
-          + " does not match schema "
-          + schema.canonicalString(), e);
+      throw new SerializationException("JSON does not match schema of type "
+          + schema.schemaType(), e);
     } catch (ValidationException e) {
-      throw new SerializationException("Validation error in JSON "
-          + object
+      throw new SerializationException("Validation error in JSON"
           + ", Error report:\n"
           + e.toJSON().toString(2), e);
     }

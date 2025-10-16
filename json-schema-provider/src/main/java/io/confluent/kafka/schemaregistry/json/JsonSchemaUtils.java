@@ -188,14 +188,12 @@ public class JsonSchemaUtils {
               .collect(Collectors.toList());
       if (client == null) {
         if (!references.isEmpty()) {
-          throw new IllegalArgumentException("Cannot resolve schema " + schema.value()
-                  + " with refs " + references);
+          throw new IllegalArgumentException("Cannot resolve schema");
         }
         return new JsonSchema(schema.value());
       } else {
         return (JsonSchema) client.parseSchema(JsonSchema.TYPE, schema.value(), references)
-                .orElseThrow(() -> new IOException("Invalid schema " + schema.value()
-                        + " with refs " + references));
+                .orElseThrow(() -> new IOException("Invalid schema"));
       }
     }
     JsonSchemaConfigBuilder config = getConfig(useOneofForNullables, failUnknownProperties);

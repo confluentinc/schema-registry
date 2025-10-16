@@ -232,7 +232,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = ruleSet;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -251,7 +251,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = null;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
