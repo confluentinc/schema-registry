@@ -742,7 +742,7 @@ public class AvroSchemaUtils {
 
     @Override
     public void setField(Object record, String name, int position, Object value) {
-      if (record instanceof GenericRecord) {
+      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
         ((GenericRecord) record).put(name, value);
       } else {
         ((IndexedRecord) record).put(position, value);
@@ -751,7 +751,7 @@ public class AvroSchemaUtils {
 
     @Override
     public Object getField(Object record, String name, int position) {
-      if (record instanceof GenericRecord) {
+      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
         return ((GenericRecord) record).get(name);
       } else {
         return ((IndexedRecord) record).get(position);
