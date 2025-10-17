@@ -563,7 +563,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schema = schema.normalize();
     }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-    if (versions != null) {
+    if (versions != null && versions.containsKey(schema)) {
       return versions.get(schema);
     } else {
       throw new RestClientException("Subject Not Found", 404, 40401);
