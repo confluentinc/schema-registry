@@ -170,19 +170,24 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
     avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampNanosConversion());
   }
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();

@@ -999,7 +999,7 @@ public class AvroDataTest {
     arraySchema.addProp("connect.default", arrayNode);
     org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
-        .name("array").type(arraySchema).noDefault()  // no default
+        .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
         .endRecord();
 
     assertEquals(expectedAvroSchema, avroSchema);
