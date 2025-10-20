@@ -407,6 +407,11 @@ public class Schema implements Comparable<Schema> {
     this.deleted = deleted;
   }
 
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
