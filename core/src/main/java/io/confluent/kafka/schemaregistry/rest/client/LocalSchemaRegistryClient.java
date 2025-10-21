@@ -31,6 +31,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -173,31 +174,33 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, 0, -1, normalize).getId();
+    return registerWithResponse(subject, schema, 0, -1, normalize, false).getId();
   }
 
   @Override
   public synchronized int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, version, id, false).getId();
+    return registerWithResponse(subject, schema, version, id, false, false).getId();
   }
 
   @Override
   public synchronized RegisterSchemaResponse registerWithResponse(
-      String subject, ParsedSchema schema, boolean normalize)
+      String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, 0, -1, normalize);
+    return registerWithResponse(subject, schema, 0, -1, normalize, propagateSchemaTags);
   }
 
   private synchronized RegisterSchemaResponse registerWithResponse(
-      String subject, ParsedSchema schema, int version, int id, boolean normalize)
+      String subject, ParsedSchema schema, int version, int id,
+      boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
     Schema s = new Schema(subject, version, id, schema);
     try {
-      return new RegisterSchemaResponse(schemaRegistry.register(subject, s, normalize));
+      return new RegisterSchemaResponse(
+          schemaRegistry.register(subject, s, normalize, propagateSchemaTags));
     } catch (IdDoesNotMatchException e) {
       throw Errors.idDoesNotMatchException(e);
     } catch (InvalidSchemaException e) {
@@ -260,12 +263,13 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subjectPrefix = schemaRegistry.tenant() + TENANT_DELIMITER + subjectPrefix;
     }
-    Iterator<Schema> schemas = null;
+    Iterator<ExtendedSchema> schemas = null;
     List<ParsedSchema> result = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     try {
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
           subjectPrefix,
+          false,
           lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT,
           latestOnly,
           null);
@@ -477,10 +481,16 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
     try {
       schemaRegistry.setMode(subject, m, force);
+    } catch (ReferenceExistsException e) {
+      throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to update mode", e);
+    } catch (SchemaRegistryTimeoutException e) {
+      throw Errors.operationTimeoutException("Update mode operation timed out", e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating the mode", e);
     }
     return m.name();
   }

@@ -130,8 +130,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
               org.apache.kafka.common.serialization.ByteArraySerializer.class);
-    props.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
     producer = new KafkaProducer<byte[], byte[]>(props);
 

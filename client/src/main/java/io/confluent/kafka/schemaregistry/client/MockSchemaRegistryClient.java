@@ -176,7 +176,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private boolean schemasEqual(ParsedSchema schema1, ParsedSchema schema2) {
     return schema1.canonicalString().equals(schema2.canonicalString())
-        || schema1.deepEquals(schema2);
+        || schema1.canLookup(schema2, this);
   }
 
   private void generateVersion(String subject, ParsedSchema schema) {
@@ -223,24 +223,25 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int register(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, 0, -1, normalize).getId();
+    return registerWithResponse(subject, schema, 0, -1, normalize, false).getId();
   }
 
   @Override
   public int register(String subject, ParsedSchema schema, int version, int id)
       throws IOException, RestClientException {
-    return registerWithResponse(subject, schema, version, id, false).getId();
+    return registerWithResponse(subject, schema, version, id, false, false).getId();
   }
 
   @Override
   public RegisterSchemaResponse registerWithResponse(
-      String subject, ParsedSchema schema, boolean normalize)
+      String subject, ParsedSchema schema, boolean normalize, boolean propagateSchemaTags)
       throws RestClientException {
-    return registerWithResponse(subject, schema, 0, -1, normalize);
+    return registerWithResponse(subject, schema, 0, -1, normalize, propagateSchemaTags);
   }
 
   private RegisterSchemaResponse registerWithResponse(
-      String subject, ParsedSchema schema, int version, int id, boolean normalize)
+      String subject, ParsedSchema schema, int version, int id,
+      boolean normalize, boolean propagateSchemaTags)
       throws RestClientException {
     if (normalize) {
       schema = schema.normalize();

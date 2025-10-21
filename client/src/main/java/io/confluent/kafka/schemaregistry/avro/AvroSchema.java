@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.avro;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_RECORD;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -351,6 +355,27 @@ public class AvroSchema implements ParsedSchema {
       return Lists.newArrayList(
               "Unexpected exception during compatibility check: " + e.getMessage());
     }
+  }
+
+  /**
+   * Returns whether the underlying raw representations are equivalent,
+   * ignoring version and references.
+   *
+   * @return whether the underlying raw representations are equivalent
+   */
+  @Override
+  public boolean equivalent(ParsedSchema schema) {
+    if (this == schema) {
+      return true;
+    }
+    if (schema == null || getClass() != schema.getClass()) {
+      return false;
+    }
+    AvroSchema that = (AvroSchema) schema;
+    return Objects.equals(schemaObj, that.schemaObj)
+        && Objects.equals(metadata, that.metadata)
+        && Objects.equals(ruleSet, that.ruleSet)
+        && metaEqual(schemaObj, that.schemaObj, new HashMap<>());
   }
 
   @Override
@@ -709,11 +734,73 @@ public class AvroSchema implements ParsedSchema {
     node.forEach(n -> getInlineTagsRecursively(tags, n));
   }
 
+  @Override
+  public Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    Map<SchemaEntity, Set<String>> tags = new LinkedHashMap<>();
+    Schema schema = rawSchema();
+    if (schema == null) {
+      return tags;
+    }
+    getInlineTaggedEntitiesRecursively(tags, schema, new HashSet<>());
+    return tags;
+  }
+
+  private void getInlineTaggedEntitiesRecursively(
+      Map<SchemaEntity, Set<String>> tags, Schema schema, Set<String> visited) {
+    switch (schema.getType()) {
+      case UNION:
+        for (Schema subtype : schema.getTypes()) {
+          getInlineTaggedEntitiesRecursively(tags, subtype, visited);
+        }
+        break;
+      case ARRAY:
+        getInlineTaggedEntitiesRecursively(tags, schema.getElementType(), visited);
+        break;
+      case MAP:
+        getInlineTaggedEntitiesRecursively(tags, schema.getValueType(), visited);
+        break;
+      case RECORD:
+        String fullName = schema.getFullName();
+        if (visited.contains(fullName)) {
+          return;
+        } else {
+          visited.add(fullName);
+        }
+        Set<String> recordTags = getInlineTags(schema);
+        if (!recordTags.isEmpty()) {
+          tags.put(new SchemaEntity(fullName, SR_RECORD), recordTags);
+        }
+        for (Schema.Field f : schema.getFields()) {
+          Set<String> fieldTags = getInlineTags(f);
+          if (!fieldTags.isEmpty()) {
+            tags.put(new SchemaEntity(fullName + "." + f.name(), SR_FIELD), fieldTags);
+          }
+          getInlineTaggedEntitiesRecursively(tags, f.schema(), visited);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private Set<String> getInlineTags(Schema record) {
+    Object prop = record.getObjectProp(TAGS);
+    if (prop instanceof List) {
+      List<?> tags = (List<?>) prop;
+      Set<String> result = new LinkedHashSet<>(tags.size());
+      for (Object tag : tags) {
+        result.add(tag.toString());
+      }
+      return result;
+    }
+    return Collections.emptySet();
+  }
+
   private Set<String> getInlineTags(Schema.Field field) {
     Object prop = field.getObjectProp(TAGS);
     if (prop instanceof List) {
       List<?> tags = (List<?>) prop;
-      Set<String> result = new HashSet<>(tags.size());
+      Set<String> result = new LinkedHashSet<>(tags.size());
       for (Object tag : tags) {
         result.add(tag.toString());
       }
