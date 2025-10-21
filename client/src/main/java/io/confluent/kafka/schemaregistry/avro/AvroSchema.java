@@ -251,6 +251,7 @@ public class AvroSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
+      // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (canonicalString == null) {
           Schema.Parser parser = getParser();

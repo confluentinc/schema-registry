@@ -347,6 +347,7 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
+      // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (canonicalString == null) {
           try {
