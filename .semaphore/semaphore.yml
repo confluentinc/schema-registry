@@ -105,9 +105,9 @@ after_pipeline:
       - name: SonarQube
         commands:
           - checkout
-          - sem-version java 11
+          - sem-version java 17
           - artifact pull workflow target
-          - emit-sonarqube-data --run_only_sonar_scan
+          - emit-sonarqube-data --enable_sonarqube_enterprise --run_only_sonar_scan
       - name: Trigger downstream projects
         commands:
           - >-
