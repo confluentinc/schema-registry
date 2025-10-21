@@ -72,7 +72,7 @@ public class AvroSchema implements ParsedSchema {
   public static final String FIELDS_FIELD = "fields";
 
   private final Schema schemaObj;
-  private String canonicalString;
+  private volatile String canonicalString;
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
@@ -251,13 +251,18 @@ public class AvroSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      Schema.Parser parser = getParser();
-      List<Schema> schemaRefs = new ArrayList<>();
-      for (String schema : resolvedReferences.values()) {
-        Schema schemaRef = parser.parse(schema);
-        schemaRefs.add(schemaRef);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          Schema.Parser parser = getParser();
+          List<Schema> schemaRefs = new ArrayList<>();
+          for (String schema : resolvedReferences.values()) {
+            Schema schemaRef = parser.parse(schema);
+            schemaRefs.add(schemaRef);
+          }
+          canonicalString = schemaObj.toString(schemaRefs, false);
+        }
       }
-      canonicalString = schemaObj.toString(schemaRefs, false);
     }
     return canonicalString;
   }
