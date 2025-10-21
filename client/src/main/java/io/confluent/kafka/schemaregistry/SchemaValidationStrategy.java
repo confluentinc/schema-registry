@@ -30,10 +30,9 @@ public interface SchemaValidationStrategy {
   /**
    * Validates that one schema is compatible with another.
    *
-   * @param policy The compatibility policy to use for validation
    * @param toValidate The schema to validate
    * @param existing The schema to validate against
    * @return List of error message, otherwise empty list
    */
-  List<String> validate(CompatibilityPolicy policy, ParsedSchema toValidate, ParsedSchema existing);
+  List<String> validate(ParsedSchema toValidate, ParsedSchema existing);
 }

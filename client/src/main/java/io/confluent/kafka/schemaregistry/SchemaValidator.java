@@ -37,17 +37,10 @@ public interface SchemaValidator {
    * are the most "recent" in order to validate only against the most recent
    * schema(s).
    *
-   * @param policy The compatibility policy to use for validation
    * @param toValidate The schema to validate
    * @param existing The schemas to validate against, in order from most recent to latest if
    *     applicable
    * @return List of error message, otherwise empty list
    */
-  List<String> validate(
-      CompatibilityPolicy policy, ParsedSchema toValidate, Iterable<ParsedSchemaHolder> existing);
-
-  default List<String> validate(
-      ParsedSchema toValidate, Iterable<ParsedSchemaHolder> existing) {
-    return validate(CompatibilityPolicy.STRICT, toValidate, existing);
-  }
+  List<String> validate(ParsedSchema toValidate, Iterable<ParsedSchemaHolder> existing);
 }

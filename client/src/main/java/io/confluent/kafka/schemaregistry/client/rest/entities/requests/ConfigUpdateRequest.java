@@ -41,7 +41,6 @@ public class ConfigUpdateRequest {
   private Optional<Boolean> validateFields;
   private Optional<Boolean> validateRules;
   private Optional<String> compatibilityLevel;
-  private Optional<String> compatibilityPolicy;
   private Optional<String> compatibilityGroup;
   private Optional<Metadata> defaultMetadata;
   private Optional<Metadata> overrideMetadata;
@@ -57,7 +56,6 @@ public class ConfigUpdateRequest {
     setValidateFields(config.isValidateFields());
     setValidateRules(config.isValidateRules());
     setCompatibilityLevel(config.getCompatibilityLevel());
-    setCompatibilityPolicy(config.getCompatibilityPolicy());
     setCompatibilityGroup(config.getCompatibilityGroup());
     setDefaultMetadata(config.getDefaultMetadata());
     setOverrideMetadata(config.getOverrideMetadata());
@@ -171,28 +169,6 @@ public class ConfigUpdateRequest {
   @JsonIgnore
   public void setCompatibilityLevel(String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel != null ? Optional.of(compatibilityLevel) : null;
-  }
-
-  @JsonProperty("compatibilityPolicy")
-  public Optional<String> getOptionalCompatibilityPolicy() {
-    return this.compatibilityPolicy;
-  }
-
-  @JsonIgnore
-  public String getCompatibilityPolicy() {
-    return compatibilityPolicy != null ? compatibilityPolicy.orElse(null) : null;
-  }
-
-  @JsonProperty("compatibilityPolicy")
-  public void setCompatibilityPolicy(Optional<String> compatibilityPolicy) {
-    this.compatibilityPolicy = compatibilityPolicy;
-  }
-
-  @JsonIgnore
-  public void setCompatibilityPolicy(String compatibilityPolicy) {
-    this.compatibilityPolicy = compatibilityPolicy != null
-        ? Optional.of(compatibilityPolicy)
-        : null;
   }
 
   @JsonProperty("compatibilityGroup")
@@ -313,7 +289,6 @@ public class ConfigUpdateRequest {
         && Objects.equals(validateFields, that.validateFields)
         && Objects.equals(validateRules, that.validateRules)
         && Objects.equals(compatibilityLevel, that.compatibilityLevel)
-        && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
         && Objects.equals(overrideMetadata, that.overrideMetadata)
@@ -324,7 +299,7 @@ public class ConfigUpdateRequest {
   @Override
   public int hashCode() {
     return Objects.hash(alias, normalize, validateFields, validateRules,
-        compatibilityLevel, compatibilityPolicy, compatibilityGroup,
+        compatibilityLevel, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 }
