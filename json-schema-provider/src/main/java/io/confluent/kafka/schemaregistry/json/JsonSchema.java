@@ -148,7 +148,7 @@ public class JsonSchema implements ParsedSchema {
 
   private final boolean ignoreModernDialects;
 
-  private transient String canonicalString;
+  private transient volatile String canonicalString;
 
   private transient int hashCode = NO_HASHCODE;
 
@@ -496,10 +496,15 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      try {
-        canonicalString = objectMapper.writeValueAsString(jsonNode);
-      } catch (IOException e) {
-        throw new IllegalArgumentException("Invalid JSON", e);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          try {
+            canonicalString = objectMapper.writeValueAsString(jsonNode);
+          } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
+          }
+        }
       }
     }
     return canonicalString;
