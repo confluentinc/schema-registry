@@ -406,7 +406,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   private final RuleSet ruleSet;
 
-  private transient String canonicalString;
+  private transient volatile String canonicalString;
 
   private transient DynamicSchema dynamicSchema;
 
@@ -2365,7 +2365,12 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      canonicalString = ProtobufSchemaUtils.toString(schemaObj);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          canonicalString = ProtobufSchemaUtils.toString(schemaObj);
+        }
+      }
     }
     return canonicalString;
   }
