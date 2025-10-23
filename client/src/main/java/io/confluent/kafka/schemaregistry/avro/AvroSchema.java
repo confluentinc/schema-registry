@@ -56,6 +56,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
@@ -224,8 +225,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   protected Schema.Parser getParser() {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(isNew());
+    boolean isNew = isNew();
+    NameValidator nameValidator = isNew
+        ? NameValidator.STRICT_VALIDATOR
+        : NameValidator.NO_VALIDATION;
+    Schema.Parser parser = new Schema.Parser(nameValidator);
+    parser.setValidateDefaults(isNew);
     return parser;
   }
 
