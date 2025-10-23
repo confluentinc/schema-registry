@@ -211,10 +211,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
-        () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
+        () -> (DatumWriter<Object>) getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
     writer.write(value, encoder);
     encoder.flush();
+  }
+
+  protected DatumWriter<?> getDatumWriter(
+      Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
+    return AvroSchemaUtils.getDatumWriter(value, schema, useLogicalTypes, allowNull);
   }
 }
