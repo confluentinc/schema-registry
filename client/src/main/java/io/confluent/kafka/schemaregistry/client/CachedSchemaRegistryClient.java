@@ -47,7 +47,6 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
-import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -99,8 +98,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
-    DEFAULT_REQUEST_PROPERTIES =
-        Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    DEFAULT_REQUEST_PROPERTIES = RestService.DEFAULT_REQUEST_PROPERTIES;
   }
 
   public CachedSchemaRegistryClient(String baseUrl, int cacheCapacity) {
