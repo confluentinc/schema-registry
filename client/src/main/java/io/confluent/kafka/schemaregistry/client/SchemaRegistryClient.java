@@ -25,7 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
@@ -407,7 +407,8 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   @Override
   default void close() throws IOException {}
 
-  public default AssociationResponse createAssociation(AssociationCreateRequest request)
+  public default AssociationResponse createOrUpdateAssociation(
+          AssociationCreateOrUpdateRequest request)
           throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }

@@ -19,9 +19,9 @@ package io.confluent.kafka.schemaregistry.client;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import org.junit.Before;
@@ -52,71 +52,71 @@ public class MockSchemaRegistryClientTest {
             assertNull("Schema registration should succeed.", e);
         }
 
-        AssociationCreateInfo createInfo1 = new AssociationCreateInfo(
+        AssociationCreateOrUpdateInfo createInfo1 = new AssociationCreateOrUpdateInfo(
                 "testKey", "key", null, false, null, false);
-        AssociationCreateInfo createInfo2 = new AssociationCreateInfo(
+        AssociationCreateOrUpdateInfo createInfo2 = new AssociationCreateOrUpdateInfo(
                 "testValue", "value", null, false, null, false);
 
         // Invalid requests
-        List<AssociationCreateRequest> invalidRequests = new ArrayList<>();
+        List<AssociationCreateOrUpdateRequest> invalidRequests = new ArrayList<>();
 
         // No resource name
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 null, "lkc1", "test-id", "topic",
                 Arrays.asList(createInfo1, createInfo2)));
 
         // No resource namespace
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", null, "test-id", "topic",
                 Arrays.asList(createInfo1, createInfo2)));
 
         // No resource id
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", null, "topic",
                 Arrays.asList(createInfo1, createInfo2)));
 
         // No associations
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", "topic", null));
 
-        // No subject name in AssociationCreateInfo
-        invalidRequests.add(new AssociationCreateRequest(
+        // No subject name in AssociationCreateOrUpdateInfo
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", "topic",
                 Collections.singletonList(
-                        new AssociationCreateInfo(null, "value", null, false, null, false)
+                        new AssociationCreateOrUpdateInfo(null, "value", null, false, null, false)
                 )));
 
         // Unsupported ResourceType
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", "topic2",
                 Arrays.asList(createInfo1, createInfo2)));
 
         // Unsupported AssociationType
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", "topic",
                 Collections.singletonList(
-                        new AssociationCreateInfo("testValue", "value2", null, false, null, false)
+                        new AssociationCreateOrUpdateInfo("testValue", "value2", null, false, null, false)
                 )));
 
         // Duplicate AssociationType in the request
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", "topic",
                 Arrays.asList(
-                        new AssociationCreateInfo("testKey", "value", null, false, null, false),
-                        new AssociationCreateInfo("testValue", "value", null, false, null, false)
+                        new AssociationCreateOrUpdateInfo("testKey", "value", null, false, null, false),
+                        new AssociationCreateOrUpdateInfo("testValue", "value", null, false, null, false)
                 )));
 
         // Weak association with frozen to be true
-        invalidRequests.add(new AssociationCreateRequest(
+        invalidRequests.add(new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", "topic",
                 Collections.singletonList(
-                        new AssociationCreateInfo("testValue", null, LifecyclePolicy.WEAK, true, null, false)
+                        new AssociationCreateOrUpdateInfo("testValue", null, LifecyclePolicy.WEAK, true, null, false)
                 )));
 
         // Test all invalid requests - they should throw exceptions
-        for (AssociationCreateRequest invalidRequest : invalidRequests) {
+        for (AssociationCreateOrUpdateRequest invalidRequest : invalidRequests) {
             try {
-                client.createAssociation(invalidRequest);
+                client.createOrUpdateAssociation(invalidRequest);
                 fail("Expected exception for invalid request");
             } catch (Exception e) {
                 // Expected - validation should fail
@@ -125,14 +125,14 @@ public class MockSchemaRegistryClientTest {
         }
 
         // Minimum valid request
-        AssociationCreateRequest createRequest = new AssociationCreateRequest(
+        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", null,
                 Collections.singletonList(
-                        new AssociationCreateInfo("testValue", null, null, false, null, false)
+                        new AssociationCreateOrUpdateInfo("testValue", null, null, false, null, false)
                 ));
         AssociationResponse createResponse = null;
         try {
-            createResponse = client.createAssociation(createRequest);
+            createResponse = client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
             assertNull("Error should be null", e);
         }
@@ -176,33 +176,33 @@ public class MockSchemaRegistryClientTest {
         }
 
         // Make an association with an existing subject without new schema
-        AssociationCreateRequest createRequest = new AssociationCreateRequest(
+        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", null,
-                Collections.singletonList(new AssociationCreateInfo(testValueSubject, null,
+                Collections.singletonList(new AssociationCreateOrUpdateInfo(testValueSubject, null,
                         null, false, null, false)
                 ));
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         // Create association request is idempotent. Re-issue the same create request should succeed.
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         // Re-issue the same request with different association property (except schema) will error out.
-        createRequest = new AssociationCreateRequest(
+        createRequest = new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", null,
                 Collections.singletonList(
-                        new AssociationCreateInfo(testValueSubject, null, LifecyclePolicy.WEAK, false, null, false)
+                        new AssociationCreateOrUpdateInfo(testValueSubject, null, LifecyclePolicy.WEAK, false, null, false)
                 ));
 
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
             fail("Expected exception - existing association gets modified");
         } catch (Exception e) {
             assertNotNull("Error should not be null", e);
@@ -212,27 +212,27 @@ public class MockSchemaRegistryClientTest {
         Schema updatedSchema = new Schema(null, null, null, null, null,
                 "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
                         "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}, {\"type\":\"string\",\"name\":\"id2\"}]}");
-        createRequest = new AssociationCreateRequest(
+        createRequest = new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", null,
                 Collections.singletonList(
-                        new AssociationCreateInfo(testValueSubject, null, null, false, updatedSchema, false)
+                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false, updatedSchema, false)
                 ));
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         // Make an association with a new subject without new schema. Test should fail.
         testValueSubject = "testValue2";
-        createRequest = new AssociationCreateRequest(
+        createRequest = new AssociationCreateOrUpdateRequest(
                 "test2", "lkc1", "test-id2", null,
                 Collections.singletonList(
-                        new AssociationCreateInfo(testValueSubject, null, null, false, null, false)
+                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false, null, false)
                 ));
 
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
             fail("Expected exception - new subject without schema");
         } catch (Exception e) {
             assertNotNull("Error should not be null", e);
@@ -240,15 +240,15 @@ public class MockSchemaRegistryClientTest {
 
         // Make an association with a new subject with new schema
         testValueSubject = "testValue2";
-        createRequest = new AssociationCreateRequest(
+        createRequest = new AssociationCreateOrUpdateRequest(
                 "test2", "lkc1", "test-id2", null,
                 Collections.singletonList(
-                        new AssociationCreateInfo(testValueSubject, null, null, false, updatedSchema, false)
+                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false, updatedSchema, false)
                 ));
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
     }
 
@@ -274,16 +274,16 @@ public class MockSchemaRegistryClientTest {
             assertNull("Schema registration should succeed.", e);
         }
 
-        AssociationCreateRequest createRequest = new AssociationCreateRequest(
+        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
-                        new AssociationCreateInfo(keySubject, "key", null, false, null, false),
-                        new AssociationCreateInfo(valueSubject, "value", null, false, null, false)
+                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, null, false),
+                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false, null, false)
                 ));
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         // Scenario 2: One using existing subject, one creating new subject
@@ -300,16 +300,16 @@ public class MockSchemaRegistryClientTest {
 
         Schema schema = new Schema(null, null, null, "AVRO", Collections.emptyList(), schemaString);
 
-        createRequest = new AssociationCreateRequest(
+        createRequest = new AssociationCreateOrUpdateRequest(
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
-                        new AssociationCreateInfo(keySubject, "key", null, false, null, false),
-                        new AssociationCreateInfo(valueSubject, "value", null, false, schema, false)
+                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, null, false),
+                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false, schema, false)
                 ));
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         // Scenario 3: Both creating new subjects
@@ -318,16 +318,16 @@ public class MockSchemaRegistryClientTest {
         resourceName = "test3";
         resourceID = "test3-id";
 
-        createRequest = new AssociationCreateRequest(
+        createRequest = new AssociationCreateOrUpdateRequest(
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
-                        new AssociationCreateInfo(keySubject, "key", null, false, schema, false),
-                        new AssociationCreateInfo(valueSubject, "value", null, false, schema, false)
+                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, schema, false),
+                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false, schema, false)
                 ));
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
     }
 
@@ -351,14 +351,14 @@ public class MockSchemaRegistryClientTest {
         }
 
         // Scenario 1: Same subject, Foo=STRONG, Bar=STRONG -> Bar should fail
-        AssociationCreateRequest fooRequest = generateAssociationCreateRequest(
+        AssociationCreateOrUpdateRequest fooRequest = generateAssociationCreateRequest(
                 resourceFoo,
-                new AssociationCreateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
+                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
         );
         try {
-            client.createAssociation(fooRequest);
+            client.createOrUpdateAssociation(fooRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         List<Association> result = null;
@@ -366,19 +366,19 @@ public class MockSchemaRegistryClientTest {
             result = client.getAssociationsByResourceId(
                     resourceFoo.getResourceId(), null, null, null, 0, -1);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
         assertEquals(1, result.size());
         assertNotNull(result.get(0).getGuid());
         assertFalse(result.get(0).getGuid().isEmpty());
 
-        AssociationCreateRequest barRequest = generateAssociationCreateRequest(
+        AssociationCreateOrUpdateRequest barRequest = generateAssociationCreateRequest(
                 resourceBar,
-                new AssociationCreateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
+                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
         );
 
         try {
-            client.createAssociation(barRequest);
+            client.createOrUpdateAssociation(barRequest);
             fail("Expected exception - cannot create strong association when subject already has strong");
         } catch (Exception e) {
             assertNotNull(e);
@@ -387,11 +387,11 @@ public class MockSchemaRegistryClientTest {
         // Scenario 2: Foo=STRONG, Bar=WEAK -> Bar should fail
         barRequest = generateAssociationCreateRequest(
                 resourceBar,
-                new AssociationCreateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
+                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
         );
 
         try {
-            client.createAssociation(barRequest);
+            client.createOrUpdateAssociation(barRequest);
             fail("Expected exception - cannot create weak when subject has strong");
         } catch (Exception e) {
             assertNotNull(e);
@@ -425,12 +425,12 @@ public class MockSchemaRegistryClientTest {
         // Create Foo weak association
         fooRequest = generateAssociationCreateRequest(
                 resourceFoo,
-                new AssociationCreateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
+                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
         );
         try {
-            client.createAssociation(fooRequest);
+            client.createOrUpdateAssociation(fooRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         try {
@@ -446,11 +446,11 @@ public class MockSchemaRegistryClientTest {
         // Try to create Bar strong - should fail
         barRequest = generateAssociationCreateRequest(
                 resourceBar,
-                new AssociationCreateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
+                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
         );
 
         try {
-            client.createAssociation(barRequest);
+            client.createOrUpdateAssociation(barRequest);
             fail("Expected exception - cannot create strong when subject has weak");
         } catch (Exception e) {
             assertNotNull(e);
@@ -459,12 +459,12 @@ public class MockSchemaRegistryClientTest {
         // Scenario 4: Foo=WEAK, Bar=WEAK -> Bar should succeed
         barRequest = generateAssociationCreateRequest(
                 resourceBar,
-                new AssociationCreateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
+                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
         );
         try {
-            client.createAssociation(barRequest);
+            client.createOrUpdateAssociation(barRequest);
         } catch (Exception e) {
-            assertNull("AssociationCreateRequest should succeed.", e);
+            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
         }
 
         try {
@@ -487,9 +487,9 @@ public class MockSchemaRegistryClientTest {
     }
 
     // Helper method
-    private AssociationCreateRequest generateAssociationCreateRequest(
-            Resource resource, AssociationCreateInfo info) {
-        return new AssociationCreateRequest(
+    private AssociationCreateOrUpdateRequest generateAssociationCreateRequest(
+            Resource resource, AssociationCreateOrUpdateInfo info) {
+        return new AssociationCreateOrUpdateRequest(
                 resource.getResourceName(),
                 resource.getResourceNamespace(),
                 resource.getResourceId(),
@@ -548,19 +548,19 @@ public class MockSchemaRegistryClientTest {
         );
 
         // Create associations: key=STRONG, value=WEAK
-        AssociationCreateRequest createRequest = new AssociationCreateRequest(
+        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
-                        new AssociationCreateInfo(
+                        new AssociationCreateOrUpdateInfo(
                                 keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
-                        new AssociationCreateInfo(
+                        new AssociationCreateOrUpdateInfo(
                                 valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
                 ));
 
         try {
-            client.createAssociation(createRequest);
+            client.createOrUpdateAssociation(createRequest);
         } catch (Exception e) {
-            assertNotNull("createAssociation should succeed.", e);
+            assertNotNull("createOrUpdateAssociation should succeed.", e);
         }
 
         // Query by subject with lifecycle filter "weak" - should return error
@@ -632,14 +632,14 @@ public class MockSchemaRegistryClientTest {
 
         // Create associations
         try {
-            client.createAssociation(new AssociationCreateRequest(
+            client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test1", "lkc1", resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateInfo(keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
-                            new AssociationCreateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
+                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
                     )));
         } catch (Exception e) {
-            assertNull("createAssociation should succeed.", e);
+            assertNull("createOrUpdateAssociation should succeed.", e);
         }
 
         // Delete with cascade=true
@@ -685,14 +685,14 @@ public class MockSchemaRegistryClientTest {
 
         // Create associations
         try {
-            client.createAssociation(new AssociationCreateRequest(
+            client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test2", "lkc1", resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateInfo(keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
-                            new AssociationCreateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
+                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
                     )));
         } catch (Exception e) {
-            assertNull("createAssociation should succeed.", e);
+            assertNull("createOrUpdateAssociation should succeed.", e);
         }
 
         // Delete with cascade=false
@@ -745,14 +745,14 @@ public class MockSchemaRegistryClientTest {
 
         // Create associations with frozen=true for key
         try {
-            client.createAssociation(new AssociationCreateRequest(
+            client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test3", "lkc1", resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateInfo(keySubject, "key", LifecyclePolicy.STRONG, true, schema, false),
-                            new AssociationCreateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, true, schema, false),
+                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
                     )));
         } catch (Exception e) {
-            assertNull("createAssociation should succeed.", e);
+            assertNull("createOrUpdateAssociation should succeed.", e);
         }
 
         // Delete with cascade=false should fail (frozen association)

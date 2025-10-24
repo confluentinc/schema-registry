@@ -32,8 +32,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateInfo;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -893,69 +893,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     return true;
   }
-
-  private void validateAssociationCreateRequest(AssociationCreateRequest request) {
-    // Validate required fields
-    if (request.getResourceName() == null || request.getResourceName().isEmpty()) {
-      throw new IllegalArgumentException(
-              "reourceId, resourceName, resourceNamespace and associations can't be null or empty");
-    }
-    if (request.getResourceNamespace() == null || request.getResourceNamespace().isEmpty()) {
-      throw new IllegalArgumentException(
-              "reourceId, resourceName, resourceNamespace and associations can't be null or empty");
-    }
-    if (request.getResourceId() == null || request.getResourceId().isEmpty()) {
-      throw new IllegalArgumentException(
-              "reourceId, resourceName, resourceNamespace and associations can't be null or empty");
-    }
-    if (request.getAssociations() == null) {
-      throw new IllegalArgumentException(
-              "reourceId, resourceName, resourceNamespace and associations can't be null or empty");
-    }
-    // Set default resource type if not provided
-    if (request.getResourceType() == null || request.getResourceType().isEmpty()) {
-      request.setResourceType(DEFAULT_RESOURCE_TYPE);
-    }
-    // Validate each association
-    for (AssociationCreateInfo associationCreateInfo : request.getAssociations()) {
-      // Check subject is required
-      if (associationCreateInfo.getSubject() == null
-              || associationCreateInfo.getSubject().isEmpty()) {
-        throw new IllegalArgumentException("subject in the association can't be null or empty");
-      }
-
-      // Set default association type if not provided
-      if (associationCreateInfo.getAssociationType() == null
-              || associationCreateInfo.getAssociationType().isEmpty()) {
-        associationCreateInfo.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
-      }
-
-      // Validate resource type and association type
-      if (!validateResourceTypeAndAssociationType(
-              request.getResourceType(), associationCreateInfo.getAssociationType())) {
-        throw new IllegalArgumentException(
-                String.format("resourceType {} and associationType {} don't match",
-                        request.getResourceType(), associationCreateInfo.getAssociationType()));
-      }
-
-      // Set default lifecycle if not provided
-      if (associationCreateInfo.getLifecycle() == null) {
-        associationCreateInfo.setLifecycle(DEFAULT_LIFECYCLE_POLICY);
-      }
-
-      // The association can't be both weak and frozen
-      if (associationCreateInfo.getLifecycle() == LifecyclePolicy.WEAK
-              && associationCreateInfo.isFrozen()) {
-        throw new IllegalArgumentException("the association can't be both weak and frozen");
-      }
-    }
-  }
-
-  private synchronized void createAssociationsHelper(AssociationCreateRequest request)
+  
+  private synchronized void createAssociationsHelper(AssociationCreateOrUpdateRequest request)
           throws IOException, RestClientException {
     // Check that association types are unique
-    Map<String, AssociationCreateInfo> infosByType = new HashMap<>();
-    for (AssociationCreateInfo info : request.getAssociations()) {
+    Map<String, AssociationCreateOrUpdateInfo> infosByType = new HashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
         throw new RestClientException(
@@ -968,7 +911,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     // Make sure subject exists
-    for (AssociationCreateInfo associationInRequest : request.getAssociations()) {
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       String subject = associationInRequest.getSubject();
       int latestVersion = latestVersion(subject);
 
@@ -980,7 +923,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     // Find existing associations
-    for (AssociationCreateInfo associationInRequest : request.getAssociations()) {
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       ResourceAndAssocType key = new ResourceAndAssocType(
               request.getResourceId(),
               request.getResourceType(),
@@ -1023,17 +966,17 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
     }
     // Post all schemas
-    for (AssociationCreateInfo associationInRequest : request.getAssociations()) {
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       String subject = associationInRequest.getSubject();
       Schema schema = associationInRequest.getSchema();
-      boolean normalize = associationInRequest.isNormalize();
+      boolean normalize = associationInRequest.getNormalize();
 
       if (schema != null) {
         register(subject, parseSchema(schema).get(), normalize);
       }
     }
     // Write associations to caches
-    for (AssociationCreateInfo associationInRequest : request.getAssociations()) {
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       ResourceAndAssocType key = new ResourceAndAssocType(
               request.getResourceId(),
               request.getResourceType(),
@@ -1049,7 +992,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
               request.getResourceType(),
               associationInRequest.getAssociationType(),
               associationInRequest.getLifecycle(),
-              associationInRequest.isFrozen()
+              associationInRequest.getFrozen()
       );
 
       // Update caches
@@ -1067,7 +1010,44 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
-  public AssociationResponse createAssociation(AssociationCreateRequest request)
+  private void validateAssociationCreateRequest(AssociationCreateOrUpdateRequest request) {
+    request.validate();
+    // Validate each association
+    for (AssociationCreateOrUpdateInfo associationCreateInfo : request.getAssociations()) {
+      // Check subject is required
+      if (associationCreateInfo.getSubject() == null
+              || associationCreateInfo.getSubject().isEmpty()) {
+        throw new IllegalArgumentException("subject in the association can't be null or empty");
+      }
+
+      // Set default association type if not provided
+      if (associationCreateInfo.getAssociationType() == null
+              || associationCreateInfo.getAssociationType().isEmpty()) {
+        associationCreateInfo.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
+      }
+
+      // Validate resource type and association type
+      if (!validateResourceTypeAndAssociationType(
+              request.getResourceType(), associationCreateInfo.getAssociationType())) {
+        throw new IllegalArgumentException(
+                String.format("resourceType {} and associationType {} don't match",
+                        request.getResourceType(), associationCreateInfo.getAssociationType()));
+      }
+
+      // Set default lifecycle if not provided
+      if (associationCreateInfo.getLifecycle() == null) {
+        associationCreateInfo.setLifecycle(DEFAULT_LIFECYCLE_POLICY);
+      }
+
+      // The association can't be both weak and frozen
+      if (associationCreateInfo.getLifecycle() == LifecyclePolicy.WEAK
+              && associationCreateInfo.getFrozen()) {
+        throw new IllegalArgumentException("the association can't be both weak and frozen");
+      }
+    }
+  }
+
+  public AssociationResponse createOrUpdateAssociation(AssociationCreateOrUpdateRequest request)
           throws IOException, RestClientException {
     try {
       validateAssociationCreateRequest(request);
@@ -1080,11 +1060,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     createAssociationsHelper(request);
     List<AssociationInfo> infos = request.getAssociations().stream()
-            .map(associationCreateInfo ->
-                    new AssociationInfo(associationCreateInfo.getSubject(),
-                            associationCreateInfo.getAssociationType(),
-                            associationCreateInfo.getLifecycle(), associationCreateInfo.isFrozen(),
-                            associationCreateInfo.getSchema())).collect(Collectors.toList());
+            .map(associationCreateOrUpdateInfo ->
+                    new AssociationInfo(associationCreateOrUpdateInfo.getSubject(),
+                            associationCreateOrUpdateInfo.getAssociationType(),
+                            associationCreateOrUpdateInfo.getLifecycle(),
+                            associationCreateOrUpdateInfo.getFrozen(),
+                            associationCreateOrUpdateInfo.getSchema()))
+            .collect(Collectors.toList());
     AssociationResponse response = new AssociationResponse(
             request.getResourceName(), request.getResourceNamespace(),
             request.getResourceId(), request.getResourceType(), infos);
