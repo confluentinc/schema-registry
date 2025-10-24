@@ -234,7 +234,6 @@ public class AssociationsResource {
       // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
-      // TODO RAY
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create request", required = true)
@@ -308,7 +307,6 @@ public class AssociationsResource {
       // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
-      // TODO RAY
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create requests", required = true)
@@ -354,7 +352,6 @@ public class AssociationsResource {
       @QueryParam("resourceType") String resourceType,
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
-      // TODO RAY
       @Parameter(description = "Cascade lifecycle")
       @QueryParam("cascadeLifecycle") boolean cascadeLifecycle) {
 

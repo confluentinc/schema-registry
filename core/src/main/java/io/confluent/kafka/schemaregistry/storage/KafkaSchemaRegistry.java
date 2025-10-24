@@ -29,7 +29,6 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TO
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -905,16 +904,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     // TODO RAY test idempotency
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String subject = info.getSubject();
-      if (context != null && !context.isEmpty() && !subject.startsWith(CONTEXT_PREFIX)) {
-        subject = QualifiedSubject.normalizeContext(context) + subject;
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), context, subject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      if (isReadOnlyMode(qualifiedSubject)) {
+        throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+            + qs.getContext() + " is in read-only mode");
       }
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
-      subject = qs.toQualifiedSubject();
-      if (isReadOnlyMode(subject)) {
-        String qualifiedContext = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-        throw new OperationNotPermittedException("Subject " + subject + " in context "
-            + qualifiedContext + " is in read-only mode");
-      }
+
+      // Set the subject in the request to the subject with context
+      info.setSubject(qs.toUnqualifiedSubject());
     }
 
     // Check that association types are unique
@@ -973,7 +971,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     // If this association is weak, check no strong associations exist
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String subject = info.getSubject();
-      if (info.getSchema() == null && getLatestVersion(subject) == null) {
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
         throw new NoActiveSubjectVersionExistsException(subject);
       }
       String assocType = info.getAssociationType();
@@ -999,6 +999,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     // Check compatibility of all schemas
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String subject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String qualifiedSubject = qs.toQualifiedSubject();
       Schema schema = info.getSchema();
       if (schema == null) {
         continue;
@@ -1007,12 +1009,22 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
       List<SchemaKey> previousSchemas = new ArrayList<>();
       // Don't check compatibility against deleted schema
-      getAllVersions(subject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
+      getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
 
-      List<String> errorLogs = isCompatible(subject, schema, previousSchemas, normalize);
+      List<String> errorLogs = isCompatible(qualifiedSubject, schema, previousSchemas, normalize);
       if (!errorLogs.isEmpty()) {
         throw new IncompatibleSchemaException(errorLogs.toString());
       }
+    }
+
+    if (dryRun) {
+      return new AssociationResponse(
+          request.getResourceName(),
+          request.getResourceNamespace(),
+          request.getResourceId(),
+          request.getResourceType(),
+          Collections.emptyList()
+      );
     }
 
     // Register schemas
@@ -1020,12 +1032,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       String subject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String qualifiedSubject = qs.toQualifiedSubject();
       Schema schema = info.getSchema();
       if (schema == null) {
         continue;
       }
       boolean normalize = Boolean.TRUE.equals(info.getNormalize());
-      Schema registeredSchema = register(subject, schema, normalize, false);
+      Schema registeredSchema = register(qualifiedSubject, schema, normalize, false);
       registeredSchemas.put(associationType, registeredSchema);
     }
 
