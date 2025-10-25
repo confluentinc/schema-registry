@@ -90,7 +90,6 @@
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
-        <avro.version>1.12.1</avro.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.5.1</cel-version>
