@@ -132,7 +132,7 @@ public class ModeResource {
     }
 
     if (io.confluent.kafka.schemaregistry.storage.Mode.FORWARD.toString()
-            .equals(request.getMode()) 
+            .equals(request.getMode())
         && !QualifiedSubject.isGlobalContext(schemaRegistry.tenant(), subject)) {
       throw new RestInvalidModeException("Forward mode only supported on global level");
     }
@@ -253,6 +253,30 @@ public class ModeResource {
     return getMode(null, defaultToGlobal);
   }
 
+
+  @DELETE
+  @DocumentedName("deleteGlobalMode")
+  @Operation(summary = "Delete global mode",
+      description = "Deletes the global mode and reverts to the default mode.",
+      responses = {
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode.",
+          content = @Content(schema = @Schema(implementation = Mode.class))),
+        @ApiResponse(responseCode = "422",
+          description = "Unprocessable Entity. Error code 42205 indicates operation not permitted.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+        @ApiResponse(responseCode = "500",
+          description = "Internal Server Error. "
+                  + "Error code 50001 indicates a failure in the backend data store.",
+          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.delete-global")
+  public void deleteGlobalMode(
+      final @Suspended AsyncResponse asyncResponse,
+      @Context HttpHeaders headers) {
+    log.info("Deleting global mode");
+    deleteSubjectMode(asyncResponse, headers, null);
+  }
+
   @DELETE
   @Path("/{subject}")
   @DocumentedName("deleteSubjectMode")
@@ -276,13 +300,13 @@ public class ModeResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
-    log.debug("Deleting mode for subject {}", subject);
+    log.info("Deleting mode for subject {}", subject);
 
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
-      throw Errors.invalidSubjectException(subject);
+      subject = null;
+    } else {
+      subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
     }
-
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     io.confluent.kafka.schemaregistry.storage.Mode deletedMode;
     Mode deleteModeResponse;
