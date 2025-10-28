@@ -37,6 +37,7 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
         "Content-Type", "application/json",
         "Accept", "application/json",
+        "Accept-Version", "8.0",
         "Authorization", "test",
         "X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b"
     ));
@@ -47,6 +48,7 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
+    Assert.assertEquals("8.0", requestProps.get("Accept-Version"));
     Assert.assertEquals("test", requestProps.get("Authorization"));
     Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
@@ -64,6 +66,7 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
         "Content-Type", "application/json",
         "Accept", "application/json",
+        "Accept-Version", "8.0",
         "Authorization", "",
         "X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b"
     ));
@@ -74,6 +77,7 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
+    Assert.assertEquals("8.0", requestProps.get("Accept-Version"));
     Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
     Assert.assertNull( requestProps.get("Authorization"));
   }
@@ -83,6 +87,7 @@ public class RequestHeaderBuilderTest {
     HttpHeaders httpHeaders = mockHttpHeaders(ImmutableMap.of(
         "Content-Type", "application/json",
         "Accept", "application/json",
+        "Accept-Version", "8.0",
         "Authorization", "",
         "X-Request-ID", "24b9afef-3cc7-4e32-944d-f89253c1b64b"
     ));
@@ -93,6 +98,7 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
+    Assert.assertEquals("8.0", requestProps.get("Accept-Version"));
     Assert.assertNull( requestProps.get("Authorization"));
     Assert.assertEquals("24b9afef-3cc7-4e32-944d-f89253c1b64b", requestProps.get("X-Request-ID"));
   }
@@ -102,6 +108,7 @@ public class RequestHeaderBuilderTest {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", "");
     headers.put("Accept", "");
+    headers.put("Accept-Version", "");
     headers.put("Authorization", "");
     headers.put("target-sr-cluster", "sr-xyz");
     headers.put("some-other-header", "abc");
@@ -122,6 +129,7 @@ public class RequestHeaderBuilderTest {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", "");
     headers.put("Accept", "");
+    headers.put("Accept-Version", "");
     headers.put("Authorization", "");
     headers.put("target-sr-cluster", "sr-xyz");
     headers.put("some-other-header", "abc");
@@ -144,6 +152,7 @@ public class RequestHeaderBuilderTest {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", "");
     headers.put("Accept", "");
+    headers.put("Accept-Version", "");
     headers.put("Authorization", "");
     headers.put("target-sr-cluster", "sr-xyz");
     headers.put("some-other-header", "abc");
@@ -164,6 +173,7 @@ public class RequestHeaderBuilderTest {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", "application/json");
     headers.put("Accept", "application/json");
+    headers.put("Accept-Version", "8.0");
     headers.put("Authorization", "test");
     headers.put("target-sr-cluster", "sr-xyz");
     headers.put("some-other-header", "abc");
@@ -176,6 +186,7 @@ public class RequestHeaderBuilderTest {
     Assert.assertNotNull(requestProps);
     Assert.assertEquals("application/json", requestProps.get("Content-Type"));
     Assert.assertEquals("application/json", requestProps.get("Accept"));
+    Assert.assertEquals("8.0", requestProps.get("Accept-Version"));
     Assert.assertEquals("test", requestProps.get("Authorization"));
     Assert.assertNull(requestProps.get("target-sr-cluster"));
     Assert.assertNull(requestProps.get("some-other-header"));
