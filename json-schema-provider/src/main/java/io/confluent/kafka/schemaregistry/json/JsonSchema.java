@@ -179,7 +179,12 @@ public class JsonSchema implements ParsedSchema {
       URI.create("https://json-schema.org/draft/2019-09/meta/format"),
       readFromClassPath("/metaschemas/draft/2019-09/meta/format"),
       URI.create("https://json-schema.org/draft/2019-09/meta/content"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/content")
+      readFromClassPath("/metaschemas/draft/2019-09/meta/content"),
+      // The following are to account for URIs with trailing #
+      URI.create("https://json-schema.org/draft/2019-09/schema#"),
+      readFromClassPath("/metaschemas/draft/2019-09/schema"),
+      URI.create("https://json-schema.org/draft/2020-12/schema#"),
+      readFromClassPath("/metaschemas/draft/2020-12/schema")
   );
 
   public JsonSchema(JsonNode jsonNode) {
