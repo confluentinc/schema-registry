@@ -248,17 +248,19 @@ public class ModeResource {
   @DELETE
   @DocumentedName("deleteGlobalMode")
   @Operation(summary = "Delete global mode",
-          description = "Deletes the global mode and reverts to the default mode.",
-          responses = {
-                  @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode.",
-                          content = @Content(schema = @Schema(implementation = Mode.class))),
-                  @ApiResponse(responseCode = "422",
-                          description = "Unprocessable Entity. Error code 42205 indicates operation not permitted.",
-                          content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
-                  @ApiResponse(responseCode = "500",
-                          description = "Internal Server Error. "
-                                  + "Error code 50001 indicates a failure in the backend data store.",
-                          content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+      description = "Deletes the global mode and reverts to the default mode.",
+      responses = {
+          @ApiResponse(responseCode = "200",
+                      description = "Operation succeeded. Returns old mode.",
+                      content = @Content(schema = @Schema(implementation = Mode.class))),
+          @ApiResponse(responseCode = "422",
+                      description = "Unprocessable Entity. "
+                              + "Error code 42205 indicates operation not permitted.",
+                      content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+                      description = "Internal Server Error. "
+                              + "Error code 50001 indicates a failure in the backend data store.",
+                      content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("mode.delete-global")
   public void deleteGlobalMode(
