@@ -638,4 +638,65 @@ public class RestApiModeTest extends ClusterTestHarness {
     }
   }
 
+  @Test
+  public void testDeleteGlobalMode() throws Exception {
+    String mode = "READONLY";
+
+    // set global mode to read only
+    assertEquals(
+            mode,
+            restApp.restClient.setMode(mode).getMode());
+
+    // verify mode is set
+    assertEquals(
+            mode,
+            restApp.restClient.getMode().getMode());
+
+    // delete global mode - should succeed and return the old mode
+    Mode deletedMode = restApp.restClient.deleteSubjectMode(null);
+    assertEquals(
+            mode,
+            deletedMode.getMode(),
+            "Deleted mode should return the old global mode");
+
+    // verify global mode is now reset to default (READWRITE)
+    assertEquals(
+            "READWRITE",
+            restApp.restClient.getMode().getMode(),
+            "Global mode should revert to default READWRITE");
+  }
+
+  @Test
+  public void testDeleteSubjectModeAfterGlobalMode() throws Exception {
+    String subject = "testSubject";
+    String globalMode = "READONLY";
+    String subjectMode = "READWRITE";
+
+    // set global mode to read only
+    assertEquals(
+            globalMode,
+            restApp.restClient.setMode(globalMode).getMode());
+
+    // set subject mode to read write
+    assertEquals(
+            subjectMode,
+            restApp.restClient.setMode(subjectMode, subject).getMode());
+
+    // verify subject mode is set
+    assertEquals(
+            subjectMode,
+            restApp.restClient.getMode(subject, false).getMode());
+
+    // delete subject mode
+    Mode deletedMode = restApp.restClient.deleteSubjectMode(subject);
+    assertEquals(
+            subjectMode,
+            deletedMode.getMode(),
+            "Deleted mode should return the old mode");
+
+    // verify subject mode falls back to global mode
+    assertEquals(
+            globalMode,
+            restApp.restClient.getMode(subject, true).getMode());
+  }
 }

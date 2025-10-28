@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD_TRANS
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,6 +41,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -831,10 +833,20 @@ public class RestApiTest extends ClusterTestHarness {
             .getMode()
     );
 
-    // We don't support deleting the mode for the default context
-    assertThrows(
-        RestClientException.class,
-        () -> restApp.restClient.deleteSubjectMode(defaultContext)
+    // Delete the mode for the default context - should succeed and revert to global mode
+    Mode deletedMode = restApp.restClient.deleteSubjectMode(defaultContext);
+    assertEquals(
+            READONLY.name(),
+            deletedMode.getMode(),
+            "Deleted mode should return the old mode");
+
+    // Verify mode reverts to global mode (IMPORT)
+    assertEquals(
+            READWRITE.name(),
+            restApp.restClient
+                    .getMode(null, true)
+                    .getMode(),
+            "Mode should revert to global mode after deleting default context mode"
     );
   }
 
