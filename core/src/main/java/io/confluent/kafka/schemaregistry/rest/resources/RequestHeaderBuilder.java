@@ -50,6 +50,7 @@ public class RequestHeaderBuilder {
   private void addStaticHeaders(Map<String, String> headerProperties, HttpHeaders httpHeaders) {
     addIfNotEmpty(httpHeaders, headerProperties, "Content-Type");
     addIfNotEmpty(httpHeaders, headerProperties, "Accept");
+    addIfNotEmpty(httpHeaders, headerProperties, "Accept-Version");
     addIfNotEmpty(httpHeaders, headerProperties, "Authorization");
     addIfNotEmpty(httpHeaders, headerProperties, "X-Request-ID");
   }

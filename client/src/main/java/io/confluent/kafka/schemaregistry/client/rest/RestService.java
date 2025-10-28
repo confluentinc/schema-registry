@@ -1117,8 +1117,9 @@ public class RestService implements Closeable, Configurable {
 
   public Mode deleteSubjectMode(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
-    String path = builder.build(subject).toString();
+    String path = subject != null
+            ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
+            : "/mode";
 
     Mode response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_MODE_RESPONSE_TYPE);
