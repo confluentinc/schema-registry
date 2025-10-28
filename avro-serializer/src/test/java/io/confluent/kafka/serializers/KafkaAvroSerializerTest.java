@@ -295,6 +295,18 @@ public class KafkaAvroSerializerTest {
           + "\"name\": \"User\",\n"
           + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
 
+  private static final org.apache.avro.Schema mapEntriesSchema = new Schema.Parser().parse(
+      "{\n"
+          + "\"type\":\"array\","
+          + "\"items\":{"
+          + "\"type\":\"record\","
+          + "\"name\":\"KsqlDataSourceSchema\","
+          + "\"namespace\":\"io.confluent.ksql.avro_schemas\","
+          + "\"fields\":["
+          + "{\"name\":\"key\",\"type\":[\"null\",\"string\"],\"default\":null},"
+          + "{\"name\":\"value\",\"type\":[\"null\",\"int\"],\"default\":null}],"
+          + "\"connect.internal.type\":\"MapEntry\"}}");
+
   @Test
   public void testKafkaAvroSerializer() {
     byte[] bytes;
@@ -967,6 +979,58 @@ public class KafkaAvroSerializerTest {
     byte[] bytes1 = avroSerializer.serialize(topic, headers, data);
     Object result = avroDeserializer.deserialize(topic, headers, bytes1);
     assertEquals(data, result);
+  }
+
+  @Test
+  public void testKafkaAvroSerializerWithMapEntries() throws IOException, RestClientException {
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    Schema entrySchema = connectOptionalKeyMapEntrySchema(
+        "bob",
+        org.apache.avro.Schema.create(org.apache.avro.Schema.Type.INT)
+    );
+    GenericData.Record e1 = new GenericData.Record(entrySchema);
+    e1.put("key", "a");
+    e1.put("value", 1);
+    GenericData.Record e2 = new GenericData.Record(entrySchema);
+    e2.put("key", null);
+    e2.put("value", null);
+    GenericData.Array<?> data = new GenericData.Array<>(mapEntriesSchema,
+        Arrays.asList(e1, e2));
+    schemaRegistry.register(topic + "-value", new AvroSchema(mapEntriesSchema));
+    avroSerializer.configure(serializerConfigs, false);
+    avroDeserializer.configure(deserializerConfigs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes1 = avroSerializer.serialize(topic, headers, data);
+    Object result = avroDeserializer.deserialize(topic, headers, bytes1);
+    assertEquals(data, result);
+  }
+
+  private static org.apache.avro.Schema connectOptionalKeyMapEntrySchema(
+      final String name,
+      final org.apache.avro.Schema valueSchema
+  ) {
+    return org.apache.avro.SchemaBuilder.record(name)
+        .namespace("io.confluent.ksql.avro_schemas")
+        .prop("connect.internal.type", "MapEntry")
+        .fields()
+        .optionalString("key")
+        .name("value")
+        .type().unionOf().nullType().and().type(valueSchema).endUnion()
+        .nullDefault()
+        .endRecord();
   }
 
   @Test
