@@ -375,6 +375,23 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   /**
+   * Checks if the given qualified subject is the global context for the given tenant.
+   * The global context is the context with name ".__GLOBAL" and an empty subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the qualified subject is the global context, false otherwise
+   */
+  public static boolean isGlobalContext(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    if (qs == null || qs.getContext() == null) {
+      return false;
+    }
+    return qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+      && (qs.getSubject().isEmpty() || qs.getSubject() == null);
+  }
+
+  /**
    * Validates the given qualified subject for the given tenant.
    * A valid subject must not be null, must not contain control characters,
    * must not be "__GLOBAL" or "__EMPTY", and must not be in the global context
