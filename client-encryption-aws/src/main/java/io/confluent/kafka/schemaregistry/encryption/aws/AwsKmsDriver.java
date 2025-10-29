@@ -46,6 +46,7 @@ public class AwsKmsDriver implements KmsDriver {
   public static final String AWS_ROLE_ARN = "AWS_ROLE_ARN";
   public static final String AWS_ROLE_SESSION_NAME = "AWS_ROLE_SESSION_NAME";
   public static final String AWS_ROLE_EXTERNAL_ID = "AWS_ROLE_EXTERNAL_ID";
+  public static final String AWS_WEB_IDENTITY_TOKEN_FILE = "AWS_WEB_IDENTITY_TOKEN_FILE";
 
   public AwsKmsDriver() {
   }
@@ -70,6 +71,7 @@ public class AwsKmsDriver implements KmsDriver {
       if (roleExternalId == null) {
         roleExternalId = System.getenv(AWS_ROLE_EXTERNAL_ID);
       }
+      String roleWebIdentityTokenFile = System.getenv(AWS_WEB_IDENTITY_TOKEN_FILE);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
       String profile = (String) configs.get(PROFILE);
@@ -82,7 +84,8 @@ public class AwsKmsDriver implements KmsDriver {
       } else {
         provider = DefaultCredentialsProvider.create();
       }
-      if (roleArn != null) {
+      // If roleWebIdentityTokenFile is set, use the DefaultCredentialsProvider
+      if (roleArn != null && roleWebIdentityTokenFile == null) {
         Region region = getRegionFromKeyId(
             AwsKmsClient.removePrefix(AwsKmsClient.PREFIX, kekUrl.get()));
         return buildRoleProvider(provider, region, roleArn, roleSessionName, roleExternalId);
