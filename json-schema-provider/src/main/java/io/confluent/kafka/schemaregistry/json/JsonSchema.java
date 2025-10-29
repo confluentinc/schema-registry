@@ -108,7 +108,7 @@ public class JsonSchema implements ParsedSchema {
 
   private final JsonNode jsonNode;
 
-  private transient Schema schemaObj;
+  private transient volatile Schema schemaObj;
 
   private final Integer version;
 
@@ -122,7 +122,7 @@ public class JsonSchema implements ParsedSchema {
 
   private transient volatile String canonicalString;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
@@ -290,36 +290,41 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (schemaObj == null) {
-      try {
-        // Extract the $schema to use for determining the id keyword
-        SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-        if (jsonNode.has(SCHEMA_KEYWORD)) {
-          String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-          if (schema != null) {
-            spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (schemaObj == null) {
+          try {
+            // Extract the $schema to use for determining the id keyword
+            SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+            if (jsonNode.has(SCHEMA_KEYWORD)) {
+              String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+              if (schema != null) {
+                spec = SpecificationVersion.lookupByMetaSchemaUrl(schema)
                     .orElse(SpecificationVersion.DRAFT_7);
+              }
+            }
+            // Extract the $id to use for resolving relative $ref URIs
+            URI idUri = null;
+            if (jsonNode.has(spec.idKeyword())) {
+              String id = jsonNode.get(spec.idKeyword()).asText();
+              if (id != null) {
+                idUri = ReferenceResolver.resolve((URI) null, id);
+              }
+            }
+            SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
+                .useDefaults(true).draftV7Support();
+            for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+              URI child = ReferenceResolver.resolve(idUri, dep.getKey());
+              builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+            }
+            JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+            builder.schemaJson(jsonObject);
+            SchemaLoader loader = builder.build();
+            schemaObj = loader.load().build();
+          } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
           }
         }
-        // Extract the $id to use for resolving relative $ref URIs
-        URI idUri = null;
-        if (jsonNode.has(spec.idKeyword())) {
-          String id = jsonNode.get(spec.idKeyword()).asText();
-          if (id != null) {
-            idUri = ReferenceResolver.resolve((URI) null, id);
-          }
-        }
-        SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
-            .useDefaults(true).draftV7Support();
-        for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
-          URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-          builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
-        }
-        JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
-        builder.schemaJson(jsonObject);
-        SchemaLoader loader = builder.build();
-        schemaObj = loader.load().build();
-      } catch (IOException e) {
-        throw new IllegalArgumentException("Invalid JSON", e);
       }
     }
     return schemaObj;
@@ -522,7 +527,12 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
+        }
+      }
     }
     return hashCode;
   }

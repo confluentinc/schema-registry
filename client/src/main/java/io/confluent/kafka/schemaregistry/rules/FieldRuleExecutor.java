@@ -34,7 +34,7 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
 
   public static final String PRESERVE_SOURCE_FIELDS = "preserve.source.fields";
 
-  private Boolean preserveSource;
+  private volatile Boolean preserveSource;
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -52,10 +52,11 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
 
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
-    if (this.preserveSource == null) {
-      String preserveValueConfig = ctx.getParameter(PRESERVE_SOURCE_FIELDS);
-      if (preserveValueConfig != null) {
-        this.preserveSource = Boolean.parseBoolean(preserveValueConfig);
+    if (preserveSource == null) {
+      synchronized (this) {
+        if (preserveSource == null) {
+          preserveSource = Boolean.parseBoolean(ctx.getParameter(PRESERVE_SOURCE_FIELDS));
+        }
       }
     }
     switch (ctx.ruleMode()) {
