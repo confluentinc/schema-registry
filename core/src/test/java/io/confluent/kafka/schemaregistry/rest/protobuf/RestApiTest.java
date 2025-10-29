@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest.protobuf;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -48,6 +49,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.serializers.protobuf.test.Root;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
 
@@ -163,7 +165,7 @@ public class RestApiTest extends ClusterTestHarness {
         schemas.get("root.proto"),
         schemaString.getSchemaString()
     );
-    schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES, 3, null, "serialized", false);
+    schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES, 3, null, "serialized", null, false);
     // the newly registered schema should be immediately readable on the leader
     assertEquals("Registered schema should be found",
         schemas.get("root.proto"),
@@ -194,7 +196,7 @@ public class RestApiTest extends ClusterTestHarness {
     Schema latestSchema = restApp.restClient.getLatestVersion("referrer");
     assertEquals("Registered schema should be found", 3, latestSchema.getId().intValue());
     Schema latestSchema2 = restApp.restClient.getLatestVersion(
-        RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "serialized");
+        RestService.DEFAULT_REQUEST_PROPERTIES, "referrer", "serialized", null);
     assertEquals("Registered schema should be found",
         latestSchema.getSchema(),
         new ProtobufSchema(latestSchema2.getSchema()).canonicalString());
@@ -479,6 +481,74 @@ public class RestApiTest extends ClusterTestHarness {
         "}\n";
     registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
 
+    RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest(new ProtobufSchema(schemaString));
+    tagSchemaRequest.setSchemaTagsToAdd(Arrays.asList(
+        new SchemaTags(new SchemaEntity("Message1.f1", SchemaEntity.EntityType.SR_FIELD),
+            Arrays.asList("TAG1")),
+        new SchemaTags(new SchemaEntity(".Message1.f1", SchemaEntity.EntityType.SR_FIELD),
+            Arrays.asList("TAG2"))
+    ));
+
+    String newSchemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1 [(confluent.field_meta) = {\n" +
+        "    tags: [\n" +
+        "      \"TAG1\",\n" +
+        "      \"TAG2\"\n" +
+        "    ]\n" +
+        "  }];\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+    RegisterSchemaResponse responses = restApp.restClient
+        .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
+    assertEquals(2, responses.getId());
+
+    Schema result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(newSchemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    tagSchemaRequest = new RegisterSchemaRequest(new ProtobufSchema(newSchemaString));
+    tagSchemaRequest.setVersion(3);
+    tagSchemaRequest.setSchemaTagsToRemove(Collections.singletonList(
+        new SchemaTags(new SchemaEntity("Message1.f1", SchemaEntity.EntityType.SR_FIELD),
+            Arrays.asList("TAG2"))));
+
+    newSchemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1 [(confluent.field_meta) = {\n" +
+        "    tags: [\n" +
+        "      \"TAG1\"\n" +
+        "    ]\n" +
+        "  }];\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+    responses = restApp.restClient
+        .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
+    assertEquals(3, responses.getId());
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(newSchemaString, result.getSchema());
+    assertEquals((Integer) 3, result.getVersion());
+    assertEquals("3", responses.getMetadata().getProperties().get("confluent:version"));
+  }
+
+  @Test
+  public void testRegisterSchemaTagsBasicDeprecated() throws Exception {
+    String subject = "test";
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1;\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+    registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setTagsToAdd(Arrays.asList(
         new SchemaTags(new SchemaEntity("Message1.f1", SchemaEntity.EntityType.SR_FIELD),
@@ -535,6 +605,211 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("3", responses.getMetadata().getProperties().get("confluent:version"));
   }
 
+  @Test
+  public void testConfluentVersion() throws Exception {
+    String subject = "test";
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example;\n" +
+        "\n" +
+        "message Message1 {\n" +
+        "  string f1 = 1;\n" +
+        "  string f2 = 2;\n" +
+        "}\n";
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchemaType(ProtobufSchema.TYPE);
+    request.setSchema(schemaString);
+    // Register with null version
+    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+
+    Schema result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+
+    // Register schema with version 2
+    request.setVersion(2);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Lookup schema with null version
+    request.setVersion(null);
+    request.setMetadata(null);
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
+    // Lookup schema with confluent:version 1 (should return one without metadata)
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "1"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 1, result.getVersion());
+    assertNull(result.getMetadata());
+
+    // Lookup schema with confluent:version 2
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Delete version 1
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    // Lookup schema with null version
+    request.setVersion(null);
+    request.setMetadata(null);
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with null version
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 2, result.getVersion());
+    assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with version 3
+    request.setVersion(3);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 3, result.getVersion());
+    assertEquals("3", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with version 3
+    request.setVersion(3);
+    request.setMetadata(null);
+    try {
+      registerAndVerifySchema(restApp.restClient, request, 3, subject);
+      fail("Registering version that is not next version should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema",
+          Errors.INVALID_SCHEMA_ERROR_CODE,
+          rce.getErrorCode());
+    }
+
+    // Register schema with version 4
+    request.setVersion(4);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 4, subject);
+
+    // Lookup schema with null version
+    request.setVersion(null);
+    request.setMetadata(null);
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 4, result.getVersion());
+    assertEquals("4", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with confluent:version -1
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "-1"), null));
+    registerAndVerifySchema(restApp.restClient, request, 5, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 5, result.getVersion());
+    assertEquals("5", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with confluent:version 2
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
+    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+
+    // Register schema with confluent:version 3
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "3"), null));
+    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+
+    // Register schema with confluent:version 0
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "0"), null));
+    registerAndVerifySchema(restApp.restClient, request, 6, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 6, result.getVersion());
+    assertEquals("6", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with empty metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.emptyMap(), null));
+    registerAndVerifySchema(restApp.restClient, request, 6, subject);
+
+    // Register schema with new metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
+    registerAndVerifySchema(restApp.restClient, request, 7, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 7, result.getVersion());
+    assertNull(result.getMetadata().getProperties().get("confluent:version"));
+
+    // Register schema with confluent:version -1
+    request.setVersion(-1);
+    request.setMetadata(null);
+    registerAndVerifySchema(restApp.restClient, request, 8, subject);
+
+    result = restApp.restClient.getLatestVersion(subject);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 8, result.getVersion());
+    assertEquals("8", result.getMetadata().getProperties().get("confluent:version"));
+
+    // Lookup schema with new metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 7, result.getVersion());
+    assertNull(result.getMetadata().getProperties().get("confluent:version"));
+
+    // Delete version 7
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "7");
+
+    // Lookup schema with new metadata
+    request.setVersion(null);
+    request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
+    result = restApp.restClient.lookUpSubjectVersion(request, subject, false, false);
+    assertEquals(schemaString, result.getSchema());
+    assertEquals((Integer) 8, result.getVersion());
+    assertEquals("8", result.getMetadata().getProperties().get("confluent:version"));
+  }
+
   public static void registerAndVerifySchema(
       RestService restService,
       String schemaString,
@@ -565,6 +840,25 @@ public class RestApiTest extends ClusterTestHarness {
     Assert.assertEquals(
         "Registered schema should be found",
         schemaString.trim(),
+        restService.getId(expectedId).getSchemaString().trim()
+    );
+  }
+
+  public static void registerAndVerifySchema(
+      RestService restService,
+      RegisterSchemaRequest request,
+      int expectedId,
+      String subject
+  ) throws IOException, RestClientException {
+    int registeredId = restService.registerSchema(request, subject, false).getId();
+    Assert.assertEquals(
+        "Registering a new schema should succeed",
+        (long) expectedId,
+        (long) registeredId
+    );
+    Assert.assertEquals(
+        "Registered schema should be found",
+        request.getSchema().trim(),
         restService.getId(expectedId).getSchemaString().trim()
     );
   }

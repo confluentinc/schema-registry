@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import java.io.InterruptedIOException;
 import java.util.Collections;
@@ -177,7 +178,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
           if (jsonNode == null) {
             jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
           }
-          schema.validate(jsonNode);
+          jsonNode = schema.validate(jsonNode);
         } catch (JsonProcessingException | ValidationException e) {
           throw new SerializationException("JSON "
               + jsonNode
@@ -286,12 +287,18 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   private Integer schemaVersion(
       String topic, boolean isKey, int id, String subject, JsonSchema schema, Object value
   ) throws IOException, RestClientException {
-    Integer version;
+    Integer version = null;
     if (isDeprecatedSubjectNameStrategy(isKey)) {
       subject = getSubjectName(topic, isKey, value, schema);
     }
     JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
-    version = schemaRegistry.getVersion(subject, subjectSchema);
+    Metadata metadata = subjectSchema.metadata();
+    if (metadata != null) {
+      version = metadata.getConfluentVersionNumber();
+    }
+    if (version == null) {
+      version = schemaRegistry.getVersion(subject, subjectSchema);
+    }
     return version;
   }
 
