@@ -73,7 +73,7 @@ public class AvroSchema implements ParsedSchema {
   public static final String FIELDS_FIELD = "fields";
 
   private final Schema schemaObj;
-  private volatile String canonicalString;
+  private transient volatile String canonicalString;
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
@@ -81,7 +81,7 @@ public class AvroSchema implements ParsedSchema {
   private final RuleSet ruleSet;
   private final boolean isNew;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
@@ -484,8 +484,13 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
-          + metaHash(schemaObj, new IdentityHashMap<>());
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
+              + metaHash(schemaObj, new IdentityHashMap<>());
+        }
+      }
     }
     return hashCode;
   }
