@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class testApiModeTest extends ClusterTestHarness {
+public class RestApiModeTest extends ClusterTestHarness {
 
   private static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
