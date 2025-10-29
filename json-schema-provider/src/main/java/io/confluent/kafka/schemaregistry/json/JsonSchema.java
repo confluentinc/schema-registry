@@ -133,7 +133,7 @@ public class JsonSchema implements ParsedSchema {
 
   private final JsonNode jsonNode;
 
-  private transient Schema schemaObj;
+  private transient volatile Schema schemaObj;
 
   private transient com.github.erosb.jsonsKema.Schema skemaObj;
 
@@ -151,7 +151,7 @@ public class JsonSchema implements ParsedSchema {
 
   private transient volatile String canonicalString;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
@@ -371,37 +371,42 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (schemaObj == null) {
-      try {
-        if (jsonNode.isBoolean()) {
-          schemaObj = jsonNode.booleanValue()
-              ? TrueSchema.builder().build()
-              : FalseSchema.builder().build();
-        } else {
-          // Extract the $schema to use for determining the id keyword
-          SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-          if (jsonNode.has(SCHEMA_KEYWORD)) {
-            String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-            SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
-            if (s != null) {
-              spec = s;
-            }
-          }
-          switch (spec) {
-            case DRAFT_2020_12:
-            case DRAFT_2019_09:
-              if (ignoreModernDialects) {
-                loadPreviousDraft(spec);
-              } else {
-                loadLatestDraft();
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (schemaObj == null) {
+          try {
+            if (jsonNode.isBoolean()) {
+              schemaObj = jsonNode.booleanValue()
+                  ? TrueSchema.builder().build()
+                  : FalseSchema.builder().build();
+            } else {
+              // Extract the $schema to use for determining the id keyword
+              SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+              if (jsonNode.has(SCHEMA_KEYWORD)) {
+                String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+                SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+                if (s != null) {
+                  spec = s;
+                }
               }
-              break;
-            default:
-              loadPreviousDraft(spec);
-              break;
+              switch (spec) {
+                case DRAFT_2020_12:
+                case DRAFT_2019_09:
+                  if (ignoreModernDialects) {
+                    loadPreviousDraft(spec);
+                  } else {
+                    loadLatestDraft();
+                  }
+                  break;
+                default:
+                  loadPreviousDraft(spec);
+                  break;
+              }
+            }
+          } catch (Throwable e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
           }
         }
-      } catch (Throwable e) {
-        throw new IllegalArgumentException("Invalid JSON Schema", e);
       }
     }
     return schemaObj;
@@ -723,8 +728,13 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(
-          jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(
+              jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
+        }
+      }
     }
     return hashCode;
   }
