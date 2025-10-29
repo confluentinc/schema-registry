@@ -24,7 +24,7 @@ public class LazyParsedSchemaHolder implements ParsedSchemaHolder {
 
   private KafkaSchemaRegistry schemaRegistry;
   private SchemaKey schemaKey;
-  private SoftReference<SchemaValue> schemaValueRef;
+  private volatile SoftReference<SchemaValue> schemaValueRef;
 
   public LazyParsedSchemaHolder(KafkaSchemaRegistry schemaRegistry, SchemaKey schemaKey) {
     this.schemaRegistry = schemaRegistry;
@@ -49,8 +49,13 @@ public class LazyParsedSchemaHolder implements ParsedSchemaHolder {
   public SchemaValue schemaValue() throws SchemaRegistryException {
     SchemaValue schemaValue = schemaValueRef.get();
     if (schemaValue == null) {
-      schemaValue = schemaRegistry.getSchemaValue(schemaKey);
-      schemaValueRef = new SoftReference<>(schemaValue);
+      synchronized (this) {
+        schemaValue = schemaValueRef.get();
+        if (schemaValue == null) {
+          schemaValue = schemaRegistry.getSchemaValue(schemaKey);
+          schemaValueRef = new SoftReference<>(schemaValue);
+        }
+      }
     }
     return schemaValue;
   }
