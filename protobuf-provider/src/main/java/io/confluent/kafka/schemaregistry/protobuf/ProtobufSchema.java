@@ -361,11 +361,11 @@ public class ProtobufSchema implements ParsedSchema {
 
   private transient volatile String canonicalString;
 
-  private transient DynamicSchema dynamicSchema;
+  private transient volatile DynamicSchema dynamicSchema;
 
-  private transient Descriptor descriptor;
+  private transient volatile Descriptor descriptor;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
@@ -1263,7 +1263,12 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (descriptor == null) {
-      descriptor = toDescriptor(name());
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (descriptor == null) {
+          descriptor = toDescriptor(name());
+        }
+      }
     }
     return descriptor;
   }
@@ -1315,10 +1320,16 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (dynamicSchema == null) {
-      Map<String, DynamicSchema> cache = new HashMap<>();
-      Context ctx = new Context();
-      ctx.collectTypeInfo(this, true);
-      dynamicSchema = toDynamicSchema(ctx, name, schemaObj, dependenciesWithLogicalTypes(), cache);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (dynamicSchema == null) {
+          Map<String, DynamicSchema> cache = new HashMap<>();
+          Context ctx = new Context();
+          ctx.collectTypeInfo(this, true);
+          dynamicSchema = toDynamicSchema(ctx, name, schemaObj,
+              dependenciesWithLogicalTypes(), cache);
+        }
+      }
     }
     return dynamicSchema;
   }
@@ -2087,8 +2098,13 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      // Can't use schemaObj as locations may differ
-      hashCode = Objects.hash(canonicalString(), references, version, metadata, ruleSet);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          // Can't use schemaObj as locations may differ
+          hashCode = Objects.hash(canonicalString(), references, version, metadata, ruleSet);
+        }
+      }
     }
     return hashCode;
   }
