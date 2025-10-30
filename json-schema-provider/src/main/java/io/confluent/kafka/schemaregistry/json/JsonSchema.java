@@ -135,7 +135,7 @@ public class JsonSchema implements ParsedSchema {
 
   private transient volatile Schema schemaObj;
 
-  private transient com.github.erosb.jsonsKema.Schema skemaObj;
+  private transient volatile com.github.erosb.jsonsKema.Schema skemaObj;
 
   private final Integer version;
 
