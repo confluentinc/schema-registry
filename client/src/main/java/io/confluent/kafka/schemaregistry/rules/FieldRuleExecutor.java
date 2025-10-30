@@ -44,21 +44,17 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
     }
   }
 
-  public boolean isPreserveSource() {
-    return Boolean.TRUE.equals(preserveSource);
+  public boolean isPreserveSource(RuleContext ctx) {
+    if (preserveSource != null) {
+      return Boolean.TRUE.equals(preserveSource);
+    }
+    return Boolean.parseBoolean(ctx.getParameter(PRESERVE_SOURCE_FIELDS));
   }
 
   public abstract FieldTransform newTransform(RuleContext ctx) throws RuleException;
 
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
-    if (preserveSource == null) {
-      synchronized (this) {
-        if (preserveSource == null) {
-          preserveSource = Boolean.parseBoolean(ctx.getParameter(PRESERVE_SOURCE_FIELDS));
-        }
-      }
-    }
     switch (ctx.ruleMode()) {
       case WRITE:
       case UPGRADE:
@@ -92,7 +88,7 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
       if (transform != null) {
         if (ctx.ruleMode() == RuleMode.WRITE
             && ctx.rule().getKind() == RuleKind.TRANSFORM
-            && isPreserveSource()) {
+            && isPreserveSource(ctx)) {
           try {
             // We use the target schema
             message = ctx.target().copyMessage(message);
