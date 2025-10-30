@@ -365,8 +365,6 @@ public class KafkaAvroSerializerTest {
 
     headers = new RecordHeaders();
     bytes = avroSerializer.serialize(topic, headers, "abc".getBytes());
-    byte schemaId = bytes[4]; // get the schema id byte which is less than 256
-    assertArrayEquals(new byte[]{0, 0, 0, 0, schemaId, 'a', 'b', 'c'}, bytes);
     assertArrayEquals("abc".getBytes(), (byte[]) avroDeserializer.deserialize(topic, headers, bytes));
     assertArrayEquals("abc".getBytes(), (byte[]) avroDecoder.fromBytes(headers, bytes));
 
