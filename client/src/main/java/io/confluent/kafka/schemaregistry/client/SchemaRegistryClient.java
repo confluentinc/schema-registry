@@ -407,6 +407,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   @Override
   default void close() throws IOException {}
 
+  public default AssociationResponse createAssociation(
+      AssociationCreateOrUpdateRequest request)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public default AssociationResponse createOrUpdateAssociation(
           AssociationCreateOrUpdateRequest request)
           throws IOException, RestClientException {
