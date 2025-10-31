@@ -34,7 +34,6 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private boolean isKey;
   private Map<ObjectNode, JsonSchema> nodeToSchemaCache;
   private Map<Class<?>, JsonSchema> classToSchemaCache;
 
