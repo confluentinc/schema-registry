@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -215,7 +216,8 @@ public class MockSchemaRegistryClientTest {
         createRequest = new AssociationCreateOrUpdateRequest(
                 "test", "lkc1", "test-id", null,
                 Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false, updatedSchema, false)
+                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false,
+                            new RegisterSchemaRequest(updatedSchema), false)
                 ));
         try {
             client.createOrUpdateAssociation(createRequest);
@@ -243,7 +245,8 @@ public class MockSchemaRegistryClientTest {
         createRequest = new AssociationCreateOrUpdateRequest(
                 "test2", "lkc1", "test-id2", null,
                 Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false, updatedSchema, false)
+                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false,
+                            new RegisterSchemaRequest(updatedSchema), false)
                 ));
         try {
             client.createOrUpdateAssociation(createRequest);
@@ -304,7 +307,8 @@ public class MockSchemaRegistryClientTest {
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
                         new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, null, false),
-                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false, schema, false)
+                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false,
+                            new RegisterSchemaRequest(schema), false)
                 ));
         try {
             client.createOrUpdateAssociation(createRequest);
@@ -321,8 +325,10 @@ public class MockSchemaRegistryClientTest {
         createRequest = new AssociationCreateOrUpdateRequest(
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
-                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, schema, false),
-                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false, schema, false)
+                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false,
+                            new RegisterSchemaRequest(schema), false),
+                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false,
+                            new RegisterSchemaRequest(schema), false)
                 ));
         try {
             client.createOrUpdateAssociation(createRequest);
@@ -552,9 +558,11 @@ public class MockSchemaRegistryClientTest {
                 resourceName, "lkc1", resourceID, null,
                 Arrays.asList(
                         new AssociationCreateOrUpdateInfo(
-                                keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
+                                keySubject, "key", LifecyclePolicy.STRONG, false,
+                            new RegisterSchemaRequest(schema), false),
                         new AssociationCreateOrUpdateInfo(
-                                valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                                valueSubject, "value", LifecyclePolicy.WEAK, false,
+                            new RegisterSchemaRequest(schema), false)
                 ));
 
         try {
@@ -635,8 +643,10 @@ public class MockSchemaRegistryClientTest {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test1", "lkc1", resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
-                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
+                                new RegisterSchemaRequest(schema), false),
+                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
+                                new RegisterSchemaRequest(schema), false)
                     )));
         } catch (Exception e) {
             assertNull("createOrUpdateAssociation should succeed.", e);
@@ -688,8 +698,10 @@ public class MockSchemaRegistryClientTest {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test2", "lkc1", resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false, schema, false),
-                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
+                                new RegisterSchemaRequest(schema), false),
+                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
+                                new RegisterSchemaRequest(schema), false)
                     )));
         } catch (Exception e) {
             assertNull("createOrUpdateAssociation should succeed.", e);
@@ -748,8 +760,10 @@ public class MockSchemaRegistryClientTest {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test3", "lkc1", resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, true, schema, false),
-                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false, schema, false)
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, true,
+                                new RegisterSchemaRequest(schema), false),
+                            new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
+                                new RegisterSchemaRequest(schema), false)
                     )));
         } catch (Exception e) {
             assertNull("createOrUpdateAssociation should succeed.", e);
