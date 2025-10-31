@@ -21,7 +21,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.Objects;
@@ -34,7 +33,7 @@ public class AssociationCreateOrUpdateInfo {
   private String associationType;
   private LifecyclePolicy lifecycle;
   private Boolean frozen;
-  private Schema schema;
+  private RegisterSchemaRequest schema;
   private Boolean normalize;
 
   @JsonCreator
@@ -43,7 +42,7 @@ public class AssociationCreateOrUpdateInfo {
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
       @JsonProperty("frozen") Boolean frozen,
-      @JsonProperty("schema") Schema schema,
+      @JsonProperty("schema") RegisterSchemaRequest schema,
       @JsonProperty("normalize") Boolean normalize) {
     this.subject = subject;
     this.associationType = associationType;
@@ -94,12 +93,12 @@ public class AssociationCreateOrUpdateInfo {
   }
 
   @JsonProperty("schema")
-  public Schema getSchema() {
+  public RegisterSchemaRequest getSchema() {
     return schema;
   }
 
   @JsonProperty("schema")
-  public void setSchema(Schema schema) {
+  public void setSchema(RegisterSchemaRequest schema) {
     this.schema = schema;
   }
 

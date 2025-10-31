@@ -36,6 +36,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
@@ -970,11 +971,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     // Post all schemas
     for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       String subject = associationInRequest.getSubject();
-      Schema schema = associationInRequest.getSchema();
+      RegisterSchemaRequest schema = associationInRequest.getSchema();
       boolean normalize = associationInRequest.getNormalize();
 
       if (schema != null) {
-        register(subject, parseSchema(schema).get(), normalize);
+        register(subject, parseSchema(new Schema(subject, schema)).get(), normalize);
       }
     }
     // Write associations to caches
@@ -1067,7 +1068,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                             associationCreateOrUpdateInfo.getAssociationType(),
                             associationCreateOrUpdateInfo.getLifecycle(),
                             associationCreateOrUpdateInfo.getFrozen(),
-                            associationCreateOrUpdateInfo.getSchema()))
+                            associationCreateOrUpdateInfo.getSchema() != null
+                                ? new Schema(
+                                    associationCreateOrUpdateInfo.getSubject(),
+                                    associationCreateOrUpdateInfo.getSchema())
+                                : null))
             .collect(Collectors.toList());
     AssociationResponse response = new AssociationResponse(
             request.getResourceName(), request.getResourceNamespace(),
