@@ -1066,8 +1066,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                             associationCreateOrUpdateInfo.getAssociationType(),
                             associationCreateOrUpdateInfo.getLifecycle(),
                             associationCreateOrUpdateInfo.getFrozen(),
-                            new Schema(associationCreateOrUpdateInfo.getSubject(),
-                                associationCreateOrUpdateInfo.getSchema())))
+                            associationCreateOrUpdateInfo.getSchema() != null
+                                ? new Schema(
+                                    associationCreateOrUpdateInfo.getSubject(),
+                                    associationCreateOrUpdateInfo.getSchema())
+                                : null))
             .collect(Collectors.toList());
     AssociationResponse response = new AssociationResponse(
             request.getResourceName(), request.getResourceNamespace(),
