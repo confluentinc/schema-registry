@@ -245,7 +245,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
           && !unqualifiedContext.isEmpty()
           && !unqualifiedSubject.startsWith(CONTEXT_PREFIX)) {
         unqualifiedSubject = QualifiedSubject.normalizeContext(unqualifiedContext)
-            + unqualifiedContext;
+            + unqualifiedSubject;
       }
       return QualifiedSubject.createFromUnqualified(tenant, unqualifiedSubject);
     } catch (IllegalArgumentException e) {

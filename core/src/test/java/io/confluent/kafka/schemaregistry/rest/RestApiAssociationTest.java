@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -90,6 +91,62 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     AssociationResponse response = restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
     assertEquals(resourceName, response.getResourceName());
+    assertEquals(resourceNamespace, response.getResourceNamespace());
+    assertEquals(resourceId, response.getResourceId());
+    assertEquals("key", response.getAssociations().get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, response.getAssociations().get(0).getLifecycle());
+    assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
+    assertEquals("value", response.getAssociations().get(1).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(1).getLifecycle());
+    assertEquals(allSchemas.get(1), response.getAssociations().get(1).getSchema().getSchema());
+
+    List<Association> associations = restApp.restClient.getAssociationsBySubject(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
+        Collections.singletonList("key"), null);
+    assertEquals(1, associations.size());
+    assertEquals(resourceId, associations.get(0).getResourceId());
+    assertEquals(resourceName, associations.get(0).getResourceName());
+    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
+    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
+    assertEquals("key", associations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
+
+    associations = restApp.restClient.getAssociationsBySubject(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "topic",
+        Collections.singletonList("value"), null);
+    assertEquals(1, associations.size());
+    assertEquals(resourceId, associations.get(0).getResourceId());
+    assertEquals(resourceName, associations.get(0).getResourceName());
+    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
+    assertEquals("value", associations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, associations.get(0).getLifecycle());
+
+    request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.STRONG,
+                false,
+                keyRequest,
+                null
+            )
+        )
+    );
+    response = restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(resourceName, response.getResourceName());
+    assertEquals(resourceNamespace, response.getResourceNamespace());
+    assertEquals(resourceId, response.getResourceId());
+    assertEquals("key", response.getAssociations().get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
+    assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
+
+
   }
 }
 

@@ -961,9 +961,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throws SchemaRegistryException {
     // TODO RAY verify subject is qualified
     // TODO RAY test idempotency
+
+    // Replace aliases and check for read-only mode
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String subject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), context, subject);
+      QualifiedSubject qs = replaceAlias(context, subject);
       String qualifiedSubject = qs.toQualifiedSubject();
       if (isReadOnlyMode(qualifiedSubject)) {
         throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
@@ -1024,21 +1026,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new AssociationFrozenException(
             association.getAssociationType(), association.getSubject());
       }
-      if (info.getLifecycle() != null) {
-        LifecyclePolicy lifecycle = info.getLifecycle();
-        if (lifecycle == LifecyclePolicy.STRONG) {
-          List<Association> assocsBySubject = getAssociationsBySubject(
-              association.getSubject(), null, Collections.emptyList(), null);
-          if (!assocsBySubject.isEmpty()) {
-            throw new AssociationForSubjectExistsException(association.getSubject());
-          }
-        } else if (lifecycle == LifecyclePolicy.WEAK) {
-          if (Boolean.TRUE.equals(info.getFrozen())) {
-            throw new IllegalPropertyException(
-                "frozen", "association with lifecycle of WEAK cannot be frozen");
-          }
-        }
-      }
     }
 
     // Check that at least one schema exists
@@ -1048,11 +1035,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String subject = info.getSubject();
       QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
       String qualifiedSubject = qs.toQualifiedSubject();
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
       if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
         throw new NoActiveSubjectVersionExistsException(subject);
       }
       List<Association> assocsBySubject = getAssociationsBySubject(
-          subject, null, Collections.emptyList(), null);
+          subject, null, Collections.emptyList(), null).stream()
+          .filter(a -> association == null
+              || !a.getResourceId().equals(association.getResourceId()))
+          .collect(Collectors.toList());
       switch (info.getLifecycle()) {
         case STRONG:
           if (!assocsBySubject.isEmpty()) {
@@ -1060,6 +1052,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           }
           break;
         case WEAK:
+          if (Boolean.TRUE.equals(info.getFrozen())) {
+            throw new IllegalPropertyException(
+                "frozen", "association with lifecycle of WEAK cannot be frozen");
+          }
           if (assocsBySubject.stream()
               .anyMatch(assoc -> assoc.getLifecycle() == LifecyclePolicy.STRONG)) {
             throw new StrongAssociationForSubjectExistsException(subject);
@@ -1134,6 +1130,26 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new association value to the store",
           e);
+    }
+  }
+
+  private QualifiedSubject replaceAlias(String context, String subject) {
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), context, subject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    Config config = null;
+    try {
+      config = getConfig(qualifiedSubject);
+    } catch (Exception e) {
+      // fall through
+    }
+    if (config == null) {
+      return qs;
+    }
+    String alias = config.getAlias();
+    if (alias != null && !alias.isEmpty()) {
+      return QualifiedSubject.qualifySubjectWithParent(tenant(), qualifiedSubject, alias, true);
+    } else {
+      return qs;
     }
   }
 
