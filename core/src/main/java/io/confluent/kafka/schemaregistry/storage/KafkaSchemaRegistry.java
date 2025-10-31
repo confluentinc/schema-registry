@@ -1006,7 +1006,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         if (isCreateOnly && info.getSchema() != null) {
           boolean normalize = Boolean.TRUE.equals(info.getNormalize());
           Schema oldSchema = lookUpSchemaUnderSubject(
-              qualifiedSubject, info.getSchema(), normalize, false);
+              qualifiedSubject, new Schema(qualifiedSubject, info.getSchema()), normalize, false);
           if (oldSchema == null) {
             throw new AssociationForResourceExistsException(
                 association.getAssociationType(), association.getResourceName());
@@ -1075,7 +1075,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String subject = info.getSubject();
       QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
       String qualifiedSubject = qs.toQualifiedSubject();
-      Schema schema = info.getSchema();
+      RegisterSchemaRequest schema = info.getSchema();
       if (schema == null) {
         continue;
       }
@@ -1085,7 +1085,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       // Don't check compatibility against deleted schema
       getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
 
-      List<String> errorLogs = isCompatible(qualifiedSubject, schema, previousSchemas, normalize);
+      List<String> errorLogs = isCompatible(qualifiedSubject,
+          new Schema(qualifiedSubject, schema), previousSchemas, normalize);
       if (!errorLogs.isEmpty()) {
         throw new IncompatibleSchemaException(errorLogs.toString());
       }
@@ -1108,12 +1109,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String subject = info.getSubject();
       QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
       String qualifiedSubject = qs.toQualifiedSubject();
-      Schema schema = info.getSchema();
+      RegisterSchemaRequest schema = info.getSchema();
       if (schema == null) {
         continue;
       }
       boolean normalize = Boolean.TRUE.equals(info.getNormalize());
-      Schema registeredSchema = register(qualifiedSubject, schema, normalize, false);
+      Schema registeredSchema = register(qualifiedSubject,
+          new Schema(qualifiedSubject, schema), normalize, false);
       registeredSchemas.put(associationType, registeredSchema);
     }
 

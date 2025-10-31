@@ -62,7 +62,6 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
     valueRequest.setSchema(allSchemas.get(1));
 
-
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
@@ -74,7 +73,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                new Schema(subject1, keyRequest),
+                keyRequest,
                 null
             ),
             new AssociationCreateOrUpdateInfo(
@@ -82,7 +81,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                new Schema(subject2, valueRequest),
+                valueRequest,
                 null
             )
         )
