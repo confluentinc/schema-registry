@@ -970,11 +970,11 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "\rbad\nsubject\t";
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
-      fail("Registering invalid subject should fail with 400");
+      fail("Registering invalid subject should fail with 422");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals(
-          400,
+          422,
           e.getStatus(),
           "Invalid subject shouldn't be registered"
       );
