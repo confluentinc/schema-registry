@@ -961,12 +961,12 @@ public class RestApiTest extends ClusterTestHarness {
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
       fail("Registering invalid subject should fail with "
-        + RestInvalidSubjectException.ERROR_CODE
+        + 422
         + " (invalid subject)");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals(
-          RestInvalidSubjectException.ERROR_CODE,
+          422,
           e.getErrorCode(),
           e.getStatus(),
           "Invalid subject shouldn't be registered"
