@@ -47,6 +47,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class KafkaJsonSchemaSerializerTest {
 
@@ -107,6 +108,16 @@ public class KafkaJsonSchemaSerializerTest {
 
     bytes = serializer.serialize(topic, "abc");
     assertEquals("abc", deserializer.deserialize(topic, bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerForKey() {
+    serializer.configure(new HashMap(config), true);
+    assertTrue(serializer.isKey());
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+    serializer.configure(new HashMap(config), false);
   }
 
   @Test(expected = InvalidConfigurationException.class)
