@@ -59,6 +59,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
@@ -970,11 +971,14 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "\rbad\nsubject\t";
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
-      fail("Registering invalid subject should fail with 422");
+      fail("Registering invalid subject should fail with "
+        + RestInvalidSubjectException.ERROR_CODE
+        + " (invalid subject)");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals(
-          422,
+          RestInvalidSubjectException.ERROR_CODE,
+          e.getErrorCode(),
           e.getStatus(),
           "Invalid subject shouldn't be registered"
       );
