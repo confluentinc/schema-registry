@@ -22,8 +22,9 @@ import org.apache.kafka.common.Configurable;
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
 
 /**
- * @param <K> Key type to be serialized from. <p/> A class that implements this interface is
- *            expected to have a constructor with no parameter.
+ * @param <K> Key type to be serialized from.
+ *            <p>A class that implements this interface is
+ *            expected to have a constructor with no parameter.</p>
  */
 public interface Serializer<K, V> extends Configurable, Serializable, Closeable {
 

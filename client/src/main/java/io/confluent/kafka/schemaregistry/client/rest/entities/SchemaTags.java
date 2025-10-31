@@ -88,4 +88,12 @@ public class SchemaTags {
   public int hashCode() {
     return Objects.hash(schemaEntity, tags);
   }
+
+  @Override
+  public String toString() {
+    return "SchemaTags{"
+        + "schemaEntity=" + schemaEntity
+        + ", tags=" + tags
+        + '}';
+  }
 }
