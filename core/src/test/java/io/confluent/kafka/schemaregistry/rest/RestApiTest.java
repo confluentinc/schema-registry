@@ -971,6 +971,7 @@ public class RestApiTest extends ClusterTestHarness {
         e.getStatus(),
         "Invalid subject shouldn't be registered"
       );
+    }
   }
 
   @Test
