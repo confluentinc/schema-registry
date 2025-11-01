@@ -186,6 +186,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
 
+  public static final String SCHEMA_VALIDATE_NAMES_CONFIG = "schema.validate.names";
+  public static final boolean SCHEMA_VALIDATE_NAMES_DEFAULT = true;
+
   /**
    * <code>schema.cache.size</code>
    */
@@ -402,6 +405,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
+  protected static final String VALIDATE_NAMES_DOC = "Determines whether name validation is "
+      + "enabled or not. If enabled, it validates both namespaces and names in Avro.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -627,6 +632,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
+    )
+    .define(SCHEMA_VALIDATE_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_NAMES_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_NAMES_DOC
     )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC

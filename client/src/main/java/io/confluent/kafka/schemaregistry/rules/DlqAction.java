@@ -55,7 +55,7 @@ public class DlqAction implements RuleAction {
   public static final String DLQ_TOPIC = "dlq.topic";
   public static final String DLQ_AUTO_FLUSH = "dlq.auto.flush";
   public static final String DLQ_REDACT_RULE_TYPES = "dlq.redact.rule.types";
-  public static final String DLQ_REDACT_RULE_TYPES_DEFAULT = "ENCRYPT,FULL_ENCRYPT";
+  public static final String DLQ_REDACT_RULE_TYPES_DEFAULT = "ENCRYPT,ENCRYPT_PAYLOAD";
   public static final String PRODUCER = "producer";  // for testing
 
   public static final String HEADER_PREFIX = "__rule.";
@@ -196,8 +196,13 @@ public class DlqAction implements RuleAction {
   @VisibleForTesting
   protected static Object redactFields(
       RuleContext ctx, Object message, List<String> redactRuleTypes) {
+    List<Rule> redactRules = getRulesToRedact(ctx, redactRuleTypes);
+    if (redactRules.isEmpty()) {
+      // No rules require redaction
+      return message;
+    }
     try (RuleExecutor executor = new FieldRedactionExecutor()) {
-      Set<String> tags = getTagsToRedact(ctx, redactRuleTypes);
+      Set<String> tags = getTagsToRedact(redactRules);
       Rule newRule = new Rule("redact", null, RuleKind.TRANSFORM, ctx.ruleMode(), TYPE,
           tags, null, null, null, null, false);
       RuleContext newCtx = new RuleContext(ctx.configs(), ctx.source(), ctx.target(),
@@ -211,9 +216,14 @@ public class DlqAction implements RuleAction {
     }
   }
 
-  private static Set<String> getTagsToRedact(RuleContext ctx, List<String> redactRuleTypes) {
+  private static List<Rule> getRulesToRedact(RuleContext ctx, List<String> redactRuleTypes) {
     return ctx.rules().stream()
         .filter(rule -> redactRuleTypes.contains(rule.getType()))
+        .collect(Collectors.toList());
+  }
+
+  private static Set<String> getTagsToRedact(List<Rule> redactRules) {
+    return redactRules.stream()
         .flatMap(rule -> rule.getTags().stream())
         .collect(Collectors.toSet());
   }

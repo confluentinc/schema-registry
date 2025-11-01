@@ -198,4 +198,66 @@ public class MutableHttpServletRequestTest {
     Assert.assertTrue(headerNamesList.contains("header-key-1"));
     Assert.assertTrue(headerNamesList.contains("header-key-2"));
   }
+
+  @Test
+  public void testPutHeaderOverwritesInGetHeaders() {
+    // Test that putHeader() properly overwrites headers when using getHeaders()
+    // This verifies that custom headers replace original headers, not append to them
+
+    // Mock HttpServletRequest with initial headers
+    HttpFields headers = HttpFields.build()
+        .add("Content-Type", "application/json")
+        .add("Authorization", "Bearer original-token")
+        .add("X-Custom-Header", "original-value-1")
+        .add("X-Custom-Header", "original-value-2");
+    when(httpServletRequest.getHeaders()).thenReturn(headers);
+
+    // Verify initial state - should have original values
+    HttpFields initialFields = mutableRequest.getHeaders();
+    List<String> initialAuthValues = initialFields.getFields("Authorization")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals(1, initialAuthValues.size());
+    Assert.assertEquals("Bearer original-token", initialAuthValues.get(0));
+
+    List<String> initialCustomValues = initialFields.getFields("X-Custom-Header")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals(2, initialCustomValues.size());
+    Assert.assertTrue(initialCustomValues.contains("original-value-1"));
+    Assert.assertTrue(initialCustomValues.contains("original-value-2"));
+
+    // Overwrite the Authorization header
+    mutableRequest.putHeader("Authorization", "Bearer new-token");
+
+    // Overwrite the X-Custom-Header (which had multiple values)
+    mutableRequest.putHeader("X-Custom-Header", "new-single-value");
+
+    // Verify that getHeaders() returns ONLY the new values, not the original ones
+    HttpFields updatedFields = mutableRequest.getHeaders();
+
+    List<String> authValues = updatedFields.getFields("Authorization")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals("Should have exactly one Authorization value", 1, authValues.size());
+    Assert.assertEquals("Bearer new-token", authValues.get(0));
+
+    List<String> customValues = updatedFields.getFields("X-Custom-Header")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals("Should have exactly one X-Custom-Header value", 1, customValues.size());
+    Assert.assertEquals("new-single-value", customValues.get(0));
+
+    // Verify Content-Type (not overwritten) is still present
+    List<String> contentTypeValues = updatedFields.getFields("Content-Type")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals(1, contentTypeValues.size());
+    Assert.assertEquals("application/json", contentTypeValues.get(0));
+  }
 }

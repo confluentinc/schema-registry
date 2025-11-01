@@ -52,6 +52,7 @@ import com.github.erosb.jsonsKema.Validator;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
@@ -132,9 +133,9 @@ public class JsonSchema implements ParsedSchema {
 
   private final JsonNode jsonNode;
 
-  private transient Schema schemaObj;
+  private transient volatile Schema schemaObj;
 
-  private transient com.github.erosb.jsonsKema.Schema skemaObj;
+  private transient volatile com.github.erosb.jsonsKema.Schema skemaObj;
 
   private final Integer version;
 
@@ -148,9 +149,9 @@ public class JsonSchema implements ParsedSchema {
 
   private final boolean ignoreModernDialects;
 
-  private transient String canonicalString;
+  private transient volatile String canonicalString;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
@@ -179,7 +180,12 @@ public class JsonSchema implements ParsedSchema {
       URI.create("https://json-schema.org/draft/2019-09/meta/format"),
       readFromClassPath("/metaschemas/draft/2019-09/meta/format"),
       URI.create("https://json-schema.org/draft/2019-09/meta/content"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/content")
+      readFromClassPath("/metaschemas/draft/2019-09/meta/content"),
+      // The following are to account for URIs with trailing #
+      URI.create("https://json-schema.org/draft/2019-09/schema#"),
+      readFromClassPath("/metaschemas/draft/2019-09/schema"),
+      URI.create("https://json-schema.org/draft/2020-12/schema#"),
+      readFromClassPath("/metaschemas/draft/2020-12/schema")
   );
 
   public JsonSchema(JsonNode jsonNode) {
@@ -231,7 +237,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = ruleSet;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -250,7 +256,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = null;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -365,37 +371,42 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (schemaObj == null) {
-      try {
-        if (jsonNode.isBoolean()) {
-          schemaObj = jsonNode.booleanValue()
-              ? TrueSchema.builder().build()
-              : FalseSchema.builder().build();
-        } else {
-          // Extract the $schema to use for determining the id keyword
-          SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-          if (jsonNode.has(SCHEMA_KEYWORD)) {
-            String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-            SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
-            if (s != null) {
-              spec = s;
-            }
-          }
-          switch (spec) {
-            case DRAFT_2020_12:
-            case DRAFT_2019_09:
-              if (ignoreModernDialects) {
-                loadPreviousDraft(spec);
-              } else {
-                loadLatestDraft();
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (schemaObj == null) {
+          try {
+            if (jsonNode.isBoolean()) {
+              schemaObj = jsonNode.booleanValue()
+                  ? TrueSchema.builder().build()
+                  : FalseSchema.builder().build();
+            } else {
+              // Extract the $schema to use for determining the id keyword
+              SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+              if (jsonNode.has(SCHEMA_KEYWORD)) {
+                String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+                SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+                if (s != null) {
+                  spec = s;
+                }
               }
-              break;
-            default:
-              loadPreviousDraft(spec);
-              break;
+              switch (spec) {
+                case DRAFT_2020_12:
+                case DRAFT_2019_09:
+                  if (ignoreModernDialects) {
+                    loadPreviousDraft(spec);
+                  } else {
+                    loadLatestDraft();
+                  }
+                  break;
+                default:
+                  loadPreviousDraft(spec);
+                  break;
+              }
+            }
+          } catch (Throwable e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
           }
         }
-      } catch (Throwable e) {
-        throw new IllegalArgumentException("Invalid JSON Schema", e);
       }
     }
     return schemaObj;
@@ -496,10 +507,15 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      try {
-        canonicalString = objectMapper.writeValueAsString(jsonNode);
-      } catch (IOException e) {
-        throw new IllegalArgumentException("Invalid JSON", e);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          try {
+            canonicalString = objectMapper.writeValueAsString(jsonNode);
+          } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
+          }
+        }
       }
     }
     return canonicalString;
@@ -662,14 +678,18 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(
+      CompatibilityPolicy policy, ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
+    Set<Difference.Type> compatibleChanges = policy == CompatibilityPolicy.LENIENT
+        ? SchemaDiff.COMPATIBLE_CHANGES_LENIENT
+        : SchemaDiff.COMPATIBLE_CHANGES_STRICT;
     final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+        SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
-        .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+        .filter(diff -> !compatibleChanges.contains(diff.getType()))
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
@@ -681,6 +701,11 @@ public class JsonSchema implements ParsedSchema {
     } else {
       return new ArrayList<>();
     }
+  }
+
+  @Override
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+    return isBackwardCompatible(CompatibilityPolicy.STRICT, previousSchema);
   }
 
   @Override
@@ -703,8 +728,13 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(
-          jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(
+              jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
+        }
+      }
     }
     return hashCode;
   }

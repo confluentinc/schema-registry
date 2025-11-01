@@ -271,7 +271,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     return Objects.hash(super.hashCode(), version, id, md5, schema, schemaType, references,
         metadata, ruleSet, deleted);
   }
-  
+
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
@@ -280,10 +280,9 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     sb.append("id=" + this.id + ",");
     sb.append("md5=" + this.md5 + ",");
     sb.append("schemaType=" + this.schemaType + ",");
-    sb.append("references=" + this.references + ",");
     sb.append("metadata=" + this.metadata + ",");
     sb.append("ruleSet=" + this.ruleSet + ",");
-    sb.append("schema=" + this.schema + ",");
+    sb.append("schemaSize=" + (this.schema != null ? this.schema.length() : 0) + ",");
     sb.append("deleted=" + this.deleted + "}");
     return sb.toString();
   }

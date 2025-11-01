@@ -52,7 +52,6 @@ import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceE
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
 import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
-import io.confluent.rest.NamedURI;
 import org.apache.avro.reflect.Nullable;
 import org.eclipse.jetty.server.Handler;
 
@@ -62,9 +61,16 @@ import java.util.function.Predicate;
 
 public interface SchemaRegistry extends SchemaVersionFetcher {
 
+  /**
+   * Schema versions under a particular subject are indexed from MIN_VERSION.
+   */
   int MIN_VERSION = 1;
   int MAX_VERSION = Integer.MAX_VALUE;
   String DEFAULT_TENANT = QualifiedSubject.DEFAULT_TENANT;
+  String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
+          + "removed from its metadata which is present in the old schema's metadata.";
+  String FIELD_CONFLICTS_WITH_RESERVED_FIELD = "The new schema has field that"
+          + " conflicts with the reserved field %s.";
 
   void init() throws SchemaRegistryException;
 
@@ -273,6 +279,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache();
 
+  default KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
+    return null;
+  }
+
   default void clearOldSchemaCache() {}
 
   default void clearNewSchemaCache() {}
@@ -347,41 +357,4 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default void setLeader(@Nullable SchemaRegistryIdentity newLeader) throws
           SchemaRegistryTimeoutException, SchemaRegistryStoreException, IdGenerationException {}
-
-  /**
-   * <p>This method returns a listener to be used for inter-instance communication.
-   * It iterates through the list of listeners until it finds one whose name
-   * matches the inter.instance.listener.name config. If no such listener is found,
-   * it returns the last listener matching the requested scheme.
-   * </p>
-   * <p>When there is no matching named listener, in theory, any port from any listener
-   * would be sufficient. Choosing the last, instead of say the first, is arbitrary.
-   * The port used by this listener also forms the identity of the schema registry instance
-   * along with the host name.
-   * </p>
-   */
-  // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
-  static NamedURI getInterInstanceListener(List<NamedURI> listeners,
-                                           String interInstanceListenerName,
-                                           String requestedScheme) throws SchemaRegistryException {
-    if (requestedScheme.isEmpty()) {
-      requestedScheme = SchemaRegistryConfig.HTTP;
-    }
-
-    NamedURI internalListener = null;
-    for (NamedURI listener : listeners) {
-      if (listener.getName() != null
-              && listener.getName().equalsIgnoreCase(interInstanceListenerName)) {
-        internalListener = listener;
-        break;
-      } else if (listener.getUri().getScheme().equalsIgnoreCase(requestedScheme)) {
-        internalListener = listener;
-      }
-    }
-    if (internalListener == null) {
-      throw new SchemaRegistryException(" No listener configured with requested scheme "
-              + requestedScheme);
-    }
-    return internalListener;
-  }
 }

@@ -19,7 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+
 import java.net.URI;
 import java.util.Collections;
 
@@ -38,7 +38,7 @@ public class AliasNonDefaultTenantFilterTest {
 
   @Before
   public void setUp() throws Exception {
-    SchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     when(schemaRegistry.tenant()).thenReturn("myTenant");
     aliasFilter = new AliasFilter(schemaRegistry);
 

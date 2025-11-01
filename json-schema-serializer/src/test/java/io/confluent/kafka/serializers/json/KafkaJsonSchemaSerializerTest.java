@@ -63,6 +63,7 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -182,6 +183,16 @@ public class KafkaJsonSchemaSerializerTest {
     headers = new RecordHeaders();
     bytes = serializer.serialize(topic, headers, TextNode.valueOf("abc"));
     assertEquals("abc", deserializer.deserialize(topic, headers, bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerForKey() {
+    serializer.configure(new HashMap(config), true);
+    assertTrue(serializer.isKey());
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+    serializer.configure(new HashMap(config), false);
   }
 
   @Test

@@ -22,8 +22,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
@@ -35,6 +37,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
@@ -187,6 +193,15 @@ public class RestService implements Closeable, Configurable {
   private static final TypeReference<Config> DELETE_SUBJECT_CONFIG_RESPONSE_TYPE =
       new TypeReference<Config>() {
       };
+  private static final TypeReference<AssociationResponse> ASSOCIATION_RESPONSE_TYPE =
+      new TypeReference<AssociationResponse>() {
+      };
+  private static final TypeReference<List<Association>> ASSOCIATIONS_RESPONSE_TYPE =
+      new TypeReference<List<Association>>() {
+      };
+  private static final TypeReference<AssociationBatchResponse> ASSOCIATION_BATCH_RESPONSE_TYPE =
+      new TypeReference<AssociationBatchResponse>() {
+      };
   private static final TypeReference<ServerClusterId> GET_CLUSTER_ID_RESPONSE_TYPE =
       new TypeReference<ServerClusterId>() {
       };
@@ -204,13 +219,18 @@ public class RestService implements Closeable, Configurable {
   private static final String AUTHORIZATION_HEADER = "Authorization";
   private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
+  public static final String ACCEPT_VERSION = "Accept-Version";
   public static final String X_FORWARD_HEADER = "X-Forward";
+  public static final String VERSION_8_0 = "8.0";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
     DEFAULT_REQUEST_PROPERTIES =
-        Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+        ImmutableMap.of(
+            "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
+            ACCEPT_VERSION, VERSION_8_0
+        );
   }
 
   private UrlList baseUrls;
@@ -617,8 +637,13 @@ public class RestService implements Closeable, Configurable {
                            Map<String, String> requestProperties,
                            TypeReference<T> responseFormat)
       throws IOException, RestClientException {
+    Map<String, String> requestProps;
     if (isForward) {
-      requestProperties.put(X_FORWARD_HEADER, "true");
+      // Copy the request props in case it is immutable
+      requestProps = new HashMap<>(requestProperties);
+      requestProps.put(X_FORWARD_HEADER, "true");
+    } else {
+      requestProps = requestProperties;
     }
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
@@ -627,7 +652,7 @@ public class RestService implements Closeable, Configurable {
         return retryExecutor.retry(() -> sendHttpRequest(requestUrl,
             method,
             requestBodyData,
-            requestProperties,
+            requestProps,
             responseFormat));
       } catch (IOException | RestClientException e) {
         if (isNonRetriableException(e)) {
@@ -1092,8 +1117,9 @@ public class RestService implements Closeable, Configurable {
 
   public Mode deleteSubjectMode(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/mode/{subject}");
-    String path = builder.build(subject).toString();
+    String path = subject != null
+            ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
+            : "/mode";
 
     Mode response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_MODE_RESPONSE_TYPE);
@@ -1822,6 +1848,107 @@ public class RestService implements Closeable, Configurable {
     String path = builder.build(delimitedContext).toString();
 
     httpRequest(path, "DELETE", null, requestProperties, VOID_RESPONSE_TYPE);
+  }
+
+  public AssociationResponse createAssociation(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, AssociationCreateOrUpdateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+
+    AssociationResponse response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_RESPONSE_TYPE);
+    return response;
+  }
+
+  public AssociationBatchResponse createAssociations(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, AssociationBatchCreateOrUpdateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchCreate");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+
+    AssociationBatchResponse response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_BATCH_RESPONSE_TYPE);
+    return response;
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, AssociationCreateOrUpdateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+
+    AssociationResponse response = httpRequest(path, "PUT",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_RESPONSE_TYPE);
+    return response;
+  }
+
+  public AssociationBatchResponse createOrUpdateAssociations(
+      Map<String, String> requestProperties,
+      String context, Boolean dryRun, AssociationBatchCreateOrUpdateRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchUpsert");
+    String path = builder.build().toString();
+    if (context != null) {
+      builder.queryParam("context", context);
+    }
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
+
+    AssociationBatchResponse response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_BATCH_RESPONSE_TYPE);
+    return response;
+  }
+
+  public void deleteAssociations(
+      Map<String, String> requestProperties,
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceId}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    builder.queryParam("cascadeLifecycle", cascadeLifecycle);
+    String path = builder.build(resourceId).toString();
+
+    httpRequest(path, "DELETE", null,
+        requestProperties, VOID_RESPONSE_TYPE);
   }
 
   public ServerClusterId getClusterId() throws IOException, RestClientException {

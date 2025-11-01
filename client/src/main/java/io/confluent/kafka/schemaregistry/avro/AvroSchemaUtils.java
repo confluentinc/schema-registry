@@ -170,19 +170,24 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
     avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampNanosConversion());
   }
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -406,7 +411,7 @@ public class AvroSchemaUtils {
     if (message instanceof SpecificRecord) {
       SpecificData data = AvroSchemaUtils.getThreadLocalSpecificData();
       return data != null ? data : getSpecificDataForSchema(schema, useLogicalTypes);
-    } else if (message instanceof GenericRecord) {
+    } else if (message instanceof GenericContainer) {
       GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
       return data != null ? data : getGenericData(useLogicalTypes);
     } else if (message != null) {
@@ -429,7 +434,7 @@ public class AvroSchemaUtils {
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
-    } else if (value instanceof GenericRecord) {
+    } else if (value instanceof GenericContainer) {
       return new GenericDatumWriter<>(schema, data);
     } else {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);
@@ -742,7 +747,7 @@ public class AvroSchemaUtils {
 
     @Override
     public void setField(Object record, String name, int position, Object value) {
-      if (record instanceof GenericRecord) {
+      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
         ((GenericRecord) record).put(name, value);
       } else {
         ((IndexedRecord) record).put(position, value);
@@ -751,7 +756,7 @@ public class AvroSchemaUtils {
 
     @Override
     public Object getField(Object record, String name, int position) {
-      if (record instanceof GenericRecord) {
+      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
         return ((GenericRecord) record).get(name);
       } else {
         return ((IndexedRecord) record).get(position);

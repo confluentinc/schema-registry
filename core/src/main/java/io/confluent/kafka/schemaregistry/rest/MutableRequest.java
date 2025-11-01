@@ -43,7 +43,7 @@ public final class MutableRequest extends Request.Wrapper {
     for (String key : customHeaders.keySet()) {
       List<String> values = customHeaders.get(key);
       for (String value : values) {
-        httpFields.add(key, value);
+        httpFields.put(key, value);
       }
     }
     return httpFields;

@@ -56,6 +56,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
@@ -74,7 +75,7 @@ public class AvroSchema implements ParsedSchema {
   public static final String FIELDS_FIELD = "fields";
 
   private final Schema schemaObj;
-  private String canonicalString;
+  private transient volatile String canonicalString;
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
@@ -82,7 +83,7 @@ public class AvroSchema implements ParsedSchema {
   private final RuleSet ruleSet;
   private final boolean isNew;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
@@ -224,8 +225,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   protected Schema.Parser getParser() {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(isNew());
+    boolean isNew = isNew();
+    NameValidator nameValidator = isNew
+        ? NameValidator.STRICT_VALIDATOR
+        : NameValidator.NO_VALIDATION;
+    Schema.Parser parser = new Schema.Parser(nameValidator);
+    parser.setValidateDefaults(isNew);
     return parser;
   }
 
@@ -259,13 +264,18 @@ public class AvroSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      Schema.Parser parser = getParser();
-      List<Schema> schemaRefs = new ArrayList<>();
-      for (String schema : resolvedReferences.values()) {
-        Schema schemaRef = parser.parse(schema);
-        schemaRefs.add(schemaRef);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          Schema.Parser parser = getParser();
+          List<Schema> schemaRefs = new ArrayList<>();
+          for (String schema : resolvedReferences.values()) {
+            Schema schemaRef = parser.parse(schema);
+            schemaRefs.add(schemaRef);
+          }
+          canonicalString = schemaObj.toString(schemaRefs, false);
+        }
       }
-      canonicalString = schemaObj.toString(schemaRefs, false);
     }
     return canonicalString;
   }
@@ -480,8 +490,13 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
-          + metaHash(schemaObj, new IdentityHashMap<>());
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
+              + metaHash(schemaObj, new IdentityHashMap<>());
+        }
+      }
     }
     return hashCode;
   }

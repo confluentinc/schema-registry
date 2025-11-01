@@ -36,13 +36,13 @@ import org.slf4j.LoggerFactory;
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private final IdGenerator idGenerator;
   private final List<String> canonicalizeSchemaTypes;
   private final Map<TopicPartition, Long> offsets = new ConcurrentHashMap<>();
 
-  public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
+  public KafkaStoreMessageHandler(SchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
