@@ -15,29 +15,19 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -146,6 +136,29 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
     assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
 
+    boolean cascadeDelete = false;
+    restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+        resourceId, "topic", Collections.singletonList("key"), cascadeDelete);
+
+    associations = restApp.restClient.getAssociationsBySubject(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
+        Collections.singletonList("key"), null);
+    assertEquals(0, associations.size());
+
+    List<Schema> schemas = restApp.restClient.getSchemas(null, false, false);
+    assertEquals(2, schemas.size());
+
+    cascadeDelete = true;
+    restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+        resourceId, "topic", Collections.singletonList("value"), cascadeDelete);
+
+    associations = restApp.restClient.getAssociationsBySubject(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
+        Collections.singletonList("value"), null);
+    assertEquals(0, associations.size());
+
+    schemas = restApp.restClient.getSchemas(null, false, false);
+    assertEquals(1, schemas.size());
 
   }
 }

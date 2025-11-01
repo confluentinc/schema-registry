@@ -1408,12 +1408,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private void deleteAssociation(Association oldAssociation, boolean cascadeLifecycle)
       throws SchemaRegistryException {
     String subject = oldAssociation.getSubject();
-    if (cascadeLifecycle && oldAssociation.getLifecycle() == LifecyclePolicy.STRONG) {
-      // Delete subject
-      deleteSubject(subject, false);
-      deleteSubject(subject, true);
-    }
-
     try {
       AssociationKey key = new AssociationKey(
           tenant(), oldAssociation.getResourceName(),
@@ -1427,6 +1421,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while deleting the association for subject '"
           + subject + "' in the backend Kafka store", e);
+    }
+
+    if (cascadeLifecycle && oldAssociation.getLifecycle() == LifecyclePolicy.STRONG) {
+      // Delete subject
+      deleteSubject(subject, false);
+      deleteSubject(subject, true);
     }
   }
 

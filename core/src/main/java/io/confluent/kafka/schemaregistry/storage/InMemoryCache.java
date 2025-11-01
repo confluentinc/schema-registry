@@ -314,9 +314,17 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     tenantAssociationsByResourceId.computeIfAbsent(
         value.getResourceId(), k -> ConcurrentHashMap.newKeySet());
     tenantAssociationsByResourceId.get(value.getResourceId()).add(value);
+
+    if (oldValue != null && !oldValue.equals(value)) {
+      // Remove old association if it exists
+      associationTombstoned(key, oldValue);
+    }
   }
 
   public void associationTombstoned(AssociationKey key, AssociationValue value) {
+    if (value == null) {
+      return;
+    }
     Map<String, AssociationValue> tenantAssociationsByGuid =
         associationsByGuid.getOrDefault(key.getTenant(), Collections.emptyMap());
     tenantAssociationsByGuid.remove(value.getGuid());

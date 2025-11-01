@@ -51,42 +51,52 @@ public class AssociationKey extends SchemaRegistryKey {
     this.associationType = associationType;
   }
 
+  @JsonProperty("tenant")
   public String getTenant() {
     return tenant;
   }
 
+  @JsonProperty("tenant")
   public void setTenant(String tenant) {
     this.tenant = tenant;
   }
 
+  @JsonProperty("resourceName")
   public String getResourceName() {
     return resourceName;
   }
 
+  @JsonProperty("resourceName")
   public void setResourceName(String resourceName) {
     this.resourceName = resourceName;
   }
 
+  @JsonProperty("resourceNamespace")
   public String getResourceNamespace() {
     return resourceNamespace;
   }
 
+  @JsonProperty("resourceNamespace")
   public void setResourceNamespace(String resourceNamespace) {
     this.resourceNamespace = resourceNamespace;
   }
 
+  @JsonProperty("resourceType")
   public String getResourceType() {
     return resourceType;
   }
 
+  @JsonProperty("resourceType")
   public void setResourceType(String resourceType) {
     this.resourceType = resourceType;
   }
 
+  @JsonProperty("associationType")
   public String getAssociationType() {
     return associationType;
   }
 
+  @JsonProperty("associationType")
   public void setAssociationType(String associationType) {
     this.associationType = associationType;
   }
@@ -110,7 +120,7 @@ public class AssociationKey extends SchemaRegistryKey {
   @Override
   public int hashCode() {
     return Objects.hash(super.hashCode(), tenant,
-        resourceName, resourceNamespace, resourceType, associationType, resourceType);
+        resourceName, resourceNamespace, resourceType, associationType);
   }
 
   @Override
@@ -150,7 +160,10 @@ public class AssociationKey extends SchemaRegistryKey {
       } else if (that.getResourceName() == null) {
         return 1;
       } else {
-        return this.getResourceName().compareTo(that.getResourceName());
+        int resourceNameComparison = this.getResourceName().compareTo(that.getResourceName());
+        if (resourceNameComparison != 0) {
+          return resourceNameComparison < 0 ? -1 : 1;
+        }
       }
 
       if (this.getResourceNamespace() == null && that.getResourceNamespace() == null) {
@@ -160,7 +173,10 @@ public class AssociationKey extends SchemaRegistryKey {
       } else if (that.getResourceNamespace() == null) {
         return 1;
       } else {
-        return this.getResourceNamespace().compareTo(that.getResourceNamespace());
+        int resourceNamespaceComparison = this.getResourceNamespace().compareTo(that.getResourceNamespace());
+        if (resourceNamespaceComparison != 0) {
+          return resourceNamespaceComparison < 0 ? -1 : 1;
+        }
       }
 
       if (this.getResourceType() == null && that.getResourceType() == null) {
@@ -170,7 +186,10 @@ public class AssociationKey extends SchemaRegistryKey {
       } else if (that.getResourceType() == null) {
         return 1;
       } else {
-        return this.getResourceType().compareTo(that.getResourceType());
+        int resourceTypeComparison = this.getResourceType().compareTo(that.getResourceType());
+        if (resourceTypeComparison != 0) {
+          return resourceTypeComparison < 0 ? -1 : 1;
+        }
       }
 
       if (this.getAssociationType() == null && that.getAssociationType() == null) {
@@ -186,7 +205,4 @@ public class AssociationKey extends SchemaRegistryKey {
       return compare;
     }
   }
-
-
-
 }
