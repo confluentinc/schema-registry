@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
@@ -2307,7 +2308,7 @@ public class RestApiTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
-    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "ENCRYPT", null, null, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, FieldEncryptionExecutor.TYPE, null, null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
     RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);

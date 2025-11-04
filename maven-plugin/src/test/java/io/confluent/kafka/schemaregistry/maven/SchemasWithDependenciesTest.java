@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Set;
@@ -136,7 +137,7 @@ public class SchemasWithDependenciesTest extends SchemaRegistryTest {
         rule.name = "rule1";
         rule.kind = RuleKind.TRANSFORM;
         rule.mode = RuleMode.WRITEREAD;
-        rule.type = "ENCRYPT";
+        rule.type = FieldEncryptionExecutor.TYPE;
         rule.tags = Collections.singleton("PII");
         List<Rule> domainRules = Collections.singletonList(rule);
         RuleSet rs = new RuleSet();

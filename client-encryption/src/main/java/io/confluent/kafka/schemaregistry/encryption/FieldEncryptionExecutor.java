@@ -67,7 +67,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
 
   private static final Logger log = LoggerFactory.getLogger(FieldEncryptionExecutor.class);
 
-  public static final String TYPE = "ENCRYPT";
+  public static final String TYPE = "ENCRYPT_FIELD";
 
   public static final String ENCRYPT_KEK_NAME = "encrypt.kek.name";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";

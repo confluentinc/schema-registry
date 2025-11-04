@@ -65,6 +65,12 @@
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client-encryption</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
