@@ -25,7 +25,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -38,6 +37,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.Test;
 
 public class FieldRedactionExecutorTest {
+
+  private static final String ENCRYPT_FIELD_TYPE = "ENCRYPT_FIELD";
 
   protected Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
@@ -66,13 +67,13 @@ public class FieldRedactionExecutorTest {
   @Test
   public void testSimpleRedaction() throws Exception {
     ParsedSchema schema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("encrypt", null, RuleKind.TRANSFORM, RuleMode.WRITE, FieldEncryptionExecutor.TYPE,
+    Rule rule = new Rule("encrypt", null, RuleKind.TRANSFORM, RuleMode.WRITE, ENCRYPT_FIELD_TYPE,
         Collections.singleton("PII"), null, null, null, null, false);
     RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
         "test-value", "test", null,
         null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
-    List<String> redactRuleTypes = Collections.singletonList(FieldEncryptionExecutor.TYPE);
+    List<String> redactRuleTypes = Collections.singletonList(ENCRYPT_FIELD_TYPE);
     Object message = createUserRecord();
     message = DlqAction.redactFields(ctx, message, redactRuleTypes);
     JsonNode json = schema.toJson(message);
@@ -87,13 +88,13 @@ public class FieldRedactionExecutorTest {
         Collections.singletonMap("**.lastName", Collections.singleton("PII2"));
     Metadata metadata = new Metadata(tags, null, null);
     schema = schema.copy(metadata, null);
-    Rule rule = new Rule("encrypt", null, RuleKind.TRANSFORM, RuleMode.WRITE, FieldEncryptionExecutor.TYPE,
+    Rule rule = new Rule("encrypt", null, RuleKind.TRANSFORM, RuleMode.WRITE, ENCRYPT_FIELD_TYPE,
         Collections.singleton("PII2"), null, null, null, null, false);
     RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema,
         "test-value", "test", null,
         null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
-    List<String> redactRuleTypes = Collections.singletonList(FieldEncryptionExecutor.TYPE);
+    List<String> redactRuleTypes = Collections.singletonList(ENCRYPT_FIELD_TYPE);
     Object message = createUserRecord();
     message = DlqAction.redactFields(ctx, message, redactRuleTypes);
     JsonNode json = schema.toJson(message);
@@ -109,7 +110,7 @@ public class FieldRedactionExecutorTest {
         "test-value", "test", null,
         null, null, false,
         RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
-    List<String> redactRuleTypes = Collections.singletonList(FieldEncryptionExecutor.TYPE);
+    List<String> redactRuleTypes = Collections.singletonList(ENCRYPT_FIELD_TYPE);
     Object message = createUserRecord();
     message = DlqAction.redactFields(ctx, message, redactRuleTypes);
     JsonNode json = schema.toJson(message);
