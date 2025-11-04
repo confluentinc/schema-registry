@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.rest.RestConfig;
 
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
@@ -183,6 +184,7 @@ public abstract class ClusterTestHarness {
             + schemaRegistryPort);
       }
       schemaRegistryProps.put(SchemaRegistryConfig.MODE_MUTABILITY, true);
+      schemaRegistryProps.put(RestConfig.JETTY_LEGACY_URI_COMPLIANCE, true);
       setupRestApp(schemaRegistryProps);
     }
   }
