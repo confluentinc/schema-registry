@@ -83,6 +83,7 @@ public class ModeResource {
   @DocumentedName("updateSubjectMode")
   @Operation(summary = "Update subject mode",
       description = "Update mode for the specified subject. "
+        + "If recursive is true and subject is a context, updates mode for all subjects under that context. "
         + "On success, echoes the original request back to the client.",
       responses = {
         @ApiResponse(responseCode = "200", description = "The original request.",
@@ -108,7 +109,10 @@ public class ModeResource {
       @NotNull ModeUpdateRequest request,
       @Parameter(description =
           "Whether to force update if setting mode to IMPORT and schemas currently exist")
-      @QueryParam("force") boolean force
+      @QueryParam("force") boolean force,
+      @Parameter(description =
+          "Whether to recursively update mode for all subjects under the context (only applies if subject is a context)")
+      @QueryParam("recursive") boolean recursive
   ) {
 
     if (subject != null
@@ -116,6 +120,7 @@ public class ModeResource {
       throw Errors.invalidSubjectException(subject);
     }
 
+    String originalSubject = subject;
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
       subject = null;
     } else {
@@ -130,10 +135,19 @@ public class ModeResource {
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
+
+      // Update mode for the context/subject itself
       schemaRegistry.setModeOrForward(subject, request, force, headerProperties);
+
+      // If recursive is enabled and subject is a context, update all subjects under it
+      if (recursive && QualifiedSubject.isContext(schemaRegistry.tenant(), originalSubject)) {
+        log.info("Recursively updating mode for all subjects under context: {}", subject);
+        schemaRegistry.setModeForSubjectsUnderContext(subject, request, force, headerProperties);
+      }
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (OperationNotPermittedException e) {
@@ -200,6 +214,7 @@ public class ModeResource {
   @DocumentedName("updateGlobalMode")
   @Operation(summary = "Update global mode",
       description = "Update global mode. "
+        + "If recursive is true, updates mode for all subjects in the default context. "
         + "On success, echoes the original request back to the client.",
       responses = {
         @ApiResponse(responseCode = "200", description = "The original request.",
@@ -223,8 +238,11 @@ public class ModeResource {
       @NotNull ModeUpdateRequest request,
       @Parameter(description =
           "Whether to force update if setting mode to IMPORT and schemas currently exist")
-      @QueryParam("force") boolean force) {
-    return updateMode(null, headers, request, force);
+      @QueryParam("force") boolean force,
+      @Parameter(description =
+          "Whether to recursively update mode for all subjects in the default context")
+      @QueryParam("recursive") boolean recursive) {
+    return updateMode(null, headers, request, force, recursive);
   }
 
   @GET
