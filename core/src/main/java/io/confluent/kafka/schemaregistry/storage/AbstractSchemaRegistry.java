@@ -93,7 +93,6 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 /**
  * Abstract base class for SchemaRegistry implementations that provides common state management
@@ -1246,34 +1245,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
-  }
-
-  @Override
-  public void setModeForSubjectsUnderContext(String context, ModeUpdateRequest request,
-                                             boolean force,
-                                             Map<String, String> headerProperties)
-      throws SchemaRegistryException {
-    // Context is already normalized and includes the trailing delimiter
-    // For default context: context would be like ":tenant:"
-    // For named context: context would be like ":.production:"
-    String subjectPrefix = context != null ? context :
-            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
-
-    // Get all subjects under this context
-    Set<String> subjects = listSubjectsWithPrefix(subjectPrefix, LookupFilter.DEFAULT);
-
-    log.info("Found {} subjects under context '{}' for recursive mode update",
-        subjects.size(), context);
-
-    // Update mode for each subject
-    int successCount = 0;
-    for (String subjectName : subjects) {
-      log.debug("Updating mode for subject: {}", subjectName);
-      setModeOrForward(subjectName, request, force, headerProperties);
-      successCount++;
-    }
-
-    log.info("Recursive mode update completed successfully for {} subjects", successCount);
   }
 
   /**
