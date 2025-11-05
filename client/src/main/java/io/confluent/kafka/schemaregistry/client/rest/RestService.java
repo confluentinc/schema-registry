@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
@@ -38,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCred
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import java.util.HashMap;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -169,13 +171,17 @@ public class RestService implements Closeable, Configurable {
   private static final String AUTHORIZATION_HEADER = "Authorization";
   private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
+  public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
     DEFAULT_REQUEST_PROPERTIES =
-        Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+        ImmutableMap.of(
+            "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
+            ACCEPT_UNKNOWN_PROPERTIES, "true"
+        );
   }
 
   private UrlList baseUrls;
@@ -421,8 +427,13 @@ public class RestService implements Closeable, Configurable {
                            Map<String, String> requestProperties,
                            TypeReference<T> responseFormat)
       throws IOException, RestClientException {
+    Map<String, String> requestProps;
     if (isForward) {
-      requestProperties.put(X_FORWARD_HEADER, "true");
+      // Copy the request props in case it is immutable
+      requestProps = new HashMap<>(requestProperties);
+      requestProps.put(X_FORWARD_HEADER, "true");
+    } else {
+      requestProps = requestProperties;
     }
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
@@ -431,7 +442,7 @@ public class RestService implements Closeable, Configurable {
         return retryExecutor.retry(() -> sendHttpRequest(requestUrl,
             method,
             requestBodyData,
-            requestProperties,
+            requestProps,
             responseFormat));
       } catch (IOException | RestClientException e) {
         if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {

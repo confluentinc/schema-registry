@@ -143,12 +143,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         restClientErrorMsg = "Error retrieving Avro schema";
         id = schemaRegistry.getId(subject, schema, normalizeSchema);
       }
-      AvroSchemaUtils.setThreadLocalData(
-          schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
-      try {
-        object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      } finally {
-        AvroSchemaUtils.clearThreadLocalData();
+      if (schema.ruleSet() != null && !schema.ruleSet().getDomainRules().isEmpty()) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
       }
 
       ByteArrayOutputStream out = new ByteArrayOutputStream();
