@@ -305,6 +305,10 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                                 Map<String, String> headerProperties) throws
           SchemaRegistryException {}
 
+  default void deleteModesForSubjectsUnderContextOrForward(String context,
+                                                           Map<String, String> headerProperties)
+      throws SchemaRegistryException {}
+
   default void deleteSchemaVersionOrForward(Map<String, String> headerProperties, String subject,
                                             Schema schema, boolean permanentDelete) throws
           SchemaRegistryException {}
