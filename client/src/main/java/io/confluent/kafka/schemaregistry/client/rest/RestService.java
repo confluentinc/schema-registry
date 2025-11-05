@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.CharStreams;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
@@ -57,6 +58,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -175,13 +177,17 @@ public class RestService implements Closeable, Configurable {
   private static final String AUTHORIZATION_HEADER = "Authorization";
   private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
+  public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
   static {
     DEFAULT_REQUEST_PROPERTIES =
-        Collections.singletonMap("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+        ImmutableMap.of(
+            "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
+            ACCEPT_UNKNOWN_PROPERTIES, "true"
+        );
   }
 
   private UrlList baseUrls;
@@ -431,8 +437,13 @@ public class RestService implements Closeable, Configurable {
                            Map<String, String> requestProperties,
                            TypeReference<T> responseFormat)
       throws IOException, RestClientException {
+    Map<String, String> requestProps;
     if (isForward) {
-      requestProperties.put(X_FORWARD_HEADER, "true");
+      // Copy the request props in case it is immutable
+      requestProps = new HashMap<>(requestProperties);
+      requestProps.put(X_FORWARD_HEADER, "true");
+    } else {
+      requestProps = requestProperties;
     }
     for (int i = 0, n = baseUrls.size(); i < n; i++) {
       String baseUrl = baseUrls.current();
@@ -441,7 +452,7 @@ public class RestService implements Closeable, Configurable {
         return retryExecutor.retry(() -> sendHttpRequest(requestUrl,
             method,
             requestBodyData,
-            requestProperties,
+            requestProps,
             responseFormat));
       } catch (IOException | RestClientException e) {
         if (isNonRetriableException(e)) {
