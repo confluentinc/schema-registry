@@ -60,6 +60,8 @@ import org.junit.Test;
 
 public class RestApiTest extends ClusterTestHarness {
 
+  private static final String ENCRYPT_FIELD_TYPE = "ENCRYPT_FIELD";
+
   FakeTicker fakeTicker;
   CachedDekRegistryClient client;
 
@@ -539,7 +541,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     Map<String, String> params = Collections.singletonMap("encrypt.kms.key.id",
         "arn:aws:kms:us-west-2:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab");
-    Rule r1 = new Rule("foo", null, null, RuleMode.WRITEREAD, "ENCRYPT", null, params, null, null, null, false);
+    Rule r1 = new Rule("foo", null, null, RuleMode.WRITEREAD, ENCRYPT_FIELD_TYPE, null, params, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
     RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
