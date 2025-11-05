@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -64,6 +66,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1277,6 +1280,109 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  private void forwardDeleteModeForSubjectsUnderContextToLeader(
+          String context,
+          Map<String, String> headerProperties)
+          throws SchemaRegistryRequestForwardingException {
+    UrlList baseUrl = leaderRestService.getBaseUrls();
+
+    log.debug("Forwarding recursive delete mode request for context {} to {}", context, baseUrl);
+    try {
+      leaderRestService.deleteSubjectMode(headerProperties, context, true);
+    } catch (IOException e) {
+      throw new SchemaRegistryRequestForwardingException(
+              String.format(
+                      "Unexpected error while forwarding recursive delete mode "
+                              + "request for context %s to %s", context, baseUrl), e);
+    } catch (RestClientException e) {
+      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
+    }
+  }
+
+  /**
+   * List all subjects that have a mode configured under the given prefix.
+   * This is different from listSubjectsWithPrefix which only returns subjects with schemas.
+   *
+   * @param prefix The subject prefix to match (e.g., ":.context:" for a context)
+   * @return Set of subject names that have modes configured under the prefix
+   * @throws SchemaRegistryException if there's an error accessing the store
+   */
+  private Set<String> listSubjectsWithModePrefix(String prefix)
+      throws SchemaRegistryException {
+    try {
+      ModeKey startKey = new ModeKey(prefix);
+      ModeKey endKey = new ModeKey(prefix + Character.MAX_VALUE);
+
+      Set<String> subjects = new LinkedHashSet<>();
+      try (CloseableIterator<SchemaRegistryValue> iterator =
+               kafkaStore.getAll(startKey, endKey)) {
+        while (iterator.hasNext()) {
+          SchemaRegistryValue value = iterator.next();
+          if (value instanceof ModeValue) {
+            ModeValue modeValue = (ModeValue) value;
+            String subject = modeValue.getSubject();
+            // Only include subjects that match our prefix
+            if (subject != null && subject.startsWith(prefix)) {
+              subjects.add(subject);
+            }
+          }
+        }
+      }
+      return subjects;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving subjects with modes under prefix: " + prefix, e);
+    }
+  }
+
+  private void deleteModesForSubjectsUnderContext(String context)
+      throws SchemaRegistryException {
+    // Context is already normalized and includes the trailing delimiter
+    // For default context: context would be like ":tenant:"
+    // For named context: context would be like ":.production:"
+    String subjectPrefix = context != null ? context :
+            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
+
+    // Get all subjects with modes under this context
+    // This includes subjects that have modes set but no schemas registered
+    Set<String> subjects = listSubjectsWithModePrefix(subjectPrefix);
+
+    log.info("Found {} subjects with modes under context '{}' for recursive mode deletion with"
+                    +  " subjectPrefix={}", subjects.size(), context, subjectPrefix);
+
+    // Delete mode for each subject (locally on leader)
+    int successCount = 0;
+    for (String subjectName : subjects) {
+      log.debug("Deleting mode for subject: {}", subjectName);
+      deleteSubjectMode(subjectName);
+      successCount++;
+    }
+
+    log.info("Recursive mode deletion completed successfully for {} subjects", successCount);
+  }
+
+  @Override
+  public void deleteModesForSubjectsUnderContextOrForward(String context,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    kafkaStore.lockFor(context).lock();
+    try {
+      if (isLeader()) {
+        deleteModesForSubjectsUnderContext(context);
+      } else {
+        // forward recursive delete to the leader
+        if (leaderIdentity != null) {
+          forwardDeleteModeForSubjectsUnderContextToLeader(context, headerProperties);
+        } else {
+          throw new UnknownLeaderException("Recursive delete mode request failed since leader is "
+              + "unknown");
+        }
+      }
+    } finally {
+      kafkaStore.lockFor(context).unlock();
     }
   }
 
