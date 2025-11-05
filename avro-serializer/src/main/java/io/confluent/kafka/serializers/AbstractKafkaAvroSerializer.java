@@ -156,12 +156,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(AvroSchema.TYPE, response.getId(), response.getGuid());
       }
-      AvroSchemaUtils.setThreadLocalData(
-          schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
-      try {
-        object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      } finally {
-        AvroSchemaUtils.clearThreadLocalData();
+      if (schema.ruleSet() != null && !schema.ruleSet().getDomainRules().isEmpty()) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
       }
 
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey);
