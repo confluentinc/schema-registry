@@ -335,7 +335,7 @@ public class ModeResource {
 
       // Delete mode for the context/subject itself
       schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
-      deleteModeResponse = new Mode(deletedMode != null ? deletedMode.name(): null);
+      deleteModeResponse = new Mode(deletedMode != null ? deletedMode.name() : null);
 
       // If recursive is enabled and subject is a context, delete mode for all subjects under it
       if (recursive && QualifiedSubject.isContext(schemaRegistry.tenant(), originalSubject)) {
