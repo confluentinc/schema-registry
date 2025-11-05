@@ -71,6 +71,15 @@ public interface LookupCache<K,V> extends Store<K,V> {
   SchemaKey schemaKeyById(Integer id, String subject) throws StoreException;
 
   /**
+   * Provides the id for the provided guid and context.
+   *
+   * @param guid the schema guid; never {@code null}
+   * @param context the qualified context
+   * @return the id if found, otherwise null.
+   */
+  Integer idByGuid(String guid, String context) throws StoreException;
+
+  /**
    * Callback that is invoked when a schema is registered.
    * This can be used to update any internal data structure.
    * This is invoked synchronously during register.

@@ -26,31 +26,31 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
+import static io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry.getInterInstanceListener;
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   private SchemaRegistryConfig config;
 
-  @Before
-  public void setUp() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
     super.setUp();
     String listeners = "http://localhost:123, https://localhost:456";
     Properties props = new Properties();
     props.setProperty(RestConfig.PORT_CONFIG, "123");
     props.setProperty(RestConfig.LISTENERS_CONFIG, listeners);
-    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, brokerList);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     config = new SchemaRegistryConfig(props);
@@ -65,9 +65,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected listeners to take precedence over port.", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+    assertEquals(456, listener.getUri().getPort(), "Expected listeners to take precedence over port.");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -79,9 +79,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected port to take the configured port value", 123, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+    assertEquals(123, listener.getUri().getPort(), "Expected port to take the configured port value");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -93,9 +93,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
-    assertEquals("Expected HTTPS listener's port to be returned", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
+    assertEquals(456, listener.getUri().getPort(), "Expected HTTPS listener's port to be returned");
+    assertEquals(SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
   }
 
   @Test
@@ -107,9 +107,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected last listener's port to be returned", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+    assertEquals(456, listener.getUri().getPort(), "Expected last listener's port to be returned");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -124,10 +124,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-      KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
-    assertEquals("Expected internal listener's port to be returned", 123, listener.getUri().getPort());
-    assertEquals("Expected internal listener's name to be returned", "bob", listener.getName());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+      getInterInstanceListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
+    assertEquals(123, listener.getUri().getPort());
+    assertEquals("bob", listener.getName());
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -142,7 +142,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     SchemaRegistryIdentity schemaRegistryIdentity = new
         SchemaRegistryIdentity("schema.registry-0.example.com", 123, true, "https");
-    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
 
     assertEquals(schemaRegistryIdentity,
@@ -162,7 +162,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     SchemaRegistryIdentity schemaRegistryIdentity = new
         SchemaRegistryIdentity("schema.registry-0.example.com", 443, true, "https");
-    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
 
     assertEquals(schemaRegistryIdentity,
@@ -171,7 +171,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testRegister() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     Schema expected = new Schema(
@@ -189,7 +189,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testGet() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     Schema expected = new Schema(
@@ -213,7 +213,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteSchema() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // Set global mode and config
@@ -298,7 +298,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteSubject() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // Set global mode and config
@@ -357,7 +357,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     @Test
     public void testGetByVersion() throws SchemaRegistryException {
-      KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+      SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
       kafkaSchemaRegistry.init();
 
       Schema schema1 = new Schema(
@@ -405,20 +405,20 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testSetMode() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(IMPORT.name()));
     assertEquals(IMPORT, kafkaSchemaRegistry.getMode("subject1"));
     assertEquals(IMPORT, kafkaSchemaRegistry.getModeInScope("subject1"));
     assertNull(kafkaSchemaRegistry.getMode("subject2"));
 
-    kafkaSchemaRegistry.setModeOrForward("subject1", new ModeUpdateRequest(READONLY.name()), true, new HashMap<String, String>());
+    kafkaSchemaRegistry.setModeOrForward("subject1", new ModeUpdateRequest(READONLY.name()), true, new HashMap<>());
     assertEquals(READONLY, kafkaSchemaRegistry.getMode("subject1"));
   }
 
   @Test
   public void testDeleteMode() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READONLY.name()));
     assertEquals(READONLY, kafkaSchemaRegistry.getMode("subject1"));
@@ -429,7 +429,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testGetVersionsWithSubjectPrefix() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // No subject yet.
@@ -457,7 +457,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testIsCompatible() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // Register schema 1.
@@ -523,10 +523,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Get the leader rest service
     RestService leaderRestService = kafkaSchemaRegistry.leaderRestService();
-    assertNotNull("Leader rest service should not be null", leaderRestService);
+    assertNotNull(leaderRestService, "Leader rest service should not be null");
 
     // Verify that isForward is set to true - this ensures that requests to the leader
     // will include the X-Forward header, which is critical for proper request forwarding
-    assertTrue("isForward should be true for leaderRestService", leaderRestService.isForward());
+    assertTrue(leaderRestService.isForward(), "isForward should be true for leaderRestService");
   }
 }

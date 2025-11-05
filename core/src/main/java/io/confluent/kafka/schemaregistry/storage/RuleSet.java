@@ -25,8 +25,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Rule set, which includes migration rules (for migrating between versions) and domain rules
- * (for the current version).
+ * Rule set, which includes migration rules (for migrating between versions), domain rules
+ * (for business logic), and encoding rules (for encoding logic).
  */
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -35,17 +35,22 @@ public class RuleSet {
 
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
+  private final List<Rule> encodingRules;
 
   @JsonCreator
   public RuleSet(
       @JsonProperty("migrationRules") List<Rule> migrationRules,
-      @JsonProperty("domainRules") List<Rule> domainRules
+      @JsonProperty("domainRules") List<Rule> domainRules,
+      @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
         : Collections.emptyList();
     this.domainRules = domainRules != null
         ? Collections.unmodifiableList(domainRules)
+        : Collections.emptyList();
+    this.encodingRules = encodingRules != null
+        ? Collections.unmodifiableList(encodingRules)
         : Collections.emptyList();
   }
 
@@ -54,6 +59,9 @@ public class RuleSet {
         .map(Rule::new)
         .collect(Collectors.toList());
     this.domainRules = ruleSet.getDomainRules().stream()
+        .map(Rule::new)
+        .collect(Collectors.toList());
+    this.encodingRules = ruleSet.getEncodingRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
   }
@@ -66,6 +74,10 @@ public class RuleSet {
     return domainRules;
   }
 
+  public List<Rule> getEncodingRules() {
+    return encodingRules;
+  }
+
   public boolean equals(Object o) {
     if (this == o) {
       return true;
@@ -75,12 +87,13 @@ public class RuleSet {
     }
     RuleSet ruleSet = (RuleSet) o;
     return Objects.equals(migrationRules, ruleSet.migrationRules)
-        && Objects.equals(domainRules, ruleSet.domainRules);
+        && Objects.equals(domainRules, ruleSet.domainRules)
+        && Objects.equals(encodingRules, ruleSet.encodingRules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules);
+    return Objects.hash(migrationRules, domainRules, encodingRules);
   }
 
   @Override
@@ -88,6 +101,7 @@ public class RuleSet {
     return "Rules{"
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
+        + ", encodingRules=" + encodingRules
         + '}';
   }
 
@@ -97,6 +111,9 @@ public class RuleSet {
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList()),
         getDomainRules().stream()
+            .map(Rule::toRuleEntity)
+            .collect(Collectors.toList()),
+        getEncodingRules().stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList())
     );

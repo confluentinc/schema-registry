@@ -20,10 +20,10 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
 
@@ -56,16 +56,20 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
 
     // register a valid avro
     int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(baseSchema, subject));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(baseSchema, subject),
+        "Registering should succeed"
+    );
 
     // register a backward compatible avro
     int expectedIdSchema2 = 2;
-    assertEquals("Registering a compatible schema should succeed",
-                 expectedIdSchema2,
-                 restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject));
-    
+    assertEquals(
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject),
+        "Registering a compatible schema should succeed"
+    );
+
     // register an incompatible avro
     String incompatibleSchemaString = baseSchemaWithColumnNoDefault;
     try {
@@ -73,9 +77,11 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a conflict status",
-                   RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
-                   e.getStatus());
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
     }
   }
   
@@ -86,14 +92,18 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
 
     // register a valid avro
     int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject),
+        "Registering should succeed"
+    );
 
     // register a backward compatible avro
     int expectedIdSchema2 = 2;
-    assertEquals("Registering a compatible schema should succeed",
-                 expectedIdSchema2,
-                 restApp.restClient.registerSchema(baseSchemaWithColumnNoDefault, subject));
+    assertEquals(
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(baseSchemaWithColumnNoDefault, subject),
+        "Registering a compatible schema should succeed"
+    );
   }
 }

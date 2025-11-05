@@ -28,7 +28,6 @@ import com.google.crypto.tink.subtle.Hkdf;
 import com.google.protobuf.ByteString;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.MD5;
 import io.confluent.kafka.schemaregistry.storage.Metadata;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -56,6 +55,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
@@ -70,7 +71,7 @@ public class MetadataEncoderService implements Closeable {
   private static final byte[] EMPTY_AAD = new byte[0];
   private static final String KEY_TEMPLATE_NAME = "AES128_GCM";
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private KeyTemplate keyTemplate;
   // visible for testing
   Cache<String, KeysetWrapper> encoders = null;
@@ -87,7 +88,7 @@ public class MetadataEncoderService implements Closeable {
 
   public MetadataEncoderService(SchemaRegistry schemaRegistry) {
     try {
-      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry = schemaRegistry;
       SchemaRegistryConfig config = schemaRegistry.config();
       String secret = encoderSecret(config);
       if (secret == null) {
@@ -97,7 +98,8 @@ public class MetadataEncoderService implements Closeable {
       }
       String topic = config.getString(SchemaRegistryConfig.METADATA_ENCODER_TOPIC_CONFIG);
       this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
-      this.encoders = createCache(new StringSerde(), new KeysetWrapperSerde(config), topic, null);
+      this.encoders = createCache(new StringSerde(), new KeysetWrapperSerde(config), topic, 
+          new TenantCacheUpdateHandler());
     } catch (Exception e) {
       throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
     }
@@ -107,7 +109,7 @@ public class MetadataEncoderService implements Closeable {
   protected MetadataEncoderService(
       SchemaRegistry schemaRegistry, Cache<String, KeysetWrapper> encoders) {
     try {
-      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry = schemaRegistry;
       SchemaRegistryConfig config = schemaRegistry.config();
       String secret = encoderSecret(config);
       if (secret == null) {
@@ -122,7 +124,7 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  public KafkaSchemaRegistry getSchemaRegistry() {
+  public SchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
   }
 
@@ -390,6 +392,28 @@ public class MetadataEncoderService implements Closeable {
         encoders.close();
       } catch (IOException e) {
         // ignore
+      }
+    }
+  }
+
+  /**
+   * Cache update handler that logs tenant (key) updates to the encoder cache.
+   */
+  private static class TenantCacheUpdateHandler
+      implements CacheUpdateHandler<String, KeysetWrapper> {
+
+    @Override
+    public void handleUpdate(String tenant, KeysetWrapper newValue, KeysetWrapper oldValue,
+                             TopicPartition tp, long offset, long timestamp) {
+      if (oldValue == null) {
+        log.info("Encoder cache update: new tenant '{}' added (partition={}, offset={}, "
+                + "timestamp={})", tenant, tp.partition(), offset, timestamp);
+      } else if (newValue == null) {
+        log.info("Encoder cache update: tenant '{}' removed (partition={}, offset={}, "
+                + "timestamp={})", tenant, tp.partition(), offset, timestamp);
+      } else {
+        log.info("Encoder cache update: tenant '{}' updated (partition={}, offset={}, "
+                + "timestamp={})", tenant, tp.partition(), offset, timestamp);
       }
     }
   }

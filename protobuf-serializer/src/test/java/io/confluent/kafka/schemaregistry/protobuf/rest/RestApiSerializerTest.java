@@ -49,7 +49,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -74,10 +73,12 @@ import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.NestedMessag
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.Status;
 import io.confluent.kafka.serializers.protobuf.test.NestedTestProto.UserId;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
+import org.junit.jupiter.api.Test;
 
 import static io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerTest.getField;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RestApiSerializerTest extends ClusterTestHarness {
 
@@ -413,9 +414,11 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     ConfigUpdateRequest config = new ConfigUpdateRequest();
     config.setDefaultMetadata(metadata);
     // add config metadata
-    assertEquals("Adding config with initial metadata should succeed",
+    assertEquals(
         config,
-        restApp.restClient.updateConfig(config, null));
+        restApp.restClient.updateConfig(config, null),
+        "Adding config with initial metadata should succeed"
+    );
 
     SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
         10,
@@ -429,24 +432,27 @@ public class RestApiSerializerTest extends ClusterTestHarness {
 
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
     int registeredId = restApp.restClient.registerSchema(request, "referrer", false).getId();
-    assertEquals("Registering a new schema should succeed", 4, registeredId);
+    assertEquals(4, registeredId, "Registering a new schema should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(4);
     // the newly registered schema should be immediately readable on the leader
-    assertNotNull("Registered schema should be found", schemaString);
+    assertNotNull(schemaString, "Registered schema should be found");
 
-    assertEquals("Schema dependencies should be found",
+    assertEquals(
         2,
-        schemaString.getReferences().size()
+        schemaString.getReferences().size(),
+        "Schema dependencies should be found"
     );
   }
 
-  @Test(expected = RestClientException.class)
+  @Test
   public void testInvalidSchema() throws Exception {
-    String schemaString = getInvalidSchema();
-    String subject = "invalid";
-    registerAndVerifySchema(
-        restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+    assertThrows(RestClientException.class, () -> {
+      String schemaString = getInvalidSchema();
+      String subject = "invalid";
+      registerAndVerifySchema(
+          restApp.restClient, schemaString, Collections.emptyList(), 1, subject);
+    });
   }
 
   private static String getInvalidSchema() {
@@ -487,14 +493,14 @@ public class RestApiSerializerTest extends ClusterTestHarness {
         normalize
     ).getId();
     assertEquals(
-        "Registering a new schema should succeed",
         (long) expectedId,
-        (long) registeredId
+        (long) registeredId,
+        "Registering a new schema should succeed"
     );
     assertEquals(
-        "Registered schema should be found",
         schemaString.trim(),
-        restService.getId(expectedId).getSchemaString().trim()
+        restService.getId(expectedId).getSchemaString().trim(),
+        "Registered schema should be found"
     );
   }
 
