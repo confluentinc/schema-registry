@@ -85,7 +85,6 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
