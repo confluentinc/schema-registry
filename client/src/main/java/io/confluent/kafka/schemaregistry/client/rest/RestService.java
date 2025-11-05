@@ -219,7 +219,7 @@ public class RestService implements Closeable, Configurable {
   private static final String AUTHORIZATION_HEADER = "Authorization";
   private static final String TARGET_SR_CLUSTER = "target-sr-cluster";
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
-  public static final String ACCEPT_VERSION = "Accept-Version";
+  public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
   public static final String VERSION_8_0 = "8.0";
 
@@ -229,7 +229,7 @@ public class RestService implements Closeable, Configurable {
     DEFAULT_REQUEST_PROPERTIES =
         ImmutableMap.of(
             "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
-            ACCEPT_VERSION, VERSION_8_0
+            ACCEPT_UNKNOWN_PROPERTIES, "true"
         );
   }
 
