@@ -66,6 +66,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1301,6 +1302,42 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
+  /**
+   * List all subjects that have a mode configured under the given prefix.
+   * This is different from listSubjectsWithPrefix which only returns subjects with schemas.
+   *
+   * @param prefix The subject prefix to match (e.g., ":.context:" for a context)
+   * @return Set of subject names that have modes configured under the prefix
+   * @throws SchemaRegistryException if there's an error accessing the store
+   */
+  private Set<String> listSubjectsWithModePrefix(String prefix)
+      throws SchemaRegistryException {
+    try {
+      ModeKey startKey = new ModeKey(prefix);
+      ModeKey endKey = new ModeKey(prefix + Character.MAX_VALUE);
+
+      Set<String> subjects = new LinkedHashSet<>();
+      try (CloseableIterator<SchemaRegistryValue> iterator =
+               kafkaStore.getAll(startKey, endKey)) {
+        while (iterator.hasNext()) {
+          SchemaRegistryValue value = iterator.next();
+          if (value instanceof ModeValue) {
+            ModeValue modeValue = (ModeValue) value;
+            String subject = modeValue.getSubject();
+            // Only include subjects that match our prefix
+            if (subject != null && subject.startsWith(prefix)) {
+              subjects.add(subject);
+            }
+          }
+        }
+      }
+      return subjects;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving subjects with modes under prefix: " + prefix, e);
+    }
+  }
+
   private void deleteModesForSubjectsUnderContext(String context)
       throws SchemaRegistryException {
     // Context is already normalized and includes the trailing delimiter
@@ -1309,11 +1346,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     String subjectPrefix = context != null ? context :
             QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
 
-    // Get all subjects under this context
-    Set<String> subjects = listSubjectsWithPrefix(subjectPrefix, LookupFilter.DEFAULT);
+    // Get all subjects with modes under this context
+    // This includes subjects that have modes set but no schemas registered
+    Set<String> subjects = listSubjectsWithModePrefix(subjectPrefix);
 
-    log.info("Found {} subjects under context '{}' for recursive mode deletion",
-        subjects.size(), context);
+    log.info("Found {} subjects with modes under context '{}' for recursive mode deletion with"
+                    +  " subjectPrefix={}", subjects.size(), context, subjectPrefix);
 
     // Delete mode for each subject (locally on leader)
     int successCount = 0;

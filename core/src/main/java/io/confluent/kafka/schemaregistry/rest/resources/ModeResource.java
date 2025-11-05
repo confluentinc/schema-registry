@@ -108,7 +108,8 @@ public class ModeResource {
       @NotNull ModeUpdateRequest request,
       @Parameter(description =
           "Whether to force update if setting mode to IMPORT and schemas currently exist")
-      @QueryParam("force") boolean force) {
+      @QueryParam("force") boolean force
+  ) {
 
     if (subject != null
         && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
@@ -129,12 +130,9 @@ public class ModeResource {
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
-
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-
-      // Update mode for the context/subject
       schemaRegistry.setModeOrForward(subject, request, force, headerProperties);
     } catch (ReferenceExistsException e) {
       throw Errors.referenceExistsException(e.getMessage());
