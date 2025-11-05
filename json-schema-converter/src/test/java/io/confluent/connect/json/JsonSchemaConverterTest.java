@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Date;
@@ -365,9 +367,9 @@ public class JsonSchemaConverterTest {
   }
 
   @Test(expected = NetworkException.class)
-  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
     JsonSchemaConverter.Serializer serializer = mock(JsonSchemaConverter.Serializer.class);
-    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SerializationException serializationException = new SerializationException("fail", new SocketException("io fail"));
     JsonSchemaData jsonSchemaData = new JsonSchemaData();
     when(serializer.serialize(TOPIC, null, false,
         jsonSchemaData.fromConnectData(Schema.STRING_SCHEMA, "value"),
@@ -385,9 +387,9 @@ public class JsonSchemaConverterTest {
   }
 
   @Test(expected = NetworkException.class)
-  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
     JsonSchemaConverter.Deserializer deserializer = mock(JsonSchemaConverter.Deserializer.class);
-    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SerializationException serializationException = new SerializationException("fail", new UnknownHostException("io fail"));
     SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
     byte[] valueBytes =
         converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());

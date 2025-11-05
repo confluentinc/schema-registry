@@ -546,8 +546,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       if (leaderIdentity == null) {
         leaderRestService = null;
       } else {
-        leaderRestService = new RestService(leaderIdentity.getUrl(),
-            config.whitelistHeaders().contains(RestService.X_FORWARD_HEADER));
+        leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
         if (sslFactory != null && sslFactory.sslContext() != null) {
@@ -1151,7 +1150,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
         logSchemaOp(schema, "DELETE");
-        if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
+      } else {
+        kafkaStore.put(key, null);
+
+        if (!getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
           }
@@ -1159,8 +1161,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             deleteConfig(subject);
           }
         }
-      } else {
-        kafkaStore.put(key, null);
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1227,15 +1227,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         DeleteSubjectKey key = new DeleteSubjectKey(subject);
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
+      } else {
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
+        }
         if (getMode(subject) != null) {
           deleteMode(subject);
         }
         if (getConfig(subject) != null) {
           deleteConfig(subject);
-        }
-      } else {
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
         }
       }
       return deletedVersions;

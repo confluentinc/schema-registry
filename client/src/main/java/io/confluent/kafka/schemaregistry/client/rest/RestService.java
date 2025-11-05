@@ -39,7 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
-import java.util.HashMap;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
@@ -58,6 +58,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +82,7 @@ import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCr
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
 import static java.lang.String.format;
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Rest access layer for sending requests to the schema registry.
@@ -374,7 +376,7 @@ public class RestService implements Closeable, Configurable {
     }
   }
 
-  private HttpURLConnection buildConnection(URL url, String method, Map<String,
+  protected HttpURLConnection buildConnection(URL url, String method, Map<String,
                                             String> requestProperties)
       throws IOException {
     HttpURLConnection connection = null;
@@ -453,7 +455,7 @@ public class RestService implements Closeable, Configurable {
             requestProps,
             responseFormat));
       } catch (IOException | RestClientException e) {
-        if (e instanceof RestClientException && !isRetriable((RestClientException) e)) {
+        if (isNonRetriableException(e)) {
           throw e;
         }
         log.warn("Request to URL {} failed with error: {}. "
@@ -468,7 +470,19 @@ public class RestService implements Closeable, Configurable {
     throw new IOException("Internal HTTP retry error"); // Can't get here
   }
 
-  public static boolean isRetriable(RestClientException e) {
+  /**
+   * Check if the given exception should not be retried.
+   * For RestClientException, determine whether to retry based on its HTTP status code.
+   * For other exceptions, check if it is a network connection exception.
+   */
+  private boolean isNonRetriableException(Exception e) {
+    if (e instanceof RestClientException) {
+      return !isRestClientExceptionRetriable((RestClientException) e);
+    }
+    return !ExceptionUtils.isNetworkConnectionException(e);
+  }
+
+  public static boolean isRestClientExceptionRetriable(RestClientException e) {
     int status = e.getStatus();
     boolean isClientErrorToIgnore =
         status == 408 || status == 429;
@@ -814,7 +828,8 @@ public class RestService implements Closeable, Configurable {
     String path = subject != null
         ? UriBuilder.fromPath("/config/{subject}")
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
-        : "/config";
+        : UriBuilder.fromPath("/config")
+        .queryParam("defaultToGlobal", defaultToGlobal).build().toString();
 
     Config config =
         httpRequest(path, "GET", null, requestProperties, GET_CONFIG_RESPONSE_TYPE);
@@ -887,7 +902,8 @@ public class RestService implements Closeable, Configurable {
     String path = subject != null
         ? UriBuilder.fromPath("/mode/{subject}")
         .queryParam("defaultToGlobal", defaultToGlobal).build(subject).toString()
-        : "/mode";
+        : UriBuilder.fromPath("/mode")
+        .queryParam("defaultToGlobal", defaultToGlobal).build().toString();
 
     Mode mode =
         httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, GET_MODE_RESPONSE_TYPE);
@@ -1672,5 +1688,11 @@ public class RestService implements Closeable, Configurable {
     if (bearerAuthCredentialProvider != null) {
       bearerAuthCredentialProvider.close();
     }
+  }
+
+  // Visible for testing only
+  @VisibleForTesting
+  public boolean isForward() {
+    return isForward;
   }
 }
