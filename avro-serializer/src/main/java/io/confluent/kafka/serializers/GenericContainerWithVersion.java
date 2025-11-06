@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import org.apache.avro.generic.GenericContainer;
 
 import java.util.Objects;
@@ -28,14 +31,33 @@ import java.util.Objects;
  * derived from the Avro schema, but only if the Avro schema does not have a property named
  * "connect.version", which takes precedence over the version here.
  */
-public class GenericContainerWithVersion {
+public class GenericContainerWithVersion implements ParsedSchemaAndValue {
 
+  private final AvroSchema schema;
   private final GenericContainer container;
   private final Integer version;
 
   public GenericContainerWithVersion(GenericContainer container, Integer version) {
+    this.schema = new AvroSchema(container.getSchema());
     this.container = container;
     this.version = version;
+  }
+
+  public GenericContainerWithVersion(
+      AvroSchema schema, GenericContainer container, Integer version) {
+    this.schema = schema;
+    this.container = container;
+    this.version = version;
+  }
+
+  @Override
+  public ParsedSchema getSchema() {
+    return schema;
+  }
+
+  @Override
+  public Object getValue() {
+    return container;
   }
 
   public GenericContainer container() {

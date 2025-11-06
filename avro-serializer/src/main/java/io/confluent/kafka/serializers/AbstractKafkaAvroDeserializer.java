@@ -276,10 +276,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
         context.getSubject(), schema, result);
     if (schema.rawSchema().getType().equals(Schema.Type.RECORD)) {
-      return new GenericContainerWithVersion((GenericContainer) result, version);
+      return new GenericContainerWithVersion(schema, (GenericContainer) result, version);
     } else {
-      return new GenericContainerWithVersion(new NonRecordContainer(schema.rawSchema(), result),
-          version);
+      return new GenericContainerWithVersion(
+          schema, new NonRecordContainer(schema.rawSchema(), result), version);
     }
   }
 
