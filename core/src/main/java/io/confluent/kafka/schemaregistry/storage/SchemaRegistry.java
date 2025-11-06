@@ -297,17 +297,14 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return null;
   }
 
-  default void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+  default void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties,
+                                          boolean recursive)
           throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
           OperationNotPermittedException, UnknownLeaderException {}
 
   default void setModeOrForward(String subject, ModeUpdateRequest mode, boolean force,
                                 Map<String, String> headerProperties) throws
           SchemaRegistryException {}
-
-  default void deleteModesForSubjectsUnderContextOrForward(String context,
-                                                           Map<String, String> headerProperties)
-      throws SchemaRegistryException {}
 
   default void deleteSchemaVersionOrForward(Map<String, String> headerProperties, String subject,
                                             Schema schema, boolean permanentDelete) throws

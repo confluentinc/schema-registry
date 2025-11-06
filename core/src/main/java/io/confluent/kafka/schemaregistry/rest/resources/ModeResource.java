@@ -310,9 +310,6 @@ public class ModeResource {
       @QueryParam("recursive") boolean recursive) {
     log.info("Deleting mode for subject {}, recursive={}", subject, recursive);
 
-    // Store the original subject for context checking
-    String originalSubject = subject;
-
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
       subject = null;
     } else {
@@ -333,15 +330,9 @@ public class ModeResource {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
 
-      // Delete mode for the context/subject itself
-      schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
+      // Delete mode for the context/subject itself (and recursively if requested)
+      schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties, recursive);
       deleteModeResponse = new Mode(deletedMode != null ? deletedMode.name() : null);
-
-      // If recursive is enabled and subject is a context, delete mode for all subjects under it
-      if (recursive && QualifiedSubject.isContext(schemaRegistry.tenant(), originalSubject)) {
-        log.info("Recursively deleting mode for all subjects under context: {}", subject);
-        schemaRegistry.deleteModesForSubjectsUnderContextOrForward(subject, headerProperties);
-      }
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -351,8 +342,6 @@ public class ModeResource {
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding delete mode request"
           + " to the leader", e);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while deleting mode", e);
     }
     asyncResponse.resume(deleteModeResponse);
   }

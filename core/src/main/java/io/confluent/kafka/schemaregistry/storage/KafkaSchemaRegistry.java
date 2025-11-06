@@ -996,13 +996,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void forwardDeleteSubjectModeRequestToLeader(
       String subject,
-      Map<String, String> headerProperties)
+      Map<String, String> headerProperties,
+      boolean recursive)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    log.debug("Forwarding delete subject mode request {} to {}", subject, baseUrl);
+    log.debug("Forwarding delete subject mode request {} to {} with recursive={}",
+        subject, baseUrl, recursive);
     try {
-      leaderRestService.deleteSubjectMode(headerProperties, subject);
+      leaderRestService.deleteSubjectMode(headerProperties, subject, recursive);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -1262,43 +1264,37 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties,
+                                         boolean recursive)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
+        // Delete the subject/context mode itself
         deleteSubjectMode(subject);
+
+        // If recursive and subject is a context, delete modes for all subjects under it
+        if (recursive && QualifiedSubject.isContext(tenant(), subject)) {
+          log.info("Recursively deleting mode for all subjects under context: {}", subject);
+          try {
+            deleteModesForSubjectsUnderContext(subject);
+          } catch (SchemaRegistryException e) {
+            throw new SchemaRegistryStoreException(
+                "Failed to recursively delete modes for subjects under context", e);
+          }
+        }
       } else {
-        // forward delete subject config request to the leader
+        // forward delete subject mode request to the leader (with recursive flag)
         if (leaderIdentity != null) {
-          forwardDeleteSubjectModeRequestToLeader(subject, headerProperties);
+          forwardDeleteSubjectModeRequestToLeader(subject, headerProperties, recursive);
         } else {
-          throw new UnknownLeaderException("Delete config request failed since leader is "
+          throw new UnknownLeaderException("Delete mode request failed since leader is "
               + "unknown");
         }
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
-    }
-  }
-
-  private void forwardDeleteModeForSubjectsUnderContextToLeader(
-          String context,
-          Map<String, String> headerProperties)
-          throws SchemaRegistryRequestForwardingException {
-    UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    log.debug("Forwarding recursive delete mode request for context {} to {}", context, baseUrl);
-    try {
-      leaderRestService.deleteSubjectMode(headerProperties, context, true);
-    } catch (IOException e) {
-      throw new SchemaRegistryRequestForwardingException(
-              String.format(
-                      "Unexpected error while forwarding recursive delete mode "
-                              + "request for context %s to %s", context, baseUrl), e);
-    } catch (RestClientException e) {
-      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
     }
   }
 
@@ -1362,28 +1358,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
 
     log.info("Recursive mode deletion completed successfully for {} subjects", successCount);
-  }
-
-  @Override
-  public void deleteModesForSubjectsUnderContextOrForward(String context,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryException {
-    kafkaStore.lockFor(context).lock();
-    try {
-      if (isLeader()) {
-        deleteModesForSubjectsUnderContext(context);
-      } else {
-        // forward recursive delete to the leader
-        if (leaderIdentity != null) {
-          forwardDeleteModeForSubjectsUnderContextToLeader(context, headerProperties);
-        } else {
-          throw new UnknownLeaderException("Recursive delete mode request failed since leader is "
-              + "unknown");
-        }
-      }
-    } finally {
-      kafkaStore.lockFor(context).unlock();
-    }
   }
 
   @Override
