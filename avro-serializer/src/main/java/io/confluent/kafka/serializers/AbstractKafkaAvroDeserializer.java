@@ -253,7 +253,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload)
       throws SerializationException, InvalidConfigurationException {
-    return deserializeWithSchemaAndVersion(topic, isKey, null, payload, null);
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, payload, null);
   }
 
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
