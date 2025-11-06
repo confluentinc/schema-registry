@@ -17,6 +17,8 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
@@ -24,7 +26,6 @@ import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -59,10 +61,12 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  private final Map<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+  private final Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
-    schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
   }
 
   /**
@@ -253,7 +257,11 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
     Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
-    return schemaCache.computeIfAbsent(cacheKey, k -> schema.copy(name));
+    try {
+      return schemaCache.get(cacheKey, () -> schema.copy(name));
+    } catch (ExecutionException e) {
+      return schema.copy(name);
+    }
   }
 
   private Object deriveType(ByteBuffer buffer, ProtobufSchema schema) {

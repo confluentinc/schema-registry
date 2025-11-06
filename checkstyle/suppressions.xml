@@ -46,6 +46,6 @@
               files="(DynamicSchema|EnumDefinition|FieldDefinition|MessageDefinition|ServiceDefinition).java"/>
 
     <suppress checks="[a-zA-Z0-9]*"
-              files="(BoundedConcurrentHashMap|DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>
+              files="(DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>
 
 </suppressions>
