@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -64,6 +66,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -993,13 +996,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void forwardDeleteSubjectModeRequestToLeader(
       String subject,
-      Map<String, String> headerProperties)
+      Map<String, String> headerProperties,
+      boolean recursive)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    log.debug("Forwarding delete subject mode request {} to {}", subject, baseUrl);
+    log.debug("Forwarding delete subject mode request {} to {} with recursive={}",
+        subject, baseUrl, recursive);
     try {
-      leaderRestService.deleteSubjectMode(headerProperties, subject);
+      leaderRestService.deleteSubjectMode(headerProperties, subject, recursive);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -1259,25 +1264,100 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties,
+                                         boolean recursive)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
+        // Delete the subject/context mode itself
         deleteSubjectMode(subject);
+
+        // If recursive and subject is a context, delete modes for all subjects under it
+        if (recursive && QualifiedSubject.isContext(tenant(), subject)) {
+          log.info("Recursively deleting mode for all subjects under context: {}", subject);
+          try {
+            deleteModesForSubjectsUnderContext(subject);
+          } catch (SchemaRegistryException e) {
+            throw new SchemaRegistryStoreException(
+                "Failed to recursively delete modes for subjects under context", e);
+          }
+        }
       } else {
-        // forward delete subject config request to the leader
+        // forward delete subject mode request to the leader (with recursive flag)
         if (leaderIdentity != null) {
-          forwardDeleteSubjectModeRequestToLeader(subject, headerProperties);
+          forwardDeleteSubjectModeRequestToLeader(subject, headerProperties, recursive);
         } else {
-          throw new UnknownLeaderException("Delete config request failed since leader is "
+          throw new UnknownLeaderException("Delete mode request failed since leader is "
               + "unknown");
         }
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
     }
+  }
+
+  /**
+   * List all subjects that have a mode configured under the given prefix.
+   * This is different from listSubjectsWithPrefix which only returns subjects with schemas.
+   *
+   * @param prefix The subject prefix to match (e.g., ":.context:" for a context)
+   * @return Set of subject names that have modes configured under the prefix
+   * @throws SchemaRegistryException if there's an error accessing the store
+   */
+  private Set<String> listSubjectsWithModePrefix(String prefix)
+      throws SchemaRegistryException {
+    try {
+      ModeKey startKey = new ModeKey(prefix);
+      ModeKey endKey = new ModeKey(prefix + Character.MAX_VALUE);
+
+      Set<String> subjects = new LinkedHashSet<>();
+      try (CloseableIterator<SchemaRegistryValue> iterator =
+               kafkaStore.getAll(startKey, endKey)) {
+        while (iterator.hasNext()) {
+          SchemaRegistryValue value = iterator.next();
+          if (value instanceof ModeValue) {
+            ModeValue modeValue = (ModeValue) value;
+            String subject = modeValue.getSubject();
+            // Only include subjects that match our prefix
+            if (subject != null && subject.startsWith(prefix)) {
+              subjects.add(subject);
+            }
+          }
+        }
+      }
+      return subjects;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving subjects with modes under prefix: " + prefix, e);
+    }
+  }
+
+  private void deleteModesForSubjectsUnderContext(String context)
+      throws SchemaRegistryException {
+    // Context is already normalized and includes the trailing delimiter
+    // For default context: context would be like ":tenant:"
+    // For named context: context would be like ":.production:"
+    String subjectPrefix = context != null ? context :
+            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
+
+    // Get all subjects with modes under this context
+    // This includes subjects that have modes set but no schemas registered
+    Set<String> subjects = listSubjectsWithModePrefix(subjectPrefix);
+
+    log.info("Found {} subjects with modes under context '{}' for recursive mode deletion with"
+                    +  " subjectPrefix={}", subjects.size(), context, subjectPrefix);
+
+    // Delete mode for each subject (locally on leader)
+    int successCount = 0;
+    for (String subjectName : subjects) {
+      log.debug("Deleting mode for subject: {}", subjectName);
+      deleteSubjectMode(subjectName);
+      successCount++;
+    }
+
+    log.info("Recursive mode deletion completed successfully for {} subjects", successCount);
   }
 
   @Override
