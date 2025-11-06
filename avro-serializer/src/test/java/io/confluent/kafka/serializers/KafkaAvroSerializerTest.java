@@ -63,6 +63,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
 import kafka.utils.VerifiableProperties;
+import scala.concurrent.impl.FutureConvertersImpl.P;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -1085,6 +1086,11 @@ public class KafkaAvroSerializerTest {
     } catch (AvroRuntimeException e){
       //this is expected
     }
+
+    ParsedSchemaAndValue schemaAndValue = avroDeserializer.deserializeWithSchema(
+        topic, headers, bytes, User.getClassSchema());
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(obj, schemaAndValue.getValue());
   }
 
   @Test
