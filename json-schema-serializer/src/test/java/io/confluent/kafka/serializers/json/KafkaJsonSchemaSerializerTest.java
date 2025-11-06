@@ -30,10 +30,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
+import io.confluent.kafka.serializers.jackson.Jackson;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -298,9 +301,17 @@ public class KafkaJsonSchemaSerializerTest {
     User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
 
     RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = serializer.serialize("foo", headers, user);
+    byte[] bytes = serializer.serialize(topic, headers, user);
     Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
+
+    ParsedSchemaAndValue schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes);
+    ParsedSchema expectedSchema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
 
     // Test for javaType property
     deserialized = getDeserializer(null).deserialize(topic, headers, bytes);

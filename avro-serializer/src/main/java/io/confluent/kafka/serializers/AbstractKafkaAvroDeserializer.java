@@ -253,6 +253,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload)
       throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, payload, null);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload, Schema readerSchema)
+      throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -270,16 +276,20 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
     AvroSchema schema = context.schemaForDeserialize();
-    Object result = context.read(schema,
-        specificAvroReaderSchema != null ? new AvroSchema(specificAvroReaderSchema) : null);
+    AvroSchema readerAvroSchema = readerSchema != null
+        ? new AvroSchema(readerSchema)
+        : specificAvroReaderSchema != null
+            ? new AvroSchema(specificAvroReaderSchema)
+            : null;
+    Object result = context.read(schema, readerAvroSchema);
 
     Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
         context.getSubject(), schema, result);
     if (schema.rawSchema().getType().equals(Schema.Type.RECORD)) {
-      return new GenericContainerWithVersion((GenericContainer) result, version);
+      return new GenericContainerWithVersion(schema, (GenericContainer) result, version);
     } else {
-      return new GenericContainerWithVersion(new NonRecordContainer(schema.rawSchema(), result),
-          version);
+      return new GenericContainerWithVersion(
+          schema, new NonRecordContainer(schema.rawSchema(), result), version);
     }
   }
 

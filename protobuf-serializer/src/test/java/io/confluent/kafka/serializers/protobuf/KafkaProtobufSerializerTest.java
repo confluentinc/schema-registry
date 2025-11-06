@@ -23,6 +23,7 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
@@ -221,6 +222,12 @@ public class KafkaProtobufSerializerTest {
     RecordHeaders headers = new RecordHeaders();
     bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
     assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
+
+    ParsedSchemaAndValue schemaAndValue = testMessageDeserializer.deserializeWithSchema(topic, headers, bytes);
+    ProtobufSchema expectedSchema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(HELLO_WORLD_MESSAGE, schemaAndValue.getValue());
 
     // specific -> derived
     headers = new RecordHeaders();
