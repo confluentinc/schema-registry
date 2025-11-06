@@ -1221,23 +1221,23 @@ public class JsonSchema implements ParsedSchema {
     Map<String, BeanPropertyWriter> props;
     try {
       props = beanGetters.get(message.getClass().getName(), () -> {
-          try {
-            Map<String, BeanPropertyWriter> m = new HashMap<>();
-            JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
-                .findValueSerializer(message.getClass());
-            Iterator<PropertyWriter> propIter = ser.properties();
-            while (propIter.hasNext()) {
-              PropertyWriter p = propIter.next();
-              if (p instanceof BeanPropertyWriter) {
-                m.put(p.getName(), (BeanPropertyWriter) p);
-              }
+        try {
+          Map<String, BeanPropertyWriter> m = new HashMap<>();
+          JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
+              .findValueSerializer(message.getClass());
+          Iterator<PropertyWriter> propIter = ser.properties();
+          while (propIter.hasNext()) {
+            PropertyWriter p = propIter.next();
+            if (p instanceof BeanPropertyWriter) {
+              m.put(p.getName(), (BeanPropertyWriter) p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON serializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON serializer for " + message.getClass(), e);
+        }
+      });
     } catch (java.util.concurrent.ExecutionException e) {
       throw new IllegalArgumentException(
           "Could not get getters for " + message.getClass(), e);
@@ -1250,27 +1250,27 @@ public class JsonSchema implements ParsedSchema {
     Map<String, SettableBeanProperty> props;
     try {
       props = beanSetters.get(message.getClass().getName(), () -> {
-          try {
-            Map<String, SettableBeanProperty> m = new HashMap<>();
-            JavaType type = objectMapper.constructType(message.getClass());
-            DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
-                .createDummyInstance(objectMapper.getDeserializationConfig());
-            // Call findNonContextValueDeserializer instead of findRootValueDeserializer
-            // so we don't get a wrapping TypeDeserializer
-            JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
-            if (deser instanceof BeanDeserializer) {
-              Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
-              while (propIter.hasNext()) {
-                SettableBeanProperty p = propIter.next();
-                m.put(p.getName(), p);
-              }
+        try {
+          Map<String, SettableBeanProperty> m = new HashMap<>();
+          JavaType type = objectMapper.constructType(message.getClass());
+          DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
+              .createDummyInstance(objectMapper.getDeserializationConfig());
+          // Call findNonContextValueDeserializer instead of findRootValueDeserializer
+          // so we don't get a wrapping TypeDeserializer
+          JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
+          if (deser instanceof BeanDeserializer) {
+            Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
+            while (propIter.hasNext()) {
+              SettableBeanProperty p = propIter.next();
+              m.put(p.getName(), p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON deserializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON deserializer for " + message.getClass(), e);
+        }
+      });
     } catch (java.util.concurrent.ExecutionException e) {
       throw new IllegalArgumentException(
           "Could not get setters for " + message.getClass(), e);
