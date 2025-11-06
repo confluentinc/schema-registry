@@ -21,6 +21,7 @@ import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
@@ -315,6 +316,11 @@ public class KafkaAvroSerializerTest {
     bytes = avroSerializer.serialize(topic, headers, avroRecord);
     assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
     assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
+
+    ParsedSchemaAndValue schemaAndValue = avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+    AvroSchema expectedSchema = new AvroSchema(avroRecord.getSchema());
+    assertEquals(expectedSchema, schemaAndValue.getSchema());
+    assertEquals(avroRecord, schemaAndValue.getValue());
 
     IndexedRecord avroRecordWithAllField = createExtendUserRecord();
     headers = new RecordHeaders();
@@ -1079,6 +1085,11 @@ public class KafkaAvroSerializerTest {
     } catch (AvroRuntimeException e){
       //this is expected
     }
+
+    ParsedSchemaAndValue schemaAndValue = avroDeserializer.deserializeWithSchema(
+        topic, headers, bytes, User.getClassSchema());
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(obj, schemaAndValue.getValue());
   }
 
   @Test
