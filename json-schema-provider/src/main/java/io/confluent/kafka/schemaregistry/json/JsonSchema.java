@@ -50,8 +50,11 @@ import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
@@ -68,7 +71,6 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -158,10 +160,14 @@ public class JsonSchema implements ParsedSchema {
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
   private static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
 
-  private static final Map<String, Map<String, BeanPropertyWriter>> beanGetters =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
-  private static final Map<String, Map<String, SettableBeanProperty>> beanSetters =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Cache<String, Map<String, BeanPropertyWriter>> beanGetters =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
+  private static final Cache<String, Map<String, SettableBeanProperty>> beanSetters =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
 
   // prepopulate the draft 2019-09 metaschemas, as the json-sKema library
   // only prepopulates the draft 2020-12 metaschemas
@@ -236,7 +242,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = ruleSet;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -255,7 +261,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = null;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -677,14 +683,18 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(
+      CompatibilityPolicy policy, ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
+    Set<Difference.Type> compatibleChanges = policy == CompatibilityPolicy.LENIENT
+        ? SchemaDiff.COMPATIBLE_CHANGES_LENIENT
+        : SchemaDiff.COMPATIBLE_CHANGES_STRICT;
     final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+        SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
-        .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+        .filter(diff -> !compatibleChanges.contains(diff.getType()))
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
@@ -696,6 +706,11 @@ public class JsonSchema implements ParsedSchema {
     } else {
       return new ArrayList<>();
     }
+  }
+
+  @Override
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+    return isBackwardCompatible(CompatibilityPolicy.STRICT, previousSchema);
   }
 
   @Override
@@ -1203,55 +1218,63 @@ public class JsonSchema implements ParsedSchema {
 
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
-        message.getClass().getName(),
-        k -> {
-          try {
-            Map<String, BeanPropertyWriter> m = new HashMap<>();
-            JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
-                .findValueSerializer(message.getClass());
-            Iterator<PropertyWriter> propIter = ser.properties();
-            while (propIter.hasNext()) {
-              PropertyWriter p = propIter.next();
-              if (p instanceof BeanPropertyWriter) {
-                m.put(p.getName(), (BeanPropertyWriter) p);
-              }
+    Map<String, BeanPropertyWriter> props;
+    try {
+      props = beanGetters.get(message.getClass().getName(), () -> {
+        try {
+          Map<String, BeanPropertyWriter> m = new HashMap<>();
+          JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
+              .findValueSerializer(message.getClass());
+          Iterator<PropertyWriter> propIter = ser.properties();
+          while (propIter.hasNext()) {
+            PropertyWriter p = propIter.next();
+            if (p instanceof BeanPropertyWriter) {
+              m.put(p.getName(), (BeanPropertyWriter) p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON serializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON serializer for " + message.getClass(), e);
+        }
+      });
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalArgumentException(
+          "Could not get getters for " + message.getClass(), e);
+    }
     return props.get(propertyName);
   }
 
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(
-        message.getClass().getName(),
-        k -> {
-          try {
-            Map<String, SettableBeanProperty> m = new HashMap<>();
-            JavaType type = objectMapper.constructType(message.getClass());
-            DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
-                .createDummyInstance(objectMapper.getDeserializationConfig());
-            // Call findNonContextValueDeserializer instead of findRootValueDeserializer
-            // so we don't get a wrapping TypeDeserializer
-            JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
-            if (deser instanceof BeanDeserializer) {
-              Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
-              while (propIter.hasNext()) {
-                SettableBeanProperty p = propIter.next();
-                m.put(p.getName(), p);
-              }
+    Map<String, SettableBeanProperty> props;
+    try {
+      props = beanSetters.get(message.getClass().getName(), () -> {
+        try {
+          Map<String, SettableBeanProperty> m = new HashMap<>();
+          JavaType type = objectMapper.constructType(message.getClass());
+          DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
+              .createDummyInstance(objectMapper.getDeserializationConfig());
+          // Call findNonContextValueDeserializer instead of findRootValueDeserializer
+          // so we don't get a wrapping TypeDeserializer
+          JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
+          if (deser instanceof BeanDeserializer) {
+            Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
+            while (propIter.hasNext()) {
+              SettableBeanProperty p = propIter.next();
+              m.put(p.getName(), p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON deserializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON deserializer for " + message.getClass(), e);
+        }
+      });
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalArgumentException(
+          "Could not get setters for " + message.getClass(), e);
+    }
     return props.get(propertyName);
   }
 

@@ -15,28 +15,29 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import org.junit.Test;
+
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import org.junit.jupiter.api.Test;
 
 public class RestApiMetadataEncoderTest extends ClusterTestHarness {
 
@@ -70,9 +71,11 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering without id should succeed"
+    );
 
     List<SubjectVersion> subjectVersions = restApp.restClient.getAllVersionsById(1);
     assertEquals(ImmutableList.of(new SubjectVersion(subject, 1)), subjectVersions);
@@ -93,33 +96,45 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
 
     int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering without id should succeed"
+    );
 
     // Remove encoder
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).getMetadataEncoder().getEncoders()
-        .remove(KafkaSchemaRegistry.DEFAULT_TENANT);
+    restApp.schemaRegistry().getMetadataEncoder().getEncoders()
+        .remove(SchemaRegistry.DEFAULT_TENANT);
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getAllVersionsById(1));
+        () -> restApp.restClient.getAllVersionsById(1),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getId(expectedIdSchema1));
+        () -> restApp.restClient.getId(expectedIdSchema1),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getVersion(subject, 1));
+        () -> restApp.restClient.getVersion(subject, 1),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getLatestVersion(subject));
+        () -> restApp.restClient.getLatestVersion(subject),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getLatestVersion(subject));
+        () -> restApp.restClient.getLatestVersion(subject),
+        "Should fail to get schema"
+    );
 
     List<Schema> schemas = restApp.restClient.getSchemas(subject, true, false);
     assertTrue(schemas.isEmpty());

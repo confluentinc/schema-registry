@@ -17,25 +17,22 @@ package io.confluent.kafka.schemaregistry;
 
 import kafka.security.minikdc.MiniKdc;
 import kafka.server.KafkaConfig;
-import kafka.utils.JaasTestUtils;
+import kafka.security.JaasTestUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.LoginManager;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
-import scala.collection.JavaConverters;
-import scala.collection.immutable.List;
-import scala.collection.immutable.Seq;
-import scala.jdk.javaapi.CollectionConverters;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 // sets up SASL for ZooKeeper and Kafka. Much of this was borrowed from kafka.api.SaslSetup in Kafka.
@@ -54,13 +51,12 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   @Override
-  protected SecurityProtocol getSecurityProtocol() {
+  protected SecurityProtocol getBrokerSecurityProtocol() {
     return SecurityProtocol.SASL_PLAINTEXT;
   }
 
-  @Before
   @Override
-  public void setUp() throws Exception {
+  protected void setUp() throws Exception {
     // Important if tests leak consumers, producers or brokers.
     LoginManager.closeAll();
 
@@ -68,16 +64,15 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     File clientKeytab = File.createTempFile("client-", ".keytab");
 
     // create a JAAS file.
-    Option<File> serverKeytabOption = Option.apply(serverKeytab);
-    Option<File> clientKeytabOption = Option.apply(clientKeytab);
-    List<String> serverSaslMechanisms = JavaConverters.asScalaBuffer(Arrays.asList("GSSAPI")).toList();
-    Option<String> clientSaslMechanism = Option.apply("GSSAPI");
+    Optional<File> serverKeytabOption = Optional.of(serverKeytab);
+    Optional<File> clientKeytabOption = Optional.of(clientKeytab);
+    List<String> serverSaslMechanisms = Arrays.asList("GSSAPI");
+    Optional<String> clientSaslMechanism = Optional.of("GSSAPI");
 
-    java.util.List<JaasTestUtils.JaasSection> jaasSections = new ArrayList<>();
-    jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KafkaServerContextName(), serverSaslMechanisms, serverKeytabOption));
+    List<JaasTestUtils.JaasSection> jaasSections = new ArrayList<>();
+    jaasSections.add(JaasTestUtils.kafkaServerSection(JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME, serverSaslMechanisms, serverKeytabOption));
     jaasSections.add(JaasTestUtils.kafkaClientSection(clientSaslMechanism, clientKeytabOption));
-    jaasSections.addAll(CollectionConverters.asJavaCollection(JaasTestUtils.zkSections()));
-    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(JavaConverters.asScalaBuffer(jaasSections).toSeq()).getAbsolutePath();
+    String jaasFilePath = JaasTestUtils.writeJaasContextsToFile(jaasSections).getAbsolutePath();
 
     log.info("Using KDC home: {}", kdcHome.getAbsolutePath());
     kdc = new MiniKdc(kdcProps, kdcHome);
@@ -96,32 +91,28 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   private void createPrincipal(File keytab, String principalNoRealm) throws Exception {
-    Seq<String> principals = JavaConverters.asScalaBuffer(
-            Arrays.asList(principalNoRealm)
-    ).toList();
-    kdc.createPrincipal(keytab, principals);
+    kdc.createPrincipal(keytab, Arrays.asList(principalNoRealm));
   }
 
   @Override
   protected KafkaConfig getKafkaConfig(int brokerId) {
-    final Option<File> trustStoreFileOption = scala.Option.apply(null);
-    final Option<SecurityProtocol> saslInterBrokerSecurityProtocol =
-            scala.Option.apply(SecurityProtocol.SASL_PLAINTEXT);
-    Properties props = TestUtils.createBrokerConfig(
-            brokerId, zkConnect, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
+    final Optional<File> trustStoreFileOption = Optional.empty();
+    final Optional<SecurityProtocol> saslInterBrokerSecurityProtocol =
+            Optional.of(SecurityProtocol.SASL_PLAINTEXT);
+    Properties props = createBrokerConfig(
+            brokerId, false, false, TestUtils.RandomPort(), saslInterBrokerSecurityProtocol,
             trustStoreFileOption, EMPTY_SASL_PROPERTIES, false, true, TestUtils.RandomPort(),
             false, TestUtils.RandomPort(),
-            false, TestUtils.RandomPort(), Option.<String>empty(), 1, false, 1, (short) 1, false);
+            false, TestUtils.RandomPort(), Optional.empty(), false, 1, (short) 1, false);
 
     injectProperties(props);
-    props.setProperty("zookeeper.connection.timeout.ms", "30000");
     props.setProperty("sasl.mechanism.inter.broker.protocol", "GSSAPI");
     props.setProperty(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "GSSAPI");
 
     return KafkaConfig.fromProps(props);
   }
 
-  @After
+  @AfterEach
   @Override
   public void tearDown() throws Exception {
     if (kdc != null) {

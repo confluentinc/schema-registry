@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest.exceptions;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
@@ -65,6 +65,7 @@ public class Errors {
   public static final int INVALID_SUBJECT_ERROR_CODE = 42208;
   public static final int SCHEMA_TOO_LARGE_ERROR_CODE = 42209;
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
+  public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -129,6 +130,14 @@ public class Errors {
         String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, id), SCHEMA_NOT_FOUND_ERROR_CODE);
   }
 
+  public static RestException schemaNotFoundException(String guid) {
+    if (guid == null) {
+      return schemaNotFoundException();
+    }
+    return new RestNotFoundException(
+        String.format(SCHEMA_NOT_FOUND_MESSAGE_FORMAT, guid), SCHEMA_NOT_FOUND_ERROR_CODE);
+  }
+
   public static RestIncompatibleSchemaException incompatibleSchemaException(String message,
                                                                             Throwable cause) {
     return new RestIncompatibleSchemaException(message,
@@ -150,6 +159,10 @@ public class Errors {
 
   public static RestInvalidSubjectException invalidSubjectException(String subject) {
     return new RestInvalidSubjectException(subject);
+  }
+
+  public static RestContextNotEmptyException contextNotEmptyException(String context) {
+    return new RestContextNotEmptyException(context);
   }
 
   public static RestException schemaRegistryException(String message, Throwable cause) {

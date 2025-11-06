@@ -24,9 +24,6 @@ import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCred
 import io.confluent.kafka.schemaregistry.client.security.basicauth
     .BasicAuthCredentialProviderFactory;
 import org.apache.kafka.common.security.JaasUtils;
-import org.eclipse.jetty.http.HttpStatus;
-import org.junit.Assert;
-import org.junit.Test;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
@@ -36,9 +33,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
 
@@ -64,8 +62,8 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
       restApp.restClient.registerSchema(schemaString1, subject);
       fail("Should fail for incorrect password");
     } catch (RestClientException ex) {
-      Assert.assertEquals(401, ex.getStatus());
-      Assert.assertEquals("Unauthorized; error code: 401", ex.getMessage());
+      assertEquals(401, ex.getStatus());
+      assertEquals("Unauthorized; error code: 401", ex.getMessage());
     }
 
   }
@@ -101,7 +99,7 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
           new File(SchemaRegistryErrorHandlerTest.class.getResource("/testauth.properties").getFile());
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
       List<String> lines = new ArrayList<>();
-      lines.add("SchemaRegistry { org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required "
+      lines.add("SchemaRegistry { org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule required "
                 + "file=\"" + userPropsFile.getAbsolutePath()
                 + "\";};");
       Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);

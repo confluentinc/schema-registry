@@ -15,11 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
 import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
@@ -40,9 +43,9 @@ import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,23 +55,24 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
-import javax.ws.rs.DefaultValue;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.DefaultValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -87,7 +91,7 @@ public class SubjectVersionsResource {
   public static final String apiTag = SubjectsResource.apiTag;
   private static final Logger log = LoggerFactory.getLogger(SubjectVersionsResource.class);
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
@@ -96,7 +100,8 @@ public class SubjectVersionsResource {
       + "returns the last registered schema under the specified subject. Note that there may be a "
       + "new latest schema that gets registered right after this request is served.";
 
-  public SubjectVersionsResource(KafkaSchemaRegistry registry) {
+  @Inject
+  public SubjectVersionsResource(SchemaRegistry registry) {
     this.schemaRegistry = registry;
   }
 
@@ -133,6 +138,8 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Desired output format for references")
+      @DefaultValue("") @QueryParam("referenceFormat") String referenceFormat,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Find tagged entities for the given tags or * for all tags")
@@ -168,6 +175,25 @@ public class SubjectVersionsResource {
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
         schema.setSchema(parsedSchema.formattedString(format));
+      }
+      QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
+      boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+      List<SchemaReference> refs = schema.getReferences();
+      boolean hasRefs = refs != null && !refs.isEmpty();
+      if (isQualifiedSubject
+          && hasRefs
+          && referenceFormat != null
+          && referenceFormat.equals("qualified")) {
+        // Convert references to be qualified with the parent subject
+        List<SchemaReference> qualifiedRefs = refs.stream()
+            .map(ref -> {
+              QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+                  schemaRegistry.tenant(), qs.toQualifiedSubject(), ref.getSubject());
+              return new SchemaReference(
+                  ref.getName(), refSubject.toUnqualifiedSubject(), ref.getVersion());
+            })
+            .collect(Collectors.toList());
+        schema.setReferences(qualifiedRefs);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
@@ -218,7 +244,7 @@ public class SubjectVersionsResource {
       @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Whether to include deleted schema")
       @QueryParam("deleted") boolean lookupDeletedSchema) {
-    return getSchemaByVersion(subject, version, format, lookupDeletedSchema, null).getSchema();
+    return getSchemaByVersion(subject, version, format, "", lookupDeletedSchema, null).getSchema();
   }
 
   @GET
@@ -259,7 +285,7 @@ public class SubjectVersionsResource {
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
 
-    Schema schema = getSchemaByVersion(subject, version, "", true, null);
+    Schema schema = getSchemaByVersion(subject, version, "", "", true, null);
     if (schema == null) {
       return new ArrayList<>();
     }
