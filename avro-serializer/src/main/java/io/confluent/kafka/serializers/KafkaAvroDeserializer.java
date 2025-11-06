@@ -123,6 +123,11 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
     return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes);
   }
 
+  public GenericContainerWithVersion deserializeWithSchema(
+      String topic, Headers headers, byte[] bytes, Schema readerSchema) {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, readerSchema);
+  }
+
   @Override
   public void close() {
     try {
