@@ -757,17 +757,17 @@ public class RestApiTest extends ClusterTestHarness {
     // Delete the mode for the default context - should succeed and revert to global mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(defaultContext);
     assertEquals(
+            "Deleted mode should return the old mode",
             READONLY.name(),
-            deletedMode.getMode(),
-            "Deleted mode should return the old mode");
+            deletedMode.getMode());
 
     // Verify mode reverts to global mode (IMPORT)
     assertEquals(
+            "Mode should revert to global mode after deleting default context mode",
             READWRITE.name(),
             restApp.restClient
                     .getMode(null, true)
-                    .getMode(),
-            "Mode should revert to global mode after deleting default context mode"
+                    .getMode()
     );
   }
 
@@ -2283,7 +2283,7 @@ public class RestApiTest extends ClusterTestHarness {
       restApp.restClient.registerSchema(schema, "testSubject2");
       fail(String.format("Subject %s in context %s is in read-only mode", "testSubject2", context));
     } catch (RestClientException rce) {
-      assertEquals("Subject testSubject2 in context " 
+      assertEquals("Subject testSubject2 in context "
       + context + " is in read-only mode", Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce
           .getErrorCode());
     }
