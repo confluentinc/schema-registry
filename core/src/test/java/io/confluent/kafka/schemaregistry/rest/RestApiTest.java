@@ -2645,7 +2645,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException rce) {
       assertEquals(
           Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce.getErrorCode(),
-          String.format("Subject %s in context" 
+          String.format("Subject %s in context"
           +" %s is in read-only mode", "testSubject2", context)
       );
     }
