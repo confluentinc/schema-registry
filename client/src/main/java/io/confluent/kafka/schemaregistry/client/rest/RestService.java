@@ -1542,7 +1542,27 @@ public class RestService implements Closeable, Configurable {
 
   public List<String> getAllContexts(Map<String, String> requestProperties)
       throws IOException, RestClientException {
+    return getAllContexts(0, -1, null, requestProperties);
+  }
+
+  public List<String> getAllContexts(int offset, int limit, String contextPrefix)
+      throws IOException, RestClientException {
+    return getAllContexts(offset, limit, contextPrefix, DEFAULT_REQUEST_PROPERTIES);
+  }
+
+  public List<String> getAllContexts(int offset, int limit, String contextPrefix,
+                                      Map<String, String> requestProperties)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/contexts");
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 0) {
+      builder.queryParam("limit", limit);
+    }
+    if (contextPrefix != null && !contextPrefix.isEmpty()) {
+      builder.queryParam("contextPrefix", contextPrefix);
+    }
     String path = builder.build().toString();
     List<String> response = httpRequest(path, "GET", null, requestProperties,
         ALL_CONTEXTS_RESPONSE_TYPE);
