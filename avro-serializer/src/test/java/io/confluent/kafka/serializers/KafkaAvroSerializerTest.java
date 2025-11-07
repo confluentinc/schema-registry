@@ -1090,6 +1090,11 @@ public class KafkaAvroSerializerTest {
         topic, headers, bytes, User.getClassSchema());
     assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
     assertEquals(obj, schemaAndValue.getValue());
+
+    schemaAndValue = avroDeserializer.deserializeWithSchema(
+        topic, headers, bytes, x -> new AvroSchema(User.getClassSchema()));
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(obj, schemaAndValue.getValue());
   }
 
   @Test
