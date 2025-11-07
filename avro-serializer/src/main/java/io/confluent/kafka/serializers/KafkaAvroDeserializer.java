@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.header.Headers;
 
@@ -126,6 +128,12 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
   public GenericContainerWithVersion deserializeWithSchema(
       String topic, Headers headers, byte[] bytes, Schema readerSchema) {
     return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, readerSchema);
+  }
+
+  public GenericContainerWithVersion deserializeWithSchema(
+      String topic, Headers headers, byte[] bytes,
+      Function<AvroSchema, AvroSchema> writerToReaderSchemaFunc) {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, writerToReaderSchemaFunc);
   }
 
   @Override
