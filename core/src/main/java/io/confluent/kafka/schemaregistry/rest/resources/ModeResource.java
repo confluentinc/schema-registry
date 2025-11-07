@@ -331,7 +331,7 @@ public class ModeResource {
           headers, schemaRegistry.config().whitelistHeaders());
 
       // Delete mode for the context/subject itself (and recursively if requested)
-      schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties, recursive);
+      schemaRegistry.deleteSubjectModeOrForward(subject, recursive, headerProperties);
       deleteModeResponse = new Mode(deletedMode != null ? deletedMode.name() : null);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
