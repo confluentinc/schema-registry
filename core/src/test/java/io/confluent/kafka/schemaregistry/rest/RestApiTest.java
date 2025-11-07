@@ -837,17 +837,17 @@ public class RestApiTest extends ClusterTestHarness {
     // Delete the mode for the default context - should succeed and revert to global mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(defaultContext);
     assertEquals(
-            "Deleted mode should return the old mode",
             READONLY.name(),
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old mode");
 
     // Verify mode reverts to global mode (IMPORT)
     assertEquals(
-            "Mode should revert to global mode after deleting default context mode",
             READWRITE.name(),
             restApp.restClient
                     .getMode(null, true)
-                    .getMode()
+                    .getMode(),
+            "Mode should revert to global mode after deleting default context mode"
     );
   }
 
