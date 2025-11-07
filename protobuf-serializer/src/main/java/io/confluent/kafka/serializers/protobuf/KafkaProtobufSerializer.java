@@ -16,11 +16,10 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -40,23 +39,19 @@ public class KafkaProtobufSerializer<T extends Message>
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private Cache<Descriptor, ProtobufSchema> schemaCache;
+  private Map<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-    this.schemaCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build();
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
     this.ticker = ticker(client);
-    this.schemaCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build();
+    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -68,9 +63,7 @@ public class KafkaProtobufSerializer<T extends Message>
     this.schemaRegistry = client;
     this.ticker = ticker(client);
     configure(serializerConfig(props));
-    this.schemaCache = CacheBuilder.newBuilder()
-        .maximumSize(cacheCapacity)
-        .build();
+    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override
@@ -94,7 +87,7 @@ public class KafkaProtobufSerializer<T extends Message>
     if (record == null) {
       return null;
     }
-    ProtobufSchema schema = schemaCache.getIfPresent(record.getDescriptorForType());
+    ProtobufSchema schema = schemaCache.get(record.getDescriptorForType());
     if (schema == null) {
       schema = ProtobufSchemaUtils.getSchema(record);
       try {

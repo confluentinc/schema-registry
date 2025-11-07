@@ -27,12 +27,11 @@ import com.fasterxml.jackson.databind.node.NumericNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -392,8 +391,8 @@ public class JsonSchemaData {
   }
 
   private final JsonSchemaDataConfig config;
-  private final Cache<Schema, JsonSchema> fromConnectSchemaCache;
-  private final Cache<JsonSchema, Schema> toConnectSchemaCache;
+  private final Map<Schema, JsonSchema> fromConnectSchemaCache;
+  private final Map<JsonSchema, Schema> toConnectSchemaCache;
   private final boolean generalizedSumTypeSupport;
   private final boolean flattenSingletonUnions;
 
@@ -406,12 +405,8 @@ public class JsonSchemaData {
 
   public JsonSchemaData(JsonSchemaDataConfig jsonSchemaDataConfig) {
     this.config = jsonSchemaDataConfig;
-    fromConnectSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(jsonSchemaDataConfig.schemaCacheSize())
-        .build();
-    toConnectSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(jsonSchemaDataConfig.schemaCacheSize())
-        .build();
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(jsonSchemaDataConfig.schemaCacheSize());
     generalizedSumTypeSupport = jsonSchemaDataConfig.isGeneralizedSumTypeSupport();
     flattenSingletonUnions = jsonSchemaDataConfig.isFlattenSingletonUnions();
   }
@@ -646,7 +641,7 @@ public class JsonSchemaData {
     if (schema == null) {
       return null;
     }
-    JsonSchema cachedSchema = fromConnectSchemaCache.getIfPresent(schema);
+    JsonSchema cachedSchema = fromConnectSchemaCache.get(schema);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -951,7 +946,7 @@ public class JsonSchemaData {
     if (config.ignoreModernDialects()) {
       schema = schema.copyIgnoringModernDialects();
     }
-    Schema cachedSchema = toConnectSchemaCache.getIfPresent(schema);
+    Schema cachedSchema = toConnectSchemaCache.get(schema);
     if (cachedSchema != null) {
       return cachedSchema;
     }

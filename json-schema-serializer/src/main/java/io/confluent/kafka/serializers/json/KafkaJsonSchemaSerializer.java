@@ -17,8 +17,7 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
@@ -35,30 +34,22 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private Cache<ObjectNode, JsonSchema> nodeToSchemaCache;
-  private Cache<Class<?>, JsonSchema> classToSchemaCache;
+  private Map<ObjectNode, JsonSchema> nodeToSchemaCache;
+  private Map<Class<?>, JsonSchema> classToSchemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
-    this.nodeToSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build();
-    this.classToSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build();
+    this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.classToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
     this.ticker = ticker(client);
-    this.nodeToSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build();
-    this.classToSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build();
+    this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.classToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -70,12 +61,8 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     this.schemaRegistry = client;
     this.ticker = ticker(client);
     configure(serializerConfig(props));
-    this.nodeToSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(cacheCapacity)
-        .build();
-    this.classToSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(cacheCapacity)
-        .build();
+    this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.classToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
   }
 
   @Override
@@ -97,19 +84,11 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     }
     JsonSchema schema;
     if (JsonSchemaUtils.isEnvelope(record)) {
-      try {
-        schema = nodeToSchemaCache.get(
-            JsonSchemaUtils.copyEnvelopeWithoutPayload((ObjectNode) record),
-            () -> getSchema(record));
-      } catch (java.util.concurrent.ExecutionException e) {
-        schema = getSchema(record);
-      }
+      schema = nodeToSchemaCache.computeIfAbsent(
+          JsonSchemaUtils.copyEnvelopeWithoutPayload((ObjectNode) record),
+          k -> getSchema(record));
     } else {
-      try {
-        schema = classToSchemaCache.get(record.getClass(), () -> getSchema(record));
-      } catch (java.util.concurrent.ExecutionException e) {
-        schema = getSchema(record);
-      }
+      schema = classToSchemaCache.computeIfAbsent(record.getClass(), k -> getSchema(record));
     }
     Object value = JsonSchemaUtils.getValue(record);
     return serializeImpl(

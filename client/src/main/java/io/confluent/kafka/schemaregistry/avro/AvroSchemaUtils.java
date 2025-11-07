@@ -24,9 +24,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -212,10 +211,8 @@ public class AvroSchemaUtils {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
   private static final Map<String, Schema> primitiveSchemas;
-  private static final Cache<Schema, Schema> transformedSchemas =
-      CacheBuilder.newBuilder()
-          .maximumSize(DEFAULT_CACHE_CAPACITY)
-          .build();
+  private static final Map<Schema, Schema> transformedSchemas =
+      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
 
   static {
     primitiveSchemas = new HashMap<>();
@@ -290,11 +287,7 @@ public class AvroSchemaUtils {
       Schema schema = ((GenericContainer) object).getSchema();
       if (removeJavaProperties) {
         final Schema s = schema;
-        try {
-          schema = transformedSchemas.get(s, () -> removeJavaProperties(s));
-        } catch (java.util.concurrent.ExecutionException e) {
-          schema = removeJavaProperties(s);
-        }
+        schema = transformedSchemas.computeIfAbsent(s, k -> removeJavaProperties(s));
       }
       return schema;
     } else if (object instanceof Map) {

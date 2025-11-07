@@ -35,13 +35,12 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
+import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.utils.DecimalUtils;
@@ -296,8 +295,8 @@ public class ProtobufData {
     });
   }
 
-  private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
-  private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
+  private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
+  private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean generalizedSumTypeSupport;
   private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
@@ -323,12 +322,8 @@ public class ProtobufData {
   }
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
-    fromConnectSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(protobufDataConfig.schemaCacheSize())
-        .build();
-    toConnectSchemaCache = CacheBuilder.newBuilder()
-        .maximumSize(protobufDataConfig.schemaCacheSize())
-        .build();
+    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
+    toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
     this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupport();
     this.ignoreDefaultForNullables = protobufDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
@@ -658,7 +653,7 @@ public class ProtobufData {
     if (schema == null) {
       return null;
     }
-    ProtobufSchema cachedSchema = fromConnectSchemaCache.getIfPresent(schema);
+    ProtobufSchema cachedSchema = fromConnectSchemaCache.get(schema);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -1347,7 +1342,7 @@ public class ProtobufData {
       return null;
     }
     Pair<String, ProtobufSchema> cacheKey = new Pair<>(schema.name(), schema);
-    Schema cachedSchema = toConnectSchemaCache.getIfPresent(cacheKey);
+    Schema cachedSchema = toConnectSchemaCache.get(cacheKey);
     if (cachedSchema != null) {
       return cachedSchema;
     }

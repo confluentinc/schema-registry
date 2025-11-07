@@ -26,6 +26,7 @@ sonarqube:
     - "**/*.pb.*"
     - "**/mk-include/**/*"
     - "protobuf-serializer/**"
+    - "client/src/main/java/io/confluent/kafka/schemaregistry/utils/BoundedConcurrentHashMap.java"
 git:
   enable: true
 code_artifact:

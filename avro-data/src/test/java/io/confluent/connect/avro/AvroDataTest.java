@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import java.util.LinkedHashMap;
@@ -1488,7 +1487,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaFromConnectConversion() {
-    Cache<org.apache.avro.Schema, Schema> cache =
+    Map<org.apache.avro.Schema, Schema> cache =
         Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -2641,7 +2640,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaToConnectConversion() {
-    Cache<Schema, org.apache.avro.Schema> cache =
+    Map<Schema, org.apache.avro.Schema> cache =
         Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 
