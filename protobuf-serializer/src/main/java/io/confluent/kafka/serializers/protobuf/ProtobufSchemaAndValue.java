@@ -16,12 +16,11 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
-import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 
-public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
+public class ProtobufSchemaAndValue {
 
   private final ProtobufSchema schema;
   private final Object value;
@@ -31,12 +30,10 @@ public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
     this.value = value;
   }
 
-  @Override
   public ProtobufSchema getSchema() {
     return schema;
   }
 
-  @Override
   public Object getValue() {
     return value;
   }

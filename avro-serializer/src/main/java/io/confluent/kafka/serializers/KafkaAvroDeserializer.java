@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers;
 
 import org.apache.avro.Schema;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -32,7 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
-    implements DeserializerWithSchema<Object> {
+    implements Deserializer<Object> {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaAvroDeserializer.class);
 
@@ -115,17 +116,6 @@ public class KafkaAvroDeserializer extends AbstractKafkaAvroDeserializer
 
   public Object deserialize(String topic, Headers headers, byte[] bytes, Schema readerSchema) {
     return deserialize(topic, isKey, headers, bytes, readerSchema);
-  }
-
-  @Override
-  public GenericContainerWithVersion deserializeWithSchema(
-      String topic, Headers headers, byte[] bytes) {
-    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes);
-  }
-
-  public GenericContainerWithVersion deserializeWithSchema(
-      String topic, Headers headers, byte[] bytes, Schema readerSchema) {
-    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, readerSchema);
   }
 
   @Override

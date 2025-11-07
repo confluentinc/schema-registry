@@ -16,12 +16,11 @@
 
 package io.confluent.kafka.serializers.json;
 
-import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
-public class JsonSchemaAndValue implements ParsedSchemaAndValue {
+public class JsonSchemaAndValue {
 
   private final JsonSchema schema;
   private final Object value;
@@ -31,12 +30,10 @@ public class JsonSchemaAndValue implements ParsedSchemaAndValue {
     this.value = value;
   }
 
-  @Override
   public JsonSchema getSchema() {
     return schema;
   }
 
-  @Override
   public Object getValue() {
     return value;
   }

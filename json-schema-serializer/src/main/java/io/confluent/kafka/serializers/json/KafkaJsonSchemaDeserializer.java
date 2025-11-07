@@ -17,8 +17,8 @@
 package io.confluent.kafka.serializers.json;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.confluent.kafka.serializers.DeserializerWithSchema;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -29,7 +29,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * Generic JSON deserializer.
  */
 public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeserializer<T>
-    implements DeserializerWithSchema<T> {
+    implements Deserializer<T> {
 
   /**
    * Constructor used by Kafka consumer.
@@ -86,12 +86,6 @@ public class KafkaJsonSchemaDeserializer<T> extends AbstractKafkaJsonSchemaDeser
   @Override
   public T deserialize(String topic, Headers headers, byte[] bytes) {
     return (T) deserialize(false, topic, isKey, headers, bytes);
-  }
-
-  @Override
-  public JsonSchemaAndValue deserializeWithSchema(
-      String topic, Headers headers, byte[] bytes) {
-    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes);
   }
 
   @Override
