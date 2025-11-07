@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -253,11 +254,20 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload)
       throws SerializationException, InvalidConfigurationException {
-    return deserializeWithSchemaAndVersion(topic, isKey, headers, payload, null);
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, payload, (Schema) null);
   }
 
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload, Schema readerSchema)
+      throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, payload,
+        writerAvroSchema -> readerSchema != null ? new AvroSchema(readerSchema) : null);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<AvroSchema, AvroSchema> writerToReaderSchemaFunc)
       throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
@@ -276,8 +286,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
     AvroSchema schema = context.schemaForDeserialize();
-    AvroSchema readerAvroSchema = readerSchema != null
-        ? new AvroSchema(readerSchema)
+    AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
+        ? writerToReaderSchemaFunc.apply(schema)
         : specificAvroReaderSchema != null
             ? new AvroSchema(specificAvroReaderSchema)
             : null;
