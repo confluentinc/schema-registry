@@ -109,10 +109,11 @@ public class RestServiceTest {
       return json.length;
     });
 
+    Map<String, String> headerProperties = new HashMap<>();
     restServiceSpy.getAllSubjects();
     // Make sure that the X-Forward header is set to true
     verify(httpURLConnection).setRequestProperty(RestService.X_FORWARD_HEADER, "true");
-    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_UNKNOWN_PROPERTIES, "true");
+    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_VERSION, RestService.VERSION_8_0);
   }
 
   /*
@@ -146,7 +147,7 @@ public class RestServiceTest {
     restServiceSpy.getAllSubjects();
     // Make sure that the Authorization header is set with the correct value for "user:password"
     verify(httpURLConnection).setRequestProperty("Authorization", "Basic dXNlcjpwYXNzd29yZA==");
-    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_UNKNOWN_PROPERTIES, "true");
+    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_VERSION, RestService.VERSION_8_0);
   }
 
 
@@ -186,7 +187,7 @@ public class RestServiceTest {
     verify(httpURLConnection).setRequestProperty("Authorization", "Bearer auth-token");
     verify(httpURLConnection).setRequestProperty("target-sr-cluster", "lsrc-dummy");
     verify(httpURLConnection).setRequestProperty("Confluent-Identity-Pool-Id", "my-pool-id");
-    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_UNKNOWN_PROPERTIES, "true");
+    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_VERSION, RestService.VERSION_8_0);
   }
 
   /*
@@ -220,7 +221,7 @@ public class RestServiceTest {
     // Make sure that the correct header is set
     verify(httpURLConnection).setRequestProperty("api-key", "test-api-key");
     verify(httpURLConnection).setRequestProperty("source-app", "foo");
-    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_UNKNOWN_PROPERTIES, "true");
+    verify(httpURLConnection).setRequestProperty(RestService.ACCEPT_VERSION, RestService.VERSION_8_0);
   }
 
   @Test

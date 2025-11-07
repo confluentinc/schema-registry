@@ -544,29 +544,26 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           readerAvroSchema = writerAvroSchema;
         }
 
-        if (!migrations.isEmpty() || (readerAvroSchema.ruleSet() != null
-            && !readerAvroSchema.ruleSet().getDomainRules().isEmpty())) {
-          AvroSchemaUtils.setThreadLocalData(
-              readerAvroSchema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
-          try {
-            // First apply migration rules
-            if (!migrations.isEmpty()) {
-              result = executeMigrations(migrations, getSubject(), topic, headers, result);
-            }
-
-            if (result instanceof JsonNode) {
-              reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
-              result = AvroSchemaUtils.toObject(
-                  (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
-            }
-
-            // Next apply domain rules
-            result = executeRules(
-                getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
-            );
-          } finally {
-            AvroSchemaUtils.clearThreadLocalData();
+        AvroSchemaUtils.setThreadLocalData(
+            readerAvroSchema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          // First apply migration rules
+          if (!migrations.isEmpty()) {
+            result = executeMigrations(migrations, getSubject(), topic, headers, result);
           }
+
+          if (result instanceof JsonNode) {
+            reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
+            result = AvroSchemaUtils.toObject(
+                (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
+          }
+
+          // Next apply domain rules
+          result = executeRules(
+              getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
+          );
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
         }
 
         return result;
