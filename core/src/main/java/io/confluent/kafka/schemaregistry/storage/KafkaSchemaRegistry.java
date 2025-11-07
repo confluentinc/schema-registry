@@ -1314,7 +1314,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private Set<String> listSubjectsWithModePrefix(String prefix)
       throws SchemaRegistryException {
     try {
-      ModeKey startKey = new ModeKey(prefix);
+      ModeKey startKey = new ModeKey(prefix + Character.MIN_VALUE);
       ModeKey endKey = new ModeKey(prefix + Character.MAX_VALUE);
 
       Set<String> subjects = new LinkedHashSet<>();
