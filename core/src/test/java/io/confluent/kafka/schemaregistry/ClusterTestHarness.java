@@ -267,8 +267,6 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     return schemaRegistryPort;
   }
 
-  // getSchemaRegistryProtocol() and injectProperties() already exist as public methods
-
   private void startBrokersConcurrently(int numBrokers) {
     log.info("Starting concurrently {} brokers for {}", numBrokers, getClass().getSimpleName());
     configs =
