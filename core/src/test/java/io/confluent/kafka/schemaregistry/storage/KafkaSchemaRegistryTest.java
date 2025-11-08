@@ -44,7 +44,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
   private SchemaRegistryConfig config;
 
   @Override
-  protected void setUp() throws Exception {
+  public void setUp() throws Exception {
     super.setUp();
     String listeners = "http://localhost:123, https://localhost:456";
     Properties props = new Properties();
