@@ -62,7 +62,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.setProperty("schema.providers", ProtobufSchemaProvider.class.getName());
     return props;
