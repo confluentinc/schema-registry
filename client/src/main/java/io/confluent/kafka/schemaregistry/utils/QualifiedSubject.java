@@ -258,6 +258,27 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return DEFAULT_CONTEXT.equals(context) ? "" : CONTEXT_DELIMITER + context + CONTEXT_DELIMITER;
   }
 
+  /**
+   * Checks if the given qualified subject represents a context (i.e., has no subject part).
+   * A context has the format ":.context:" with an empty subject part, or null for default context.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the qualified subject is a context, false otherwise
+   */
+  public static boolean isContext(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    return qs == null || qs.getSubject().isEmpty();
+  }
+
+  /**
+   * Checks if the given qualified subject is the default context for the given tenant.
+   * The default context is the context with name "." and an empty subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the qualified subject is the default context, false otherwise
+   */
   public static boolean isDefaultContext(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
@@ -324,4 +345,3 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 }
-
