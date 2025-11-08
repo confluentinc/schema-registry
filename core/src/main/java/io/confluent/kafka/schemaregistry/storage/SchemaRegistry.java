@@ -263,8 +263,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   void deleteSubjectMode(String subject) throws SchemaRegistryStoreException,
           OperationNotPermittedException;
 
-  void deleteSubjectMode(String subject, boolean recursive) throws SchemaRegistryStoreException,
-          OperationNotPermittedException;
+  default void deleteSubjectMode(String subject, boolean recursive)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {}
 
   RuleSetHandler getRuleSetHandler();
 
