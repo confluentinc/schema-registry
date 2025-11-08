@@ -142,7 +142,7 @@ public class RestApiSslTest extends ClusterTestHarness {
 
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Configuration.setConfiguration(null);
     props.put(
         SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG,
@@ -175,7 +175,7 @@ public class RestApiSslTest extends ClusterTestHarness {
   }
 
   @Override
-  protected String getSchemaRegistryProtocol() {
+  public String getSchemaRegistryProtocol() {
     return "https";
   }
 

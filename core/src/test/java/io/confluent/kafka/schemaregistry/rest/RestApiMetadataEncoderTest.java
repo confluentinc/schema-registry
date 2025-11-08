@@ -53,7 +53,7 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() throws Exception {
+  public Properties getSchemaRegistryProperties() throws Exception {
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     return props;

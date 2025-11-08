@@ -82,7 +82,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   protected abstract EncryptionProperties getFieldEncryptionProperties(List<String> ruleNames);
 
   @Override
-  protected Properties getSchemaRegistryProperties() throws Exception {
+  public Properties getSchemaRegistryProperties() throws Exception {
     Properties props = new Properties();
     props.setProperty("resource.extension.class", DekRegistryResourceExtension.class.getName());
     Object testClient = getFieldEncryptionProperties(null).getTestClient();
@@ -93,7 +93,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
   }
 
   @Override
-  protected void setUp() throws Exception {
+  public void setUp() throws Exception {
     super.setUp();
     restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
