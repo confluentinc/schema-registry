@@ -674,18 +674,16 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete context mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, true);
-    assertEquals(
+    assertEquals("Deleted mode should return the old context mode",
             mode,
-            deletedMode.getMode(),
-            "Deleted mode should return the old context mode");
+            deletedMode.getMode());
 
     // verify context mode is deleted
     try {
       restApp.restClient.getMode(context, false);
       fail("Should throw exception for deleted context mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     // verify all subject modes under the context are also deleted
@@ -693,24 +691,21 @@ public class RestApiModeTest extends ClusterTestHarness {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject3, false);
       fail("Should throw exception for deleted subject3 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
   }
 
@@ -747,29 +742,25 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // non-recursive delete context mode (recursive = false)
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, false);
-    assertEquals(
+    assertEquals("Deleted mode should return the old context mode",
             mode,
-            deletedMode.getMode(),
-            "Deleted mode should return the old context mode");
+            deletedMode.getMode());
 
     // verify context mode is deleted
     try {
       restApp.restClient.getMode(context, false);
       fail("Should throw exception for deleted context mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     // verify subject modes are NOT deleted (still exist)
-    assertEquals(
+    assertEquals("Subject1 mode should still exist",
             mode,
-            restApp.restClient.getMode(subject1, false).getMode(),
-            "Subject1 mode should still exist");
-    assertEquals(
+            restApp.restClient.getMode(subject1, false).getMode());
+    assertEquals("Subject2 mode should still exist",
             mode,
-            restApp.restClient.getMode(subject2, false).getMode(),
-            "Subject2 mode should still exist");
+            restApp.restClient.getMode(subject2, false).getMode());
   }
 
   @Test
@@ -811,40 +802,35 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete global mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), null, true);
-    assertEquals(
+    assertEquals("Deleted mode should return the old global mode",
             mode,
-            deletedMode.getMode(),
-            "Deleted mode should return the old global mode");
+            deletedMode.getMode());
 
     // verify global mode is deleted (reverts to default)
-    assertEquals(
+    assertEquals("Global mode should revert to default READWRITE",
             "READWRITE",
-            restApp.restClient.getMode(null, false).getMode(),
-            "Global mode should revert to default READWRITE");
+            restApp.restClient.getMode(null, false).getMode());
 
     // verify all subject modes in default context are also deleted
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject3, false);
       fail("Should throw exception for deleted subject3 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
   }
 
@@ -876,33 +862,29 @@ public class RestApiModeTest extends ClusterTestHarness {
       restApp.restClient.getMode(context, false);
       fail("Context mode should not be set");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     // recursive delete context mode (should succeed even though context mode is not set)
     // and should delete modes for subjects under the context
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, true);
-    assertEquals(
+    assertEquals("Deleted mode should return null as context mode was not set",
             null,
-            deletedMode.getMode(),
-            "Deleted mode should return null as context mode was not set");
+            deletedMode.getMode());
 
     // verify subject modes are deleted
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
   }
 
@@ -944,34 +926,30 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete context mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, true);
-    assertEquals(
+    assertEquals("Deleted mode should return the old context mode",
             contextMode,
-            deletedMode.getMode(),
-            "Deleted mode should return the old context mode");
+            deletedMode.getMode());
 
     // verify all modes are deleted
     try {
       restApp.restClient.getMode(context, false);
       fail("Should throw exception for deleted context mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     // subject3 still has no mode (should not be affected)
@@ -979,8 +957,7 @@ public class RestApiModeTest extends ClusterTestHarness {
       restApp.restClient.getMode(subject3, false);
       fail("Subject3 should still have no mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
   }
 
@@ -1022,36 +999,31 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete context1 mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context1, true);
-    assertEquals(
+    assertEquals("Deleted mode should return the old context1 mode",
             mode,
-            deletedMode.getMode(),
-            "Deleted mode should return the old context1 mode");
+            deletedMode.getMode());
 
     // verify context1 and subject1 modes are deleted
     try {
       restApp.restClient.getMode(context1, false);
       fail("Should throw exception for deleted context1 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals(40409, e.getErrorCode(),
-              "Should get mode not configured error");
+      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
     }
 
     // verify context2 and subject2 modes are NOT affected
-    assertEquals(
+    assertEquals("Context2 mode should still exist",
             mode,
-            restApp.restClient.getMode(context2, false).getMode(),
-            "Context2 mode should still exist");
-    assertEquals(
+            restApp.restClient.getMode(context2, false).getMode());
+    assertEquals("Subject2 mode should still exist",
             mode,
-            restApp.restClient.getMode(subject2, false).getMode(),
-            "Subject2 mode should still exist");
+            restApp.restClient.getMode(subject2, false).getMode());
   }
 }
