@@ -84,7 +84,7 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
 
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Configuration.setConfiguration(null);
 
     props.put(SchemaRegistryConfig.AUTHENTICATION_METHOD_CONFIG, SchemaRegistryConfig
@@ -110,7 +110,7 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
   }
 
   @Override
-  protected String getSchemaRegistryProtocol() {
+  public String getSchemaRegistryProtocol() {
     return "http";
   }
 }

@@ -38,7 +38,7 @@ public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
   public CustomSchemaProviderMetricTest() { super(1, true); }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
                       CustomSchemaProvider.class.getName());

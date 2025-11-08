@@ -77,7 +77,7 @@ import scala.collection.Seq;
  */
 @Tag("IntegrationTest")
 @DisplayNameGeneration(AddKraftQuorum.class)
-public abstract class ClusterTestHarness {
+public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(ClusterTestHarness.class);
 
@@ -109,9 +109,10 @@ public abstract class ClusterTestHarness {
   /**
    * Choose an available port
    */
-  public static int choosePort() {
-    return choosePorts(1)[0];
-  }
+ @Override
+ public int choosePort() {
+   return choosePorts(1)[0];
+ }
 
   private final int numBrokers;
   private final boolean setupRestApp;
@@ -156,7 +157,7 @@ public abstract class ClusterTestHarness {
     log.info("Completed setup of {}", getClass().getSimpleName());
   }
 
-  protected void setUp() throws Exception {
+  public void setUp() throws Exception {
     checkState(testInfo != null);
     log.info("Starting controller of {}", getClass().getSimpleName());
     // start controller
@@ -175,8 +176,7 @@ public abstract class ClusterTestHarness {
     setupAcls();
 
     if (setupRestApp) {
-      if (schemaRegistryPort == null)
-        schemaRegistryPort = choosePort();
+      schemaRegistryPort = getSchemaRegistryPort();
       Properties schemaRegistryProps = getSchemaRegistryProperties();
       if (!schemaRegistryProps.containsKey(SchemaRegistryConfig.LISTENERS_CONFIG)) {
         schemaRegistryProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
@@ -189,17 +189,18 @@ public abstract class ClusterTestHarness {
     }
   }
 
-  protected void setupRestApp(Properties schemaRegistryProps) throws Exception {
+  public void setupRestApp(Properties schemaRegistryProps) throws Exception {
     restApp = new RestApp(schemaRegistryPort, null, brokerList, KAFKASTORE_TOPIC,
                           compatibilityType, true, schemaRegistryProps);
     restApp.start();
   }
 
-  protected Properties getSchemaRegistryProperties() throws Exception {
+  public Properties getSchemaRegistryProperties() throws Exception {
     return new Properties();
   }
 
-  protected void injectProperties(Properties props) {
+  @Override
+  public void injectProperties(Properties props) {
     // Make sure that broker only role is "broker"
     props.setProperty("process.roles", "broker");
     props.setProperty("message.max.bytes", String.valueOf(MAX_MESSAGE_SIZE));
@@ -236,17 +237,37 @@ public abstract class ClusterTestHarness {
     return KafkaConfig.fromProps(props);
   }
 
-  protected SecurityProtocol getBrokerSecurityProtocol() {
+  public SecurityProtocol getBrokerSecurityProtocol() {
     return SecurityProtocol.PLAINTEXT;
   }
 
-  protected String getSchemaRegistryProtocol() {
+  @Override
+  public String getSchemaRegistryProtocol() {
     return SchemaRegistryConfig.HTTP;
   }
 
-  protected Time brokerTime(int brokerId) {
+  public Time brokerTime(int brokerId) {
     return Time.SYSTEM;
   }
+
+  @Override
+  public String getBrokerList() {
+    return brokerList;
+  }
+
+  @Override
+  public RestApp getRestApp() {
+    return restApp;
+  }
+  
+  @Override
+  public Integer getSchemaRegistryPort() {
+    if (schemaRegistryPort == null)
+        schemaRegistryPort = choosePort();
+    return schemaRegistryPort;
+  }
+
+  // getSchemaRegistryProtocol() and injectProperties() already exist as public methods
 
   private void startBrokersConcurrently(int numBrokers) {
     log.info("Starting concurrently {} brokers for {}", numBrokers, getClass().getSimpleName());
