@@ -51,12 +51,12 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
   }
 
   @Override
-  protected SecurityProtocol getBrokerSecurityProtocol() {
+  public SecurityProtocol getBrokerSecurityProtocol() {
     return SecurityProtocol.SASL_PLAINTEXT;
   }
 
   @Override
-  protected void setUp() throws Exception {
+  public void setUp() throws Exception {
     // Important if tests leak consumers, producers or brokers.
     LoginManager.closeAll();
 
