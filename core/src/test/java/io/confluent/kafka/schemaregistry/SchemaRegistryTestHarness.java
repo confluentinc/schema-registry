@@ -19,13 +19,13 @@ import java.util.Properties;
 
 /**
  * Interface defining common operations needed by schema registry integration tests.
- * This allows tests to be written against either Kafka-based or RP-based implementations.
+ * This allows tests to be written against non-Kafka-based implementations.
  */
 public interface SchemaRegistryTestHarness {
   
   /**
    * Gets the broker list for Kafka connections.
-   * @return broker list string, or null if not applicable (e.g., RP-based tests)
+   * @return broker list string, or null if not applicable
    */
   String getBrokerList();
   
