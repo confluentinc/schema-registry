@@ -378,59 +378,45 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // Test 1: Get all contexts without filter
     List<String> allContexts = restApp.restClient.getAllContexts();
-    assertEquals(
+    assertEquals("Getting all contexts should return all registered contexts",
         ImmutableList.of(DEFAULT_CONTEXT, ".dev", ".prod", ".prod-eu", ".staging"),
-        allContexts,
-        "Getting all contexts should return all registered contexts"
-    );
+        allContexts);
 
     // Test 2: Filter by prefix ".prod" - should match both ".prod" and ".prod-eu"
     List<String> prodContexts = restApp.restClient.getAllContexts(0, -1, ".prod");
-    assertEquals(
+    assertEquals("Filtering by '.prod' should return contexts starting with '.prod'",
         ImmutableList.of(".prod", ".prod-eu"),
-        prodContexts,
-        "Filtering by '.prod' should return contexts starting with '.prod'"
-    );
+        prodContexts);
 
     // Test 3: Filter by exact match ".prod-eu"
     List<String> prodEuContexts = restApp.restClient.getAllContexts(0, -1, ".prod-eu");
-    assertEquals(
+    assertEquals("Filtering by '.prod-eu' should return only '.prod-eu' context",
         Collections.singletonList(".prod-eu"),
-        prodEuContexts,
-        "Filtering by '.prod-eu' should return only '.prod-eu' context"
-    );
+        prodEuContexts);
 
     // Test 4: Filter by "." - should return all contexts (all start with ".")
     List<String> dotPrefixContexts = restApp.restClient.getAllContexts(0, -1, ".");
-    assertEquals(
+    assertEquals("Filtering by '.' should return all contexts as all contexts start with '.'",
         allContexts,
-        dotPrefixContexts,
-        "Filtering by '.' should return all contexts as all contexts start with '.'"
-    );
+        dotPrefixContexts);
 
     // Test 5: Filter by ".s" - should return ".staging"
     List<String> stagingContexts = restApp.restClient.getAllContexts(0, -1, ".s");
-    assertEquals(
+    assertEquals("Filtering by '.s' should return '.staging' context",
         Collections.singletonList(".staging"),
-        stagingContexts,
-        "Filtering by '.s' should return '.staging' context"
-    );
+        stagingContexts);
 
     // Test 6: Filter by non-matching prefix
     List<String> noMatch = restApp.restClient.getAllContexts(0, -1, ".nonexistent");
-    assertEquals(
+    assertEquals("Filtering by non-matching prefix should return empty list",
         Collections.emptyList(),
-        noMatch,
-        "Filtering by non-matching prefix should return empty list"
-    );
+        noMatch);
 
     // Test 7: Filter with empty string - should return all contexts
     List<String> emptyFilter = restApp.restClient.getAllContexts(0, -1, "");
-    assertEquals(
+    assertEquals("Filtering with empty string should return all contexts",
         allContexts,
-        emptyFilter,
-        "Filtering with empty string should return all contexts"
-    );
+        emptyFilter);
   }
 
   @Test
@@ -450,58 +436,42 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // Test 1: Get all contexts (should have default + 4 named contexts = 5 total)
     List<String> allContexts = restApp.restClient.getAllContexts();
-    assertEquals(
+    assertEquals("Should have 5 total contexts",
         5,
-        allContexts.size(),
-        "Should have 5 total contexts"
-    );
+        allContexts.size());
 
     // Test 2: Filter by "." and paginate - offset 0, limit 2
     List<String> page1 = restApp.restClient.getAllContexts(0, 2, ".");
-    assertEquals(
+    assertEquals("First page should have 2 contexts",
         2,
-        page1.size(),
-        "First page should have 2 contexts"
-    );
-    assertEquals(
+        page1.size());
+    assertEquals("First page should contain default and .alpha",
         ImmutableList.of(DEFAULT_CONTEXT, ".alpha"),
-        page1,
-        "First page should contain default and .alpha"
-    );
+        page1);
 
     // Test 3: Filter by "." and paginate - offset 2, limit 2
     List<String> page2 = restApp.restClient.getAllContexts(2, 2, ".");
-    assertEquals(
+    assertEquals("Second page should have 2 contexts",
         2,
-        page2.size(),
-        "Second page should have 2 contexts"
-    );
-    assertEquals(
+        page2.size());
+    assertEquals("Second page should contain .beta and .delta",
         ImmutableList.of(".beta", ".delta"),
-        page2,
-        "Second page should contain .beta and .delta"
-    );
+        page2);
 
     // Test 4: Filter by "." and paginate - offset 4, limit 2
     List<String> page3 = restApp.restClient.getAllContexts(4, 2, ".");
-    assertEquals(
+    assertEquals("Third page should have 1 context",
         1,
-        page3.size(),
-        "Third page should have 1 context"
-    );
-    assertEquals(
+        page3.size());
+    assertEquals("Third page should contain .gamma",
         Collections.singletonList(".gamma"),
-        page3,
-        "Third page should contain .gamma"
-    );
+        page3);
 
     // Test 5: Filter by ".a" (should match .alpha) with pagination
     List<String> alphaPage = restApp.restClient.getAllContexts(0, 1, ".a");
-    assertEquals(
+    assertEquals("Filtering by '.a' with limit 1 should return .alpha",
         Collections.singletonList(".alpha"),
-        alphaPage,
-        "Filtering by '.a' with limit 1 should return .alpha"
-    );
+        alphaPage);
   }
 
   @Test
@@ -513,35 +483,27 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // Test 1: Null contextPrefix (should return all contexts)
     List<String> nullFilter = restApp.restClient.getAllContexts(0, -1, null);
-    assertEquals(
+    assertEquals("Null contextPrefix should return all contexts",
         ImmutableList.of(DEFAULT_CONTEXT, ".test"),
-        nullFilter,
-        "Null contextPrefix should return all contexts"
-    );
+        nullFilter);
 
     // Test 2: Very long non-matching prefix
     List<String> longPrefix = restApp.restClient.getAllContexts(
         0, -1, ".thisIsAVeryLongPrefixThatWillNeverMatch");
-    assertEquals(
+    assertEquals("Long non-matching prefix should return empty list",
         Collections.emptyList(),
-        longPrefix,
-        "Long non-matching prefix should return empty list"
-    );
+        longPrefix);
 
     // Test 3: Filter by "." - should return all contexts (all start with ".")
     List<String> dotPrefixCtx = restApp.restClient.getAllContexts(0, -1, ".");
-    assertEquals(
+    assertEquals("Prefix '.' should match all contexts as all contexts start with '.'",
         ImmutableList.of(DEFAULT_CONTEXT, ".test"),
-        dotPrefixCtx,
-        "Prefix '.' should match all contexts as all contexts start with '.'"
-    );
+        dotPrefixCtx);
 
     // Test 4: Case-sensitive matching - ".TEST" should not match ".test"
     List<String> upperCaseFilter = restApp.restClient.getAllContexts(0, -1, ".TEST");
-    assertEquals(
+    assertEquals("Context prefix filter should be case-sensitive",
         Collections.emptyList(),
-        upperCaseFilter,
-        "Context prefix filter should be case-sensitive"
-    );
+        upperCaseFilter);
   }
 }
