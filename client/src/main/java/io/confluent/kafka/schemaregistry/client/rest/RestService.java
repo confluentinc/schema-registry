@@ -917,9 +917,23 @@ public class RestService implements Closeable, Configurable {
 
   public Mode deleteSubjectMode(Map<String, String> requestProperties, String subject)
       throws IOException, RestClientException {
+    return deleteSubjectMode(requestProperties, subject, false);
+  }
+
+  public Mode deleteSubjectMode(Map<String, String> requestProperties, String subject,
+                                boolean recursive)
+      throws IOException, RestClientException {
+    UriBuilder builder = subject != null
+            ? UriBuilder.fromPath("/mode/{subject}")
+            : UriBuilder.fromPath("/mode");
+
+    if (recursive) {
+      builder.queryParam("recursive", "true");
+    }
+
     String path = subject != null
-            ? UriBuilder.fromPath("/mode/{subject}").build(subject).toString()
-            : "/mode";
+            ? builder.build(subject).toString()
+            : builder.build().toString();
 
     Mode response = httpRequest(path, "DELETE", null, requestProperties,
         DELETE_SUBJECT_MODE_RESPONSE_TYPE);
