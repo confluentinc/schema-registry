@@ -17,177 +17,88 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import org.apache.avro.Schema;
+import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import org.apache.kafka.common.config.types.Password;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLSession;
 import javax.security.auth.login.Configuration;
 import java.io.File;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+/**
+ * Kafka-based implementation of REST API SSL integration tests.
+ */
+public class RestApiSslTest extends AbstractRestApiSslTest {
 
-public class RestApiSslTest extends ClusterTestHarness {
+  private ClusterTestHarness harness;
+  private Properties sslProps = new Properties();
 
-  Properties props = new Properties();
-
-  public RestApiSslTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
+  @BeforeEach
+  public void setUpTest(TestInfo testInfo) throws Exception {
+    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name) {
+      @Override
+      public Properties getSchemaRegistryProperties() throws Exception {
+        return RestApiSslTest.this.getSchemaRegistryProperties();
+      }
+      
+      @Override
+      public String getSchemaRegistryProtocol() {
+        return "https";
+      }
+    };
+    harness.setUpTest(testInfo);
   }
 
-
-  @Test
-  public void testRegisterWithClientSecurity() throws Exception {
-    setupHostNameVerifier();
-
-    String subject = "testSubject";
-    Schema schema = AvroUtils.parseSchema("{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").rawSchema();
-
-    int expectedIdSchema1 = 1;
-
-    Map clientsslConfigs = new HashMap();
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_PROTOCOL_CONFIG,
-        "TLS");
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEY_PASSWORD_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG));
-    CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
-
-    assertEquals(
-        expectedIdSchema1,
-        schemaRegistryClient.register(subject, new AvroSchema(schema)),
-        "Registering should succeed"
-    );
-
+  @AfterEach
+  public void tearDown() throws Exception {
+    if (harness != null) {
+      harness.tearDown();
+    }
   }
-
-
-  @Test
-  public void testRegisterWithClientSecurityWithMinimalProperties() throws Exception {
-
-    setupHostNameVerifier();
-
-    String subject = "testSubject";
-    Schema schema = AvroUtils.parseSchema(
-        "{\"type\":\"record\","
-            + "\"name\":\"myrecord\","
-            + "\"fields\":"
-            + "[{\"type\":\"string\",\"name\":\"f2\"}]}").rawSchema();
-
-    int expectedIdSchema1 = 1;
-
-    Map clientsslConfigs = new HashMap();
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_LOCATION_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_PASSWORD_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_KEYSTORE_TYPE_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_LOCATION_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-    clientsslConfigs.put(
-        SchemaRegistryClientConfig.CLIENT_NAMESPACE + SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG,
-        props.get(SchemaRegistryConfig.SSL_TRUSTSTORE_TYPE_CONFIG));
-    CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(restApp.restClient, 10, clientsslConfigs);
-
-    assertEquals(
-        expectedIdSchema1,
-        schemaRegistryClient.register(subject, new AvroSchema(schema)),
-        "Registering should succeed"
-    );
-
-  }
-
 
   @Override
-  public Properties getSchemaRegistryProperties() {
+  protected SchemaRegistryTestHarness getHarness() {
+    return harness;
+  }
+
+  @Override
+  protected Properties getSslProperties() {
+    return sslProps;
+  }
+
+  protected Properties getSchemaRegistryProperties() {
     Configuration.setConfiguration(null);
-    props.put(
+    sslProps.put(
         SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG,
         "https"
     );
-    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+    sslProps.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
     try {
       File trustStoreFile = File.createTempFile("truststore", ".jks");
       trustStoreFile.deleteOnExit();
       List<X509Certificate> clientCerts = new ArrayList<>();
 
       List<KeyPair> keyPairs = new ArrayList<>();
-      props.putAll(
+      sslProps.putAll(
           SecureTestUtils.clientSslConfigsWithKeyStore(1, trustStoreFile, new Password
                   ("TrustPassword"), clientCerts,
               keyPairs
           ));
-      props.put(SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_CONFIG, SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_REQUIRED);
+      sslProps.put(SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_CONFIG, SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_REQUIRED);
 
     } catch (Exception e) {
       throw new RuntimeException("Exception creation SSL properties ", e);
     }
 
     // Use localhost instead of 0.0.0.0 to avoid 400 Invalid SNI
-    props.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
-        "://localhost:"
-        + schemaRegistryPort);
+    sslProps.put(SchemaRegistryConfig.LISTENERS_CONFIG, "https://localhost:" + getHarness().getSchemaRegistryPort());
 
-    return props;
+    return sslProps;
   }
-
-  @Override
-  public String getSchemaRegistryProtocol() {
-    return "https";
-  }
-
-  private void setupHostNameVerifier() {
-      // Create all-trusting host name verifier
-      HostnameVerifier allHostsValid = new HostnameVerifier() {
-        public boolean verify(String hostname, SSLSession session) {
-          return true;
-        }
-      };
-      // Install the all-trusting host verifier
-      HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
-  }
-
 }
