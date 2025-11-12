@@ -2260,9 +2260,9 @@ public abstract class AbstractRestApiTest {
     restApp().restClient.registerSchema(schema2, subject);
 
     restApp().restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
-    assertEquals(CompatibilityLevel.BACKWARD.name, restApp
+    assertEquals(CompatibilityLevel.BACKWARD.name, restApp()
         .restClient.getConfig(subject).getCompatibilityLevel(), "Compatibility Level Exists");
-    assertEquals(CompatibilityLevel.FULL.name, restApp
+    assertEquals(CompatibilityLevel.FULL.name, restApp()
         .restClient.getConfig(null).getCompatibilityLevel(), "Top Compatibility Level Exists");
     restApp().restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "2");
     try {
