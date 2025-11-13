@@ -1,0 +1,58 @@
+# GitOps Schema Federation Manager - Deployment Configuration
+#
+# This file defines Schema Registry regions and deployment rules
+
+regions:
+  # Local development - US West
+  us-west-local:
+    schemaRegistryUrl: http://localhost:8081
+    authType: none
+    mode: IMPORT
+    description: Local development Schema Registry (US West)
+
+  # Local development - EU Central
+  eu-central-local:
+    schemaRegistryUrl: http://localhost:8082
+    authType: none
+    mode: IMPORT
+    description: Local development Schema Registry (EU Central)
+
+  # Confluent Cloud (requires credentials in .env)
+  confluent-cloud:
+    schemaRegistryUrl: ${CCLOUD_SR_URL}
+    authType: basic
+    username: ${CCLOUD_SR_API_KEY}
+    password: ${CCLOUD_SR_API_SECRET}
+    mode: IMPORT
+    description: Confluent Cloud Schema Registry
+
+# Deployment Rules
+# Schemas are deployed based on subject patterns and contexts
+deploymentRules:
+  # Rule 1: Default context - all subjects to all regions
+  - context: default
+    subjects: ["*"]
+    regions:
+      - us-west-local
+      - eu-central-local
+      - confluent-cloud
+
+  # Rule 2: GDPR-related subjects only to EU and Cloud
+  - context: default
+    subjects: ["gdpr-*", "*-pii-*"]
+    regions:
+      - eu-central-local
+      - confluent-cloud
+
+  # Rule 3: Analytics context - US only
+  - context: analytics
+    subjects: ["*"]
+    regions:
+      - us-west-local
+
+  # Rule 4: Test context - local only (not cloud)
+  - context: test
+    subjects: ["*"]
+    regions:
+      - us-west-local
+      - eu-central-local
