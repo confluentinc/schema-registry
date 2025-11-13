@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
@@ -253,6 +254,21 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload)
       throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, payload, (Schema) null);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload, Schema readerSchema)
+      throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, payload,
+        writerAvroSchema -> readerSchema != null ? new AvroSchema(readerSchema) : null);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<AvroSchema, AvroSchema> writerToReaderSchemaFunc)
+      throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -270,16 +286,20 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
     AvroSchema schema = context.schemaForDeserialize();
-    Object result = context.read(schema,
-        specificAvroReaderSchema != null ? new AvroSchema(specificAvroReaderSchema) : null);
+    AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
+        ? writerToReaderSchemaFunc.apply(schema)
+        : specificAvroReaderSchema != null
+            ? new AvroSchema(specificAvroReaderSchema)
+            : null;
+    Object result = context.read(schema, readerAvroSchema);
 
     Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
         context.getSubject(), schema, result);
     if (schema.rawSchema().getType().equals(Schema.Type.RECORD)) {
-      return new GenericContainerWithVersion((GenericContainer) result, version);
+      return new GenericContainerWithVersion(schema, (GenericContainer) result, version);
     } else {
-      return new GenericContainerWithVersion(new NonRecordContainer(schema.rawSchema(), result),
-          version);
+      return new GenericContainerWithVersion(
+          schema, new NonRecordContainer(schema.rawSchema(), result), version);
     }
   }
 
@@ -534,26 +554,29 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           readerAvroSchema = writerAvroSchema;
         }
 
-        AvroSchemaUtils.setThreadLocalData(
-            readerAvroSchema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
-        try {
-          // First apply migration rules
-          if (!migrations.isEmpty()) {
-            result = executeMigrations(migrations, getSubject(), topic, headers, result);
-          }
+        if (!migrations.isEmpty() || (readerAvroSchema.ruleSet() != null
+            && !readerAvroSchema.ruleSet().getDomainRules().isEmpty())) {
+          AvroSchemaUtils.setThreadLocalData(
+              readerAvroSchema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+          try {
+            // First apply migration rules
+            if (!migrations.isEmpty()) {
+              result = executeMigrations(migrations, getSubject(), topic, headers, result);
+            }
 
-          if (result instanceof JsonNode) {
-            reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
-            result = AvroSchemaUtils.toObject(
-                (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
-          }
+            if (result instanceof JsonNode) {
+              reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
+              result = AvroSchemaUtils.toObject(
+                  (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
+            }
 
-          // Next apply domain rules
-          result = executeRules(
-              getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
-          );
-        } finally {
-          AvroSchemaUtils.clearThreadLocalData();
+            // Next apply domain rules
+            result = executeRules(
+                getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
+            );
+          } finally {
+            AvroSchemaUtils.clearThreadLocalData();
+          }
         }
 
         return result;

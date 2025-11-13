@@ -36,7 +36,7 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
   }
 
   @Override
-  protected SecurityProtocol getBrokerSecurityProtocol() {
+  public SecurityProtocol getBrokerSecurityProtocol() {
     return SecurityProtocol.SSL;
   }
 

@@ -174,7 +174,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.put(
         SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG,

@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.encryption;
 import static io.confluent.kafka.schemaregistry.encryption.EncryptionExecutor.CLOCK;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -239,6 +240,28 @@ public abstract class EncryptionExecutorTest {
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name").toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerBytes() throws Exception {
+    byte[] data = new byte[] {0x02, 0x03, 0x04};
+    AvroSchema avroSchema = new AvroSchema("\"bytes\"");
+    Rule rule = new Rule("rule1", null, null, null,
+        EncryptionExecutor.TYPE, null, null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, data);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    byte[] result = (byte[]) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertArrayEquals(data, result);
   }
 
   @Test

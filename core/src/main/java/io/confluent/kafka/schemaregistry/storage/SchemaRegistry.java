@@ -263,6 +263,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   void deleteSubjectMode(String subject) throws SchemaRegistryStoreException,
           OperationNotPermittedException;
 
+  default void deleteSubjectMode(String subject, boolean recursive)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {}
+
   RuleSetHandler getRuleSetHandler();
 
   void setRuleSetHandler(RuleSetHandler ruleSetHandler);
@@ -297,7 +300,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return null;
   }
 
-  default void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+  default void deleteSubjectModeOrForward(String subject, boolean recursive,
+                                          Map<String, String> headerProperties)
           throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
           OperationNotPermittedException, UnknownLeaderException {}
 

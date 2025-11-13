@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.CompatibilityLevel.FORWARD_TRANS
 import static io.confluent.kafka.schemaregistry.CompatibilityLevel.NONE;
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
+import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,6 +41,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -57,6 +59,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSubjectException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidVersionException;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
@@ -72,7 +75,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import org.apache.avro.Schema.Parser;
-import org.apache.avro.SchemaParseException;
 import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
@@ -282,7 +284,7 @@ public class RestApiTest extends ClusterTestHarness {
     try {
         new Parser().parse(badSchemaString);
         fail("Parsing invalid schema string should fail with SchemaParseException");
-    } catch (SchemaParseException spe) {
+    } catch (Exception spe) {
         expectedErrorMessage = spe.getMessage();
     }
 
@@ -832,10 +834,20 @@ public class RestApiTest extends ClusterTestHarness {
             .getMode()
     );
 
-    // We don't support deleting the mode for the default context
-    assertThrows(
-        RestClientException.class,
-        () -> restApp.restClient.deleteSubjectMode(defaultContext)
+    // Delete the mode for the default context - should succeed and revert to global mode
+    Mode deletedMode = restApp.restClient.deleteSubjectMode(defaultContext);
+    assertEquals(
+            READONLY.name(),
+            deletedMode.getMode(),
+            "Deleted mode should return the old mode");
+
+    // Verify mode reverts to global mode (IMPORT)
+    assertEquals(
+            READWRITE.name(),
+            restApp.restClient
+                    .getMode(null, true)
+                    .getMode(),
+            "Mode should revert to global mode after deleting default context mode"
     );
   }
 
@@ -959,12 +971,14 @@ public class RestApiTest extends ClusterTestHarness {
     String subject = "\rbad\nsubject\t";
     try {
       TestUtils.registerAndVerifySchema(restApp.restClient, schema, 1, subject);
-      fail("Registering invalid subject should fail with 400");
+      fail("Registering invalid subject should fail with "
+        + RestInvalidSubjectException.ERROR_CODE
+        + " (invalid subject)");
     } catch (RestClientException e) {
       // this is expected.
       assertEquals(
-          400,
-          e.getStatus(),
+          RestInvalidSubjectException.ERROR_CODE,
+          e.getErrorCode(),
           "Invalid subject shouldn't be registered"
       );
     }
@@ -2631,7 +2645,7 @@ public class RestApiTest extends ClusterTestHarness {
     } catch (RestClientException rce) {
       assertEquals(
           Errors.OPERATION_NOT_PERMITTED_ERROR_CODE, rce.getErrorCode(),
-          String.format("Subject %s in context" 
+          String.format("Subject %s in context"
           +" %s is in read-only mode", "testSubject2", context)
       );
     }
@@ -2687,13 +2701,13 @@ public class RestApiTest extends ClusterTestHarness {
   public void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
     String subject0 = "testSubject0";
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-                                                     + "\"name\":\"myrecord\","
-                                                     + "\"fields\":"
-                                                     + "[{\"type\":\"string\",\"name\":"
-                                                     + "\"f" + "\"},"
-                                                     + "{\"type\":\"string\",\"name\":"
-                                                     + "\"g\" , \"default\":\"d\"}"
-                                                     + "]}");
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":"
+        + "\"f" + "\"},"
+        + "{\"type\":\"string\",\"name\":"
+        + "\"g\" , \"default\":\"d\"}"
+        + "]}");
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
     request1.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "f"),
@@ -2784,12 +2798,12 @@ public class RestApiTest extends ClusterTestHarness {
 
     // remove reserved fields for subject0
     schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-                                        + "\"name\":\"myrecord\","
-                                        + "\"fields\":"
-                                        + "["
-                                        + "{\"type\":\"string\",\"name\":"
-                                        + "\"g\" , \"default\":\"d\"}"
-                                        + "]}");
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "["
+        + "{\"type\":\"string\",\"name\":"
+        + "\"g\" , \"default\":\"d\"}"
+        + "]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
     request2.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "g"),
@@ -2798,6 +2812,41 @@ public class RestApiTest extends ClusterTestHarness {
         RestClientException.class,
         () -> restApp.restClient.registerSchema(request2, subject0, false),
         "Fail registering because of removal of reserved fields"
+    );
+  }
+
+  @Test
+  public void testRegisterSchemaWithInvalidNamespace() throws RestClientException, IOException {
+    String subject0 = "testSubject0";
+    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
+                                                     + "\"name\":\"myrecord\","
+                                                     + "\"namespace\":\"a-bad.namespace\","
+                                                     + "\"fields\":"
+                                                     + "[{\"type\":\"string\",\"name\":"
+                                                     + "\"f" + "\"},"
+                                                     + "{\"type\":\"string\",\"name\":"
+                                                     + "\"g\" , \"default\":\"d\"}"
+                                                     + "]}");
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
+    assertThrows(
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject0, false),
+        "Fail registering subject0 because of global validateFields"
+    );
+
+    // global validateNames = false
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
+    configUpdateRequest.setValidateNames(false);
+    assertEquals(
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null),
+        "Updating config should succeed"
+    );
+    assertEquals(
+        1,
+        restApp.restClient.registerSchema(request1, subject0, false).getId(),
+        "Should register despite reserved fields"
     );
   }
 
@@ -3050,7 +3099,7 @@ public class RestApiTest extends ClusterTestHarness {
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties schemaRegistryProps = new Properties();
     schemaRegistryProps.put("response.http.headers.config",
             "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");

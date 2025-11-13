@@ -156,12 +156,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(AvroSchema.TYPE, response.getId(), response.getGuid());
       }
-      AvroSchemaUtils.setThreadLocalData(
-          schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
-      try {
-        object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      } finally {
-        AvroSchemaUtils.clearThreadLocalData();
+      if (schema.ruleSet() != null && !schema.ruleSet().getDomainRules().isEmpty()) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
       }
 
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey);
@@ -209,16 +211,17 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
-    DatumWriter<Object> writer = getDatumWriter(value, rawSchema);
+    DatumWriter<Object> writer;
+    writer = datumWriterCache.get(rawSchema,
+        () -> (DatumWriter<Object>) getDatumWriter(
+            value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
+    );
     writer.write(value, encoder);
     encoder.flush();
   }
 
-  protected DatumWriter<Object> getDatumWriter(Object value, Schema rawSchema)
-            throws ExecutionException {
-    return datumWriterCache.get(rawSchema,
-        () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
-            value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
-    );
+  protected DatumWriter<?> getDatumWriter(
+      Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
+    return AvroSchemaUtils.getDatumWriter(value, schema, useLogicalTypes, allowNull);
   }
 }
