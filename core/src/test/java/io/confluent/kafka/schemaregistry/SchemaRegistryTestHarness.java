@@ -15,20 +15,15 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import java.util.Properties;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 
 /**
  * Interface defining common operations needed by schema registry integration tests.
  * This allows tests to be written against non-Kafka-based implementations.
  */
 public interface SchemaRegistryTestHarness {
-  
-  /**
-   * Gets the broker list for Kafka connections.
-   * @return broker list string, or null if not applicable
-   */
-  String getBrokerList();
-  
   /**
    * Gets the REST application instance for making schema registry API calls.
    * @return RestApp instance
@@ -40,23 +35,40 @@ public interface SchemaRegistryTestHarness {
    * @return schema registry port number
    */
   Integer getSchemaRegistryPort();
-  
+
   /**
    * Chooses an available port for schema registry or other services.
    * @return available port number
    */
-  int choosePort();
+  default int choosePort() {
+    return choosePorts(1)[0];
+  }
+
+
+  /**
+   * Choose a number of random available ports
+   */
+  static int[] choosePorts(int count) {
+    try {
+      ServerSocket[] sockets = new ServerSocket[count];
+      int[] ports = new int[count];
+      for (int i = 0; i < count; i++) {
+        sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
+        ports[i] = sockets[i].getLocalPort();
+      }
+      for (int i = 0; i < count; i++) {
+        sockets[i].close();
+      }
+      return ports;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   /**
    * Gets the schema registry protocol (http or https).
    * @return protocol string
    */
   String getSchemaRegistryProtocol();
-  
-  /**
-   * Inject properties into broker configuration.
-   * @param props properties to inject
-   */
-  void injectProperties(Properties props);
 }
 
