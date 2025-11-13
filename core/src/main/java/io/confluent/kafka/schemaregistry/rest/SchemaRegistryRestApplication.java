@@ -37,10 +37,8 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.servlet.ServletContextHandler;
-import java.util.Arrays;
-import java.util.Collection;
-import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
@@ -72,10 +70,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
-    List<Handler.Singleton> schemaRegistryCustomHandlers =
+    List<HandlerWrapper> schemaRegistryCustomHandlers =
             schemaRegistry.getCustomHandler();
     if (schemaRegistryCustomHandlers != null) {
-      for (Handler.Singleton
+      for (HandlerWrapper
               schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
         // add all custom handlers after the security handler.
         // This is necessary for authentication to be applied before
@@ -237,52 +235,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
         }
       }
     }
-  }
-
-  // this is overridden mainly to log all handlers in the hierarchy
-  @Override
-  public Handler configureHandler() {
-    Handler handler = super.configureHandler();
-    logAllHandlers(handler);
-    return handler;
-  }
-
-  public static void logAllHandlers(Handler handler) {
-    StringBuilder handlerDetails = new StringBuilder();
-    logHandlerHierarchy(handler, handlerDetails, 0);
-    log.info("schema registry handler hierarchy:\n{}", handlerDetails);
-  }
-
-  private static void logHandlerHierarchy(
-      Handler handler, StringBuilder handlerDetails, int depth) {
-    if (handler == null) {
-      return;
-    }
-    // Add indentation based on depth
-    handlerDetails.append(createIndentation(depth));
-    handlerDetails.append("- ").append(handler.getClass().getName()).append("\n");
-    // If the handler is a wrapper, recurse
-    if (handler instanceof Handler.Singleton) {
-      Handler.Singleton wrapper = (Handler.Singleton) handler;
-      logHandlerHierarchy(wrapper.getHandler(), handlerDetails, depth + 1);
-    } else if (handler instanceof Handler.Sequence) {
-      // Recursively process each handler in the collection
-      for (Handler child : ((Handler.Sequence) handler).getHandlers()) {
-        logHandlerHierarchy(child, handlerDetails, depth + 1);
-      }
-    } else if (handler instanceof ServletContextHandler) {
-      // Print internal handlers of ServletContextHandler (if any)
-      ServletContextHandler contextHandler = (ServletContextHandler) handler;
-      if (contextHandler.getHandlers() != null) {
-        for (Handler child : contextHandler.getHandlers()) {
-          logHandlerHierarchy(child, handlerDetails, depth + 1);
-        }
-      }
-    }
-  }
-
-  private static String createIndentation(int depth) {
-    return "  ".repeat(Math.max(0, depth));
   }
 
   // for testing purpose only
