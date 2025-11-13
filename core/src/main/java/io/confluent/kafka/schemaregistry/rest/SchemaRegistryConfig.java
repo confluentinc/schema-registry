@@ -514,7 +514,7 @@ public class SchemaRegistryConfig extends RestConfig {
       + " TLS versions and cipher suites will be validated based on FIPS compliance requirement.";
   protected static final String ENABLE_FIPS_MODE_DOC =
       "The FIPS mode to enable on the server. Valid values are 'fips-140-2' and 'fips-140-3'."
-      + "This config is only applicable when FIPS is enabled.";
+      + " This config is only applicable when FIPS is enabled.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
