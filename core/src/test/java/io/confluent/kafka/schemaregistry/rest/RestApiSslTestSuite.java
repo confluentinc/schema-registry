@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -23,18 +22,11 @@ import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import org.apache.avro.Schema;
-import org.apache.kafka.common.config.types.Password;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSession;
-import javax.security.auth.login.Configuration;
-import java.io.File;
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
@@ -42,20 +34,20 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Abstract base class for REST API SSL integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for SSL REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiSslTest {
+public interface RestApiSslTestSuite {
 
   /**
    * Get the test harness.
    */
-  protected abstract SchemaRegistryTestHarness getHarness();
+  SchemaRegistryTestHarness getHarness();
 
   /**
    * Helper method to get the RestApp from the harness.
    */
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
@@ -63,10 +55,10 @@ public abstract class AbstractRestApiSslTest {
    * Get SSL properties for schema registry.
    * Override to provide SSL-specific configuration.
    */
-  protected abstract Properties getSslProperties();
+  Properties getSslProperties();
 
   @Test
-  public void testRegisterWithClientSecurity() throws Exception {
+  default void testRegisterWithClientSecurity() throws Exception {
     setupHostNameVerifier();
 
     String subject = "testSubject";
@@ -115,7 +107,7 @@ public abstract class AbstractRestApiSslTest {
 
 
   @Test
-  public void testRegisterWithClientSecurityWithMinimalProperties() throws Exception {
+  default void testRegisterWithClientSecurityWithMinimalProperties() throws Exception {
 
     setupHostNameVerifier();
 
@@ -158,7 +150,7 @@ public abstract class AbstractRestApiSslTest {
 
   }
 
-  protected void setupHostNameVerifier() {
+  default void setupHostNameVerifier() {
       // Create all-trusting host name verifier
       HostnameVerifier allHostsValid = new HostnameVerifier() {
         public boolean verify(String hostname, SSLSession session) {

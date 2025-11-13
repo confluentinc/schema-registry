@@ -18,44 +18,25 @@ package io.confluent.kafka.schemaregistry.rest.protobuf;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API Protobuf schema integration tests.
+ * ClusterTestHarness implementation of Protobuf schema REST API integration tests.
  */
-public class RestApiTest extends AbstractRestApiTest {
+public class RestApiTest extends ClusterTestHarness implements RestApiTestSuite {
 
-  private ClusterTestHarness harness;
-
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiTest.this.getSchemaRegistryProperties();
-      }
-    };
-    harness.setUpTest(testInfo);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  public RestApiTest() {
+    super(1, true);
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.setProperty("schema.providers", ProtobufSchemaProvider.class.getName());
     return props;

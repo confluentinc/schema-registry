@@ -22,46 +22,43 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 
 import java.util.Collections;
 
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
 import org.junit.jupiter.api.Test;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Abstract base class for REST API mode integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for mode REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiModeTest {
+public interface RestApiModeTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
-  private static String SCHEMA_STRING = AvroUtils.parseSchema(
+  String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
           + "\"name\":\"myrecord\","
           + "\"fields\":"
           + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
       .canonicalString();
 
-  private static String SCHEMA2_STRING = AvroUtils.parseSchema(
+  String SCHEMA2_STRING = AvroUtils.parseSchema(
           "{\"type\":\"record\","
               + "\"name\":\"myrecord\","
               + "\"fields\":"
               + "[{\"type\":\"int\",\"name\":\"f1\"}]}")
       .canonicalString();
 
-  private static String SCHEMA_WITH_DECIMAL = AvroUtils.parseSchema(
+  String SCHEMA_WITH_DECIMAL = AvroUtils.parseSchema(
           "{\n"
               + "    \"type\": \"record\",\n"
               + "    \"name\": \"MyRecord\",\n"
@@ -83,7 +80,7 @@ public abstract class AbstractRestApiModeTest {
               + "}")
       .canonicalString();
 
-  private static String SCHEMA_WITH_DECIMAL2 = AvroUtils.parseSchema(
+  String SCHEMA_WITH_DECIMAL2 = AvroUtils.parseSchema(
           "{\n"
               + "    \"type\": \"record\",\n"
               + "    \"name\": \"MyRecord\",\n"
@@ -106,7 +103,7 @@ public abstract class AbstractRestApiModeTest {
       .canonicalString();
 
   @Test
-  public void testReadOnlyMode() throws Exception {
+  default void testReadOnlyMode() throws Exception {
     String subject = "testSubject";
     String mode = "READONLY";
 
@@ -130,7 +127,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testReadWriteMode() throws Exception {
+  default void testReadWriteMode() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
 
@@ -161,7 +158,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testImportMode() throws Exception {
+  default void testImportMode() throws Exception {
     String subject = "testSubject";
     String mode = "IMPORT";
 
@@ -180,7 +177,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testImportModeWithoutId() throws Exception {
+  default void testImportModeWithoutId() throws Exception {
     String subject = "testSubject";
     String mode = "IMPORT";
 
@@ -204,7 +201,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testClearMode() throws Exception {
+  default void testClearMode() throws Exception {
     String mode = "READONLY";
 
     // set mode to read only
@@ -224,7 +221,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testInvalidImportMode() throws Exception {
+  default void testInvalidImportMode() throws Exception {
     String subject = "testSubject";
     String mode = "IMPORT";
 
@@ -260,7 +257,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRegisterSchemaWithNoIdAfterImport() throws Exception {
+  default void testRegisterSchemaWithNoIdAfterImport() throws Exception {
     // Represents a production use case where auto-registering clients
     // do not fail when SR is in import mode and the schema already exists
     String subject = "testSubject";
@@ -294,7 +291,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRegisterSchemaWithDifferentIdAfterImport() throws Exception {
+  default void testRegisterSchemaWithDifferentIdAfterImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
 
@@ -330,7 +327,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRegisterSchemaWithSameIdAfterImport() throws Exception {
+  default void testRegisterSchemaWithSameIdAfterImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
 
@@ -383,7 +380,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRegisterSchemaWithSameIdButWithMetadataAfterImport() throws Exception {
+  default void testRegisterSchemaWithSameIdButWithMetadataAfterImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
 
@@ -452,7 +449,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testImportModeWithEquivalentSchemaDifferentId() throws Exception {
+  default void testImportModeWithEquivalentSchemaDifferentId() throws Exception {
     String subject = "testSubject";
     String mode = "IMPORT";
 
@@ -490,7 +487,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testImportModeWithSameSchemaDifferentId() throws Exception {
+  default void testImportModeWithSameSchemaDifferentId() throws Exception {
     String subject = "testSubject";
     String mode = "IMPORT";
 
@@ -528,7 +525,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testImportModeWithSameSchemaDifferentIdAndSubject() throws Exception {
+  default void testImportModeWithSameSchemaDifferentIdAndSubject() throws Exception {
     String subject = "testSubject";
     String subject2 = "testSubject2";
     String mode = "IMPORT";
@@ -571,7 +568,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRegisterIncompatibleSchemaDuringImport() throws Exception {
+  default void testRegisterIncompatibleSchemaDuringImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
 
@@ -621,7 +618,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testGlobalContextWithReadOnlyMode() throws Exception {
+  default void testGlobalContextWithReadOnlyMode() throws Exception {
     String subject = "testSubject";
     String mode = "READONLY";
 
@@ -648,7 +645,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testDeleteGlobalMode() throws Exception {
+  default void testDeleteGlobalMode() throws Exception {
     String mode = "READONLY";
 
     // set global mode to read only
@@ -676,7 +673,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testDeleteSubjectModeAfterGlobalMode() throws Exception {
+  default void testDeleteSubjectModeAfterGlobalMode() throws Exception {
     String subject = "testSubject";
     String globalMode = "READONLY";
     String subjectMode = "READWRITE";
@@ -710,7 +707,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRecursiveDeleteContextMode() throws Exception {
+  default void testRecursiveDeleteContextMode() throws Exception {
     String context = ":.mycontext:";
     String subject1 = ":.mycontext:subject1";
     String subject2 = ":.mycontext:subject2";
@@ -790,7 +787,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testNonRecursiveDeleteContextModeDoesNotAffectSubjects() throws Exception {
+  default void testNonRecursiveDeleteContextModeDoesNotAffectSubjects() throws Exception {
     String context = ":.mycontext:";
     String subject1 = ":.mycontext:subject1";
     String subject2 = ":.mycontext:subject2";
@@ -848,7 +845,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRecursiveDeleteGlobalMode() throws Exception {
+  default void testRecursiveDeleteGlobalMode() throws Exception {
     String subject1 = "subject1";
     String subject2 = "subject2";
     String subject3 = "subject3";
@@ -924,7 +921,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRecursiveDeleteContextModeWhenContextModeNotSet() throws Exception {
+  default void testRecursiveDeleteContextModeWhenContextModeNotSet() throws Exception {
     String context = ":.mycontext:";
     String subject1 = ":.mycontext:subject1";
     String subject2 = ":.mycontext:subject2";
@@ -982,7 +979,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRecursiveDeleteMixedContextAndSubjects() throws Exception {
+  default void testRecursiveDeleteMixedContextAndSubjects() throws Exception {
     String context = ":.mycontext:";
     String subject1 = ":.mycontext:subject1";
     String subject2 = ":.mycontext:subject2";
@@ -1060,7 +1057,7 @@ public abstract class AbstractRestApiModeTest {
   }
 
   @Test
-  public void testRecursiveDeleteDoesNotAffectOtherContexts() throws Exception {
+  default void testRecursiveDeleteDoesNotAffectOtherContexts() throws Exception {
     String context1 = ":.context1:";
     String context2 = ":.context2:";
     String subject1 = ":.context1:subject1";

@@ -17,45 +17,31 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API register schema tags integration tests.
+ * ClusterTestHarness implementation of register schema tags REST API integration tests.
  */
-public class RestApiRegisterSchemaTagsTest extends AbstractRestApiRegisterSchemaTagsTest {
+public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness implements RestApiRegisterSchemaTagsTestSuite {
 
-  private ClusterTestHarness harness;
+  public RestApiRegisterSchemaTagsTest() {
+    super(1, true);
+  }
 
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiRegisterSchemaTagsTest.this.getSchemaRegistryProperties();
-      }
-    };
-    harness.setUpTest(testInfo);
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     setupRuleSetHandler();
   }
 
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  @Override
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
-  }
-
-  @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     return new Properties();
   }
 }

@@ -18,44 +18,25 @@ package io.confluent.kafka.schemaregistry.rest;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API metadata encoder integration tests.
+ * ClusterTestHarness implementation of metadata encoder REST API integration tests.
  */
-public class RestApiMetadataEncoderTest extends AbstractRestApiMetadataEncoderTest {
+public class RestApiMetadataEncoderTest extends ClusterTestHarness implements RestApiMetadataEncoderTestSuite {
 
-  private ClusterTestHarness harness;
-
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiMetadataEncoderTest.this.getSchemaRegistryProperties();
-      }
-    };
-    harness.setUpTest(testInfo);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  public RestApiMetadataEncoderTest() {
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     return props;

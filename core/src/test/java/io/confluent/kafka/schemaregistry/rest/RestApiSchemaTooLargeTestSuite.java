@@ -22,24 +22,21 @@ import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
 /**
- * Abstract base class for REST API schema-too-large integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for schema-too-large REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiSchemaTooLargeTest {
+public interface RestApiSchemaTooLargeTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
-  protected abstract void injectProperties(Properties props);
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
-  private static final String schema =
+  String schema =
       "{\"namespace\": \"namespace\",\n"
           + " \"type\": \"record\",\n"
           + " \"name\": \"test\",\n"
@@ -65,7 +62,7 @@ public abstract class AbstractRestApiSchemaTooLargeTest {
           + "}";
 
   @Test
-  public void testSchemaTooLarge() throws Exception {
+  default void testSchemaTooLarge() throws Exception {
     String subject = "testTopic1";
     try {
       restApp().restClient.registerSchema(schema, subject);

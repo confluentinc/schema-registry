@@ -51,24 +51,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Abstract base class for REST API JSON schema integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for JSON schema REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiTest {
+public interface RestApiTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
-  private static final Random random = new Random();
+  Random random = new Random();
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  ObjectMapper MAPPER = new ObjectMapper();
 
   @Test
-  public void testBasic() throws Exception{
+  default void testBasic() throws Exception{
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
     int schemasInSubject1 = 10;
@@ -144,7 +143,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaReferences() throws Exception {
+  default void testSchemaReferences() throws Exception {
     Map<String, String> schemas = getJsonSchemaWithReferences();
     String subject = "reference";
     registerAndVerifySchema(restApp().restClient, schemas.get("ref.json"), 1, subject);
@@ -222,7 +221,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaMissingReferences() throws Exception {
+  default void testSchemaMissingReferences() throws Exception {
     assertThrows(RestClientException.class, () -> {
       Map<String, String> schemas = getJsonSchemaWithReferences();
 
@@ -235,7 +234,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaNormalization() throws Exception {
+  default void testSchemaNormalization() throws Exception {
     String subject1 = "testSubject1";
 
     String reference1 = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
@@ -291,7 +290,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testBad() throws Exception {
+  default void testBad() throws Exception {
     String subject1 = "testTopic1";
     List<String> allSubjects = new ArrayList<String>();
 
@@ -334,7 +333,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testIncompatibleSchema() throws Exception {
+  default void testIncompatibleSchema() throws Exception {
     String subject = "testSubject";
 
     // Make two incompatible schemas - field 'myField2' has different types
@@ -393,7 +392,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testConfluentVersion() throws Exception {
+  default void testConfluentVersion() throws Exception {
     String subject = "test";
     String schemaString = "{\"id\":\"urn:jsonschema:com:MySchema\",\"properties\":{\"myEnum\":{\"enum\":[\"YES_VALUE\",\"NO_VALUE\"],\"type\":\"string\"}},\"type\":\"object\"}";
 

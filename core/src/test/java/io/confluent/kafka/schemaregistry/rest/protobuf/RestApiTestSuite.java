@@ -55,22 +55,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Abstract base class for REST API Protobuf schema integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for Protobuf schema REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiTest {
+public interface RestApiTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
-  private static final Random random = new Random();
+  Random random = new Random();
 
   @Test
-  public void testBasic() throws Exception{
+  default void testBasic() throws Exception{
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
     int schemasInSubject1 = 10;
@@ -146,7 +145,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaReferences() throws Exception {
+  default void testSchemaReferences() throws Exception {
     Map<String, String> schemas = getProtobufSchemaWithDependencies();
     String subject = "confluent/meta.proto";
     registerAndVerifySchema(restApp().restClient, schemas.get("confluent/meta.proto"), 1, subject);
@@ -214,7 +213,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaReferencesPkg() throws Exception {
+  default void testSchemaReferencesPkg() throws Exception {
     String msg1 = "syntax = \"proto3\";\n" +
         "package pkg1;\n" +
         "\n" +
@@ -254,7 +253,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaMissingReferences() throws Exception {
+  default void testSchemaMissingReferences() throws Exception {
     assertThrows(RestClientException.class, () -> {
       Map<String, String> schemas = getProtobufSchemaWithDependencies();
 
@@ -267,7 +266,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testIncompatibleSchema() throws Exception {
+  default void testIncompatibleSchema() throws Exception {
     String subject = "testSubject";
 
     // Make two incompatible schemas - field 'myField2' has different types
@@ -324,7 +323,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaNormalization() throws Exception {
+  default void testSchemaNormalization() throws Exception {
     String subject1 = "testSubject1";
 
     String msg1 = "syntax = \"proto3\";\n" +
@@ -417,7 +416,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testBad() throws Exception {
+  default void testBad() throws Exception {
     String subject1 = "testTopic1";
     List<String> allSubjects = new ArrayList<String>();
 
@@ -460,7 +459,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testCustomOption() throws Exception {
+  default void testCustomOption() throws Exception {
     String subject = "test-proto";
     String enumOptionSchemaString = "syntax = \"proto3\";\n"
         + "\n"
@@ -495,7 +494,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsBasic() throws Exception {
+  default void testRegisterSchemaTagsBasic() throws Exception {
     String subject = "test";
     String schemaString = "syntax = \"proto3\";\n" +
         "package com.example;\n" +
@@ -563,7 +562,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsBasicDeprecated() throws Exception {
+  default void testRegisterSchemaTagsBasicDeprecated() throws Exception {
     String subject = "test";
     String schemaString = "syntax = \"proto3\";\n" +
         "package com.example;\n" +
@@ -631,7 +630,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testConfluentVersion() throws Exception {
+  default void testConfluentVersion() throws Exception {
     String subject = "test";
     String schemaString = "syntax = \"proto3\";\n" +
         "package com.example;\n" +

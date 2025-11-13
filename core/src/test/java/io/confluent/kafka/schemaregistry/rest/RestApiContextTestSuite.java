@@ -31,34 +31,29 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
+
 import org.junit.jupiter.api.Test;
 
 /**
- * Abstract base class for REST API context integration tests.
+ * Interface for context REST API integration tests.
  * Concrete subclasses provide the specific test harness implementation.
  */
-public abstract class AbstractRestApiContextTest {
+public interface RestApiContextTestSuite {
 
   /**
    * Get the test harness.
    */
-  protected abstract SchemaRegistryTestHarness getHarness();
-
-  /**
-   * Get schema registry properties for the specific implementation.
-   */
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
 
   /**
    * Helper method to get the RestApp from the harness.
    */
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
   @Test
-  public void testQualifiedSubjects() throws Exception{
+  default void testQualifiedSubjects() throws Exception{
     String subject1 = ":.ctx1:testTopic1";
     String subject2 = ":.ctx2:testTopic2";
     String subject3 = ":.ctx3:testTopic1";
@@ -249,7 +244,7 @@ public abstract class AbstractRestApiContextTest {
   }
 
   @Test
-  public void testContextPaths() throws Exception {
+  default void testContextPaths() throws Exception {
     RestService restClient1 = new RestService(restApp().restConnect + "/contexts/.ctx1");
     RestService restClient2 = new RestService(restApp().restConnect + "/contexts/.ctx2");
     RestService restClient3 = new RestService(restApp().restConnect + "/contexts/:.:");
@@ -481,7 +476,7 @@ public abstract class AbstractRestApiContextTest {
   }
 
   @Test
-  public void testContextPrefixFilter() throws Exception {
+  default void testContextPrefixFilter() throws Exception {
     // Register schemas in multiple contexts to create test data
     String subject1 = ":.prod:testSubject1";
     String subject2 = ":.prod-eu:testSubject2";
@@ -556,7 +551,7 @@ public abstract class AbstractRestApiContextTest {
   }
 
   @Test
-  public void testContextPrefixFilterWithPagination() throws Exception {
+  default void testContextPrefixFilterWithPagination() throws Exception {
     // Register schemas in multiple contexts
     String subject1 = ":.alpha:test";
     String subject2 = ":.beta:test";
@@ -627,7 +622,7 @@ public abstract class AbstractRestApiContextTest {
   }
 
   @Test
-  public void testContextPrefixFilterEdgeCases() throws Exception {
+  default void testContextPrefixFilterEdgeCases() throws Exception {
     // Create a context
     String subject = ":.test:subject";
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(1);

@@ -77,7 +77,7 @@ import scala.collection.Seq;
  */
 @Tag("IntegrationTest")
 @DisplayNameGeneration(AddKraftQuorum.class)
-public class ClusterTestHarness implements SchemaRegistryTestHarness {
+public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(ClusterTestHarness.class);
 
@@ -199,7 +199,10 @@ public class ClusterTestHarness implements SchemaRegistryTestHarness {
     return new Properties();
   }
 
-  @Override
+  /**
+   * Inject properties into broker configuration.
+   * @param props properties to inject
+   */
   public void injectProperties(Properties props) {
     // Make sure that broker only role is "broker"
     props.setProperty("process.roles", "broker");
@@ -250,7 +253,10 @@ public class ClusterTestHarness implements SchemaRegistryTestHarness {
     return Time.SYSTEM;
   }
 
-  @Override
+  /**
+   * Gets the broker list for Kafka connections.
+   * @return broker list string, or null if not applicable
+   */
   public String getBrokerList() {
     return brokerList;
   }

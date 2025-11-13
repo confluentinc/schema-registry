@@ -51,28 +51,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import java.util.Properties;
 
 /**
- * Abstract base class for REST API compatibility integration tests.
+ * Interface for compatibility REST API integration tests.
  * Concrete subclasses provide the specific test harness implementation.
  */
-public abstract class AbstractRestApiCompatibilityTest {
+public interface RestApiCompatibilityTestSuite {
 
   /**
    * Get the test harness.
    */
-  protected abstract SchemaRegistryTestHarness getHarness();
-
-  /**
-   * Get schema registry properties for the specific implementation.
-   */
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
 
   /**
    * Helper method to get the RestApp from the harness.
    */
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
@@ -81,7 +75,7 @@ public abstract class AbstractRestApiCompatibilityTest {
    * Default implementation sets up a pass-through RuleSetHandler.
    * Override to customize or skip.
    */
-  protected void setupRuleSetHandler() {
+  default void setupRuleSetHandler() {
     restApp().schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
@@ -98,7 +92,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testCompatibility() throws Exception {
+  default void testCompatibility() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -164,7 +158,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testCompatibilityLevelChangeToNone() throws Exception {
+  default void testCompatibilityLevelChangeToNone() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -215,7 +209,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testCompatibilityLevelChangeToBackward() throws Exception {
+  default void testCompatibilityLevelChangeToBackward() throws Exception {
     String subject = "testSubject";
 
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -313,7 +307,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testCompatibilityGroup() throws Exception {
+  default void testCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -383,7 +377,7 @@ public abstract class AbstractRestApiCompatibilityTest {
 
 
   @Test
-  public void testAddCompatibilityGroup() throws Exception {
+  default void testAddCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -469,7 +463,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testClearCompatibilityGroup() throws Exception {
+  default void testClearCompatibilityGroup() throws Exception {
     String subject = "testSubject";
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
@@ -494,7 +488,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testConfigMetadata() throws Exception {
+  default void testConfigMetadata() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -644,7 +638,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testConfigRuleSet() throws Exception {
+  default void testConfigRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -819,7 +813,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testSchemaMetadata() throws Exception {
+  default void testSchemaMetadata() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -854,7 +848,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testSchemaRuleSet() throws Exception {
+  default void testSchemaRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -889,7 +883,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testCompareAndSetVersion() throws Exception {
+  default void testCompareAndSetVersion() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -935,7 +929,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testConfigInvalidRuleSet() throws Exception {
+  default void testConfigInvalidRuleSet() throws Exception {
     Rule r1 = new Rule("foo", null, null, RuleMode.READ, "IGNORE", null, null, null, null, null, false);
     List<Rule> rules = Collections.singletonList(r1);
     // Add READ rule to migrationRules
@@ -976,7 +970,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testRegisterInvalidRuleSet() throws Exception {
+  default void testRegisterInvalidRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -1003,7 +997,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testRegisterBadDefaultWithNormalizeConfig() throws Exception {
+  default void testRegisterBadDefaultWithNormalizeConfig() throws Exception {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
@@ -1046,7 +1040,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testSubjectAlias() throws Exception {
+  default void testSubjectAlias() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -1075,7 +1069,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testSubjectAliasWithSlash() throws Exception {
+  default void testSubjectAliasWithSlash() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -1104,7 +1098,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testSubjectAliasWithContext() throws Exception {
+  default void testSubjectAliasWithContext() throws Exception {
     RestService restClient1 = new RestService(restApp().restConnect + "/contexts/.mycontext");
     RestService restClient2 = new RestService(restApp().restConnect + "/contexts/.mycontext2");
 
@@ -1134,7 +1128,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testGlobalAliasNotUsed() throws Exception {
+  default void testGlobalAliasNotUsed() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -1164,7 +1158,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testGetSchemasWithAliases() throws Exception {
+  default void testGetSchemasWithAliases() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -1330,7 +1324,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testGetSchemasWithAliasesAndContextWildcard() throws Exception {
+  default void testGetSchemasWithAliasesAndContextWildcard() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro
@@ -1501,7 +1495,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testRegisterEmptyRuleSet() throws Exception {
+  default void testRegisterEmptyRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -1540,7 +1534,7 @@ public abstract class AbstractRestApiCompatibilityTest {
   }
 
   @Test
-  public void testGlobalContextWithNone() throws Exception {
+  default void testGlobalContextWithNone() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro

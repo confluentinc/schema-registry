@@ -45,22 +45,20 @@ import java.util.Collections;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import java.util.Properties;
 
 /**
- * Abstract base class for REST API register schema tags integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for register schema tags REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiRegisterSchemaTagsTest {
+public interface RestApiRegisterSchemaTagsTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
-  protected void setupRuleSetHandler() {
+  default void setupRuleSetHandler() {
     restApp().schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
@@ -79,14 +77,14 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
     });
   }
 
-  public final String schemaString = "{" +
+  String schemaString = "{" +
       "\"type\":\"record\"," +
       "\"name\":\"myrecord\"," +
       "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}]" +
       "}";
 
   @Test
-  public void testRegisterSchemaTagsBasic() throws Exception {
+  default void testRegisterSchemaTagsBasic() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -208,7 +206,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaWithoutNewVersionInput() throws Exception {
+  default void testRegisterSchemaWithoutNewVersionInput() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -252,7 +250,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsInDiffContext() throws Exception {
+  default void testRegisterSchemaTagsInDiffContext() throws Exception {
     String subject = ":.ctx:testSubject";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -278,7 +276,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsWithInvalidSchema() throws Exception {
+  default void testRegisterSchemaTagsWithInvalidSchema() throws Exception {
     // subject doesn't exist
     RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest(new AvroSchema(schemaString));
     tagSchemaRequest.setVersion(2);
@@ -306,7 +304,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsWithInvalidTags() throws Exception {
+  default void testRegisterSchemaTagsWithInvalidTags() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -325,7 +323,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsBasicDeprecated() throws Exception {
+  default void testRegisterSchemaTagsBasicDeprecated() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -383,7 +381,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaWithoutNewVersionInputDeprecated() throws Exception {
+  default void testRegisterSchemaWithoutNewVersionInputDeprecated() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -427,7 +425,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsInDiffContextDeprecated() throws Exception {
+  default void testRegisterSchemaTagsInDiffContextDeprecated() throws Exception {
     String subject = ":.ctx:testSubject";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -453,7 +451,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsWithInvalidSchemaDeprecated() throws Exception {
+  default void testRegisterSchemaTagsWithInvalidSchemaDeprecated() throws Exception {
     // subject doesn't exist
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(2);
@@ -497,7 +495,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsWithInvalidTagsDeprecated() throws Exception {
+  default void testRegisterSchemaTagsWithInvalidTagsDeprecated() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 
@@ -516,7 +514,7 @@ public abstract class AbstractRestApiRegisterSchemaTagsTest {
   }
 
   @Test
-  public void testRegisterSchemaTagsIncrementalRuleSetDeprecated() throws Exception {
+  default void testRegisterSchemaTagsIncrementalRuleSetDeprecated() throws Exception {
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemaString, 1, subject);
 

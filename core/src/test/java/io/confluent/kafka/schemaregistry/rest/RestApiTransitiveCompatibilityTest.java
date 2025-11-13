@@ -18,44 +18,25 @@ package io.confluent.kafka.schemaregistry.rest;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API transitive compatibility integration tests.
+ * ClusterTestHarness implementation of transitive compatibility REST API integration tests.
  */
-public class RestApiTransitiveCompatibilityTest extends AbstractRestApiTransitiveCompatibilityTest {
+public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness implements RestApiTransitiveCompatibilityTestSuite {
 
-  private ClusterTestHarness harness;
-
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD_TRANSITIVE.name) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiTransitiveCompatibilityTest.this.getSchemaRegistryProperties();
-      }
-    };
-    harness.setUpTest(testInfo);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  public RestApiTransitiveCompatibilityTest() {
+    super(1, true, CompatibilityLevel.BACKWARD_TRANSITIVE.name);
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     return new Properties();
   }
 }

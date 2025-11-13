@@ -17,54 +17,26 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API schema-too-large integration tests.
+ * ClusterTestHarness implementation of schema-too-large REST API integration tests.
  */
-public class RestApiSchemaTooLargeTest extends AbstractRestApiSchemaTooLargeTest {
+public class RestApiSchemaTooLargeTest extends ClusterTestHarness implements RestApiSchemaTooLargeTestSuite {
 
-  private ClusterTestHarness harness;
-
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true){
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiSchemaTooLargeTest.this.getSchemaRegistryProperties();
-      }
-      
-      @Override
-      public void injectProperties(Properties props) {
-        RestApiSchemaTooLargeTest.this.injectProperties(props);
-      }
-    };
-    harness.setUpTest(testInfo);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  public RestApiSchemaTooLargeTest() {
+    super(1, true);
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
-    return new Properties();
-  }
-
-  @Override
-  protected void injectProperties(Properties props) {
+  public void injectProperties(Properties props) {
+    super.injectProperties(props);
     // Lower the message max bytes to induce schema too large exception
     props.setProperty("message.max.bytes", "900");
   }

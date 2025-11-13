@@ -15,28 +15,25 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import org.junit.jupiter.api.Test;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Abstract base class for REST API transitive compatibility integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for transitive compatibility REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiTransitiveCompatibilityTest {
+public interface RestApiTransitiveCompatibilityTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
@@ -59,7 +56,7 @@ public abstract class AbstractRestApiTransitiveCompatibilityTest {
   
   /* Confirm that removing a default in from a column that was added earlier is not compatible. */
   @Test
-  public void testCompatibility() throws Exception{
+  default void testCompatibility() throws Exception{
     String subject = "testSubject";
 
     // register a valid avro
@@ -95,7 +92,7 @@ public abstract class AbstractRestApiTransitiveCompatibilityTest {
   
   /* Confirm that removing a default in isolation is compatible. */
   @Test
-  public void validateTransitiveEffect() throws Exception {
+  default void validateTransitiveEffect() throws Exception {
     String subject = "testSubject";
 
     // register a valid avro

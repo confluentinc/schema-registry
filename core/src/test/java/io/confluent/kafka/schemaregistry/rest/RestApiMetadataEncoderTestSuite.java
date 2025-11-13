@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
@@ -35,25 +34,23 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import org.junit.jupiter.api.Test;
 
 /**
- * Abstract base class for REST API metadata encoder integration tests.
- * Concrete subclasses provide the specific test harness implementation.
+ * Interface for metadata encoder REST API integration tests with default test implementations.
+ * Implementing classes must provide test harness implementation.
  */
-public abstract class AbstractRestApiMetadataEncoderTest {
+public interface RestApiMetadataEncoderTestSuite {
 
-  protected abstract SchemaRegistryTestHarness getHarness();
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  SchemaRegistryTestHarness getHarness();
   
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
-  private static String SCHEMA_STRING = AvroUtils.parseSchema(
+  String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
           + "\"name\":\"myrecord\","
           + "\"fields\":"
@@ -61,7 +58,7 @@ public abstract class AbstractRestApiMetadataEncoderTest {
       .canonicalString();
 
   @Test
-  public void testRegisterSchemaWithSensitiveMetadata() throws Exception {
+  default void testRegisterSchemaWithSensitiveMetadata() throws Exception {
     String subject = "testSubject";
 
     Map<String, String> properties = new HashMap<>();
@@ -86,7 +83,7 @@ public abstract class AbstractRestApiMetadataEncoderTest {
   }
 
   @Test
-  public void testMissingEncoder() throws Exception {
+  default void testMissingEncoder() throws Exception {
     String subject = "testSubject";
 
     Map<String, String> properties = new HashMap<>();

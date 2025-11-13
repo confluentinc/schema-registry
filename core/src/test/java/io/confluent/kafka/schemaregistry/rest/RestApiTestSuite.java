@@ -79,30 +79,30 @@ import org.apache.avro.Schema.Parser;
 import org.junit.jupiter.api.Test;
 
 /**
- * Abstract base class for REST API integration tests.
+ * Interface for REST API integration tests.
  * Concrete subclasses provide the specific test harness implementation.
  */
-public abstract class AbstractRestApiTest {
+public interface RestApiTestSuite {
 
   /**
    * Get the test harness.
    */
-  protected abstract SchemaRegistryTestHarness getHarness();
+  SchemaRegistryTestHarness getHarness();
 
   /**
    * Get schema registry properties for the specific implementation.
    */
-  protected abstract Properties getSchemaRegistryProperties() throws Exception;
+  Properties getSchemaRegistryProperties() throws Exception;
 
   /**
    * Helper method to get the RestApp from the harness.
    */
-  protected RestApp restApp() {
+  default RestApp restApp() {
     return getHarness().getRestApp();
   }
 
   @Test
-  public void testBasic() throws Exception {
+  default void testBasic() throws Exception {
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
     int schemasInSubject1 = 10;
@@ -248,7 +248,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterSameSchemaOnDifferentSubject() throws Exception {
+  default void testRegisterSameSchemaOnDifferentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     int id1 = restApp().restClient.registerSchema(schema, "subject1");
     int id2 = restApp().restClient.registerSchema(schema, "subject2");
@@ -259,7 +259,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterBadDefault() throws Exception {
+  default void testRegisterBadDefault() throws Exception {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
@@ -289,7 +289,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterInvalidSchemaBadType() throws Exception {
+  default void testRegisterInvalidSchemaBadType() throws Exception {
     String subject = "testSubject";
 
     //Invalid Field Type 'str'
@@ -318,7 +318,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterInvalidSchemaBadReference() throws Exception {
+  default void testRegisterInvalidSchemaBadReference() throws Exception {
     String subject = "testSubject";
 
     //Invalid Reference
@@ -340,7 +340,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterBadReferenceInContext() throws Exception {
+  default void testRegisterBadReferenceInContext() throws Exception {
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
     String subject = "testSubject";
@@ -372,11 +372,11 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterDiffSchemaType() throws Exception {
+  default void testRegisterDiffSchemaType() throws Exception {
     String subject = "testSubject";
     String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTest.getRandomJsonSchemas(1).get(0);
-    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTest.getRandomProtobufSchemas(1).get(0);
+    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTestSuite.getRandomJsonSchemas(1).get(0);
+    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTestSuite.getRandomProtobufSchemas(1).get(0);
 
     restApp().restClient.updateCompatibility(NONE.name, subject);
 
@@ -397,7 +397,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterDiffContext() throws Exception {
+  default void testRegisterDiffContext() throws Exception {
     List<String> avroSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
     String subject = "testSubject";
@@ -436,7 +436,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testImportDifferentSchemaOnSameID() throws Exception {
+  default void testImportDifferentSchemaOnSameID() throws Exception {
     String schema1 = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
@@ -476,7 +476,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testImportSameSchemaDifferentVersion() throws Exception {
+  default void testImportSameSchemaDifferentVersion() throws Exception {
     String schema = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
@@ -493,7 +493,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testCompatibleSchemaLookupBySubject() throws Exception {
+  default void testCompatibleSchemaLookupBySubject() throws Exception {
     String subject = "testSubject";
     int numRegisteredSchemas = 0;
     int numSchemas = 10;
@@ -519,7 +519,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testIncompatibleSchemaLookupBySubject() throws Exception {
+  default void testIncompatibleSchemaLookupBySubject() throws Exception {
     String subject = "testSubject";
 
     // Make two incompatible schemas - field 'f' has different types
@@ -554,7 +554,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testIncompatibleSchemaBySubject() throws Exception {
+  default void testIncompatibleSchemaBySubject() throws Exception {
     String subject = "testSubject";
 
     String schema1String = "{\"type\":\"record\","
@@ -598,7 +598,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testBadFormat() throws Exception {
+  default void testBadFormat() throws Exception {
     String subject = "testSubject";
 
     String schema1String = "{\"type\":\"record\","
@@ -620,7 +620,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaRegistrationUnderDiffSubjects() throws Exception {
+  default void testSchemaRegistrationUnderDiffSubjects() throws Exception {
     String subject1 = "testSubject1";
     String subject2 = "testSubject2";
 
@@ -686,7 +686,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testConfigDefaults() throws Exception {
+  default void testConfigDefaults() throws Exception {
     assertEquals(
         NONE.name,
         restApp().restClient.getConfig(null).getCompatibilityLevel(),
@@ -704,7 +704,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testNonExistentSubjectConfigChange() throws Exception {
+  default void testNonExistentSubjectConfigChange() throws Exception {
     String subject = "testSubject";
     try {
       restApp().restClient.updateCompatibility(CompatibilityLevel.FORWARD.name, subject);
@@ -719,7 +719,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSubjectConfigChange() throws Exception {
+  default void testSubjectConfigChange() throws Exception {
     String subject = "testSubject";
     assertEquals(
         NONE.name,
@@ -755,7 +755,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGlobalConfigChange() throws Exception{
+  default void testGlobalConfigChange() throws Exception{
     assertEquals(
         NONE.name,
         restApp().restClient.getConfig(null).getCompatibilityLevel(),
@@ -790,7 +790,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDefaultContextConfigAndMode() throws Exception {
+  default void testDefaultContextConfigAndMode() throws Exception {
     String defaultContext = ":.:";
 
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
@@ -870,7 +870,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetSchemaNonExistingId() throws Exception {
+  default void testGetSchemaNonExistingId() throws Exception {
     try {
       restApp().restClient.getId(100);
       fail("Schema lookup by missing id should fail with "
@@ -887,7 +887,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetSchemaWithFetchMaxId() throws Exception {
+  default void testGetSchemaWithFetchMaxId() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
     int latestId = 0;
 
@@ -901,13 +901,13 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetSchemaTypes() throws Exception {
+  default void testGetSchemaTypes() throws Exception {
     assertEquals(new HashSet<>(Arrays.asList("AVRO", "JSON", "PROTOBUF")),
         new HashSet<>(restApp().restClient.getSchemaTypes()));
   }
 
   @Test
-  public void testListVersionsNonExistingSubject() throws Exception {
+  default void testListVersionsNonExistingSubject() throws Exception {
     try {
       restApp().restClient.getAllVersions("Invalid");
       fail("Getting all versions of missing subject should fail with "
@@ -924,7 +924,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetVersionNonExistentSubject() throws Exception {
+  default void testGetVersionNonExistentSubject() throws Exception {
     // test getVersion on a non-existing subject
     try {
       restApp().restClient.getVersion("non-existing-subject", 1);
@@ -942,7 +942,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetNonExistingVersion() throws Exception {
+  default void testGetNonExistingVersion() throws Exception {
     // test getVersion on a non-existing version
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
@@ -962,7 +962,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetInvalidVersion() throws Exception {
+  default void testGetInvalidVersion() throws Exception {
     // test getVersion on a non-existing version
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
@@ -983,7 +983,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterInvalidSubject() throws Exception {
+  default void testRegisterInvalidSubject() throws Exception {
     // test invalid subject
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "\rbad\nsubject\t";
@@ -1003,7 +1003,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetVersion() throws Exception {
+  default void testGetVersion() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -1028,7 +1028,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetOnlySchemaById() throws Exception {
+  default void testGetOnlySchemaById() throws Exception {
     String schema = String.valueOf(TestUtils.getRandomCanonicalAvroString(1));
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schema, 1, subject);
@@ -1040,7 +1040,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetLatestVersionSchemaOnly() throws Exception {
+  default void testGetLatestVersionSchemaOnly() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -1054,7 +1054,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetVersionSchemaOnly() throws Exception {
+  default void testGetVersionSchemaOnly() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(1);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -1067,21 +1067,21 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaReferences() throws Exception {
+  default void testSchemaReferences() throws Exception {
     testSchemaReferencesInContext("", "", 2);
   }
 
   @Test
-  public void testSchemaReferencesSameContext() throws Exception {
+  default void testSchemaReferencesSameContext() throws Exception {
     testSchemaReferencesInContext(":.ctx:", ":.ctx:", 2);
   }
 
   @Test
-  public void testSchemaReferencesDifferentContext() throws Exception {
+  default void testSchemaReferencesDifferentContext() throws Exception {
     testSchemaReferencesInContext("", ":.ctx:", 1);
   }
 
-  private void testSchemaReferencesInContext(String context, String refContext, int parentId)
+  default void testSchemaReferencesInContext(String context, String refContext, int parentId)
       throws Exception {
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
     String unqualifiedSubject = "my_reference";
@@ -1156,7 +1156,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaUnqualifiedReferencesInContext() throws Exception {
+  default void testSchemaUnqualifiedReferencesInContext() throws Exception {
     String context = ":.ctx:";
     int parentId = 2;
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
@@ -1250,7 +1250,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaReferencesMultipleLevels() throws Exception {
+  default void testSchemaReferencesMultipleLevels() throws Exception {
     String root = "[\"myavro.BudgetDecreased\",\"myavro.BudgetUpdated\"]";
 
     String ref1 = "{\n"
@@ -1343,7 +1343,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaMissingReferences() throws Exception {
+  default void testSchemaMissingReferences() throws Exception {
     assertThrows(RestClientException.class, () -> {
       List<String> schemas = TestUtils.getAvroSchemaWithReferences();
 
@@ -1355,7 +1355,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSchemaNormalization() throws Exception {
+  default void testSchemaNormalization() throws Exception {
     String subject1 = "testSubject1";
 
     String reference1 = "{\"type\":\"record\","
@@ -1455,7 +1455,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testBad() throws Exception {
+  default void testBad() throws Exception {
     String subject1 = "testTopic1";
     List<String> allSubjects = new ArrayList<>();
 
@@ -1499,7 +1499,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testLookUpSchemaUnderNonExistentSubject() throws Exception {
+  default void testLookUpSchemaUnderNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     try {
       restApp().restClient.lookUpSubjectVersion(schema, "non-existent-subject");
@@ -1516,7 +1516,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testLookUpNonExistentSchemaUnderSubject() throws Exception {
+  default void testLookUpNonExistentSchemaUnderSubject() throws Exception {
     String subject = "test";
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -1533,7 +1533,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetSubjectsAssociatedWithSchemaId() throws Exception {
+  default void testGetSubjectsAssociatedWithSchemaId() throws Exception {
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
 
@@ -1573,7 +1573,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetSubjectsAssociatedWithNotFoundSchemaId() throws Exception {
+  default void testGetSubjectsAssociatedWithNotFoundSchemaId() throws Exception {
     try {
       restApp().restClient.getAllSubjectsById(1);
       fail("Getting all subjects associated with id 1 should fail with "
@@ -1588,7 +1588,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetVersionsAssociatedWithSchemaId() throws Exception {
+  default void testGetVersionsAssociatedWithSchemaId() throws Exception {
     String subject1 = "testTopic1";
     String subject2 = "testTopic2";
 
@@ -1628,7 +1628,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testCompatibilityNonExistentSubject() throws Exception {
+  default void testCompatibilityNonExistentSubject() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     boolean result = restApp().restClient.testCompatibility(schema, "non-existent-subject", "latest")
                                        .isEmpty();
@@ -1640,7 +1640,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testCompatibilityNonExistentVersion() throws Exception {
+  default void testCompatibilityNonExistentVersion() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schema, 1, subject);
@@ -1655,7 +1655,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testCompatibilityInvalidVersion() throws Exception {
+  default void testCompatibilityInvalidVersion() throws Exception {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schema, 1, subject);
@@ -1670,7 +1670,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetConfigNonExistentSubject() throws Exception {
+  default void testGetConfigNonExistentSubject() throws Exception {
     try {
       restApp().restClient.getConfig("non-existent-subject");
       fail("Getting the configuration of a missing subject should fail with "
@@ -1683,7 +1683,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testCanonicalization() throws Exception {
+  default void testCanonicalization() throws Exception {
     // schema string with extra white space
     String schema = "{   \"type\":   \"string\"}";
     String subject = "test";
@@ -1708,7 +1708,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteSchemaVersionBasic() throws Exception {
+  default void testDeleteSchemaVersionBasic() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
 
@@ -1781,7 +1781,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteSchemaVersionPermanent() throws Exception {
+  default void testDeleteSchemaVersionPermanent() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
 
@@ -1912,7 +1912,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteSchemaVersionInvalidSubject() throws Exception {
+  default void testDeleteSchemaVersionInvalidSubject() throws Exception {
     try {
       String subject = "test";
       restApp().restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
@@ -1929,7 +1929,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteLatestVersion() throws Exception {
+  default void testDeleteLatestVersion() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
     String subject = "test";
 
@@ -1971,7 +1971,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteAndCreateWithDanglingReference() throws Exception {
+  default void testDeleteAndCreateWithDanglingReference() throws Exception {
     int parentId = 2;
     testSchemaReferencesInContext("", "", parentId);
 
@@ -2012,7 +2012,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testReviveSchemaWithDanglingReference() throws Exception {
+  default void testReviveSchemaWithDanglingReference() throws Exception {
     // Step 1: Register a schema ref
     String refSchema = "{\"type\":\"record\",\"name\":\"Ref\",\"namespace\":\"com.example\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
     int refId = restApp().restClient.registerSchema(refSchema, "ref");
@@ -2070,7 +2070,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetLatestVersionNonExistentSubject() throws Exception {
+  default void testGetLatestVersionNonExistentSubject() throws Exception {
     String subject = "non_existent_subject";
 
     try {
@@ -2088,7 +2088,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetLatestVersionDeleteOlder() throws Exception {
+  default void testGetLatestVersionDeleteOlder() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
 
@@ -2110,7 +2110,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteInvalidVersion() throws Exception {
+  default void testDeleteInvalidVersion() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(1);
     String subject = "test";
 
@@ -2128,7 +2128,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteWithLookup() throws Exception {
+  default void testDeleteWithLookup() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
 
@@ -2162,7 +2162,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testIncompatibleSchemaLookupBySubjectAfterDelete() throws Exception {
+  default void testIncompatibleSchemaLookupBySubjectAfterDelete() throws Exception {
     String subject = "testSubject";
 
     // Make two incompatible schemas - field 'g' has different types
@@ -2232,7 +2232,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSubjectCompatibilityAfterDeletingAllVersions() throws Exception {
+  default void testSubjectCompatibilityAfterDeletingAllVersions() throws Exception {
     String subject = "testSubject";
 
     String schema1String = "{\"type\":\"record\","
@@ -2282,7 +2282,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testListSubjects() throws Exception {
+  default void testListSubjects() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject1 = "test1";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject1);
@@ -2338,7 +2338,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testListSoftDeletedSubjectsAndSchemas() throws Exception {
+  default void testListSoftDeletedSubjectsAndSchemas() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
     String subject1 = "test1";
     String subject2 = "test2";
@@ -2384,7 +2384,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteSubjectBasic() throws Exception {
+  default void testDeleteSubjectBasic() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -2407,7 +2407,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteSubjectException() throws Exception {
+  default void testDeleteSubjectException() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -2439,7 +2439,7 @@ public abstract class AbstractRestApiTest {
 
 
   @Test
-  public void testDeleteSubjectPermanent() throws Exception {
+  default void testDeleteSubjectPermanent() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -2496,7 +2496,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testDeleteSubjectAndRegister() throws Exception {
+  default void testDeleteSubjectAndRegister() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
     TestUtils.registerAndVerifySchema(restApp().restClient, schemas.get(0), 1, subject);
@@ -2524,7 +2524,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testSubjectCompatibilityAfterDeletingSubject() throws Exception {
+  default void testSubjectCompatibilityAfterDeletingSubject() throws Exception {
     String subject = "testSubject";
 
     String schema1String = "{\"type\":\"record\","
@@ -2570,7 +2570,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetClusterId() throws Exception {
+  default void testGetClusterId() throws Exception {
     try {
       ServerClusterId serverClusterId = restApp().restClient.getClusterId();
       assertEquals("", serverClusterId.getId());
@@ -2582,20 +2582,20 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGetSchemaRegistryServerVersion() throws Exception {
+  default void testGetSchemaRegistryServerVersion() throws Exception {
       SchemaRegistryServerVersion srVersion = restApp().restClient.getSchemaRegistryServerVersion();
       assertEquals(AppInfoParser.getVersion(), srVersion.getVersion());
       assertEquals(AppInfoParser.getCommitId(), srVersion.getCommitId());
   }
 
   @Test
-  public void testGetSchemaRegistryServerDeployment() throws Exception {
+  default void testGetSchemaRegistryServerDeployment() throws Exception {
     SchemaRegistryDeployment srDeployment = restApp().restClient.getSchemaRegistryDeployment();
     assertEquals(0, srDeployment.getAttributes().size(), "Should return empty attributes list by default");
   }
 
   @Test
-  public void testHttpResponseHeaders() throws Exception {
+  default void testHttpResponseHeaders() throws Exception {
     String baseUrl = restApp().restClient.getBaseUrls().current();
     String requestUrl = buildRequestUrl(baseUrl, "/v1/metadata/id");
     HttpURLConnection connection = null;
@@ -2623,7 +2623,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testGlobalMode() throws Exception {
+  default void testGlobalMode() throws Exception {
     // test default globalMode
     assertEquals("READWRITE", restApp().restClient.getMode().getMode());
 
@@ -2670,7 +2670,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterWithAndWithoutMetadata() throws Exception {
+  default void testRegisterWithAndWithoutMetadata() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -2691,7 +2691,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterDropsRuleSet() throws Exception {
+  default void testRegisterDropsRuleSet() throws Exception {
     String subject = "testSubject";
 
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
@@ -2716,7 +2716,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
+  default void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
     String subject0 = "testSubject0";
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
         + "\"name\":\"myrecord\","
@@ -2834,7 +2834,7 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testRegisterSchemaWithInvalidNamespace() throws RestClientException, IOException {
+  default void testRegisterSchemaWithInvalidNamespace() throws RestClientException, IOException {
     String subject0 = "testSubject0";
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
                                                      + "\"name\":\"myrecord\","
@@ -2869,13 +2869,13 @@ public abstract class AbstractRestApiTest {
   }
 
   @Test
-  public void testInvalidSchema() {
+  default void testInvalidSchema() {
     assertThrows(InvalidSchemaException.class, () ->
         restApp().schemaRegistry().parseSchema(null));
   }
 
   @Test
-  public void testConfluentVersion() throws Exception {
+  default void testConfluentVersion() throws Exception {
     String subject = "test";
     String schemaString = "{\"type\":\"record\","
         + "\"name\":\"myrecord\","
@@ -3094,7 +3094,7 @@ public abstract class AbstractRestApiTest {
     }
   }
 
-  public static void registerAndVerifySchema(
+  static void registerAndVerifySchema(
       RestService restService,
       RegisterSchemaRequest request,
       int expectedId,
@@ -3116,7 +3116,7 @@ public abstract class AbstractRestApiTest {
     );
   }
 
-  private String matchHeaderValue(Map<String, List<String>> responseHeaders,
+  default String matchHeaderValue(Map<String, List<String>> responseHeaders,
                                   String headerName, String expectedHeaderValue) {
     if (responseHeaders.isEmpty() || responseHeaders.get(headerName) == null)
       return null;
@@ -3128,7 +3128,7 @@ public abstract class AbstractRestApiTest {
             .orElse(null);
   }
 
-  private String buildRequestUrl(String baseUrl, String path) {
+  default String buildRequestUrl(String baseUrl, String path) {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }

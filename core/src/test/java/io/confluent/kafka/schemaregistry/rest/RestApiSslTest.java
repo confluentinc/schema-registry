@@ -19,9 +19,6 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import org.apache.kafka.common.config.types.Password;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import javax.security.auth.login.Configuration;
 import java.io.File;
@@ -32,47 +29,33 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API SSL integration tests.
+ * ClusterTestHarness implementation of SSL REST API integration tests.
  */
-public class RestApiSslTest extends AbstractRestApiSslTest {
+public class RestApiSslTest extends ClusterTestHarness implements RestApiSslTestSuite {
 
-  private ClusterTestHarness harness;
   private Properties sslProps = new Properties();
 
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiSslTest.this.getSchemaRegistryProperties();
-      }
-      
-      @Override
-      public String getSchemaRegistryProtocol() {
-        return "https";
-      }
-    };
-    harness.setUpTest(testInfo);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  public RestApiSslTest() {
+    super(1, true, CompatibilityLevel.BACKWARD.name);
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected Properties getSslProperties() {
+  public String getSchemaRegistryProtocol() {
+    return "https";
+  }
+
+  @Override
+  public Properties getSslProperties() {
     return sslProps;
   }
 
-  protected Properties getSchemaRegistryProperties() {
+  @Override
+  public Properties getSchemaRegistryProperties() {
     Configuration.setConfiguration(null);
     sslProps.put(
         SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG,

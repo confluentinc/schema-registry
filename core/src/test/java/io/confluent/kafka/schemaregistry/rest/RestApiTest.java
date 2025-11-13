@@ -17,44 +17,25 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
- * Kafka-based implementation of REST API integration tests.
+ * ClusterTestHarness implementation of REST API integration tests.
  */
-public class RestApiTest extends AbstractRestApiTest {
+public class RestApiTest extends ClusterTestHarness implements RestApiTestSuite {
 
-  private ClusterTestHarness harness;
-
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        return RestApiTest.this.getSchemaRegistryProperties();
-      }
-    };
-    harness.setUpTest(testInfo);
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    if (harness != null) {
-      harness.tearDown();
-    }
+  public RestApiTest() {
+    super(1, true);
   }
 
   @Override
-  protected SchemaRegistryTestHarness getHarness() {
-    return harness;
+  public SchemaRegistryTestHarness getHarness() {
+    return this;
   }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties schemaRegistryProps = new Properties();
     schemaRegistryProps.put("response.http.headers.config",
             "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
