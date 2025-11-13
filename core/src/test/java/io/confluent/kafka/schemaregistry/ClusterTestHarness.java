@@ -77,7 +77,7 @@ import scala.collection.Seq;
  */
 @Tag("IntegrationTest")
 @DisplayNameGeneration(AddKraftQuorum.class)
-public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
+public class ClusterTestHarness implements SchemaRegistryTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(ClusterTestHarness.class);
 
