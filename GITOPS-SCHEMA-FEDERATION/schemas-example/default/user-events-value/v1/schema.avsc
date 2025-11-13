@@ -1,0 +1,40 @@
+{
+  "type": "record",
+  "name": "UserEvent",
+  "namespace": "com.example.events",
+  "doc": "Schema for user activity events",
+  "fields": [
+    {
+      "name": "userId",
+      "type": "string",
+      "doc": "Unique user identifier (UUID format)"
+    },
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "EventType",
+        "symbols": ["LOGIN", "LOGOUT", "SIGNUP", "PROFILE_UPDATE", "PASSWORD_CHANGE"]
+      },
+      "doc": "Type of user event"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event timestamp in milliseconds since epoch"
+    },
+    {
+      "name": "ipAddress",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Client IP address (optional)"
+    },
+    {
+      "name": "userAgent",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Client user agent string (optional)"
+    }
+  ]
+}

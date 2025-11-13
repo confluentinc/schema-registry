@@ -1,0 +1,17 @@
+{
+  "schemaId": 10001,
+  "subject": "user-events-value",
+  "version": 1,
+  "context": "default",
+  "schemaType": "AVRO",
+  "compatibilityMode": "BACKWARD",
+  "deploymentRegions": [
+    "us-west-local",
+    "eu-central-local",
+    "confluent-cloud"
+  ],
+  "createdAt": "2025-11-13T10:00:00Z",
+  "createdBy": "platform-team@example.com",
+  "description": "User event schema for tracking user activities across the platform",
+  "tags": ["events", "users", "authentication"]
+}

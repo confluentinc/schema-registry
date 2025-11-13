@@ -1,0 +1,349 @@
+version: '3.8'
+
+# GitOps Schema Federation Manager - Enterprise Edition
+# Includes: Kafka + SR, Unity Catalog, MinIO, Neo4j, PostgreSQL
+
+services:
+  # ============================================================================
+  # KAFKA ECOSYSTEM (Existing)
+  # ============================================================================
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka
+    container_name: kafka-enterprise
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    networks:
+      - schema-federation
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    hostname: schema-registry
+    container_name: schema-registry-enterprise
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_MODE_MUTABILITY: "true"
+    networks:
+      - schema-federation
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.6.0
+    hostname: control-center
+    container_name: control-center-enterprise
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: kafka:29092
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+    networks:
+      - schema-federation
+
+  # ============================================================================
+  # UNITY CATALOG ECOSYSTEM (NEW)
+  # ============================================================================
+
+  # MinIO - S3-compatible object storage for Iceberg tables
+  minio:
+    image: minio/minio:latest
+    hostname: minio
+    container_name: minio-enterprise
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - schema-federation
+
+  # MinIO Client - Create buckets on startup
+  minio-setup:
+    image: minio/mc:latest
+    container_name: minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 admin password123;
+      mc mb myminio/warehouse || true;
+      mc mb myminio/iceberg || true;
+      mc anonymous set download myminio/warehouse;
+      mc anonymous set download myminio/iceberg;
+      exit 0;
+      "
+    networks:
+      - schema-federation
+
+  # PostgreSQL - Metastore for Unity Catalog
+  postgres-uc:
+    image: postgres:15
+    hostname: postgres-uc
+    container_name: postgres-uc-enterprise
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: unitycatalog
+      POSTGRES_PASSWORD: unitycatalog
+      POSTGRES_DB: unitycatalog
+    volumes:
+      - postgres-uc-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unitycatalog"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - schema-federation
+
+  # Unity Catalog Server
+  unity-catalog:
+    image: ghcr.io/unitycatalog/unitycatalog:latest
+    hostname: unity-catalog
+    container_name: unity-catalog-enterprise
+    depends_on:
+      postgres-uc:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Database configuration
+      UC_DATABASE_URL: jdbc:postgresql://postgres-uc:5432/unitycatalog
+      UC_DATABASE_USER: unitycatalog
+      UC_DATABASE_PASSWORD: unitycatalog
+
+      # S3 configuration for Iceberg
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password123
+      AWS_S3_ENDPOINT: http://minio:9000
+      AWS_S3_PATH_STYLE_ACCESS: "true"
+
+      # Unity Catalog configuration
+      UC_SERVER_PORT: 8080
+      UC_WAREHOUSE_DIR: s3://warehouse/
+    volumes:
+      - ./unity-catalog-init:/etc/unitycatalog/init:ro
+    networks:
+      - schema-federation
+
+  # ============================================================================
+  # METADATA GRAPH (NEW)
+  # ============================================================================
+
+  # Neo4j - Graph database for schema metadata
+  neo4j:
+    image: neo4j:5.13
+    hostname: neo4j
+    container_name: neo4j-enterprise
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/password123
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*,gds.*
+      NEO4J_dbms_memory_heap_max__size: 2G
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    networks:
+      - schema-federation
+
+  # ============================================================================
+  # GITOPS SCHEMA FEDERATION SERVICES (Enhanced)
+  # ============================================================================
+
+  # PostgreSQL - ID Service & Metadata
+  postgres-gitops:
+    image: postgres:15
+    hostname: postgres-gitops
+    container_name: postgres-gitops-enterprise
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: gitops
+      POSTGRES_PASSWORD: gitops
+      POSTGRES_DB: schema_federation
+    volumes:
+      - postgres-gitops-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - schema-federation
+
+  # API Service (Enhanced with Unity Catalog support)
+  gitops-api:
+    build:
+      context: ../api-service
+      dockerfile: Dockerfile
+    hostname: gitops-api
+    container_name: gitops-api-enterprise
+    depends_on:
+      - postgres-gitops
+      - schema-registry
+      - unity-catalog
+      - neo4j
+    ports:
+      - "8090:8090"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://gitops:gitops@postgres-gitops:5432/schema_federation
+
+      # Schema Registry
+      SR_URL: http://schema-registry:8081
+
+      # Unity Catalog
+      UC_URL: http://unity-catalog:8080
+      UC_TOKEN: ${UC_AUTH_TOKEN:-}
+
+      # Neo4j
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: password123
+
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password123
+
+      # Application
+      API_PORT: 8090
+      LOG_LEVEL: DEBUG
+      GIT_REPO_PATH: /app/SCHEMASTORE
+    volumes:
+      - ../SCHEMASTORE:/app/SCHEMASTORE
+      - ./deployment-config-enterprise.yaml:/app/deployment-config.yaml:ro
+    networks:
+      - schema-federation
+
+  # Web UI (Enhanced)
+  gitops-ui:
+    build:
+      context: ../web-ui
+      dockerfile: Dockerfile
+    hostname: gitops-ui
+    container_name: gitops-ui-enterprise
+    depends_on:
+      - gitops-api
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8090/api/v1
+      REACT_APP_NEO4J_BROWSER_URL: http://localhost:7474
+    networks:
+      - schema-federation
+
+  # ============================================================================
+  # DEMO DATA GENERATORS (NEW)
+  # ============================================================================
+
+  # Iceberg Table Creator
+  iceberg-demo-setup:
+    image: python:3.11-slim
+    container_name: iceberg-demo-setup
+    depends_on:
+      - unity-catalog
+      - minio-setup
+    working_dir: /app
+    volumes:
+      - ./demo-scripts:/app:ro
+    environment:
+      UC_URL: http://unity-catalog:8080
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password123
+    command: >
+      sh -c "
+      pip install requests pyiceberg boto3;
+      python /app/create_demo_tables.py;
+      "
+    networks:
+      - schema-federation
+
+  # Kafka Topic Creator
+  kafka-demo-setup:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-demo-setup
+    depends_on:
+      - kafka
+      - schema-registry
+    environment:
+      KAFKA_BROKER: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    volumes:
+      - ./demo-scripts:/scripts:ro
+    command: >
+      bash -c "
+      sleep 10;
+      kafka-topics --bootstrap-server kafka:29092 --create --topic user-events --partitions 3 --replication-factor 1 || true;
+      kafka-topics --bootstrap-server kafka:29092 --create --topic user-events-cdc --partitions 3 --replication-factor 1 || true;
+      kafka-topics --bootstrap-server kafka:29092 --create --topic order-events --partitions 3 --replication-factor 1 || true;
+      /scripts/register_demo_schemas.sh;
+      "
+    networks:
+      - schema-federation
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+
+volumes:
+  minio-data:
+    driver: local
+  postgres-uc-data:
+    driver: local
+  postgres-gitops-data:
+    driver: local
+  neo4j-data:
+    driver: local
+  neo4j-logs:
+    driver: local
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  schema-federation:
+    driver: bridge
+    name: schema-federation-enterprise
