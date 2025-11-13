@@ -32,7 +32,12 @@ public class RestApiContextTest extends AbstractRestApiContextTest {
 
   @BeforeEach
   public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true);
+    harness = new ClusterTestHarness(1, true) {
+      @Override
+      public Properties getSchemaRegistryProperties() throws Exception {
+        return RestApiContextTest.this.getSchemaRegistryProperties();
+      }
+    };
     harness.setUpTest(testInfo);
   }
 

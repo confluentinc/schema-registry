@@ -33,7 +33,12 @@ public class RestApiCompatibilityTest extends AbstractRestApiCompatibilityTest {
 
   @BeforeEach
   public void setUpTest(TestInfo testInfo) throws Exception {
-    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name);
+    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name) {
+      @Override
+      public Properties getSchemaRegistryProperties() throws Exception {
+        return RestApiCompatibilityTest.this.getSchemaRegistryProperties();
+      }
+    };
     harness.setUpTest(testInfo);
     // Set up the RuleSetHandler after harness is initialized
     setupRuleSetHandler();
