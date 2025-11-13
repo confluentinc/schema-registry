@@ -15,20 +15,11 @@
 
 package io.confluent.kafka.schemaregistry;
 
-import java.util.Properties;
-
 /**
  * Interface defining common operations needed by schema registry integration tests.
  * This allows tests to be written against non-Kafka-based implementations.
  */
 public interface SchemaRegistryTestHarness {
-  
-  /**
-   * Gets the broker list for Kafka connections.
-   * @return broker list string, or null if not applicable
-   */
-  String getBrokerList();
-  
   /**
    * Gets the REST application instance for making schema registry API calls.
    * @return RestApp instance
@@ -52,11 +43,5 @@ public interface SchemaRegistryTestHarness {
    * @return protocol string
    */
   String getSchemaRegistryProtocol();
-  
-  /**
-   * Inject properties into broker configuration.
-   * @param props properties to inject
-   */
-  void injectProperties(Properties props);
 }
 
