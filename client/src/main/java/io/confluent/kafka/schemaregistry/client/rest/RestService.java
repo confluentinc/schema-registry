@@ -1891,13 +1891,13 @@ public class RestService implements Closeable, Configurable {
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations");
-    String path = builder.build().toString();
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
     }
+    String path = builder.build().toString();
 
     AssociationResponse response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
@@ -1911,13 +1911,13 @@ public class RestService implements Closeable, Configurable {
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations:batchCreate");
-    String path = builder.build().toString();
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
     }
+    String path = builder.build().toString();
 
     AssociationBatchResponse response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
@@ -1931,13 +1931,13 @@ public class RestService implements Closeable, Configurable {
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations");
-    String path = builder.build().toString();
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
     }
+    String path = builder.build().toString();
 
     AssociationResponse response = httpRequest(path, "PUT",
         request.toJson().getBytes(StandardCharsets.UTF_8),
@@ -1951,13 +1951,13 @@ public class RestService implements Closeable, Configurable {
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations:batchUpsert");
-    String path = builder.build().toString();
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
     }
+    String path = builder.build().toString();
 
     AssociationBatchResponse response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
