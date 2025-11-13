@@ -364,6 +364,7 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   /**
    * Checks if the given qualified subject represents a context (i.e., has no subject part).
    * A context has the format ":.context:" with an empty subject part, or null for default context.
+   * Also returns true for wildcard subject ("*") when tenant is not the default tenant.
    *
    * @param tenant the tenant
    * @param qualifiedSubject the subject with a tenant prefix
@@ -371,7 +372,11 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    */
   public static boolean isContext(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    return qs == null || qs.getSubject().isEmpty();
+    if (qs == null || qs.getSubject().isEmpty()) {
+      return true;
+    }
+    // Check if it's the wildcard subject in non default tenant
+    return tenant != null && !DEFAULT_TENANT.equals(tenant) && WILDCARD.equals(qs.getSubject());
   }
 
   /**
