@@ -17,93 +17,45 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
-import io.confluent.kafka.schemaregistry.avro.AvroUtils;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
-import org.junit.jupiter.api.Test;
+import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import java.util.Properties;
 
-public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
+/**
+ * Kafka-based implementation of REST API transitive compatibility integration tests.
+ */
+public class RestApiTransitiveCompatibilityTest extends AbstractRestApiTransitiveCompatibilityTest {
 
-  String baseSchema = AvroUtils.parseSchema("{\"type\":\"record\","
-      + "\"name\":\"myrecord\","
-      + "\"fields\":"
-      + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-  
-  String baseSchemaWithColumnWithDefault = AvroUtils.parseSchema("{\"type\":\"record\","
-      + "\"name\":\"myrecord\","
-      + "\"fields\":"
-      + "[{\"type\":\"string\",\"name\":\"f1\"},"
-      + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}").canonicalString();
-  
-  String baseSchemaWithColumnNoDefault = AvroUtils.parseSchema("{\"type\":\"record\","
-      + "\"name\":\"myrecord\","
-      + "\"fields\":"
-      + "[{\"type\":\"string\",\"name\":\"f1\"},"
-      + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
-  
-  
-  public RestApiTransitiveCompatibilityTest() {
-    super(1, true, CompatibilityLevel.BACKWARD_TRANSITIVE.name);
+  private ClusterTestHarness harness;
+
+  @BeforeEach
+  public void setUpTest(TestInfo testInfo) throws Exception {
+    harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD_TRANSITIVE.name) {
+      @Override
+      public Properties getSchemaRegistryProperties() throws Exception {
+        return RestApiTransitiveCompatibilityTest.this.getSchemaRegistryProperties();
+      }
+    };
+    harness.setUpTest(testInfo);
   }
 
-  /* Confirm that removing a default in from a column that was added earlier is not compatible. */
-  @Test
-  public void testCompatibility() throws Exception {
-    String subject = "testSubject";
-
-    // register a valid avro
-    int expectedIdSchema1 = 1;
-    assertEquals(
-        expectedIdSchema1,
-        restApp.restClient.registerSchema(baseSchema, subject),
-        "Registering should succeed"
-    );
-
-    // register a backward compatible avro
-    int expectedIdSchema2 = 2;
-    assertEquals(
-        expectedIdSchema2,
-        restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject),
-        "Registering a compatible schema should succeed"
-    );
-
-    // register an incompatible avro
-    String incompatibleSchemaString = baseSchemaWithColumnNoDefault;
-    try {
-      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
-      fail("Registering an incompatible schema should fail");
-    } catch (RestClientException e) {
-      // this is expected.
-      assertEquals(
-          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
-          e.getStatus(),
-          "Should get a conflict status"
-      );
+  @AfterEach
+  public void tearDown() throws Exception {
+    if (harness != null) {
+      harness.tearDown();
     }
   }
-  
-  /* Confirm that removing a default in isolation is compatible. */
-  @Test
-  public void validateTransitiveEffect() throws Exception {
-    String subject = "testSubject";
 
-    // register a valid avro
-    int expectedIdSchema1 = 1;
-    assertEquals(
-        expectedIdSchema1,
-        restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject),
-        "Registering should succeed"
-    );
+  @Override
+  protected SchemaRegistryTestHarness getHarness() {
+    return harness;
+  }
 
-    // register a backward compatible avro
-    int expectedIdSchema2 = 2;
-    assertEquals(
-        expectedIdSchema2,
-        restApp.restClient.registerSchema(baseSchemaWithColumnNoDefault, subject),
-        "Registering a compatible schema should succeed"
-    );
+  @Override
+  protected Properties getSchemaRegistryProperties() {
+    return new Properties();
   }
 }
