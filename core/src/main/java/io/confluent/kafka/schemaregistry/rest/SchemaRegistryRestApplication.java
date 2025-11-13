@@ -37,8 +37,10 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
-import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.servlet.ServletContextHandler;
+import java.util.Arrays;
+import java.util.Collection;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.slf4j.Logger;
@@ -70,21 +72,12 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
-    List<HandlerWrapper> schemaRegistryCustomHandlers =
+    List<Handler.Singleton> schemaRegistryCustomHandlers =
             schemaRegistry.getCustomHandler();
     if (schemaRegistryCustomHandlers != null) {
-      for (HandlerWrapper
+      for (Handler.Singleton
               schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
-        // add all custom handlers after the security handler.
-        // This is necessary for authentication to be applied before
-        // any of the custom handlers.
-        if (context.getSecurityHandler() != null) {
-          schemaRegistryCustomHandler
-              .setHandler(context.getSecurityHandler().getHandler());
-          context.getSecurityHandler().setHandler(schemaRegistryCustomHandler);
-        } else {
-          context.insertHandler(schemaRegistryCustomHandler);
-        }
+        context.insertHandler(schemaRegistryCustomHandler);
       }
     }
   }
