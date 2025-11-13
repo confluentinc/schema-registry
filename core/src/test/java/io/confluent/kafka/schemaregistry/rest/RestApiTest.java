@@ -35,8 +35,8 @@ public class RestApiTest extends ClusterTestHarness implements RestApiTestSuite 
   }
 
   @Override
-  public Properties getSchemaRegistryProperties() {
-    Properties schemaRegistryProps = new Properties();
+  public Properties getSchemaRegistryProperties() throws Exception {
+    Properties schemaRegistryProps = super.getSchemaRegistryProperties();
     schemaRegistryProps.put("response.http.headers.config",
             "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
     schemaRegistryProps.put("schema.providers.avro.validate.defaults", "true");

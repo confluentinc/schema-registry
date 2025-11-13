@@ -19,8 +19,6 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 
-import java.util.Properties;
-
 /**
  * ClusterTestHarness implementation of mode REST API integration tests.
  */
@@ -33,10 +31,5 @@ public class RestApiModeTest extends ClusterTestHarness implements RestApiModeTe
   @Override
   public SchemaRegistryTestHarness getHarness() {
     return this;
-  }
-
-  @Override
-  public Properties getSchemaRegistryProperties() {
-    return new Properties();
   }
 }

@@ -17,17 +17,14 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 /**
  * ClusterTestHarness implementation of context REST API integration tests.
  */
 public class RestApiContextTest extends ClusterTestHarness implements RestApiContextTestSuite {
 
-  @BeforeEach
-  public void setUpTest(TestInfo testInfo) throws Exception {
-    super.setUp();
+  public RestApiContextTest() {
+    super(1, true);
   }
 
   @Override

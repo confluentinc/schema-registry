@@ -18,8 +18,6 @@ package io.confluent.kafka.schemaregistry.rest;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 
-import java.util.Properties;
-
 /**
  * ClusterTestHarness implementation of register schema tags REST API integration tests.
  */
@@ -38,10 +36,5 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness implements
   @Override
   public SchemaRegistryTestHarness getHarness() {
     return this;
-  }
-
-  @Override
-  public Properties getSchemaRegistryProperties() {
-    return new Properties();
   }
 }
