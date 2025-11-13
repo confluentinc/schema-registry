@@ -72,4 +72,9 @@ public class ContextValue extends SchemaRegistryValue {
   public int hashCode() {
     return Objects.hash(tenant, context);
   }
+
+  @Override
+  public ContextKey toKey() {
+    return new ContextKey(tenant, context);
+  }
 }
