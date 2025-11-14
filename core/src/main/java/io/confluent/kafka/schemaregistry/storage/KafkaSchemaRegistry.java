@@ -724,7 +724,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Mode mode = getModeInScope(subject);
 
       boolean modifiedSchema = false;
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         modifiedSchema = maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
@@ -771,7 +771,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
@@ -794,7 +794,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
-        } else if (newVersion != schema.getVersion() && mode != Mode.IMPORT) {
+        } else if (newVersion != schema.getVersion()
+                && !mode.isImportOrForwardMode()) {
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
@@ -866,9 +867,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
 
     if (schema.getId() >= 0) {
-      if (getModeInScope(subject) != Mode.IMPORT) {
+      if (!getModeInScope(subject).isImportOrForwardMode()) {
         throw new OperationNotPermittedException("Subject " + subject
-        + " in context " + context + " is not in import mode");
+        + " in context " + context + " is not in import or forward mode");
       }
     } else {
       if (getModeInScope(subject) != Mode.READWRITE) {
@@ -1626,7 +1627,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
                                                        boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      Mode mode = getModeInScope(schema.getSubject());
+      if (!mode.isImportOrForwardMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
       }
       if (normalize) {
