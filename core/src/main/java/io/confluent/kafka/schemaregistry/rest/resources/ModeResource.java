@@ -122,18 +122,19 @@ public class ModeResource {
 
     try {
       if (request.getOptionalMode().isPresent()) {
-        io.confluent.kafka.schemaregistry.storage.Mode mode = Enum.valueOf(
-            io.confluent.kafka.schemaregistry.storage.Mode.class,
+        Enum.valueOf(io.confluent.kafka.schemaregistry.storage.Mode.class,
             request.getMode().toUpperCase(Locale.ROOT));
-        if (mode == io.confluent.kafka.schemaregistry.storage.Mode.FORWARD) {
-          if (subject != null) {
-            throw new RestInvalidModeException("Forward mode only supported on global level");
-          }
-        }
       }
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
+
+    if (io.confluent.kafka.schemaregistry.storage.Mode.FORWARD.toString()
+        .equals(request.getMode())
+        && !QualifiedSubject.isGlobalContext(schemaRegistry.tenant(), subject)) {
+      throw new RestInvalidModeException("Forward mode only supported on global level");
+    }
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
