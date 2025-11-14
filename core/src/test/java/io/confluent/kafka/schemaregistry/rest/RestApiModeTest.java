@@ -1026,4 +1026,21 @@ public class RestApiModeTest extends ClusterTestHarness {
             mode,
             restApp.restClient.getMode(subject2, false).getMode());
   }
+
+
+  @Test
+  public void testSetForwardMode() throws Exception {
+    String subject = "testSubject";
+    String mode = Mode.FORWARD.toString();
+
+    try {
+      restApp.restClient.setMode(Mode.FORWARD.toString(), subject);
+    } catch (RestClientException e) {
+      assertEquals(42204, e.getErrorCode());
+      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
+    }
+    assertEquals(
+            mode,
+            restApp.restClient.setMode(mode).getMode());
+  }
 }
