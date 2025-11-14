@@ -119,6 +119,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,6 +138,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
+  private final List<HandlerWrapper> customHandler;
+
   private final Map<String, Object> props;
   private final LoadingCache<RawSchema, ParsedSchema> newSchemaCache;
   private final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
@@ -262,6 +265,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+    this.customHandler = new ArrayList<>();
   }
 
   @VisibleForTesting
@@ -724,14 +728,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Mode mode = getModeInScope(subject);
 
       boolean modifiedSchema = false;
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         modifiedSchema = maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
 
       int schemaId = schema.getId();
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, schemaId < 0, normalize);
-
       if (parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -771,7 +774,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
@@ -794,7 +797,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
-        } else if (newVersion != schema.getVersion() && mode != Mode.IMPORT) {
+        } else if (newVersion != schema.getVersion()
+                && !mode.isImportOrForwardMode()) {
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
@@ -866,9 +870,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
 
     if (schema.getId() >= 0) {
-      if (getModeInScope(subject) != Mode.IMPORT) {
-        throw new OperationNotPermittedException("Subject " + subject
-        + " in context " + context + " is not in import mode");
+      if (!getModeInScope(subject).isImportOrForwardMode()) {
+        throw new OperationNotPermittedException("Subject "
+                + subject + " is not in import or forward mode");
       }
     } else {
       if (getModeInScope(subject) != Mode.READWRITE) {
@@ -1626,7 +1630,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
                                                        boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      Mode mode = getModeInScope(schema.getSubject());
+      if (!mode.isImportOrForwardMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
       }
       if (normalize) {
@@ -2824,6 +2829,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public void onTruststoreCreated(KeyStore truststore) {
     metricsContainer.emitCertificateExpirationMetric(
         truststore, metricsContainer.getCertificateExpirationTruststore());
+  }
+
+  public List<HandlerWrapper> getCustomHandler() {
+    return customHandler;
+  }
+
+  public void addCustomHandler(HandlerWrapper handler) {
+    customHandler.add(handler);
+  }
+
+  public void removeCustomHandler(HandlerWrapper handler) {
+    customHandler.remove(handler);
   }
 
   private static class RawSchema {
