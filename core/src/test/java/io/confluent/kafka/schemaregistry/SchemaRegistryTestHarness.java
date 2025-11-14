@@ -21,7 +21,7 @@ import java.net.ServerSocket;
 
 /**
  * Interface defining common operations needed by schema registry integration tests.
- * This allows tests to be written against non-Kafka-based implementations.
+ * This allows tests to be written and run against an arbitrary test harness.
  */
 public interface SchemaRegistryTestHarness {
   /**
