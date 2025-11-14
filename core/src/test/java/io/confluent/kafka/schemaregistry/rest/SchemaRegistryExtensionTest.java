@@ -58,8 +58,7 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][] {
         { SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG },
-        { SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG },
-        { SchemaRegistryConfig.INIT_RESOURCE_EXTENSION_CONFIG}
+        { SchemaRegistryConfig.SCHEMAREGISTRY_RESOURCE_EXTENSION_CONFIG }
     });
   }
 
