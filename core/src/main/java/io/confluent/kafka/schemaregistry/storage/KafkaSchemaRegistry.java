@@ -1339,10 +1339,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
       throws SchemaRegistryException {
     String tenant = tenant();
-    String minResourceNamespace = resourceNamespace != null
+    String minResourceNamespace = resourceNamespace != null && !resourceNamespace.equals("*")
         ? resourceNamespace
         : String.valueOf(Character.MIN_VALUE);
-    String maxResourceNamespace = resourceNamespace != null
+    String maxResourceNamespace = resourceNamespace != null && !resourceNamespace.equals("*")
         ? resourceNamespace
         : String.valueOf(Character.MAX_VALUE);
     String minResourceType = resourceType != null

@@ -93,7 +93,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     List<Association> associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
-        Collections.singletonList("key"), null);
+        Collections.singletonList("key"), null, 0, -1);
     assertEquals(1, associations.size());
     assertEquals(resourceId, associations.get(0).getResourceId());
     assertEquals(resourceName, associations.get(0).getResourceName());
@@ -104,7 +104,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "topic",
-        Collections.singletonList("value"), null);
+        Collections.singletonList("value"), null, 0, -1);
     assertEquals(1, associations.size());
     assertEquals(resourceId, associations.get(0).getResourceId());
     assertEquals(resourceName, associations.get(0).getResourceName());
@@ -143,7 +143,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
-        Collections.singletonList("key"), null);
+        Collections.singletonList("key"), null, 0, -1);
     assertEquals(0, associations.size());
 
     List<Schema> schemas = restApp.restClient.getSchemas(null, false, false);
@@ -155,7 +155,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
-        Collections.singletonList("value"), null);
+        Collections.singletonList("value"), null, 0, -1);
     assertEquals(0, associations.size());
 
     schemas = restApp.restClient.getSchemas(null, false, false);
