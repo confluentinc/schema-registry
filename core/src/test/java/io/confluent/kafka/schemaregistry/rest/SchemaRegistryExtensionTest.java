@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -26,6 +28,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Properties;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.Configurable;
@@ -162,13 +166,15 @@ public class SchemaRegistryExtensionTest extends ClusterTestHarness {
             SchemaRegistry schemaRegistry
     ) {
       KafkaSchemaRegistry kafkaSchemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
-      kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper() {
+      kafkaSchemaRegistry.addCustomHandler(new HandlerWrapper() {
         @Override
-        public boolean handle(Request request, org.eclipse.jetty.server.Response response, Callback callback) throws Exception {
+        public void handle(String target,
+                           Request baseRequest,
+                           HttpServletRequest request,
+                           HttpServletResponse response) throws java.io.IOException, javax.servlet.ServletException {
           // adding another handler so we can assert handler is indeed added into the handler chain based on number of handler
-          kafkaSchemaRegistry.addCustomHandler(new Handler.Wrapper());
-          super.handle(request, response, callback);
-          return true;
+          kafkaSchemaRegistry.addCustomHandler(new HandlerWrapper());
+          super.handle(target, baseRequest, request, response);
         }
       });
     }
