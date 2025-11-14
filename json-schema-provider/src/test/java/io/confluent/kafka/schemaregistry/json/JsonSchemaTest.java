@@ -451,6 +451,30 @@ public class JsonSchemaTest {
     testEnvelopeWithReferences(draft);
   }
 
+  @Test
+  public void testEnvelopeWithReferencesDraft_2019_09_RawHttp() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2019-09/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2019_09_RawHttpTrailingHash() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2019-09/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12_RawHttp() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12_RawHttpTrailingHash() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
   private void testEnvelopeWithReferences(String draft) throws Exception {
     Map<String, String> schemas = getJsonSchemaWithReferences(draft);
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
