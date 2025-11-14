@@ -75,16 +75,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     if (schemaRegistryCustomHandlers != null) {
       for (HandlerWrapper
               schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
-        // add all custom handlers after the security handler.
-        // This is necessary for authentication to be applied before
-        // any of the custom handlers.
-        if (context.getSecurityHandler() != null) {
-          schemaRegistryCustomHandler
-              .setHandler(context.getSecurityHandler().getHandler());
-          context.getSecurityHandler().setHandler(schemaRegistryCustomHandler);
-        } else {
-          context.insertHandler(schemaRegistryCustomHandler);
-        }
+        context.insertHandler(schemaRegistryCustomHandler);
       }
     }
   }
