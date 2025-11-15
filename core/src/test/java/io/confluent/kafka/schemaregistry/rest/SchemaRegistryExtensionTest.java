@@ -51,7 +51,6 @@ import org.junit.Assert;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-@Ignore
 @RunWith(Parameterized.class)
 public class SchemaRegistryExtensionTest extends ClusterTestHarness {
   private static final String SUBJECT = "testSubject";

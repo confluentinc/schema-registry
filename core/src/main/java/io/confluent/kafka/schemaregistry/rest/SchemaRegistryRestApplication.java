@@ -117,8 +117,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     super.configureBaseApplication(config, metricTags);
 
     SchemaRegistryConfig schemaRegistryConfig = getConfiguration();
-    registerInitResourceExtensions(config, schemaRegistryConfig);
     schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
+    registerInitResourceExtensions(config, schemaRegistryConfig);
   }
 
   @Override
