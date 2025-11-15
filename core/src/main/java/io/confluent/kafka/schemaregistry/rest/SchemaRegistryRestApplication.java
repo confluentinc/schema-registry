@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceCollection;
@@ -69,6 +70,14 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     context.setErrorHandler(new JsonErrorHandler());
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
+    List<HandlerWrapper> schemaRegistryCustomHandlers =
+            schemaRegistry.getCustomHandler();
+    if (schemaRegistryCustomHandlers != null) {
+      for (HandlerWrapper
+              schemaRegistryCustomHandler : schemaRegistryCustomHandlers) {
+        context.insertHandler(schemaRegistryCustomHandler);
+      }
+    }
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
@@ -108,8 +117,8 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     super.configureBaseApplication(config, metricTags);
 
     SchemaRegistryConfig schemaRegistryConfig = getConfiguration();
-    registerInitResourceExtensions(config, schemaRegistryConfig);
     schemaRegistry = initSchemaRegistry(schemaRegistryConfig);
+    registerInitResourceExtensions(config, schemaRegistryConfig);
   }
 
   @Override

@@ -289,6 +289,15 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
   }
 
+  public static boolean isGlobalContext(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    if (qs == null || qs.getContext() == null) {
+      return false;
+    }
+    return qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+      && (qs.getSubject().isEmpty() || qs.getSubject() == null);
+  }
+
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
     return isValidSubject(tenant, qualifiedSubject, false);
   }
