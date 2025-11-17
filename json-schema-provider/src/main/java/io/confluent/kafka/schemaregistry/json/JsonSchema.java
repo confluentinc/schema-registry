@@ -171,27 +171,37 @@ public class JsonSchema implements ParsedSchema {
 
   // prepopulate the draft 2019-09 metaschemas, as the json-sKema library
   // only prepopulates the draft 2020-12 metaschemas
-  private static final Map<URI, String> prepopulatedMetaSchemas = ImmutableMap.of(
-      URI.create("https://json-schema.org/draft/2019-09/schema"),
-      readFromClassPath("/metaschemas/draft/2019-09/schema"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/core"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/core"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/validation"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/validation"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/applicator"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/applicator"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/meta-data"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/meta-data"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/format"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/format"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/content"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/content"),
-      // The following are to account for URIs with trailing #
-      URI.create("https://json-schema.org/draft/2019-09/schema#"),
-      readFromClassPath("/metaschemas/draft/2019-09/schema"),
-      URI.create("https://json-schema.org/draft/2020-12/schema#"),
-      readFromClassPath("/metaschemas/draft/2020-12/schema")
-  );
+  private static final Map<URI, String> prepopulatedMetaSchemas = 
+      new ImmutableMap.Builder<URI, String>()
+          .put(URI.create("https://json-schema.org/draft/2019-09/schema"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/core"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/core"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/validation"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/validation"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/applicator"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/applicator"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/meta-data"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/meta-data"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/format"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/format"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/content"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/content"))
+          // The following are to account for URIs with trailing #
+          .put(URI.create("https://json-schema.org/draft/2019-09/schema#"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("https://json-schema.org/draft/2020-12/schema#"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          // The following are to account for raw http
+          .put(URI.create("http://json-schema.org/draft/2019-09/schema"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("http://json-schema.org/draft/2019-09/schema#"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("http://json-schema.org/draft/2020-12/schema"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          .put(URI.create("http://json-schema.org/draft/2020-12/schema#"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          .build();
 
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
