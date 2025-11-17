@@ -381,8 +381,8 @@ public interface RestApiTestSuite {
   default void testRegisterDiffSchemaType() throws Exception {
     String subject = "testSubject";
     String avroSchema = TestUtils.getRandomCanonicalAvroString(1).get(0);
-    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTestSuite.getRandomJsonSchemas(1).get(0);
-    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTestSuite.getRandomProtobufSchemas(1).get(0);
+    String jsonSchema = io.confluent.kafka.schemaregistry.rest.json.RestApiTest.getRandomJsonSchemas(1).get(0);
+    String protobufSchema = io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTest.getRandomProtobufSchemas(1).get(0);
 
     restApp().restClient.updateCompatibility(NONE.name, subject);
 
