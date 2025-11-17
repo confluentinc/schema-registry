@@ -86,34 +86,6 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
   protected static final Optional<Properties> EMPTY_SASL_PROPERTIES = Optional.empty();
 
-  /**
-   * Choose a number of random available ports
-   */
-  public static int[] choosePorts(int count) {
-    try {
-      ServerSocket[] sockets = new ServerSocket[count];
-      int[] ports = new int[count];
-      for (int i = 0; i < count; i++) {
-        sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
-        ports[i] = sockets[i].getLocalPort();
-      }
-      for (int i = 0; i < count; i++) {
-        sockets[i].close();
-      }
-      return ports;
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  /**
-   * Choose an available port
-   */
- @Override
- public int choosePort() {
-   return choosePorts(1)[0];
- }
-
   private final int numBrokers;
   private final boolean setupRestApp;
   protected String compatibilityType;
@@ -199,7 +171,10 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     return new Properties();
   }
 
-  @Override
+  /**
+   * Inject properties into broker configuration.
+   * @param props properties to inject
+   */
   public void injectProperties(Properties props) {
     // Make sure that broker only role is "broker"
     props.setProperty("process.roles", "broker");
@@ -250,7 +225,10 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     return Time.SYSTEM;
   }
 
-  @Override
+  /**
+   * Gets the broker list for Kafka connections.
+   * @return broker list string, or null if not applicable
+   */
   public String getBrokerList() {
     return brokerList;
   }
