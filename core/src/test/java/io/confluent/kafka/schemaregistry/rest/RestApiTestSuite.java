@@ -92,11 +92,6 @@ public interface RestApiTestSuite {
   SchemaRegistryTestHarness getHarness();
 
   /**
-   * Get schema registry properties for the specific implementation.
-   */
-  Properties getSchemaRegistryProperties() throws Exception;
-
-  /**
    * Helper method to get the RestApp from the harness.
    */
   default RestApp restApp() {
