@@ -34,8 +34,9 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationCreateOrUpdateRequest {
 
-  private static final String DEFAULT_RESOURCE_TYPE = "topic";
-  private static final String DEFAULT_ASSOCIATION_TYPE = "value";
+  private static final String TOPIC_RESOURCE_TYPE = "topic";
+  private static final String KEY_ASSOCIATION_TYPE = "key";
+  private static final String VALUE_ASSOCIATION_TYPE = "value";
   private static final LifecyclePolicy DEFAULT_LIFECYCLE = LifecyclePolicy.STRONG;
 
   private String resourceName;
@@ -138,16 +139,24 @@ public class AssociationCreateOrUpdateRequest {
       throw new IllegalPropertyException("resourceId", "cannot be null or empty");
     }
     if (getResourceType() != null && !getResourceType().isEmpty()) {
-      checkName(getResourceType(), "resourceType");
+      if (!getResourceType().equals(TOPIC_RESOURCE_TYPE)) {
+        throw new IllegalPropertyException(
+            "resourceType", "must be '" + TOPIC_RESOURCE_TYPE + "'");
+      }
     } else {
-      setResourceType(DEFAULT_RESOURCE_TYPE);
+      setResourceType(TOPIC_RESOURCE_TYPE);
     }
     for (AssociationCreateOrUpdateInfo info : getAssociations()) {
       checkSubject(info.getSubject());
       if (info.getAssociationType() != null && !info.getAssociationType().isEmpty()) {
-        checkName(info.getAssociationType(), "associationType");
+        if (!info.getAssociationType().equals(KEY_ASSOCIATION_TYPE)
+            && !info.getAssociationType().equals(VALUE_ASSOCIATION_TYPE)) {
+          throw new IllegalPropertyException(
+              "associationType",
+              "must be either '" + KEY_ASSOCIATION_TYPE + "' or '" + VALUE_ASSOCIATION_TYPE + "'");
+        }
       } else {
-        info.setAssociationType(DEFAULT_ASSOCIATION_TYPE);
+        info.setAssociationType(VALUE_ASSOCIATION_TYPE);
       }
       if (info.getLifecycle() == LifecyclePolicy.WEAK) {
         if (Boolean.TRUE.equals(info.getFrozen())) {
