@@ -35,6 +35,8 @@ import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.RestApp;
+import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
@@ -77,11 +79,21 @@ import java.util.Properties;
 import org.apache.avro.Schema.Parser;
 import org.junit.jupiter.api.Test;
 
-public class RestApiTest extends ClusterTestHarness {
+public abstract class RestApiTest {
+
+  protected RestApp restApp = null;
 
   public RestApiTest() {
-    super(1, true);
   }
+
+  public void setUpTest(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  /**
+   * Get the test harness.
+   */
+  public abstract SchemaRegistryTestHarness getHarness();
 
   @Test
   public void testBasic() throws Exception {
@@ -3096,15 +3108,6 @@ public class RestApiTest extends ClusterTestHarness {
         restService.getId(expectedId).getSchemaString().trim(),
         "Registered schema should be found"
     );
-  }
-
-  @Override
-  public Properties getSchemaRegistryProperties() {
-    Properties schemaRegistryProps = new Properties();
-    schemaRegistryProps.put("response.http.headers.config",
-            "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
-    schemaRegistryProps.put("schema.providers.avro.validate.defaults", "true");
-    return schemaRegistryProps;
   }
 
   private String matchHeaderValue(Map<String, List<String>> responseHeaders,
