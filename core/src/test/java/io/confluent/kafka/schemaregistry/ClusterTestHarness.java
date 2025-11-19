@@ -37,9 +37,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Time;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.util.List;
 import java.util.Properties;
 
