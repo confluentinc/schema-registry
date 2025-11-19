@@ -1113,7 +1113,7 @@ public abstract class RestApiTest {
       } catch (Exception e) {
         return false;
       }
-    }, 5000, "ReferencedBy returned empty list");
+    }, 2000, "ReferencedBy returned empty list");
 
     List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
     assertEquals(parentId, refs.get(0).intValue());
@@ -1219,7 +1219,7 @@ public abstract class RestApiTest {
     }, 2000, "ReferencedBy returned empty list");
 
     List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1);
-    assertEquals(expectedSchemaId(parentId), refs.get(0).intValue());
+    assertEquals(parentId, refs.get(0).intValue());
 
     ns.MyRecord myrecord = new ns.MyRecord();
     AvroSchema schema = new AvroSchema(AvroSchemaUtils.getSchema(myrecord));
@@ -1227,7 +1227,7 @@ public abstract class RestApiTest {
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
         AvroSchema.TYPE, Collections.emptyList(), subject2, false);
     assertEquals(
-        expectedSchemaId(parentId), registeredSchema.getId().intValue(),
+        parentId, registeredSchema.getId().intValue(),
         "Registered schema should be found"
     );
 
