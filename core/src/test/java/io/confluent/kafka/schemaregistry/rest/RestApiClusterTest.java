@@ -29,7 +29,7 @@ public class RestApiClusterTest extends RestApiTest {
 
   protected ClusterTestHarness harness;
 
-  public RestApiClusterTest() throws Exception {
+  public RestApiClusterTest() {
     this.harness = new ClusterTestHarness(1, true);
     this.harness.injectSchemaRegistryProperties(getSchemaRegistryProperties());
   }
@@ -45,7 +45,7 @@ public class RestApiClusterTest extends RestApiTest {
     harness.tearDown();
   }
 
-  public Properties getSchemaRegistryProperties() throws Exception {
+  public Properties getSchemaRegistryProperties() {
     Properties schemaRegistryProps = new Properties();
     schemaRegistryProps.put("response.http.headers.config",
         "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");

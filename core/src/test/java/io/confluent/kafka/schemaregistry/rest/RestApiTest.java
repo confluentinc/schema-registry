@@ -1074,7 +1074,7 @@ public abstract class RestApiTest {
     testSchemaReferencesInContext("", ":.ctx:", expectedSchemaId(1));
   }
 
-  public void testSchemaReferencesInContext(String context, String refContext, int parentId)
+  private void testSchemaReferencesInContext(String context, String refContext, int parentId)
       throws Exception {
     List<String> schemas = TestUtils.getAvroSchemaWithReferences();
     String unqualifiedSubject = "my_reference";
@@ -1585,6 +1585,7 @@ public abstract class RestApiTest {
     associatedSubjects = restApp.restClient.getAllSubjectsByIdWithPagination(
             RestService.DEFAULT_REQUEST_PROPERTIES, schemaId, null, true, 1, 0);
     assertEquals(1, associatedSubjects.size());
+    // Ordering of subjects is not guaranteed across all test harnesses, so we check for either subject.
     assertTrue(associatedSubjects.get(0).equals(subject1) || associatedSubjects.get(0).equals(subject2));
   }
 
@@ -1641,6 +1642,7 @@ public abstract class RestApiTest {
     associatedSubjects = restApp.restClient.getAllVersionsByIdWithPagination(
             RestService.DEFAULT_REQUEST_PROPERTIES, schemaId, null, true, 1, 1);
     assertEquals(associatedSubjects.size(), 1);
+    // Ordering of subjects is not guaranteed across all test harnesses, so we check for either subject.
     assertTrue(associatedSubjects.contains(new SubjectVersion(subject2, 1)) ||
         associatedSubjects.contains(new SubjectVersion(subject1, 1)));
   }
