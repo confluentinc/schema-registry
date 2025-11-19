@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 
 import java.util.Properties;
 import org.junit.jupiter.api.AfterEach;
