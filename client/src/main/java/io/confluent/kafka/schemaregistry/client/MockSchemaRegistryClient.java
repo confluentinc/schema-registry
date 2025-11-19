@@ -44,6 +44,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.Arrays;
 import java.util.Objects;
@@ -98,6 +99,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, List<Association>> subjectToAssocCache;
   private final Map<ResourceAndAssocType, Association> resourceAndAssocTypeCache;
   private final Map<String, List<Association>> resourceIdToAssocCache;
+  private final Map<String, Map<String, List<Association>>> resourceNameToAssocCache;
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
   private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
@@ -152,6 +154,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     subjectToAssocCache = new ConcurrentHashMap<>();
     resourceAndAssocTypeCache = new ConcurrentHashMap<>();
     resourceIdToAssocCache = new ConcurrentHashMap<>();
+    resourceNameToAssocCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
     ids = new ConcurrentHashMap<>();
     this.providers = providers != null && !providers.isEmpty()
@@ -1003,12 +1006,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
       subjectToAssocCache.computeIfAbsent(
               associationInRequest.getSubject(),
-              k -> new ArrayList<>()
+              k -> new CopyOnWriteArrayList<>()
       ).add(newAssociation);
 
       resourceIdToAssocCache.computeIfAbsent(
               request.getResourceId(),
-              k -> new ArrayList<>()
+              k -> new CopyOnWriteArrayList<>()
+      ).add(newAssociation);
+
+      resourceNameToAssocCache.computeIfAbsent(
+          request.getResourceName(),
+          k -> new ConcurrentHashMap<>()
+      ).computeIfAbsent(request.getResourceNamespace(),
+          k -> new CopyOnWriteArrayList<>()
       ).add(newAssociation);
     }
   }
@@ -1167,6 +1177,70 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return filtered.subList(start, end);
   }
 
+  public List<Association> getAssociationsByResourceName(String resourceName,
+                                                         String resourceNamespace,
+                                                         String resourceType,
+                                                         List<String> associationTypes,
+                                                         String lifecycle, int offset, int limit)
+          throws IOException, RestClientException {
+    if (resourceName == null || resourceName.isEmpty()) {
+      throw new RestClientException("Association parameters are invalid", 422, 42212);
+    }
+    if (lifecycle != null) {
+      try {
+        LifecyclePolicy.valueOf(lifecycle);
+      } catch (IllegalArgumentException e) {
+        throw new RestClientException("Association parameters are invalid", 422, 42212);
+      }
+    }
+
+    Map<String, List<Association>> namespaceMap = resourceNameToAssocCache.get(resourceName);
+    if (namespaceMap == null || namespaceMap.isEmpty()) {
+      return new ArrayList<>();  // Return empty list
+    }
+
+    List<Association> associations = new ArrayList<>();
+    // If resourceNamespace is null or "*", collect from all namespaces
+    if (resourceNamespace == null || WILDCARD.equals(resourceNamespace)) {
+      for (List<Association> assocList : namespaceMap.values()) {
+        associations.addAll(assocList);
+      }
+    } else {
+      // Get associations from specific namespace
+      List<Association> namespaceAssociations = namespaceMap.get(resourceNamespace);
+      if (namespaceAssociations != null) {
+        associations.addAll(namespaceAssociations);
+      }
+    }
+
+    if (associations.isEmpty()) {
+      return new ArrayList<>();  // Return empty list
+    }
+
+    List<Association> filtered = associations.stream()
+            .filter(association ->
+                    resourceType == null || association.getResourceType().equals(resourceType))
+            .filter(association ->
+                    associationTypes == null
+                            || associationTypes.isEmpty()
+                            || associationTypes.contains(association.getAssociationType()))
+            .filter(association ->
+                    lifecycle == null || association.getLifecycle().toString().equals(lifecycle))
+            .collect(Collectors.toList());
+
+    // Apply pagination
+    int start = offset;
+    if (start > filtered.size()) {
+      start = filtered.size();
+    }
+
+    int end = start + limit;
+    if (limit <= 0 || end > filtered.size()) {
+      end = filtered.size();
+    }
+    return filtered.subList(start, end);
+  }
+
   private void checkDeleteAssociation(Association association, boolean cascadeLifecycle)
           throws RestClientException {
     if (!cascadeLifecycle && association.getLifecycle() == LifecyclePolicy.STRONG
@@ -1185,6 +1259,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       deleteSubjectNoAssociationsCheck(null, subject, false);
       deleteSubjectNoAssociationsCheck(null, subject, true);
     }
+    resourceNameToAssocCache.computeIfPresent(association.getResourceName(), (k, map) -> {
+      map.computeIfPresent(association.getResourceNamespace(), (k2, list) -> {
+        list.remove(association);
+        return list.isEmpty() ? null : list;
+      });
+      return map.isEmpty() ? null : map;
+    });
     resourceIdToAssocCache.computeIfPresent(resourceId, (k, list) -> {
       list.remove(association);
       return list.isEmpty() ? null : list;

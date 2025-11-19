@@ -439,6 +439,16 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  public default List<Association> getAssociationsByResourceName(String resourceName,
+      String resourceNamespace,
+      String resourceType,
+      List<String> associationTypes,
+      String lifecycle,
+      int offset, int limit)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public default void deleteAssociations(String resourceId, String resourceType,
                                          List<String> associationTypes, boolean cascadeLifecycle)
           throws IOException, RestClientException {
