@@ -544,6 +544,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
                 .maximumSize(cacheCapacity)
                 .build());
         idSchemaMap.put(retrievedResponse.getId(), schema);
+        // Invalidate latest version cache since a new schema version was registered
+        latestVersionCache.invalidate(subject);
+        latestWithMetadataCache.invalidateAll();
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
