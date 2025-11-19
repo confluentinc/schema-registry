@@ -930,23 +930,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       }
     }
   }
-  
-  private synchronized AssociationResponse createOrUpdateAssociationHelper(
-          AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
-          throws IOException, RestClientException {
+
+  private void checkExistingAssociationsByResourceId(AssociationCreateOrUpdateRequest request,
+                                                     boolean isCreateOnly)
+          throws RestClientException {
     String resourceId = request.getResourceId();
     String resourceType = request.getResourceType();
-    String resourceName = request.getResourceName();
-    String resourceNamespace = request.getResourceNamespace();
 
-    // Check that association types are unique
-    checkAssociationTypeUniqueness(request);
-
-    // Make sure subject exists if the schema in request is null
-    // The compatibility check will be done through post new schema directly
-    checkSubjectExists(request);
-
-    // Check whether the resource already has an association
     for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       String subject = associationInRequest.getSubject();
       String associationType = associationInRequest.getAssociationType();
@@ -987,21 +977,23 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                   "The association of type  '%s' is frozen for subject '%s'",
                   associationType, subject), 404, 40410);
         }
-        // If the final association is weak frozen, return false
-        LifecyclePolicy endLifecyclePolicy = associationInRequest.getLifecycle() != null
-                ? associationInRequest.getLifecycle() : existingAssociation.getLifecycle();
-        boolean endFrozen = associationInRequest.getFrozen() != null
-                ? associationInRequest.getFrozen() : existingAssociation.isFrozen();
-        if (endLifecyclePolicy == LifecyclePolicy.WEAK && endFrozen) {
-          // FIXME
+        // If existing association is weak but request is frozen, return false
+        if (existingAssociation.getLifecycle() == LifecyclePolicy.WEAK
+                && Boolean.TRUE.equals(associationInRequest.getFrozen())) {
           throw new RestClientException(String.format(
-                  "The association of type  '%s' is frozen for subject '%s'",
-                  associationType, subject), 400, 40000);
+                  "The association specified an invalid value for property: '%s', detail: %s",
+                  "frozen", "association with lifecycle of WEAK cannot be frozen"),
+                  422, 42212);
         }
       }
     }
+  }
 
-    // Check if subject can accept new association
+  private void checkExistingAssociationsBySubject(AssociationCreateOrUpdateRequest request)
+          throws RestClientException {
+    String resourceId = request.getResourceId();
+    String resourceType = request.getResourceType();
+
     for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       String subject = associationInRequest.getSubject();
       String associationType = associationInRequest.getAssociationType();
@@ -1028,18 +1020,28 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         }
       }
     }
+  }
 
-    // Post all schemas
-    postAllSchemasFromAssociationRequest(request);
+  private List<Association> writeAssociationsToCaches(AssociationCreateOrUpdateRequest request) {
+    String resourceId = request.getResourceId();
+    String resourceType = request.getResourceType();
+    String resourceName = request.getResourceName();
+    String resourceNamespace = request.getResourceNamespace();
 
     List<Association> results = new ArrayList<>();
-    // Write associations to caches
     for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       ResourceAndAssocType key = new ResourceAndAssocType(resourceId, resourceType,
               associationInRequest.getAssociationType());
 
       if (resourceAndAssocTypeCache.containsKey(key)) {
-        modifyAssociationInPlace(resourceAndAssocTypeCache.get(key),  associationInRequest);
+        // Modify existing association in place
+        Association existingAssociation = resourceAndAssocTypeCache.get(key);
+        if (associationInRequest.getLifecycle() != null) {
+          existingAssociation.setLifecycle(associationInRequest.getLifecycle());
+        }
+        if (associationInRequest.getFrozen() != null) {
+          existingAssociation.setFrozen(associationInRequest.getFrozen());
+        }
         results.add(resourceAndAssocTypeCache.get(key));
         continue;
       }
@@ -1054,9 +1056,43 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
               Boolean.TRUE.equals(associationInRequest.getFrozen()));
 
       // Update all caches
-      updateAssociationCaches(key, newAssociation);
+      resourceAndAssocTypeCache.put(key, newAssociation);
+      subjectToAssocCache.computeIfAbsent(newAssociation.getSubject(),
+              k -> new ArrayList<>()).add(newAssociation);
+      resourceIdToAssocCache.computeIfAbsent(resourceId,
+              k -> new ArrayList<>()).add(newAssociation);
+      resourceNameToAssocCache
+              .computeIfAbsent(resourceName, k -> new ConcurrentHashMap<>())
+              .computeIfAbsent(resourceNamespace,
+                      k -> new CopyOnWriteArrayList<>()).add(newAssociation);
       results.add(newAssociation);
     }
+    return results;
+  }
+
+  
+  private synchronized AssociationResponse createOrUpdateAssociationHelper(
+          AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
+          throws IOException, RestClientException {
+    // Check that association types are unique
+    checkAssociationTypeUniqueness(request);
+
+    // Make sure subject exists if the schema in request is null
+    // The schema compatibility check will be done through post new schema directly
+    checkSubjectExists(request);
+
+    // Check whether the resource already has an association
+    checkExistingAssociationsByResourceId(request, isCreateOnly);
+
+    // Check if subject can accept new association
+    checkExistingAssociationsBySubject(request);
+
+    // Post all schemas
+    postAllSchemasFromAssociationRequest(request);
+
+    // Write associations to caches
+    List<Association> results = writeAssociationsToCaches(request);
+
     // Create response
     return createResponseFromAssociationCreateOrUpdateRequest(request, results);
   }
@@ -1080,7 +1116,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                       createOrUpdateInfo.getSchema())
                       : null));
     }
-    return new AssociationResponse(resourceName, resourceNamespace, resourceId, resourceType, infos);
+    return new AssociationResponse(
+            resourceName, resourceNamespace, resourceId, resourceType, infos);
   }
 
   private void postAllSchemasFromAssociationRequest(AssociationCreateOrUpdateRequest request)
@@ -1094,28 +1131,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                 associationInRequest.getNormalize());
       }
     }
-  }
-
-  private void modifyAssociationInPlace(Association existingAssociation,
-                                        AssociationCreateOrUpdateInfo associationInRequest) {
-    if (associationInRequest.getLifecycle() != null) {
-      existingAssociation.setLifecycle(associationInRequest.getLifecycle());
-    }
-    if (associationInRequest.getFrozen() != null) {
-      existingAssociation.setFrozen(associationInRequest.getFrozen());
-    }
-  }
-
-  private void updateAssociationCaches(ResourceAndAssocType key, Association newAssociation) {
-    resourceAndAssocTypeCache.put(key, newAssociation);
-    subjectToAssocCache.computeIfAbsent(newAssociation.getSubject(),
-            k -> new ArrayList<>()).add(newAssociation);
-    resourceIdToAssocCache.computeIfAbsent(newAssociation.getResourceId(),
-            k -> new ArrayList<>()).add(newAssociation);
-    resourceNameToAssocCache
-            .computeIfAbsent(newAssociation.getResourceName(), k -> new ConcurrentHashMap<>())
-            .computeIfAbsent(newAssociation.getResourceNamespace(),
-            k -> new CopyOnWriteArrayList<>()).add(newAssociation);
   }
 
   private boolean schemaExistsInRegistry(String subject, RegisterSchemaRequest schema) {
