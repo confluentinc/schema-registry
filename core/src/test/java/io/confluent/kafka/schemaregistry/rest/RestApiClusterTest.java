@@ -19,27 +19,49 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
 
 import java.util.Properties;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 
 /**
  * ClusterTestHarness implementation of REST API integration tests.
  */
-public class RestApiClusterTest extends ClusterTestHarness implements RestApiTest {
+public class RestApiClusterTest extends RestApiTest {
+
+  private ClusterTestHarness harness;
 
   public RestApiClusterTest() {
-    super(1, true);
+    this.harness = new LocalClusterTestHarness(1, true);
+  }
+
+  @BeforeEach
+  public void setUpTest(TestInfo testInfo) throws Exception {
+    harness.setUpTest(testInfo);
+    setUpTest(harness.getRestApp());
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    harness.tearDown();
   }
 
   @Override
   public SchemaRegistryTestHarness getHarness() {
-    return this;
+    return harness;
   }
 
-  @Override
-  public Properties getSchemaRegistryProperties() throws Exception {
-    Properties schemaRegistryProps = super.getSchemaRegistryProperties();
-    schemaRegistryProps.put("response.http.headers.config",
-            "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
-    schemaRegistryProps.put("schema.providers.avro.validate.defaults", "true");
-    return schemaRegistryProps;
+  static class LocalClusterTestHarness extends ClusterTestHarness {
+    public LocalClusterTestHarness(int numBrokers, boolean setupRestApp) {
+      super(numBrokers, setupRestApp);
+    }
+
+    @Override
+    public Properties getSchemaRegistryProperties() throws Exception {
+      Properties schemaRegistryProps = super.getSchemaRegistryProperties();
+      schemaRegistryProps.put("response.http.headers.config",
+          "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
+      schemaRegistryProps.put("schema.providers.avro.validate.defaults", "true");
+      return schemaRegistryProps;
+    }
   }
 }
