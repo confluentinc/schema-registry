@@ -37,9 +37,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Time;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.util.List;
 import java.util.Properties;
 
@@ -77,7 +74,7 @@ import scala.collection.Seq;
  */
 @Tag("IntegrationTest")
 @DisplayNameGeneration(AddKraftQuorum.class)
-public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
+public class ClusterTestHarness implements SchemaRegistryTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(ClusterTestHarness.class);
 
@@ -86,37 +83,11 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
   public static final String KAFKASTORE_TOPIC = SchemaRegistryConfig.DEFAULT_KAFKASTORE_TOPIC;
   protected static final Optional<Properties> EMPTY_SASL_PROPERTIES = Optional.empty();
 
-  /**
-   * Choose a number of random available ports
-   */
-  public static int[] choosePorts(int count) {
-    try {
-      ServerSocket[] sockets = new ServerSocket[count];
-      int[] ports = new int[count];
-      for (int i = 0; i < count; i++) {
-        sockets[i] = new ServerSocket(0, 0, InetAddress.getByName("0.0.0.0"));
-        ports[i] = sockets[i].getLocalPort();
-      }
-      for (int i = 0; i < count; i++) {
-        sockets[i].close();
-      }
-      return ports;
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  /**
-   * Choose an available port
-   */
- @Override
- public int choosePort() {
-   return choosePorts(1)[0];
- }
-
   private final int numBrokers;
   private final boolean setupRestApp;
   protected String compatibilityType;
+
+  protected Properties schemaRegistryProperties;
 
   // Quorum controller
   private TestInfo testInfo;
@@ -147,6 +118,7 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     this.numBrokers = numBrokers;
     this.setupRestApp = setupRestApp;
     this.compatibilityType = compatibilityType;
+    this.schemaRegistryProperties = new Properties();
   }
 
   @BeforeEach
@@ -195,11 +167,28 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     restApp.start();
   }
 
+  /**
+   * Subclasses can override this method to provide custom schema registry properties
+   * or add properties via {@link #injectSchemaRegistryProperties(Properties)}.
+   * @return schema registry properties
+   * @throws Exception if an error occurs
+   */
   public Properties getSchemaRegistryProperties() throws Exception {
-    return new Properties();
+    return schemaRegistryProperties;
   }
 
-  @Override
+  /**
+   * Inject properties into schema registry configuration.
+   * @param props properties to inject
+   */
+  public void injectSchemaRegistryProperties(Properties props) {
+    this.schemaRegistryProperties.putAll(props);
+  }
+
+  /**
+   * Inject properties into broker configuration.
+   * @param props properties to inject
+   */
   public void injectProperties(Properties props) {
     // Make sure that broker only role is "broker"
     props.setProperty("process.roles", "broker");
@@ -250,7 +239,10 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     return Time.SYSTEM;
   }
 
-  @Override
+  /**
+   * Gets the broker list for Kafka connections.
+   * @return broker list string, or null if not applicable
+   */
   public String getBrokerList() {
     return brokerList;
   }
