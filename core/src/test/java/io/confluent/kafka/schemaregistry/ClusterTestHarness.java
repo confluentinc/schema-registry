@@ -87,7 +87,7 @@ public class ClusterTestHarness implements SchemaRegistryTestHarness {
   private final boolean setupRestApp;
   protected String compatibilityType;
 
-  private Properties schemaRegistryProperties;
+  protected Properties schemaRegistryProperties;
 
   // Quorum controller
   private TestInfo testInfo;
@@ -169,7 +169,7 @@ public class ClusterTestHarness implements SchemaRegistryTestHarness {
 
   /**
    * Subclasses can override this method to provide custom schema registry properties
-   * or set properties via {@link #setSchemaRegistryProperties}
+   * or add properties via {@link #injectSchemaRegistryProperties(Properties)}.
    * @return schema registry properties
    * @throws Exception if an error occurs
    */
@@ -177,8 +177,12 @@ public class ClusterTestHarness implements SchemaRegistryTestHarness {
     return schemaRegistryProperties;
   }
 
-  public void setSchemaRegistryProperties(Properties props) {
-    this.schemaRegistryProperties = props;
+  /**
+   * Inject properties into schema registry configuration.
+   * @param props properties to inject
+   */
+  public void injectSchemaRegistryProperties(Properties props) {
+    this.schemaRegistryProperties.putAll(props);
   }
 
   /**
