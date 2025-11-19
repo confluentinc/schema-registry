@@ -3115,7 +3115,7 @@ public abstract class RestApiTest {
     }
   }
 
-  static void registerAndVerifySchema(
+  public static void registerAndVerifySchema(
       RestService restService,
       RegisterSchemaRequest request,
       int expectedId,
