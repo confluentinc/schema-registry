@@ -90,11 +90,6 @@ public abstract class RestApiTest {
     this.restApp = restApp;
   }
 
-  /**
-   * Get the test harness.
-   */
-  public abstract SchemaRegistryTestHarness getHarness();
-
   @Test
   public void testBasic() throws Exception {
     String subject1 = "testTopic1";

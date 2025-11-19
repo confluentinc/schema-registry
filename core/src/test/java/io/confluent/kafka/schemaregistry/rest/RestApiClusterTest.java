@@ -45,11 +45,6 @@ public class RestApiClusterTest extends RestApiTest {
     harness.tearDown();
   }
 
-  @Override
-  public SchemaRegistryTestHarness getHarness() {
-    return harness;
-  }
-
   static class LocalClusterTestHarness extends ClusterTestHarness {
     public LocalClusterTestHarness(int numBrokers, boolean setupRestApp) {
       super(numBrokers, setupRestApp);
