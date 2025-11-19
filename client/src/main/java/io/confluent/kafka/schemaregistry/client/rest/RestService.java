@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
@@ -1961,6 +1962,94 @@ public class RestService implements Closeable, Configurable {
     AssociationBatchResponse response = httpRequest(path, "POST",
         request.toJson().getBytes(StandardCharsets.UTF_8),
         requestProperties, ASSOCIATION_BATCH_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<Association> getAssociationsBySubject(
+      Map<String, String> requestProperties,
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle, int offset, int limit)
+      throws IOException, RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/subjects/{subject}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 0) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(subject).toString();
+
+    List<Association> response = httpRequest(path, "GET", null,
+        requestProperties, ASSOCIATIONS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<Association> getAssociationsByResourceId(
+      Map<String, String> requestProperties,
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle, int offset, int limit)
+      throws IOException, RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceId}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 1) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(resourceId).toString();
+
+    List<Association> response = httpRequest(path, "GET", null,
+        requestProperties, ASSOCIATIONS_RESPONSE_TYPE);
+    return response;
+  }
+
+  public List<Association> getAssociationsByResourceName(
+      Map<String, String> requestProperties,
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle,
+      int offset, int limit)
+      throws IOException, RestClientException {
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceNamespace}/{resourceName}");
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    for (String associationType : associationTypes) {
+      builder.queryParam("associationType", associationType);
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.toString());
+    }
+    if (offset > 0) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit >= 1) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build(resourceNamespace, resourceName).toString();
+
+    List<Association> response = httpRequest(path, "GET", null,
+        requestProperties, ASSOCIATIONS_RESPONSE_TYPE);
     return response;
   }
 
