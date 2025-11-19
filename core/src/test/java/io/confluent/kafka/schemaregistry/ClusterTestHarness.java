@@ -77,7 +77,7 @@ import scala.collection.Seq;
  */
 @Tag("IntegrationTest")
 @DisplayNameGeneration(AddKraftQuorum.class)
-public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
+public class ClusterTestHarness implements SchemaRegistryTestHarness {
 
   private static final Logger log = LoggerFactory.getLogger(ClusterTestHarness.class);
 
@@ -89,6 +89,8 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
   private final int numBrokers;
   private final boolean setupRestApp;
   protected String compatibilityType;
+
+  private Properties schemaRegistryProperties;
 
   // Quorum controller
   private TestInfo testInfo;
@@ -119,6 +121,7 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     this.numBrokers = numBrokers;
     this.setupRestApp = setupRestApp;
     this.compatibilityType = compatibilityType;
+    this.schemaRegistryProperties = new Properties();
   }
 
   @BeforeEach
@@ -167,8 +170,18 @@ public abstract class ClusterTestHarness implements SchemaRegistryTestHarness {
     restApp.start();
   }
 
+  /**
+   * Subclasses can override this method to provide custom schema registry properties
+   * or set properties via {@link #setSchemaRegistryProperties}
+   * @return schema registry properties
+   * @throws Exception if an error occurs
+   */
   public Properties getSchemaRegistryProperties() throws Exception {
-    return new Properties();
+    return schemaRegistryProperties;
+  }
+
+  public void setSchemaRegistryProperties(Properties props) {
+    this.schemaRegistryProperties = props;
   }
 
   /**

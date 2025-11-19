@@ -16,29 +16,39 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
 /**
  * ClusterTestHarness implementation of REST API integration tests.
  */
-public class RestApiClusterTest extends ClusterTestHarness implements RestApiTest {
+public class RestApiClusterTest extends RestApiTest {
 
-  public RestApiClusterTest() {
-    super(1, true);
+  protected ClusterTestHarness harness;
+
+  public RestApiClusterTest() throws Exception {
+    this.harness = new ClusterTestHarness(1, true);
+    this.harness.setSchemaRegistryProperties(getSchemaRegistryProperties());
   }
 
-  @Override
-  public SchemaRegistryTestHarness getHarness() {
-    return this;
+  @BeforeEach
+  public void setUpTest(TestInfo testInfo) throws Exception {
+    harness.setUpTest(testInfo);
+    setRestApp(harness.getRestApp());
   }
 
-  @Override
+  @AfterEach
+  public void tearDown() throws Exception {
+    harness.tearDown();
+  }
+
   public Properties getSchemaRegistryProperties() throws Exception {
-    Properties schemaRegistryProps = super.getSchemaRegistryProperties();
+    Properties schemaRegistryProps = harness.getSchemaRegistryProperties();
     schemaRegistryProps.put("response.http.headers.config",
-            "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
+        "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"");
     schemaRegistryProps.put("schema.providers.avro.validate.defaults", "true");
     return schemaRegistryProps;
   }
