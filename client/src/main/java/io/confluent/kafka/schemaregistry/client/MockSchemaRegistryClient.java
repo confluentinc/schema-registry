@@ -1070,7 +1070,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return results;
   }
 
-  
   private synchronized AssociationResponse createOrUpdateAssociationHelper(
           AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
           throws IOException, RestClientException {
@@ -1154,13 +1153,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                 String.format("resourceType {} and associationType {} don't match",
                         request.getResourceType(), associationCreateInfo.getAssociationType()));
       }
-      /*
-      // Set default lifecycle if not provided
-      if (associationCreateInfo.getLifecycle() == null) {
-        associationCreateInfo.setLifecycle(DEFAULT_LIFECYCLE_POLICY);
-      }
-
-       */
     }
   }
 
