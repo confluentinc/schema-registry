@@ -22,7 +22,11 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -1104,6 +1108,56 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (restService != null) {
       restService.close();
     }
+  }
+
+  @Override
+  public AssociationResponse createAssociation(AssociationCreateOrUpdateRequest request)
+      throws IOException, RestClientException {
+    return restService.createAssociation(DEFAULT_REQUEST_PROPERTIES, null, false, request);
+  }
+
+  @Override
+  public AssociationResponse createOrUpdateAssociation(AssociationCreateOrUpdateRequest request)
+      throws IOException, RestClientException {
+    return restService.createOrUpdateAssociation(DEFAULT_REQUEST_PROPERTIES, null, false, request);
+  }
+
+  @Override
+  public List<Association> getAssociationsBySubject(String subject,
+      String resourceType, List<String> associationTypes, String lifecycle, int offset, int limit)
+      throws IOException, RestClientException {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsBySubject(
+        DEFAULT_REQUEST_PROPERTIES, subject, resourceType, associationTypes, lifecyclePolicy,
+        offset, limit);
+  }
+
+  @Override
+  public List<Association> getAssociationsByResourceId(String resourceId,
+      String resourceType, List<String> associationTypes, String lifecycle, int offset, int limit)
+      throws IOException, RestClientException {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceId(
+        DEFAULT_REQUEST_PROPERTIES, resourceId, resourceType, associationTypes, lifecyclePolicy,
+        offset, limit);
+  }
+
+  @Override
+  public List<Association> getAssociationsByResourceName(String resourceName,
+      String resourceNamespace, String resourceType, List<String> associationTypes,
+      String lifecycle, int offset, int limit) throws IOException, RestClientException {
+    LifecyclePolicy lifecyclePolicy = lifecycle != null ? LifecyclePolicy.valueOf(lifecycle) : null;
+    return restService.getAssociationsByResourceName(
+        DEFAULT_REQUEST_PROPERTIES, resourceName, resourceNamespace, resourceType, associationTypes,
+        lifecyclePolicy, offset, limit);
+  }
+
+  @Override
+  public void deleteAssociations(String resourceId, String resourceType,
+                                  List<String> associationTypes, boolean cascadeLifecycle)
+      throws IOException, RestClientException {
+    restService.deleteAssociations(
+        DEFAULT_REQUEST_PROPERTIES, resourceId, resourceType, associationTypes, cascadeLifecycle);
   }
 
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
