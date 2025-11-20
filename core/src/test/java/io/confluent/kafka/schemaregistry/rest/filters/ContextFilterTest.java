@@ -280,6 +280,26 @@ public class ContextFilterTest {
   }
 
   @Test
+  public void testContextNamedSubjects() {
+    String path = "/contexts/subjects/subjects/foo/versions";
+    Assert.assertEquals(
+        "Context must be preserved",
+        "/subjects/:.subjects:foo/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testContextNamedContexts() {
+    String path = "/contexts/contexts/subjects/foo/versions";
+    Assert.assertEquals(
+        "Context must be preserved",
+        "/subjects/:.contexts:foo/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
   public void testSubjectNamedSubjects() {
     String path = "/subjects/subjects/versions";
     Assert.assertEquals(
