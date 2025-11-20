@@ -310,8 +310,8 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         associationsBySubject.computeIfAbsent(
             key.getTenant(), k -> new ConcurrentHashMap<>());
     tenantAssociationsBySubject.computeIfAbsent(
-        value.getSubject(), k -> ConcurrentHashMap.newKeySet());
-    tenantAssociationsBySubject.get(value.getSubject()).add(value);
+        key.getSubject(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsBySubject.get(key.getSubject()).add(value);
     Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
         associationsByResourceId.computeIfAbsent(
             key.getTenant(), k -> new ConcurrentHashMap<>());
@@ -335,12 +335,12 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     tenantAssociationsByGuid.remove(value.getGuid());
     Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
         associationsBySubject.getOrDefault(key.getTenant(), Collections.emptyMap());
-    tenantAssociationsBySubject.get(value.getSubject()).remove(value);
+    tenantAssociationsBySubject.get(key.getSubject()).remove(value);
     Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
         associationsByResourceId.getOrDefault(key.getTenant(), Collections.emptyMap());
     tenantAssociationsByResourceId.get(value.getResourceId()).remove(value);
-    if (tenantAssociationsBySubject.get(value.getSubject()).isEmpty()) {
-      tenantAssociationsBySubject.remove(value.getSubject());
+    if (tenantAssociationsBySubject.get(key.getSubject()).isEmpty()) {
+      tenantAssociationsBySubject.remove(key.getSubject());
     }
     if (tenantAssociationsByResourceId.get(value.getResourceId()).isEmpty()) {
       tenantAssociationsByResourceId.remove(value.getResourceId());

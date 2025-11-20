@@ -26,8 +26,8 @@ import java.util.Objects;
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonPropertyOrder(value = {"keytype", "tenant", "resourceName", "resourceNamespace",
-    "resourceType", "associationType"})
-public class AssociationKey extends SchemaRegistryKey {
+    "resourceType", "associationType", "subject"})
+public class AssociationKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 0;
   @NotEmpty
@@ -37,12 +37,14 @@ public class AssociationKey extends SchemaRegistryKey {
   private String resourceType;
   private String associationType;
 
-  public AssociationKey(@JsonProperty("tenant") String tenant,
+  public AssociationKey(
+      @JsonProperty("tenant") String tenant,
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceType") String resourceType,
-      @JsonProperty("associationType") String associationType) {
-    super(SchemaRegistryKeyType.ASSOC);
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("subject") String subject) {
+    super(SchemaRegistryKeyType.ASSOC, subject);
     this.magicByte = MAGIC_BYTE;
     this.tenant = tenant;
     this.resourceName = resourceName;
@@ -131,9 +133,9 @@ public class AssociationKey extends SchemaRegistryKey {
         + ", resourceNamespace='" + resourceNamespace + '\''
         + ", resourceType='" + resourceType + '\''
         + ", associationType='" + associationType + '\''
+        + ", subject='" + getSubject() + '\''
         + '}';
   }
-
 
   @Override
   public int compareTo(SchemaRegistryKey o) {
@@ -200,7 +202,20 @@ public class AssociationKey extends SchemaRegistryKey {
       } else if (that.getAssociationType() == null) {
         return 1;
       } else {
-        return this.getAssociationType().compareTo(that.getAssociationType());
+        int assocTypeComparison = this.getAssociationType().compareTo(that.getAssociationType());
+        if (assocTypeComparison != 0) {
+          return assocTypeComparison < 0 ? -1 : 1;
+        }
+      }
+
+      if (this.getSubject() == null && that.getSubject() == null) {
+        return 0;
+      } else if (this.getSubject() == null) {
+        return -1;
+      } else if (that.getSubject() == null) {
+        return 1;
+      } else {
+        return this.getSubject().compareTo(that.getSubject());
       }
     } else {
       return compare;

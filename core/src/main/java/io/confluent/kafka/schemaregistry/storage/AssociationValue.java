@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ public class AssociationValue extends SubjectValue {
   private boolean frozen;
 
   @JsonCreator
-  public AssociationValue(@JsonProperty("subject") String subject,
+  public AssociationValue(
       @JsonProperty("guid") String guid,
       @JsonProperty("tenant") String tenant,
       @JsonProperty("resourceName") String resourceName,
@@ -58,6 +59,7 @@ public class AssociationValue extends SubjectValue {
       @JsonProperty("resourceId") String resourceId,
       @JsonProperty("resourceType") String resourceType,
       @JsonProperty("associationType") String associationType,
+      @JsonProperty("subject") String subject,
       @JsonProperty("lifecycle") Lifecycle lifecycle,
       @JsonProperty("frozen") boolean frozen) {
     super(subject);
@@ -200,6 +202,7 @@ public class AssociationValue extends SubjectValue {
         + ", resourceId='" + resourceId + '\''
         + ", resourceType='" + resourceType + '\''
         + ", associationType='" + associationType + '\''
+        + ", subject='" + getSubject() + '\''
         + ", lifecycle=" + lifecycle
         + ", frozen=" + frozen
         + '}';
@@ -208,12 +211,13 @@ public class AssociationValue extends SubjectValue {
   @Override
   public AssociationKey toKey() {
     return new AssociationKey(tenant,
-        resourceName, resourceNamespace, resourceType, associationType);
+        resourceName, resourceNamespace, resourceType, associationType, getSubject());
   }
 
   public Association toAssociationEntity() {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, getSubject());
     return new Association(
-        getSubject(),
+        qs.toUnqualifiedSubject(),
         guid,
         resourceName,
         resourceNamespace,
@@ -236,9 +240,11 @@ public class AssociationValue extends SubjectValue {
         .filter(info -> !assocTypesToSkip.contains(info.getAssociationType()))
         .map(info -> {
           Association old = oldMap.get(info.getAssociationType());
+          String subject = old == null ? info.getSubject() : old.getSubject();
+          String qualifiedSubject =
+              QualifiedSubject.createFromUnqualified(tenant, subject).toQualifiedSubject();
           return old == null
               ? new AssociationValue(
-                  info.getSubject(),
                   UUID.randomUUID().toString(),
                   tenant,
                   request.getResourceName(),
@@ -246,12 +252,12 @@ public class AssociationValue extends SubjectValue {
                   request.getResourceId(),
                   request.getResourceType(),
                   info.getAssociationType(),
+                  qualifiedSubject,
                   info.getLifecycle() == LifecyclePolicy.STRONG
                       ? Lifecycle.STRONG
                       : Lifecycle.WEAK,
                   Boolean.TRUE.equals(info.getFrozen()))
               : new AssociationValue(
-                  old.getSubject(),
                   old.getGuid(),
                   tenant,
                   old.getResourceName(),
@@ -259,6 +265,7 @@ public class AssociationValue extends SubjectValue {
                   old.getResourceId(),
                   old.getResourceType(),
                   info.getAssociationType(),
+                  qualifiedSubject,
                   info.getLifecycle() != null
                       ? (info.getLifecycle() == LifecyclePolicy.STRONG
                           ? Lifecycle.STRONG
@@ -289,7 +296,7 @@ public class AssociationValue extends SubjectValue {
     }
     List<AssociationInfo> infos = associations.stream()
         .map(a -> new AssociationInfo(
-            a.getSubject(),
+            QualifiedSubject.create(a.getTenant(), a.getSubject()).toUnqualifiedSubject(),
             a.getAssociationType(),
             a.getLifecycle() == Lifecycle.STRONG
                 ? LifecyclePolicy.STRONG

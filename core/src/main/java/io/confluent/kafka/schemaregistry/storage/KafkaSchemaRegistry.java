@@ -967,8 +967,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     // Replace aliases and check for read-only mode
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String subject = info.getSubject();
-      QualifiedSubject qs = replaceAlias(context, subject);
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       if (isReadOnlyMode(qualifiedSubject)) {
         throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
@@ -999,8 +999,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         .collect(Collectors.toMap(Association::getAssociationType, a -> a));
     Set<String> assocTypesToSkip = new HashSet<>();
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String subject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
@@ -1025,7 +1025,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new AssociationForResourceExistsException(
             association.getAssociationType(), association.getResourceName());
       }
-      if (!association.getSubject().equals(subject)) {
+      if (!association.getSubject().equals(unqualifiedSubject)) {
         throw new IllegalPropertyException(
             "subject", "subject of association cannot be changed");
       }
@@ -1044,16 +1044,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     // If this association is strong, check no other associations exist
     // If this association is weak, check no strong associations exist
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String subject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
       if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
-        throw new NoActiveSubjectVersionExistsException(subject);
+        throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
       }
       List<Association> assocsBySubject = getAssociationsBySubject(
-          subject, null, Collections.emptyList(), null).stream()
+          qualifiedSubject, null, Collections.emptyList(), null).stream()
           .filter(a -> association == null
               || !(a.getResourceId().equals(association.getResourceId())
                    && a.getResourceType().equals(association.getResourceType())
@@ -1062,7 +1062,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       switch (info.getLifecycle()) {
         case STRONG:
           if (!assocsBySubject.isEmpty()) {
-            throw new AssociationForSubjectExistsException(subject);
+            throw new AssociationForSubjectExistsException(unqualifiedSubject);
           }
           break;
         case WEAK:
@@ -1072,7 +1072,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           }
           if (assocsBySubject.stream()
               .anyMatch(assoc -> assoc.getLifecycle() == LifecyclePolicy.STRONG)) {
-            throw new StrongAssociationForSubjectExistsException(subject);
+            throw new StrongAssociationForSubjectExistsException(unqualifiedSubject);
           }
           break;
         default:
@@ -1082,8 +1082,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     // Check compatibility of all schemas
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String subject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       RegisterSchemaRequest schema = info.getSchema();
       if (schema == null) {
@@ -1116,8 +1116,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     Map<String, Schema> registeredSchemas = new HashMap<>();
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
-      String subject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), subject);
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       RegisterSchemaRequest schema = info.getSchema();
       if (schema == null) {
@@ -1148,7 +1148,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   private QualifiedSubject replaceAlias(String context, String subject) {
-    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), context, subject);
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context, subject);
     String qualifiedSubject = qs.toQualifiedSubject();
     Config config = null;
     try {
@@ -1364,12 +1364,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         : String.valueOf(Character.MAX_VALUE);
     String minAssociationType = String.valueOf(Character.MIN_VALUE);
     String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
 
     List<Association> associations = new ArrayList<>();
     AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
-        minResourceType, minAssociationType);
+        minResourceType, minAssociationType, minSubject);
     AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
-        maxResourceType, maxAssociationType);
+        maxResourceType, maxAssociationType, maxSubject);
     try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
       while (iter.hasNext()) {
         AssociationValue value = (AssociationValue) iter.next();
@@ -1404,11 +1406,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private void checkDeleteAssociation(
       Association oldAssociation, boolean cascadeLifecycle)
       throws SchemaRegistryException {
-    String subject = oldAssociation.getSubject();
-    if (isReadOnlyMode(subject)) {
-      String qualifiedContext = QualifiedSubject.qualifiedContextFor(tenant(), subject);
-      throw new OperationNotPermittedException("Subject " + subject + " in context "
-          + qualifiedContext + " is in read-only mode");
+    String unqualifiedSubject = oldAssociation.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (isReadOnlyMode(qualifiedSubject)) {
+      throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+          + qs.getContext() + " is in read-only mode");
     }
 
     if (!cascadeLifecycle
@@ -1421,12 +1424,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void deleteAssociation(Association oldAssociation, boolean cascadeLifecycle)
       throws SchemaRegistryException {
-    String subject = oldAssociation.getSubject();
+    String unqualifiedSubject = oldAssociation.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String subject = qs.toQualifiedSubject();
     try {
       AssociationKey key = new AssociationKey(
           tenant(), oldAssociation.getResourceName(),
           oldAssociation.getResourceNamespace(), oldAssociation.getResourceType(),
-          oldAssociation.getAssociationType());
+          oldAssociation.getAssociationType(), subject);
       // Ensure cache is up-to-date before any potential writes
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       kafkaStore.put(key, null);

@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -252,6 +253,9 @@ public class AssociationsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
+      if (context == null) {
+        context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
+      }
       AssociationResponse association = schemaRegistry.createAssociationOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
@@ -329,6 +333,9 @@ public class AssociationsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
+      if (context == null) {
+        context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
+      }
       AssociationResponse association = schemaRegistry.createOrUpdateAssociationOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(association);
@@ -394,6 +401,9 @@ public class AssociationsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
+      if (context == null) {
+        context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
+      }
       AssociationBatchResponse response = schemaRegistry.createAssociationsOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(response);
@@ -436,6 +446,9 @@ public class AssociationsResource {
         headers, schemaRegistry.config().whitelistHeaders());
 
     try {
+      if (context == null) {
+        context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
+      }
       AssociationBatchResponse response = schemaRegistry.createOrUpdateAssociationsOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(response);
@@ -491,8 +504,11 @@ public class AssociationsResource {
         throw Errors.associationNotFoundException(resourceId);
       }
 
-      String subject = oldAssociations.get(0).getSubject();
-      schemaRegistry.deleteAssociationsOrForward(subject,
+      String unqualifiedSubject = oldAssociations.get(0).getSubject();
+      QualifiedSubject qs =
+          QualifiedSubject.createFromUnqualified(schemaRegistry.tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      schemaRegistry.deleteAssociationsOrForward(qualifiedSubject,
           resourceId, resourceType, associationTypes, cascadeLifecycle,
           headerProperties);
       asyncResponse.resume(Response.status(204).build());
