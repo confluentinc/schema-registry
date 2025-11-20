@@ -25,9 +25,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,576 +39,727 @@ import static org.junit.Assert.*;
 
 public class MockSchemaRegistryClientTest {
     private SchemaRegistryClient client;
+    static final String SIMPLE_STRING_SCHEMA = "{\"type\": \"string\"}";
+    static final String SIMPLE_AVRO_SCHEMA = "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
+            "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}]}";
+    static final String EVOLVED_AVRO_SCHEMA = "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
+          "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}, {\"type\":\"string\",\"name\":\"id2\"}]}";
+    static final String TOPIC = "topic";
+    static final String KEY = "key";
+    static final String VALUE = "value";
+
+    private static String defaulKeySubject = "testKey";
+    private static String defaultValueSubject = "testValue";
+    private static String defaultResourceNamespace = "lkc1";
+    private static String defaultResourceName = "test";
+    private static String defaultResourceId = "test-id";
 
     @Before
     public void setUp() {
         this.client = new MockSchemaRegistryClient();
     }
 
-    @Test
-    public void testAssociationCreateRequestValidationLogic() {
-        // Pre-create subjects used for testing
+    private void registerTestAvroSchemaInSchemaRegistry(SchemaRegistryClient client, String subject,
+                                                    String schemaStr, boolean normalize) {
         try {
-            client.register("testKey", new AvroSchema("{\"type\": \"string\"}"), true);
-            client.register("testValue", new AvroSchema("{\"type\": \"string\"}"), true);
+          client.register(subject, new AvroSchema(schemaStr), normalize);
         } catch (Exception e) {
-            assertNull("Schema registration should succeed.", e);
-        }
-
-        AssociationCreateOrUpdateInfo createInfo1 = new AssociationCreateOrUpdateInfo(
-                "testKey", "key", null, false, null, false);
-        AssociationCreateOrUpdateInfo createInfo2 = new AssociationCreateOrUpdateInfo(
-                "testValue", "value", null, false, null, false);
-
-        // Invalid requests
-        List<AssociationCreateOrUpdateRequest> invalidRequests = new ArrayList<>();
-
-        // No resource name
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                null, "lkc1", "test-id", "topic",
-                Arrays.asList(createInfo1, createInfo2)));
-
-        // No resource namespace
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", null, "test-id", "topic",
-                Arrays.asList(createInfo1, createInfo2)));
-
-        // No resource id
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", null, "topic",
-                Arrays.asList(createInfo1, createInfo2)));
-
-        // No associations
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", "topic", null));
-
-        // No subject name in AssociationCreateOrUpdateInfo
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", "topic",
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(null, "value", null, false, null, false)
-                )));
-
-        // Unsupported ResourceType
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", "topic2",
-                Arrays.asList(createInfo1, createInfo2)));
-
-        // Unsupported AssociationType
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", "topic",
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo("testValue", "value2", null, false, null, false)
-                )));
-
-        // Duplicate AssociationType in the request
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", "topic",
-                Arrays.asList(
-                        new AssociationCreateOrUpdateInfo("testKey", "value", null, false, null, false),
-                        new AssociationCreateOrUpdateInfo("testValue", "value", null, false, null, false)
-                )));
-
-        // Weak association with frozen to be true
-        invalidRequests.add(new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", "topic",
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo("testValue", null, LifecyclePolicy.WEAK, true, null, false)
-                )));
-
-        // Test all invalid requests - they should throw exceptions
-        for (AssociationCreateOrUpdateRequest invalidRequest : invalidRequests) {
-            try {
-                client.createOrUpdateAssociation(invalidRequest);
-                fail("Expected exception for invalid request");
-            } catch (Exception e) {
-                // Expected - validation should fail
-                assertNotNull("Error should not be null", e);
-            }
-        }
-
-        // Minimum valid request
-        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", null,
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo("testValue", null, null, false, null, false)
-                ));
-        AssociationResponse createResponse = null;
-        try {
-            createResponse = client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("Error should be null", e);
-        }
-
-        // Assertions
-        assertNotNull("Response should not be null", createResponse);
-        assertEquals("ResourceName should match",
-                createRequest.getResourceName(), createResponse.getResourceName());
-        assertEquals("ResourceNamespace should match",
-                createRequest.getResourceNamespace(), createResponse.getResourceNamespace());
-        assertEquals("ResourceId should match",
-                createRequest.getResourceId(), createResponse.getResourceId());
-        assertEquals("ResourceType should be 'topic'",
-                "topic", createResponse.getResourceType());
-        assertEquals("Should have 1 association",
-                1, createResponse.getAssociations().size());
-
-        AssociationInfo association = createResponse.getAssociations().get(0);
-        assertEquals("Subject should match",
-                createRequest.getAssociations().get(0).getSubject(), association.getSubject());
-        assertEquals("AssociationType should be 'value'",
-                "value", association.getAssociationType());
-        assertEquals("Lifecycle should be STRONG",
-                LifecyclePolicy.STRONG, association.getLifecycle());
-        assertFalse("Frozen should be false", association.isFrozen());
-        assertNull("Schema should be null", association.getSchema());
-        //assertFalse("Normalize should be false", association.isNormalize());
-    }
-
-    @Test
-    public void testCreateOneAssociationInCreateRequest() {
-        // Pre-create subjects
-        String testValueSubject = "testValue";
-        AvroSchema schemaInfo = new AvroSchema(
-                "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
-                        "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}]}");
-        try {
-            client.register(testValueSubject, schemaInfo, true);
-        } catch (Exception e) {
-            assertNull("Schema registration should succeed.", e);
-        }
-
-        // Make an association with an existing subject without new schema
-        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", null,
-                Collections.singletonList(new AssociationCreateOrUpdateInfo(testValueSubject, null,
-                        null, false, null, false)
-                ));
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-
-        // Create association request is idempotent. Re-issue the same create request should succeed.
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-
-        // Re-issue the same request with different association property (except schema) will error out.
-        createRequest = new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", null,
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(testValueSubject, null, LifecyclePolicy.WEAK, false, null, false)
-                ));
-
-        try {
-            client.createOrUpdateAssociation(createRequest);
-            fail("Expected exception - existing association gets modified");
-        } catch (Exception e) {
-            assertNotNull("Error should not be null", e);
-        }
-
-        // Make an association with an existing subject with new schema
-        Schema updatedSchema = new Schema(null, null, null, null, null,
-                "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
-                        "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}, {\"type\":\"string\",\"name\":\"id2\"}]}");
-        createRequest = new AssociationCreateOrUpdateRequest(
-                "test", "lkc1", "test-id", null,
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false,
-                            new RegisterSchemaRequest(updatedSchema), false)
-                ));
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-
-        // Make an association with a new subject without new schema. Test should fail.
-        testValueSubject = "testValue2";
-        createRequest = new AssociationCreateOrUpdateRequest(
-                "test2", "lkc1", "test-id2", null,
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false, null, false)
-                ));
-
-        try {
-            client.createOrUpdateAssociation(createRequest);
-            fail("Expected exception - new subject without schema");
-        } catch (Exception e) {
-            assertNotNull("Error should not be null", e);
-        }
-
-        // Make an association with a new subject with new schema
-        testValueSubject = "testValue2";
-        createRequest = new AssociationCreateOrUpdateRequest(
-                "test2", "lkc1", "test-id2", null,
-                Collections.singletonList(
-                        new AssociationCreateOrUpdateInfo(testValueSubject, null, null, false,
-                            new RegisterSchemaRequest(updatedSchema), false)
-                ));
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+          assertNull("Schema registration should succeed.", e);
         }
     }
 
+    private List<AssociationCreateOrUpdateRequest> buildInvalidCreateRequests() {
+      AssociationCreateOrUpdateInfo validKeyAssocInfo1 = new AssociationCreateOrUpdateInfo(
+              defaulKeySubject, KEY, null, false, null, false);
+      AssociationCreateOrUpdateInfo validValueAssocInfo1 = new AssociationCreateOrUpdateInfo(
+              defaultValueSubject, VALUE, null, false, null, false);
+
+      // Invalid requests
+      List<AssociationCreateOrUpdateRequest> invalidRequests = new ArrayList<>();
+
+      // No resource name
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(null, defaultResourceName,
+              defaultResourceId, TOPIC, Arrays.asList(validKeyAssocInfo1, validValueAssocInfo1)));
+
+      // No resource namespace
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, null,
+              defaultResourceId, TOPIC, Arrays.asList(validKeyAssocInfo1, validValueAssocInfo1)));
+
+      // No resource id
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              null, TOPIC, Arrays.asList(validKeyAssocInfo1, validValueAssocInfo1)));
+
+      // No associations
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              defaultResourceId, TOPIC, null));
+
+      // Duplicate association types
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              null, TOPIC, Arrays.asList(validKeyAssocInfo1, validKeyAssocInfo1)));
+
+      // No subject name in AssociationCreateOrUpdateInfo
+      AssociationCreateOrUpdateInfo invalidValueAssocInfoNoSubject = new AssociationCreateOrUpdateInfo(
+              null, VALUE, null, false, null, false);
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              defaultResourceId, TOPIC, Arrays.asList(invalidValueAssocInfoNoSubject)));
+
+      // Unsupported ResourceType
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              defaultResourceId, "topic2", Arrays.asList(validKeyAssocInfo1, validValueAssocInfo1)));
+
+      // Unsupported AssociationType
+      AssociationCreateOrUpdateInfo invalidValueAssocInfoWrongType = new AssociationCreateOrUpdateInfo(
+              defaultValueSubject, "value2", null, false, null, false);
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              defaultResourceId, TOPIC, Arrays.asList(invalidValueAssocInfoWrongType)));
+
+      // Weak association with frozen to be true
+      AssociationCreateOrUpdateInfo invalidValueAssocInfoWeakFrozen = new AssociationCreateOrUpdateInfo(
+              defaultValueSubject, VALUE, LifecyclePolicy.WEAK, true, null, false);
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(defaultResourceName, defaultResourceNamespace,
+              defaultResourceId, TOPIC, Arrays.asList(invalidValueAssocInfoWeakFrozen)));
+
+      return invalidRequests;
+    }
+
+    private static class Resource {
+    final String resourceName;
+    final String resourceNamespace;
+    final String resourceId;
+    final String resourceType;
+
+    public Resource(String name, String namespace, String id, String type) {
+      this.resourceName = name;
+      this.resourceNamespace = namespace;
+      this.resourceId = id;
+      this.resourceType = type;
+    }
+  }
+
+    private static class AssociationRequestBuilder {
+      private String resourceName;
+      private String resourceNamespace;
+      private String resourceId;
+      private String resourceType;
+      private List<AssociationCreateOrUpdateInfo> associations = new ArrayList<>();
+      private AssociationCreateOrUpdateInfo keyAssociation;
+      private AssociationCreateOrUpdateInfo valueAssociation;
+
+      public AssociationRequestBuilder resource(String resourceName, String resourceNamespace, String resourceId, String resourceType) {
+        this.resourceName = resourceName;
+        this.resourceNamespace = resourceNamespace;
+        this.resourceId = resourceId;
+        this.resourceType = resourceType;
+        return this;
+      }
+
+      public AssociationRequestBuilder defaultResource() {
+        this.resourceName = defaultResourceName;
+        this.resourceNamespace = defaultResourceNamespace;
+        this.resourceId = defaultResourceId;
+        this.resourceType = TOPIC;
+        return this;
+      }
+
+      private void initKeyAssociaiton() {
+        keyAssociation = new AssociationCreateOrUpdateInfo(null, KEY,
+                null, null, null, false);
+      }
+
+      private void initValueAssociaiton() {
+        valueAssociation = new AssociationCreateOrUpdateInfo(null, VALUE,
+                null, null, null, false);
+      }
+
+      private RegisterSchemaRequest getRegisterSchemaRequest(String schemaStr) {
+        Schema schema = new Schema(null, null, null, null, null, schemaStr);
+        return new RegisterSchemaRequest(schema);
+      }
+
+      public AssociationRequestBuilder keySubject (String keySubject) {
+        if (keyAssociation == null) {
+          initKeyAssociaiton();
+        }
+        keyAssociation.setSubject(keySubject);
+        return this;
+      }
+
+      public AssociationRequestBuilder keySchema (String keySchema) {
+        if (keyAssociation == null) {
+          initKeyAssociaiton();
+        }
+        keyAssociation.setSchema(getRegisterSchemaRequest(keySchema));
+        return this;
+      }
+
+      public AssociationRequestBuilder keyLifecycle(LifecyclePolicy keyLifecyclePolicy) {
+        if (keyAssociation == null) {
+          initKeyAssociaiton();
+        }
+        keyAssociation.setLifecycle(keyLifecyclePolicy);
+        return this;
+      }
+
+      public AssociationRequestBuilder valueSubject (String valueSubject) {
+        if (valueAssociation == null) {
+          initValueAssociaiton();
+        }
+        valueAssociation.setSubject(valueSubject);
+        return this;
+      }
+
+      public AssociationRequestBuilder valueSchema (String valueSchema) {
+        if (valueAssociation == null) {
+          initValueAssociaiton();
+        }
+        valueAssociation.setSchema(getRegisterSchemaRequest(valueSchema));
+        return this;
+      }
+
+      public AssociationRequestBuilder valueLifecycle(LifecyclePolicy valueLifecyclePolicy) {
+        if (valueAssociation == null) {
+          initValueAssociaiton();
+        }
+        valueAssociation.setLifecycle(valueLifecyclePolicy);
+        return this;
+      }
+
+      public AssociationRequestBuilder valueFrozen(boolean isFrozen) {
+        if (valueAssociation == null) {
+          initValueAssociaiton();
+        }
+        valueAssociation.setFrozen(isFrozen);
+        return this;
+      }
+
+      public AssociationRequestBuilder association(String subject, String associationType, LifecyclePolicy lifecyclePolicy,
+                                                   boolean frozen, String schema, boolean normalize) {
+        AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(subject, associationType, lifecyclePolicy,
+                frozen, schema == null ? null : getRegisterSchemaRequest(schema), normalize);
+        associations.add(info);
+        return this;
+      }
+
+      public AssociationCreateOrUpdateRequest build() {
+        if (keyAssociation != null) {
+          associations.add(keyAssociation);
+        }
+        if (valueAssociation != null) {
+          associations.add(valueAssociation);
+        }
+        return new AssociationCreateOrUpdateRequest(resourceName, resourceNamespace, resourceId, resourceType, associations);
+      }
+    }
+
+    private interface AssociationCreator {
+      AssociationResponse create(AssociationCreateOrUpdateRequest request)
+              throws IOException, RestClientException;
+    }
+
+    private void testInvalidCreateAssociationRequestHelper(AssociationCreator associationCreator) {
+      registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_STRING_SCHEMA, true);
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_STRING_SCHEMA, true);
+
+      List<AssociationCreateOrUpdateRequest> invalidRequests = buildInvalidCreateRequests();
+
+      // Test all invalid requests to createAssociation - they should throw exceptions
+      for (AssociationCreateOrUpdateRequest invalidRequest : invalidRequests) {
+        try {
+          associationCreator.create(invalidRequest);
+          fail("Expected exception for invalid request");
+        } catch (Exception e) {
+          // Expected - validation should fail
+          assertNotNull("Error should not be null", e);
+        }
+      }
+    }
+
     @Test
-    public void testCreateMultipleAssociationsInCreateRequest() {
-        String schemaString =
-                "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
-                        "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}]}";
+    public void testInvalidCreateAssociationRequest() {
+      // Call createAssociation endpoint.
+      testInvalidCreateAssociationRequestHelper(client::createAssociation);
+      // Reset test
+      setUp();
+      // Call createAssociation endpoint.
+      testInvalidCreateAssociationRequestHelper(client::createOrUpdateAssociation);
+    }
 
-        AvroSchema schemaInfo = new AvroSchema(schemaString);
+    private void testMinimumValidCreateAssociationRequestHelper(AssociationCreator associationCreator) {
+      // Pre-create value subject for testing
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_STRING_SCHEMA, true);
+      AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder()
+              .resource(defaultResourceName, defaultResourceNamespace, defaultResourceId, null)
+              .association(defaultValueSubject, null, null, false, null, false)
+              .build();
+      AssociationResponse createResponse = null;
+      try {
+        createResponse = associationCreator.create(createRequest);
+      } catch (Exception e) {
+        assertNull("Error should be null", e);
+      }
 
-        // Scenario 1: Both associations using existing subjects
-        String keySubject = "test1Key";
-        String valueSubject = "test1Value";
-        String resourceName = "test1";
-        String resourceID = "test1-id";
+      // Assertions
+      assertNotNull("Response should not be null", createResponse);
+      assertEquals("ResourceName should match",
+              createRequest.getResourceName(), createResponse.getResourceName());
+      assertEquals("ResourceNamespace should match",
+              createRequest.getResourceNamespace(), createResponse.getResourceNamespace());
+      assertEquals("ResourceId should match",
+              createRequest.getResourceId(), createResponse.getResourceId());
+      assertEquals("ResourceType should be 'topic'",
+              "topic", createResponse.getResourceType());
+      assertEquals("Should have 1 association",
+              1, createResponse.getAssociations().size());
 
-        // Pre-create subjects
-        try {
-            client.register(keySubject, schemaInfo, true);
-            client.register(valueSubject, schemaInfo, true);
-        } catch (Exception e) {
-            assertNull("Schema registration should succeed.", e);
-        }
+      AssociationInfo association = createResponse.getAssociations().get(0);
+      assertEquals("Subject should match",
+              createRequest.getAssociations().get(0).getSubject(), association.getSubject());
+      assertEquals("AssociationType should be 'value'",
+              "value", association.getAssociationType());
+      assertEquals("Lifecycle should be WEAK",
+              LifecyclePolicy.WEAK, association.getLifecycle());
+      assertFalse("Frozen should be false", association.isFrozen());
+      assertNull("Schema should be null", association.getSchema());
+    }
 
-        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
-                resourceName, "lkc1", resourceID, null,
-                Arrays.asList(
-                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, null, false),
-                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false, null, false)
-                ));
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
+    @Test
+    public void testValidCreateAssociationRequestViaCreateAssociationEndpoint() {
+      // Call createAssociation endpoint.
+      testMinimumValidCreateAssociationRequestHelper(client::createAssociation);
+      // Reset test
+      setUp();
+      // Call createAssociation endpoint.
+      testMinimumValidCreateAssociationRequestHelper(client::createOrUpdateAssociation);
+    }
 
-        // Scenario 2: One using existing subject, one creating new subject
-        keySubject = "test2Key";
-        valueSubject = "test2Value";
-        resourceName = "test2";
-        resourceID = "test2-id";
+    private void testCreateOneAssociationHelper(AssociationCreator associationCreator) {
+    // Pre-create subjects
+    registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
 
-        try {
-            client.register(keySubject, schemaInfo, true);
-        } catch (Exception e) {
-            assertNull("Schema registration should succeed.", e);
-        }
+    // Create a new value association using an existing subject.
+    AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
+            .valueSubject(defaultValueSubject).build();
 
-        Schema schema = new Schema(null, null, null, "AVRO", Collections.emptyList(), schemaString);
+    try {
+      associationCreator.create(createRequest);
+    } catch (Exception e) {
+      assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+    }
 
-        createRequest = new AssociationCreateOrUpdateRequest(
-                resourceName, "lkc1", resourceID, null,
-                Arrays.asList(
-                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false, null, false),
-                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false,
-                            new RegisterSchemaRequest(schema), false)
-                ));
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
+    // Create association request is idempotent. Re-issue the same create request should succeed.
+    try {
+      associationCreator.create(createRequest);
+    } catch (Exception e) {
+      assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+    }
+    // After the second request, the subject and resource should still have just one association.
+    List<Association> associations = null;
+    try {
+      associations = client.getAssociationsBySubject(defaultValueSubject, null,
+              null, null, 0, -1);
+    }  catch (Exception e) {
+      assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+    }
+    assertTrue(associations != null);
+    assertTrue(associations.size() == 1);
 
-        // Scenario 3: Both creating new subjects
-        keySubject = "test3Key";
-        valueSubject = "test3Value";
-        resourceName = "test3";
-        resourceID = "test3-id";
+    // Create a key association using a new subject without schema should fail.
+    createRequest = new AssociationRequestBuilder().defaultResource().keySubject(defaulKeySubject).build();
+    try {
+      associationCreator.create(createRequest);
+      fail("Expected exception - new subject without schema");
+    } catch (Exception e) {
+      assertNotNull("Error should not be null", e);
+    }
 
-        createRequest = new AssociationCreateOrUpdateRequest(
-                resourceName, "lkc1", resourceID, null,
-                Arrays.asList(
-                        new AssociationCreateOrUpdateInfo(keySubject, "key", null, false,
-                            new RegisterSchemaRequest(schema), false),
-                        new AssociationCreateOrUpdateInfo(valueSubject, "value", null, false,
-                            new RegisterSchemaRequest(schema), false)
-                ));
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
+    // Create a key association using a new subject with a schema should succeed.
+    createRequest = new AssociationRequestBuilder().defaultResource().keySubject(defaulKeySubject).
+            keySchema(EVOLVED_AVRO_SCHEMA).build();
+    try {
+      associationCreator.create(createRequest);
+    } catch (Exception e) {
+      assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+    }
+  }
+
+    @Test
+    public void testCreateOneAssociation() {
+      // Call createAssociation endpoint.
+      testCreateOneAssociationHelper(client::createAssociation);
+      // Reset test
+      setUp();
+      // Call createAssociation endpoint.
+      testCreateOneAssociationHelper(client::createOrUpdateAssociation);
+    }
+
+    @Test
+    public void testUpdateOneAssociationViaCreateEndpoint() {
+      // Pre-create subjects
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
+
+      // Create a new value association using an existing subject.
+      AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
+              .valueSubject(defaultValueSubject).build();
+
+      try {
+        client.createAssociation(createRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      // Re-issue the same request with different association property should error out.
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject).
+              valueLifecycle(LifecyclePolicy.STRONG).build();
+
+      try {
+        client.createAssociation(createRequest);
+        fail("Expected exception - existing association gets modified");
+      } catch (Exception e) {
+        assertNotNull("Create association with a different property should fail.", e);
+      }
+
+      // Create an existing value association with updated schema through createAssociation should error out.
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject).
+              valueSchema(EVOLVED_AVRO_SCHEMA).build();
+      try {
+        client.createAssociation(createRequest);
+        fail("Expected exception - existing association gets modified");
+      } catch (Exception e) {
+        assertNotNull("Create association with a different schema should fail.", e);
+      }
+    }
+
+    @Test
+    public void testUpdateOneAssociationViaUpsertEndpoint() {
+      // The upsert endpoint is createOrUpdateAssociation endpoint.
+      // Pre-create subjects
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
+
+      // Create a new value association using an existing subject.
+      // final state: strong, non-frozen
+      AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
+              .valueSubject(defaultValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      // Change strong, not frozen lifecycle to weak, non-frozen lifecycle should succeed.
+      // final state: weak, non-frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+                      .valueLifecycle(LifecyclePolicy.WEAK).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+      } catch (Exception e) {
+        assertNull("Create association with a different property should succeed.", e);
+      }
+
+      // Update schema should succeed.
+      // final state: weak, non-frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+              .valueSchema(EVOLVED_AVRO_SCHEMA).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+      } catch (Exception e) {
+        assertNull("Update association with a different schema should succeed.", e);
+      }
+
+      // Change weak, non-frozen lifecycle to weak, frozen lifecycle should fail.
+      // final state: weak, non-frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+              .valueFrozen(true).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+        fail("Weak frozen is not supported");
+      } catch (Exception e) {
+        assertNotNull("Update association to weak frozen should fail.", e);
+      }
+
+      // Change to strong, not frozen should succeed.
+      // final state: strong, non-frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+              .valueLifecycle(LifecyclePolicy.STRONG).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+      } catch (Exception e) {
+        assertNull("Update association back to strong should succeed.", e);
+      }
+
+      // Change to frozen should succeed.
+      // final state: strong, frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+              .valueFrozen(true).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+      } catch (Exception e) {
+        assertNull("Update association to strong frozen should succeed.", e);
+      }
+
+      // Change to non-frozen should fail.
+      // final state: strong, frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+              .valueFrozen(false).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+        fail();
+      } catch (Exception e) {
+        assertNotNull("Update association back to strong non-frozen should fail.", e);
+      }
+
+      // Change to weak should fail.
+      // final state: strong, frozen
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
+              .valueLifecycle(LifecyclePolicy.WEAK).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+        fail();
+      } catch (Exception e) {
+        assertNotNull("Update association back to weak when frozen was set should fail.", e);
+      }
+    }
+
+    private void testCreateMultipleAssociationsHelper(AssociationCreator associationCreator) {
+      // Pre-create subjects
+      registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_AVRO_SCHEMA, true);
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
+
+      // Scenario 1: Both associations using existing subjects
+      AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
+              .keySubject(defaulKeySubject).valueSubject(defaultValueSubject).build();
+      try {
+        associationCreator.create(createRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      // Scenario 2: One using existing subject, one creating new subject
+      // Reset
+      client.reset();
+      registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_AVRO_SCHEMA, true);
+      createRequest = new AssociationRequestBuilder().defaultResource()
+              .keySubject(defaulKeySubject).valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA).build();
+      try {
+        associationCreator.create(createRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      // Scenario 3: Both creating new subjects
+      // Reset
+      client.reset();
+      createRequest = new AssociationRequestBuilder().defaultResource()
+              .keySubject(defaulKeySubject).keySchema(SIMPLE_AVRO_SCHEMA)
+              .valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA).build();
+      try {
+        associationCreator.create(createRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+    }
+
+    @Test
+    public void testCreateMultipleAssociations() {
+      // Call createAssociation endpoint.
+      testCreateMultipleAssociationsHelper(client::createAssociation);
+      // Reset test
+      setUp();
+      // Call createAssociation endpoint.
+      testCreateMultipleAssociationsHelper(client::createOrUpdateAssociation);
+    }
+
+    private void testCreateStrongAndWeakAssociationsForTheSameSubjectHelper(AssociationCreator associationCreator) {
+      Resource resourceFoo = new Resource("foo", defaultResourceNamespace, "id-foo", TOPIC);
+      Resource resourceBar = new Resource("bar", defaultResourceNamespace, "id-bar", TOPIC);
+      String fooValueSubject = "fooValue";
+
+      registerTestAvroSchemaInSchemaRegistry(client, fooValueSubject, SIMPLE_AVRO_SCHEMA, true);
+
+      // Scenario 1: Same subject, Foo=STRONG, Bar=STRONG -> Bar should fail
+      AssociationCreateOrUpdateRequest fooRequest = new AssociationRequestBuilder()
+              .resource(resourceFoo.resourceName, resourceFoo.resourceNamespace, resourceFoo.resourceId, resourceFoo.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
+      try {
+        associationCreator.create(fooRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      List<Association> result = null;
+      try {
+        result = client.getAssociationsByResourceId(
+                resourceFoo.resourceId, null, null, null, 0, -1);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+      assertEquals(1, result.size());
+      assertNotNull(result.get(0).getGuid());
+      assertFalse(result.get(0).getGuid().isEmpty());
+
+      AssociationCreateOrUpdateRequest barRequest = new AssociationRequestBuilder()
+              .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
+
+      try {
+        client.createOrUpdateAssociation(barRequest);
+        fail("Expected exception - cannot create strong association when subject already has strong");
+      } catch (Exception e) {
+        assertNotNull(e);
+      }
+
+      // Scenario 2: Foo=STRONG, Bar=WEAK -> Bar should fail
+      barRequest = new AssociationRequestBuilder()
+              .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
+      try {
+        client.createOrUpdateAssociation(barRequest);
+        fail("Expected exception - cannot create weak when subject has strong");
+      } catch (Exception e) {
+        assertNotNull(e);
+      }
+
+      // Scenario 3: Foo=WEAK, Bar=STRONG -> Bar should fail
+      // Reset
+      client.reset();
+      registerTestAvroSchemaInSchemaRegistry(client, fooValueSubject, SIMPLE_AVRO_SCHEMA, true);
+      fooRequest = new AssociationRequestBuilder()
+              .resource(resourceFoo.resourceName, resourceFoo.resourceNamespace, resourceFoo.resourceId, resourceFoo.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
+
+      try {
+        associationCreator.create(fooRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      try {
+        result = client.getAssociationsByResourceId(
+                resourceFoo.resourceId, null, null, null, 0, -1);
+      } catch (Exception e) {
+        assertNull("getAssociationsByResourceId succeed.", e);
+      }
+      assertEquals(1, result.size());
+      assertNotNull(result.get(0).getGuid());
+      assertFalse(result.get(0).getGuid().isEmpty());
+
+      // Try to create Bar strong - should fail
+      barRequest = new AssociationRequestBuilder()
+              .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
+
+      try {
+        associationCreator.create(barRequest);
+        fail("Expected exception - cannot create strong when subject has weak");
+      } catch (Exception e) {
+        assertNotNull(e);
+      }
+
+      // Scenario 4: Foo=WEAK, Bar=WEAK -> Bar should succeed
+      barRequest = new AssociationRequestBuilder()
+              .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
+      try {
+        associationCreator.create(barRequest);
+        // Try running the same request twice. The second one should do nothing.
+        associationCreator.create(barRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
+      try {
+        result = client.getAssociationsByResourceId(
+                resourceBar.resourceId, null, null, null, 0, -1);
+      } catch (Exception e) {
+        assertNull("getAssociationsByResourceId should succeed.", e);
+      }
+      assertEquals(1, result.size());
+      assertNotNull(result.get(0).getGuid());
+      assertFalse(result.get(0).getGuid().isEmpty());
+
+      // Verify subject has 2 associations
+      try {
+        result = client.getAssociationsBySubject(fooValueSubject, null, null, null, 0, -1);
+      } catch (Exception e) {
+        assertNull("getAssociationsBySubject should succeed.", e);
+      }
+      assertEquals(2, result.size());
     }
 
     @Test
     public void testCreateStrongAndWeakAssociationsForTheSameSubject() {
-        // Resources for testing
-        Resource resourceFoo = new Resource("foo", "lkc1", "id-foo", "topic");
-        Resource resourceBar = new Resource("bar", "lkc1", "id-bar", "topic");
-        String fooValueSubject = "fooValue";
-        String value = "value";
-
-        // Pre-create subject
-        String schemaString =
-                "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
-                        "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}]}";
-        AvroSchema schemaInfo = new AvroSchema(schemaString);
-        try {
-            client.register(fooValueSubject, schemaInfo, true);
-        } catch (Exception e) {
-            assertNull("Schema registration should succeed.", e);
-        }
-
-        // Scenario 1: Same subject, Foo=STRONG, Bar=STRONG -> Bar should fail
-        AssociationCreateOrUpdateRequest fooRequest = generateAssociationCreateRequest(
-                resourceFoo,
-                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
-        );
-        try {
-            client.createOrUpdateAssociation(fooRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-
-        List<Association> result = null;
-        try {
-            result = client.getAssociationsByResourceId(
-                    resourceFoo.getResourceId(), null, null, null, 0, -1);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-        assertEquals(1, result.size());
-        assertNotNull(result.get(0).getGuid());
-        assertFalse(result.get(0).getGuid().isEmpty());
-
-        AssociationCreateOrUpdateRequest barRequest = generateAssociationCreateRequest(
-                resourceBar,
-                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
-        );
-
-        try {
-            client.createOrUpdateAssociation(barRequest);
-            fail("Expected exception - cannot create strong association when subject already has strong");
-        } catch (Exception e) {
-            assertNotNull(e);
-        }
-
-        // Scenario 2: Foo=STRONG, Bar=WEAK -> Bar should fail
-        barRequest = generateAssociationCreateRequest(
-                resourceBar,
-                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
-        );
-
-        try {
-            client.createOrUpdateAssociation(barRequest);
-            fail("Expected exception - cannot create weak when subject has strong");
-        } catch (Exception e) {
-            assertNotNull(e);
-        }
-
-        // Scenario 3: Foo=WEAK, Bar=STRONG -> Bar should fail
-        // Delete Foo association without cascade
-        try {
-            client.deleteAssociations(fooRequest.getResourceId(), null, null, false);
-        } catch (Exception e) {
-            assertNull("AssociationDeleteRequest should succeed.", e);
-        }
-        List<Association> associations = null;
-        try {
-            associations = client.getAssociationsByResourceId(
-                    resourceFoo.getResourceId(), null, null, null, 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsByResourceId should succeed.", e);
-        }
-        assertEquals(0, associations.size());
-
-        // Verify subject still exists
-        SchemaMetadata metadata = null;
-        try {
-            metadata = client.getLatestSchemaMetadata(fooValueSubject);
-        } catch (Exception e) {
-            assertNull("getLatestSchemaMetadata should succeed.", e);
-        }
-        assertTrue(metadata.getId() > 0);
-
-        // Create Foo weak association
-        fooRequest = generateAssociationCreateRequest(
-                resourceFoo,
-                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
-        );
-        try {
-            client.createOrUpdateAssociation(fooRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-
-        try {
-            result = client.getAssociationsByResourceId(
-                    resourceFoo.getResourceId(), null, null, null, 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsByResourceId succeed.", e);
-        }
-        assertEquals(1, result.size());
-        assertNotNull(result.get(0).getGuid());
-        assertFalse(result.get(0).getGuid().isEmpty());
-
-        // Try to create Bar strong - should fail
-        barRequest = generateAssociationCreateRequest(
-                resourceBar,
-                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.STRONG, false, null, false)
-        );
-
-        try {
-            client.createOrUpdateAssociation(barRequest);
-            fail("Expected exception - cannot create strong when subject has weak");
-        } catch (Exception e) {
-            assertNotNull(e);
-        }
-
-        // Scenario 4: Foo=WEAK, Bar=WEAK -> Bar should succeed
-        barRequest = generateAssociationCreateRequest(
-                resourceBar,
-                new AssociationCreateOrUpdateInfo(fooValueSubject, value, LifecyclePolicy.WEAK, false, null, false)
-        );
-        try {
-            client.createOrUpdateAssociation(barRequest);
-        } catch (Exception e) {
-            assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
-        }
-
-        try {
-            result = client.getAssociationsByResourceId(
-                    resourceBar.getResourceId(), null, null, null, 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsByResourceId should succeed.", e);
-        }
-        assertEquals(1, result.size());
-        assertNotNull(result.get(0).getGuid());
-        assertFalse(result.get(0).getGuid().isEmpty());
-
-        // Verify subject has 2 associations
-        try {
-            result = client.getAssociationsBySubject(fooValueSubject, null, null, null, 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsBySubject should succeed.", e);
-        }
-        assertEquals(2, result.size());
-    }
-
-    // Helper method
-    private AssociationCreateOrUpdateRequest generateAssociationCreateRequest(
-            Resource resource, AssociationCreateOrUpdateInfo info) {
-        return new AssociationCreateOrUpdateRequest(
-                resource.getResourceName(),
-                resource.getResourceNamespace(),
-                resource.getResourceId(),
-                resource.getResourceType(),
-                Collections.singletonList(info)
-        );
-    }
-
-    // Helper class
-    private static class Resource {
-        private final String resourceName;
-        private final String resourceNamespace;
-        private final String resourceId;
-        private final String resourceType;
-
-        public Resource(String name, String namespace, String id, String type) {
-            this.resourceName = name;
-            this.resourceNamespace = namespace;
-            this.resourceId = id;
-            this.resourceType = type;
-        }
-
-        public String getResourceName() {
-            return resourceName;
-        }
-
-        public String getResourceNamespace() {
-            return resourceNamespace;
-        }
-
-        public String getResourceId() {
-            return resourceId;
-        }
-
-        public String getResourceType() {
-            return resourceType;
-        }
+      testCreateStrongAndWeakAssociationsForTheSameSubjectHelper(client::createAssociation);
+      setUp();
+      testCreateStrongAndWeakAssociationsForTheSameSubjectHelper(client::createOrUpdateAssociation);
     }
 
     @Test
     public void testGetAssociationsWithFilters() {
-        // Setup
-        String keySubject = "test1Key";
-        String valueSubject = "test1Value";
-        String resourceName = "test1";
-        String resourceID = "test1-id";
+      // Setup
+      // Create associations: key=STRONG, value=WEAK
+      AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
+              .keySubject(defaulKeySubject).keySchema(SIMPLE_AVRO_SCHEMA).keyLifecycle(LifecyclePolicy.STRONG)
+              .valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA)
+              .valueLifecycle(LifecyclePolicy.WEAK).build();
+      try {
+          client.createOrUpdateAssociation(createRequest);
+      } catch (Exception e) {
+          assertNotNull("createOrUpdateAssociation should succeed.", e);
+      }
 
-        String schemaString =
-                "{\"namespace\":\"basicavro\",\"type\":\"record\",\"name\":\"Payment\"," +
-                        "\"fields\":[{\"type\":\"string\",\"name\":\"id\"}]}";
+      // Query by subject with lifecycle filter "weak" - should return error
+      List<Association> associations = null;
+      try {
+          associations = client.getAssociationsBySubject(
+                  defaulKeySubject, null, Arrays.asList(KEY, VALUE), "weak", 0, -1);
+          fail("getAssociationsBySubject with lower case lifecycle should fail.");
+      } catch (Exception e) {
+          assertNotNull("getAssociationsBySubject should return error.", e);
+      }
 
-        Schema schema = new Schema(
-                null, null, null, null,
-                Collections.emptyList(),
-                schemaString
-        );
+      // Query by subject with lifecycle filter "WEAK" - should return 0
+      try {
+          associations = client.getAssociationsBySubject(
+                  defaulKeySubject, null, Arrays.asList(KEY, VALUE), "WEAK", 0, -1);
+      } catch (Exception e) {
+          assertNull("getAssociationsBySubject should succeed.", e);
+      }
+      assertEquals(0, associations.size());
 
-        // Create associations: key=STRONG, value=WEAK
-        AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
-                resourceName, "lkc1", resourceID, null,
-                Arrays.asList(
-                        new AssociationCreateOrUpdateInfo(
-                                keySubject, "key", LifecyclePolicy.STRONG, false,
-                            new RegisterSchemaRequest(schema), false),
-                        new AssociationCreateOrUpdateInfo(
-                                valueSubject, "value", LifecyclePolicy.WEAK, false,
-                            new RegisterSchemaRequest(schema), false)
-                ));
+      // Query by subject with lifecycle filter "STRONG" - should return 1
+      try {
+          associations = client.getAssociationsBySubject(
+                  defaulKeySubject, null, Arrays.asList(KEY, VALUE), "STRONG", 0, -1);
+      } catch (Exception e) {
+          assertNull("getAssociationsBySubject should succeed.", e);
+      }
+      assertEquals(1, associations.size());
 
-        try {
-            client.createOrUpdateAssociation(createRequest);
-        } catch (Exception e) {
-            assertNotNull("createOrUpdateAssociation should succeed.", e);
-        }
+      // Query by resourceID without lifecycle filter - should return 2
+      try {
+          associations = client.getAssociationsByResourceId(
+                  defaultResourceId, null, Arrays.asList(KEY, VALUE), null, 0, -1);
+      } catch (Exception e) {
+          assertNull("getAssociationsByResourceId should succeed.", e);
+      }
+      assertEquals(2, associations.size());
 
-        // Query by subject with lifecycle filter "weak" - should return error
-        List<Association> associations = null;
-        try {
-            associations = client.getAssociationsBySubject(
-                    keySubject, null, Arrays.asList("key", "value"), "weak", 0, -1);
-            fail("getAssociationsBySubject with lower case lifecycle should fail.");
-        } catch (Exception e) {
-            assertNotNull("getAssociationsBySubject should return error.", e);
-        }
+      // Query by resourceName with a wrong resource name - should return 0
+      try {
+        associations = client.getAssociationsByResourceName(
+                "WrongResourceName", null, null, Arrays.asList(KEY, VALUE), null, 0, -1);
+      } catch (Exception e) {
+        assertNull("getAssociationsByResourceId should succeed.", e);
+      }
+      assertEquals(0, associations.size());
 
-        // Query by subject with lifecycle filter "WEAK" - should return 0
-        try {
-            associations = client.getAssociationsBySubject(
-                    keySubject, null, Arrays.asList("key", "value"), "WEAK", 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsBySubject should succeed.", e);
-        }
-        assertEquals(0, associations.size());
-
-        // Query by subject with lifecycle filter "STRONG" - should return 1
-        try {
-            associations = client.getAssociationsBySubject(
-                    keySubject, null, Arrays.asList("key", "value"), "STRONG", 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsBySubject should succeed.", e);
-        }
-        assertEquals(1, associations.size());
-
-        // Query by resourceID without lifecycle filter - should return 2
-        try {
-            associations = client.getAssociationsByResourceId(
-                    resourceID, null, Arrays.asList("key", "value"), null, 0, -1);
-        } catch (Exception e) {
-            assertNull("getAssociationsByResourceId should succeed.", e);
-        }
-        assertEquals(2, associations.size());
+      // Query by resourceName without lifecycle filter - should return 2
+      try {
+        associations = client.getAssociationsByResourceName(
+                defaultResourceName, null, null, Arrays.asList(KEY, VALUE), null, 0, -1);
+      } catch (Exception e) {
+        assertNull("getAssociationsByResourceId should succeed.", e);
+      }
+      assertEquals(2, associations.size());
     }
 
     @Test
@@ -631,7 +784,6 @@ public class MockSchemaRegistryClientTest {
         // cascade=false should fail, cascade=true should delete strong only
         testDeleteFrozenAndNonCascade(schema);
     }
-
 
     private void testCascadeDelete(Schema schema) {
         String keySubject = "test1Key";
