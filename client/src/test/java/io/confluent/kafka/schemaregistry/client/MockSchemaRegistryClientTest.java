@@ -78,7 +78,7 @@ public class MockSchemaRegistryClientTest {
       List<AssociationCreateOrUpdateRequest> invalidRequests = new ArrayList<>();
 
       // No resource name
-      invalidRequests.add(new AssociationCreateOrUpdateRequest(null, defaultResourceName,
+      invalidRequests.add(new AssociationCreateOrUpdateRequest(null, defaultResourceNamespace,
               defaultResourceId, TOPIC, Arrays.asList(validKeyAssocInfo1, validValueAssocInfo1)));
 
       // No resource namespace
@@ -323,7 +323,7 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
-    public void testValidCreateAssociationRequestViaCreateAssociationEndpoint() {
+    public void testMinimumValidCreateAssociationRequest() {
       // Call createAssociation endpoint.
       testMinimumValidCreateAssociationRequestHelper(client::createAssociation);
       // Reset test
@@ -789,11 +789,13 @@ public class MockSchemaRegistryClientTest {
         String keySubject = "test1Key";
         String valueSubject = "test1Value";
         String resourceID = "test1-id";
+        String resourceName = "test1";
+        String resourceNamespace = "lkc1";
 
         // Create associations
         try {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
-                    "test1", "lkc1", resourceID, null,
+                    resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
                             new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
                                 new RegisterSchemaRequest(schema), false),
@@ -829,7 +831,8 @@ public class MockSchemaRegistryClientTest {
             assertNull("getLatestSchemaMetadata should succeed.", e);
         }
 
-        // Associations should be deleted
+        // Associations should be deleted.
+        // AssociationsById should be empty
         try {
             List<Association> associations = client.getAssociationsByResourceId(
                     resourceID, null, null, null, 0, -1);
@@ -838,17 +841,28 @@ public class MockSchemaRegistryClientTest {
         } catch (Exception e) {
             assertNull("getAssociationsByResourceId should succeed.", e);
         }
+        // AssociationsByName should be empty
+        try {
+          List<Association> associations = client.getAssociationsByResourceName(
+                  resourceName, resourceNamespace, null, null, null, 0, -1);
+          assertTrue("Associations should be empty",
+                  associations == null || associations.isEmpty());
+        } catch (Exception e) {
+          assertNull("getAssociationsByResourceName should succeed.", e);
+        }
     }
 
     private void testNoCascadeDelete(Schema schema) {
         String keySubject = "test2Key";
         String valueSubject = "test2Value";
         String resourceID = "test2-id";
+        String resourceName = "test2";
+        String resourceNamespace = "lkc1";
 
         // Create associations
         try {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
-                    "test2", "lkc1", resourceID, null,
+                    resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
                             new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
                                 new RegisterSchemaRequest(schema), false),
@@ -882,6 +896,7 @@ public class MockSchemaRegistryClientTest {
         }
 
         // Associations should be deleted
+        // AssociationsById should be empty
         try {
             List<Association> associations = client.getAssociationsByResourceId(
                     resourceID, null, null, null, 0, -1);
@@ -889,6 +904,16 @@ public class MockSchemaRegistryClientTest {
                     associations == null || associations.isEmpty());
         } catch (Exception e) {
             assertNull("getAssociationsByResourceId should succeed.", e);
+        }
+
+        // AssociationsByName should be empty
+        try {
+          List<Association> associations = client.getAssociationsByResourceName(
+                  resourceName, resourceNamespace, null, null, null, 0, -1);
+          assertTrue("Associations should be empty",
+                  associations == null || associations.isEmpty());
+        } catch (Exception e) {
+          assertNull("getAssociationsByResourceId should succeed.", e);
         }
     }
 
