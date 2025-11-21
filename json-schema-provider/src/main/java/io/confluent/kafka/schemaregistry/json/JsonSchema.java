@@ -15,6 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.json;
 
+import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
@@ -51,13 +53,22 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -81,17 +92,6 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.ArrayList;
-
-import static io.confluent.kafka.schemaregistry.json.JsonSchemaUtils.findMatchingEntity;
-
 public class JsonSchema implements ParsedSchema {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchema.class);
@@ -101,6 +101,8 @@ public class JsonSchema implements ParsedSchema {
   public static final String TAGS = "confluent:tags";
 
   private static final String SCHEMA_KEYWORD = "$schema";
+
+  private static final String PROPERTIES_KEYWORD = "properties";
 
   private static final Object NONE_MARKER = new Object();
 
@@ -329,6 +331,15 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
+  public boolean hasTopLevelField(String field) {
+    if (jsonNode != null) {
+      JsonNode properties = jsonNode.get(PROPERTIES_KEYWORD);
+      return properties instanceof ObjectNode && properties.has(field);
+    }
+    return false;
+  }
+
+  @Override
   public String schemaType() {
     return TYPE;
   }
@@ -420,9 +431,25 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public void validate() {
+  public void validate(boolean strict) {
     // Access the raw schema since it is computed lazily
-    rawSchema();
+    Schema rawSchema = rawSchema();
+    if (strict) {
+      if (rawSchema instanceof ObjectSchema) {
+        ObjectSchema schema = (ObjectSchema) rawSchema;
+        Optional<String> restrictedField = schema.getPropertySchemas()
+                .keySet()
+                .stream()
+                .filter(field -> field.startsWith("$$"))
+                .findAny();
+        if (restrictedField.isPresent()) {
+          throw new ValidationException(schema,
+                  "Field names cannot start with $$ prefix",
+                  "properties",
+                  String.format("#/properties/%s", restrictedField.get()));
+        }
+      }
+    }
   }
 
   public void validate(Object value) throws JsonProcessingException, ValidationException {
@@ -474,10 +501,8 @@ public class JsonSchema implements ParsedSchema {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
-    final List<Difference> differences = SchemaDiff.compare(
-        ((JsonSchema) previousSchema).rawSchema(),
-        rawSchema()
-    );
+    final List<Difference> differences =
+            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
         .collect(Collectors.toList());
@@ -528,7 +553,7 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public Object fromJson(JsonNode json) throws IOException {
+  public Object fromJson(JsonNode json) {
     return json;
   }
 
@@ -595,15 +620,14 @@ public class JsonSchema implements ParsedSchema {
       Schema subschema = ((ArraySchema)schema).getAllItemSchema();
       List<Object> result = new ArrayList<>();
       int i = 0;
-      for (Iterator<? extends Object> it = ((Iterable<?>) message).iterator(); it.hasNext();) {
-        result.add(toTransformedMessage(
-            ctx, subschema, path + "[" + i + "]", it.next(), transform));
+      for (Object o : (Iterable<?>) message) {
+        result.add(toTransformedMessage(ctx, subschema, path + "[" + i + "]", o, transform));
         i++;
       }
       return result;
     } else if (schema instanceof ObjectSchema) {
       if (message == null) {
-        return message;
+        return null;
       }
       Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
       for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
@@ -631,7 +655,7 @@ public class JsonSchema implements ParsedSchema {
       return message;
     } else if (schema instanceof ReferenceSchema) {
       if (message == null) {
-        return message;
+        return null;
       }
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
@@ -696,7 +720,7 @@ public class JsonSchema implements ParsedSchema {
 
   private static boolean isMap(final ObjectSchema objectSchema) {
     return objectSchema.getPropertySchemas() == null
-        || objectSchema.getPropertySchemas().size() == 0;
+        || objectSchema.getPropertySchemas().isEmpty();
   }
 
   @Override
@@ -862,7 +886,6 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  @SuppressWarnings("unchecked")
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
     Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
@@ -888,7 +911,6 @@ public class JsonSchema implements ParsedSchema {
     return props.get(propertyName);
   }
 
-  @SuppressWarnings("unchecked")
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
     Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(

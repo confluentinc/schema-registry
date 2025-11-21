@@ -599,7 +599,7 @@ public class DekRegistry implements Closeable {
   protected DataEncryptionKey generateEncryptedDek(KeyEncryptionKey kek, DataEncryptionKey key)
       throws DekGenerationException {
     try {
-      Aead aead = toKekEntity(kek).toAead(config.originals());
+      Aead aead = getAead(kek);
       // Generate new dek
       byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
       byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
@@ -624,7 +624,7 @@ public class DekRegistry implements Closeable {
       throws DekGenerationException {
     try {
       // Decrypt dek
-      Aead aead = toKekEntity(kek).toAead(config.originals());
+      Aead aead = getAead(kek);
       byte[] encryptedDek = Base64.getDecoder().decode(
           key.getEncryptedKeyMaterial().getBytes(StandardCharsets.UTF_8));
       byte[] rawDek = aead.decrypt(encryptedDek, EMPTY_AAD);
@@ -646,6 +646,10 @@ public class DekRegistry implements Closeable {
       }
       throw new DekGenerationException(msg);
     }
+  }
+
+  protected Aead getAead(KeyEncryptionKey kek) throws GeneralSecurityException {
+    return toKekEntity(kek).toAead(config.originals());
   }
 
   public Kek putKekOrForward(String name, UpdateKekRequest request,
