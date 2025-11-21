@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 public enum SchemaRegistryKeyType {
+  ASSOC("ASSOC"),
   CONFIG("CONFIG"),
   SCHEMA("SCHEMA"),
   MODE("MODE"),
