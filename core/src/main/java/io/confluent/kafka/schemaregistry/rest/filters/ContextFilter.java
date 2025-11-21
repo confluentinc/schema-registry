@@ -105,9 +105,7 @@ public class ContextFilter implements ContainerRequestFilter {
         context = uriPathStr;
         contextPathFound = false;
         continue;
-      }
-
-      if (uriPathStr.equals("contexts")) {
+      } else if (isFirst && uriPathStr.equals("contexts")) {
         contextPathFound = true;
         continue;
       }
@@ -118,15 +116,15 @@ public class ContextFilter implements ContainerRequestFilter {
         }
 
         subjectPathFound = false;
-      }
-
-      boolean isRootConfigOrMode = isRootConfigOrMode(isFirst, uriPathStr);
-      if (uriPathStr.equals("subjects")
-          || uriPathStr.equals("deks")
-          || isRootConfigOrMode) {
-        subjectPathFound = true;
-        if (isRootConfigOrMode) {
-          configOrModeFound = true;
+      } else {
+        boolean isRootConfigOrMode = isRootConfigOrMode(isFirst, uriPathStr);
+        if (uriPathStr.equals("subjects")
+            || uriPathStr.equals("deks")
+            || isRootConfigOrMode) {
+          subjectPathFound = true;
+          if (isRootConfigOrMode) {
+            configOrModeFound = true;
+          }
         }
       }
 

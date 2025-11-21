@@ -263,4 +263,51 @@ public class ContextFilterTest {
     );
   }
 
+  @Test
+  public void testSubjectNamedFoo() {
+    String path = "/subjects/foo/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/foo/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+    path = "/contexts/.ctx/subjects/foo/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/:.ctx:foo/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSubjectNamedSubjects() {
+    String path = "/subjects/subjects/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/subjects/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+    path = "/contexts/.ctx/subjects/subjects/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/:.ctx:subjects/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSubjectNamedContexts() {
+    String path = "/subjects/contexts/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/contexts/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+    path = "/contexts/.ctx/subjects/contexts/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/:.ctx:contexts/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
 }
