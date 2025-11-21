@@ -244,7 +244,7 @@ public class AssociationsResource {
     log.debug("Creating association {}", request);
 
     try {
-      request.validate();
+      request.validate(dryRun);
     } catch (IllegalPropertyException e) {
       throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     }
@@ -324,7 +324,7 @@ public class AssociationsResource {
     log.debug("Creating or updating association {}", request);
 
     try {
-      request.validate();
+      request.validate(dryRun);
     } catch (IllegalPropertyException e) {
       throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     }

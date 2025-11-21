@@ -99,6 +99,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -980,7 +981,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
 
     // Check that association types are unique
-    Map<String, AssociationCreateOrUpdateInfo> infosByType = new HashMap<>();
+    Map<String, AssociationCreateOrUpdateInfo> infosByType = new LinkedHashMap<>();
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
@@ -1201,7 +1202,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationCreateOrUpdateRequest req : request.getRequests()) {
       kafkaStore.lockFor(context).lock();
       try {
-        req.validate();
+        req.validate(dryRun);
         AssociationResponse response = isCreateOnly
             ? createAssociation(context, dryRun, req)
             : createOrUpdateAssociation(context, dryRun, req);
@@ -1306,6 +1307,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       LifecyclePolicy lifecycle) throws SchemaRegistryException {
     String tenant = tenant();
     List<Association> associations = new ArrayList<>();
+    if (subject == null) {
+      return associations;
+    }
     try (CloseableIterator<AssociationValue> iter =
         lookupCache.associationsBySubject(tenant, subject)) {
       while (iter.hasNext()) {
@@ -1320,6 +1324,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryStoreException("Error while getting associations for subject '"
           + subject + "' in the backend Kafka store", e);
     }
+    Collections.sort(associations);
     return associations;
   }
 
@@ -1328,6 +1333,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       LifecyclePolicy lifecycle) throws SchemaRegistryException {
     String tenant = tenant();
     List<Association> associations = new ArrayList<>();
+    if (resourceId == null) {
+      return associations;
+    }
     try (CloseableIterator<AssociationValue> iter =
         lookupCache.associationsByResourceId(tenant, resourceId)) {
       while (iter.hasNext()) {
@@ -1342,6 +1350,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryStoreException("Error while getting associations for resource id '"
           + resourceId + "' in the backend Kafka store", e);
     }
+    Collections.sort(associations);
     return associations;
   }
 
@@ -1350,6 +1359,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
       throws SchemaRegistryException {
     String tenant = tenant();
+    List<Association> associations = new ArrayList<>();
+    if (resourceName == null) {
+      return associations;
+    }
     String minResourceNamespace = resourceNamespace != null && !resourceNamespace.equals("*")
         ? resourceNamespace
         : String.valueOf(Character.MIN_VALUE);
@@ -1367,7 +1380,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     String minSubject = String.valueOf(Character.MIN_VALUE);
     String maxSubject = String.valueOf(Character.MAX_VALUE);
 
-    List<Association> associations = new ArrayList<>();
     AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
         minResourceType, minAssociationType, minSubject);
     AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
@@ -1385,6 +1397,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           "Error while retrieving schema from the backend Kafka"
               + " store", e);
     }
+    Collections.sort(associations);
     return associations;
   }
 

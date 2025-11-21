@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.common.collect.ImmutableList;
@@ -54,10 +55,11 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
     valueRequest.setSchema(allSchemas.get(1));
 
+    // Dry run request has null resource ID
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
-        resourceId,
+        null,
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
@@ -80,6 +82,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     );
 
     AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, true, request);
+    assertEquals(resourceNamespace, response.getResourceNamespace());
+    assertNull(response.getResourceId());
+    assertNull(response.getAssociations());
+
+    request.setResourceId(resourceId);
+
+    response = restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
     assertEquals(resourceName, response.getResourceName());
     assertEquals(resourceNamespace, response.getResourceNamespace());
@@ -172,6 +182,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     );
+
+    response = restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, true, request);
+    assertEquals(resourceNamespace, response.getResourceNamespace());
+    assertEquals(resourceId, response.getResourceId());
+    assertNull(response.getAssociations());
+
     response = restApp.restClient.createOrUpdateAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
     assertEquals(resourceName, response.getResourceName());
