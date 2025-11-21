@@ -706,8 +706,17 @@ public class MockSchemaRegistryClientTest {
           assertNotNull("createOrUpdateAssociation should succeed.", e);
       }
 
-      // Query by subject with lifecycle filter "weak" - should return error
       List<Association> associations = null;
+      // Query by subject with a non-existent subject - should return empty result instead of nil
+      try {
+        associations = client.getAssociationsBySubject(
+                "nonExistentSubjectName", null, Arrays.asList(KEY, VALUE), null, 0, -1);
+      } catch (Exception e) {
+        assertNull("getAssociationsBySubject should succeed.", e);
+      }
+      assertEquals(0, associations.size());
+
+      // Query by subject with lifecycle filter "weak" - should return error
       try {
           associations = client.getAssociationsBySubject(
                   defaulKeySubject, null, Arrays.asList(KEY, VALUE), "weak", 0, -1);
@@ -913,7 +922,7 @@ public class MockSchemaRegistryClientTest {
           assertTrue("Associations should be empty",
                   associations == null || associations.isEmpty());
         } catch (Exception e) {
-          assertNull("getAssociationsByResourceId should succeed.", e);
+          assertNull("getAssociationsByResourceName should succeed.", e);
         }
     }
 
