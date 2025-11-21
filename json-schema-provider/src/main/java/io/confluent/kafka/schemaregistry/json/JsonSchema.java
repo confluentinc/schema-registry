@@ -531,6 +531,16 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
+  public String formattedString(String format) {
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
+    }
+    // Don't throw an exception for forward compatibility of formats
+    log.warn("Unsupported format {}", format);
+    return canonicalString();
+  }
+
+  @Override
   public Integer version() {
     return version;
   }
