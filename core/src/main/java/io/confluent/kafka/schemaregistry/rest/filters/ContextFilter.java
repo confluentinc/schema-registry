@@ -191,6 +191,8 @@ public class ContextFilter implements ContainerRequestFilter {
           })
           .toArray();
       builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
+    } else if (path.equals("associations") || path.startsWith("associations:")) {
+      builder.replaceQueryParam("context", QualifiedSubject.normalizeContext(context));
     }
   }
 

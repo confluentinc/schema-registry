@@ -132,10 +132,10 @@ public class AssociationCreateOrUpdateRequest {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
-  public void validate() {
+  public void validate(boolean dryRun) {
     checkName(getResourceName(), "resourceName");
     checkName(getResourceNamespace(), "resourceNamespace");
-    if (getResourceId() == null || getResourceId().isEmpty()) {
+    if (!dryRun && (getResourceId() == null || getResourceId().isEmpty())) {
       throw new IllegalPropertyException("resourceId", "cannot be null or empty");
     }
     if (getResourceType() != null && !getResourceType().isEmpty()) {
