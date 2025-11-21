@@ -98,7 +98,6 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceId, associations.get(0).getResourceId());
     assertEquals(resourceName, associations.get(0).getResourceName());
     assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
-    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
     assertEquals("key", associations.get(0).getAssociationType());
     assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
 
@@ -111,6 +110,51 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
     assertEquals("value", associations.get(0).getAssociationType());
     assertEquals(LifecyclePolicy.STRONG, associations.get(0).getLifecycle());
+
+    associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, associations.size());
+    assertEquals(resourceId, associations.get(0).getResourceId());
+    assertEquals(resourceName, associations.get(0).getResourceName());
+    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
+    assertEquals("key", associations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
+    assertEquals(resourceId, associations.get(1).getResourceId());
+    assertEquals(resourceName, associations.get(1).getResourceName());
+    assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
+    assertEquals("value", associations.get(1).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
+
+    associations = restApp.restClient.getAssociationsByResourceName(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceName, "*", "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, associations.size());
+    assertEquals(resourceId, associations.get(0).getResourceId());
+    assertEquals(resourceName, associations.get(0).getResourceName());
+    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
+    assertEquals("key", associations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
+    assertEquals(resourceId, associations.get(1).getResourceId());
+    assertEquals(resourceName, associations.get(1).getResourceName());
+    assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
+    assertEquals("value", associations.get(1).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
+
+    associations = restApp.restClient.getAssociationsByResourceName(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceName, resourceNamespace, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, associations.size());
+    assertEquals(resourceId, associations.get(0).getResourceId());
+    assertEquals(resourceName, associations.get(0).getResourceName());
+    assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
+    assertEquals("key", associations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
+    assertEquals(resourceId, associations.get(1).getResourceId());
+    assertEquals(resourceName, associations.get(1).getResourceName());
+    assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
+    assertEquals("value", associations.get(1).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
 
     request = new AssociationCreateOrUpdateRequest(
         resourceName,

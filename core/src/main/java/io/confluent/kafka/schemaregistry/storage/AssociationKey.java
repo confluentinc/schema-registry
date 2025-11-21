@@ -26,7 +26,7 @@ import java.util.Objects;
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonPropertyOrder(value = {"keytype", "tenant", "resourceName", "resourceNamespace",
-    "resourceType", "associationType", "subject"})
+    "resourceType", "associationType", "subject", "magic"})
 public class AssociationKey extends SubjectKey {
 
   private static final int MAGIC_BYTE = 0;
