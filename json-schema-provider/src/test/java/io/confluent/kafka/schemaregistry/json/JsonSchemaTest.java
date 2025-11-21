@@ -850,6 +850,28 @@ public class JsonSchemaTest {
     assertEquals(ImmutableSet.of("PII", "TEST2", "TEST3"), resultSchema.inlineTags());
   }
 
+  @Test
+  public void testBadFormat() throws Exception {
+    String schema = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"type\": [\"null\", \"object\"],\n"
+        + "  \"properties\": {\n"
+        + "    \"parent\": {\n"
+        + "        \"$ref\": \"task.schema.json\"\n"
+        + "    },    \n"
+        + "    \"title\": {\n"
+        + "        \"description\": \"Task title\",\n"
+        + "        \"type\": \"string\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    assertEquals(jsonSchema.canonicalString(), jsonSchema.formattedString("serialized"));
+  }
+
   private static Map<String, String> getJsonSchemaWithReferences() {
     Map<String, String> schemas = new HashMap<>();
     String reference = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
