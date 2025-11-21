@@ -68,8 +68,10 @@ public interface ParsedSchema {
    * @return the formatted string
    */
   default String formattedString(String format) {
-    // Don't throw an exception for forward compatibility of formats
-    return canonicalString();
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
+    }
+    throw new IllegalArgumentException("Format not supported: " + format);
   }
 
   /**
