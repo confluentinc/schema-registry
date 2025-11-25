@@ -205,7 +205,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     boolean cascadeDelete = false;
     restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
-        resourceId, "topic", Collections.singletonList("key"), cascadeDelete);
+        resourceId, "topic", Collections.singletonList("key"), cascadeDelete, false);
 
     associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
@@ -217,7 +217,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     cascadeDelete = true;
     restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
-        resourceId, "topic", Collections.singletonList("value"), cascadeDelete);
+        resourceId, "topic", Collections.singletonList("value"), cascadeDelete, false);
 
     associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
