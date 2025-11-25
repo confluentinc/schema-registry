@@ -2056,7 +2056,7 @@ public class RestService implements Closeable, Configurable {
   public void deleteAssociations(
       Map<String, String> requestProperties,
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle
+      boolean cascadeLifecycle, Boolean dryRun
   ) throws IOException,
       RestClientException {
     UriBuilder builder =
@@ -2068,6 +2068,9 @@ public class RestService implements Closeable, Configurable {
       builder.queryParam("associationType", associationType);
     }
     builder.queryParam("cascadeLifecycle", cascadeLifecycle);
+    if (dryRun != null) {
+      builder.queryParam("dryRun", dryRun);
+    }
     String path = builder.build(resourceId).toString();
 
     httpRequest(path, "DELETE", null,
