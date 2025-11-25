@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceE
 import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
+import io.confluent.kafka.schemaregistry.rest.resources.AssociationsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ConfigResource;
 import io.confluent.kafka.schemaregistry.rest.resources.ContextsResource;
@@ -127,6 +128,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     config.register(RootResource.class);
+    config.register(new AssociationsResource(schemaRegistry));
     config.register(new ConfigResource(schemaRegistry));
     config.register(new ContextsResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
