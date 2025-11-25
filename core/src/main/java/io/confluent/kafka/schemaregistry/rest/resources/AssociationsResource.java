@@ -486,7 +486,9 @@ public class AssociationsResource {
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
       @Parameter(description = "Cascade lifecycle")
-      @QueryParam("cascadeLifecycle") boolean cascadeLifecycle) {
+      @QueryParam("cascadeLifecycle") boolean cascadeLifecycle,
+      @Parameter(description = "Dry run")
+      @QueryParam("dryRun") boolean dryRun) {
 
     log.debug("Deleting association for resource {}", resourceId);
 
@@ -509,7 +511,7 @@ public class AssociationsResource {
           QualifiedSubject.createFromUnqualified(schemaRegistry.tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       schemaRegistry.deleteAssociationsOrForward(qualifiedSubject,
-          resourceId, resourceType, associationTypes, cascadeLifecycle,
+          resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun,
           headerProperties);
       asyncResponse.resume(Response.status(204).build());
     } catch (AssociationFrozenException e) {

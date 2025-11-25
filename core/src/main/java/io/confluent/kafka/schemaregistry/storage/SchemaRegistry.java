@@ -436,7 +436,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default void deleteAssociationsOrForward(
       String subject,  // subject is only used for locking per tenant
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle, Map<String, String> headerProperties)
+      boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
       throws SchemaRegistryException {
   }
 
