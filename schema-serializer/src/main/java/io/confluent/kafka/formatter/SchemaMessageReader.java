@@ -203,11 +203,13 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
 
     valueSchema = getSchema(serializer.getSchemaRegistryClient(), props, false);
     final SubjectNameStrategy valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    valueSubjectNameStrategy.setSchemaRegistryClient(serializer.getSchemaRegistryClient());
     valueSubject = getSubjectName(valueSubjectNameStrategy, topic, false, valueSchema);
 
     if (needsKeySchema()) {
       keySchema = getSchema(serializer.getSchemaRegistryClient(), props, true);
       final SubjectNameStrategy keySubjectNameStrategy = config.keySubjectNameStrategy();
+      keySubjectNameStrategy.setSchemaRegistryClient(serializer.getSchemaRegistryClient());
       keySubject = getSubjectName(keySubjectNameStrategy, topic, true, keySchema);
     }
   }

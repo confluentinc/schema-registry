@@ -23,8 +23,15 @@ import io.confluent.kafka.example.Widget;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -598,6 +605,51 @@ public class KafkaAvroSerializerTest {
     byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
     assertEquals(annotatedUserRecord, specificAvroDeserializer.deserialize(topic, headers, bytes));
     assertEquals(annotatedUserRecord, specificAvroDecoder.fromBytes(headers, bytes));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerWithAssociatedNameStrategy()
+      throws IOException, RestClientException {
+    IndexedRecord avroRecord = createUserRecord();
+    RegisterSchemaRequest valueRequest =
+        new RegisterSchemaRequest(new AvroSchema(avroRecord.getSchema()));
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        topic,
+        "myresourcens",
+        "123",
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                "mysubject",
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                valueRequest,
+                null
+            )
+        )
+    );
+    schemaRegistry.createAssociation(request);
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
   }
 
   @Test
