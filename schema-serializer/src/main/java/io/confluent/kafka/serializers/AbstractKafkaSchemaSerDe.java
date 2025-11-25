@@ -185,9 +185,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
     contextNameStrategy = config.contextNameStrategy();
     keySubjectNameStrategy = config.keySubjectNameStrategy();
+    keySubjectNameStrategy.setSchemaRegistryClient(schemaRegistry);
     keySchemaIdSerializer = config.keySchemaIdSerializer();
     keySchemaIdDeserializer = config.keySchemaIdDeserializer();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    valueSubjectNameStrategy.setSchemaRegistryClient(schemaRegistry);
     valueSchemaIdSerializer = config.valueSchemaIdSerializer();
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
