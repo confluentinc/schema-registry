@@ -1127,7 +1127,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                 parseSchema(new Schema(
                         associationInRequest.getSubject(),
                         associationInRequest.getSchema())).get(),
-                associationInRequest.getNormalize());
+                Boolean.TRUE.equals(associationInRequest.getNormalize()));
       }
     }
   }
