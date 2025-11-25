@@ -1124,6 +1124,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       if (schema == null) {
         continue;
       }
+      Mode subjectMode = getModeInScope(qualifiedSubject);
+      if (subjectMode == Mode.IMPORT) {
+        continue;
+      }
       boolean normalize = Boolean.TRUE.equals(info.getNormalize());
       Schema registeredSchema = register(qualifiedSubject,
           new Schema(qualifiedSubject, schema), normalize, false);
@@ -1133,18 +1137,26 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     List<AssociationValue> associationValues =
         AssociationValue.fromAssociationCreateOrUpdateRequest(
             tenant(), request, associations, assocTypesToSkip);
+    for (AssociationValue associationValue : associationValues) {
+      putAssociation(associationValue);
+    }
+    return AssociationValue.toAssociationResponse(associationValues, registeredSchemas);
+  }
+
+  private void putAssociation(AssociationValue associationValue) throws SchemaRegistryException {
+    String qualifiedSubject = associationValue.getSubject();
     try {
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(context, kafkaStoreTimeoutMs);
-      for (AssociationValue associationValue : associationValues) {
-        AssociationKey associationKey = associationValue.toKey();
-        kafkaStore.put(associationKey, associationValue);
-        log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
-            associationValue, associationKey);
-      }
-      return AssociationValue.toAssociationResponse(associationValues, registeredSchemas);
+      AssociationKey associationKey = associationValue.toKey();
+      // Ensure cache is up-to-date before any potential writes
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
+      kafkaStore.put(associationKey, associationValue);
+      log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
+          associationValue, associationKey);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new association value to the store",
-          e);
+      throw new SchemaRegistryStoreException("Error while putting the association for subject '"
+          + qualifiedSubject + "' in the backend Kafka store", e);
     }
   }
 
@@ -1403,13 +1415,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   public void deleteAssociations(
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle)
+      boolean cascadeLifecycle, boolean dryRun)
       throws SchemaRegistryException {
     // TODO RAY test idempotency
     List<Association> associations = getAssociationsByResourceId(resourceId,
         resourceType, associationTypes, null);
     for (Association association : associations) {
       checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    if (dryRun) {
+      return;
     }
     for (Association association : associations) {
       deleteAssociation(association, cascadeLifecycle);
@@ -1439,43 +1454,47 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throws SchemaRegistryException {
     String unqualifiedSubject = oldAssociation.getSubject();
     QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-    String subject = qs.toQualifiedSubject();
+    String qualifiedSubject = qs.toQualifiedSubject();
     try {
       AssociationKey key = new AssociationKey(
           tenant(), oldAssociation.getResourceName(),
           oldAssociation.getResourceNamespace(), oldAssociation.getResourceType(),
-          oldAssociation.getAssociationType(), subject);
+          oldAssociation.getAssociationType(), qualifiedSubject);
       // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
       kafkaStore.put(key, null);
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while deleting the association for subject '"
-          + subject + "' in the backend Kafka store", e);
+          + qualifiedSubject + "' in the backend Kafka store", e);
     }
 
+    Mode subjectMode = getModeInScope(qualifiedSubject);
+    if (subjectMode == Mode.IMPORT) {
+      return;
+    }
     if (cascadeLifecycle && oldAssociation.getLifecycle() == LifecyclePolicy.STRONG) {
       // Delete subject
-      deleteSubject(subject, false);
-      deleteSubject(subject, true);
+      deleteSubject(qualifiedSubject, false);
+      deleteSubject(qualifiedSubject, true);
     }
   }
 
   public void deleteAssociationsOrForward(
       String subject,  // subject is only used for locking per tenant
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle, Map<String, String> headerProperties)
+      boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
       throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteAssociations(resourceId, resourceType, associationTypes, cascadeLifecycle);
+        deleteAssociations(resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun);
       } else {
         // forward update config request to the leader
         if (leaderIdentity != null) {
           forwardDeleteAssociationsRequestToLeader(resourceId,
-              resourceType, associationTypes, cascadeLifecycle, headerProperties);
+              resourceType, associationTypes, cascadeLifecycle, dryRun, headerProperties);
         } else {
           throw new UnknownLeaderException("Delete association request failed since leader is "
               + "unknown");
@@ -1753,14 +1772,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private void forwardDeleteAssociationsRequestToLeader(
       String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle, Map<String, String> headerProperties)
+      boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding delete associations request to %s", baseUrl));
     try {
       leaderRestService.deleteAssociations(
-          headerProperties, resourceId, resourceType, associationTypes, cascadeLifecycle);
+          headerProperties, resourceId, resourceType, associationTypes, cascadeLifecycle, dryRun);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format("Unexpected error while forwarding the delete association request to %s",
