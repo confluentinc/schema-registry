@@ -32,11 +32,16 @@ import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.serializers.jackson.Jackson;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -194,7 +199,6 @@ public class KafkaJsonSchemaSerializerTest {
     assertTrue(serializer.isKey());
 
     // restore configs
-    serializer.configure(new HashMap(config), false);
     serializer.configure(new HashMap(config), false);
   }
 
@@ -408,7 +412,51 @@ public class KafkaJsonSchemaSerializerTest {
     Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
     assertEquals(expectedRecord, deserialized);
   }
-  
+
+  @Test
+  public void testKafkaJsonSchemaDeserializerWithAssociatedNameStrategy()
+      throws IOException, RestClientException {
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        topic,
+        "myresourcens",
+        "123",
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                "mysubject",
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                valueRequest,
+                null
+            )
+        )
+    );
+    schemaRegistry.createAssociation(request);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    assertEquals(user, deserializer.deserialize(topic, headers, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+  }
+
   @Test
   public void testKafkaJsonSchemaDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
       throws IOException, RestClientException {
@@ -432,7 +480,6 @@ public class KafkaJsonSchemaSerializerTest {
     assertEquals(user, deserializer.deserialize(topic, headers, bytes));
 
     // restore configs
-    serializer.configure(new HashMap(config), false);
     serializer.configure(new HashMap(config), false);
   }
 
