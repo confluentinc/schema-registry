@@ -35,6 +35,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 
@@ -65,6 +66,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected Schema specificAvroReaderSchema = null;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
+  protected boolean avroFailOnTrailingData = false;
   private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
   private final LoadingCache<IdentityPair<Schema, Schema>, DatumReader<?>> datumReaderCache;
 
@@ -131,7 +133,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
-            .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+        .getBoolean(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    avroFailOnTrailingData = config
+        .getBoolean(KafkaAvroDeserializerConfig.AVRO_FAIL_ON_TRAILING_DATA_CONFIG);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -543,8 +547,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           result = bytes;
         } else {
           int start = buffer.position() + buffer.arrayOffset();
-          result = reader.read(null, decoderFactory.binaryDecoder(buffer.array(),
-              start, length, null));
+          BinaryDecoder decoder = decoderFactory.binaryDecoder(buffer.array(), start, length, null);
+          result = reader.read(null, decoder);
+          if (avroFailOnTrailingData && !decoder.isEnd()) {
+            throw new SerializationException("Trailing data found after deserializing Avro "
+                + " message for id " + schemaId);
+          }
           if (writerSchema.getType().equals(Schema.Type.STRING)) {
             result = result.toString();
           }
