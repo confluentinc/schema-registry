@@ -42,16 +42,15 @@ public class ClientAppInfoParser {
 
   /**
    * Builds the User-Agent string for HTTP requests.
-   * Format: "schema-registry-client-java/{version} (Java/{java.version}; {os.name})"
+   * Format: "schema-registry-client-java/{version} (Java/{java.version})"
    *
    * @return The User-Agent string
    */
   public static String getUserAgent() {
     String version = getVersion();
     String javaVersion = System.getProperty("java.version", "unknown");
-    String osName = System.getProperty("os.name", "unknown");
-    return String.format("schema-registry-client-java/%s (Java/%s; %s)",
-                         version, javaVersion, osName);
+    return String.format("schema-registry-client-java/%s (Java/%s)",
+                         version, javaVersion);
   }
 
   private static String readAppProperty(String propertyName, String defaultValue) {

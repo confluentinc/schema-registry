@@ -57,7 +57,7 @@ public class ClientAppInfoParserTest {
     assertTrue("First part should contain version",
                clientPart.matches("schema-registry-client-java/.*"));
 
-    // Second part: (Java/{version}; {os})
+    // Second part: (Java/{version})
     String environmentPart = parts[1];
     assertTrue("Second part should be in parentheses",
                environmentPart.startsWith("(") && environmentPart.endsWith(")"));
