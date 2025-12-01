@@ -30,11 +30,7 @@ public class RestValidation {
     if (name.length() > NAME_MAX_LENGTH) {
       throw new IllegalPropertyException(propertyName, "exceeds max length of " + NAME_MAX_LENGTH);
     }
-    char first = name.charAt(0);
-    if (!(Character.isLetter(first) || first == '_')) {
-      throw new IllegalPropertyException(propertyName, "must start with a letter or underscore");
-    }
-    for (int i = 1; i < name.length(); i++) {
+    for (int i = 0; i < name.length(); i++) {
       char c = name.charAt(i);
       if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
         throw new IllegalPropertyException(propertyName, "illegal character '" + c + "'");
