@@ -31,7 +31,6 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
   public static final boolean AVRO_USE_LOGICAL_TYPE_CONVERTERS_DEFAULT = false;
   public static final String AVRO_USE_LOGICAL_TYPE_CONVERTERS_DOC =
           "If true, use logical type converter in generic record";
-
   public static final String AVRO_REMOVE_JAVA_PROPS_CONFIG = "avro.remove.java.properties";
   public static final boolean AVRO_REMOVE_JAVA_PROPS_DEFAULT = false;
   public static final String AVRO_REMOVE_JAVA_PROPS_DOC =
