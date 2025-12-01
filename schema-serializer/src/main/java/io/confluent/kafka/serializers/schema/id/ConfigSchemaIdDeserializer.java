@@ -17,8 +17,11 @@
 package io.confluent.kafka.serializers.schema.id;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 
@@ -30,9 +33,11 @@ public class ConfigSchemaIdDeserializer implements SchemaIdDeserializer {
 
   public static final String USE_SCHEMA_ID = "use.schema.id";
   public static final String USE_SCHEMA_GUID = "use.schema.guid";
+  public static final String USE_MESSAGE_INDEXES = "use.message.indexes";
 
   private Integer id = null;
   private UUID guid = null;
+  private List<Integer> messageIndexes = null;
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -48,6 +53,14 @@ public class ConfigSchemaIdDeserializer implements SchemaIdDeserializer {
     if (guidConfig != null) {
       this.guid = UUID.fromString(guidConfig.toString());
     }
+    Object messageIndexesConfig = configs.get(USE_MESSAGE_INDEXES);
+    if (messageIndexesConfig != null) {
+      String[] parts = messageIndexesConfig.toString().split(",");
+      this.messageIndexes = Arrays.stream(parts)
+          .map(String::trim)
+          .map(Integer::parseInt)
+          .collect(Collectors.toList());
+    }
   }
 
   @Override
@@ -59,6 +72,9 @@ public class ConfigSchemaIdDeserializer implements SchemaIdDeserializer {
     }
     if (guid != null) {
       schemaId.setGuid(guid);
+    }
+    if (messageIndexes != null) {
+      schemaId.setMessageIndexes(messageIndexes);
     }
     return ByteBuffer.wrap(payload);
   }
