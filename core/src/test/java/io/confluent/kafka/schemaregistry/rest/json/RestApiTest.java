@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.rest.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 
 import java.io.IOException;
@@ -26,10 +27,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Random;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -49,21 +48,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class RestApiTest extends ClusterTestHarness {
+public abstract class RestApiTest {
 
   private static final Random random = new Random();
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  public RestApiTest() {
-    super(1, true);
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
   }
 
-  @Override
-  public Properties getSchemaRegistryProperties() {
-    Properties props = new Properties();
-    props.setProperty("schema.providers", JsonSchemaProvider.class.getName());
-    return props;
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
   }
 
   @Test
@@ -90,7 +88,7 @@ public class RestApiTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject1; i++) {
       String schema = allSchemasInSubject1.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter, subject1);
+      registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(schemaIdCounter), subject1);
       schemaIdCounter++;
       allVersionsInSubject1.add(expectedVersion);
     }
@@ -106,7 +104,7 @@ public class RestApiTest extends ClusterTestHarness {
           subject1
       ).getId();
       assertEquals(
-          expectedId,
+          expectedSchemaId(expectedId),
           foundId,
           "Re-registering an existing schema should return the existing version"
       );
@@ -116,7 +114,7 @@ public class RestApiTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject2; i++) {
       String schema = allSchemasInSubject2.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter, subject2);
+      registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(schemaIdCounter), subject2);
       schemaIdCounter++;
       allVersionsInSubject2.add(expectedVersion);
     }
@@ -146,7 +144,7 @@ public class RestApiTest extends ClusterTestHarness {
   public void testSchemaReferences() throws Exception {
     Map<String, String> schemas = getJsonSchemaWithReferences();
     String subject = "reference";
-    registerAndVerifySchema(restApp.restClient, schemas.get("ref.json"), 1, subject);
+    registerAndVerifySchema(restApp.restClient, schemas.get("ref.json"), expectedSchemaId(1), subject);
 
     RegisterSchemaRequest request = new RegisterSchemaRequest();
     request.setSchema(schemas.get("main.json"));
@@ -154,9 +152,9 @@ public class RestApiTest extends ClusterTestHarness {
     SchemaReference ref = new SchemaReference("ref.json", "reference", 1);
     request.setReferences(Collections.singletonList(ref));
     int registeredId = restApp.restClient.registerSchema(request, "referrer", false).getId();
-    assertEquals(2, registeredId, "Registering a new schema should succeed");
+    assertEquals(expectedSchemaId(2), registeredId, "Registering a new schema should succeed");
 
-    SchemaString schemaString = restApp.restClient.getId(2);
+    SchemaString schemaString = restApp.restClient.getId(expectedSchemaId(2));
     // the newly registered schema should be immediately readable on the leader
     assertEquals(
         MAPPER.readTree(schemas.get("main.json")),
@@ -171,7 +169,7 @@ public class RestApiTest extends ClusterTestHarness {
     );
 
     List<Integer> refs = restApp.restClient.getReferencedBy("reference", 1);
-    assertEquals(2, refs.get(0).intValue());
+    assertEquals(expectedSchemaId(2), refs.get(0).intValue());
 
     CachedSchemaRegistryClient schemaRegistryClient = new CachedSchemaRegistryClient(
             restApp.restClient, 10,
@@ -180,7 +178,7 @@ public class RestApiTest extends ClusterTestHarness {
     JsonSchema schema = JsonSchemaUtils.getSchema(holder, schemaRegistryClient);
     Schema registeredSchema = restApp.restClient.lookUpSubjectVersion(schema.canonicalString(),
             JsonSchema.TYPE, schema.references(), "referrer", false);
-    assertEquals(2, registeredSchema.getId().intValue(), "Registered schema should be found");
+    assertEquals(expectedSchemaId(2), registeredSchema.getId().intValue(), "Registered schema should be found");
 
     try {
       restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
@@ -240,11 +238,11 @@ public class RestApiTest extends ClusterTestHarness {
     String reference1 = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
         + "{\"ExternalType\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},"
         + "\"additionalProperties\":false}}}";
-    registerAndVerifySchema(restApp.restClient, reference1, 1, "ref1");
+    registerAndVerifySchema(restApp.restClient, reference1, expectedSchemaId(1), "ref1");
     String reference2 = "{\"type\":\"object\",\"additionalProperties\":false,\"definitions\":"
         + "{\"ExternalType2\":{\"type\":\"object\",\"properties\":{\"name2\":{\"type\":\"string\"}},"
         + "\"additionalProperties\":false}}}";
-    registerAndVerifySchema(restApp.restClient, reference2, 2, "ref2");
+    registerAndVerifySchema(restApp.restClient, reference2, expectedSchemaId(2), "ref2");
 
     SchemaReference ref1 = new SchemaReference("ref1.json", "ref1", 1);
     SchemaReference ref2 = new SchemaReference("ref2.json", "ref2", 1);
@@ -283,7 +281,7 @@ public class RestApiTest extends ClusterTestHarness {
         "1st schema under subject1 should have version 1"
     );
     assertEquals(
-        3,
+        expectedSchemaId(3),
         idOfRegisteredSchema1Subject1,
         "1st schema registered globally should have id 3"
     );
@@ -302,7 +300,7 @@ public class RestApiTest extends ClusterTestHarness {
     );
 
     try {
-      registerAndVerifySchema(restApp.restClient, getBadSchema(), 1, subject1);
+      registerAndVerifySchema(restApp.restClient, getBadSchema(), expectedSchemaId(1), subject1);
       fail("Registering bad schema should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
       assertEquals(
@@ -365,7 +363,7 @@ public class RestApiTest extends ClusterTestHarness {
 
     // test that compatibility check for incompatible schema returns false and the appropriate
     // error response from Avro
-    int idOfRegisteredSchema1Subject1 = restApp.restClient.registerSchema(registerRequest, subject, true).getId();
+    restApp.restClient.registerSchema(registerRequest, subject, true);
 
     try {
       registerRequest.setSchema(schema2String);
@@ -381,8 +379,7 @@ public class RestApiTest extends ClusterTestHarness {
     }
 
     List<String> response = restApp.restClient.testCompatibility(registerRequest, subject,
-      String.valueOf(
-        idOfRegisteredSchema1Subject1),
+      String.valueOf(1),
       false,
       true);
     assertTrue(response.size() > 0);
@@ -400,7 +397,7 @@ public class RestApiTest extends ClusterTestHarness {
     request.setSchemaType(JsonSchema.TYPE);
     request.setSchema(schemaString);
     // Register with null version
-    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(1), subject);
 
     Schema result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -410,17 +407,17 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with version -1
     request.setVersion(-1);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 1, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(1), subject);
 
     // Register schema with version 2
     request.setVersion(2);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(2), subject);
 
     // Register schema with version -1
     request.setVersion(-1);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(2), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -463,7 +460,7 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("2", result.getMetadata().getProperties().get("confluent:version"));
 
     // Register schema with null version
-    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(2), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -473,17 +470,17 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with version 3
     request.setVersion(3);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(3), subject);
 
     // Register schema with version -1
     request.setVersion(-1);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(3), subject);
 
     // Register schema with version -1
     request.setVersion(-1);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(3), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -494,7 +491,7 @@ public class RestApiTest extends ClusterTestHarness {
     request.setVersion(3);
     request.setMetadata(null);
     try {
-      registerAndVerifySchema(restApp.restClient, request, 3, subject);
+      registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(3), subject);
       fail("Registering version that is not next version should fail with " + Errors.INVALID_SCHEMA_ERROR_CODE);
     } catch (RestClientException rce) {
       assertEquals(
@@ -507,7 +504,7 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with version 4
     request.setVersion(4);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 4, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(4), subject);
 
     // Lookup schema with null version
     request.setVersion(null);
@@ -520,7 +517,7 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with confluent:version -1
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "-1"), null));
-    registerAndVerifySchema(restApp.restClient, request, 5, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(5), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -530,17 +527,17 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with confluent:version 2
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "2"), null));
-    registerAndVerifySchema(restApp.restClient, request, 2, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(2), subject);
 
     // Register schema with confluent:version 3
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "3"), null));
-    registerAndVerifySchema(restApp.restClient, request, 3, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(3), subject);
 
     // Register schema with confluent:version 0
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("confluent:version", "0"), null));
-    registerAndVerifySchema(restApp.restClient, request, 6, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(6), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -550,12 +547,12 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with empty metadata
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.emptyMap(), null));
-    registerAndVerifySchema(restApp.restClient, request, 6, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(6), subject);
 
     // Register schema with new metadata
     request.setVersion(null);
     request.setMetadata(new Metadata(null, Collections.singletonMap("mykey", "myvalue"), null));
-    registerAndVerifySchema(restApp.restClient, request, 7, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(7), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
@@ -565,7 +562,7 @@ public class RestApiTest extends ClusterTestHarness {
     // Register schema with confluent:version -1
     request.setVersion(-1);
     request.setMetadata(null);
-    registerAndVerifySchema(restApp.restClient, request, 8, subject);
+    registerAndVerifySchema(restApp.restClient, request, expectedSchemaId(8), subject);
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(schemaString, result.getSchema());
