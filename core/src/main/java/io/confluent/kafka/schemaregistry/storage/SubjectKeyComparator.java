@@ -34,7 +34,10 @@ public class SubjectKeyComparator<K> implements Comparator<K> {
   @Override
   @SuppressWarnings("unchecked")
   public int compare(K o1, K o2) {
-    if (o1 instanceof SubjectKey && o2 instanceof SubjectKey) {
+    if (o1 instanceof AssociationKey && o2 instanceof AssociationKey) {
+      // AssociationKeys are compared via resourceName and other fields
+      return ((Comparable) o1).compareTo(o2);
+    } else if (o1 instanceof SubjectKey && o2 instanceof SubjectKey) {
       SubjectKey s1 = (SubjectKey) o1;
       SubjectKey s2 = (SubjectKey) o2;
       int cmp = s1.keyType.compareTo(s2.keyType);
