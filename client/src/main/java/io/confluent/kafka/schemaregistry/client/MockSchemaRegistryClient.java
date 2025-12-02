@@ -1127,7 +1127,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                 parseSchema(new Schema(
                         associationInRequest.getSubject(),
                         associationInRequest.getSchema())).get(),
-                associationInRequest.getNormalize());
+                Boolean.TRUE.equals(associationInRequest.getNormalize()));
       }
     }
   }
@@ -1143,7 +1143,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private void validateAssociationCreateOrUpdateRequest(AssociationCreateOrUpdateRequest request) {
-    request.validate();
+    request.validate(false);
     // Validate each association
     for (AssociationCreateOrUpdateInfo associationCreateInfo : request.getAssociations()) {
       // Validate resource type and association type
