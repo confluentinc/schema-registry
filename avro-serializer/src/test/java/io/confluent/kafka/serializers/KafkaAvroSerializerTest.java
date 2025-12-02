@@ -139,6 +139,8 @@ public class KafkaAvroSerializerTest {
     Properties deserializerConfig = new Properties();
     deserializerConfig.setProperty(
         KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    deserializerConfig.setProperty(
+        KafkaAvroDeserializerConfig.AVRO_FAIL_ON_TRAILING_DATA_CONFIG, "true");
     return deserializerConfig;
   }
 
@@ -437,6 +439,25 @@ public class KafkaAvroSerializerTest {
     byte[] randomBytes = "foo".getBytes();
     RecordHeaders headers = new RecordHeaders();
     unconfiguredSerializer.deserialize(topic, headers, randomBytes);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithTrailingData() throws IOException, RestClientException {
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false
+    );
+    avroSerializer.configure(configs, false);
+    IndexedRecord avroRecord = createUserRecord();
+    schemaRegistry.register(topic + "-value", new AvroSchema(avroRecord.getSchema()));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    // Append some extra bytes to simulate trailing data
+    byte[] bytesWithTrailingData = new byte[bytes.length + 5];
+    System.arraycopy(bytes, 0, bytesWithTrailingData, 0, bytes.length);
+    avroDeserializer.deserialize(topic, headers, bytesWithTrailingData);
   }
 
   @Test
