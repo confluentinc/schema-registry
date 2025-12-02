@@ -207,6 +207,34 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
   }
 
   /**
+   * Creates a QualifiedSubject from the given tenant, context, and unqualified subject.
+   *
+   * @param tenant the tenant
+   * @param context the context with a tenant prefix
+   * @param unqualifiedSubject the subject without a tenant prefix
+   * @return the QualifiedSubject, or null if the qualified subject is null or invalid
+   */
+  public static QualifiedSubject create(String tenant, String context, String unqualifiedSubject) {
+    try {
+      if (unqualifiedSubject == null) {
+        return null;
+      }
+      if (context != null && !context.isEmpty()) {
+        String unqualifiedContext = QualifiedSubject.create(tenant, context).toUnqualifiedContext();
+        if (unqualifiedContext != null
+            && !unqualifiedContext.isEmpty()
+            && !unqualifiedSubject.startsWith(CONTEXT_PREFIX)) {
+          unqualifiedSubject = QualifiedSubject.normalizeContext(unqualifiedContext)
+              + unqualifiedSubject;
+        }
+      }
+      return QualifiedSubject.createFromUnqualified(tenant, unqualifiedSubject);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
+
+  /**
    * Creates a QualifiedSubject from the given tenant and unqualified subject.
    *
    * @param tenant the tenant
