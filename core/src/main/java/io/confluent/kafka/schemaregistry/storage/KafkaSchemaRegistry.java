@@ -23,8 +23,6 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_D
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -2659,30 +2657,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  /**
+   * Returns the context prefix to use for listing subjects under a given context.
+   * This method can be overridden in subclasses to customize prefix computation.
+   *
+   * @param context The normalized context string, or null for default context
+   * @return The subject prefix to use for matching subjects
+   */
+  protected String getContextPrefixForDeleteMode(String context) {
+    // Context is already normalized and includes the trailing delimiter
+    // For default context: context would be null
+    // For named context: context would be like ":.production:"
+    return context != null ? context :
+            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
+  }
+
   private void deleteModesForSubjectsUnderContext(String context)
       throws SchemaRegistryException {
-    // Check if this is a wildcard subject in a non-default tenant to handle
-    // global mode in multi-tenant schema registry.
-    String tenant = tenant();
-    QualifiedSubject qs = QualifiedSubject.create(tenant, context);
-    boolean isWildcardInNonDefaultTenant = qs != null
-            && tenant != null
-            && !DEFAULT_TENANT.equals(tenant)
-            && WILDCARD.equals(qs.getSubject());
-
-    String subjectPrefix;
-    if (isWildcardInNonDefaultTenant) {
-      // For wildcard in non-default tenant, delete modes for all subjects in that tenant
-      // Strip the "*" to get the tenant prefix (e.g., "tenant1_*" -> "tenant1_")
-      subjectPrefix = context.substring(0, context.length() - 1);
-      log.info("Handling wildcard in non-default tenant, prefix='{}'", subjectPrefix);
-    } else {
-      // Context is already normalized and includes the trailing delimiter
-      // For default context: context would be null
-      // For named context: context would be like ":.production:"
-      subjectPrefix = context != null ? context :
-              QualifiedSubject.normalize(tenant, CONTEXT_PREFIX + CONTEXT_DELIMITER);
-    }
+    String subjectPrefix = getContextPrefixForDeleteMode(context);
 
     // Get all subjects with modes under this context
     // This includes subjects that have modes set but no schemas registered
