@@ -97,7 +97,7 @@ public abstract class RestApiTest {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
-      int expectedId = i + 1;
+      int expectedId = expectedSchemaId(i + 1);
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = restApp.restClient.registerSchema(schemaString,
           ProtobufSchema.TYPE,
@@ -105,7 +105,7 @@ public abstract class RestApiTest {
           subject1
       ).getId();
       assertEquals(
-          expectedSchemaId(expectedId),
+          expectedId,
           foundId,
           "Re-registering an existing schema should return the existing version"
       );

@@ -15,8 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -40,12 +39,21 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class RestApiSslTest extends ClusterTestHarness {
+public abstract class RestApiSslTest {
 
-  Properties props = new Properties();
+  protected RestApp restApp = null;
+  protected Properties props = new Properties();
 
-  public RestApiSslTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  public void setProps(Properties props) {
+    this.props = props;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
   }
 
 
@@ -59,7 +67,7 @@ public class RestApiSslTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").rawSchema();
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
 
     Map clientsslConfigs = new HashMap();
     clientsslConfigs.put(
@@ -109,7 +117,7 @@ public class RestApiSslTest extends ClusterTestHarness {
             + "\"fields\":"
             + "[{\"type\":\"string\",\"name\":\"f2\"}]}").rawSchema();
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
 
     Map clientsslConfigs = new HashMap();
     clientsslConfigs.put(
@@ -138,45 +146,6 @@ public class RestApiSslTest extends ClusterTestHarness {
         "Registering should succeed"
     );
 
-  }
-
-
-  @Override
-  public Properties getSchemaRegistryProperties() {
-    Configuration.setConfiguration(null);
-    props.put(
-        SchemaRegistryConfig.SCHEMAREGISTRY_INTER_INSTANCE_PROTOCOL_CONFIG,
-        "https"
-    );
-    props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
-    try {
-      File trustStoreFile = File.createTempFile("truststore", ".jks");
-      trustStoreFile.deleteOnExit();
-      List<X509Certificate> clientCerts = new ArrayList<>();
-
-      List<KeyPair> keyPairs = new ArrayList<>();
-      props.putAll(
-          SecureTestUtils.clientSslConfigsWithKeyStore(1, trustStoreFile, new Password
-                  ("TrustPassword"), clientCerts,
-              keyPairs
-          ));
-      props.put(SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_CONFIG, SchemaRegistryConfig.SSL_CLIENT_AUTHENTICATION_REQUIRED);
-
-    } catch (Exception e) {
-      throw new RuntimeException("Exception creation SSL properties ", e);
-    }
-
-    // Use localhost instead of 0.0.0.0 to avoid 400 Invalid SNI
-    props.put(SchemaRegistryConfig.LISTENERS_CONFIG, getSchemaRegistryProtocol() +
-        "://localhost:"
-        + schemaRegistryPort);
-
-    return props;
-  }
-
-  @Override
-  public String getSchemaRegistryProtocol() {
-    return "https";
   }
 
   private void setupHostNameVerifier() {
