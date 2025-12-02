@@ -2678,7 +2678,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       log.info("Handling wildcard in non-default tenant, prefix='{}'", subjectPrefix);
     } else {
       // Context is already normalized and includes the trailing delimiter
-      // For default context: context would be like ":tenant:"
+      // For default context: context would be null
       // For named context: context would be like ":.production:"
       subjectPrefix = context != null ? context :
               QualifiedSubject.normalize(tenant, CONTEXT_PREFIX + CONTEXT_DELIMITER);
