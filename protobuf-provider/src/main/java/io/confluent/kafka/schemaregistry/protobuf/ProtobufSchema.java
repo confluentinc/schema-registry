@@ -2676,7 +2676,12 @@ public class ProtobufSchema implements ParsedSchema {
     StringBuilder sb = new StringBuilder();
     List<TypeElement> types = schemaObj.getTypes();
     boolean first = true;
-    for (Integer index : indexes.indexes()) {
+    List<Integer> indexList = indexes.indexes();
+    if (indexList.isEmpty()) {
+      // Default to the first message
+      indexList = MessageIndexes.DEFAULT_INDEX;
+    }
+    for (Integer index : indexList) {
       if (!first) {
         sb.append(".");
       } else {
