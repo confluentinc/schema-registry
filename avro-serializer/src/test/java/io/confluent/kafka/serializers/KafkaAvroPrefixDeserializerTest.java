@@ -26,7 +26,7 @@ public class KafkaAvroPrefixDeserializerTest extends KafkaAvroSerializerTest {
 
   @Override
   protected Properties createDeserializerConfig() {
-    Properties props = super.createSerializerConfig();
+    Properties props = super.createDeserializerConfig();
     props.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_DESERIALIZER,
         PrefixSchemaIdDeserializer.class.getName());
     props.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_DESERIALIZER,
