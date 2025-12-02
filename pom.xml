@@ -91,6 +91,7 @@
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
+        <avro.version>1.11.4</avro.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.5.1</cel-version>
         <google.api.client.version>2.4.0</google.api.client.version>
