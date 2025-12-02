@@ -28,7 +28,7 @@
               files="(.*).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractKafkaAvroSerializer|AbstractkafkaAvroDeserializer|AbstractKafkaJsonSchemaSerializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|AbstractKafkaSchemaSerDe|AvroData|AvroSchema|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchema|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils|JsonSchemaComparator|SchemaMessageFormatter|SchemaMessageReader|SchemaTranslator|SubjectVersionsResource|CachedSchemaRegistryClient|Association|AssociationKey).java"/>
+              files="(AbstractKafkaAvroSerializer|AbstractKafkaAvroDeserializer|AbstractKafkaJsonSchemaSerializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|AbstractKafkaSchemaSerDe|AvroData|AvroSchema|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchema|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils|JsonSchemaComparator|SchemaMessageFormatter|SchemaMessageReader|SchemaTranslator|SubjectVersionsResource|CachedSchemaRegistryClient|Association|AssociationKey).java"/>
 
     <suppress checks="MethodLength"
               files="(AvroData|ProtobufSchema|ProtobufSchemaUtils).java"/>
