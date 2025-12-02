@@ -16,14 +16,13 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 
 import java.util.Collections;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
@@ -32,7 +31,17 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class RestApiModeTest extends ClusterTestHarness {
+public abstract class RestApiModeTest {
+
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
 
   private static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
@@ -92,10 +101,6 @@ public class RestApiModeTest extends ClusterTestHarness {
               + "}")
       .canonicalString();
 
-  public RestApiModeTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
-  }
-
   @Test
   public void testReadOnlyMode() throws Exception {
     String subject = "testSubject";
@@ -143,7 +148,7 @@ public class RestApiModeTest extends ClusterTestHarness {
       );
     }
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject),
@@ -162,7 +167,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     // register a valid avro schema
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
@@ -220,7 +225,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     String mode = "IMPORT";
 
     // register a valid avro schema
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject),
@@ -269,7 +274,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
@@ -294,7 +299,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject),
@@ -312,7 +317,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     // register same schema with different id
-    expectedIdSchema1 = 2;
+    expectedIdSchema1 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
@@ -330,7 +335,7 @@ public class RestApiModeTest extends ClusterTestHarness {
             mode,
             restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject),
@@ -383,7 +388,7 @@ public class RestApiModeTest extends ClusterTestHarness {
             mode,
             restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject),
@@ -452,7 +457,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 100;
+    int expectedIdSchema1 = expectedSchemaId(100);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1),
@@ -466,7 +471,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     );
 
     // register equivalent schema with different id
-    expectedIdSchema1 = 200;
+    expectedIdSchema1 = expectedSchemaId(200);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL2, subject, 2, expectedIdSchema1),
@@ -490,7 +495,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 100;
+    int expectedIdSchema1 = expectedSchemaId(100);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1),
@@ -504,7 +509,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     );
 
     // register equivalent schema with different id
-    expectedIdSchema1 = 200;
+    expectedIdSchema1 = expectedSchemaId(200);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1),
@@ -529,7 +534,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 100;
+    int expectedIdSchema1 = expectedSchemaId(100);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
@@ -543,7 +548,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals(1, versionOfRegisteredSubject1);
 
     // register equivalent schema with different id
-    expectedIdSchema1 = 200;
+    expectedIdSchema1 = expectedSchemaId(200);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject2, 1, expectedIdSchema1));
@@ -571,7 +576,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_STRING, subject),
@@ -597,7 +602,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     );
 
     // register same schema with same id
-    expectedIdSchema1 = 2;
+    expectedIdSchema1 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA2_STRING, subject, 2, expectedIdSchema1),

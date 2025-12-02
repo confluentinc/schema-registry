@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -32,10 +32,16 @@ import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-public class RestApiContextTest extends ClusterTestHarness {
+public abstract class RestApiContextTest {
 
-  public RestApiContextTest() {
-    super(1, true);
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
   }
 
   @Test
@@ -90,7 +96,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject1; i++) {
       String schema = allSchemasInSubject1.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter,
+      registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(schemaIdCounter),
                               subject1);
       schemaIdCounter++;
       allVersionsInSubject1.add(expectedVersion);
@@ -98,7 +104,7 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
-      int expectedId = i + 1;
+      int expectedId = expectedSchemaId(i + 1);
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = restApp.restClient.registerSchema(schemaString, subject1);
       assertEquals(
@@ -114,7 +120,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject2; i++) {
       String schema = allSchemasInSubject2.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter,
+      registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(schemaIdCounter),
                               subject2);
       schemaIdCounter++;
       allVersionsInSubject2.add(expectedVersion);
@@ -127,7 +133,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject3; i++) {
       String schema = allSchemasInSubject3.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter,
+      registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(schemaIdCounter),
           subject3);
       schemaIdCounter++;
       allVersionsInSubject3.add(expectedVersion);
@@ -140,7 +146,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject4; i++) {
       String schema = allSchemasInSubject4.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restApp.restClient, schema, schemaIdCounter,
+      registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(schemaIdCounter),
           subject4);
       schemaIdCounter++;
       allVersionsInSubject4.add(expectedVersion);
@@ -235,7 +241,14 @@ public class RestApiContextTest extends ClusterTestHarness {
     RestService restClient2 = new RestService(restApp.restConnect + "/contexts/.ctx2");
     RestService restClient3 = new RestService(restApp.restConnect + "/contexts/:.:");
     RestService noCtxRestClient3 = new RestService(restApp.restConnect);
+    testContextPathsImpl(restClient1, restClient2, restClient3, noCtxRestClient3);
+  }
 
+  public void testContextPathsImpl(
+      RestService restClient1,
+      RestService restClient2,
+      RestService restClient3,
+      RestService noCtxRestClient3) throws Exception {
     String subject1 = "testTopic1";
     String subject2A = "testTopic2A";
     String subject2B = "testTopic2B";
@@ -270,7 +283,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject1; i++) {
       String schema = allSchemasInSubject1.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restClient1, schema, schemaIdCounter,
+      registerAndVerifySchema(restClient1, schema, expectedSchemaId(schemaIdCounter),
           subject1);
       schemaIdCounter++;
       allVersionsInSubject1.add(expectedVersion);
@@ -278,7 +291,7 @@ public class RestApiContextTest extends ClusterTestHarness {
 
     // test re-registering existing schemas
     for (int i = 0; i < schemasInSubject1; i++) {
-      int expectedId = i + 1;
+      int expectedId = expectedSchemaId(i + 1);
       String schemaString = allSchemasInSubject1.get(i);
       int foundId = restClient1.registerSchema(schemaString, subject1);
       assertEquals(
@@ -294,11 +307,11 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject2; i++) {
       String schema = allSchemasInSubject2.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restClient2, schema, schemaIdCounter,
+      registerAndVerifySchema(restClient2, schema, expectedSchemaId(schemaIdCounter),
           subject2A);
-      registerAndVerifySchema(restClient2, schema, schemaIdCounter,
+      registerAndVerifySchema(restClient2, schema, expectedSchemaId(schemaIdCounter),
           subject2B);
-      registerAndVerifySchema(restClient2, schema, schemaIdCounter,
+      registerAndVerifySchema(restClient2, schema, expectedSchemaId(schemaIdCounter),
           subject2C);
       schemaIdCounter++;
       allVersionsInSubject2.add(expectedVersion);
@@ -308,7 +321,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     schemaIdCounter = 1;
 
     try {
-      restClient3.getId(schemaIdCounter);
+      restClient3.getId(expectedSchemaId(schemaIdCounter));
       fail("Registered schema should not be found in default context");
     } catch (RestClientException rce) {
       assertEquals(
@@ -322,7 +335,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     for (int i = 0; i < schemasInSubject3; i++) {
       String schema = allSchemasInSubject3.get(i);
       int expectedVersion = i + 1;
-      registerAndVerifySchema(restClient3, schema, schemaIdCounter,
+      registerAndVerifySchema(restClient3, schema, expectedSchemaId(schemaIdCounter),
           subject3);
       schemaIdCounter++;
       allVersionsInSubject3.add(expectedVersion);
@@ -394,7 +407,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     // This should return schema id 1 from the default context
     assertEquals(
         allSchemasInSubject3.get(0),
-        noCtxRestClient3.getId(1, subject3).getSchemaString(),
+        noCtxRestClient3.getId(expectedSchemaId(1), subject3).getSchemaString(),
         "Registered schema should be found"
     );
 
@@ -402,7 +415,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     // This should NOT return schema id 1 from the default context
     assertEquals(
         allSchemasInSubject2.get(0),
-        noCtxRestClient3.getId(1, subject2A).getSchemaString(),
+        noCtxRestClient3.getId(expectedSchemaId(1), subject2A).getSchemaString(),
         "Registered schema should be found"
     );
 
@@ -446,7 +459,7 @@ public class RestApiContextTest extends ClusterTestHarness {
     );
   }
 
-  static void registerAndVerifySchema(RestService restService, String schemaString,
+  protected static void registerAndVerifySchema(RestService restService, String schemaString,
       int expectedId, String subject)
       throws IOException, RestClientException {
     int registeredId = restService.registerSchema(schemaString, subject);
