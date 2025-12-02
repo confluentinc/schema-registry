@@ -1339,13 +1339,24 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
+  /**
+   * Returns the context prefix to use for listing subjects under a given context.
+   * This method can be overridden in subclasses to customize prefix computation.
+   *
+   * @param context The normalized context string, or null for default context
+   * @return The subject prefix to use for matching subjects
+   */
+  protected String getContextPrefixForDeleteMode(String context) {
+    // Context is already normalized and includes the trailing delimiter
+    // For default context: context would be null
+    // For named context: context would be like ":.production:"
+    return context != null ? context :
+            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
+  }
+
   private void deleteModesForSubjectsUnderContext(String context)
       throws SchemaRegistryException {
-    // Context is already normalized and includes the trailing delimiter
-    // For default context: context would be like ":tenant:"
-    // For named context: context would be like ":.production:"
-    String subjectPrefix = context != null ? context :
-            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
+    String subjectPrefix = getContextPrefixForDeleteMode(context);
 
     // Get all subjects with modes under this context
     // This includes subjects that have modes set but no schemas registered
