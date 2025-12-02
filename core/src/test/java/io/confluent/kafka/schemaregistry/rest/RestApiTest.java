@@ -76,6 +76,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.apache.avro.Schema.Parser;
+import org.apache.avro.SchemaParseException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -295,7 +296,7 @@ public abstract class RestApiTest {
     try {
         new Parser().parse(badSchemaString);
         fail("Parsing invalid schema string should fail with SchemaParseException");
-    } catch (Exception spe) {
+    } catch (SchemaParseException spe) {
         expectedErrorMessage = spe.getMessage();
     }
 
@@ -2740,13 +2741,13 @@ public abstract class RestApiTest {
   public void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
     String subject0 = "testSubject0";
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":"
-        + "\"f" + "\"},"
-        + "{\"type\":\"string\",\"name\":"
-        + "\"g\" , \"default\":\"d\"}"
-        + "]}");
+                                                     + "\"name\":\"myrecord\","
+                                                     + "\"fields\":"
+                                                     + "[{\"type\":\"string\",\"name\":"
+                                                     + "\"f" + "\"},"
+                                                     + "{\"type\":\"string\",\"name\":"
+                                                     + "\"g\" , \"default\":\"d\"}"
+                                                     + "]}");
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
     request1.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "f"),
@@ -2837,12 +2838,12 @@ public abstract class RestApiTest {
 
     // remove reserved fields for subject0
     schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "["
-        + "{\"type\":\"string\",\"name\":"
-        + "\"g\" , \"default\":\"d\"}"
-        + "]}");
+                                        + "\"name\":\"myrecord\","
+                                        + "\"fields\":"
+                                        + "["
+                                        + "{\"type\":\"string\",\"name\":"
+                                        + "\"g\" , \"default\":\"d\"}"
+                                        + "]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
     request2.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "g"),
@@ -2851,41 +2852,6 @@ public abstract class RestApiTest {
         RestClientException.class,
         () -> restApp.restClient.registerSchema(request2, subject0, false),
         "Fail registering because of removal of reserved fields"
-    );
-  }
-
-  @Test
-  public void testRegisterSchemaWithInvalidNamespace() throws RestClientException, IOException {
-    String subject0 = "testSubject0";
-    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-                                                     + "\"name\":\"myrecord\","
-                                                     + "\"namespace\":\"a-bad.namespace\","
-                                                     + "\"fields\":"
-                                                     + "[{\"type\":\"string\",\"name\":"
-                                                     + "\"f" + "\"},"
-                                                     + "{\"type\":\"string\",\"name\":"
-                                                     + "\"g\" , \"default\":\"d\"}"
-                                                     + "]}");
-    RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
-    assertThrows(
-        RestClientException.class,
-        () -> restApp.restClient.registerSchema(request1, subject0, false),
-        "Fail registering subject0 because of global validateFields"
-    );
-
-    // global validateNames = false
-    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
-    configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
-    configUpdateRequest.setValidateNames(false);
-    assertEquals(
-        configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, null),
-        "Updating config should succeed"
-    );
-    assertEquals(
-        expectedSchemaId(1),
-        restApp.restClient.registerSchema(request1, subject0, false).getId(),
-        "Should register despite reserved fields"
     );
   }
 

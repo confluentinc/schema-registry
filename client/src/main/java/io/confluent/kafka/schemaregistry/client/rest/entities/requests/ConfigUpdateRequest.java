@@ -39,7 +39,6 @@ public class ConfigUpdateRequest {
   private Optional<String> alias;
   private Optional<Boolean> normalize;
   private Optional<Boolean> validateFields;
-  private Optional<Boolean> validateNames;
   private Optional<Boolean> validateRules;
   private Optional<String> compatibilityLevel;
   private Optional<String> compatibilityPolicy;
@@ -56,7 +55,6 @@ public class ConfigUpdateRequest {
     setAlias(config.getAlias());
     setNormalize(config.isNormalize());
     setValidateFields(config.isValidateFields());
-    setValidateNames(config.isValidateNames());
     setValidateRules(config.isValidateRules());
     setCompatibilityLevel(config.getCompatibilityLevel());
     setCompatibilityPolicy(config.getCompatibilityPolicy());
@@ -129,26 +127,6 @@ public class ConfigUpdateRequest {
   @JsonIgnore
   public void setValidateFields(Boolean validateFields) {
     this.validateFields = validateFields != null ? Optional.of(validateFields) : null;
-  }
-
-  @JsonProperty("validateNames")
-  public Optional<Boolean> isOptionalValidateNames() {
-    return validateNames;
-  }
-
-  @JsonIgnore
-  public Boolean isValidateNames() {
-    return validateNames != null ? validateNames.orElse(null) : null;
-  }
-
-  @JsonProperty("validateNames")
-  public void setValidateNames(Optional<Boolean> validateNames) {
-    this.validateNames = validateNames;
-  }
-
-  @JsonIgnore
-  public void setValidateNames(Boolean validateNames) {
-    this.validateNames = validateNames != null ? Optional.of(validateNames) : null;
   }
 
   @JsonProperty("validateRules")
@@ -333,7 +311,6 @@ public class ConfigUpdateRequest {
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
-        && Objects.equals(validateNames, that.validateNames)
         && Objects.equals(validateRules, that.validateRules)
         && Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
@@ -346,7 +323,7 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateNames, validateRules,
+    return Objects.hash(alias, normalize, validateFields, validateRules,
         compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
