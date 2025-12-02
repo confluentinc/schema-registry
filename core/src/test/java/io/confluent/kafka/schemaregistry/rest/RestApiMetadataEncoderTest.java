@@ -20,8 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -34,12 +33,21 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import org.junit.jupiter.api.Test;
 
-public class RestApiMetadataEncoderTest extends ClusterTestHarness {
+public abstract class RestApiMetadataEncoderTest {
+
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
 
   private static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
@@ -47,17 +55,6 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
           + "\"fields\":"
           + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
       .canonicalString();
-
-  public RestApiMetadataEncoderTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
-  }
-
-  @Override
-  public Properties getSchemaRegistryProperties() throws Exception {
-    Properties props = new Properties();
-    props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
-    return props;
-  }
 
   @Test
   public void testRegisterSchemaWithSensitiveMetadata() throws Exception {
@@ -70,7 +67,7 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     Schema schema = new Schema(subject, null, null, null, null, metadata, null, SCHEMA_STRING);
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request, subject, false).getId(),
@@ -95,7 +92,7 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     Schema schema = new Schema(subject, null, null, null, null, metadata, null, SCHEMA_STRING);
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
 
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request, subject, false).getId(),
