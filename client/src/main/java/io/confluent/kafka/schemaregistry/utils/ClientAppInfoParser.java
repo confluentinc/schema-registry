@@ -41,16 +41,14 @@ public class ClientAppInfoParser {
   }
 
   /**
-   * Builds the User-Agent string for HTTP requests.
-   * Format: "schema-registry-client-java/{version} (Java/{java.version})"
+   * Builds the Confluent-Client-Version header value.
+   * Format: "java/{version}"
    *
-   * @return The User-Agent string
+   * @return The client version string
    */
-  public static String getUserAgent() {
+  public static String getClientVersion() {
     String version = getVersion();
-    String javaVersion = System.getProperty("java.version", "unknown");
-    return String.format("schema-registry-client-java/%s (Java/%s)",
-                         version, javaVersion);
+    return String.format("java/%s", version);
   }
 
   private static String readAppProperty(String propertyName, String defaultValue) {

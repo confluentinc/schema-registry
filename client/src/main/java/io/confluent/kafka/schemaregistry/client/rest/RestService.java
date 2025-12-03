@@ -224,7 +224,7 @@ public class RestService implements Closeable, Configurable {
   public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
   public static final String VERSION_8_0 = "8.0";
-  public static final String USER_AGENT = "User-Agent";
+  public static final String CONFLUENT_CLIENT_VERSION = "Confluent-Client-Version";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -233,7 +233,7 @@ public class RestService implements Closeable, Configurable {
         ImmutableMap.of(
             "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
             ACCEPT_UNKNOWN_PROPERTIES, "true",
-            USER_AGENT, ClientAppInfoParser.getUserAgent()
+            CONFLUENT_CLIENT_VERSION, ClientAppInfoParser.getClientVersion()
         );
   }
 

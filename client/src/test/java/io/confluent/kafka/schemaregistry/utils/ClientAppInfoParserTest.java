@@ -30,38 +30,13 @@ public class ClientAppInfoParserTest {
   }
 
   @Test
-  public void testGetUserAgent() {
-    String userAgent = ClientAppInfoParser.getUserAgent();
-    assertNotNull("User-Agent should not be null", userAgent);
-    assertFalse("User-Agent should not be empty", userAgent.isEmpty());
+  public void testClientVersionFormat() {
+    String clientVersion = ClientAppInfoParser.getClientVersion();
 
-    // Verify format: schema-registry-client-java/{version} (Java/{java.version}; {os.name})
-    assertTrue("User-Agent should start with 'schema-registry-client-java/'",
-               userAgent.startsWith("schema-registry-client-java/"));
-    assertTrue("User-Agent should contain Java version",
-               userAgent.contains("Java/"));
-    assertTrue("User-Agent should contain parentheses",
-               userAgent.contains("(") && userAgent.contains(")"));
-  }
-
-  @Test
-  public void testUserAgentFormat() {
-    String userAgent = ClientAppInfoParser.getUserAgent();
-
-    // Split to verify format
-    String[] parts = userAgent.split(" ", 2);
-    assertEquals("User-Agent should have two main parts", 2, parts.length);
-
-    // First part: schema-registry-client-java/{version}
-    String clientPart = parts[0];
-    assertTrue("First part should contain version",
-               clientPart.matches("schema-registry-client-java/.*"));
-
-    // Second part: (Java/{version})
-    String environmentPart = parts[1];
-    assertTrue("Second part should be in parentheses",
-               environmentPart.startsWith("(") && environmentPart.endsWith(")"));
-    assertTrue("Second part should contain Java version",
-               environmentPart.contains("Java/"));
+    // Verify format: java/{version}
+    String[] parts = clientVersion.split("/", 2);
+    assertEquals("Client version should have exactly two parts", 2, parts.length);
+    assertEquals("First part should be 'java'", "java", parts[0]);
+    assertFalse("Version part should not be empty", parts[1].isEmpty());
   }
 }
