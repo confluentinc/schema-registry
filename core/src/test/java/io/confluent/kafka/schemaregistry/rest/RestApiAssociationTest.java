@@ -142,7 +142,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
 
     associations = restApp.restClient.getAssociationsByResourceName(
-        RestService.DEFAULT_REQUEST_PROPERTIES, resourceName, "*", "topic",
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceName, "-", "topic",
         ImmutableList.of("key", "value"), null, 0, -1);
     assertEquals(2, associations.size());
     assertEquals(resourceId, associations.get(0).getResourceId());

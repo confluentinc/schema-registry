@@ -73,6 +73,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   int MIN_VERSION = 1;
   int MAX_VERSION = Integer.MAX_VALUE;
   String DEFAULT_TENANT = QualifiedSubject.DEFAULT_TENANT;
+  String RESOURCE_WILDCARD = "-";
   String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
           + "removed from its metadata which is present in the old schema's metadata.";
   String FIELD_CONFLICTS_WITH_RESERVED_FIELD = "The new schema has field that"
