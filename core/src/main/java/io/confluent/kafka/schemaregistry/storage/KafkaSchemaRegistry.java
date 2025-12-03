@@ -1375,10 +1375,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     if (resourceName == null) {
       return associations;
     }
-    String minResourceNamespace = resourceNamespace != null && !resourceNamespace.equals("*")
+    String minResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
         ? resourceNamespace
         : String.valueOf(Character.MIN_VALUE);
-    String maxResourceNamespace = resourceNamespace != null && !resourceNamespace.equals("*")
+    String maxResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
         ? resourceNamespace
         : String.valueOf(Character.MAX_VALUE);
     String minResourceType = resourceType != null

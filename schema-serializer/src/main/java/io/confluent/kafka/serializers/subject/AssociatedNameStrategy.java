@@ -37,7 +37,7 @@ import org.apache.commons.lang3.SerializationException;
  * the associated subject name for the topic.  The topic is passed as the resource name
  * to schema registry.  If there is a configuration property named
  * "associated.resource.namespace", then its value will be passed as the resource namespace;
- * otherwise the value "*" will be passed as the resource namespace.
+ * otherwise the value "-" will be passed as the resource namespace.
  * If more than subject is returned from the query, an exception will be thrown.
  * If no subjects are returned from the query, then the behavior will fall back
  * to {@link TopicNameStrategy}, unless the configuration property
@@ -47,6 +47,7 @@ import org.apache.commons.lang3.SerializationException;
 public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   public static final String ASSOCIATED_RESOURCE_NAMESPACE = "associated.resource.namespace";
+  public static final String NAMESPACE_WILDCARD = "-";
   public static final String SKIP_TOPIC_NAME_STRATEGY_FALLBACK =
       "skip.topic.name.strategy.fallback";
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
@@ -101,7 +102,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       throws IOException, RestClientException {
     List<Association> associations = client.getAssociationsByResourceName(
         topic,
-        associatedResourceNamespace != null ? associatedResourceNamespace : "*",
+        associatedResourceNamespace != null ? associatedResourceNamespace : NAMESPACE_WILDCARD,
         "topic",
         Collections.singletonList(isKey ? "key" : "value"),
         null,
