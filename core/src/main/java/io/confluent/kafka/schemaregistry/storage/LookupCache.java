@@ -112,31 +112,28 @@ public interface LookupCache<K,V> extends Store<K,V> {
   /**
    * Returns the association for the given association guid.
    *
-   * @param tenant the tenant; never {@code null}
    * @param guid the association guid; never {@code null}
    * @return the association for the association guid
    */
-  AssociationValue associationByGuid(String tenant, String guid)
+  AssociationValue associationByGuid(String guid)
       throws StoreException;
 
   /**
    * Returns associations for the given subject.
    *
-   * @param tenant the tenant; never {@code null}
    * @param subject the subject; never {@code null}
    * @return the associations for the subject
    */
-  CloseableIterator<AssociationValue> associationsBySubject(String tenant, String subject)
+  CloseableIterator<AssociationValue> associationsBySubject(String subject)
       throws StoreException;
 
   /**
    * Returns associations for the given resource id.
    *
-   * @param tenant the tenant; never {@code null}
    * @param resourceId the resource id; never {@code null}
    * @return the associations for the resource id
    */
-  CloseableIterator<AssociationValue> associationsByResourceId(String tenant, String resourceId)
+  CloseableIterator<AssociationValue> associationsByResourceId(String resourceId)
       throws StoreException;
 
   /**
