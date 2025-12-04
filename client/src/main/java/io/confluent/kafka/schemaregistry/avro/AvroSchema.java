@@ -701,6 +701,12 @@ public class AvroSchema implements ParsedSchema {
       case MAP:
         return Type.MAP;
       case UNION:
+        // Check if the schema is a nullable type
+        List<Schema> types = schema.getTypes();
+        if (types.size() == 2
+            && types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
+          return Type.NULLABLE;
+        }
         return Type.COMBINED;
       case FIXED:
         return Type.FIXED;
