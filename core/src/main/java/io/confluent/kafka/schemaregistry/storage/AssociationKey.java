@@ -139,7 +139,7 @@ public class AssociationKey extends SubjectKey {
 
   @Override
   public int compareTo(SchemaRegistryKey o) {
-    int compare = super.compareTo(o);
+    int compare = this.keyType.compareTo(o.keyType);
     if (compare == 0) {
       AssociationKey that = (AssociationKey) o;
       if (this.getTenant() == null && that.getTenant() == null) {
