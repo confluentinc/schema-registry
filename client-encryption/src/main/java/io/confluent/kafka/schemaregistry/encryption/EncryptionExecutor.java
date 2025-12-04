@@ -511,8 +511,11 @@ public class EncryptionExecutor implements RuleExecutor {
           case WRITE:
             plaintext = toBytes(type, value);
             if (plaintext == null) {
-              throw new RuleException(
-                  "Type '" + type + "' not supported for encryption");
+              if (ctx.currentField() == null || !ctx.currentField().isInCombined()) {
+                throw new RuleException(
+                    "Type '" + type + "' not supported for encryption");
+              }
+              return value;
             }
             dek = getOrCreateDek(ctx, isDekRotated() ? LATEST_VERSION : null);
             ciphertext = cryptor.encrypt(dek.getKeyMaterialBytes(), plaintext, EMPTY_AAD);

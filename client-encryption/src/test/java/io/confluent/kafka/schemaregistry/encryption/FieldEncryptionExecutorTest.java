@@ -36,6 +36,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
@@ -124,6 +125,7 @@ public abstract class FieldEncryptionExecutorTest {
   protected final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   protected final KafkaJsonSchemaSerializer<Employee> jsonSchemaSerializer3;
   protected final KafkaJsonSchemaSerializer<SampleEvent> jsonSchemaSerializer4;
+  protected final KafkaJsonSchemaSerializer<JsonNode> jsonSchemaSerializer5;
   protected final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   protected final KafkaProtobufSerializer<Widget> protobufSerializer;
   protected final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
@@ -185,6 +187,7 @@ public abstract class FieldEncryptionExecutorTest {
     jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer3 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer4 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
+    jsonSchemaSerializer5 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, clientProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
@@ -1609,6 +1612,117 @@ public abstract class FieldEncryptionExecutorTest {
         "456",
         ((JsonNode)obj).get("paymentDetails").get("accountPassword").textValue()
     );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerOneOfWithInt() throws Exception {
+    String json = "{\n"
+        + "    \"id\": \"123\",\n"
+        + "    \"stringOrInt\": 12\n"
+        + "}";
+    JsonNode data = new ObjectMapper().readTree(json);
+
+    String schemaStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"id\": {\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"stringOrInt\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ],\n" +
+        "      \"anyOf\": [\n" +
+        "        {\n" +
+        "          \"type\": \"string\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"integer\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"null\"\n" +
+        "        }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"StringOrInt\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 0;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer3);
+    byte[] bytes = jsonSchemaSerializer5.serialize(topic, headers, data);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(jsonSchemaDeserializer);
+    Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be a JsonNode ",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned value should be the int",
+        12,
+        ((JsonNode)obj).get("stringOrInt").intValue()
+    );
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaJsonSchemaSerializerNullableInt() throws Exception {
+    String json = "{\n"
+        + "    \"id\": \"123\",\n"
+        + "    \"stringOrInt\": 12\n"
+        + "}";
+    JsonNode data = new ObjectMapper().readTree(json);
+
+    String schemaStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"id\": {\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"stringOrInt\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ],\n" +
+        "      \"anyOf\": [\n" +
+        "        {\n" +
+        "          \"type\": \"integer\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"null\"\n" +
+        "        }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"StringOrInt\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 0;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer3);
+    jsonSchemaSerializer5.serialize(topic, headers, data);
   }
 
   @Test
