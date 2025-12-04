@@ -698,6 +698,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         + context + " is in read-only mode");
       }
 
+      // Ensure cache is up-to-date before any potential writes
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+
       List<Association> assocsBySubject = getAssociationsBySubject(
           subject, null, Collections.emptyList(), null);
       if (!assocsBySubject.isEmpty()) {
@@ -728,8 +731,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       if (permanentDelete && schemaValue != null && !schemaValue.isDeleted()) {
         throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
       }
-      // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       if (!permanentDelete) {
         schemaValue = new SchemaValue(schema);
         schemaValue.setDeleted(true);
@@ -790,13 +791,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         + context + " is in read-only mode");
       }
 
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
+
       List<Association> assocsBySubject = getAssociationsBySubject(
           subject, null, Collections.emptyList(), null);
       if (!assocsBySubject.isEmpty()) {
         throw new AssociationForSubjectExistsException(subject);
       }
 
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       List<Integer> deletedVersions = new ArrayList<>();
       int deleteWatermarkVersion = 0;
       Iterator<SchemaKey> schemasToBeDeleted = getAllVersions(subject,
@@ -963,9 +965,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
       boolean isCreateOnly)
       throws SchemaRegistryException {
-    // TODO RAY verify subject is qualified
-    // TODO RAY test idempotency
-
     // Replace aliases and check for read-only mode
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String unqualifiedSubject = info.getSubject();
@@ -978,6 +977,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
       // Set the subject in the request to the subject with context
       info.setSubject(qs.toUnqualifiedSubject());
+
+      try {
+        // Ensure cache is up-to-date before any potential writes
+        kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
+      } catch (StoreException e) {
+        throw new SchemaRegistryStoreException("Error while putting the association for subject '"
+            + qualifiedSubject + "' in the backend Kafka store", e);
+      }
     }
 
     // Check that association types are unique
@@ -1147,8 +1154,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     String qualifiedSubject = associationValue.getSubject();
     try {
       AssociationKey associationKey = associationValue.toKey();
-      // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
       kafkaStore.put(associationKey, associationValue);
       log.debug("Wrote new assoc: {} to the Kafka data store with key {}",
           associationValue, associationKey);
@@ -1304,9 +1309,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   public Association getAssociationByGuid(String guid)
       throws SchemaRegistryException {
-    String tenant = tenant();
     try {
-      AssociationValue associationValue = lookupCache.associationByGuid(tenant, guid);
+      AssociationValue associationValue = lookupCache.associationByGuid(guid);
       return associationValue != null ? associationValue.toAssociationEntity() : null;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while getting association for guid '"
@@ -1317,13 +1321,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   public List<Association> getAssociationsBySubject(
       String subject, String resourceType, List<String> associationTypes,
       LifecyclePolicy lifecycle) throws SchemaRegistryException {
-    String tenant = tenant();
     List<Association> associations = new ArrayList<>();
     if (subject == null) {
       return associations;
     }
-    try (CloseableIterator<AssociationValue> iter =
-        lookupCache.associationsBySubject(tenant, subject)) {
+    try (CloseableIterator<AssociationValue> iter = lookupCache.associationsBySubject(subject)) {
       while (iter.hasNext()) {
         AssociationValue value = iter.next();
         if ((resourceType == null || value.getResourceType().equals(resourceType))
@@ -1343,13 +1345,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   public List<Association> getAssociationsByResourceId(
       String resourceId, String resourceType, List<String> associationTypes,
       LifecyclePolicy lifecycle) throws SchemaRegistryException {
-    String tenant = tenant();
     List<Association> associations = new ArrayList<>();
     if (resourceId == null) {
       return associations;
     }
     try (CloseableIterator<AssociationValue> iter =
-        lookupCache.associationsByResourceId(tenant, resourceId)) {
+        lookupCache.associationsByResourceId(resourceId)) {
       while (iter.hasNext()) {
         AssociationValue value = iter.next();
         if ((resourceType == null || value.getResourceType().equals(resourceType))
@@ -1419,7 +1420,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle, boolean dryRun)
       throws SchemaRegistryException {
-    // TODO RAY test idempotency
     List<Association> associations = getAssociationsByResourceId(resourceId,
         resourceType, associationTypes, null);
     for (Association association : associations) {

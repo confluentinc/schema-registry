@@ -233,7 +233,6 @@ public class AssociationsResource {
   public void createAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
       @Parameter(description = "Dry run")
@@ -313,7 +312,6 @@ public class AssociationsResource {
   public void createOrUpdateAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
       @Parameter(description = "Dry run")
@@ -389,7 +387,6 @@ public class AssociationsResource {
   public void createAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
       @Parameter(description = "Dry run")
@@ -434,7 +431,6 @@ public class AssociationsResource {
   public void createOrUpdateAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
-      // TODO RAY
       @Parameter(description = "Context")
       @QueryParam("context") String context,
       @Parameter(description = "Dry run")

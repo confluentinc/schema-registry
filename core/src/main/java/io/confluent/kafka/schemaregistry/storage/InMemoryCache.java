@@ -273,28 +273,28 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public AssociationValue associationByGuid(String tenant, String guid)
+  public AssociationValue associationByGuid(String guid)
       throws StoreException {
     Map<String, AssociationValue> tenantAssociations =
-        associationsByGuid.getOrDefault(tenant, Collections.emptyMap());
+        associationsByGuid.getOrDefault(tenant(), Collections.emptyMap());
     return tenantAssociations.get(guid);
   }
 
   @Override
-  public CloseableIterator<AssociationValue> associationsBySubject(String tenant, String subject)
+  public CloseableIterator<AssociationValue> associationsBySubject(String subject)
       throws StoreException {
     Map<String, Set<AssociationValue>> tenantAssociations =
-        associationsBySubject.getOrDefault(tenant, Collections.emptyMap());
+        associationsBySubject.getOrDefault(tenant(), Collections.emptyMap());
     Set<AssociationValue> associations =
         tenantAssociations.getOrDefault(subject, Collections.emptySet());
     return new DelegatingIterator<>(associations.iterator());
   }
 
   @Override
-  public CloseableIterator<AssociationValue> associationsByResourceId(
-      String tenant, String resourceId) throws StoreException {
+  public CloseableIterator<AssociationValue> associationsByResourceId(String resourceId)
+      throws StoreException {
     Map<String, Set<AssociationValue>> tenantAssociations =
-        associationsByResourceId.getOrDefault(tenant, Collections.emptyMap());
+        associationsByResourceId.getOrDefault(tenant(), Collections.emptyMap());
     Set<AssociationValue> associations =
         tenantAssociations.getOrDefault(resourceId, Collections.emptySet());
     return new DelegatingIterator<>(associations.iterator());
