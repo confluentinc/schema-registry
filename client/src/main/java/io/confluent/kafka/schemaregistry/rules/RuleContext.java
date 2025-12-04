@@ -210,6 +210,7 @@ public class RuleContext {
     private final String fullName;
     private final String name;
     private Type type;
+    private boolean inCombined;
     private final Set<String> tags;
 
     public FieldContext(Object containingMessage, String fullName,
@@ -218,6 +219,7 @@ public class RuleContext {
       this.fullName = fullName;
       this.name = name;
       this.type = type;
+      this.inCombined = type == Type.COMBINED;
       this.tags = tags;
       fieldContexts.addLast(this);
     }
@@ -240,6 +242,10 @@ public class RuleContext {
 
     public void setType(Type type) {
       this.type = type;
+    }
+
+    public boolean isInCombined() {
+      return inCombined;
     }
 
     public Set<String> getTags() {
@@ -279,6 +285,7 @@ public class RuleContext {
     ARRAY(false),
     MAP(false),
     COMBINED(false),
+    NULLABLE(false),
     FIXED(false),
     STRING(true),
     BYTES(true),

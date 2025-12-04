@@ -81,6 +81,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -96,12 +97,14 @@ import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.NotSchema;
+import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
@@ -922,6 +925,14 @@ public class JsonSchema implements ParsedSchema {
     } else if (schema instanceof ArraySchema) {
       return Type.ARRAY;
     } else if (schema instanceof CombinedSchema) {
+      // Check if the schema is a nullable type
+      ValidationCriterion criterion = ((CombinedSchema) schema).getCriterion();
+      Collection<Schema> subschemas = ((CombinedSchema) schema).getSubschemas();
+      if (!criterion.equals(CombinedSchema.ALL_CRITERION)
+          && subschemas.size() == 2
+          && subschemas.stream().anyMatch(s -> s instanceof NullSchema)) {
+        return Type.NULLABLE;
+      }
       return Type.COMBINED;
     } else if (schema instanceof StringSchema) {
       return Type.STRING;
