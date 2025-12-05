@@ -76,12 +76,14 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.apache.avro.Schema.Parser;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
  * Interface for REST API integration tests.
  * Concrete subclasses provide the specific test harness implementation.
  */
+@Tag("IntegrationTest")
 public abstract class RestApiTest {
 
   protected RestApp restApp = null;
