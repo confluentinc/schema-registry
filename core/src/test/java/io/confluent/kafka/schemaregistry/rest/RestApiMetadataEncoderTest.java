@@ -35,8 +35,10 @@ import java.util.List;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("IntegrationTest")
 public abstract class RestApiMetadataEncoderTest {
 
   protected RestApp restApp = null;
