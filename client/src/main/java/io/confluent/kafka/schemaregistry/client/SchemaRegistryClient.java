@@ -78,7 +78,9 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   default ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
     return parseSchema(schema)
-        .orElseThrow(() -> new IOException("Invalid schema of type " + schema.getSchemaType()));
+        .orElseThrow(() -> new IOException("Invalid schema " + schema.getSchema()
+        + " with refs " + schema.getReferences()
+        + " of type " + schema.getSchemaType()));
   }
 
   /**
@@ -299,7 +301,7 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
-  default SchemaRegistryDeployment getSchemaRegistryDeployment()
+  default SchemaRegistryDeployment getSchemaRegistryDeployment() 
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
