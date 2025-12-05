@@ -19,6 +19,12 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -67,6 +73,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   int MIN_VERSION = 1;
   int MAX_VERSION = Integer.MAX_VALUE;
   String DEFAULT_TENANT = QualifiedSubject.DEFAULT_TENANT;
+  String RESOURCE_WILDCARD = "-";
   String RESERVED_FIELD_REMOVED = "The new schema has reserved field %s "
           + "removed from its metadata which is present in the old schema's metadata.";
   String FIELD_CONFLICTS_WITH_RESERVED_FIELD = "The new schema has field that"
@@ -344,6 +351,95 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default void deleteContextOrForward(Map<String, String> requestProperties,
                                       String delimitedContext) throws SchemaRegistryException {}
+
+  default AssociationResponse createAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationResponse createAssociationOrForward(String context, boolean dryRun,
+      AssociationCreateOrUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationBatchResponse createAssociations(
+      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+    return null;
+  }
+
+  default AssociationBatchResponse createAssociationsOrForward(
+      String context, boolean dryRun,
+      AssociationBatchCreateOrUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationResponse createOrUpdateAssociationOrForward(String context, boolean dryRun,
+      AssociationCreateOrUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationBatchResponse createOrUpdateAssociations(
+      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+    return null;
+  }
+
+  default AssociationBatchResponse createOrUpdateAssociationsOrForward(
+      String context, boolean dryRun,
+      AssociationBatchCreateOrUpdateRequest request,
+      Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default Association getAssociationByGuid(String guid)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default List<Association> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    return null;
+  }
+
+  default List<Association> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    return null;
+  }
+
+  default List<Association> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default void deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+  }
+
+  default void deleteAssociationsOrForward(
+      String subject,  // subject is only used for locking per tenant
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun, Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+  }
 
   default void addLeaderChangeListener(Consumer<Boolean> listener) {}
 

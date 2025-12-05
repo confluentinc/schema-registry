@@ -1153,8 +1153,8 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public void deleteAssociations(String resourceId, String resourceType,
                                   List<String> associationTypes, boolean cascadeLifecycle)
       throws IOException, RestClientException {
-    restService.deleteAssociations(
-        DEFAULT_REQUEST_PROPERTIES, resourceId, resourceType, associationTypes, cascadeLifecycle);
+    restService.deleteAssociations(DEFAULT_REQUEST_PROPERTIES,
+        resourceId, resourceType, associationTypes, cascadeLifecycle, false);
   }
 
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)

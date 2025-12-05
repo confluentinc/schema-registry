@@ -81,6 +81,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private static final Logger log = LoggerFactory.getLogger(MockSchemaRegistryClient.class);
 
   private static final int DEFAULT_CAPACITY = 1000;
+  private static final String RESOURCE_WILDCARD = "-";
   private static final String WILDCARD = "*";
   private static final String DEFAULT_RESOURCE_TYPE = "topic";
   private static final String DEFAULT_ASSOCIATION_TYPE = "value";
@@ -1129,7 +1130,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                 parseSchema(new Schema(
                         associationInRequest.getSubject(),
                         associationInRequest.getSchema())).get(),
-                associationInRequest.getNormalize());
+                Boolean.TRUE.equals(associationInRequest.getNormalize()));
       }
     }
   }
@@ -1145,7 +1146,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private void validateAssociationCreateOrUpdateRequest(AssociationCreateOrUpdateRequest request) {
-    request.validate();
+    request.validate(false);
     // Validate each association
     for (AssociationCreateOrUpdateInfo associationCreateInfo : request.getAssociations()) {
       // Validate resource type and association type
@@ -1298,8 +1299,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     List<Association> associations = new ArrayList<>();
-    // If resourceNamespace is null or "*", collect from all namespaces
-    if (resourceNamespace == null || WILDCARD.equals(resourceNamespace)) {
+    // If resourceNamespace is null or "-", collect from all namespaces
+    if (resourceNamespace == null || RESOURCE_WILDCARD.equals(resourceNamespace)) {
       for (List<Association> assocList : namespaceMap.values()) {
         associations.addAll(assocList);
       }
