@@ -310,4 +310,20 @@ public class ContextFilterTest {
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
+
+  @Test
+  public void testAssociationsContextQueryParam() {
+    String path = "/contexts/.ctx/associations";
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>());
+    Assert.assertEquals(
+        "URI must not change",
+        "/associations/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Context must change",
+        "context=:.ctx:",
+        uri.getQuery()
+    );
+  }
 }

@@ -25,7 +25,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class Association {
+public class Association implements Comparable<Association> {
 
   private String subject;
   private String guid;
@@ -177,5 +177,71 @@ public class Association {
         && Objects.equals(associationType, info.getAssociationType())
         && (info.getLifecycle() == null || Objects.equals(info.getLifecycle(), getLifecycle()))
         && (info.getFrozen() == null || Objects.equals(info.getFrozen(), isFrozen()));
+  }
+
+  @Override
+  public int compareTo(Association that) {
+    if (this.getResourceName() == null && that.getResourceName() == null) {
+      // pass
+    } else if (this.getResourceName() == null) {
+      return -1;
+    } else if (that.getResourceName() == null) {
+      return 1;
+    } else {
+      int resourceNameComparison = this.getResourceName().compareTo(that.getResourceName());
+      if (resourceNameComparison != 0) {
+        return resourceNameComparison < 0 ? -1 : 1;
+      }
+    }
+
+    if (this.getResourceNamespace() == null && that.getResourceNamespace() == null) {
+      // pass
+    } else if (this.getResourceNamespace() == null) {
+      return -1;
+    } else if (that.getResourceNamespace() == null) {
+      return 1;
+    } else {
+      int resourceNamespaceComparison =
+          this.getResourceNamespace().compareTo(that.getResourceNamespace());
+      if (resourceNamespaceComparison != 0) {
+        return resourceNamespaceComparison < 0 ? -1 : 1;
+      }
+    }
+
+    if (this.getResourceType() == null && that.getResourceType() == null) {
+      // pass
+    } else if (this.getResourceType() == null) {
+      return -1;
+    } else if (that.getResourceType() == null) {
+      return 1;
+    } else {
+      int resourceTypeComparison = this.getResourceType().compareTo(that.getResourceType());
+      if (resourceTypeComparison != 0) {
+        return resourceTypeComparison < 0 ? -1 : 1;
+      }
+    }
+
+    if (this.getAssociationType() == null && that.getAssociationType() == null) {
+      return 0;
+    } else if (this.getAssociationType() == null) {
+      return -1;
+    } else if (that.getAssociationType() == null) {
+      return 1;
+    } else {
+      int assocTypeComparison = this.getAssociationType().compareTo(that.getAssociationType());
+      if (assocTypeComparison != 0) {
+        return assocTypeComparison < 0 ? -1 : 1;
+      }
+    }
+
+    if (this.getSubject() == null && that.getSubject() == null) {
+      return 0;
+    } else if (this.getSubject() == null) {
+      return -1;
+    } else if (that.getSubject() == null) {
+      return 1;
+    } else {
+      return this.getSubject().compareTo(that.getSubject());
+    }
   }
 }
