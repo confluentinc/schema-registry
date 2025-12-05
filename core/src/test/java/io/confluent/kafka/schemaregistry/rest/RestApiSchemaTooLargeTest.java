@@ -21,8 +21,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("IntegrationTest")
 public abstract class RestApiSchemaTooLargeTest {
 
   protected RestApp restApp = null;
