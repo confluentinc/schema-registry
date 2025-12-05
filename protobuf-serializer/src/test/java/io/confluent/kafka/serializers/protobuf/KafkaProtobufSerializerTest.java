@@ -24,7 +24,11 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -33,6 +37,7 @@ import io.confluent.kafka.serializers.protobuf.test.CustomOptions2;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.DecimalValuePb2;
 import io.confluent.kafka.serializers.protobuf.test.Ranges;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -835,6 +840,50 @@ public class KafkaProtobufSerializerTest {
     assertEquals(expected, schema.canonicalString());
     schema = new ProtobufSchema(schema.canonicalString());
     assertEquals(expected, schema.canonicalString());
+  }
+
+  @Test
+  public void testKafkaProtobufDeserializerWithAssociatedNameStrategy()
+      throws IOException, RestClientException {
+    ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
+    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        topic,
+        "myresourcens",
+        "123",
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                "mysubject",
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                valueRequest,
+                null
+            )
+        )
+    );
+    schemaRegistry.createAssociation(request);
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaProtobufDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaProtobufDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+    );
+    protobufSerializer.configure(configs, false);
+    protobufDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
+
+    // restore configs
+    protobufSerializer.configure(new HashMap(serializerConfig), false);
+    testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
   }
 
   @Test
