@@ -26,11 +26,13 @@ import java.util.Collections;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Tag("IntegrationTest")
 public abstract class RestApiModeTest {
 
   protected RestApp restApp = null;
