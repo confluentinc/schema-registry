@@ -58,6 +58,9 @@ public class RewrapDeks implements Callable<Integer> {
       description = "KEK name", paramLabel = "<kekName>")
   private String kekName;
   @Parameters(index = "2", arity = "0..1", defaultValue = "true",
+      description = "Subject, defaults to all subjects", paramLabel = "<subject>")
+  private String subject;
+  @Parameters(index = "3", arity = "0..1", defaultValue = "true",
       description = "Include deleted DEKs, defaults to true", paramLabel = "<includeDeleted>")
   private boolean includeDeleted;
   @Option(names = {"-X", "--property"},
@@ -84,7 +87,10 @@ public class RewrapDeks implements Callable<Integer> {
         Collections.emptyMap()
     )) {
       Kek kek = client.getKek(kekName, includeDeleted);
-      List<String> subjects = client.listDeks(kekName, includeDeleted);
+      List<String> subjects = subject != null
+          ? Collections.singletonList(subject)
+          : client.listDeks(kekName, includeDeleted);
+
       for (String subject : subjects) {
         for (DekFormat algorithm : DekFormat.values()) {
           List<Integer> versions = client.listDekVersions(
