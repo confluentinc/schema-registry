@@ -101,6 +101,16 @@ public interface DekRegistryClient extends Closeable {
       boolean deleted)
       throws IOException, RestClientException;
 
+  Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial,
+      boolean deleted,
+      boolean rewrap)
+      throws IOException, RestClientException;
+
   Kek updateKek(
       String name,
       Map<String, String> kmsProps,
