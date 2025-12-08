@@ -235,17 +235,40 @@ public class MockDekRegistryClient implements DekRegistryClient {
       String encryptedKeyMaterial,
       boolean deleted)
       throws IOException, RestClientException {
+    return createDek(kekName, subject, version, algorithm, encryptedKeyMaterial, deleted, false);
+  }
+
+  @Override
+  public Dek createDek(
+      String kekName,
+      String subject,
+      int version,
+      DekFormat algorithm,
+      String encryptedKeyMaterial,
+      boolean deleted,
+      boolean rewrap)
+      throws IOException, RestClientException {
+    if (algorithm == null) {
+      algorithm = DekFormat.AES256_GCM;
+    }
     DekId keyId = new DekId(kekName, subject, version, algorithm);
-    Dek oldKey = deks.get(keyId);
     Dek key = new Dek(kekName, subject, version, algorithm,
         encryptedKeyMaterial, null, System.currentTimeMillis(), deleted);
-    key = maybeGenerateEncryptedDek(key);
-    if (key.getEncryptedKeyMaterial() == null) {
-      throw new RestClientException("Could not generate dek for " + subject, 500, 50070);
+    Dek oldKey = deks.get(keyId);
+    Kek kek = getKek(key.getKekName(), true);
+    if (rewrap && kek.isShared()) {
+      if (oldKey != null) {
+        oldKey = maybeGenerateRawDek(oldKey);
+        key.setKeyMaterial(oldKey.getKeyMaterialBytes());
+      }
     }
-    if (oldKey != null
+    key = maybeGenerateEncryptedDek(key);
+    if (!rewrap && oldKey != null
         && (deleted == oldKey.isDeleted() || !oldKey.equals(key))) {
       throw new RestClientException("Key " + subject + " already exists", 409, 40972);
+    }
+    if (key.getEncryptedKeyMaterial() == null) {
+      throw new RestClientException("Could not generate dek for " + subject, 500, 50070);
     }
     deks.put(keyId, key);
     key = maybeGenerateRawDek(key);
@@ -258,8 +281,15 @@ public class MockDekRegistryClient implements DekRegistryClient {
       if (key.getEncryptedKeyMaterial() == null) {
         Kek kek = getKek(key.getKekName(), true);
         Aead aead = kek.toAead(configs);
-        // Generate new dek
-        byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
+        byte[] rawDek = null;
+        String rawDekStr = key.getKeyMaterial();
+        if (rawDekStr != null) {
+          rawDek = Base64.getDecoder().decode(rawDekStr.getBytes(StandardCharsets.UTF_8));
+        }
+        if (rawDek == null) {
+          // Generate new dek
+          rawDek = getCryptor(key.getAlgorithm()).generateKey();
+        }
         byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
         String encryptedDekStr =
             new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
