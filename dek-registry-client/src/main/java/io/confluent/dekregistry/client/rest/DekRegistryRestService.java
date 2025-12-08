@@ -198,6 +198,11 @@ public class DekRegistryRestService extends RestService implements Configurable 
         KEK_TYPE);
   }
 
+  public Dek createDek(String kekName, CreateDekRequest request)
+      throws IOException, RestClientException {
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, false, request);
+  }
+
   public Dek createDek(String kekName, boolean rewrap, CreateDekRequest request)
       throws IOException, RestClientException {
     return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, rewrap, request);
