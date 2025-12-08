@@ -21,7 +21,6 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import org.junit.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -29,16 +28,17 @@ import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import org.junit.jupiter.api.Test;
 
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_CUSTOM_SCHEMA_PROVIDER;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class CustomSchemaProviderMetricTest extends ClusterTestHarness {
 
   public CustomSchemaProviderMetricTest() { super(1, true); }
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
                       CustomSchemaProvider.class.getName());

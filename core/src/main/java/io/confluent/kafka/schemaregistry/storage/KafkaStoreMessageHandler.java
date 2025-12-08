@@ -36,13 +36,13 @@ import org.slf4j.LoggerFactory;
 public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreMessageHandler.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
   private final IdGenerator idGenerator;
   private final List<String> canonicalizeSchemaTypes;
   private final Map<TopicPartition, Long> offsets = new ConcurrentHashMap<>();
 
-  public KafkaStoreMessageHandler(KafkaSchemaRegistry schemaRegistry,
+  public KafkaStoreMessageHandler(SchemaRegistry schemaRegistry,
                                   LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache,
                                   IdGenerator idGenerator) {
     this.schemaRegistry = schemaRegistry;
@@ -129,7 +129,11 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
                            TopicPartition tp,
                            long offset,
                            long timestamp) {
-    if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
+    if (key.getKeyType() == SchemaRegistryKeyType.ASSOC) {
+      handleAssociationUpdate((AssociationKey) key,
+          (AssociationValue) value,
+          (AssociationValue) oldValue);
+    } else if (key.getKeyType() == SchemaRegistryKeyType.SCHEMA) {
       handleSchemaUpdate((SchemaKey) key,
           (SchemaValue) value,
           (SchemaValue) oldValue);
@@ -197,6 +201,16 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       lookupCache.schemaTombstoned(schemaKey, oldSchemaValue);
       // Need to clear entire cache until we can prevent hard deleting referenced schemas
       schemaRegistry.clearOldSchemaCache();
+    }
+  }
+
+  private void handleAssociationUpdate(AssociationKey key,
+      AssociationValue value,
+      AssociationValue oldValue) {
+    if (value != null) {
+      lookupCache.associationRegistered(key, value, oldValue);
+    } else {
+      lookupCache.associationTombstoned(key, oldValue);
     }
   }
 

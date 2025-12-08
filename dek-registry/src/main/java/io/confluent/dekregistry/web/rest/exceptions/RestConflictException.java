@@ -16,7 +16,7 @@
 package io.confluent.dekregistry.web.rest.exceptions;
 
 import io.confluent.rest.exceptions.RestException;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 public class RestConflictException extends RestException {
 

@@ -33,8 +33,10 @@ public class Config {
   private String alias;
   private Boolean normalize;
   private Boolean validateFields;
+  private Boolean validateNames;
   private Boolean validateRules;
   private String compatibilityLevel;
+  private String compatibilityPolicy;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
   private Metadata overrideMetadata;
@@ -45,13 +47,39 @@ public class Config {
   public Config(@JsonProperty("alias") String alias,
                 @JsonProperty("normalize") Boolean normalize,
                 @JsonProperty("validateFields") Boolean validateFields,
+                @JsonProperty("validateNames") Boolean validateNames,
                 @JsonProperty("validateRules") Boolean validateRules,
                 @JsonProperty("compatibilityLevel") String compatibilityLevel,
+                @JsonProperty("compatibilityPolicy") String compatibilityPolicy,
                 @JsonProperty("compatibilityGroup") String compatibilityGroup,
                 @JsonProperty("defaultMetadata") Metadata defaultMetadata,
                 @JsonProperty("overrideMetadata") Metadata overrideMetadata,
                 @JsonProperty("defaultRuleSet") RuleSet defaultRuleSet,
                 @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
+    this.alias = alias;
+    this.normalize = normalize;
+    this.validateFields = validateFields;
+    this.validateNames = validateNames;
+    this.validateRules = validateRules;
+    this.compatibilityLevel = compatibilityLevel;
+    this.compatibilityPolicy = compatibilityPolicy;
+    this.compatibilityGroup = compatibilityGroup;
+    this.defaultMetadata = defaultMetadata;
+    this.overrideMetadata = overrideMetadata;
+    this.defaultRuleSet = defaultRuleSet;
+    this.overrideRuleSet = overrideRuleSet;
+  }
+
+  public Config(@JsonProperty("alias") String alias,
+      @JsonProperty("normalize") Boolean normalize,
+      @JsonProperty("validateFields") Boolean validateFields,
+      @JsonProperty("validateRules") Boolean validateRules,
+      @JsonProperty("compatibilityLevel") String compatibilityLevel,
+      @JsonProperty("compatibilityGroup") String compatibilityGroup,
+      @JsonProperty("defaultMetadata") Metadata defaultMetadata,
+      @JsonProperty("overrideMetadata") Metadata overrideMetadata,
+      @JsonProperty("defaultRuleSet") RuleSet defaultRuleSet,
+      @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
     this.alias = alias;
     this.normalize = normalize;
     this.validateFields = validateFields;
@@ -75,8 +103,10 @@ public class Config {
     this.alias = request.getAlias();
     this.normalize = request.isNormalize();
     this.validateFields = request.isValidateFields();
+    this.validateNames = request.isValidateNames();
     this.validateRules = request.isValidateRules();
     this.compatibilityLevel = request.getCompatibilityLevel();
+    this.compatibilityPolicy = request.getCompatibilityPolicy();
     this.compatibilityGroup = request.getCompatibilityGroup();
     this.defaultMetadata = request.getDefaultMetadata();
     this.overrideMetadata = request.getOverrideMetadata();
@@ -114,6 +144,16 @@ public class Config {
     this.validateFields = validateFields;
   }
 
+  @JsonProperty("validateNames")
+  public Boolean isValidateNames() {
+    return validateNames;
+  }
+
+  @JsonProperty("validateNames")
+  public void setValidateNames(Boolean validateNames) {
+    this.validateNames = validateNames;
+  }
+
   @JsonProperty("validateRules")
   public Boolean isValidateRules() {
     return validateRules;
@@ -136,6 +176,16 @@ public class Config {
   @JsonProperty("compatibilityLevel")
   public void setCompatibilityLevel(String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
+  }
+
+  @JsonProperty("compatibilityPolicy")
+  public String getCompatibilityPolicy() {
+    return this.compatibilityPolicy;
+  }
+
+  @JsonProperty("compatibilityPolicy")
+  public void setCompatibilityPolicy(String compatibilityPolicy) {
+    this.compatibilityPolicy = compatibilityPolicy;
   }
 
   @JsonProperty("compatibilityGroup")
@@ -208,8 +258,10 @@ public class Config {
     return Objects.equals(alias, config.alias)
         && Objects.equals(normalize, config.normalize)
         && Objects.equals(validateFields, config.validateFields)
+        && Objects.equals(validateNames, config.validateNames)
         && Objects.equals(validateRules, config.validateRules)
         && Objects.equals(compatibilityLevel, config.compatibilityLevel)
+        && Objects.equals(compatibilityPolicy, config.compatibilityPolicy)
         && Objects.equals(compatibilityGroup, config.compatibilityGroup)
         && Objects.equals(defaultMetadata, config.defaultMetadata)
         && Objects.equals(overrideMetadata, config.overrideMetadata)
@@ -219,8 +271,8 @@ public class Config {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateRules,
-        compatibilityLevel, compatibilityGroup,
+    return Objects.hash(alias, normalize, validateFields, validateNames, validateRules,
+        compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 
@@ -230,8 +282,10 @@ public class Config {
         + "alias='" + alias + '\''
         + ", normalize=" + normalize
         + ", validateFields=" + validateFields
+        + ", validateNames=" + validateNames
         + ", validateRules=" + validateRules
         + ", compatibilityLevel='" + compatibilityLevel + '\''
+        + ", compatibilityPolicy='" + compatibilityPolicy + '\''
         + ", compatibilityGroup='" + compatibilityGroup + '\''
         + ", defaultMetadata=" + defaultMetadata
         + ", overrideMetadata=" + overrideMetadata

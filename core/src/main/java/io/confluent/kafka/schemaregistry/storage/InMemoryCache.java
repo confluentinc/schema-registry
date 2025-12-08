@@ -51,11 +51,18 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
   private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
 
+  private final Map<String, Map<String, AssociationValue>> associationsByGuid;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsBySubject;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsByResourceId;
+
   public InMemoryCache(Serializer<K, V> serializer) {
     this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
+    this.associationsByGuid = new ConcurrentHashMap<>();
+    this.associationsBySubject = new ConcurrentHashMap<>();
+    this.associationsByResourceId = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -161,6 +168,22 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Integer idByGuid(String guid, String context) throws StoreException {
+    MD5 md5;
+    try {
+      md5 = MD5.fromString(guid);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context);
+    String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+    Map<String, Map<MD5, Integer>> ctxIds =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> ids = ctxIds.getOrDefault(ctx, Collections.emptyMap());
+    return ids.get(md5);
+  }
+
+  @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
@@ -247,6 +270,81 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         hashToGuid.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
     Map<MD5, Integer> hashes = ctxHashes.computeIfAbsent(ctx, k -> new ConcurrentHashMap<>());
     hashes.put(md5, schemaValue.getId());
+  }
+
+  @Override
+  public AssociationValue associationByGuid(String guid)
+      throws StoreException {
+    Map<String, AssociationValue> tenantAssociations =
+        associationsByGuid.getOrDefault(tenant(), Collections.emptyMap());
+    return tenantAssociations.get(guid);
+  }
+
+  @Override
+  public CloseableIterator<AssociationValue> associationsBySubject(String subject)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsBySubject.getOrDefault(tenant(), Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(subject, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  @Override
+  public CloseableIterator<AssociationValue> associationsByResourceId(String resourceId)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsByResourceId.getOrDefault(tenant(), Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(resourceId, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  @Override
+  public void associationRegistered(
+      AssociationKey key, AssociationValue value, AssociationValue oldValue) {
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.computeIfAbsent(key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByGuid.put(value.getGuid(), value);
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsBySubject.computeIfAbsent(
+        key.getSubject(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsBySubject.get(key.getSubject()).add(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByResourceId.computeIfAbsent(
+        value.getResourceId(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsByResourceId.get(value.getResourceId()).add(value);
+
+    if (oldValue != null && !oldValue.equals(value)) {
+      // Remove old association if it exists
+      associationTombstoned(key, oldValue);
+    }
+  }
+
+  @Override
+  public void associationTombstoned(AssociationKey key, AssociationValue value) {
+    if (value == null) {
+      return;
+    }
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByGuid.remove(value.getGuid());
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsBySubject.get(key.getSubject()).remove(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByResourceId.get(value.getResourceId()).remove(value);
+    if (tenantAssociationsBySubject.get(key.getSubject()).isEmpty()) {
+      tenantAssociationsBySubject.remove(key.getSubject());
+    }
+    if (tenantAssociationsByResourceId.get(value.getResourceId()).isEmpty()) {
+      tenantAssociationsByResourceId.remove(value.getResourceId());
+    }
   }
 
   @Override
@@ -414,8 +512,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return s -> qs == null
         || subject.equals(s)
         // check context match for a qualified subject with an empty subject
-        || (qs.getSubject().isEmpty() && qs.toQualifiedContext().equals(
-            QualifiedSubject.qualifiedContextFor(tenant(), s)));
+        || QualifiedSubject.isSubjectInContext(tenant(), s, qs);
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {

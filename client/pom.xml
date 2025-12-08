@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.5-0</version>
+        <version>8.0.3-0</version>
     </parent>
 
     <licenses>
@@ -21,6 +21,10 @@
     <artifactId>kafka-schema-registry-client</artifactId>
     <packaging>jar</packaging>
     <name>kafka-schema-registry-client</name>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
 
     <dependencies>
          <dependency>
@@ -92,6 +96,10 @@
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -102,9 +110,6 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
-                        <excludes>
-                            <exclude>src/main/java/io/confluent/kafka/schemaregistry/utils/BoundedConcurrentHashMap.java</exclude>
-                        </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
                         </licenseHeader>

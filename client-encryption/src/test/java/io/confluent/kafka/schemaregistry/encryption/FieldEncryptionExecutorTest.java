@@ -36,6 +36,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
@@ -89,7 +90,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Parser;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -108,7 +108,7 @@ public abstract class FieldEncryptionExecutorTest {
     }
   }
 
-  protected final FieldEncryptionProperties fieldEncryptionProps;
+  protected final EncryptionProperties fieldEncryptionProps;
   protected final SchemaRegistryClient schemaRegistry;
   protected final DekRegistryClient dekRegistry;
   protected final KafkaAvroSerializer avroSerializer;
@@ -125,14 +125,13 @@ public abstract class FieldEncryptionExecutorTest {
   protected final KafkaJsonSchemaSerializer<AnnotatedOldWidget> jsonSchemaSerializer2;
   protected final KafkaJsonSchemaSerializer<Employee> jsonSchemaSerializer3;
   protected final KafkaJsonSchemaSerializer<SampleEvent> jsonSchemaSerializer4;
+  protected final KafkaJsonSchemaSerializer<JsonNode> jsonSchemaSerializer5;
   protected final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   protected final KafkaProtobufSerializer<Widget> protobufSerializer;
   protected final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
   protected final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   protected final KafkaAvroSerializer badSerializer;
   protected final KafkaAvroDeserializer badDeserializer;
-  protected final KafkaAvroSerializer goodDekSerializer;
-  protected final KafkaAvroSerializer badDekSerializer;
   protected final String topic;
   protected final FakeClock fakeClock = new FakeClock();
 
@@ -162,7 +161,7 @@ public abstract class FieldEncryptionExecutorTest {
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
 
     List<String> qualifiedRuleNames = ImmutableList.of("test-key:rule1", "test-value:rule1");
-    FieldEncryptionProperties qualifiedFieldEncryptionProps =
+    EncryptionProperties qualifiedFieldEncryptionProps =
         getFieldEncryptionProperties(qualifiedRuleNames, FieldEncryptionExecutor.class);
     Map<String, Object> qualifiedClientProps = qualifiedFieldEncryptionProps.getClientProperties("mock://");
     avroKeySerializer = new KafkaAvroSerializer();
@@ -188,6 +187,7 @@ public abstract class FieldEncryptionExecutorTest {
     jsonSchemaSerializer2 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer3 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaSerializer4 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
+    jsonSchemaSerializer5 = new KafkaJsonSchemaSerializer<>(schemaRegistry, clientProps);
     jsonSchemaDeserializer = new KafkaJsonSchemaDeserializer<>(schemaRegistry, clientProps);
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
@@ -199,17 +199,9 @@ public abstract class FieldEncryptionExecutorTest {
     badClientProps.put(AbstractKafkaSchemaSerDeConfig.RULE_SERVICE_LOADER_ENABLE, false);
     badSerializer = new KafkaAvroSerializer(schemaRegistry, badClientProps);
     badDeserializer = new KafkaAvroDeserializer(schemaRegistry, badClientProps);
-
-    FieldEncryptionProperties goodDekProps = getFieldEncryptionProperties(ruleNames, GoodDekGenerator.class);
-    Map<String, Object> goodDekClientProps = goodDekProps.getClientProperties("mock://");
-    goodDekSerializer = new KafkaAvroSerializer(schemaRegistry, goodDekClientProps);
-
-    FieldEncryptionProperties badDekProps = getFieldEncryptionProperties(ruleNames, BadDekGenerator.class);
-    Map<String, Object> badDekClientProps = badDekProps.getClientProperties("mock://");
-    badDekSerializer = new KafkaAvroSerializer(schemaRegistry, badDekClientProps);
   }
 
-  protected abstract FieldEncryptionProperties getFieldEncryptionProperties(
+  protected abstract EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor);
 
   protected Cryptor addSpyToCryptor(AbstractKafkaSchemaSerDe serde) throws Exception {
@@ -224,7 +216,7 @@ public abstract class FieldEncryptionExecutorTest {
       executor = (FieldEncryptionExecutor) executorsByType.entrySet().iterator().next().getValue();
     }
     if (executor != null) {
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
+      Map<DekFormat, Cryptor> cryptors = executor.getEncryptionExecutor().getCryptors();
       Cryptor spy = spy(new Cryptor(dekFormat));
       cryptors.put(dekFormat, spy);
       return spy;
@@ -256,7 +248,7 @@ public abstract class FieldEncryptionExecutorTest {
     }
     if (executor != null) {
       // Check for existing cryptor
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
+      Map<DekFormat, Cryptor> cryptors = executor.getEncryptionExecutor().getCryptors();
       Cryptor cryptor = cryptors.get(dekFormat);
       if (cryptor != null) {
         return cryptor;
@@ -278,7 +270,7 @@ public abstract class FieldEncryptionExecutorTest {
         (FieldEncryptionExecutor) executors.get(FieldEncryptionExecutor.TYPE).entrySet()
             .iterator().next().getValue();
     if (executor != null) {
-      Map<DekFormat, Cryptor> cryptors = executor.getCryptors();
+      Map<DekFormat, Cryptor> cryptors = executor.getEncryptionExecutor().getCryptors();
       Cryptor spy = spy(new Cryptor(dekFormat));
       doThrow(new GeneralSecurityException()).when(spy).encrypt(any(), any(), any());
       doThrow(new GeneralSecurityException()).when(spy).decrypt(any(), any(), any());
@@ -1623,6 +1615,117 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerOneOfWithInt() throws Exception {
+    String json = "{\n"
+        + "    \"id\": \"123\",\n"
+        + "    \"stringOrInt\": 12\n"
+        + "}";
+    JsonNode data = new ObjectMapper().readTree(json);
+
+    String schemaStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"id\": {\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"stringOrInt\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ],\n" +
+        "      \"anyOf\": [\n" +
+        "        {\n" +
+        "          \"type\": \"string\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"integer\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"null\"\n" +
+        "        }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"StringOrInt\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 0;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer3);
+    byte[] bytes = jsonSchemaSerializer5.serialize(topic, headers, data);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(jsonSchemaDeserializer);
+    Object obj = jsonSchemaDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+
+    assertTrue(
+        "Returned object should be a JsonNode ",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned value should be the int",
+        12,
+        ((JsonNode)obj).get("stringOrInt").intValue()
+    );
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaJsonSchemaSerializerNullableInt() throws Exception {
+    String json = "{\n"
+        + "    \"id\": \"123\",\n"
+        + "    \"stringOrInt\": 12\n"
+        + "}";
+    JsonNode data = new ObjectMapper().readTree(json);
+
+    String schemaStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"additionalProperties\": false,\n" +
+        "  \"properties\": {\n" +
+        "    \"id\": {\n" +
+        "      \"type\": \"string\"\n" +
+        "    },\n" +
+        "    \"stringOrInt\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ],\n" +
+        "      \"anyOf\": [\n" +
+        "        {\n" +
+        "          \"type\": \"integer\"\n" +
+        "        },\n" +
+        "        {\n" +
+        "          \"type\": \"null\"\n" +
+        "        }\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"StringOrInt\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    int expectedEncryptions = 0;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer3);
+    jsonSchemaSerializer5.serialize(topic, headers, data);
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerMissingProperty() throws Exception {
     Address address = new Address();
     address.doornumber = 1234;
@@ -2006,50 +2109,6 @@ public abstract class FieldEncryptionExecutorTest {
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
   }
 
-  @Test
-  public void testGoodDekGenerator() throws Exception {
-    IndexedRecord avroRecord = createUserRecord();
-    AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
-    Metadata metadata = getMetadata("kek1");
-    avroSchema = avroSchema.copy(metadata, ruleSet);
-    schemaRegistry.register(topic + "-value", avroSchema);
-
-
-    int expectedEncryptions = 1;
-    RecordHeaders headers = new RecordHeaders();
-    Cryptor cryptor = addSpyToCryptor(goodDekSerializer);
-    byte[] bytes = goodDekSerializer.serialize(topic, headers, avroRecord);
-    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
-    cryptor = addSpyToCryptor(avroDeserializer);
-    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
-    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
-    assertEquals("testUser", record.get("name"));
-  }
-
-  @Test
-  public void testBadDekGenerator() throws Exception {
-    IndexedRecord avroRecord = createUserRecord();
-    AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    Rule rule = new Rule("rule1", null, null, null,
-        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
-    Metadata metadata = getMetadata("kek1");
-    avroSchema = avroSchema.copy(metadata, ruleSet);
-    schemaRegistry.register(topic + "-value", avroSchema);
-
-
-    RecordHeaders headers = new RecordHeaders();
-    try {
-      badDekSerializer.serialize(topic, headers, avroRecord);
-      fail();
-    } catch (Exception e) {
-      assertTrue(e instanceof SerializationException);
-    }
-  }
-
   protected Metadata getMetadata(String kekName) {
     return getMetadata(kekName, null);
   }
@@ -2291,24 +2350,6 @@ public abstract class FieldEncryptionExecutorTest {
     @Override
     public int hashCode() {
       return Objects.hash(annotatedPii);
-    }
-  }
-
-  public static class GoodDekGenerator extends FieldEncryptionExecutor {
-
-    @Override
-    protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
-      // generate a valid dek
-      return new byte[32];
-    }
-  }
-
-  public static class BadDekGenerator extends FieldEncryptionExecutor {
-
-    @Override
-    protected byte[] generateDek(DekFormat dekFormat) throws GeneralSecurityException {
-      // generate an invalid dek
-      return new byte[15];
     }
   }
 
