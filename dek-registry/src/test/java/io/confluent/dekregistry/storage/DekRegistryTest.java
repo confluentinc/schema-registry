@@ -68,7 +68,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         byte[] encryptedDek = aead.encrypt("rawDek1".getBytes(), DekRegistry.EMPTY_AAD);
         String encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
         CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject1\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": true}", encryptedKeyMaterial));
-        dekRegistry.createDek(kek.getName(), dekRequest);
+        dekRegistry.createDek(kek.getName(), false, dekRequest);
     }
 
     @Test
@@ -104,7 +104,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         String encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
         CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
         );
-        dekRegistry.createDek(kek2.getName(), dekRequest);
+        dekRegistry.createDek(kek2.getName(), false, dekRequest);
         assertEquals(Arrays.asList("kekName1", "kekName2"), dekRegistry.getKekNames(Collections.singletonList("sub"), true));
         assertEquals(Collections.singletonList("kekName1"), dekRegistry.getKekNames(Collections.singletonList("subject1"), true));
         assertEquals(Collections.emptyList(), dekRegistry.getKekNames(Collections.singletonList("subject1"), false));
