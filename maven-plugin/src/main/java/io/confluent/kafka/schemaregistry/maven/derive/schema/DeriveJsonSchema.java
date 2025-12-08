@@ -105,7 +105,7 @@ public class DeriveJsonSchema extends DeriveSchema {
    */
   protected JsonNode convertToFormat(JsonNode schema, String name) {
     JsonSchema jsonSchema = new JsonSchema(schema);
-    jsonSchema.validate();
+    jsonSchema.validate(false);
     // Input schema is in json format, hence no conversion is needed. Returning schema as is
     return schema;
   }

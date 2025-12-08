@@ -41,6 +41,7 @@ public class SchemaRegistryIdentity {
   private Integer port;
   private Boolean leaderEligibility;
   private String scheme;
+  private Boolean isLeader;
 
   public SchemaRegistryIdentity(
       @JsonProperty("host") String host,
@@ -53,6 +54,7 @@ public class SchemaRegistryIdentity {
     this.port = port;
     this.leaderEligibility = leaderEligibility;
     this.scheme = scheme;
+    this.isLeader = false;
   }
 
   public static SchemaRegistryIdentity fromJson(String json) throws IOException {
@@ -123,6 +125,16 @@ public class SchemaRegistryIdentity {
     return CURRENT_VERSION;
   }
 
+  @JsonProperty("leader")
+  public Boolean isLeader() {
+    return isLeader;
+  }
+
+  @JsonProperty("leader")
+  public void setLeader(Boolean isLeader) {
+    this.isLeader = isLeader;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -169,7 +181,8 @@ public class SchemaRegistryIdentity {
     sb.append("host=" + this.host + ",");
     sb.append("port=" + this.port + ",");
     sb.append("scheme=" + this.scheme + ",");
-    sb.append("leaderEligibility=" + this.leaderEligibility);
+    sb.append("leaderEligibility=" + this.leaderEligibility + ",");
+    sb.append("isLeader=" + this.isLeader);
     return sb.toString();
   }
 

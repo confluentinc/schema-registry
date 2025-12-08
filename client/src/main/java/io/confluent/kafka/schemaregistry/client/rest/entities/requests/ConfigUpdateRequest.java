@@ -35,6 +35,8 @@ public class ConfigUpdateRequest {
 
   private String alias;
   private Boolean normalize;
+  private Boolean validateFields;
+  private Boolean validateRules;
   private String compatibilityLevel;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
@@ -48,6 +50,8 @@ public class ConfigUpdateRequest {
   public ConfigUpdateRequest(Config config) {
     this.alias = config.getAlias();
     this.normalize = config.isNormalize();
+    this.validateFields = config.isValidateFields();
+    this.validateRules = config.isValidateRules();
     this.compatibilityLevel = config.getCompatibilityLevel();
     this.compatibilityGroup = config.getCompatibilityGroup();
     this.defaultMetadata = config.getDefaultMetadata();
@@ -78,6 +82,26 @@ public class ConfigUpdateRequest {
   @JsonProperty("normalize")
   public void setNormalize(Boolean normalize) {
     this.normalize = normalize;
+  }
+
+  @JsonProperty("validateFields")
+  public Boolean isValidateFields() {
+    return validateFields;
+  }
+
+  @JsonProperty("validateFields")
+  public void setValidateFields(Boolean validateFields) {
+    this.validateFields = validateFields;
+  }
+
+  @JsonProperty("validateRules")
+  public Boolean isValidateRules() {
+    return validateRules;
+  }
+
+  @JsonProperty("validateRules")
+  public void setValidateRules(Boolean validateRules) {
+    this.validateRules = validateRules;
   }
 
   @Schema(description = "Compatibility Level",
@@ -159,6 +183,8 @@ public class ConfigUpdateRequest {
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
+        && Objects.equals(validateFields, that.validateFields)
+        && Objects.equals(validateRules, that.validateRules)
         && Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
@@ -169,7 +195,8 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, compatibilityLevel, compatibilityGroup,
+    return Objects.hash(alias, normalize, validateFields, validateRules,
+        compatibilityLevel, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 }
