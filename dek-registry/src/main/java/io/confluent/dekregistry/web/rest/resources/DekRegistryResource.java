@@ -437,7 +437,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @PathParam("name") String kekName,
       @Parameter(description = "The create request", required = true)
       @NotNull CreateDekRequest request) {
-    createDekWithSubject(asyncResponse, headers, kekName, request.getSubject(), request);
+    createDekWithSubject(asyncResponse, headers, kekName, request.getSubject(), false, request);
   }
 
   @POST
@@ -460,6 +460,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @PathParam("name") String kekName,
       @Parameter(description = "Subject of the dek", required = true)
       @PathParam("subject") String subject,
+      @Parameter(description =
+          "Whether to rewrap encryptedKeyMaterial if the dek already exists")
+      @QueryParam("rewrap") boolean rewrap,
       @Parameter(description = "The create request", required = true)
       @NotNull CreateDekRequest request) {
 
@@ -481,7 +484,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
-      Dek dek = dekRegistry.createDekOrForward(kekName, request, headerProperties);
+      Dek dek = dekRegistry.createDekOrForward(kekName, rewrap, request, headerProperties);
       asyncResponse.resume(dek);
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
