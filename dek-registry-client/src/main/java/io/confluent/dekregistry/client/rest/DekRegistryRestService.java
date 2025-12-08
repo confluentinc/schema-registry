@@ -209,19 +209,22 @@ public class DekRegistryRestService extends RestService implements Configurable 
         KEK_TYPE);
   }
 
-  public Dek createDek(String kekName, CreateDekRequest request)
+  public Dek createDek(String kekName, boolean rewrap, CreateDekRequest request)
       throws IOException, RestClientException {
-    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, request);
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, rewrap, request);
   }
 
   public Dek createDek(
       Map<String, String> requestProperties,
       String kekName,
+      boolean rewrap,
       CreateDekRequest request)
       throws IOException, RestClientException {
     try {
       UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
-      String path = builder.build(kekName, request.getSubject()).toString();
+      String path = builder
+          .queryParam("rewrap", rewrap)
+          .build(kekName, request.getSubject()).toString();
 
       return httpRequest(
           path, "POST",
