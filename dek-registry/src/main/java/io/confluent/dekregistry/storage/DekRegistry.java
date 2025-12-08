@@ -510,17 +510,17 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public Dek createDekOrForward(String kekName, CreateDekRequest request,
+  public Dek createDekOrForward(String kekName, boolean rewrap, CreateDekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createDek(kekName, request).toDekEntity();
+        return createDek(kekName, rewrap, request).toDekEntity();
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
-          return forwardCreateDekRequestToLeader(kekName, request, headerProperties);
+          return forwardCreateDekRequestToLeader(kekName, rewrap, request, headerProperties);
         } else {
           throw new UnknownLeaderException("Request failed since leader is unknown");
         }
@@ -530,14 +530,16 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private Dek forwardCreateDekRequestToLeader(String kekName,
+  private Dek forwardCreateDekRequestToLeader(String kekName, boolean rewrap,
       CreateDekRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     RestService leaderRestService = schemaRegistry.leaderRestService();
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
-    String path = builder.build(kekName, request.getSubject()).toString();
+    String path = builder
+        .queryParam("rewrap", rewrap)
+        .build(kekName, request.getSubject()).toString();
 
     log.debug(String.format("Forwarding create key request to %s", baseUrl));
     try {
@@ -553,7 +555,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public DataEncryptionKey createDek(String kekName, CreateDekRequest request)
+  public DataEncryptionKey createDek(String kekName, boolean rewrap, CreateDekRequest request)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -569,20 +571,26 @@ public class DekRegistry implements Closeable {
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         algorithm, version, request.getEncryptedKeyMaterial(), request.isDeleted());
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
-    if (key.getEncryptedKeyMaterial() == null) {
-      if (kek.isShared()) {
-        key = generateEncryptedDek(kek, key);
-      } else {
-        throw new InvalidKeyException("encryptedKeyMaterial");
-      }
-    }
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
         tenant, kekName, request.getSubject(), algorithm, version);
     DataEncryptionKey oldKey = (DataEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the dek is deleted
-    if (oldKey != null
-        && ((request.isDeleted() == oldKey.isDeleted()) || !oldKey.isEquivalent(key))) {
+    if (!rewrap && oldKey != null
+        && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
       throw new AlreadyExistsException(request.getSubject());
+    }
+    if (key.getEncryptedKeyMaterial() != null) {
+      if (kek.isShared() && oldKey != null) {
+        throw new AlreadyExistsException(request.getSubject());
+      }
+    } else if (kek.isShared()) {
+      if (oldKey != null) {
+        oldKey = generateRawDek(kek, oldKey);
+        key.setKeyMaterial(oldKey.getKeyMaterial());
+      }
+      key = generateEncryptedDek(kek, key);
+    } else {
+      throw new InvalidKeyException("encryptedKeyMaterial");
     }
     keys.put(keyId, key);
     // Retrieve key with ts set
@@ -600,8 +608,15 @@ public class DekRegistry implements Closeable {
       throws DekGenerationException {
     try {
       Aead aead = getAead(kek);
-      // Generate new dek
-      byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
+      byte[] rawDek = null;
+      String rawDekStr = key.getKeyMaterial();
+      if (rawDekStr != null) {
+        rawDek = Base64.getDecoder().decode(rawDekStr.getBytes(StandardCharsets.UTF_8));
+      }
+      if (rawDek == null) {
+        // Generate new dek
+        rawDek = getCryptor(key.getAlgorithm()).generateKey();
+      }
       byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
       String encryptedDekStr =
           new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
