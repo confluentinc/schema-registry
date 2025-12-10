@@ -33,10 +33,12 @@ import picocli.CommandLine;
 public class RewrapDeksTest {
 
   private final DekRegistryClient dekRegistry;
-  private final String topic;
+  private final String topic1;
+  private final String topic2;
 
   public RewrapDeksTest() throws Exception {
-    topic = "test";
+    topic1 = "test1";
+    topic2 = "test2";
     dekRegistry = DekRegistryClientFactory.newClient(Collections.singletonList(
             "mock://"),
         1000,
@@ -53,11 +55,13 @@ public class RewrapDeksTest {
 
   @Test
   public void testRewrapDek() throws Exception {
-    String subject = topic + "-value";
+    String subject1 = topic1 + "-value";
+    String subject2 = topic2 + "-value";
     String kekName = "kek1";
     dekRegistry.createKek(kekName, "local-kms", "mykey", Collections.emptyMap(), null, false);
     String encryptedDek = "07V2ndh02DA73p+dTybwZFm7DKQSZN1tEwQh+FoX1DZLk4Yj2LLu4omYjp/84tAg3BYlkfGSz+zZacJHIE4=";
-    dekRegistry.createDek(kekName, subject, null, encryptedDek);
+    dekRegistry.createDek(kekName, subject1, null, encryptedDek);
+    dekRegistry.createDek(kekName, subject2, null, encryptedDek);
 
     RewrapDeks app = new RewrapDeks();
     CommandLine cmd = new CommandLine(app);
@@ -66,7 +70,37 @@ public class RewrapDeksTest {
         "--property", "rule.executors._default_.param.secret=mysecret");
     assertEquals(0, exitCode);
 
-    Dek dek = dekRegistry.getDekVersion(kekName, subject, -1, null, false);
+    Dek dek = dekRegistry.getDekVersion(kekName, subject1, -1, null, false);
+    assertEquals(kekName, dek.getKekName());
+    assertNotNull(dek.getEncryptedKeyMaterial());
+    assertNull(dek.getKeyMaterial());
+
+    dek = dekRegistry.getDekVersion(kekName, subject2, -1, null, false);
+    assertEquals(kekName, dek.getKekName());
+    assertNotNull(dek.getEncryptedKeyMaterial());
+    assertNull(dek.getKeyMaterial());
+  }
+
+  @Test
+  public void testRewrapDekSingleSubject() throws Exception {
+    String subject1 = topic1 + "-value";
+    String kekName = "kek1";
+    dekRegistry.createKek(kekName, "local-kms", "mykey", Collections.emptyMap(), null, false);
+    String encryptedDek = "07V2ndh02DA73p+dTybwZFm7DKQSZN1tEwQh+FoX1DZLk4Yj2LLu4omYjp/84tAg3BYlkfGSz+zZacJHIE4=";
+    dekRegistry.createDek(kekName, subject1, null, encryptedDek);
+
+    RewrapDeks app = new RewrapDeks();
+    CommandLine cmd = new CommandLine(app);
+
+    int exitCode = cmd.execute("mock://", kekName, subject1,
+        "--property", "rule.executors._default_.param.secret=mysecret");
+    assertEquals(0, exitCode);
+
+    Dek dek = dekRegistry.getDekVersion(kekName, subject1, -1, null, false);
+    assertEquals(kekName, dek.getKekName());
+    assertNotNull(dek.getEncryptedKeyMaterial());
+    assertNull(dek.getKeyMaterial());
+
     assertEquals(kekName, dek.getKekName());
     assertNotNull(dek.getEncryptedKeyMaterial());
     assertNull(dek.getKeyMaterial());
@@ -74,11 +108,13 @@ public class RewrapDeksTest {
 
   @Test
   public void testRewrapDekForSharedKek() throws Exception {
-    String subject = topic + "-value";
+    String subject1 = topic1 + "-value";
+    String subject2 = topic2 + "-value";
     String kekName = "kek1";
     dekRegistry.createKek(kekName, "local-kms", "mykey", ImmutableMap.of("secret", "mysecret"), null, true);
     String encryptedDek = null;
-    dekRegistry.createDek(kekName, subject, null, encryptedDek);
+    dekRegistry.createDek(kekName, subject1, null, encryptedDek);
+    dekRegistry.createDek(kekName, subject2, null, encryptedDek);
 
     RewrapDeks app = new RewrapDeks();
     CommandLine cmd = new CommandLine(app);
@@ -86,7 +122,32 @@ public class RewrapDeksTest {
     int exitCode = cmd.execute("mock://", kekName);
     assertEquals(0, exitCode);
 
-    Dek dek = dekRegistry.getDekVersion(kekName, subject, -1, null, false);
+    Dek dek = dekRegistry.getDekVersion(kekName, subject1, -1, null, false);
+    assertEquals(kekName, dek.getKekName());
+    assertNotNull(dek.getEncryptedKeyMaterial());
+    assertNotNull(dek.getKeyMaterial());
+
+    dek = dekRegistry.getDekVersion(kekName, subject2, -1, null, false);
+    assertEquals(kekName, dek.getKekName());
+    assertNotNull(dek.getEncryptedKeyMaterial());
+    assertNotNull(dek.getKeyMaterial());
+  }
+
+  @Test
+  public void testRewrapDekForSharedKekSingleSubject() throws Exception {
+    String subject1 = topic1 + "-value";
+    String kekName = "kek1";
+    dekRegistry.createKek(kekName, "local-kms", "mykey", ImmutableMap.of("secret", "mysecret"), null, true);
+    String encryptedDek = null;
+    dekRegistry.createDek(kekName, subject1, null, encryptedDek);
+
+    RewrapDeks app = new RewrapDeks();
+    CommandLine cmd = new CommandLine(app);
+
+    int exitCode = cmd.execute("mock://", kekName, subject1);
+    assertEquals(0, exitCode);
+
+    Dek dek = dekRegistry.getDekVersion(kekName, subject1, -1, null, false);
     assertEquals(kekName, dek.getKekName());
     assertNotNull(dek.getEncryptedKeyMaterial());
     assertNotNull(dek.getKeyMaterial());
