@@ -115,6 +115,39 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
+    public void testDekRewrap() throws Exception {
+        CreateKekRequest kRequest2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": true}");
+        KeyEncryptionKey kek2 = dekRegistry.createKek(kRequest2);
+        // Test get without a subject prefix.
+        // Includes deleted ones.
+        assertEquals(Arrays.asList("kekName1", "kekName2"), dekRegistry.getKekNames(null, true));
+        // Ignores deleted ones.
+        assertEquals(Collections.singletonList("kekName1"), dekRegistry.getKekNames(Collections.emptyList(), false));
+
+        // Test get with a non-existing subject prefix.
+        assertEquals(Collections.emptyList(), dekRegistry.getKekNames(Collections.singletonList("non_exist_prefix"), false));
+
+        // Test get by subject prefix with Dek.
+        TestKmsDriver t = new TestKmsDriver();
+        KmsClient client = t.newKmsClient(null, Optional.of("test-kms://kmsId"));
+        Aead aead = client.getAead("test-kms://kmsId");
+        byte[] encryptedDek = aead.encrypt("rawDek2".getBytes(), DekRegistry.EMPTY_AAD);
+        String encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
+        CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
+        );
+        DataEncryptionKey dek = dekRegistry.createDek(kek2.getName(), false, dekRequest);
+        assertEquals(encryptedKeyMaterial, dek.getEncryptedKeyMaterial());
+
+        // Rewrap DEK
+        encryptedDek = aead.encrypt("rawDek3".getBytes(), DekRegistry.EMPTY_AAD);
+        encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
+        dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
+        );
+        dek = dekRegistry.createDek(kek2.getName(), true, dekRequest);
+        assertEquals(encryptedKeyMaterial, dek.getEncryptedKeyMaterial());
+    }
+
+    @Test
     public void testDeleteKek() throws SchemaRegistryException  {
         // First soft delete.
         dekRegistry.deleteKek("kekName1", false);
