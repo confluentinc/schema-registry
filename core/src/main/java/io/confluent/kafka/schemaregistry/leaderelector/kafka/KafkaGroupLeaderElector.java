@@ -20,8 +20,8 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryInitialization
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LeaderElector;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
@@ -74,7 +74,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
   private final long retryBackoffMaxMs;
   private final boolean stickyLeaderElection;
   private final SchemaRegistryCoordinator coordinator;
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private AtomicBoolean stopped = new AtomicBoolean(false);
   private ExecutorService executor;
@@ -82,7 +82,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
 
   public KafkaGroupLeaderElector(SchemaRegistryConfig config,
                                  SchemaRegistryIdentity myIdentity,
-                                 KafkaSchemaRegistry schemaRegistry
+                                 SchemaRegistry schemaRegistry
   ) throws SchemaRegistryInitializationException {
     try {
       this.schemaRegistry = schemaRegistry;
@@ -201,18 +201,15 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
     log.debug("Initializing schema registry group member");
 
     executor = Executors.newSingleThreadExecutor();
-    executor.submit(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          while (!stopped.get()) {
-            coordinator.poll(Integer.MAX_VALUE);
-          }
-        } catch (WakeupException we) {
-          // do nothing because the thread is closing -- see stop()
-        } catch (Throwable t) {
-          log.error("Unexpected exception in schema registry group processing thread", t);
+    executor.submit(() -> {
+      try {
+        while (!stopped.get()) {
+          coordinator.poll(Integer.MAX_VALUE);
         }
+      } catch (WakeupException we) {
+        // do nothing because the thread is closing -- see stop()
+      } catch (Throwable t) {
+        log.error("Unexpected exception in schema registry group processing thread", t);
       }
     });
 
@@ -244,7 +241,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       switch (assignment.error()) {
         case SchemaRegistryProtocol.Assignment.NO_ERROR:
           if (assignment.leaderIdentity() == null) {
-            log.error(
+            log.warn(
                 "No leader eligible schema registry instances joined the schema registry group. "
                 + "Rebalancing was successful and this instance can serve reads, but no writes "
                 + "can be processed."
@@ -322,7 +319,7 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
     }
 
     // Do final cleanup
-    AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+    AtomicReference<Throwable> firstException = new AtomicReference<>();
     this.stopped.set(true);
     closeQuietly(coordinator, "coordinator", firstException);
     closeQuietly(metrics, "consumer metrics", firstException);

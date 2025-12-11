@@ -31,11 +31,15 @@ public class RuleSet {
   @Parameter(required = false)
   protected List<Rule> domainRules = new ArrayList<>();
 
+  @Parameter(required = false)
+  protected List<Rule> encodingRules = new ArrayList<>();
+
   @Override
   public String toString() {
     return "RuleSet{"
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
+        + ", encodingRules=" + encodingRules
         + '}';
   }
 
@@ -48,6 +52,11 @@ public class RuleSet {
             : null,
         domainRules != null
             ? domainRules.stream()
+            .map(Rule::toRuleEntity)
+            .collect(Collectors.toList())
+            : null,
+        encodingRules != null
+            ? encodingRules.stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList())
             : null

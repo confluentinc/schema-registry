@@ -18,6 +18,7 @@ package io.confluent.connect.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
@@ -28,7 +29,10 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumWriter;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -198,6 +202,16 @@ public class AvroConverter implements Converter {
           headers,
           value,
           schema);
+    }
+
+    @Override
+    protected DatumWriter<?> getDatumWriter(
+        Object value, org.apache.avro.Schema schema, boolean useLogicalTypes, boolean allowNull) {
+      GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
+      if (data == null) {
+        data = AvroSchemaUtils.getGenericData(useLogicalTypes);
+      }
+      return new GenericDatumWriter<>(schema, data);
     }
   }
 
