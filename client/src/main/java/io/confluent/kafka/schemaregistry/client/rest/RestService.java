@@ -1933,14 +1933,15 @@ public class RestService implements Closeable, Configurable {
       String context, Boolean dryRun, AssociationCreateOrUpdateRequest request
   ) throws IOException,
       RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/associations");
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceId}");
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
     }
-    String path = builder.build().toString();
+    String path = builder.build(request.getResourceId()).toString();
 
     AssociationResponse response = httpRequest(path, "PUT",
         request.toJson().getBytes(StandardCharsets.UTF_8),
