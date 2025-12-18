@@ -297,7 +297,7 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/associations")
+  @Path("/associations/resources/{resourceId}")
   @PUT
   @Operation(summary = "Create or update an association.", responses = {
       @ApiResponse(responseCode = "200", description = "The create or update response",
@@ -312,6 +312,8 @@ public class AssociationsResource {
   public void createOrUpdateAssociation(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
+      @Parameter(description = "Resource ID")
+      @PathParam("resourceId") String resourceId,
       @Parameter(description = "Context")
       @QueryParam("context") String context,
       @Parameter(description = "Dry run")
@@ -320,6 +322,15 @@ public class AssociationsResource {
       @NotNull AssociationCreateOrUpdateRequest request) {
 
     log.debug("Creating or updating association {}", request);
+
+    if (request.getResourceId() == null) {
+      request.setResourceId(resourceId);
+    } else if (!request.getResourceId().equals(resourceId)) {
+      throw Errors.invalidAssociationException(
+          "resourceId",
+          "Resource ID in the path parameter does not match "
+              + "the resource ID in the request body");
+    }
 
     try {
       request.validate(dryRun);
@@ -476,6 +487,7 @@ public class AssociationsResource {
   public void deleteAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
+      @Parameter(description = "Resource ID")
       @PathParam("resourceId") String resourceId,
       @Parameter(description = "Resource type")
       @QueryParam("resourceType") String resourceType,
