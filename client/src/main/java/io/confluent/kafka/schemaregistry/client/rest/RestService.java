@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import io.confluent.kafka.schemaregistry.utils.ClientAppInfoParser;
 import java.util.HashMap;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
@@ -177,6 +178,7 @@ public class RestService implements Closeable, Configurable {
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
   public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
+  public static final String CONFLUENT_CLIENT_VERSION = "Confluent-Client-Version";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -184,7 +186,8 @@ public class RestService implements Closeable, Configurable {
     DEFAULT_REQUEST_PROPERTIES =
         ImmutableMap.of(
             "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
-            ACCEPT_UNKNOWN_PROPERTIES, "true"
+            ACCEPT_UNKNOWN_PROPERTIES, "true",
+            CONFLUENT_CLIENT_VERSION, ClientAppInfoParser.getClientVersion()
         );
   }
 
