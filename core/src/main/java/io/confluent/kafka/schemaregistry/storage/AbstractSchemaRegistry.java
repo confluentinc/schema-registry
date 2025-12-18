@@ -1227,10 +1227,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   @Override
   public Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
     try {
-      Mode globalMode = lookupCache.mode(null, true, defaultMode);
-      Mode subjectMode = lookupCache.mode(subject, true, defaultMode);
-
-      return globalMode == Mode.READONLY_OVERRIDE ? globalMode : subjectMode;
+      return lookupCache.mode(subject, true, defaultMode);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
@@ -1239,10 +1236,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   @Override
   public Mode getMode(String subject) throws SchemaRegistryStoreException {
     try {
-      Mode globalMode = lookupCache.mode(null, false, defaultMode);
-      Mode subjectMode = lookupCache.mode(subject, false, defaultMode);
-
-      return globalMode == Mode.READONLY_OVERRIDE ? globalMode : subjectMode;
+      return lookupCache.mode(subject, false, defaultMode);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
