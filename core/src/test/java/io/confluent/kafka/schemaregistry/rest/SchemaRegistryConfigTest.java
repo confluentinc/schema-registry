@@ -186,6 +186,13 @@ public class SchemaRegistryConfigTest {
   }
 
   @Test
+  public void defaultAssociationsEnable() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals(true, config.getBoolean(SchemaRegistryConfig.ASSOCIATIONS_ENABLE));
+  }
+
+  @Test
   public void defaultMutabilityMode() throws RestConfigException {
     Properties props = new Properties();
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);

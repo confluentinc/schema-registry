@@ -128,7 +128,9 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   @Override
   public void setupResources(Configurable<?> config, SchemaRegistryConfig schemaRegistryConfig) {
     config.register(RootResource.class);
-    config.register(new AssociationsResource(schemaRegistry));
+    if (schemaRegistryConfig.enableAssociations()) {
+      config.register(new AssociationsResource(schemaRegistry));
+    }
     config.register(new ConfigResource(schemaRegistry));
     config.register(new ContextsResource(schemaRegistry));
     config.register(new SubjectsResource(schemaRegistry));
