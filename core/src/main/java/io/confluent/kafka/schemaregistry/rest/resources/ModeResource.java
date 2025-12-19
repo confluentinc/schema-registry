@@ -109,7 +109,8 @@ public class ModeResource {
       @QueryParam("force") boolean force
   ) {
 
-    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
       throw Errors.invalidSubjectException(subject);
     }
 
@@ -127,6 +128,15 @@ public class ModeResource {
     } catch (IllegalArgumentException e) {
       throw new RestInvalidModeException();
     }
+
+
+    if (io.confluent.kafka.schemaregistry.storage.Mode.FORWARD.toString()
+            .equals(request.getMode()) 
+        && !QualifiedSubject.isGlobalContext(schemaRegistry.tenant(), subject)) {
+      throw new RestInvalidModeException("Forward mode only supported on global level");
+    }
+
+
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
@@ -236,8 +246,42 @@ public class ModeResource {
       })
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("mode.get-global")
-  public Mode getTopLevelMode() {
-    return getMode(null, false);
+  public Mode getTopLevelMode(
+      @Parameter(description = "Whether to return the global mode if subject mode not found")
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+    return getMode(null, defaultToGlobal);
+  }
+
+  @DELETE
+  @DocumentedName("deleteGlobalMode")
+  @Operation(summary = "Delete global mode",
+      description = "Deletes the global mode and reverts to the default mode. "
+        + "If recursive is true, also deletes mode for all subjects in the default context.",
+      responses = {
+          @ApiResponse(responseCode = "200",
+                      description = "Operation succeeded. Returns old mode."
+                              + "If recursive is enabled and mode is not found, returns 200 "
+                              + "and returns null mode as it would delete mode for all subjects "
+                              + "under it",
+                      content = @Content(schema = @Schema(implementation = Mode.class))),
+          @ApiResponse(responseCode = "422",
+                      description = "Unprocessable Entity. "
+                              + "Error code 42205 indicates operation not permitted.",
+                      content = @Content(schema = @Schema(implementation = ErrorMessage.class))),
+          @ApiResponse(responseCode = "500",
+                      description = "Internal Server Error. "
+                              + "Error code 50001 indicates a failure in the backend data store.",
+                      content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
+  @Tags(@Tag(name = apiTag))
+  @PerformanceMetric("mode.delete-global")
+  public void deleteGlobalMode(
+          final @Suspended AsyncResponse asyncResponse,
+          @Context HttpHeaders headers,
+          @Parameter(description =
+              "Whether to recursively delete mode for all subjects in the default context")
+          @QueryParam("recursive") boolean recursive) {
+    log.info("Deleting global mode, recursive={}", recursive);
+    deleteSubjectMode(asyncResponse, headers, null, recursive);
   }
 
   @DELETE
@@ -245,9 +289,13 @@ public class ModeResource {
   @DocumentedName("deleteSubjectMode")
   @Operation(summary = "Delete subject mode",
       description = "Deletes the specified subject-level mode and reverts to "
-        + "the global default.",
+        + "the global default. "
+        + "If the subject is a context and recursive is true, also deletes mode "
+        + "for all subjects under that context.",
       responses = {
-        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode.",
+        @ApiResponse(responseCode = "200", description = "Operation succeeded. Returns old mode."
+                + "If recursive is enabled and mode is not found, returns 200 and returns null"
+                + "mode as it would delete mode for all subjects under it",
           content = @Content(schema = @Schema(implementation = Mode.class))),
         @ApiResponse(responseCode = "404",
           description = "Not Found. Error code 40401 indicates subject not found.",
@@ -262,27 +310,36 @@ public class ModeResource {
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
-      @PathParam("subject") String subject) {
-    log.debug("Deleting mode for subject {}", subject);
+      @PathParam("subject") String subject,
+      @Parameter(description =
+          "Whether to recursively delete mode for all subjects under the context, "
+            + "if the subject is a context")
+      @QueryParam("recursive") boolean recursive) {
+    log.info("Deleting mode for subject {}, recursive={}", subject, recursive);
 
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
-      throw Errors.invalidSubjectException(subject);
+      subject = null;
+    } else {
+      subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
     }
-
-    subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     io.confluent.kafka.schemaregistry.storage.Mode deletedMode;
     Mode deleteModeResponse;
     try {
       deletedMode = schemaRegistry.getMode(subject);
-      if (deletedMode == null) {
+      if (deletedMode == null && !recursive) {
+        // If recursive is not enabled and mode is not found, return 404
+        // If recursive is enabled and mode is not found, continue to delete mode for all
+        // subjects under it
         throw Errors.subjectNotFoundException(subject);
       }
 
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSubjectModeOrForward(subject, headerProperties);
-      deleteModeResponse = new Mode(deletedMode.name());
+
+      // Delete mode for the context/subject itself (and recursively if requested)
+      schemaRegistry.deleteSubjectModeOrForward(subject, recursive, headerProperties);
+      deleteModeResponse = new Mode(deletedMode != null ? deletedMode.name() : null);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {

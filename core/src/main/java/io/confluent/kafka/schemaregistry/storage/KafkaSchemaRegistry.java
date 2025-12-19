@@ -119,6 +119,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,6 +138,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       + " conflicts with the reserved field %s.";
   private final SchemaRegistryConfig config;
   private final List<SchemaRegistryResourceExtension> resourceExtensions;
+  private final List<HandlerWrapper> customHandler;
+
   private final Map<String, Object> props;
   private final LoadingCache<RawSchema, ParsedSchema> newSchemaCache;
   private final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
@@ -262,6 +265,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
     this.metadataEncoder = new MetadataEncoderService(this);
     this.ruleSetHandler = new RuleSetHandler();
     this.time = config.getTime();
+    this.customHandler = new ArrayList<>();
   }
 
   @VisibleForTesting
@@ -546,8 +550,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       if (leaderIdentity == null) {
         leaderRestService = null;
       } else {
-        leaderRestService = new RestService(leaderIdentity.getUrl(),
-            config.whitelistHeaders().contains(RestService.X_FORWARD_HEADER));
+        leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
         if (sslFactory != null && sslFactory.sslContext() != null) {
@@ -725,14 +728,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       Mode mode = getModeInScope(subject);
 
       boolean modifiedSchema = false;
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         modifiedSchema = maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
 
       int schemaId = schema.getId();
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, schemaId < 0, normalize);
-
       if (parsedSchema != null) {
         // see if the schema to be registered already exists
         SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(schema);
@@ -772,7 +774,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
       boolean isCompatible = true;
       List<String> compatibilityErrorLogs = new ArrayList<>();
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         compatibilityErrorLogs.addAll(isCompatibleWithPrevious(config,
@@ -795,7 +797,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
-        } else if (newVersion != schema.getVersion() && mode != Mode.IMPORT) {
+        } else if (newVersion != schema.getVersion()
+                && !mode.isImportOrForwardMode()) {
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
@@ -862,14 +865,14 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   ) throws OperationNotPermittedException, SchemaRegistryStoreException {
     String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
     if (isReadOnlyMode(subject)) {
-      throw new OperationNotPermittedException("Subject " + subject 
+      throw new OperationNotPermittedException("Subject " + subject
       + " in context " + context + " is in read-only mode");
     }
 
     if (schema.getId() >= 0) {
-      if (getModeInScope(subject) != Mode.IMPORT) {
-        throw new OperationNotPermittedException("Subject " + subject 
-        + " in context " + context + " is not in import mode");
+      if (!getModeInScope(subject).isImportOrForwardMode()) {
+        throw new OperationNotPermittedException("Subject "
+                + subject + " is not in import or forward mode");
       }
     } else {
       if (getModeInScope(subject) != Mode.READWRITE) {
@@ -1151,7 +1154,10 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         metadataEncoder.encodeMetadata(schemaValue);
         kafkaStore.put(key, schemaValue);
         logSchemaOp(schema, "DELETE");
-        if (!getAllVersions(subject, LookupFilter.DEFAULT).hasNext()) {
+      } else {
+        kafkaStore.put(key, null);
+
+        if (!getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext()) {
           if (getMode(subject) != null) {
             deleteMode(subject);
           }
@@ -1159,8 +1165,6 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
             deleteConfig(subject);
           }
         }
-      } else {
-        kafkaStore.put(key, null);
       }
     } catch (StoreTimeoutException te) {
       throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
@@ -1227,15 +1231,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         DeleteSubjectKey key = new DeleteSubjectKey(subject);
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
+      } else {
+        for (Integer version : deletedVersions) {
+          kafkaStore.put(new SchemaKey(subject, version), null);
+        }
         if (getMode(subject) != null) {
           deleteMode(subject);
         }
         if (getConfig(subject) != null) {
           deleteConfig(subject);
-        }
-      } else {
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
         }
       }
       return deletedVersions;
@@ -1433,7 +1437,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
         if (!existingSchema.equals(schemaCopy)) {
           String context = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
           throw new OperationNotPermittedException(
-              String.format("Overwrite new schema with id %s in context" 
+              String.format("Overwrite new schema with id %s in context"
               + " %s is not permitted.",
               id, context)
           );
@@ -1588,14 +1592,15 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   private void forwardDeleteSubjectModeRequestToLeader(
       String subject,
+      boolean recursive,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    log.debug(String.format("Forwarding delete subject mode request %s to %s",
-        subject, baseUrl));
+    log.debug("Forwarding delete subject mode request {} to {} with recursive={}",
+        subject, baseUrl, recursive);
     try {
-      leaderRestService.deleteSubjectMode(headerProperties, subject);
+      leaderRestService.deleteSubjectMode(headerProperties, subject, recursive);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
           String.format(
@@ -1625,7 +1630,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
                                                        boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      Mode mode = getModeInScope(schema.getSubject());
+      if (!mode.isImportOrForwardMode()) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
       }
       if (normalize) {
@@ -2564,37 +2570,128 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
 
   public void deleteSubjectMode(String subject)
       throws SchemaRegistryStoreException, OperationNotPermittedException {
+    deleteSubjectMode(subject, false);
+  }
+
+  public void deleteSubjectMode(String subject, boolean recursive)
+      throws SchemaRegistryStoreException, OperationNotPermittedException {
     if (!allowModeChanges) {
       throw new OperationNotPermittedException("Mode changes are not allowed");
     }
     try {
       kafkaStore.waitUntilKafkaReaderReachesLastOffset(subject, kafkaStoreTimeoutMs);
       deleteMode(subject);
+
+      // If recursive and subject is a context, delete modes for all subjects under it
+      if (recursive && QualifiedSubject.isContext(tenant(), subject)) {
+        log.info("Recursively deleting mode for all subjects under context: {}", subject);
+        try {
+          deleteModesForSubjectsUnderContext(subject);
+        } catch (SchemaRegistryException e) {
+          throw new SchemaRegistryStoreException(
+              "Failed to recursively delete modes for subjects under context", e);
+        }
+      }
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to delete subject config value from store",
           e);
     }
   }
 
-  public void deleteSubjectModeOrForward(String subject, Map<String, String> headerProperties)
+  public void deleteSubjectModeOrForward(String subject, boolean recursive,
+                                         Map<String, String> headerProperties)
       throws SchemaRegistryStoreException, SchemaRegistryRequestForwardingException,
       OperationNotPermittedException, UnknownLeaderException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteSubjectMode(subject);
+        // Delete the subject/context mode itself (and recursively if requested)
+        deleteSubjectMode(subject, recursive);
       } else {
-        // forward delete subject config request to the leader
+        // forward delete subject mode request to the leader (with recursive flag)
         if (leaderIdentity != null) {
-          forwardDeleteSubjectModeRequestToLeader(subject, headerProperties);
+          forwardDeleteSubjectModeRequestToLeader(subject, recursive, headerProperties);
         } else {
-          throw new UnknownLeaderException("Delete config request failed since leader is "
+          throw new UnknownLeaderException("Delete mode request failed since leader is "
               + "unknown");
         }
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
     }
+  }
+
+  /**
+   * List all subjects that have a mode configured under the given prefix.
+   * This is different from listSubjectsWithPrefix which only returns subjects with schemas.
+   *
+   * @param prefix The subject prefix to match (e.g., ":.context:" for a context)
+   * @return Set of subject names that have modes configured under the prefix
+   * @throws SchemaRegistryException if there's an error accessing the store
+   */
+  private Set<String> listSubjectsWithModePrefix(String prefix)
+      throws SchemaRegistryException {
+    try {
+      ModeKey startKey = new ModeKey(prefix + Character.MIN_VALUE);
+      ModeKey endKey = new ModeKey(prefix + Character.MAX_VALUE);
+
+      Set<String> subjects = new LinkedHashSet<>();
+      try (CloseableIterator<SchemaRegistryValue> iterator =
+               kafkaStore.getAll(startKey, endKey)) {
+        while (iterator.hasNext()) {
+          SchemaRegistryValue value = iterator.next();
+          if (value instanceof ModeValue) {
+            ModeValue modeValue = (ModeValue) value;
+            String subject = modeValue.getSubject();
+            // Only include subjects that match our prefix
+            if (subject != null && subject.startsWith(prefix)) {
+              subjects.add(subject);
+            }
+          }
+        }
+      }
+      return subjects;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving subjects with modes under prefix: " + prefix, e);
+    }
+  }
+
+  /**
+   * Returns the context prefix to use for listing subjects under a given context.
+   * This method can be overridden in subclasses to customize prefix computation.
+   *
+   * @param context The normalized context string, or null for default context
+   * @return The subject prefix to use for matching subjects
+   */
+  protected String getContextPrefixForDeleteMode(String context) {
+    // Context is already normalized and includes the trailing delimiter
+    // For default context: context would be null
+    // For named context: context would be like ":.production:"
+    return context != null ? context :
+            QualifiedSubject.normalize(tenant(), CONTEXT_PREFIX + CONTEXT_DELIMITER);
+  }
+
+  private void deleteModesForSubjectsUnderContext(String context)
+      throws SchemaRegistryException {
+    String subjectPrefix = getContextPrefixForDeleteMode(context);
+
+    // Get all subjects with modes under this context
+    // This includes subjects that have modes set but no schemas registered
+    Set<String> subjects = listSubjectsWithModePrefix(subjectPrefix);
+
+    log.info("Found {} subjects with modes under context '{}' for recursive mode deletion with"
+                    +  " subjectPrefix={}", subjects.size(), context, subjectPrefix);
+
+    // Delete mode for each subject (locally on leader)
+    int successCount = 0;
+    for (String subjectName : subjects) {
+      log.debug("Deleting mode for subject: {}", subjectName);
+      deleteSubjectMode(subjectName);
+      successCount++;
+    }
+
+    log.info("Recursive mode deletion completed successfully for {} subjects", successCount);
   }
 
   KafkaStore<SchemaRegistryKey, SchemaRegistryValue> getKafkaStore() {
@@ -2694,7 +2791,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   }
 
   private void logSchemaOp(Schema schema, String operation) {
-    log.info("Resource association log - (tenant, id, subject, operation): ({}, {}, {}, {})", 
+    log.info("Resource association log - (tenant, id, subject, operation): ({}, {}, {}, {})",
         tenant(), schema.getId(), schema.getSubject(), operation);
   }
 
@@ -2743,6 +2840,18 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
   public void onTruststoreCreated(KeyStore truststore) {
     metricsContainer.emitCertificateExpirationMetric(
         truststore, metricsContainer.getCertificateExpirationTruststore());
+  }
+
+  public List<HandlerWrapper> getCustomHandler() {
+    return customHandler;
+  }
+
+  public void addCustomHandler(HandlerWrapper handler) {
+    customHandler.add(handler);
+  }
+
+  public void removeCustomHandler(HandlerWrapper handler) {
+    customHandler.remove(handler);
   }
 
   private static class RawSchema {
