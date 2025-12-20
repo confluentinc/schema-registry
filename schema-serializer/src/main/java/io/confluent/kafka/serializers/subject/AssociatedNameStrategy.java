@@ -36,7 +36,7 @@ import org.apache.commons.lang3.SerializationException;
  * A {@link SubjectNameStrategy} that will query schema registry for
  * the associated subject name for the topic.  The topic is passed as the resource name
  * to schema registry.  If there is a configuration property named
- * "topic.cluster.id", then its value will be passed as the resource namespace;
+ * "kafka.cluster.id", then its value will be passed as the resource namespace;
  * otherwise the value "-" will be passed as the resource namespace.
  * If more than subject is returned from the query, an exception will be thrown.
  * If no subjects are returned from the query, then the behavior will fall back
@@ -46,22 +46,22 @@ import org.apache.commons.lang3.SerializationException;
  */
 public class AssociatedNameStrategy implements SubjectNameStrategy {
 
-  public static final String TOPIC_CLUSTER_ID = "topic.cluster.id";
+  public static final String KAFKA_CLUSTER_ID = "kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String SKIP_TOPIC_NAME_STRATEGY_FALLBACK =
       "skip.topic.name.strategy.fallback";
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
-  private String topicClusterId;
+  private String kafkaClusterId;
   private boolean skipTopicNameStrategyFallback;
   private LoadingCache<CacheKey, String> subjectNameCache;
 
   @Override
   public void configure(Map<String, ?> configs) {
-    Object topicClusterIdConfig = configs.get(TOPIC_CLUSTER_ID);
-    if (topicClusterIdConfig != null) {
-      this.topicClusterId = topicClusterIdConfig.toString();
+    Object kafkaClusterIdConfig = configs.get(KAFKA_CLUSTER_ID);
+    if (kafkaClusterIdConfig != null) {
+      this.kafkaClusterId = kafkaClusterIdConfig.toString();
     }
     Object skipConfig = configs.get(SKIP_TOPIC_NAME_STRATEGY_FALLBACK);
     if (skipConfig != null) {
@@ -102,7 +102,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       throws IOException, RestClientException {
     List<Association> associations = client.getAssociationsByResourceName(
         topic,
-        topicClusterId != null ? topicClusterId : NAMESPACE_WILDCARD,
+        kafkaClusterId != null ? kafkaClusterId : NAMESPACE_WILDCARD,
         "topic",
         Collections.singletonList(isKey ? "key" : "value"),
         null,
