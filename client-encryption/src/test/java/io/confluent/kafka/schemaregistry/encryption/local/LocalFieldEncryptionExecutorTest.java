@@ -30,13 +30,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import java.util.Collections;
 import java.util.List;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
@@ -47,9 +46,9 @@ public class LocalFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new LocalFieldEncryptionProperties(ruleNames, ruleExecutor);
+    return new LocalEncryptionProperties(ruleNames, ruleExecutor);
   }
 
   @Test

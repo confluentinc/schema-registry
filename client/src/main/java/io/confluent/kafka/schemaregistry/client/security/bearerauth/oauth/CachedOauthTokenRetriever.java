@@ -42,7 +42,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateEx
  * @author Varun PV
  */
 
-class CachedOauthTokenRetriever {
+public class CachedOauthTokenRetriever {
 
   private AccessTokenRetriever accessTokenRetriever;
   private AccessTokenValidator accessTokenValidator;

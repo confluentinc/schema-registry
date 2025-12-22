@@ -44,8 +44,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -55,8 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RestApiTest extends ClusterTestHarness {
 
@@ -81,7 +78,7 @@ public class RestApiTest extends ClusterTestHarness {
     return props;
   }
 
-  @Before
+  @Override
   public void setUp() throws Exception {
     super.setUp();
     fakeTicker = new FakeTicker();
@@ -93,7 +90,7 @@ public class RestApiTest extends ClusterTestHarness {
         null,
         fakeTicker
     );
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
 

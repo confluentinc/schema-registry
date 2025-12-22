@@ -18,11 +18,14 @@ package io.confluent.connect.protobuf;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos;
+import com.google.protobuf.DescriptorProtos.Edition;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
@@ -32,12 +35,13 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.utils.DecimalUtils;
@@ -292,8 +296,8 @@ public class ProtobufData {
     });
   }
 
-  private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
-  private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
+  private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
+  private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean generalizedSumTypeSupport;
   private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
@@ -319,8 +323,12 @@ public class ProtobufData {
   }
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
-    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
-    toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
+    fromConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(protobufDataConfig.schemaCacheSize())
+        .build();
+    toConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(protobufDataConfig.schemaCacheSize())
+        .build();
     this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupport();
     this.ignoreDefaultForNullables = protobufDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
@@ -650,7 +658,7 @@ public class ProtobufData {
     if (schema == null) {
       return null;
     }
-    ProtobufSchema cachedSchema = fromConnectSchemaCache.get(schema);
+    ProtobufSchema cachedSchema = fromConnectSchemaCache.getIfPresent(schema);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -1307,7 +1315,27 @@ public class ProtobufData {
 
   private boolean isOptional(FieldDescriptor fieldDescriptor) {
     return fieldDescriptor.toProto().getProto3Optional()
-        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
+        || (supportOptionalForProto2 && hasOptionalKeyword(fieldDescriptor));
+  }
+
+  // copied from Descriptors.java since it is not public
+  private boolean hasOptionalKeyword(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (getEdition(fieldDescriptor.getFile()) == Edition.EDITION_PROTO2
+        && fieldDescriptor.isOptional()
+        && fieldDescriptor.getContainingOneof() == null);
+  }
+
+  // copied from Descriptors.java since it is not public
+  private DescriptorProtos.Edition getEdition(FileDescriptor file) {
+    switch (file.toProto().getSyntax()) {
+      case "editions":
+        return file.toProto().getEdition();
+      case "proto3":
+        return Edition.EDITION_PROTO3;
+      default:
+        return Edition.EDITION_PROTO2;
+    }
   }
 
   private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
@@ -1319,7 +1347,7 @@ public class ProtobufData {
       return null;
     }
     Pair<String, ProtobufSchema> cacheKey = new Pair<>(schema.name(), schema);
-    Schema cachedSchema = toConnectSchemaCache.get(cacheKey);
+    Schema cachedSchema = toConnectSchemaCache.getIfPresent(cacheKey);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -1529,7 +1557,7 @@ public class ProtobufData {
     }
 
     if (useOptionalForNullables) {
-      if (descriptor.hasOptionalKeyword()) {
+      if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }
     } else if (!useWrapperForNullables) {

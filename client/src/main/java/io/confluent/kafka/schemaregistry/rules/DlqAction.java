@@ -73,7 +73,7 @@ public class DlqAction implements RuleAction {
 
   private Map<String, ?> configs;
   private String topic;
-  private boolean autoFlush;
+  private volatile boolean autoFlush;
   private List<String> redactRuleTypes;
   private volatile KafkaProducer<byte[], byte[]> producer;
 
