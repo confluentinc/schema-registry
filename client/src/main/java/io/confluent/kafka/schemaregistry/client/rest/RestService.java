@@ -223,9 +223,7 @@ public class RestService implements Closeable, Configurable {
   private static final String TARGET_IDENTITY_POOL_ID = "Confluent-Identity-Pool-Id";
   public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
-
-  public static final String VERSION_8_0 = "8.0";
-
+  
   public static final String CONFLUENT_CLIENT_VERSION = "Confluent-Client-Version";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
