@@ -41,7 +41,6 @@ import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCr
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import io.confluent.kafka.schemaregistry.utils.ClientAppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
-import java.util.HashMap;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
