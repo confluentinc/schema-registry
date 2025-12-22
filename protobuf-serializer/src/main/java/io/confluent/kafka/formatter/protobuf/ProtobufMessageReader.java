@@ -27,8 +27,6 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.io.BufferedReader;
-
 import io.confluent.kafka.formatter.SchemaMessageReader;
 import io.confluent.kafka.formatter.SchemaMessageSerializer;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -74,18 +72,17 @@ public class ProtobufMessageReader extends SchemaMessageReader<Message> {
       ProtobufSchema valueSchema,
       String topic,
       boolean parseKey,
-      BufferedReader reader,
       boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(url, keySchema, valueSchema, topic,
-        parseKey, reader, normalizeSchema, autoRegister, useLatest);
+        parseKey, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
-  public void init(java.io.InputStream inputStream, Properties props) {
-    super.init(inputStream, props);
+  public void init(Properties props) {
+    super.init(props);
     if (props.containsKey("key.schema.full.name")) {
       String keySchemaFullName = props.getProperty("key.schema.full.name").trim();
       keySchema = ((ProtobufSchema) keySchema).copy(keySchemaFullName);
