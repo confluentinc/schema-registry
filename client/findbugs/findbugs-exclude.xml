@@ -1,0 +1,218 @@
+<!--
+  ~ Copyright 2018 Confluent Inc.
+  ~
+  ~ Licensed under the Confluent Community License (the "License"); you may not use
+  ~ this file except in compliance with the License.  You may obtain a copy of the
+  ~ License at
+  ~
+  ~ http://www.confluent.io/confluent-community-license
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+  ~ WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations under the License.
+  -->
+
+<!-- Findbugs filtering.
+
+Findbugs is a static code analysis tool run as part of the "check" phase of the build.
+This file dictates which categories of bugs and individual false positives that we supress.
+
+For a detailed description of findbugs bug categories, see http://findbugs.sourceforge.net/bugDescriptions.html
+-->
+<FindBugsFilter>
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema" />
+        <Method name="validate" />
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_INFERRED" />
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId"/>
+        <Bug pattern="SS_SHOULD_BE_STATIC"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.KafkaAvroDeserializer"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.KafkaAvroSerializer"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.rest.SchemaRegistryRestApplication"/>
+        <Bug pattern="DM_EXIT"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.avro.AvroData"/>
+        <Bug pattern="RC_REF_COMPARISON_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.avro.AvroData"/>
+        <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.protobuf.ProtobufData"/>
+        <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.json.JsonSchemaData"/>
+        <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+    </Match>
+
+    <Match>
+        <Class name="~.*Request"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor"/>
+        <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.utils.AppInfoParser"/>
+        <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.client.security.SslFactory.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.tools.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.serializers.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.schemaregistry.benchmark.*"/>
+        <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap.*"/>
+    </Match>
+
+    <!-- exclude generated code -->
+    <Match>
+        <Class name="~io.confluent.protobuf.*"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
+    </Match>
+
+    <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1539 -->
+    <Match>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE"/>
+    </Match>
+
+    <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+
+    <Match>
+        <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+    </Match>
+
+    <!-- Static field warnings in json schema provider -->
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.json.utils.MaximumCardinalityMatch"/>
+        <Bug pattern="SS_SHOULD_BE_STATIC"/>
+    </Match>
+
+    <!-- Method hiding warnings in data config classes -->
+    <!-- This is a legitimate design pattern where child config classes provide their own baseConfigDef() -->
+    <!-- All classes extending AbstractDataConfig follow this pattern -->
+    <Match>
+        <Class name="io.confluent.connect.avro.AvroDataConfig"/>
+        <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.json.JsonSchemaDataConfig"/>
+        <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.connect.protobuf.ProtobufDataConfig"/>
+        <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <!-- Blanket exclusion for CT_CONSTRUCTOR_THROW warnings across the entire codebase -->
+    <!-- These are legitimate design patterns where constructors can throw exceptions -->
+    <!-- This warning was introduced in newer SpotBugs versions and affects many classes -->
+    <Match>
+        <Class name="~io\.confluent\..*"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+</FindBugsFilter>
