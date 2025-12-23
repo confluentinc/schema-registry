@@ -30,8 +30,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("IntegrationTest")
 public abstract class RestApiContextTest {
 
   protected RestApp restApp = null;

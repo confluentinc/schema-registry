@@ -45,7 +45,7 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   public static final String ENCRYPT_DEK_EXPIRY_DAYS = EncryptionExecutor.ENCRYPT_DEK_EXPIRY_DAYS;
 
   public static final String KMS_TYPE_SUFFIX = EncryptionExecutor.KMS_TYPE_SUFFIX;
-  public static final byte[] EMPTY_AAD = EncryptionExecutor.EMPTY_AAD;
+  public static final byte[] EMPTY_AAD = new byte[0];
   public static final String CACHE_EXPIRY_SECS = EncryptionExecutor.CACHE_EXPIRY_SECS;
   public static final String CACHE_SIZE = EncryptionExecutor.CACHE_SIZE;
   public static final String CLOCK = EncryptionExecutor.CLOCK;

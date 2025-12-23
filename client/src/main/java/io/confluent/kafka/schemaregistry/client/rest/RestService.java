@@ -46,6 +46,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchema
 import io.confluent.kafka.schemaregistry.client.security.basicauth.BasicAuthCredentialProviderFactory;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
 import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
+import io.confluent.kafka.schemaregistry.utils.ClientAppInfoParser;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
@@ -223,6 +224,7 @@ public class RestService implements Closeable, Configurable {
   public static final String ACCEPT_UNKNOWN_PROPERTIES = "Confluent-Accept-Unknown-Properties";
   public static final String X_FORWARD_HEADER = "X-Forward";
   public static final String VERSION_8_0 = "8.0";
+  public static final String CONFLUENT_CLIENT_VERSION = "Confluent-Client-Version";
 
   public static final Map<String, String> DEFAULT_REQUEST_PROPERTIES;
 
@@ -230,7 +232,8 @@ public class RestService implements Closeable, Configurable {
     DEFAULT_REQUEST_PROPERTIES =
         ImmutableMap.of(
             "Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
-            ACCEPT_UNKNOWN_PROPERTIES, "true"
+            ACCEPT_UNKNOWN_PROPERTIES, "true",
+            CONFLUENT_CLIENT_VERSION, ClientAppInfoParser.getClientVersion()
         );
   }
 
@@ -1930,14 +1933,15 @@ public class RestService implements Closeable, Configurable {
       String context, Boolean dryRun, AssociationCreateOrUpdateRequest request
   ) throws IOException,
       RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/associations");
+    UriBuilder builder =
+        UriBuilder.fromPath("/associations/resources/{resourceId}");
     if (context != null) {
       builder.queryParam("context", context);
     }
     if (dryRun != null) {
       builder.queryParam("dryRun", dryRun);
     }
-    String path = builder.build().toString();
+    String path = builder.build(request.getResourceId()).toString();
 
     AssociationResponse response = httpRequest(path, "PUT",
         request.toJson().getBytes(StandardCharsets.UTF_8),

@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Tag("IntegrationTest")
 public abstract class RestApiTest {
 
   private static final Random random = new Random();
