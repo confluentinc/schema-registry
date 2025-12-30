@@ -205,10 +205,10 @@ public class ContextFilter implements ContainerRequestFilter {
   }
 
   private static boolean isCreateOrUpdate(String method) {
-    return method != null &&
-        (method.equalsIgnoreCase("POST")
-            || method.equalsIgnoreCase("PUT")
-            || method.equalsIgnoreCase("PATCH"));
+    return method != null
+        && (method.equalsIgnoreCase("POST")
+        || method.equalsIgnoreCase("PUT")
+        || method.equalsIgnoreCase("PATCH"));
   }
 
   private static boolean startsWithContext(String path) {
