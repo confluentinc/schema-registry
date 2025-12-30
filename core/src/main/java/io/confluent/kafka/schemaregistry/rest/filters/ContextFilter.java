@@ -56,13 +56,14 @@ public class ContextFilter implements ContainerRequestFilter {
   @Override
   public void filter(ContainerRequestContext requestContext) throws IOException {
 
+    String method = requestContext.getMethod();
     String path = requestContext.getUriInfo().getPath(false);
     if (path.startsWith("contexts/")) {
       try {
         UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
         MultivaluedMap<String, String> queryParams =
             requestContext.getUriInfo().getQueryParameters(false);
-        URI uri = modifyUri(builder, path, queryParams);
+        URI uri = modifyUri(builder, method, path, queryParams);
         requestContext.setRequestUri(uri);
       } catch (IllegalArgumentException e) {
         requestContext.abortWith(
@@ -76,9 +77,15 @@ public class ContextFilter implements ContainerRequestFilter {
 
   @VisibleForTesting
   URI modifyUri(UriBuilder builder, String path, MultivaluedMap<String, String> queryParams) {
+    return modifyUri(builder, null, path, queryParams);
+  }
+
+  @VisibleForTesting
+  URI modifyUri(UriBuilder builder, String method,
+      String path, MultivaluedMap<String, String> queryParams) {
     ContextAndPath contextAndPath = modifyUriPath(path);
     builder.replacePath(contextAndPath.path);
-    replaceQueryParams(builder, contextAndPath, queryParams);
+    replaceQueryParams(builder, method, contextAndPath, queryParams);
     return builder.build();
   }
 
@@ -156,6 +163,7 @@ public class ContextFilter implements ContainerRequestFilter {
 
   private void replaceQueryParams(
       UriBuilder builder,
+      String method,
       ContextAndPath contextAndPath,
       MultivaluedMap<String, String> queryParams) {
     String context = contextAndPath.getContext();
@@ -191,9 +199,16 @@ public class ContextFilter implements ContainerRequestFilter {
           })
           .toArray();
       builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
-    } else if (path.equals("associations") || path.startsWith("associations:")) {
+    } else if (isCreateOrUpdate(method) && path.startsWith("associations")) {
       builder.replaceQueryParam("context", QualifiedSubject.normalizeContext(context));
     }
+  }
+
+  private static boolean isCreateOrUpdate(String method) {
+    return method != null &&
+        (method.equalsIgnoreCase("POST")
+            || method.equalsIgnoreCase("PUT")
+            || method.equalsIgnoreCase("PATCH"));
   }
 
   private static boolean startsWithContext(String path) {
