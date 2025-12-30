@@ -669,8 +669,6 @@
                             <argLine>
                                 @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
-                            <parallel>classes</parallel>
-                            <threadCount>5</threadCount>
                             <excludedGroups>IntegrationTest</excludedGroups>
                         </configuration>
                     </plugin>
@@ -681,10 +679,6 @@
                             <argLine>
                                 @{argLine} --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
                             </argLine>
-                            <forkCount>2</forkCount>
-                            <reuseForks>false</reuseForks>
-                            <parallel>classes</parallel>
-                            <threadCount>3</threadCount>
                             <rerunFailingTestsCount>3</rerunFailingTestsCount>
                             <groups>IntegrationTest</groups>
                         </configuration>
