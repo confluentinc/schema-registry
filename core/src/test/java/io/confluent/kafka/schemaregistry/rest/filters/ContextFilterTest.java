@@ -314,10 +314,42 @@ public class ContextFilterTest {
   @Test
   public void testAssociationsContextQueryParam() {
     String path = "/contexts/.ctx/associations";
-    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>());
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), "POST", path, new MultivaluedHashMap<>());
     Assert.assertEquals(
         "URI must not change",
         "/associations/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Context must change",
+        "context=:.ctx:",
+        uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testPutAssociationsContextQueryParam() {
+    String path = "/contexts/.ctx/associations/resources/myresource";
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), "PUT", path, new MultivaluedHashMap<>());
+    Assert.assertEquals(
+        "URI must not change",
+        "/associations/resources/myresource/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Context must change",
+        "context=:.ctx:",
+        uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testPatchAssociationsContextQueryParam() {
+    String path = "/contexts/.ctx/associations/resources/myresource";
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), "PATCH", path, new MultivaluedHashMap<>());
+    Assert.assertEquals(
+        "URI must not change",
+        "/associations/resources/myresource/",
         uri.getPath()
     );
     Assert.assertEquals(
