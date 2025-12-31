@@ -1,0 +1,4 @@
+[
+  "io.confluent.kafka.example.uniontest.UnionTestUser",
+  "io.confluent.kafka.example.uniontest.UnionTestGrant"
+]

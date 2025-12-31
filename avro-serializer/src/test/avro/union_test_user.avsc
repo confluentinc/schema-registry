@@ -1,0 +1,11 @@
+{
+  "namespace": "io.confluent.kafka.example.uniontest",
+  "type": "record",
+  "name": "UnionTestUser",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string"
+    }
+  ]
+}
