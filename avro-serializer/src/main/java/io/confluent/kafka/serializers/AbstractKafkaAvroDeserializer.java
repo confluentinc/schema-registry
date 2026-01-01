@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -363,13 +364,34 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema) {
-    if (writerSchema.getType() == Type.ARRAY
-        || writerSchema.getType() == Type.MAP
-        || writerSchema.getType() == Type.UNION) {
-      return writerSchema;
+    return getSpecificReaderSchema(writerSchema, false);
+  }
+
+  private Schema getSpecificReaderSchema(Schema writerSchema, boolean allowFallback) {
+    switch (writerSchema.getType()) {
+      case ARRAY:
+        Schema elementSchema = getSpecificReaderSchema(writerSchema.getElementType(), true);
+        return Schema.createArray(elementSchema);
+      case MAP:
+        Schema valueSchema = getSpecificReaderSchema(writerSchema.getValueType(), true);
+        return Schema.createMap(valueSchema);
+      case UNION:
+        List<Schema> readerTypes = new ArrayList<>(writerSchema.getTypes().size());
+        for (Schema type : writerSchema.getTypes()) {
+          Schema readerType = getSpecificReaderSchema(type, true);
+          readerTypes.add(readerType);
+        }
+        return Schema.createUnion(readerTypes);
+      default:
+        break;
     }
     Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
     if (readerClass == null) {
+      if (allowFallback) {
+        // For union/map/array, if the reader schema can't be found,
+        // fall back to writerSchema to preserve existing behavior.
+        return writerSchema;
+      }
       throw new SerializationException("Could not find class "
           + writerSchema.getFullName()
           + " specified in writer's schema whilst finding reader's "

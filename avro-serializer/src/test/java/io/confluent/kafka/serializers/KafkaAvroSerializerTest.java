@@ -810,7 +810,7 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
-  public void testKafkaAvroDeserializerFailsWithUnionAndEvolvedUserSchemaSpecific()
+  public void testKafkaAvroDeserializerWithUnionAndEvolvedUserSchemaSpecific()
       throws IOException, RestClientException {
     String unionTopic = "union_evolved_user";
     Map serializerConfigs = ImmutableMap.of(
