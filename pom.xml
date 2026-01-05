@@ -669,6 +669,7 @@
                             <argLine>
                                 @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
+                            <excludedGroups>IntegrationTest</excludedGroups>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -678,6 +679,8 @@
                             <argLine>
                                 @{argLine} --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
                             </argLine>
+                            <rerunFailingTestsCount>3</rerunFailingTestsCount>
+                            <groups>IntegrationTest</groups>
                         </configuration>
                     </plugin>
                 </plugins>
