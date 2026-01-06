@@ -163,6 +163,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
   public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
   /**
+   * <code>associations.enable</code>*
+   */
+  public static final String ASSOCIATIONS_ENABLE = "associations.enable";
+  public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -454,6 +459,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELECTION_STICKY_DOC =
       "If true, leader election will prefer to keep the current leader if possible. This is a "
       + "cluster wide setting i.e all nodes should have either true or false.";
+  protected static final String ASSOCIATIONS_ENABLE_DOC =
+      "If true, enable support for associations between resources and subjects.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -710,6 +717,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
             ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
+    )
+    .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
+        ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -995,6 +1005,10 @@ public class SchemaRegistryConfig extends RestConfig {
       }
     }
     return overridden;
+  }
+
+  public boolean enableAssociations() {
+    return getBoolean(ASSOCIATIONS_ENABLE);
   }
 
   public static void main(String[] args) {
