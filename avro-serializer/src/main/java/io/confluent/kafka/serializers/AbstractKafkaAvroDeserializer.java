@@ -513,6 +513,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             ExtendedParsedSchema extendedSchema = schemaFromRegistry();
             writerAvroSchema = (AvroSchema) extendedSchema.getSchema();
             Integer version = extendedSchema.getVersion();
+            if (version == null) {
+              version = schemaVersion(
+                  topic, isKey, schemaId, getSubject(), writerAvroSchema, null);
+            }
             writerAvroSchema = writerAvroSchema.copy(version);
 
             migrations = getMigrations(getSubject(), writerAvroSchema, readerAvroSchema);
