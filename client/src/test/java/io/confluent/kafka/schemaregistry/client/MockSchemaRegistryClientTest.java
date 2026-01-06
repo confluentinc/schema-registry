@@ -16,9 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -26,6 +33,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import java.util.Map;
+import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -986,6 +996,150 @@ public class MockSchemaRegistryClientTest {
             assertFalse("Value subject should have versions", valueVersions.isEmpty());
         } catch (Exception e) {
             assertNull("getAllVersions should succeed.", e);
+        }
+    }
+
+    @Test
+    public void testClientForScopeWithMultipleProviders() {
+        // Clean up any existing scopes first
+        MockSchemaRegistry.dropScope("scope");
+
+        // Test 1: Get client with AvroSchemaProvider
+        AvroSchemaProvider avroProvider = new AvroSchemaProvider();
+        SchemaRegistryClient client1 = MockSchemaRegistry
+                .getClientForScope("scope", Collections.singletonList(avroProvider));
+        assertNotNull("Client1 should not be null", client1);
+        assertTrue("Client1 should be a MockSchemaRegistryClient",
+                client1 instanceof MockSchemaRegistryClient);
+
+        // Verify that client1 has AvroSchemaProvider
+        MockSchemaRegistryClient mockClient1 = (MockSchemaRegistryClient) client1;
+        assertTrue("Client1 should have Avro provider",
+                mockClient1.getProviders().containsKey("AVRO"));
+
+        // Test 2: Get client with DummySchemaProvider
+        DummySchemaProvider dummyProvider = new DummySchemaProvider();
+        SchemaRegistryClient client2 = MockSchemaRegistry
+                .getClientForScope("scope", Collections.singletonList(dummyProvider));
+        assertNotNull("Client2 should not be null", client2);
+        assertTrue("Client2 should be a MockSchemaRegistryClient",
+                client2 instanceof MockSchemaRegistryClient);
+
+        // Verify that client2 has DummySchemaProvider
+        MockSchemaRegistryClient mockClient2 = (MockSchemaRegistryClient) client2;
+        assertTrue("Client1 should have Avro provider",
+                mockClient2.getProviders().containsKey("AVRO"));
+        assertTrue("Client2 should have Dummy provider",
+                mockClient2.getProviders().containsKey("DUMMY"));
+
+        // Verify that the two clients are the same instance
+        assertEquals("Clients should be the same instance", client1, client2);
+
+        // Clean up
+        MockSchemaRegistry.dropScope("scope");
+    }
+
+    /**
+     * A dummy schema provider for testing purposes only.
+     */
+    private static class DummySchemaProvider extends AbstractSchemaProvider {
+        @Override
+        public String schemaType() {
+            return "DUMMY";
+        }
+
+        @Override
+        public ParsedSchema parseSchemaOrElseThrow(
+            Schema schema, boolean isNew, boolean normalize) {
+            return new DummySchema(schema);
+        }
+    }
+
+    /**
+     * A simple dummy schema implementation for testing.
+     */
+    private static class DummySchema implements ParsedSchema {
+        private final Schema schema;
+        private final Metadata metadata;
+        private final RuleSet ruleSet;
+        private final Integer version;
+
+        public DummySchema(Schema schema) {
+            this(schema, null, null, null);
+        }
+
+        public DummySchema(Schema schema, Metadata metadata, RuleSet ruleSet, Integer version) {
+            this.schema = schema;
+            this.metadata = metadata;
+            this.ruleSet = ruleSet;
+            this.version = version;
+        }
+
+        @Override
+        public String schemaType() {
+            return "DUMMY";
+        }
+
+        @Override
+        public String name() {
+            return "DummySchema";
+        }
+
+        @Override
+        public String canonicalString() {
+            return schema.getSchema() != null ? schema.getSchema() : "{}";
+        }
+
+        @Override
+        public Integer version() {
+            return version;
+        }
+
+        @Override
+        public List<SchemaReference> references() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public Metadata metadata() {
+            return metadata;
+        }
+
+        @Override
+        public RuleSet ruleSet() {
+            return ruleSet;
+        }
+
+        @Override
+        public ParsedSchema copy() {
+            return new DummySchema(schema, metadata, ruleSet, version);
+        }
+
+        @Override
+        public ParsedSchema copy(Integer version) {
+            return new DummySchema(schema, metadata, ruleSet, version);
+        }
+
+        @Override
+        public ParsedSchema copy(Metadata metadata, RuleSet ruleSet) {
+            return new DummySchema(schema, metadata, ruleSet, version);
+        }
+
+        @Override
+        public ParsedSchema copy(
+                Map<SchemaEntity, Set<String>> tagsToAdd,
+                Map<SchemaEntity, Set<String>> tagsToRemove) {
+            return this;
+        }
+
+        @Override
+        public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public Object rawSchema() {
+            return schema.getSchema();
         }
     }
 
