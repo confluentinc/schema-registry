@@ -22,6 +22,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
@@ -94,8 +95,8 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private Config defaultConfig = new Config("BACKWARD");
   private final Map<String, Map<ParsedSchema, RegisterSchemaResponse>> schemaToResponseCache;
   private final Map<String, Map<ParsedSchema, Integer>> registeredSchemaCache;
-  private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
-  private final Map<String, ParsedSchema> guidToSchemaCache;
+  private final Map<String, Map<Integer, ExtendedParsedSchema>> idToSchemaCache;
+  private final Map<String, ExtendedParsedSchema> guidToSchemaCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
   private final Map<String, Config> configCache;
   private final Map<String, List<Association>> subjectToAssocCache;
@@ -210,11 +211,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private int getIdFromRegistry(
       String subject, ParsedSchema schema, boolean registerRequest, int id)
       throws RestClientException {
-    Map<Integer, ParsedSchema> idSchemaMap =
+    Map<Integer, ExtendedParsedSchema> idSchemaMap =
         idToSchemaCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     if (!idSchemaMap.isEmpty()) {
-      for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
-        if (schemasEqual(entry.getValue(), schema)) {
+      for (Map.Entry<Integer, ExtendedParsedSchema> entry : idSchemaMap.entrySet()) {
+        if (schemasEqual(entry.getValue().getSchema(), schema)) {
           if (registerRequest) {
             if (id < 0 || id == entry.getKey()) {
               generateVersion(subject, schema);
@@ -242,8 +243,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         schemaId = schemaIdMap.computeIfAbsent(schema, k ->
             ids.computeIfAbsent(context, c -> new AtomicInteger(0)).incrementAndGet());
       }
-      generateVersion(subject, schema);
-      idSchemaMap.put(schemaId, schema);
+      int version = generateVersion(subject, schema);
+      Schema schemaEntity = new Schema(subject, version, schemaId, schema);
+      idSchemaMap.put(schemaId, new ExtendedParsedSchema(
+          subject, version, schemaId, schemaEntity.getGuid(), schema));
       return schemaId;
     } else {
       throw new RestClientException("Schema Not Found", 404, 40403);
@@ -255,7 +258,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         || schema1.canLookup(schema2, this);
   }
 
-  private void generateVersion(String subject, ParsedSchema schema) {
+  private int generateVersion(String subject, ParsedSchema schema) {
     List<Integer> versions = allVersions(subject);
     int currentVersion;
     if (versions.isEmpty()) {
@@ -266,13 +269,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     Map<ParsedSchema, Integer> schemaVersionMap =
         schemaToVersionCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
     schemaVersionMap.put(schema, currentVersion);
+    return currentVersion;
   }
 
-  private ParsedSchema getSchemaBySubjectAndIdFromRegistry(String subject, int id)
+  private ExtendedParsedSchema getSchemaBySubjectAndIdFromRegistry(String subject, int id)
       throws RestClientException {
-    Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
+    Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
     if (idSchemaMap != null) {
-      ParsedSchema schema = idSchemaMap.get(id);
+      ExtendedParsedSchema schema = idSchemaMap.get(id);
       if (schema != null) {
         return schema;
       }
@@ -281,7 +285,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (!context.equals(subject)) {
       idSchemaMap = idToSchemaCache.get(context);
       if (idSchemaMap != null) {
-        ParsedSchema schema = idSchemaMap.get(id);
+        ExtendedParsedSchema schema = idSchemaMap.get(id);
         if (schema != null) {
           return schema;
         }
@@ -341,10 +345,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
-      final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
+      final Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schema);
-      guidToSchemaCache.put(schemaEntity.getGuid(), schema);
+      ExtendedParsedSchema extendedSchema = new ExtendedParsedSchema(
+          subject, schemaResponse.getVersion(),
+          schemaResponse.getId(), schemaResponse.getGuid(), schema);
+      idSchemaMap.put(retrievedId, extendedSchema);
+      guidToSchemaCache.put(schemaEntity.getGuid(), extendedSchema);
       return schemaResponse;
     }
   }
@@ -357,14 +364,21 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
+    ExtendedParsedSchema extendedSchema = getExtendedSchemaBySubjectAndId(subject, id);
+    return extendedSchema != null ? extendedSchema.getSchema() : null;
+  }
+
+  @Override
+  public ExtendedParsedSchema getExtendedSchemaBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
     if (subject == null) {
       subject = NO_SUBJECT;
     }
 
-    final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache
+    final Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache
         .computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
-    ParsedSchema schema = idSchemaMap.get(id);
+    ExtendedParsedSchema schema = idSchemaMap.get(id);
     if (schema != null) {
       return schema;
     }
@@ -375,7 +389,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         return schema;
       }
 
-      ParsedSchema retrievedSchema = getSchemaBySubjectAndIdFromRegistry(subject, id);
+      ExtendedParsedSchema retrievedSchema = getSchemaBySubjectAndIdFromRegistry(subject, id);
       idSchemaMap.put(id, retrievedSchema);
       return retrievedSchema;
     }
@@ -383,6 +397,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    ExtendedParsedSchema extendedSchema = getExtendedSchemaByGuid(guid, format);
+    return extendedSchema != null ? extendedSchema.getSchema() : null;
+  }
+
+  @Override
+  public ExtendedParsedSchema getExtendedSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
     return guidToSchemaCache.get(guid);
   }
@@ -438,10 +459,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return idToSchemaCache.entrySet().stream()
         .filter(entry -> entry.getValue().containsKey(id))
         .flatMap(e -> {
-          ParsedSchema schema = e.getValue().get(id);
+          ExtendedParsedSchema schema = e.getValue().get(id);
           Map<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(e.getKey());
           if (schemaVersionMap != null) {
-            int version = schemaVersionMap.get(schema);
+            int version = schemaVersionMap.get(schema.getSchema());
             return Stream.of(new SubjectVersion(e.getKey(), version));
           } else {
             return Stream.empty();
@@ -488,9 +509,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       version = maxVersion;
     }
     int id = -1;
-    Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
-    for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
-      if (schemasEqual(entry.getValue(), schema)) {
+    Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
+    for (Map.Entry<Integer, ExtendedParsedSchema> entry : idSchemaMap.entrySet()) {
+      if (schemasEqual(entry.getValue().getSchema(), schema)) {
         id = entry.getKey();
       }
     }
@@ -520,9 +541,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
     int id = -1;
-    Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
-    for (Map.Entry<Integer, ParsedSchema> entry : idSchemaMap.entrySet()) {
-      if (schemasEqual(entry.getValue(), schema)) {
+    Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
+    for (Map.Entry<Integer, ExtendedParsedSchema> entry : idSchemaMap.entrySet()) {
+      if (schemasEqual(entry.getValue().getSchema(), schema)) {
         id = entry.getKey();
       }
     }
@@ -552,9 +573,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         Map<String, String> props = schemaMetadata.getProperties();
         if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
           int id = -1;
-          Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
-          for (Map.Entry<Integer, ParsedSchema> e : idSchemaMap.entrySet()) {
-            if (schemasEqual(e.getValue(), schema)) {
+          Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache.get(subject);
+          for (Map.Entry<Integer, ExtendedParsedSchema> e : idSchemaMap.entrySet()) {
+            if (schemasEqual(e.getValue().getSchema(), schema)) {
               id = e.getKey();
             }
           }
@@ -632,7 +653,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
       schemaHistory.add(new SimpleParsedSchemaHolder(getSchemaBySubjectAndIdFromRegistry(subject,
-          schemaMetadata.getId())));
+          schemaMetadata.getId()).getSchema()));
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory).isEmpty();
@@ -686,9 +707,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schemaResponse = new RegisterSchemaResponse(schemaEntity);
       schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
-      final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
+      final Map<Integer, ExtendedParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
-      idSchemaMap.put(retrievedId, schema);
+      idSchemaMap.put(retrievedId, new ExtendedParsedSchema(
+          subject, schemaResponse.getVersion(), retrievedId, schemaResponse.getGuid(), schema));
       return schemaResponse;
     }
   }
@@ -775,7 +797,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     for (int version : allVersions(subject)) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(subject, version);
       schemaHistory.add(new SimpleParsedSchemaHolder(getSchemaBySubjectAndIdFromRegistry(subject,
-          schemaMetadata.getId())));
+          schemaMetadata.getId()).getSchema()));
     }
 
     return newSchema.isCompatible(compatibilityLevel, schemaHistory);

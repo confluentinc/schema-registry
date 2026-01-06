@@ -248,37 +248,37 @@ public class KafkaJsonSchemaSerializerTest {
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
     KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, new HashMap(config));
 
-    doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 429, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 429, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(ThrottlingQuotaExceededException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 408, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 408, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 408, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 408, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 503, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 503, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 503, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 503, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 504, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 504, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 504, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 504, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
     assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 502, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 502, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 502, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 502, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(DisconnectException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
-    doThrow(new RestClientException("err", 501, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    doThrow(new RestClientException("err", 501, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    doThrow(new RestClientException("err", 501, 0)).when(mockClient).getExtendedSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 501, 0)).when(mockClient).getExtendedSchemaByGuid(any(), any());
     assertThrows(SerializationException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
   }
 

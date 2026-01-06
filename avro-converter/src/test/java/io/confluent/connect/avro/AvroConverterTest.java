@@ -261,7 +261,7 @@ public class AvroConverterTest {
         .requiredInt("key")
         .endRecord();
     schemaRegistry.register(subject, new AvroSchema(avroSchema1).copy(
-        new Metadata(null, ImmutableMap.of("confluent:version", "2"), null), null));
+        new Metadata(null, ImmutableMap.of("confluent:version", "1"), null), null));
 
     org.apache.avro.Schema avroSchema2 = org.apache.avro.SchemaBuilder
         .record("Foo").fields()
@@ -269,7 +269,7 @@ public class AvroConverterTest {
         .requiredString("value")
         .endRecord();
     schemaRegistry.register(subject, new AvroSchema(avroSchema2).copy(
-        new Metadata(null, ImmutableMap.of("confluent:version", "200"), null), null));
+        new Metadata(null, ImmutableMap.of("confluent:version", "2"), null), null));
 
 
     // Get serialized data
@@ -283,10 +283,10 @@ public class AvroConverterTest {
 
 
     SchemaAndValue converted1 = avroConverter.toConnectData(TOPIC, serializedRecord1);
-    assertEquals(2L, (long) converted1.schema().version());
+    assertEquals(1L, (long) converted1.schema().version());
 
     SchemaAndValue converted2 = avroConverter.toConnectData(TOPIC, serializedRecord2);
-    assertEquals(200L, (long) converted2.schema().version());
+    assertEquals(2L, (long) converted2.schema().version());
   }
 
 

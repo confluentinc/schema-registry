@@ -19,6 +19,7 @@ import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_T
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.TENANT_DELIMITER;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -237,6 +238,13 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
+    ExtendedParsedSchema extendedSchema = getExtendedSchemaBySubjectAndId(subject, id);
+    return extendedSchema != null ? extendedSchema.getSchema() : null;
+  }
+
+  @Override
+  public synchronized ExtendedParsedSchema getExtendedSchemaBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
@@ -254,11 +262,19 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (s == null) {
       throw Errors.schemaNotFoundException(id);
     }
-    return parseSchema(new Schema(null, null, null, s)).get();
+    ParsedSchema schema = parseSchema(new Schema(null, null, null, s)).get();
+    return new ExtendedParsedSchema(subject, s.getVersion(), id, s.getGuid(), schema);
   }
 
   @Override
   public synchronized ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    ExtendedParsedSchema extendedSchema = getExtendedSchemaByGuid(guid, format);
+    return extendedSchema != null ? extendedSchema.getSchema() : null;
+  }
+
+  @Override
+  public synchronized ExtendedParsedSchema getExtendedSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
     SchemaString s = null;
     String errorMessage = "Error while retrieving schema with guid " + guid + " from the schema "
@@ -274,7 +290,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (s == null) {
       throw Errors.schemaNotFoundException(guid);
     }
-    return parseSchema(new Schema(null, null, null, s)).get();
+    ParsedSchema schema = parseSchema(new Schema(null, null, null, s)).get();
+    return new ExtendedParsedSchema(s.getSubject(), s.getVersion(), null, s.getGuid(), schema);
   }
 
   @Override
