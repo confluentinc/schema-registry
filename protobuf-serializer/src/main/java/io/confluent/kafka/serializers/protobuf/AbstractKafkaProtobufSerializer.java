@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -143,13 +144,14 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, schemaEntity.getGuid());
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
-        ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
+        ExtendedParsedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (ProtobufSchema) extendedSchema.getSchema();
         schemaId = new SchemaId(
             ProtobufSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
-        ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
+        ExtendedParsedSchema extendedSchema =
+            lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (ProtobufSchema) extendedSchema.getSchema();
         schemaId = new SchemaId(
             ProtobufSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
@@ -204,7 +206,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ExtendedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedParsedSchema> latestVersions,
       ReferenceSubjectNameStrategy strategy,
       String topic,
       boolean isKey,
@@ -244,7 +246,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ExtendedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedParsedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -272,7 +274,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean autoRegisterSchema,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ExtendedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedParsedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -320,7 +322,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean propagateSchemaTags,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ExtendedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedParsedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -357,7 +359,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       boolean propagateSchemaTags,
       boolean useLatestVersion,
       boolean latestCompatStrict,
-      Map<SubjectSchema, ExtendedSchema> latestVersions,
+      Map<SubjectSchema, ExtendedParsedSchema> latestVersions,
       boolean skipKnownTypes,
       ReferenceSubjectNameStrategy strategy,
       String topic,
@@ -430,7 +432,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         id = response.getId();
         version = schemaRegistry.getVersion(subject, schema, normalizeSchema);
       } else if (useLatestVersion) {
-        ExtendedSchema extendedSchema = lookupLatestVersion(
+        ExtendedParsedSchema extendedSchema = lookupLatestVersion(
             schemaRegistry, subject, schema, latestVersions, latestCompatStrict);
         schema = (ProtobufSchema) extendedSchema.getSchema();
         id = extendedSchema.getId();

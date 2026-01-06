@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -154,13 +155,14 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, schemaEntity.getGuid());
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
-        ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
+        ExtendedParsedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (JsonSchema) extendedSchema.getSchema();
         schemaId = new SchemaId(
             JsonSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
-        ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
+        ExtendedParsedSchema extendedSchema =
+            lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (JsonSchema) extendedSchema.getSchema();
         schemaId = new SchemaId(
             JsonSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());

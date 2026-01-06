@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -92,6 +93,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -121,8 +123,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
   protected SchemaIdSerializer valueSchemaIdSerializer = new PrefixSchemaIdSerializer();
   protected SchemaIdDeserializer valueSchemaIdDeserializer = new DualSchemaIdDeserializer();
-  protected Cache<SubjectSchema, ExtendedSchema> latestVersions;
-  protected Cache<String, ExtendedSchema> latestWithMetadata;
+  protected Cache<SubjectSchema, ExtendedParsedSchema> latestVersions;
+  protected Cache<String, ExtendedParsedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
@@ -374,20 +376,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return isKey;
   }
 
-  protected Map<SubjectSchema, ExtendedSchema> latestVersionsCache() {
+  protected Map<SubjectSchema, ExtendedParsedSchema> latestVersionsCache() {
     return latestVersions != null ? latestVersions.asMap() : new HashMap<>();
   }
 
-  protected Map<String, ExtendedSchema> latestWithMetadataCache() {
+  protected Map<String, ExtendedParsedSchema> latestWithMetadataCache() {
     return latestWithMetadata != null ? latestWithMetadata.asMap() : new HashMap<>();
   }
 
-  protected ExtendedSchema getLatestWithMetadata(String subject)
+  protected ExtendedParsedSchema getLatestWithMetadata(String subject)
       throws IOException, RestClientException {
     if (metadata == null || metadata.isEmpty()) {
       return null;
     }
-    ExtendedSchema extendedSchema = latestWithMetadata.getIfPresent(subject);
+    ExtendedParsedSchema extendedSchema = latestWithMetadata.getIfPresent(subject);
     if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestWithMetadata(subject, metadata, true);
       ParsedSchema schema =
@@ -395,8 +397,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
       schema = schema.copy(schemaMetadata.getVersion());
-      extendedSchema = new ExtendedSchema(
-          schemaMetadata.getId(), schemaMetadata.getVersion(),
+      extendedSchema = new ExtendedParsedSchema(
+          subject, schemaMetadata.getVersion(), schemaMetadata.getId(),
           schemaMetadata.getGuid(), schema
       );
       latestWithMetadata.put(subject, extendedSchema);
@@ -573,12 +575,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
-  protected ParsedSchema getSchemaBySchemaId(String subject, SchemaId schemaId)
+  protected ExtendedParsedSchema getSchemaBySchemaId(String subject, SchemaId schemaId)
       throws IOException, RestClientException {
     if (schemaId.getId() != null) {
-      return schemaRegistry.getSchemaBySubjectAndId(subject, schemaId.getId());
+      return schemaRegistry.getExtendedSchemaBySubjectAndId(subject, schemaId.getId());
     } else if (schemaId.getGuid() != null) {
-      return schemaRegistry.getSchemaByGuid(schemaId.getGuid().toString(), null);
+      return schemaRegistry.getExtendedSchemaByGuid(schemaId.getGuid().toString(), null);
     } else {
       throw new SerializationException("Could not deserialize schema ID");
     }
@@ -595,22 +597,22 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return lookupSchema;
   }
 
-  protected ExtendedSchema lookupLatestVersion(
+  protected ExtendedParsedSchema lookupLatestVersion(
       String subject, ParsedSchema schema, boolean latestCompatStrict)
       throws IOException, RestClientException {
     return lookupLatestVersion(
         schemaRegistry, subject, schema, latestVersionsCache(), latestCompatStrict);
   }
 
-  protected static ExtendedSchema lookupLatestVersion(
+  protected static ExtendedParsedSchema lookupLatestVersion(
       SchemaRegistryClient schemaRegistry,
       String subject,
       ParsedSchema schema,
-      Map<SubjectSchema, ExtendedSchema> cache,
+      Map<SubjectSchema, ExtendedParsedSchema> cache,
       boolean latestCompatStrict)
       throws IOException, RestClientException {
     SubjectSchema ss = new SubjectSchema(subject, schema);
-    ExtendedSchema extendedSchema = null;
+    ExtendedParsedSchema extendedSchema = null;
     if (cache != null) {
       extendedSchema = cache.get(ss);
     }
@@ -632,8 +634,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
           throw new IOException(baseMsg + " See log file for more details.");
         }
       }
-      extendedSchema = new ExtendedSchema(
-          schemaMetadata.getId(), schemaMetadata.getVersion(),
+      extendedSchema = new ExtendedParsedSchema(
+          subject, schemaMetadata.getVersion(), schemaMetadata.getId(),
           schemaMetadata.getGuid(), latestVersion
       );
       if (cache != null) {
@@ -958,56 +960,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     @Override
     public int hashCode() {
       return Objects.hash(subject, schema);
-    }
-  }
-
-  protected static class ExtendedSchema {
-    private final Integer id;
-    private final Integer version;
-    private final String guid;
-    private final ParsedSchema schema;
-
-    public ExtendedSchema(Integer id, Integer version, String guid, ParsedSchema schema) {
-      this.id = id;
-      this.version = version;
-      this.guid = guid;
-      this.schema = schema;
-    }
-
-    public Integer getId() {
-      return id;
-    }
-
-    public Integer getVersion() {
-      return version;
-    }
-
-    public String getGuid() {
-      return guid;
-    }
-
-    public ParsedSchema getSchema() {
-      return schema;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      ExtendedSchema that = (ExtendedSchema) o;
-      return id.equals(that.id)
-          && version.equals(that.version)
-          && Objects.equals(guid, that.guid)
-          && schema.equals(that.schema);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(id, version, guid, schema);
     }
   }
 

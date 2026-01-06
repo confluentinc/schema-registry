@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -100,6 +101,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
    * @param payload serialized data
    * @return the deserialized object
    */
+  @SuppressWarnings("unchecked")
   protected T deserialize(byte[] payload)
       throws SerializationException, InvalidConfigurationException {
     return (T) deserialize(false, null, isKey, payload);
@@ -129,20 +131,27 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
     SchemaId schemaId = new SchemaId(JsonSchema.TYPE);
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
-      ByteBuffer buffer =
+      final ByteBuffer byteBuffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
       String subject = isKey == null || strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
-      JsonSchema schema = (JsonSchema) getSchemaBySchemaId(subject, schemaId);
+      ExtendedParsedSchema extendedSchema = getSchemaBySchemaId(subject, schemaId);
+      JsonSchema schema = (JsonSchema) extendedSchema.getSchema();
+      subject = extendedSchema.getSubject();
       if (isKey != null && strategyUsesSchema(isKey)) {
-        subject = subjectName(topic, isKey, schema);
-        schema = schemaForDeserialize(schemaId, schema, subject, isKey);
+        String newSubject = subjectName(topic, isKey, schema);
+        if (newSubject != null && !newSubject.equals(subject)) {
+          subject = newSubject;
+          extendedSchema = getSchemaBySchemaId(subject, schemaId);
+          schema = (JsonSchema) extendedSchema.getSchema();
+        }
       }
       Object buf = executeRules(
           subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
-          schema, buffer
+          schema, byteBuffer
       );
-      buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
+      final ByteBuffer buffer =
+          buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
       ParsedSchema readerSchema = null;
       if (metadata != null) {
@@ -151,7 +160,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
       }
       if (includeSchemaAndVersion || readerSchema != null) {
-        Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
+        Integer version = extendedSchema.getVersion();
+        if (version == null) {
+          version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
+        }
         schema = schema.copy(version);
       }
       List<Migration> migrations = Collections.emptyList();
@@ -294,7 +306,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String subject, JsonSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version = null;
-    JsonSchema subjectSchema = (JsonSchema) getSchemaBySchemaId(subject, schemaId);
+    ExtendedParsedSchema extendedSchema = getSchemaBySchemaId(subject, schemaId);
+    JsonSchema subjectSchema = (JsonSchema) extendedSchema.getSchema();
     Metadata metadata = subjectSchema.metadata();
     if (metadata != null) {
       version = metadata.getConfluentVersionNumber();
@@ -307,12 +320,6 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
   private String subjectName(String topic, boolean isKey, JsonSchema schemaFromRegistry) {
     return getSubjectName(topic, isKey, null, schemaFromRegistry);
-  }
-
-  private JsonSchema schemaForDeserialize(
-      SchemaId schemaId, JsonSchema schemaFromRegistry, String subject, boolean isKey
-  ) throws IOException, RestClientException {
-    return (JsonSchema) getSchemaBySchemaId(subject, schemaId);
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(

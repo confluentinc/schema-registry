@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -168,7 +169,35 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
 
+  /**
+   * Get the schema with metadata (id, version, guid, subject) by subject and schema ID.
+   *
+   * @param subject the subject name
+   * @param id the schema ID
+   * @return ExtendedSchema containing the schema and its metadata
+   * @throws IOException if there's an error communicating with the schema registry
+   * @throws RestClientException if the schema registry returns an error
+   */
+  default ExtendedParsedSchema getExtendedSchemaBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   default ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Get the schema with metadata (id, version, guid, subject) by GUID.
+   *
+   * @param guid the schema GUID
+   * @param format the format to return the schema in (optional)
+   * @return ExtendedSchema containing the schema and its metadata
+   * @throws IOException if there's an error communicating with the schema registry
+   * @throws RestClientException if the schema registry returns an error
+   */
+  default ExtendedParsedSchema getExtendedSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }

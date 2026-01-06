@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.ExtendedParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -140,13 +141,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, schemaEntity.getGuid());
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
-        ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
+        ExtendedParsedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (AvroSchema) extendedSchema.getSchema();
         schemaId = new SchemaId(
             AvroSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
-        ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
+        ExtendedParsedSchema extendedSchema =
+            lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (AvroSchema) extendedSchema.getSchema();
         schemaId = new SchemaId(
             AvroSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
