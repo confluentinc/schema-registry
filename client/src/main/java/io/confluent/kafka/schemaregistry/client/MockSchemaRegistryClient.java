@@ -105,7 +105,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
   private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
-  private final Map<String, SchemaProvider> providers;
+  private final Map<String, SchemaProvider> providers = new HashMap<>();
 
   private static final String NO_SUBJECT = "";
 
@@ -159,15 +159,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     resourceNameToAssocCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
     ids = new ConcurrentHashMap<>();
-    this.providers = providers != null && !providers.isEmpty()
-                     ? providers.stream()
-                           .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
-                     : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
-    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    for (SchemaProvider provider : this.providers.values()) {
-      provider.configure(schemaProviderConfigs);
+    if (providers == null || providers.isEmpty()) {
+      providers = Collections.singletonList(new AvroSchemaProvider());
     }
+    addProviders(providers);
 
     final Map<String, SchemaProvider> schemaProviders = this.providers;
     this.parsedSchemaCache = CacheBuilder.newBuilder()
@@ -190,6 +185,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                     + " of type " + schema.getSchemaType()));
           }
         });
+  }
+
+  public Map<String, SchemaProvider> getProviders() {
+    return Collections.unmodifiableMap(providers);
+  }
+
+  public void addProviders(List<SchemaProvider> providers) {
+    for (SchemaProvider provider : providers) {
+      this.providers.put(provider.schemaType(), provider);
+      Map<String, Object> schemaProviderConfigs = new HashMap<>();
+      schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+      provider.configure(schemaProviderConfigs);
+    }
   }
 
   @Override
