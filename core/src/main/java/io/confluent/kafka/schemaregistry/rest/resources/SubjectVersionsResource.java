@@ -348,6 +348,8 @@ public class SubjectVersionsResource {
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Whether to return deleted schemas only")
       @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema,
+      @Parameter(description = "Whether to return deleted schemas as negative numbers")
+      @QueryParam("deletedAsNegative") boolean deletedAsNegative,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -372,8 +374,10 @@ public class SubjectVersionsResource {
     errorMessage = "Error while listing all versions for subject "
                    + subject;
     LookupFilter filter = LookupFilter.DEFAULT;
-    // if both deleted && deletedOnly are true, return deleted only
-    if (lookupDeletedOnlySchema) {
+    if (deletedAsNegative) {
+      filter = LookupFilter.DELETED_AS_NEGATIVE;
+    } else if (lookupDeletedOnlySchema) {
+      // if both deleted && deletedOnly are true, return deleted only
       filter = LookupFilter.DELETED_ONLY;
     } else if (lookupDeletedSchema) {
       filter = LookupFilter.INCLUDE_DELETED;
