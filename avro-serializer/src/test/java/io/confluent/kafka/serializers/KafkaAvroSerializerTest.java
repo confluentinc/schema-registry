@@ -291,7 +291,7 @@ public class KafkaAvroSerializerTest {
           + " \"name\": \"test\",\n"
           + " \"items\": {\n"
           + "\"type\": \"record\",\n"
-          + "\"namespace\": \"io.confluent.kafka.example\",\n"
+          + "\"namespace\": \"example.avro\",\n"
           + "\"name\": \"User\",\n"
           + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
 
@@ -301,7 +301,7 @@ public class KafkaAvroSerializerTest {
           + " \"name\": \"test\",\n"
           + " \"values\": {\n"
           + "\"type\": \"record\",\n"
-          + "\"namespace\": \"io.confluent.kafka.example\",\n"
+          + "\"namespace\": \"example.avro\",\n"
           + "\"name\": \"User\",\n"
           + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}}");
 
@@ -991,7 +991,6 @@ public class KafkaAvroSerializerTest {
             new SchemaReference("io.confluent.kafka.example.User", "user", -1)
         )));
   }
-
   @Test
   public void testKafkaAvroSerializerWithArraySpecific() throws IOException, RestClientException {
     Map serializerConfigs = ImmutableMap.of(
@@ -1038,7 +1037,7 @@ public class KafkaAvroSerializerTest {
         true
     );
     Map<Utf8, IndexedRecord> data = new HashMap<>();
-    data.put(new Utf8("one"), createSpecificAvroRecord());
+    data.put(new Utf8("one"), createUserRecordUtf8());
     schemaRegistry.register(topic + "-value", new AvroSchema(mapSchema));
     avroSerializer.configure(serializerConfigs, false);
     avroDeserializer.configure(deserializerConfigs, false);

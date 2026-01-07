@@ -34,7 +34,6 @@ public class ConfigValue extends SubjectValue {
   private String alias;
   private Boolean normalize;
   private Boolean validateFields;
-  private Boolean validateNames;
   private Boolean validateRules;
   private CompatibilityLevel compatibilityLevel;
   private CompatibilityPolicy compatibilityPolicy;
@@ -48,7 +47,6 @@ public class ConfigValue extends SubjectValue {
                      @JsonProperty("alias") String alias,
                      @JsonProperty("normalize") Boolean normalize,
                      @JsonProperty("validateFields") Boolean validateFields,
-                     @JsonProperty("validateNames") Boolean validateNames,
                      @JsonProperty("validateRules") Boolean validateRules,
                      @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
                      @JsonProperty("compatibilityPolicy") CompatibilityPolicy compatibilityPolicy,
@@ -61,7 +59,6 @@ public class ConfigValue extends SubjectValue {
     this.alias = alias;
     this.normalize = normalize;
     this.validateFields = validateFields;
-    this.validateNames = validateNames;
     this.validateRules = validateRules;
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityPolicy = compatibilityPolicy;
@@ -76,8 +73,6 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = configEntity.getAlias();
     this.normalize = configEntity.isNormalize();
-    this.validateFields = configEntity.isValidateFields();
-    this.validateNames = configEntity.isValidateNames();
     this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityPolicy = CompatibilityPolicy.forName(configEntity.getCompatibilityPolicy());
@@ -101,7 +96,6 @@ public class ConfigValue extends SubjectValue {
     this.alias = configEntity.getAlias();
     this.normalize = configEntity.isNormalize();
     this.validateFields = configEntity.isValidateFields();
-    this.validateNames = configEntity.isValidateNames();
     this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityPolicy = CompatibilityPolicy.forName(configEntity.getCompatibilityPolicy());
@@ -149,16 +143,6 @@ public class ConfigValue extends SubjectValue {
   @JsonProperty("validateFields")
   public void setValidateFields(Boolean validateFields) {
     this.validateFields = validateFields;
-  }
-
-  @JsonProperty("validateNames")
-  public Boolean isValidateNames() {
-    return validateNames;
-  }
-
-  @JsonProperty("validateNames")
-  public void setValidateNames(Boolean validateNames) {
-    this.validateNames = validateNames;
   }
 
   @JsonProperty("validateRules")
@@ -256,7 +240,6 @@ public class ConfigValue extends SubjectValue {
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
-        && Objects.equals(validateNames, that.validateNames)
         && Objects.equals(validateRules, that.validateRules)
         && compatibilityLevel == that.compatibilityLevel
         && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
@@ -269,8 +252,7 @@ public class ConfigValue extends SubjectValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), alias, normalize,
-            validateFields, validateNames, validateRules,
+    return Objects.hash(super.hashCode(), alias, normalize, validateFields, validateRules,
             compatibilityLevel, compatibilityPolicy, compatibilityGroup,
             defaultMetadata, overrideMetadata, defaultRuleSet,
             overrideRuleSet);
@@ -282,7 +264,6 @@ public class ConfigValue extends SubjectValue {
         + "alias='" + alias + '\''
         + ", normalize=" + normalize
         + ", validateFields=" + validateFields
-        + ", validateNames=" + validateNames
         + ", validateRules=" + validateRules
         + ", compatibilityLevel=" + compatibilityLevel
         + ", compatibilityPolicy='" + compatibilityPolicy + '\''
@@ -304,7 +285,6 @@ public class ConfigValue extends SubjectValue {
         alias,
         normalize,
         validateFields,
-        validateNames,
         validateRules,
         compatibilityLevel != null ? compatibilityLevel.name : null,
         compatibilityPolicy != null ? compatibilityPolicy.name : null,
@@ -353,8 +333,6 @@ public class ConfigValue extends SubjectValue {
               ? newConfig.isNormalize() : oldConfig.isNormalize(),
           newConfig.isOptionalValidateFields() != null
               ? newConfig.isValidateFields() : oldConfig.isValidateFields(),
-          newConfig.isOptionalValidateNames() != null
-              ? newConfig.isValidateNames() : oldConfig.isValidateNames(),
           newConfig.isOptionalValidateRules() != null
               ? newConfig.isValidateRules() : oldConfig.isValidateRules(),
           newConfig.getOptionalCompatibilityLevel() != null
