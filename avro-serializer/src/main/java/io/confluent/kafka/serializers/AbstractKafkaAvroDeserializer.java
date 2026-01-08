@@ -33,7 +33,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.BinaryDecoder;
@@ -328,10 +327,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     if (readerSchema != null) {
       return readerSchema;
     }
-    final boolean shouldSkipReaderSchemaCacheUsage = shouldSkipReaderSchemaCacheUsage(writerSchema);
-    if (!shouldSkipReaderSchemaCacheUsage) {
-      readerSchema = readerSchemaCache.get(writerSchema.getFullName());
-    }
+    readerSchema = readerSchemaCache.get(writerSchema.getFullName());
     if (readerSchema != null) {
       return readerSchema;
     }
@@ -344,7 +340,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
     } else if (useSpecificAvroReader) {
       readerSchema = getSpecificReaderSchema(writerSchema);
-      if (!shouldSkipReaderSchemaCacheUsage) {
+      if (!shouldSkipReaderSchemaCacheUsage(writerSchema, readerSchema)) {
         readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
       }
     } else {
@@ -353,13 +349,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return readerSchema;
   }
 
-  private boolean shouldSkipReaderSchemaCacheUsage(Schema schema) {
-    return useSpecificAvroReader
-      && (
-        schema.getType() == Type.ARRAY
-        || schema.getType() == Type.MAP
-        || schema.getType() == Type.UNION
-      );
+  private boolean shouldSkipReaderSchemaCacheUsage(Schema writerSchema, Schema readerSchema) {
+    return writerSchema == readerSchema;
   }
 
   @SuppressWarnings("unchecked")
