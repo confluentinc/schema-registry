@@ -314,11 +314,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return readerSchema;
   }
 
-  @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema) {
     return getSpecificReaderSchema(writerSchema, false);
   }
 
+  @SuppressWarnings("unchecked")
   private Schema getSpecificReaderSchema(Schema writerSchema, boolean allowFallback) {
     switch (writerSchema.getType()) {
       case ARRAY:
