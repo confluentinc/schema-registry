@@ -53,13 +53,14 @@ import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
-import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
-import io.confluent.kafka.schemaregistry.utils.Props;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
+import io.confluent.kafka.schemaregistry.utils.Props;
+import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -81,15 +82,15 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final Logger log = LoggerFactory.getLogger(LocalSchemaRegistryClient.class);
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final Map<String, SchemaProvider> providers;
 
-  public LocalSchemaRegistryClient(KafkaSchemaRegistry schemaRegistry) {
+  public LocalSchemaRegistryClient(SchemaRegistry schemaRegistry) {
     this(schemaRegistry, null);
   }
 
   public LocalSchemaRegistryClient(
-      KafkaSchemaRegistry schemaRegistry, List<SchemaProvider> providers) {
+      SchemaRegistry schemaRegistry, List<SchemaProvider> providers) {
     this.schemaRegistry = schemaRegistry;
     this.providers = providers != null && !providers.isEmpty()
                      ? providers.stream().collect(Collectors.toMap(p -> p.schemaType(), p -> p))
@@ -257,6 +258,26 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public synchronized ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    SchemaString s = null;
+    String errorMessage = "Error while retrieving schema with guid " + guid + " from the schema "
+        + "registry";
+    try {
+      s = schemaRegistry.getByGuid(guid, format);
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    if (s == null) {
+      throw Errors.schemaNotFoundException(guid);
+    }
+    return parseSchema(new Schema(null, null, null, s)).get();
+  }
+
+  @Override
   public synchronized List<ParsedSchema> getSchemas(
       String subjectPrefix,
       boolean lookupDeletedSchema,
@@ -367,25 +388,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized int getVersion(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
-    if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
-      subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
-    }
-    Schema s = new Schema(subject, 0, -1, schema);
-    Schema matchingSchema = null;
-    try {
-      if (!schemaRegistry.hasSubjects(subject, false)) {
-        throw Errors.subjectNotFoundException(subject);
-      }
-      matchingSchema =
-          schemaRegistry.lookUpSchemaUnderSubject(subject, s, normalize, false);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while looking up schema under subject " + subject,
-          e);
-    }
-    if (matchingSchema == null) {
-      throw Errors.schemaNotFoundException();
-    }
-    return matchingSchema.getVersion();
+    return getIdWithResponse(subject, schema, normalize).getVersion();
   }
 
   @Override
@@ -533,6 +536,24 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    return getIdWithResponse(subject, schema, normalize).getId();
+  }
+
+  public String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  public String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponse(subject, schema, normalize).getGuid();
+  }
+
+  @Override
+  public RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
@@ -551,7 +572,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (matchingSchema == null) {
       throw Errors.schemaNotFoundException();
     }
-    return matchingSchema.getId();
+    return new RegisterSchemaResponse(matchingSchema);
   }
 
   @Override

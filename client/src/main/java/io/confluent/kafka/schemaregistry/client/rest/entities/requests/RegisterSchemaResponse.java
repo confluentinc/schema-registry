@@ -20,11 +20,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTypeConverter;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -40,11 +38,14 @@ public class RegisterSchemaResponse {
 
   private int id;
   private Integer version;
+  private String guid;
   private String schemaType;
   private List<SchemaReference> references = null;
   private Metadata metadata = null;
   private RuleSet ruleSet = null;
   private String schema;
+  private Long timestamp;
+  private Boolean deleted;
 
   public RegisterSchemaResponse() {
   }
@@ -58,11 +59,29 @@ public class RegisterSchemaResponse {
         ? schema.getVersion()
         : null;
     this.id = schema.getId();
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
     this.schema = schema.getSchema();
+    this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
+  }
+
+  public RegisterSchemaResponse copy() {
+    RegisterSchemaResponse response = new RegisterSchemaResponse();
+    response.setId(getId());
+    response.setVersion(getVersion());
+    response.setGuid(getGuid());
+    response.setSchemaType(getSchemaType());
+    response.setReferences(getReferences());
+    response.setMetadata(getMetadata());
+    response.setRuleSet(getRuleSet());
+    response.setSchema(getSchema());
+    response.setTimestamp(getTimestamp());
+    response.setDeleted(getDeleted());
+    return response;
   }
 
   public static RegisterSchemaResponse fromJson(String json) throws IOException {
@@ -92,9 +111,18 @@ public class RegisterSchemaResponse {
     this.version = version;
   }
 
+  @JsonProperty("guid")
+  public String getGuid() {
+    return guid;
+  }
+
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return this.schemaType;
   }
@@ -148,6 +176,26 @@ public class RegisterSchemaResponse {
     this.schema = schema;
   }
 
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
+
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -159,6 +207,7 @@ public class RegisterSchemaResponse {
     RegisterSchemaResponse that = (RegisterSchemaResponse) o;
     return Objects.equals(version, that.version)
         && id == that.id
+        && Objects.equals(guid, that.guid)
         && Objects.equals(schemaType, that.schemaType)
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
@@ -168,7 +217,7 @@ public class RegisterSchemaResponse {
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, references, metadata, ruleSet, version, id, schema);
+    return Objects.hash(schemaType, references, metadata, ruleSet, version, id, guid, schema);
   }
 
   @Override
@@ -179,11 +228,14 @@ public class RegisterSchemaResponse {
       buf.append("version=").append(version).append(", ");
     }
     buf.append("id=").append(id).append(", ");
+    buf.append("guid=").append(guid).append(", ");
     buf.append("schemaType=").append(this.schemaType).append(", ");
     buf.append("references=").append(this.references).append(", ");
     buf.append("metadata=").append(this.metadata).append(", ");
     buf.append("ruleSet=").append(this.ruleSet).append(", ");
-    buf.append("schema=").append(schema).append("}");
+    buf.append("schema=").append(schema).append(",");
+    buf.append("ts=").append(timestamp).append(",");
+    buf.append("deleted=").append(deleted).append("}");
     return buf.toString();
   }
 
