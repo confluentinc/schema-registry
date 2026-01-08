@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -26,13 +27,13 @@ import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.BinaryDecoder;
@@ -50,7 +51,6 @@ import org.apache.avro.reflect.ReflectDatumReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -67,7 +67,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
   protected boolean avroFailOnTrailingData = false;
-  private final Map<String, Schema> readerSchemaCache = new ConcurrentHashMap<>();
+  private final Cache<Schema, Schema> readerSchemaCache;
   private final LoadingCache<IdentityPair<Schema, Schema>, DatumReader<?>> datumReaderCache;
 
   public AbstractKafkaAvroDeserializer() {
@@ -97,6 +97,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             }
           }
         };
+    readerSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        // use identity (==) comparison for keys
+        .weakKeys()
+        .build();
     datumReaderCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build(cacheLoader);
@@ -327,10 +332,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     if (readerSchema != null) {
       return readerSchema;
     }
-    final boolean shouldSkipReaderSchemaCacheUsage = shouldSkipReaderSchemaCacheUsage(writerSchema);
-    if (!shouldSkipReaderSchemaCacheUsage) {
-      readerSchema = readerSchemaCache.get(writerSchema.getFullName());
-    }
+    readerSchema = readerSchemaCache.getIfPresent(writerSchema);
     if (readerSchema != null) {
       return readerSchema;
     }
@@ -340,36 +342,46 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       readerSchema = writerSchema;
     } else if (useSchemaReflection) {
       readerSchema = getReflectionReaderSchema(writerSchema);
-      readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
+      readerSchemaCache.put(writerSchema, readerSchema);
     } else if (useSpecificAvroReader) {
       readerSchema = getSpecificReaderSchema(writerSchema);
-      if (!shouldSkipReaderSchemaCacheUsage) {
-        readerSchemaCache.put(writerSchema.getFullName(), readerSchema);
-      }
+      readerSchemaCache.put(writerSchema, readerSchema);
     } else {
       readerSchema = writerSchema;
     }
     return readerSchema;
   }
 
-  private boolean shouldSkipReaderSchemaCacheUsage(Schema schema) {
-    return useSpecificAvroReader
-      && (
-        schema.getType() == Type.ARRAY
-        || schema.getType() == Type.MAP
-        || schema.getType() == Type.UNION
-      );
+  private Schema getSpecificReaderSchema(Schema writerSchema) {
+    return getSpecificReaderSchema(writerSchema, false);
   }
 
   @SuppressWarnings("unchecked")
-  private Schema getSpecificReaderSchema(Schema writerSchema) {
-    if (writerSchema.getType() == Type.ARRAY
-        || writerSchema.getType() == Type.MAP
-        || writerSchema.getType() == Type.UNION) {
-      return writerSchema;
+  private Schema getSpecificReaderSchema(Schema writerSchema, boolean allowFallback) {
+    switch (writerSchema.getType()) {
+      case ARRAY:
+        Schema elementSchema = getSpecificReaderSchema(writerSchema.getElementType(), true);
+        return Schema.createArray(elementSchema);
+      case MAP:
+        Schema valueSchema = getSpecificReaderSchema(writerSchema.getValueType(), true);
+        return Schema.createMap(valueSchema);
+      case UNION:
+        List<Schema> readerTypes = new ArrayList<>(writerSchema.getTypes().size());
+        for (Schema type : writerSchema.getTypes()) {
+          Schema readerType = getSpecificReaderSchema(type, true);
+          readerTypes.add(readerType);
+        }
+        return Schema.createUnion(readerTypes);
+      default:
+        break;
     }
     Class<SpecificRecord> readerClass = SpecificData.get().getClass(writerSchema);
     if (readerClass == null) {
+      if (allowFallback) {
+        // For union/map/array, if the reader schema can't be found,
+        // fall back to writerSchema to preserve existing behavior.
+        return writerSchema;
+      }
       throw new SerializationException("Could not find class "
           + writerSchema.getFullName()
           + " specified in writer's schema whilst finding reader's "
