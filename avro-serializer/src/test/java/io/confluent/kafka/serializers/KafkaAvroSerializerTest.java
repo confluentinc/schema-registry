@@ -21,6 +21,7 @@ import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
@@ -644,6 +645,81 @@ public class KafkaAvroSerializerTest {
     avroDeserializer.configure(deserializerConfigs, false);
     byte[] bytes1 = avroSerializer.serialize(topic, record);
     assertEquals(record, avroDeserializer.deserialize(topic, bytes1));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerWithUnionAndEvolvedUserSchemaSpecific()
+      throws IOException, RestClientException {
+    String unionTopic = "union_evolved_user";
+    Map serializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true
+    );
+    Map deserializerConfigs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG,
+        true
+    );
+    String unionUserSubject = "union-test-user";
+    String unionGrantSubject = "union-test-grant";
+    Schema baseUserSchema = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"UnionTestUser\","
+            + "\"namespace\":\"io.confluent.kafka.example.uniontest\","
+            + "\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}");
+    schemaRegistry.register(unionUserSubject, new AvroSchema(baseUserSchema));
+    Schema evolvedUserSchema = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"UnionTestUser\","
+            + "\"namespace\":\"io.confluent.kafka.example.uniontest\","
+            + "\"fields\":["
+            + "{\"name\":\"name\",\"type\":\"string\"},"
+            + "{\"name\":\"age\",\"type\":\"int\",\"default\":0}"
+            + "]}");
+    schemaRegistry.register(unionUserSubject, new AvroSchema(evolvedUserSchema));
+    Schema grantSchema = new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"UnionTestGrant\","
+            + "\"namespace\":\"io.confluent.kafka.example.uniontest\","
+            + "\"fields\":[{\"name\":\"grant\",\"type\":\"string\"}]}");
+    schemaRegistry.register(unionGrantSubject, new AvroSchema(grantSchema));
+    String unionSchema =
+        "[\"io.confluent.kafka.example.uniontest.UnionTestUser\","
+            + "\"io.confluent.kafka.example.uniontest.UnionTestGrant\"]";
+    schemaRegistry.register(unionTopic + "-value",
+        new AvroSchema(unionSchema,
+            ImmutableList.of(
+                new SchemaReference(
+                    "io.confluent.kafka.example.uniontest.UnionTestUser",
+                    unionUserSubject,
+                    2
+                ),
+                new SchemaReference(
+                    "io.confluent.kafka.example.uniontest.UnionTestGrant",
+                    unionGrantSubject,
+                    1
+                )
+            ),
+            ImmutableMap.of(
+                "io.confluent.kafka.example.uniontest.UnionTestUser",
+                evolvedUserSchema.toString(),
+                "io.confluent.kafka.example.uniontest.UnionTestGrant",
+                grantSchema.toString()
+            ),
+            null
+        ));
+    avroSerializer.configure(serializerConfigs, false);
+    KafkaAvroDeserializer userSpecificDeserializer =
+        new KafkaAvroDeserializer(schemaRegistry, deserializerConfigs);
+
+    GenericRecord userRecord = new GenericData.Record(evolvedUserSchema);
+    userRecord.put("name", "testUser");
+    userRecord.put("age", 1);
+    byte[] bytes = avroSerializer.serialize(unionTopic, userRecord);
+    UnionTestUser user = (UnionTestUser) userSpecificDeserializer.deserialize(unionTopic, bytes);
+    assertEquals("testUser", user.getName().toString());
   }
 
   /**
