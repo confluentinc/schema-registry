@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers.protobuf;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
@@ -38,7 +39,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -181,7 +181,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       Object message = null;
       if (!migrations.isEmpty()) {
         message = DynamicMessage.parseFrom(schema.toDescriptor(),
-            new ByteArrayInputStream(buffer.array(), start, length),
+            CodedInputStream.newInstance(buffer.array(), start, length),
             ProtobufSchema.EXTENSION_REGISTRY);
         message = executeMigrations(migrations, subject, topic, headers, message);
         message = readerSchema.fromJson((JsonNode) message);
@@ -193,7 +193,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (message == null) {
           message = DynamicMessage.parseFrom(schema.toDescriptor(),
-              new ByteArrayInputStream(buffer.array(), start, length),
+              CodedInputStream.newInstance(buffer.array(), start, length),
               ProtobufSchema.EXTENSION_REGISTRY);
         }
         message = executeRules(
@@ -223,7 +223,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
           throw new SerializationException("Could not find descriptor with name " + schema.name());
         }
         value = DynamicMessage.parseFrom(descriptor,
-            new ByteArrayInputStream(protobufBytes.array(), start, length),
+            CodedInputStream.newInstance(protobufBytes.array(), start, length),
             ProtobufSchema.EXTENSION_REGISTRY
         );
       }
