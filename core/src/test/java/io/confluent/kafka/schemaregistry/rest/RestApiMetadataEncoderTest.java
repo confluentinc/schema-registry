@@ -43,6 +43,8 @@ public abstract class RestApiMetadataEncoderTest {
 
   protected RestApp restApp = null;
 
+  protected String tenant = SchemaRegistry.DEFAULT_TENANT;
+
   public void setRestApp(RestApp restApp) {
     this.restApp = restApp;
   }
@@ -76,7 +78,7 @@ public abstract class RestApiMetadataEncoderTest {
         "Registering without id should succeed"
     );
 
-    List<SubjectVersion> subjectVersions = restApp.restClient.getAllVersionsById(1);
+    List<SubjectVersion> subjectVersions = restApp.restClient.getAllVersionsById(expectedIdSchema1);
     assertEquals(ImmutableList.of(new SubjectVersion(subject, 1)), subjectVersions);
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1);
@@ -103,11 +105,11 @@ public abstract class RestApiMetadataEncoderTest {
 
     // Remove encoder
     restApp.schemaRegistry().getMetadataEncoder().getEncoders()
-        .remove(SchemaRegistry.DEFAULT_TENANT);
+        .remove(tenant);
 
     assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getAllVersionsById(1),
+        () -> restApp.restClient.getAllVersionsById(expectedIdSchema1),
         "Should fail to get schema"
     );
 
