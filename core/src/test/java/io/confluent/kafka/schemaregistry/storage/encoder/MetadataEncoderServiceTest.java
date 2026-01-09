@@ -15,10 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.storage.encoder;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -33,21 +33,32 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 public class MetadataEncoderServiceTest {
 
-  @Test
-  public void testEncoding() throws Exception {
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+  protected SchemaRegistry schemaRegistry;
+  protected MetadataEncoderService encoderService;
+
+  public MetadataEncoderServiceTest() throws Exception {
+    this.schemaRegistry = mock(SchemaRegistry.class);
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     when(schemaRegistry.config()).thenReturn(config);
     Cache<String, KeysetWrapper> encoders = new InMemoryCache<>();
-    MetadataEncoderService encoderService = new MetadataEncoderService(schemaRegistry, encoders);
+    this.encoderService = new MetadataEncoderService(schemaRegistry, encoders);
     encoderService.init();
+  }
 
+  @AfterEach
+  public void teardown() {
+    encoderService.close();
+  }
+
+  @Test
+  public void testEncoding() throws Exception {
     Map<String, String> properties = new HashMap<>();
     properties.put("nonsensitive", "foo");
     properties.put("sensitive", "foo");
@@ -71,7 +82,5 @@ public class MetadataEncoderServiceTest {
     // the value of "sensitive" is decrypted
     assertEquals("foo", schema2.getMetadata().getProperties().get("sensitive"));
     assertNull(schema2.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
-
-    encoderService.close();
   }
 }
