@@ -204,7 +204,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       ByteBuffer protobufBytes = buffer;
       if (message != null) {
         protobufBytes = ByteBuffer.wrap(((Message) message).toByteArray());
-        length = buffer.limit();
+        length = protobufBytes.limit();
         start = 0;
       }
 
