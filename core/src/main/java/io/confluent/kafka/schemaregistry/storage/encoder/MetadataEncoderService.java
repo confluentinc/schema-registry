@@ -47,6 +47,7 @@ import java.security.GeneralSecurityException;
 import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
@@ -72,11 +73,11 @@ public class MetadataEncoderService implements Closeable {
   private static final String KEY_TEMPLATE_NAME = "AES128_GCM";
 
   private final SchemaRegistry schemaRegistry;
-  private KeyTemplate keyTemplate;
+  protected KeyTemplate keyTemplate;
   // visible for testing
-  Cache<String, KeysetWrapper> encoders = null;
-  private final AtomicBoolean initialized = new AtomicBoolean();
-  private final CountDownLatch initLatch = new CountDownLatch(1);
+  protected Cache<String, KeysetWrapper> encoders = null;
+  protected final AtomicBoolean initialized = new AtomicBoolean();
+  protected final CountDownLatch initLatch = new CountDownLatch(1);
 
   static {
     try {
@@ -220,13 +221,36 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  private void maybeRotateSecrets() {
+  /**
+   * Get all tenant keys. Used for secret rotation.
+   */
+  protected Set<String> getAllTenants() {
+    return encoders != null ? encoders.keySet() : Collections.emptySet();
+  }
+
+  /**
+   * Get the encoder wrapper for a tenant.
+   */
+  protected KeysetWrapper getEncoderWrapper(String tenant) {
+    return encoders != null ? encoders.get(tenant) : null;
+  }
+
+  /**
+   * Store an encoder wrapper for a tenant.
+   */
+  protected void putEncoderWrapper(String tenant, KeysetWrapper wrapper) {
+    if (encoders != null) {
+      encoders.put(tenant, wrapper);
+    }
+  }
+
+  protected void maybeRotateSecrets() {
     String oldSecret = encoderOldSecret(schemaRegistry.config());
     if (oldSecret != null) {
       log.info("Rotating encoder secret");
-      for (String key : encoders.keySet()) {
-        KeysetWrapper wrapper = encoders.get(key);
-        if (wrapper.isRotationNeeded()) {
+      for (String key : getAllTenants()) {
+        KeysetWrapper wrapper = getEncoderWrapper(key);
+        if (wrapper != null && wrapper.isRotationNeeded()) {
           try {
             KeysetHandle handle = wrapper.getKeysetHandle();
             KeysetHandle rotatedHandle = KeysetManager
@@ -239,7 +263,7 @@ public class MetadataEncoderService implements Closeable {
                 .setPrimary(keyId)
                 .getKeysetHandle();
             // This will cause the new secret to be used
-            encoders.put(key, new KeysetWrapper(rotatedHandle, false));
+            putEncoderWrapper(key, new KeysetWrapper(rotatedHandle, false));
           } catch (GeneralSecurityException e) {
             log.error("Could not rotate key for {}", key, e);
           }
@@ -247,7 +271,6 @@ public class MetadataEncoderService implements Closeable {
       }
       log.info("Done rotating encoder secret");
     }
-
   }
 
   public void waitForInit() throws InterruptedException {
@@ -368,7 +391,7 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  private KeysetHandle getOrCreateEncoder(String tenant) {
+  protected KeysetHandle getOrCreateEncoder(String tenant) {
     // Ensure encoders are up to date
     encoders.sync();
     KeysetWrapper wrapper = encoders.computeIfAbsent(tenant,

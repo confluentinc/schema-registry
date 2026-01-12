@@ -390,6 +390,11 @@
                 <artifactId>httpclient5</artifactId>
                 <version>${apache.httpclient5.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-core</artifactId>
+                <version>${log4j.version}</version>
+            </dependency>
 
             <!--children-->
             <dependency>
