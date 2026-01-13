@@ -257,7 +257,7 @@ public class MetadataEncoderService implements Closeable {
                 .withKeysetHandle(handle)
                 .add(keyTemplate)
                 .getKeysetHandle();
-            int keyId = rotatedHandle.getAt(rotatedHandle.size()).getId();
+            int keyId = rotatedHandle.getAt(rotatedHandle.size() - 1).getId();
             rotatedHandle = KeysetManager
                 .withKeysetHandle(rotatedHandle)
                 .setPrimary(keyId)
