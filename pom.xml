@@ -92,20 +92,20 @@
         <antlr.version>4.13.1</antlr.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
-        <cel-version>0.5.1</cel-version>
+        <cel-version>0.5.3</cel-version>
         <google.api.client.version>2.4.0</google.api.client.version>
         <google.auth.version>1.24.1</google.auth.version>
         <guice.version>5.1.0</guice.version>
-        <jsonata-version>2.5.1</jsonata-version>
+        <jsonata-version>2.6.2</jsonata-version>
         <json-schema.version>1.14.6</json-schema.version>
-        <json-skema.version>0.24.0</json-skema.version>
+        <json-skema.version>0.28.0</json-skema.version>
         <kcache.version>5.2.3</kcache.version>
         <proto-google-common-protos.version>2.53.0</proto-google-common-protos.version>
         <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
-        <tink.version>1.17.0</tink.version>
+        <tink.version>1.20.0</tink.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
-        <wire.version>5.4.0</wire.version>
+        <wire.version>5.5.0</wire.version>
         <swagger.version>2.2.29</swagger.version>
         <io.confluent.schema-registry.version>8.1.2-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
