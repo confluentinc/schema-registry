@@ -60,15 +60,12 @@ public abstract class RestApiMetadataEncoderTest {
 
   /**
    * Creates a new RestApp configured with the rotated secret.
-   * Subclasses must override this if they support secret rotation testing.
-   * 
+   *
    * @param newSecret the new encoder secret
    * @param oldSecret the old encoder secret (for rotation)
-   * @return a new RestApp configured with the rotated secrets, or null if not supported
+   * @return a new RestApp configured with the rotated secrets
    */
-  protected RestApp createRotatedRestApp(String newSecret, String oldSecret) throws Exception {
-    return null;
-  }
+  protected abstract RestApp createRotatedRestApp(String newSecret, String oldSecret) throws Exception;
 
   private static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
@@ -200,7 +197,7 @@ public abstract class RestApiMetadataEncoderTest {
         .getEncoder(tenant).size();
     assertEquals(1, keyCountBeforeRotation, "Should have 1 key before rotation");
 
-    // Step 2: Stop the RestApp (but keep Kafka running)
+    // Step 2: Stop the RestApp
     restApp.stop();
 
     // Step 3: Start a new RestApp with the rotated secret configuration
