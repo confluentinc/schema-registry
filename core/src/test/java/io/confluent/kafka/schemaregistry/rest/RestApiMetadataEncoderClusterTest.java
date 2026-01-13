@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.RestApp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -45,8 +46,29 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
 
   public Properties getSchemaRegistryProperties() {
     Properties props = new Properties();
-    props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
+    props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, INITIAL_SECRET);
     return props;
+  }
+
+  @Override
+  protected RestApp createRotatedRestApp(String newSecret, String oldSecret) throws Exception {
+    Properties rotatedProps = new Properties();
+    rotatedProps.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, newSecret);
+    rotatedProps.setProperty(SchemaRegistryConfig.METADATA_ENCODER_OLD_SECRET_CONFIG, oldSecret);
+    rotatedProps.put(SchemaRegistryConfig.LISTENERS_CONFIG,
+        harness.getSchemaRegistryProtocol() + "://0.0.0.0:" + harness.getSchemaRegistryPort());
+    rotatedProps.put(SchemaRegistryConfig.MODE_MUTABILITY, true);
+
+    RestApp rotatedRestApp = new RestApp(
+        harness.choosePort(),
+        null,
+        harness.getBrokerList(),
+        ClusterTestHarness.KAFKASTORE_TOPIC,
+        CompatibilityLevel.BACKWARD.name,
+        true,
+        rotatedProps);
+    rotatedRestApp.start();
+    return rotatedRestApp;
   }
 }
 
