@@ -356,5 +356,5 @@ public abstract class AbstractMetadataEncoderService implements MetadataEncoderS
   protected abstract KeysetHandle getOrCreateEncoder(String tenant);
 
   @Override
-  public void close() {}
+  public abstract void close();
 }

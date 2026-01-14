@@ -119,7 +119,6 @@ public class KafkaMetadataEncoderService extends AbstractMetadataEncoderService 
         // ignore
       }
     }
-    super.close();
   }
 
   /**
