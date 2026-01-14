@@ -36,19 +36,19 @@ import java.util.Properties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-public class MetadataEncoderServiceTest {
+public class KafkaMetadataEncoderServiceTest {
 
   protected SchemaRegistry schemaRegistry;
   protected MetadataEncoderService encoderService;
 
-  public MetadataEncoderServiceTest() throws Exception {
+  public KafkaMetadataEncoderServiceTest() throws Exception {
     this.schemaRegistry = mock(SchemaRegistry.class);
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     when(schemaRegistry.config()).thenReturn(config);
     Cache<String, KeysetWrapper> encoders = new InMemoryCache<>();
-    this.encoderService = new MetadataEncoderService(schemaRegistry, encoders);
+    this.encoderService = new KafkaMetadataEncoderService(schemaRegistry, encoders);
     encoderService.init();
   }
 
