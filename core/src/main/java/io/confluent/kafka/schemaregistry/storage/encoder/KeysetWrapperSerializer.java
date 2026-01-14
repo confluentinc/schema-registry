@@ -32,8 +32,8 @@ public class KeysetWrapperSerializer implements Serializer<KeysetWrapper> {
 
   public KeysetWrapperSerializer(SchemaRegistryConfig config) {
     try {
-      String secret = AbstractMetadataEncoderService.encoderSecret(config);
-      aead = AbstractMetadataEncoderService.getPrimitive(secret);
+      String secret = MetadataEncoderService.encoderSecret(config);
+      aead = MetadataEncoderService.getPrimitive(secret);
     } catch (GeneralSecurityException e) {
       throw new ConfigException("Error while configuring KeysetWrapperSerializer", e);
     }

@@ -32,11 +32,11 @@ public class KeysetWrapperDeserializer implements Deserializer<KeysetWrapper> {
 
   public KeysetWrapperDeserializer(SchemaRegistryConfig config) {
     try {
-      String secret = AbstractMetadataEncoderService.encoderSecret(config);
-      aead = AbstractMetadataEncoderService.getPrimitive(secret);
-      String oldSecret = AbstractMetadataEncoderService.encoderOldSecret(config);
+      String secret = MetadataEncoderService.encoderSecret(config);
+      aead = MetadataEncoderService.getPrimitive(secret);
+      String oldSecret = MetadataEncoderService.encoderOldSecret(config);
       if (oldSecret != null) {
-        oldAead = AbstractMetadataEncoderService.getPrimitive(oldSecret);
+        oldAead = MetadataEncoderService.getPrimitive(oldSecret);
       }
     } catch (GeneralSecurityException e) {
       throw new ConfigException("Error while configuring KeysetWrapperDeserializer", e);
