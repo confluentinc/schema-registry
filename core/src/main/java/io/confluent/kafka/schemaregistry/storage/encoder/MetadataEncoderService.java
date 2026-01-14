@@ -62,7 +62,7 @@ import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MetadataEncoderService implements Closeable {
+public class MetadataEncoderService implements Closeable, MetadataEncoderServiceInterface {
 
   private static final Logger log = LoggerFactory.getLogger(MetadataEncoderService.class);
 
@@ -271,7 +271,7 @@ public class MetadataEncoderService implements Closeable {
       return;
     }
     try {
-      transformMetadata(schema, true, (aead, value) -> {
+      transformMetadata(schema, true, true, (aead, value) -> {
         try {
           byte[] ciphertext = aead.encrypt(value.getBytes(StandardCharsets.UTF_8), EMPTY_AAD);
           return Base64.getEncoder().encodeToString(ciphertext);
@@ -299,7 +299,7 @@ public class MetadataEncoderService implements Closeable {
       return;
     }
     try {
-      transformMetadata(schema, false, (aead, value) -> {
+      transformMetadata(schema, false, false, (aead, value) -> {
         try {
           byte[] plaintext = aead.decrypt(Base64.getDecoder().decode(value), EMPTY_AAD);
           return new String(plaintext, StandardCharsets.UTF_8);
@@ -313,8 +313,8 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  private void transformMetadata(
-      SchemaValue schema, boolean isEncode, BiFunction<Aead, String, String> func)
+  public void transformMetadata(
+      SchemaValue schema, boolean rotationNeeded, boolean isEncode, BiFunction<Aead, String, String> func)
       throws SchemaRegistryStoreException {
     Metadata metadata = schema.getMetadata();
     if (metadata == null
@@ -333,7 +333,7 @@ public class MetadataEncoderService implements Closeable {
       String tenant = qualifiedSubject.getTenant();
 
       // Only create the encoder if we are encoding during writes and not decoding during reads
-      KeysetHandle handle = isEncode ? getOrCreateEncoder(tenant) : getEncoder(tenant);
+      KeysetHandle handle = isEncode ? getOrCreateEncoder(tenant, rotationNeeded) : getEncoder(tenant);
       if (handle == null) {
         throw new SchemaRegistryStoreException("Could not get encoder for tenant " + tenant);
       }
@@ -366,14 +366,30 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  private KeysetHandle getOrCreateEncoder(String tenant) {
+  public KeysetHandle getOrCreateEncoder(String tenant, Boolean rotationNeeded) {
     // Ensure encoders are up to date
+    if (encoders == null) {
+      throw new IllegalStateException("Encoders not initialized when we call getOrCreateEncoder");
+    }
     encoders.sync();
+    if (rotationNeeded) {
+      KeysetWrapper wrapper = encoders.compute(tenant,
+              (k, v) -> {
+                try {
+                  KeysetHandle handle = KeysetHandle.generateNew(keyTemplate);
+                  return new KeysetWrapper(handle, rotationNeeded);
+                } catch (GeneralSecurityException e) {
+                  throw new IllegalStateException("Could not create key template");
+                }
+
+              });
+      return wrapper.getKeysetHandle();
+    }
     KeysetWrapper wrapper = encoders.computeIfAbsent(tenant,
         k -> {
           try {
             KeysetHandle handle = KeysetHandle.generateNew(keyTemplate);
-            return new KeysetWrapper(handle, false);
+            return new KeysetWrapper(handle, rotationNeeded);
           } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Could not create key template");
           }
