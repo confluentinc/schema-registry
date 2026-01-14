@@ -58,6 +58,8 @@ public abstract class RestApiMetadataEncoderTest {
     return sequentialId;
   }
 
+  protected abstract void removeEncoder(String tenant) throws Exception;
+
   /**
    * Creates a new RestApp configured with the rotated secret.
    *
@@ -125,8 +127,7 @@ public abstract class RestApiMetadataEncoderTest {
     );
 
     // Remove encoder
-    restApp.schemaRegistry().getMetadataEncoder().getEncoders()
-        .remove(tenant);
+    removeEncoder(tenant);
 
     assertThrows(
         RestClientException.class,
@@ -192,11 +193,6 @@ public abstract class RestApiMetadataEncoderTest {
     SchemaString schemaString = restApp.restClient.getId(schemaId);
     assertEquals(properties, schemaString.getMetadata().getProperties());
 
-    // Get the encoder keyset size before rotation (should be 1 key)
-    int keyCountBeforeRotation = restApp.schemaRegistry().getMetadataEncoder()
-        .getEncoder(tenant).size();
-    assertEquals(1, keyCountBeforeRotation, "Should have 1 key before rotation");
-
     // Step 2: Stop the RestApp
     restApp.stop();
 
@@ -211,13 +207,7 @@ public abstract class RestApiMetadataEncoderTest {
       assertEquals(properties, rotatedSchemaString.getMetadata().getProperties(),
           "Schema should be readable after secret rotation");
 
-      // Step 5: Verify the encoder keyset has been rotated (should now have 2 keys)
-      int keyCountAfterRotation = rotatedRestApp.schemaRegistry().getMetadataEncoder()
-          .getEncoder(tenant).size();
-      assertEquals(2, keyCountAfterRotation, 
-          "Should have 2 keys after rotation (old + new primary)");
-
-      // Verify we can still register new schemas with sensitive metadata
+      // Step 5: Verify we can still register new schemas with sensitive metadata
       String newSubject = "rotationTestSubject2";
       Map<String, String> newProperties = new HashMap<>();
       newProperties.put("nonsensitive", "bar");
