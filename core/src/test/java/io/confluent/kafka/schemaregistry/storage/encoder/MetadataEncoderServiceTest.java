@@ -36,12 +36,12 @@ import java.util.Properties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-public class KafkaMetadataEncoderServiceTest {
+public class MetadataEncoderServiceTest {
 
   protected SchemaRegistry schemaRegistry;
   protected MetadataEncoderService encoderService;
 
-  public KafkaMetadataEncoderServiceTest() throws Exception {
+  public MetadataEncoderServiceTest() throws Exception {
     this.schemaRegistry = mock(SchemaRegistry.class);
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");

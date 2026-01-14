@@ -31,7 +31,7 @@ import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.Set;
 
-public class KafkaMetadataEncoderService extends MetadataEncoderService {
+public class KafkaMetadataEncoderService extends AbstractMetadataEncoderService {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaMetadataEncoderService.class);
 
