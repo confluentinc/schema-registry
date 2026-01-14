@@ -48,7 +48,7 @@ public class MetadataEncoderServiceTest {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     when(schemaRegistry.config()).thenReturn(config);
     Cache<String, KeysetWrapper> encoders = new InMemoryCache<>();
-    this.encoderService = new MetadataEncoderService(schemaRegistry, encoders);
+    this.encoderService = new KafkaMetadataEncoderService(schemaRegistry, encoders);
     encoderService.init();
   }
 
