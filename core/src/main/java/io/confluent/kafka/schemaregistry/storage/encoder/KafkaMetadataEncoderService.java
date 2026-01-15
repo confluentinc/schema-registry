@@ -127,7 +127,7 @@ public class KafkaMetadataEncoderService extends MetadataEncoderService {
   }
 
   @VisibleForTesting
-  protected KeysetHandle getEncoder(String tenant) {
+  public KeysetHandle getEncoder(String tenant) {
     if (encoders == null) {
       return null;
     }

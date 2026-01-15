@@ -56,6 +56,7 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
+import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import org.apache.avro.reflect.Nullable;
 import org.eclipse.jetty.server.Handler;
@@ -178,6 +179,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   // Can be used to pass values between extensions
   Map<String, Object> properties();
+
+  MetadataEncoderService getMetadataEncoder();
 
   void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler);
 

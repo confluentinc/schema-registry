@@ -203,7 +203,7 @@ public abstract class MetadataEncoderService implements Closeable {
   }
 
   @VisibleForTesting
-  protected abstract KeysetHandle getEncoder(String tenant);
+  public abstract KeysetHandle getEncoder(String tenant);
 
   public void encodeMetadata(SchemaValue schema) throws SchemaRegistryStoreException {
     if (!initialized.get() || schema == null || isEncoded(schema)) {
