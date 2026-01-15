@@ -18,15 +18,25 @@ package io.confluent.kafka.schemaregistry.rest;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
 public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTest {
 
+  private static final Logger log = LoggerFactory.getLogger(RestApiMetadataEncoderClusterTest.class);
+
   protected ClusterTestHarness harness;
+
+  private static final String encodersTopic = SchemaRegistryConfig.METADATA_ENCODER_TOPIC_DEFAULT;
 
   public RestApiMetadataEncoderClusterTest() {
     this.harness = new ClusterTestHarness(1, true, CompatibilityLevel.BACKWARD.name);
@@ -48,6 +58,21 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, INITIAL_SECRET);
     return props;
+  }
+
+  @Override
+  protected void removeEncoder(String tenant) throws Exception {
+    // Create a kafka producer and produce message with key:<tenant>
+    // and value:null to the encoders topic
+    Properties producerProps = new Properties();
+    producerProps.put("bootstrap.servers", harness.getBrokerList());
+    producerProps.put("key.serializer", StringSerializer.class.getName());
+    producerProps.put("value.serializer", ByteArraySerializer.class.getName());
+    KafkaProducer<String, byte[]> producer = new KafkaProducer<>(producerProps);
+    ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(encodersTopic, tenant, null);
+    producer.send(producerRecord).get();
+    log.info("Produced record to KafkaStore topic: {}", producerRecord);
+    producer.close();
   }
 
   @Override
