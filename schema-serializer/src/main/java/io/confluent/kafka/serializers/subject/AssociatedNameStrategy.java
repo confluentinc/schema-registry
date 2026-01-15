@@ -29,8 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import org.apache.commons.lang3.SerializationException;
+import org.apache.kafka.common.errors.SerializationException;
 
 /**
  * A {@link SubjectNameStrategy} that will query schema registry for
@@ -41,20 +40,19 @@ import org.apache.commons.lang3.SerializationException;
  * If more than subject is returned from the query, an exception will be thrown.
  * If no subjects are returned from the query, then the behavior will fall back
  * to {@link TopicNameStrategy}, unless the configuration property
- * "skip.topic.name.strategy.fallback" is set to true, in which case an exception
- * will be thrown.
+ * "fallback.subject.name.strategy.type" is set to "RECORD", "TOPIC_RECORD", or "NONE".
  */
 public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   public static final String KAFKA_CLUSTER_ID = "kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
-  public static final String SKIP_TOPIC_NAME_STRATEGY_FALLBACK =
-      "skip.topic.name.strategy.fallback";
+  public static final String FALLBACK_SUBJECT_NAME_STRATEGY_TYPE =
+      "fallback.subject.name.strategy.type";
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
   private String kafkaClusterId;
-  private boolean skipTopicNameStrategyFallback;
+  private SubjectNameStrategy fallbackSubjectNameStrategy;
   private LoadingCache<CacheKey, String> subjectNameCache;
 
   @Override
@@ -63,16 +61,34 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     if (kafkaClusterIdConfig != null) {
       this.kafkaClusterId = kafkaClusterIdConfig.toString();
     }
-    Object skipConfig = configs.get(SKIP_TOPIC_NAME_STRATEGY_FALLBACK);
-    if (skipConfig != null) {
-      this.skipTopicNameStrategyFallback = Boolean.parseBoolean(skipConfig.toString());
+    Object fallbackConfig = configs.get(FALLBACK_SUBJECT_NAME_STRATEGY_TYPE);
+    if (fallbackConfig != null) {
+      switch (fallbackConfig.toString().toUpperCase()) {
+        case "TOPIC":
+          this.fallbackSubjectNameStrategy = new TopicNameStrategy();
+          break;
+        case "RECORD":
+          this.fallbackSubjectNameStrategy = new RecordNameStrategy();
+          break;
+        case "TOPIC_RECORD":
+          this.fallbackSubjectNameStrategy = new TopicRecordNameStrategy();
+          break;
+        case "NONE":
+          break;
+        default:
+          throw new IllegalArgumentException("Invalid value for "
+              + FALLBACK_SUBJECT_NAME_STRATEGY_TYPE + ": " + fallbackConfig);
+      }
+    } else {
+      // default is TopicNameStrategy
+      this.fallbackSubjectNameStrategy = new TopicNameStrategy();
     }
     this.subjectNameCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build(new CacheLoader<CacheKey, String>() {
           @Override
           public String load(CacheKey key) throws Exception {
-            return loadSubjectName(key.topic, key.isKey);
+            return loadSubjectName(key.topic, key.isKey, key.schema);
           }
         });
   }
@@ -89,8 +105,8 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
     
     try {
-      return subjectNameCache.get(new CacheKey(topic, isKey));
-    } catch (ExecutionException e) {
+      return subjectNameCache.get(new CacheKey(topic, isKey, schema));
+    } catch (Exception e) {
       if (e.getCause() instanceof SerializationException) {
         throw (SerializationException) e.getCause();
       }
@@ -98,7 +114,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
   }
 
-  private String loadSubjectName(String topic, boolean isKey) 
+  private String loadSubjectName(String topic, boolean isKey, ParsedSchema schema)
       throws IOException, RestClientException {
     List<Association> associations = client.getAssociationsByResourceName(
         topic,
@@ -113,12 +129,10 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       throw new SerializationException("Multiple associated subjects found for topic " + topic);
     } else if (associations.size() == 1) {
       return associations.get(0).getSubject();
+    } else if (fallbackSubjectNameStrategy != null) {
+      return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
     } else {
-      if (skipTopicNameStrategyFallback) {
-        throw new SerializationException("No associated subject found for topic " + topic);
-      }
-      // fall back to TopicNameStrategy
-      return isKey ? topic + "-key" : topic + "-value";
+      throw new SerializationException("No associated subject found for topic " + topic);
     }
   }
 
@@ -128,10 +142,12 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   private static class CacheKey {
     private final String topic;
     private final boolean isKey;
+    private final ParsedSchema schema;
 
-    CacheKey(String topic, boolean isKey) {
+    CacheKey(String topic, boolean isKey, ParsedSchema schema) {
       this.topic = topic;
       this.isKey = isKey;
+      this.schema = schema;
     }
 
     @Override
@@ -143,12 +159,14 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
         return false;
       }
       CacheKey cacheKey = (CacheKey) o;
-      return isKey == cacheKey.isKey && Objects.equals(topic, cacheKey.topic);
+      return isKey == cacheKey.isKey
+          && Objects.equals(topic, cacheKey.topic)
+          && Objects.equals(schema, cacheKey.schema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(topic, isKey);
+      return Objects.hash(topic, isKey, schema);
     }
   }
 }
