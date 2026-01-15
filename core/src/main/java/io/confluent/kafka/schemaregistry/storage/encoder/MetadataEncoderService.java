@@ -33,20 +33,13 @@ import io.confluent.kafka.schemaregistry.storage.Metadata;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
-import io.kcache.Cache;
-import io.kcache.CacheUpdateHandler;
-import io.kcache.KafkaCache;
-import io.kcache.KafkaCacheConfig;
-import io.kcache.exceptions.CacheInitializationException;
-import io.kcache.utils.Caches;
-import io.kcache.utils.InMemoryCache;
+
 import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Base64;
-import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -56,7 +49,6 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.serialization.Serde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,46 +129,6 @@ public abstract class MetadataEncoderService implements Closeable {
     return secret;
   }
 
-  protected <K, V> Cache<K, V> createCache(
-      Serde<K> keySerde,
-      Serde<V> valueSerde,
-      String topic,
-      CacheUpdateHandler<K, V> cacheUpdateHandler) throws CacheInitializationException {
-    Properties props = getKafkaCacheProperties(topic);
-    KafkaCacheConfig config = new KafkaCacheConfig(props);
-    Cache<K, V> kafkaCache = Caches.concurrentCache(
-        new KafkaCache<>(config,
-            keySerde,
-            valueSerde,
-            cacheUpdateHandler,
-            new InMemoryCache<>()));
-    getSchemaRegistry().addLeaderChangeListener(isLeader -> {
-      if (isLeader) {
-        // Reset the cache to remove any stale data from previous leadership
-        kafkaCache.reset();
-        // Ensure the new leader catches up with the offsets
-        kafkaCache.sync();
-      }
-    });
-    return kafkaCache;
-  }
-
-  private Properties getKafkaCacheProperties(String topic) {
-    Properties props = new Properties();
-    props.putAll(schemaRegistry.config().originalProperties());
-    Set<String> keys = props.stringPropertyNames();
-    for (String key : keys) {
-      if (key.startsWith("kafkastore.")) {
-        String newKey = key.replace("kafkastore", "kafkacache");
-        if (!keys.contains(newKey)) {
-          props.put(newKey, props.get(key));
-        }
-      }
-    }
-    props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
-    return props;
-  }
-
   /**
    * Subclass hook to prepare any resources before secret rotation occurs.
    * Default is no-op.
@@ -185,6 +137,11 @@ public abstract class MetadataEncoderService implements Closeable {
     // no-op
   }
 
+  /**
+   * Initialize the metadata encoder service by rotating the secrets if needed.
+   * Subclasses should override {@link #doInit()} to prepare any resources
+   * before the secrets are rotated.
+   */
   public final void init() {
     if (!initialized.get()) {
       doInit();

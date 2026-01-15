@@ -1647,7 +1647,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return props;
   }
 
-  @Override
   public MetadataEncoderService getMetadataEncoder() {
     return metadataEncoder;
   }

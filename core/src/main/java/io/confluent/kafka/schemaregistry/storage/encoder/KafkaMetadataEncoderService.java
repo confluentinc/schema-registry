@@ -21,7 +21,13 @@ import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.kcache.Cache;
 import io.kcache.CacheUpdateHandler;
+import io.kcache.KafkaCache;
+import io.kcache.KafkaCacheConfig;
+import io.kcache.exceptions.CacheInitializationException;
+import io.kcache.utils.Caches;
+import io.kcache.utils.InMemoryCache;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
+import java.util.Properties;
 import java.util.Set;
 
 public class KafkaMetadataEncoderService extends MetadataEncoderService {
@@ -56,6 +63,46 @@ public class KafkaMetadataEncoderService extends MetadataEncoderService {
       return;
     }
     this.encoders = encoders;
+  }
+
+  protected <K, V> Cache<K, V> createCache(
+      Serde<K> keySerde,
+      Serde<V> valueSerde,
+      String topic,
+      CacheUpdateHandler<K, V> cacheUpdateHandler) throws CacheInitializationException {
+    Properties props = getKafkaCacheProperties(topic);
+    KafkaCacheConfig config = new KafkaCacheConfig(props);
+    Cache<K, V> kafkaCache = Caches.concurrentCache(
+        new KafkaCache<>(config,
+            keySerde,
+            valueSerde,
+            cacheUpdateHandler,
+            new InMemoryCache<>()));
+    getSchemaRegistry().addLeaderChangeListener(isLeader -> {
+      if (isLeader) {
+        // Reset the cache to remove any stale data from previous leadership
+        kafkaCache.reset();
+        // Ensure the new leader catches up with the offsets
+        kafkaCache.sync();
+      }
+    });
+    return kafkaCache;
+  }
+
+  private Properties getKafkaCacheProperties(String topic) {
+    Properties props = new Properties();
+    props.putAll(getSchemaRegistry().config().originalProperties());
+    Set<String> keys = props.stringPropertyNames();
+    for (String key : keys) {
+      if (key.startsWith("kafkastore.")) {
+        String newKey = key.replace("kafkastore", "kafkacache");
+        if (!keys.contains(newKey)) {
+          props.put(newKey, props.get(key));
+        }
+      }
+    }
+    props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+    return props;
   }
 
   @Override
