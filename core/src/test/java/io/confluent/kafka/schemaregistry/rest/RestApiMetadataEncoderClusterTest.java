@@ -62,17 +62,8 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
 
   @Override
   protected void removeEncoder(String tenant) throws Exception {
-    // Create a kafka producer and produce message with key:<tenant>
-    // and value:null to the encoders topic
-    Properties producerProps = new Properties();
-    producerProps.put("bootstrap.servers", harness.getBrokerList());
-    producerProps.put("key.serializer", StringSerializer.class.getName());
-    producerProps.put("value.serializer", ByteArraySerializer.class.getName());
-    KafkaProducer<String, byte[]> producer = new KafkaProducer<>(producerProps);
-    ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(encodersTopic, tenant, null);
-    producer.send(producerRecord).get();
+    ProducerRecord<String, byte[]> producerRecord = removeEncoderFromKafka(harness.getBrokerList(), tenant, encodersTopic);
     log.info("Produced record to KafkaStore topic: {}", producerRecord);
-    producer.close();
   }
 
   @Override
@@ -94,6 +85,20 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
         rotatedProps);
     rotatedRestApp.start();
     return rotatedRestApp;
+  }
+
+  // Create a kafka producer and produce message with key:<tenant>
+  // and value:null to the encoders topic
+  public static ProducerRecord<String, byte[]> removeEncoderFromKafka(String brokerList, String tenant, String encodersTopic) throws Exception {
+    Properties producerProps = new Properties();
+    producerProps.put("bootstrap.servers", brokerList);
+    producerProps.put("key.serializer", StringSerializer.class.getName());
+    producerProps.put("value.serializer", ByteArraySerializer.class.getName());
+    KafkaProducer<String, byte[]> producer = new KafkaProducer<>(producerProps);
+    ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(encodersTopic, tenant, null);
+    producer.send(producerRecord).get();
+    producer.close();
+    return producerRecord;
   }
 }
 
