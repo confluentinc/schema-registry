@@ -58,6 +58,8 @@ public abstract class RestApiMetadataEncoderTest {
     return sequentialId;
   }
 
+  protected abstract void removeEncoder(String tenant) throws Exception;
+
   /**
    * Creates a new RestApp configured with the rotated secret.
    *
@@ -67,14 +69,14 @@ public abstract class RestApiMetadataEncoderTest {
    */
   protected abstract RestApp createRotatedRestApp(String newSecret, String oldSecret) throws Exception;
 
-  private static String SCHEMA_STRING = AvroUtils.parseSchema(
+  protected static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
           + "\"name\":\"myrecord\","
           + "\"fields\":"
           + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
       .canonicalString();
 
-  private static String ROTATION_TEST_SCHEMA = AvroUtils.parseSchema(
+  protected static String ROTATION_TEST_SCHEMA = AvroUtils.parseSchema(
       "{\"type\":\"record\","
           + "\"name\":\"rotationtest\","
           + "\"fields\":"
@@ -125,8 +127,7 @@ public abstract class RestApiMetadataEncoderTest {
     );
 
     // Remove encoder
-    restApp.schemaRegistry().getMetadataEncoder().getEncoders()
-        .remove(tenant);
+    removeEncoder(tenant);
 
     assertThrows(
         RestClientException.class,
@@ -214,7 +215,7 @@ public abstract class RestApiMetadataEncoderTest {
       // Step 5: Verify the encoder keyset has been rotated (should now have 2 keys)
       int keyCountAfterRotation = rotatedRestApp.schemaRegistry().getMetadataEncoder()
           .getEncoder(tenant).size();
-      assertEquals(2, keyCountAfterRotation, 
+      assertEquals(2, keyCountAfterRotation,
           "Should have 2 keys after rotation (old + new primary)");
 
       // Verify we can still register new schemas with sensitive metadata
