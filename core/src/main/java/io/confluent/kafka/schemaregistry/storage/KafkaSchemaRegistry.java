@@ -81,7 +81,7 @@ import io.confluent.kafka.schemaregistry.leaderelector.kafka.KafkaGroupLeaderEle
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
-import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
+import io.confluent.kafka.schemaregistry.storage.encoder.KafkaMetadataEncoderService;
 import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
@@ -180,7 +180,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     this.idGenerator = identityGenerator(config);
     this.kafkaStore = kafkaStore(config);
     this.store = kafkaStore;
-    this.metadataEncoder = new MetadataEncoderService(this);
+    this.metadataEncoder = new KafkaMetadataEncoderService(this);
   }
 
   private static MetricsContainer initMetricsContainer(
