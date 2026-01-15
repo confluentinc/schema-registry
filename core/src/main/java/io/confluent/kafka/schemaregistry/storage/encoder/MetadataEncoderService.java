@@ -33,22 +33,13 @@ import io.confluent.kafka.schemaregistry.storage.Metadata;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
-import io.kcache.Cache;
-import io.kcache.CacheUpdateHandler;
-import io.kcache.KafkaCache;
-import io.kcache.KafkaCacheConfig;
-import io.kcache.exceptions.CacheInitializationException;
-import io.kcache.utils.Caches;
-import io.kcache.utils.InMemoryCache;
+
 import java.io.Closeable;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Base64;
-import java.util.Collections;
-import java.util.Properties;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -57,14 +48,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MetadataEncoderService implements Closeable {
+public abstract class MetadataEncoderService implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(MetadataEncoderService.class);
 
@@ -73,9 +61,9 @@ public class MetadataEncoderService implements Closeable {
   private static final String KEY_TEMPLATE_NAME = "AES128_GCM";
 
   private final SchemaRegistry schemaRegistry;
+  protected final String encoderSecret;
   protected KeyTemplate keyTemplate;
-  // visible for testing
-  protected Cache<String, KeysetWrapper> encoders = null;
+
   protected final AtomicBoolean initialized = new AtomicBoolean();
   protected final CountDownLatch initLatch = new CountDownLatch(1);
 
@@ -88,38 +76,15 @@ public class MetadataEncoderService implements Closeable {
   }
 
   public MetadataEncoderService(SchemaRegistry schemaRegistry) {
-    try {
-      this.schemaRegistry = schemaRegistry;
-      SchemaRegistryConfig config = schemaRegistry.config();
-      String secret = encoderSecret(config);
-      if (secret == null) {
-        log.warn("No value specified for {}, sensitive metadata will not be encoded",
-            SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
-        return;
-      }
-      String topic = config.getString(SchemaRegistryConfig.METADATA_ENCODER_TOPIC_CONFIG);
-      this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
-      this.encoders = createCache(new StringSerde(), new KeysetWrapperSerde(config), topic, 
-          new TenantCacheUpdateHandler());
-    } catch (Exception e) {
-      throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
+    this.schemaRegistry = schemaRegistry;
+    this.encoderSecret = encoderSecret(schemaRegistry.config());
+    if (encoderSecret == null) {
+      log.warn("No value specified for {}, sensitive metadata will not be encoded",
+          SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
+      return;
     }
-  }
-
-  @VisibleForTesting
-  protected MetadataEncoderService(
-      SchemaRegistry schemaRegistry, Cache<String, KeysetWrapper> encoders) {
     try {
-      this.schemaRegistry = schemaRegistry;
-      SchemaRegistryConfig config = schemaRegistry.config();
-      String secret = encoderSecret(config);
-      if (secret == null) {
-        log.warn("No value specified for {}, sensitive metadata will not be encoded",
-            SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
-        return;
-      }
       this.keyTemplate = KeyTemplates.get(KEY_TEMPLATE_NAME);
-      this.encoders = encoders;
     } catch (Exception e) {
       throw new IllegalArgumentException("Could not instantiate MetadataEncoderService", e);
     }
@@ -127,11 +92,6 @@ public class MetadataEncoderService implements Closeable {
 
   public SchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
-  }
-
-  @VisibleForTesting
-  public Cache<String, KeysetWrapper> getEncoders() {
-    return encoders;
   }
 
   protected static Aead getPrimitive(String secret) throws GeneralSecurityException {
@@ -169,49 +129,22 @@ public class MetadataEncoderService implements Closeable {
     return secret;
   }
 
-  protected <K, V> Cache<K, V> createCache(
-      Serde<K> keySerde,
-      Serde<V> valueSerde,
-      String topic,
-      CacheUpdateHandler<K, V> cacheUpdateHandler) throws CacheInitializationException {
-    Properties props = getKafkaCacheProperties(topic);
-    KafkaCacheConfig config = new KafkaCacheConfig(props);
-    Cache<K, V> kafkaCache = Caches.concurrentCache(
-        new KafkaCache<>(config,
-            keySerde,
-            valueSerde,
-            cacheUpdateHandler,
-            new InMemoryCache<>()));
-    getSchemaRegistry().addLeaderChangeListener(isLeader -> {
-      if (isLeader) {
-        // Reset the cache to remove any stale data from previous leadership
-        kafkaCache.reset();
-        // Ensure the new leader catches up with the offsets
-        kafkaCache.sync();
-      }
-    });
-    return kafkaCache;
+  /**
+   * Subclass hook to prepare any resources before secret rotation occurs.
+   * Default is no-op.
+   */
+  protected void doInit() {
+    // no-op
   }
 
-  private Properties getKafkaCacheProperties(String topic) {
-    Properties props = new Properties();
-    props.putAll(schemaRegistry.config().originalProperties());
-    Set<String> keys = props.stringPropertyNames();
-    for (String key : keys) {
-      if (key.startsWith("kafkastore.")) {
-        String newKey = key.replace("kafkastore", "kafkacache");
-        if (!keys.contains(newKey)) {
-          props.put(newKey, props.get(key));
-        }
-      }
-    }
-    props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
-    return props;
-  }
-
-  public void init() {
-    if (encoders != null && !initialized.get()) {
-      encoders.init();
+  /**
+   * Initialize the metadata encoder service by rotating the secrets if needed.
+   * Subclasses should override {@link #doInit()} to prepare any resources
+   * before the secrets are rotated.
+   */
+  public final void init() {
+    if (!initialized.get()) {
+      doInit();
       maybeRotateSecrets();
       boolean isInitialized = initialized.compareAndSet(false, true);
       if (!isInitialized) {
@@ -224,25 +157,17 @@ public class MetadataEncoderService implements Closeable {
   /**
    * Get all tenant keys. Used for secret rotation.
    */
-  protected Set<String> getAllTenants() {
-    return encoders != null ? encoders.keySet() : Collections.emptySet();
-  }
+  protected abstract Set<String> getAllTenants();
 
   /**
    * Get the encoder wrapper for a tenant.
    */
-  protected KeysetWrapper getEncoderWrapper(String tenant) {
-    return encoders != null ? encoders.get(tenant) : null;
-  }
+  protected abstract KeysetWrapper getEncoderWrapper(String tenant);
 
   /**
    * Store an encoder wrapper for a tenant.
    */
-  protected void putEncoderWrapper(String tenant, KeysetWrapper wrapper) {
-    if (encoders != null) {
-      encoders.put(tenant, wrapper);
-    }
-  }
+  protected abstract void putEncoderWrapper(String tenant, KeysetWrapper wrapper);
 
   protected void maybeRotateSecrets() {
     String oldSecret = encoderOldSecret(schemaRegistry.config());
@@ -278,18 +203,7 @@ public class MetadataEncoderService implements Closeable {
   }
 
   @VisibleForTesting
-  public KeysetHandle getEncoder(String tenant) {
-    if (encoders == null) {
-      return null;
-    }
-    KeysetWrapper wrapper = encoders.get(tenant);
-    if (wrapper == null) {
-      // Ensure encoders are up to date
-      encoders.sync();
-      wrapper = encoders.get(tenant);
-    }
-    return wrapper != null ? wrapper.getKeysetHandle() : null;
-  }
+  public abstract KeysetHandle getEncoder(String tenant);
 
   public void encodeMetadata(SchemaValue schema) throws SchemaRegistryStoreException {
     if (!initialized.get() || schema == null || isEncoded(schema)) {
@@ -391,53 +305,8 @@ public class MetadataEncoderService implements Closeable {
     }
   }
 
-  protected KeysetHandle getOrCreateEncoder(String tenant) {
-    // Ensure encoders are up to date
-    encoders.sync();
-    KeysetWrapper wrapper = encoders.computeIfAbsent(tenant,
-        k -> {
-          try {
-            KeysetHandle handle = KeysetHandle.generateNew(keyTemplate);
-            return new KeysetWrapper(handle, false);
-          } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Could not create key template");
-          }
-
-        });
-    return wrapper.getKeysetHandle();
-  }
+  protected abstract KeysetHandle getOrCreateEncoder(String tenant);
 
   @Override
-  public void close() {
-    log.info("Shutting down MetadataEncoderService");
-    if (encoders != null) {
-      try {
-        encoders.close();
-      } catch (IOException e) {
-        // ignore
-      }
-    }
-  }
-
-  /**
-   * Cache update handler that logs tenant (key) updates to the encoder cache.
-   */
-  private static class TenantCacheUpdateHandler
-      implements CacheUpdateHandler<String, KeysetWrapper> {
-
-    @Override
-    public void handleUpdate(String tenant, KeysetWrapper newValue, KeysetWrapper oldValue,
-                             TopicPartition tp, long offset, long timestamp) {
-      if (oldValue == null) {
-        log.info("Encoder cache update: new tenant '{}' added (partition={}, offset={}, "
-                + "timestamp={})", tenant, tp.partition(), offset, timestamp);
-      } else if (newValue == null) {
-        log.info("Encoder cache update: tenant '{}' removed (partition={}, offset={}, "
-                + "timestamp={})", tenant, tp.partition(), offset, timestamp);
-      } else {
-        log.info("Encoder cache update: tenant '{}' updated (partition={}, offset={}, "
-                + "timestamp={})", tenant, tp.partition(), offset, timestamp);
-      }
-    }
-  }
+  public abstract void close();
 }

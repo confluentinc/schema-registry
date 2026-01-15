@@ -15,6 +15,19 @@
 
 package io.confluent.kafka.schemaregistry.storage.encoder;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -22,22 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.SchemaValue;
-import io.kcache.Cache;
-import io.kcache.utils.InMemoryCache;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
-public class MetadataEncoderServiceTest {
-
+public abstract class MetadataEncoderServiceTest {
   protected SchemaRegistry schemaRegistry;
   protected MetadataEncoderService encoderService;
 
@@ -47,8 +45,10 @@ public class MetadataEncoderServiceTest {
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     when(schemaRegistry.config()).thenReturn(config);
-    Cache<String, KeysetWrapper> encoders = new InMemoryCache<>();
-    this.encoderService = new MetadataEncoderService(schemaRegistry, encoders);
+  }
+
+  @BeforeEach
+  public void setup() throws Exception {
     encoderService.init();
   }
 
