@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
@@ -62,7 +63,7 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
 
   @Override
   protected void removeEncoder(String tenant) throws Exception {
-    ProducerRecord<String, byte[]> producerRecord = removeEncoderFromKafka(
+    RecordMetadata producerRecord = removeEncoderFromKafka(
         harness.getBrokerList(), encodersTopic, tenant);
     log.info("Produced record to KafkaStore topic: {}", producerRecord);
   }
@@ -90,7 +91,7 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
 
   // Create a kafka producer and produce message with key:<tenant>
   // and value:null to the encoders topic
-  public static ProducerRecord<String, byte[]> removeEncoderFromKafka(
+  public static RecordMetadata removeEncoderFromKafka(
       String brokerList, String encodersTopic, String tenant) throws Exception {
     Properties producerProps = new Properties();
     producerProps.put("bootstrap.servers", brokerList);
@@ -98,9 +99,9 @@ public class RestApiMetadataEncoderClusterTest extends RestApiMetadataEncoderTes
     producerProps.put("value.serializer", ByteArraySerializer.class.getName());
     KafkaProducer<String, byte[]> producer = new KafkaProducer<>(producerProps);
     ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(encodersTopic, tenant, null);
-    producer.send(producerRecord).get();
+    RecordMetadata r = producer.send(producerRecord).get();
     producer.close();
-    return producerRecord;
+    return r;
   }
 }
 
