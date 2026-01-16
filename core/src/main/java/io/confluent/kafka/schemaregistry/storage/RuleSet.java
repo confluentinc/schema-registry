@@ -33,16 +33,19 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RuleSet {
 
+  private final ExecutionEnvironment enableOnlyAt;
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
   private final List<Rule> encodingRules;
 
   @JsonCreator
   public RuleSet(
+      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt,
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules,
       @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
+    this.enableOnlyAt = enableOnlyAt;
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
         : Collections.emptyList();
@@ -55,6 +58,9 @@ public class RuleSet {
   }
 
   public RuleSet(io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet) {
+    this.enableOnlyAt = ruleSet.getEnableOnlyAt() != null
+        ? ExecutionEnvironment.fromEntity(ruleSet.getEnableOnlyAt())
+        : null;
     this.migrationRules = ruleSet.getMigrationRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
@@ -64,6 +70,10 @@ public class RuleSet {
     this.encodingRules = ruleSet.getEncodingRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
+  }
+
+  public ExecutionEnvironment getEnableOnlyAt() {
+    return enableOnlyAt;
   }
 
   public List<Rule> getMigrationRules() {
@@ -86,20 +96,22 @@ public class RuleSet {
       return false;
     }
     RuleSet ruleSet = (RuleSet) o;
-    return Objects.equals(migrationRules, ruleSet.migrationRules)
+    return enableOnlyAt == ruleSet.enableOnlyAt
+        && Objects.equals(migrationRules, ruleSet.migrationRules)
         && Objects.equals(domainRules, ruleSet.domainRules)
         && Objects.equals(encodingRules, ruleSet.encodingRules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules, encodingRules);
+    return Objects.hash(enableOnlyAt, migrationRules, domainRules, encodingRules);
   }
 
   @Override
   public String toString() {
     return "Rules{"
-        + "migrationRules=" + migrationRules
+        + "enableOnlyAt=" + enableOnlyAt
+        + ", migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
         + '}';
@@ -107,6 +119,7 @@ public class RuleSet {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet toRuleSetEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet(
+        getEnableOnlyAt() != null ? getEnableOnlyAt().toEntity() : null,
         getMigrationRules().stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList()),

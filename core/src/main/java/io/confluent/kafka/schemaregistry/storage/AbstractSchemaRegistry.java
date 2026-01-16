@@ -478,7 +478,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                 .filter(r -> !rulesToRemove.contains(r.getName()))
                 .collect(Collectors.toList());
       }
-      ruleSet = new RuleSet(migrationRules, domainRules, encodingRules);
+      ruleSet = new RuleSet(ruleSet.getEnableOnlyAt(), migrationRules, domainRules, encodingRules);
     }
     return ruleSet;
   }
