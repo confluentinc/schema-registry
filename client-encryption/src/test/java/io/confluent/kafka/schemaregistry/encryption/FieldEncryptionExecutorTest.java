@@ -444,8 +444,8 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
-        Collections.emptyList(), ExecutionEnvironment.NONE);
+    RuleSet ruleSet = new RuleSet(ExecutionEnvironment.NONE, Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList());
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -470,8 +470,8 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
-        Collections.emptyList(), ExecutionEnvironment.GATEWAY);
+    RuleSet ruleSet = new RuleSet(ExecutionEnvironment.GATEWAY, Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList());
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -496,8 +496,8 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
-        Collections.emptyList(), ExecutionEnvironment.GATEWAY);
+    RuleSet ruleSet = new RuleSet(ExecutionEnvironment.GATEWAY, Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList());
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
@@ -528,8 +528,8 @@ public abstract class FieldEncryptionExecutorTest {
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
-    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
-        Collections.emptyList(), ExecutionEnvironment.ALL);
+    RuleSet ruleSet = new RuleSet(ExecutionEnvironment.ALL, Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList());
     Metadata metadata = getMetadata("kek1");
     avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);

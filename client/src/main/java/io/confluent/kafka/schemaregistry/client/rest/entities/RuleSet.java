@@ -42,18 +42,19 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RuleSet {
 
+  private final ExecutionEnvironment enableOnlyAt;
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
   private final List<Rule> encodingRules;
-  private final ExecutionEnvironment enableOnlyAt;
 
   @JsonCreator
   public RuleSet(
+      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt,
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules,
-      @JsonProperty("encodingRules") List<Rule> encodingRules,
-      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt
+      @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
+    this.enableOnlyAt = enableOnlyAt;
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
         : Collections.emptyList();
@@ -63,7 +64,6 @@ public class RuleSet {
     this.encodingRules = encodingRules != null
         ? Collections.unmodifiableList(encodingRules)
         : Collections.emptyList();
-    this.enableOnlyAt = enableOnlyAt;
   }
 
   public RuleSet(
@@ -71,7 +71,7 @@ public class RuleSet {
       @JsonProperty("domainRules") List<Rule> domainRules,
       @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
-    this(migrationRules, domainRules, encodingRules, null);
+    this(null, migrationRules, domainRules, encodingRules);
   }
 
   public RuleSet(
@@ -79,6 +79,10 @@ public class RuleSet {
       @JsonProperty("domainRules") List<Rule> domainRules
   ) {
     this(migrationRules, domainRules, null);
+  }
+
+  public ExecutionEnvironment getEnableOnlyAt() {
+    return enableOnlyAt;
   }
 
   public List<Rule> getMigrationRules() {
@@ -91,10 +95,6 @@ public class RuleSet {
 
   public List<Rule> getEncodingRules() {
     return encodingRules;
-  }
-
-  public ExecutionEnvironment getEnableOnlyAt() {
-    return enableOnlyAt;
   }
 
   @JsonIgnore
@@ -150,28 +150,31 @@ public class RuleSet {
       return false;
     }
     RuleSet ruleSet = (RuleSet) o;
-    return Objects.equals(migrationRules, ruleSet.migrationRules)
+    return enableOnlyAt == ruleSet.enableOnlyAt
+        && Objects.equals(migrationRules, ruleSet.migrationRules)
         && Objects.equals(domainRules, ruleSet.domainRules)
-        && Objects.equals(encodingRules, ruleSet.encodingRules)
-        && enableOnlyAt == ruleSet.enableOnlyAt;
+        && Objects.equals(encodingRules, ruleSet.encodingRules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules, encodingRules, enableOnlyAt);
+    return Objects.hash(enableOnlyAt, migrationRules, domainRules, encodingRules);
   }
 
   @Override
   public String toString() {
     return "Rules{"
-        + "migrationRules=" + migrationRules
+        + "enableOnlyAt=" + enableOnlyAt
+        + ", migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
-        + ", enableOnlyAt=" + enableOnlyAt
         + '}';
   }
 
   public void updateHash(MessageDigest md) {
+    if (enableOnlyAt != null) {
+      md.update(enableOnlyAt.name().getBytes(StandardCharsets.UTF_8));
+    }
     if (migrationRules != null) {
       migrationRules.forEach(r -> r.updateHash(md));
     }
@@ -180,9 +183,6 @@ public class RuleSet {
     }
     if (encodingRules != null) {
       encodingRules.forEach(r -> r.updateHash(md));
-    }
-    if (enableOnlyAt != null) {
-      md.update(enableOnlyAt.name().getBytes(StandardCharsets.UTF_8));
     }
   }
 
@@ -239,10 +239,10 @@ public class RuleSet {
           ? newRuleSet.getEnableOnlyAt()
           : oldRuleSet.getEnableOnlyAt();
       return new RuleSet(
+          enableOnlyAt,
           merge(oldRuleSet.migrationRules, newRuleSet.migrationRules),
           merge(oldRuleSet.domainRules, newRuleSet.domainRules),
-          merge(oldRuleSet.encodingRules, newRuleSet.encodingRules),
-          enableOnlyAt
+          merge(oldRuleSet.encodingRules, newRuleSet.encodingRules)
       );
     }
   }

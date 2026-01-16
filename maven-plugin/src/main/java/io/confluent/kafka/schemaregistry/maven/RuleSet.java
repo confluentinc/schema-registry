@@ -27,6 +27,9 @@ public class RuleSet {
   // For mojo, cannot have any constructors besides default constructor
 
   @Parameter(required = false)
+  protected ExecutionEnvironment enableOnlyAt;
+
+  @Parameter(required = false)
   protected List<Rule> migrationRules = new ArrayList<>();
 
   @Parameter(required = false)
@@ -35,21 +38,19 @@ public class RuleSet {
   @Parameter(required = false)
   protected List<Rule> encodingRules = new ArrayList<>();
 
-  @Parameter(required = false)
-  protected ExecutionEnvironment enableOnlyAt;
-
   @Override
   public String toString() {
     return "RuleSet{"
-        + "migrationRules=" + migrationRules
+        + "enableOnlyAt=" + enableOnlyAt
+        + ", migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
-        + ", enableOnlyAt=" + enableOnlyAt
         + '}';
   }
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet toRuleSetEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet(
+        enableOnlyAt,
         migrationRules != null
             ? migrationRules.stream()
             .map(Rule::toRuleEntity)
@@ -64,8 +65,7 @@ public class RuleSet {
             ? encodingRules.stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList())
-            : null,
-        enableOnlyAt
+            : null
     );
   }
 }

@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import java.util.Collections;
@@ -187,7 +186,7 @@ public class SchemaValuesTest {
     Metadata metadata = new Metadata(null, null, null);
     List<Rule> domainRules = Collections.singletonList(new Rule(null, null, RuleKind.TRANSFORM,
         RuleMode.WRITEREAD, null, null, null, null, null, null, false));
-    RuleSet ruleSet = new RuleSet(domainRules, null, null, null);
+    RuleSet ruleSet = new RuleSet(null, domainRules, null, null);
 
     schema = new SchemaValue(
         "subject", 1, 1, null, "AVRO", null, metadata, ruleSet, schemaString, false);

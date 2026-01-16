@@ -33,18 +33,19 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RuleSet {
 
+  private final ExecutionEnvironment enableOnlyAt;
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
   private final List<Rule> encodingRules;
-  private final ExecutionEnvironment enableOnlyAt;
 
   @JsonCreator
   public RuleSet(
+      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt,
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules,
-      @JsonProperty("encodingRules") List<Rule> encodingRules,
-      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt
+      @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
+    this.enableOnlyAt = enableOnlyAt;
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
         : Collections.emptyList();
@@ -54,10 +55,12 @@ public class RuleSet {
     this.encodingRules = encodingRules != null
         ? Collections.unmodifiableList(encodingRules)
         : Collections.emptyList();
-    this.enableOnlyAt = enableOnlyAt;
   }
 
   public RuleSet(io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet) {
+    this.enableOnlyAt = ruleSet.getEnableOnlyAt() != null
+        ? ExecutionEnvironment.fromEntity(ruleSet.getEnableOnlyAt())
+        : null;
     this.migrationRules = ruleSet.getMigrationRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
@@ -67,9 +70,10 @@ public class RuleSet {
     this.encodingRules = ruleSet.getEncodingRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
-    this.enableOnlyAt = ruleSet.getEnableOnlyAt() != null
-        ? ExecutionEnvironment.fromEntity(ruleSet.getEnableOnlyAt())
-        : null;
+  }
+
+  public ExecutionEnvironment getEnableOnlyAt() {
+    return enableOnlyAt;
   }
 
   public List<Rule> getMigrationRules() {
@@ -84,10 +88,6 @@ public class RuleSet {
     return encodingRules;
   }
 
-  public ExecutionEnvironment getEnableOnlyAt() {
-    return enableOnlyAt;
-  }
-
   public boolean equals(Object o) {
     if (this == o) {
       return true;
@@ -96,29 +96,30 @@ public class RuleSet {
       return false;
     }
     RuleSet ruleSet = (RuleSet) o;
-    return Objects.equals(migrationRules, ruleSet.migrationRules)
+    return enableOnlyAt == ruleSet.enableOnlyAt
+        && Objects.equals(migrationRules, ruleSet.migrationRules)
         && Objects.equals(domainRules, ruleSet.domainRules)
-        && Objects.equals(encodingRules, ruleSet.encodingRules)
-        && enableOnlyAt == ruleSet.enableOnlyAt;
+        && Objects.equals(encodingRules, ruleSet.encodingRules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules, encodingRules);
+    return Objects.hash(enableOnlyAt, migrationRules, domainRules, encodingRules);
   }
 
   @Override
   public String toString() {
     return "Rules{"
-        + "migrationRules=" + migrationRules
+        + "enableOnlyAt=" + enableOnlyAt
+        + ", migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
-        + ", enableOnlyAt=" + enableOnlyAt
         + '}';
   }
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet toRuleSetEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet(
+        getEnableOnlyAt() != null ? getEnableOnlyAt().toEntity() : null,
         getMigrationRules().stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList()),
@@ -127,8 +128,7 @@ public class RuleSet {
             .collect(Collectors.toList()),
         getEncodingRules().stream()
             .map(Rule::toRuleEntity)
-            .collect(Collectors.toList()),
-        getEnableOnlyAt() != null ? getEnableOnlyAt().toEntity() : null
+            .collect(Collectors.toList())
     );
   }
 }
