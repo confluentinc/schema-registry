@@ -33,6 +33,7 @@ import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -126,6 +127,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
+  protected ExecutionEnvironment executionEnv;
   protected boolean enableRuleServiceLoader;
   protected Map<String, Map<String, RuleBase>> ruleExecutors;
   protected Map<String, Map<String, RuleBase>> ruleActions;
@@ -216,6 +218,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
+    executionEnv = config.getExecutionEnvironment();
     enableRuleServiceLoader = config.enableRuleServiceLoader();
     ruleExecutors = initRuleObjects(
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
@@ -680,19 +683,23 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     if (message == null || target == null) {
       return message;
     }
+    ExecutionEnvironment enabledEnv = null;
     List<Rule> rules = Collections.emptyList();
     if (ruleMode == RuleMode.UPGRADE) {
       if (target.ruleSet() != null) {
+        enabledEnv = target.ruleSet().getEnableOnlyAt();
         rules = target.ruleSet().getMigrationRules();
       }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
       if (source.ruleSet() != null) {
+        enabledEnv = source.ruleSet().getEnableOnlyAt();
         rules = new ArrayList<>(source.ruleSet().getMigrationRules());
         // Execute downgrade rules in reverse order for symmetry
         Collections.reverse(rules);
       }
     } else {
       if (target.ruleSet() != null) {
+        enabledEnv = target.ruleSet().getEnableOnlyAt();
         rules = rulePhase == RulePhase.ENCODING
             ? target.ruleSet().getEncodingRules()
             : target.ruleSet().getDomainRules();
@@ -705,7 +712,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     for (int i = 0; i < rules.size(); i++) {
       Rule rule = rules.get(i);
-      if (skipRule(rule, headers)) {
+      RuleContext ctx = new RuleContext(configOriginals, enabledEnv, source, target,
+          subject, topic, headers,
+          isKey ? original : key(),
+          isKey ? null : original,
+          isKey, ruleMode, rule, i, rules);
+      if (skipRule(ctx, rule, headers)) {
         continue;
       }
       if (rule.getMode() == RuleMode.WRITEREAD) {
@@ -719,11 +731,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       } else if (ruleMode != rule.getMode()) {
         continue;
       }
-      RuleContext ctx = new RuleContext(configOriginals, source, target,
-          subject, topic, headers,
-          isKey ? original : key(),
-          isKey ? null : original,
-          isKey, ruleMode, rule, i, rules);
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
@@ -792,8 +799,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     });
   }
 
-  private boolean isDisabled(Rule rule) {
+  private boolean isDisabled(RuleContext ctx, Rule rule) {
     return disabledFlags.computeIfAbsent(rule, r -> {
+      // 1. Check config overrides
       Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
@@ -806,6 +814,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
       }
+
+      // 2. Check ruleSet setting
+      ExecutionEnvironment enabledEnv = ctx.enabledEnv();
+      if (enabledEnv == null) {
+        enabledEnv = ExecutionEnvironment.ALL;
+      }
+      if (enabledEnv == ExecutionEnvironment.NONE) {
+        return true;
+      }
+      if (enabledEnv != ExecutionEnvironment.ALL && enabledEnv != this.executionEnv) {
+        return true;
+      }
+
+      // 3. Check rule setting
       return rule.isDisabled();
     });
   }
@@ -815,8 +837,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return configOriginals.get(propertyName);
   }
 
-  private boolean skipRule(Rule rule, Headers headers) {
-    if (isDisabled(rule)) {
+  private boolean skipRule(RuleContext ctx, Rule rule, Headers headers) {
+    if (isDisabled(ctx, rule)) {
       return true;
     }
     if (headers != null) {
