@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,16 +42,19 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RuleSet {
 
+  private final ExecutionEnvironment enableOnlyAt;
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
   private final List<Rule> encodingRules;
 
   @JsonCreator
   public RuleSet(
+      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt,
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules,
       @JsonProperty("encodingRules") List<Rule> encodingRules
   ) {
+    this.enableOnlyAt = enableOnlyAt;
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
         : Collections.emptyList();
@@ -64,9 +68,21 @@ public class RuleSet {
 
   public RuleSet(
       @JsonProperty("migrationRules") List<Rule> migrationRules,
+      @JsonProperty("domainRules") List<Rule> domainRules,
+      @JsonProperty("encodingRules") List<Rule> encodingRules
+  ) {
+    this(null, migrationRules, domainRules, encodingRules);
+  }
+
+  public RuleSet(
+      @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules
   ) {
     this(migrationRules, domainRules, null);
+  }
+
+  public ExecutionEnvironment getEnableOnlyAt() {
+    return enableOnlyAt;
   }
 
   public List<Rule> getMigrationRules() {
@@ -134,26 +150,31 @@ public class RuleSet {
       return false;
     }
     RuleSet ruleSet = (RuleSet) o;
-    return Objects.equals(migrationRules, ruleSet.migrationRules)
+    return enableOnlyAt == ruleSet.enableOnlyAt
+        && Objects.equals(migrationRules, ruleSet.migrationRules)
         && Objects.equals(domainRules, ruleSet.domainRules)
         && Objects.equals(encodingRules, ruleSet.encodingRules);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules, encodingRules);
+    return Objects.hash(enableOnlyAt, migrationRules, domainRules, encodingRules);
   }
 
   @Override
   public String toString() {
     return "Rules{"
-        + "migrationRules=" + migrationRules
+        + "enableOnlyAt=" + enableOnlyAt
+        + ", migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
         + '}';
   }
 
   public void updateHash(MessageDigest md) {
+    if (enableOnlyAt != null) {
+      md.update(enableOnlyAt.name().getBytes(StandardCharsets.UTF_8));
+    }
     if (migrationRules != null) {
       migrationRules.forEach(r -> r.updateHash(md));
     }
@@ -214,7 +235,11 @@ public class RuleSet {
     } else if (newRuleSet == null) {
       return oldRuleSet;
     } else {
+      ExecutionEnvironment enableOnlyAt = newRuleSet.getEnableOnlyAt() != null
+          ? newRuleSet.getEnableOnlyAt()
+          : oldRuleSet.getEnableOnlyAt();
       return new RuleSet(
+          enableOnlyAt,
           merge(oldRuleSet.migrationRules, newRuleSet.migrationRules),
           merge(oldRuleSet.domainRules, newRuleSet.domainRules),
           merge(oldRuleSet.encodingRules, newRuleSet.encodingRules)

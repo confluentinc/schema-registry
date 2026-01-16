@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,6 +25,9 @@ import org.apache.maven.plugins.annotations.Parameter;
 public class RuleSet {
 
   // For mojo, cannot have any constructors besides default constructor
+
+  @Parameter(required = false)
+  protected ExecutionEnvironment enableOnlyAt;
 
   @Parameter(required = false)
   protected List<Rule> migrationRules = new ArrayList<>();
@@ -37,7 +41,8 @@ public class RuleSet {
   @Override
   public String toString() {
     return "RuleSet{"
-        + "migrationRules=" + migrationRules
+        + "enableOnlyAt=" + enableOnlyAt
+        + ", migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
         + '}';
@@ -45,6 +50,7 @@ public class RuleSet {
 
   public io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet toRuleSetEntity() {
     return new io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet(
+        enableOnlyAt,
         migrationRules != null
             ? migrationRules.stream()
             .map(Rule::toRuleEntity)
