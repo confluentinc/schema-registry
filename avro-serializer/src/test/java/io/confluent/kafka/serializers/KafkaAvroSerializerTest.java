@@ -675,6 +675,63 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerWithAssociatedNameStrategyFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to TopicNameStrategy
+    IndexedRecord avroRecord = createUserRecord();
+    String fallbackTopic = "fallback-test";
+
+    // Pre-register the schema with TopicNameStrategy subject name
+    schemaRegistry.register(fallbackTopic + "-value", new AvroSchema(avroRecord.getSchema()));
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+        // fallback.subject.name.strategy.type defaults to "TOPIC"
+    );
+    avroSerializer.configure(configs, false);
+    avroDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to TopicNameStrategy since no association exists
+    byte[] bytes = avroSerializer.serialize(fallbackTopic, headers, avroRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    avroDeserializer.configure(new HashMap(defaultConfig), false);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaAvroSerializerWithAssociatedNameStrategyNoFallback()
+      throws IOException, RestClientException {
+    // No association is created and fallback is disabled
+    IndexedRecord avroRecord = createUserRecord();
+    String noFallbackTopic = "no-fallback-test";
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaAvroSerializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        "NONE"
+    );
+    avroSerializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should throw SerializationException since no association exists and fallback is disabled
+    avroSerializer.serialize(noFallbackTopic, headers, avroRecord);
+  }
+
+  @Test
   public void testKafkaAvroDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
       throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
