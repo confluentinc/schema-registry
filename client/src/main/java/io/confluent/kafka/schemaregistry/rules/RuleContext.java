@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.rules;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.header.Headers;
 public class RuleContext {
 
   private final Map<String, ?> configs;
+  private final ExecutionEnvironment enabledEnv;
   private final ParsedSchema source;
   private final ParsedSchema target;
   private final String subject;
@@ -56,6 +58,7 @@ public class RuleContext {
 
   public RuleContext(
       Map<String, ?> configs,
+      ExecutionEnvironment enabledEnv,
       ParsedSchema source,
       ParsedSchema target,
       String subject,
@@ -69,6 +72,7 @@ public class RuleContext {
       int index,
       List<Rule> rules) {
     this.configs = configs;
+    this.enabledEnv = enabledEnv;
     this.source = source;
     this.target = target;
     this.subject = subject;
@@ -86,6 +90,10 @@ public class RuleContext {
 
   public Map<String, ?> configs() {
     return configs;
+  }
+
+  public ExecutionEnvironment enabledEnv() {
+    return enabledEnv;
   }
 
   public ParsedSchema source() {
