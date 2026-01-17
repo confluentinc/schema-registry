@@ -55,6 +55,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -434,6 +435,121 @@ public abstract class FieldEncryptionExecutorTest {
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("hello world", record.get("f1"));
 
+  }
+
+  @Test
+  public void testKafkaAvroSerializerEnableOnlyAtNone() throws Exception {
+    // Set enableOnlyAt to NONE, encryption should be skipped
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList(), ExecutionEnvironment.NONE);
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 0;  // No encryption should happen
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    // Value should NOT be encrypted since rule was skipped
+    assertEquals("testUser", record.get("name").toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerEnableOnlyAtGatewayNotRun() throws Exception {
+    // Set enableOnlyAt to GATEWAY, but don't configure execution.environment
+    // The default execution environment is CLIENT, so the rule should be skipped
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList(), ExecutionEnvironment.GATEWAY);
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 0;  // No encryption should happen
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    // Value should NOT be encrypted since rule was skipped
+    assertEquals("testUser", record.get("name").toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerEnableOnlyAtGatewayWithGateway() throws Exception {
+    // Set enableOnlyAt to GATEWAY and also set execution.environment to GATEWAY
+    // The rule should be executed
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList(), ExecutionEnvironment.GATEWAY);
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    // Create serializers with execution.environment set to GATEWAY
+    Map<String, Object> gatewayClientProps = fieldEncryptionProps.getClientProperties("mock://");
+    gatewayClientProps.put(CLOCK, fakeClock);
+    gatewayClientProps.put(AbstractKafkaSchemaSerDeConfig.EXECUTION_ENVIRONMENT, "GATEWAY");
+    KafkaAvroSerializer gatewaySerializer = new KafkaAvroSerializer(schemaRegistry, gatewayClientProps);
+    KafkaAvroDeserializer gatewayDeserializer = new KafkaAvroDeserializer(schemaRegistry, gatewayClientProps);
+
+    int expectedEncryptions = 1;  // Encryption should happen
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(gatewaySerializer);
+    byte[] bytes = gatewaySerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(gatewayDeserializer);
+    GenericRecord record = (GenericRecord) gatewayDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerEnableOnlyAtAllWithGateway() throws Exception {
+    // Set enableOnlyAt to ALL and also set execution.environment to GATEWAY
+    // The rule should be executed since ALL matches any environment
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule),
+        Collections.emptyList(), ExecutionEnvironment.ALL);
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    // Create serializers with execution.environment set to GATEWAY
+    Map<String, Object> gatewayClientProps = fieldEncryptionProps.getClientProperties("mock://");
+    gatewayClientProps.put(CLOCK, fakeClock);
+    gatewayClientProps.put(AbstractKafkaSchemaSerDeConfig.EXECUTION_ENVIRONMENT, "GATEWAY");
+    KafkaAvroSerializer gatewaySerializer = new KafkaAvroSerializer(schemaRegistry, gatewayClientProps);
+    KafkaAvroDeserializer gatewayDeserializer = new KafkaAvroDeserializer(schemaRegistry, gatewayClientProps);
+
+    int expectedEncryptions = 1;  // Encryption should happen
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(gatewaySerializer);
+    byte[] bytes = gatewaySerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(gatewayDeserializer);
+    GenericRecord record = (GenericRecord) gatewayDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name"));
   }
 
   @Test

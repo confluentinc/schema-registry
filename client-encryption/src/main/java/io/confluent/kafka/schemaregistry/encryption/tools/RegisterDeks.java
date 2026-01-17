@@ -147,7 +147,7 @@ public class RegisterDeks implements Callable<Integer> {
     try (EncryptionExecutor executor = new EncryptionExecutor()) {
       Map<String, Object> ruleConfigs = configsWithoutPrefix(rule, configs);
       executor.configure(ruleConfigs);
-      RuleContext ctx = new RuleContext(configs, null, parsedSchema,
+      RuleContext ctx = new RuleContext(configs, null, null, parsedSchema,
           subject, null, null, null, null, false, RuleMode.WRITE, rule, i, rules);
       EncryptionExecutorTransform transform = executor.newTransform(ctx);
       transform.getOrCreateDek(ctx, transform.isDekRotated() ? -1 : null);

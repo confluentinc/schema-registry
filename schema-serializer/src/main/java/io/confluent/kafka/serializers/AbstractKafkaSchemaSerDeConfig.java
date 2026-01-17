@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
+import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
@@ -160,6 +162,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String SCHEMA_FORMAT = "schema.format";
   public static final String SCHEMA_FORMAT_DOC =
       "The schema format to use when registering or looking up schemas.";
+
+  public static final String EXECUTION_ENVIRONMENT = "execution.environment";
+  public static final String EXECUTION_ENVIRONMENT_DOCS =
+      "The execution environment, one of ALL, CLIENT, GATEWAY, SERVER, or NONE";
 
   public static final String RULE_EXECUTORS = "rule.executors";
   public static final String RULE_EXECUTORS_DOCS =
@@ -361,6 +367,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_WITH_METADATA_DOC)
         .define(SCHEMA_FORMAT, Type.STRING, null,
                 Importance.LOW, SCHEMA_FORMAT_DOC)
+        .define(EXECUTION_ENVIRONMENT, Type.STRING, null,
+                EnumRecommender.in(ExecutionEnvironment.values()),
+                Importance.MEDIUM, EXECUTION_ENVIRONMENT_DOCS)
         .define(RULE_EXECUTORS, Type.LIST, "",
                 Importance.LOW, RULE_EXECUTORS_DOCS)
         .define(RULE_ACTIONS, Type.LIST, "",
@@ -497,6 +506,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public String getSchemaFormat() {
     return this.getString(SCHEMA_FORMAT);
+  }
+
+  public ExecutionEnvironment getExecutionEnvironment() {
+    String envStr = this.getString(EXECUTION_ENVIRONMENT);
+    return envStr != null ? ExecutionEnvironment.valueOf(envStr) : null;
   }
 
   public boolean enableRuleServiceLoader() {
