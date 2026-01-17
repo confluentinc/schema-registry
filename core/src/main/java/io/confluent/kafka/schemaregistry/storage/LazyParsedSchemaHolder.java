@@ -16,11 +16,10 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
-import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import java.lang.ref.SoftReference;
 
-public class LazyParsedSchemaHolder implements ParsedSchemaHolder {
+public class LazyParsedSchemaHolder implements SchemaValueHolder {
 
   private SchemaRegistry schemaRegistry;
   private SchemaKey schemaKey;
@@ -46,6 +45,7 @@ public class LazyParsedSchemaHolder implements ParsedSchemaHolder {
     }
   }
 
+  @Override
   public SchemaValue schemaValue() throws SchemaRegistryException {
     SchemaValue schemaValue = schemaValueRef.get();
     if (schemaValue == null) {

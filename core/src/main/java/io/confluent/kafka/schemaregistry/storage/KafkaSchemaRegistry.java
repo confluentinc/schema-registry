@@ -511,7 +511,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       // iterate from the latest to first
       if (schema.getVersion() == 0) {
         for (ParsedSchemaHolder schemaHolder : undeletedVersions) {
-          SchemaValue schemaValue = ((LazyParsedSchemaHolder) schemaHolder).schemaValue();
+          SchemaValue schemaValue = ((SchemaValueHolder) schemaHolder).schemaValue();
           ParsedSchema undeletedSchema = schemaHolder.schema();
           if (parsedSchema != null
               && (schemaId < 0 || schemaId == schemaValue.getId())
