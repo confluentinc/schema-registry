@@ -21,7 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -366,13 +366,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   default AssociationBatchResponse createAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request) {
     return null;
   }
 
   default AssociationBatchResponse createAssociationsOrForward(
       String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
+      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     return null;
@@ -392,13 +392,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   default AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request) {
     return null;
   }
 
   default AssociationBatchResponse createOrUpdateAssociationsOrForward(
       String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
+      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     return null;

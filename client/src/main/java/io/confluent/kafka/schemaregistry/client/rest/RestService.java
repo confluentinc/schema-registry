@@ -38,7 +38,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -1910,7 +1910,7 @@ public class RestService implements Closeable, Configurable {
 
   public AssociationBatchResponse createAssociations(
       Map<String, String> requestProperties,
-      String context, Boolean dryRun, AssociationBatchCreateOrUpdateRequest request
+      String context, Boolean dryRun, AssociationBatchRequest request
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations:batchCreate");
@@ -1951,7 +1951,7 @@ public class RestService implements Closeable, Configurable {
 
   public AssociationBatchResponse createOrUpdateAssociations(
       Map<String, String> requestProperties,
-      String context, Boolean dryRun, AssociationBatchCreateOrUpdateRequest request
+      String context, Boolean dryRun, AssociationBatchRequest request
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations:batchUpsert");

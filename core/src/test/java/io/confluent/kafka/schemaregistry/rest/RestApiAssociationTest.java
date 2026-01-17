@@ -26,7 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -879,8 +879,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     AssociationBatchResponse batchResponse = restApp.restClient.createAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
@@ -964,8 +964,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     // Dry run
     AssociationBatchResponse batchResponse = restApp.restClient.createAssociations(
@@ -1059,8 +1059,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     AssociationBatchResponse batchResponse = restApp.restClient.createAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
@@ -1153,8 +1153,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     AssociationBatchResponse batchResponse = restApp.restClient.createOrUpdateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
@@ -1244,8 +1244,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     AssociationBatchResponse batchResponse = restApp.restClient.createOrUpdateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, true, batchRequest);
@@ -1338,8 +1338,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     AssociationBatchResponse batchResponse = restApp.restClient.createOrUpdateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);

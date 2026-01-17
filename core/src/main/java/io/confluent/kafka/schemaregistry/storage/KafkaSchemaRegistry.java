@@ -43,7 +43,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -932,13 +932,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   public AssociationBatchResponse createAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request) {
     return createOrUpdateAssociations(context, dryRun, request, true);
   }
 
   public AssociationBatchResponse createAssociationsOrForward(
       String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
+      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     // Don't obtain lock for the entire batch request
@@ -1208,12 +1208,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   public AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+      String context, boolean dryRun, AssociationBatchRequest request) {
     return createOrUpdateAssociations(context, dryRun, request, false);
   }
 
   private AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request,
+      String context, boolean dryRun, AssociationBatchRequest request,
       boolean isCreateOnly) {
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationCreateOrUpdateRequest req : request.getRequests()) {
@@ -1290,7 +1290,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   public AssociationBatchResponse createOrUpdateAssociationsOrForward(
       String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
+      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     // Don't obtain lock for the entire batch request
@@ -1708,7 +1708,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   private AssociationBatchResponse forwardCreateAssociationsRequestToLeader(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request,
+      String context, boolean dryRun, AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
@@ -1751,7 +1751,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   private AssociationBatchResponse forwardCreateOrUpdateAssociationsRequestToLeader(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request,
+      String context, boolean dryRun, AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();

@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -403,7 +403,7 @@ public class AssociationsResource {
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create requests", required = true)
-      @NotNull AssociationBatchCreateOrUpdateRequest request) {
+      @NotNull AssociationBatchRequest request) {
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -447,7 +447,7 @@ public class AssociationsResource {
       @Parameter(description = "Dry run")
       @QueryParam("dryRun") boolean dryRun,
       @Parameter(description = "The create requests", required = true)
-      @NotNull AssociationBatchCreateOrUpdateRequest request) {
+      @NotNull AssociationBatchRequest request) {
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
