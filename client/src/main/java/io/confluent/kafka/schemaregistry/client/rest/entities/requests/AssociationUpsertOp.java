@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Confluent Inc.
+ * Copyright 2026 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,49 +19,46 @@ package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.io.IOException;
-import java.util.List;
-import java.util.Objects;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
 
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AssociationBatchCreateOrUpdateRequest {
-
-  private List<AssociationCreateOrUpdateRequest> requests;
+public class AssociationUpsertOp extends AssociationCreateOrUpdateOp {
 
   @JsonCreator
-  public AssociationBatchCreateOrUpdateRequest(
-      @JsonProperty("requests") List<AssociationCreateOrUpdateRequest> requests) {
-    this.requests = requests;
-  }
-
-  @JsonProperty("requests")
-  public List<AssociationCreateOrUpdateRequest> getRequests() {
-    return requests;
-  }
-
-  @JsonProperty("requests")
-  public void setRequests(List<AssociationCreateOrUpdateRequest> requests) {
-    this.requests = requests;
+  public AssociationUpsertOp(
+      @JsonProperty("subject") String subject,
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
+      @JsonProperty("frozen") Boolean frozen,
+      @JsonProperty("schema") RegisterSchemaRequest schema,
+      @JsonProperty("normalize") Boolean normalize) {
+    super(
+        OpType.UPSERT,
+        subject,
+        associationType,
+        lifecycle,
+        frozen,
+        schema,
+        normalize);
   }
 
   @Override
   public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    AssociationBatchCreateOrUpdateRequest that = (AssociationBatchCreateOrUpdateRequest) o;
-    return Objects.equals(requests, that.requests);
+    return super.equals(o);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(requests);
-  }
-
-  public String toJson() throws IOException {
-    return JacksonMapper.INSTANCE.writeValueAsString(this);
+    return super.hashCode();
   }
 }

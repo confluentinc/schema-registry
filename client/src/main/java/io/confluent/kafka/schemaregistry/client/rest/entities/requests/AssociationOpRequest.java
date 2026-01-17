@@ -22,7 +22,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -31,7 +30,7 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AssociationCreateOrUpdateRequest {
+public class AssociationOpRequest {
 
   private static final String TOPIC_RESOURCE_TYPE = "topic";
 
@@ -39,31 +38,20 @@ public class AssociationCreateOrUpdateRequest {
   private String resourceNamespace;
   private String resourceId;
   private String resourceType;
-  private List<AssociationCreateOrUpdateInfo> associations;
+  private List<? extends AssociationOp> associations;
 
   @JsonCreator
-  public AssociationCreateOrUpdateRequest(
+  public AssociationOpRequest(
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
       @JsonProperty("resourceType") String resourceType,
-      @JsonProperty("associations") List<AssociationCreateOrUpdateInfo> associations) {
+      @JsonProperty("associations") List<? extends AssociationOp> associations) {
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
     this.resourceType = resourceType;
     this.associations = associations;
-  }
-
-  public AssociationCreateOrUpdateRequest(
-      AssociationOpRequest request, AssociationOp op) {
-    this(
-        request.getResourceName(),
-        request.getResourceNamespace(),
-        request.getResourceId(),
-        request.getResourceType(),
-        ImmutableList.of(new AssociationCreateOrUpdateInfo((AssociationCreateOrUpdateOp) op))
-    );
   }
 
   @JsonProperty("resourceName")
@@ -107,12 +95,12 @@ public class AssociationCreateOrUpdateRequest {
   }
 
   @JsonProperty("associations")
-  public List<AssociationCreateOrUpdateInfo> getAssociations() {
+  public List<? extends AssociationOp> getAssociations() {
     return associations;
   }
 
   @JsonProperty("associations")
-  public void setAssociations(List<AssociationCreateOrUpdateInfo> associations) {
+  public void setAssociations(List<? extends AssociationOp> associations) {
     this.associations = associations;
   }
 
@@ -121,7 +109,7 @@ public class AssociationCreateOrUpdateRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    AssociationCreateOrUpdateRequest that = (AssociationCreateOrUpdateRequest) o;
+    AssociationOpRequest that = (AssociationOpRequest) o;
     return Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
@@ -153,7 +141,7 @@ public class AssociationCreateOrUpdateRequest {
     } else {
       setResourceType(TOPIC_RESOURCE_TYPE);
     }
-    for (AssociationCreateOrUpdateInfo info : getAssociations()) {
+    for (AssociationOp info : getAssociations()) {
       info.validate(dryRun);
     }
   }
