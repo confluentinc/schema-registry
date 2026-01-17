@@ -352,7 +352,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   private boolean maybePropagateSchemaTags(
-          Schema schema, LazyParsedSchemaHolder previousSchema, boolean propagateSchemaTags)
+          Schema schema, ParsedSchemaHolder previousSchema, boolean propagateSchemaTags)
           throws InvalidSchemaException {
     if (!propagateSchemaTags || previousSchema == null) {
       return false;
@@ -419,8 +419,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           boolean propagateSchemaTags)
           throws SchemaRegistryException {
     boolean populatedSchema = false;
-    LazyParsedSchemaHolder previousSchemaHolder = !undeletedVersions.isEmpty()
-            ? (LazyParsedSchemaHolder) undeletedVersions.get(0)
+    SchemaValueHolder previousSchemaHolder = !undeletedVersions.isEmpty()
+            ? (SchemaValueHolder) undeletedVersions.get(0)
             : null;
     Schema previousSchema = previousSchemaHolder != null
             ? toSchemaEntity(previousSchemaHolder.schemaValue())
