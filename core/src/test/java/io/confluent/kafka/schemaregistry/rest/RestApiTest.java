@@ -69,6 +69,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -3115,6 +3116,37 @@ public abstract class RestApiTest {
     } catch (RestClientException rce) {
       assertEquals(Errors.SCHEMA_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
     }
+  }
+
+  @Test
+  public void testRegisterSchemaWithSensitiveMetadata() throws Exception {
+    String subject = "testSubject";
+    String SCHEMA_STRING = AvroUtils.parseSchema(
+            "{\"type\":\"record\","
+                + "\"name\":\"myrecord\","
+                + "\"fields\":"
+                + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
+        .canonicalString();
+
+    Map<String, String> properties = new HashMap<>();
+    properties.put("nonsensitive", "foo");
+    properties.put("sensitive", "foo");
+    Metadata metadata = new Metadata(null, properties, Collections.singleton("sensitive"));
+    Schema schema = new Schema(subject, null, null, null, null, metadata, null, SCHEMA_STRING);
+    RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
+
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering without id should succeed"
+    );
+
+    List<SubjectVersion> subjectVersions = restApp.restClient.getAllVersionsById(expectedIdSchema1);
+    assertEquals(ImmutableList.of(new SubjectVersion(subject, 1)), subjectVersions);
+
+    SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1);
+    assertEquals(properties, schemaString.getMetadata().getProperties());
   }
 
   public static void registerAndVerifySchema(
