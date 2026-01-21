@@ -58,6 +58,15 @@ public class AssociationCreateOrUpdateInfo {
     this.normalize = normalize;
   }
 
+  public AssociationCreateOrUpdateInfo(AssociationCreateOrUpdateOp op) {
+    this.subject = op.getSubject();
+    this.associationType = op.getAssociationType();
+    this.lifecycle = op.getLifecycle();
+    this.frozen = op.getFrozen();
+    this.schema = op.getSchema();
+    this.normalize = op.getNormalize();
+  }
+
   @JsonProperty("subject")
   public String getSubject() {
     return subject;

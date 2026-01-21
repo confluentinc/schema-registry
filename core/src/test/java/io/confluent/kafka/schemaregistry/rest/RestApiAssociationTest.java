@@ -28,10 +28,13 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.util.ArrayList;
@@ -837,14 +840,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     keyRequest2.setSchema(allSchemas.get(2));
 
     // Create batch request with multiple associations
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject1,
                 "key",
                 LifecyclePolicy.WEAK,
@@ -852,7 +855,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 keyRequest1,
                 null
             ),
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject2,
                 "value",
                 LifecyclePolicy.STRONG,
@@ -862,13 +865,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject3,
                 "key",
                 LifecyclePolicy.WEAK,
@@ -938,14 +941,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     valueRequest.setSchema(allSchemas.get(1));
 
     // Create batch request
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName,
         resourceNamespace,
         resourceId,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject1,
                 "key",
                 LifecyclePolicy.WEAK,
@@ -953,7 +956,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 keyRequest,
                 null
             ),
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject2,
                 "value",
                 LifecyclePolicy.STRONG,
@@ -1025,14 +1028,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, existingRequest);
 
     // Create batch request where first will fail (duplicate), second will succeed
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,  // Same resource ID - will fail
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject1,
                 "key",  // Duplicate
                 LifecyclePolicy.STRONG,
@@ -1042,13 +1045,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,  // Different resource - will succeed
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject2,
                 "value",
                 LifecyclePolicy.WEAK,
@@ -1119,14 +1122,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, initialRequest);
 
     // Batch upsert: update existing and create new
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,  // Existing - will be updated
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject1,
                 "key",
                 LifecyclePolicy.STRONG,  // Change from WEAK to STRONG
@@ -1136,13 +1139,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,  // New - will be created
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject2,
                 "value",
                 LifecyclePolicy.WEAK,
@@ -1226,14 +1229,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, initialRequest);
 
     // Dry run update
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName,
         resourceNamespace,
         resourceId,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject1,
                 "key",
                 LifecyclePolicy.STRONG,  // Try to change to STRONG
@@ -1304,14 +1307,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, frozenRequest);
 
     // Batch upsert: try to update frozen (will fail) and create new (will succeed)
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject1,
                 "key",
                 LifecyclePolicy.WEAK,  // Try to change frozen - will fail
@@ -1321,13 +1324,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject2,
                 "value",
                 LifecyclePolicy.WEAK,

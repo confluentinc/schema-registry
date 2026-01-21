@@ -365,12 +365,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return null;
   }
 
-  default AssociationBatchResponse createAssociations(
+  default AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request) {
     return null;
   }
 
-  default AssociationBatchResponse createAssociationsOrForward(
+  default AssociationBatchResponse mutateAssociationsOrForward(
       String context, boolean dryRun,
       AssociationBatchRequest request,
       Map<String, String> headerProperties)
@@ -386,19 +386,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default AssociationResponse createOrUpdateAssociationOrForward(String context, boolean dryRun,
       AssociationCreateOrUpdateRequest request,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryException {
-    return null;
-  }
-
-  default AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
-    return null;
-  }
-
-  default AssociationBatchResponse createOrUpdateAssociationsOrForward(
-      String context, boolean dryRun,
-      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     return null;

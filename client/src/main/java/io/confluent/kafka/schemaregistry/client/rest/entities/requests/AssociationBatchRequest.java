@@ -29,21 +29,21 @@ import java.util.Objects;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AssociationBatchRequest {
 
-  private List<AssociationBatchRequest> requests;
+  private List<AssociationOpRequest> requests;
 
   @JsonCreator
   public AssociationBatchRequest(
-      @JsonProperty("requests") List<AssociationBatchRequest> requests) {
+      @JsonProperty("requests") List<AssociationOpRequest> requests) {
     this.requests = requests;
   }
 
   @JsonProperty("requests")
-  public List<AssociationBatchRequest> getRequests() {
+  public List<AssociationOpRequest> getRequests() {
     return requests;
   }
 
   @JsonProperty("requests")
-  public void setRequests(List<AssociationBatchRequest> requests) {
+  public void setRequests(List<AssociationOpRequest> requests) {
     this.requests = requests;
   }
 

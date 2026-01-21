@@ -387,15 +387,15 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/associations:batchCreate")
+  @Path("/associations:batch")
   @POST
-  @Operation(summary = "Create a batch of associations.", responses = {
-      @ApiResponse(responseCode = "207", description = "The create response",
+  @Operation(summary = "Mutate associations in batch.", responses = {
+      @ApiResponse(responseCode = "207", description = "The batch response",
           content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
   })
-  @PerformanceMetric("associations.create")
-  @DocumentedName("createAssociations")
-  public void createAssociations(
+  @PerformanceMetric("associations.mutate")
+  @DocumentedName("mutateAssociations")
+  public void mutateAssociations(
       final @Suspended AsyncResponse asyncResponse,
       final @Context HttpHeaders headers,
       @Parameter(description = "Context")
@@ -412,7 +412,7 @@ public class AssociationsResource {
       if (context == null) {
         context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
       }
-      AssociationBatchResponse response = schemaRegistry.createAssociationsOrForward(
+      AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
           context, dryRun, request, headerProperties);
       asyncResponse.resume(response);
     } catch (SchemaRegistryTimeoutException e) {
@@ -427,51 +427,7 @@ public class AssociationsResource {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(
-          "Error while creating associations: " + e.getMessage(), e);
-    }
-  }
-
-  @Path("/associations:batchUpsert")
-  @POST
-  @Operation(summary = "Create or update a batch of associations.", responses = {
-      @ApiResponse(responseCode = "207", description = "The create or update response",
-          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
-  })
-  @PerformanceMetric("associations.upsert")
-  @DocumentedName("createOrUpdateAssociations")
-  public void createOrUpdateAssociations(
-      final @Suspended AsyncResponse asyncResponse,
-      final @Context HttpHeaders headers,
-      @Parameter(description = "Context")
-      @QueryParam("context") String context,
-      @Parameter(description = "Dry run")
-      @QueryParam("dryRun") boolean dryRun,
-      @Parameter(description = "The create requests", required = true)
-      @NotNull AssociationBatchRequest request) {
-
-    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, schemaRegistry.config().whitelistHeaders());
-
-    try {
-      if (context == null) {
-        context = new QualifiedSubject(schemaRegistry.tenant(), null, null).toQualifiedContext();
-      }
-      AssociationBatchResponse response = schemaRegistry.createOrUpdateAssociationsOrForward(
-          context, dryRun, request, headerProperties);
-      asyncResponse.resume(response);
-    } catch (SchemaRegistryTimeoutException e) {
-      throw Errors.operationTimeoutException("Register operation timed out", e);
-    } catch (SchemaRegistryStoreException e) {
-      throw Errors.storeException("Register schema operation failed while writing"
-          + " to the Kafka store", e);
-    } catch (SchemaRegistryRequestForwardingException e) {
-      throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-          + " to the leader", e);
-    } catch (UnknownLeaderException e) {
-      throw Errors.unknownLeaderException("Leader not known.", e);
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(
-          "Error while creating associations: " + e.getMessage(), e);
+          "Error while mutating associations: " + e.getMessage(), e);
     }
   }
 

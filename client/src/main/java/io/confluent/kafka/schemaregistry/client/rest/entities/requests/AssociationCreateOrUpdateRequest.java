@@ -17,13 +17,12 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
 import static io.confluent.kafka.schemaregistry.client.rest.utils.RestValidation.checkName;
-import static io.confluent.kafka.schemaregistry.client.rest.utils.RestValidation.checkSubject;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -54,6 +53,17 @@ public class AssociationCreateOrUpdateRequest {
     this.resourceId = resourceId;
     this.resourceType = resourceType;
     this.associations = associations;
+  }
+
+  public AssociationCreateOrUpdateRequest(
+      AssociationOpRequest request, AssociationOp op) {
+    this(
+        request.getResourceName(),
+        request.getResourceNamespace(),
+        request.getResourceId(),
+        request.getResourceType(),
+        ImmutableList.of(new AssociationCreateOrUpdateInfo((AssociationCreateOrUpdateOp) op))
+    );
   }
 
   @JsonProperty("resourceName")

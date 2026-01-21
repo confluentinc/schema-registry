@@ -25,8 +25,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.io.IOException;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
