@@ -2872,13 +2872,13 @@ public abstract class RestApiTest {
     assertThrows(
         RestClientException.class,
         () -> restApp.restClient.registerSchema(request1, subject0, false),
-        "Fail registering subject0 because of global validateFields"
+        "Fail registering subject0 because of global validateNewSchemas"
     );
 
-    // global validateNames = false
+    // global validateNewSchemas = false
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
     configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
-    configUpdateRequest.setValidateNames(false);
+    configUpdateRequest.validateNewSchemas(false);
     assertEquals(
         configUpdateRequest,
         restApp.restClient.updateConfig(configUpdateRequest, null),
@@ -2887,7 +2887,42 @@ public abstract class RestApiTest {
     assertEquals(
         expectedSchemaId(1),
         restApp.restClient.registerSchema(request1, subject0, false).getId(),
-        "Should register despite reserved fields"
+        "Should register despite invalid namespace"
+    );
+  }
+
+  @Test
+  public void testRegisterSchemaWithInvalidDefault() throws RestClientException, IOException {
+    String subject0 = "testSubject0";
+    String recordInvalidDefaultSchema =
+        "{\"namespace\": \"namespace\",\n"
+            + " \"type\": \"record\",\n"
+            + " \"name\": \"test\",\n"
+            + " \"fields\": [\n"
+            + "     {\"name\": \"string_default\", \"type\": \"string\", \"default\": null}\n"
+            + "]\n"
+            + "}";
+    ParsedSchema schema1 = AvroUtils.parseSchema(recordInvalidDefaultSchema);
+    RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
+    assertThrows(
+        RestClientException.class,
+        () -> restApp.restClient.registerSchema(request1, subject0, false),
+        "Fail registering subject0 because of global validateNewSchemas"
+    );
+
+    // global validateNewSchemas = false
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
+    configUpdateRequest.validateNewSchemas(false);
+    assertEquals(
+        configUpdateRequest,
+        restApp.restClient.updateConfig(configUpdateRequest, null),
+        "Updating config should succeed"
+    );
+    assertEquals(
+        expectedSchemaId(1),
+        restApp.restClient.registerSchema(request1, subject0, false).getId(),
+        "Should register despite invalid default"
     );
   }
 
