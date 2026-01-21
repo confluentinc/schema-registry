@@ -143,7 +143,7 @@ public abstract class MetadataEncoderService implements Closeable {
    * before the secrets are rotated.
    */
   public final void init() {
-    if (!initialized.get()) {
+    if (encoderSecret != null && !initialized.get()) {
       doInit();
       maybeRotateSecrets();
       boolean isInitialized = initialized.compareAndSet(false, true);
