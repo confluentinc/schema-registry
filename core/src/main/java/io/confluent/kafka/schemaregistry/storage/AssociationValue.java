@@ -301,7 +301,7 @@ public class AssociationValue extends SubjectValue {
             + "resourceNamespace, resourceId, and resourceType.");
       }
       infos.add(new AssociationInfo(
-          a1.getSubject(),
+          QualifiedSubject.create(a1.getTenant(), a1.getSubject()).toUnqualifiedSubject(),
           a1.getAssociationType(),
           a1.getLifecycle() == Lifecycle.STRONG
               ? LifecyclePolicy.STRONG
