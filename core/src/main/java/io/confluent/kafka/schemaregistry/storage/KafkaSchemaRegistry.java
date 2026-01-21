@@ -942,21 +942,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       try {
         req.validate(dryRun);
         for (AssociationOp op : req.getAssociations()) {
-          AssociationResponse response = new AssociationResponse(
-              req.getResourceName(),
-              req.getResourceNamespace(),
-              req.getResourceId(),
-              req.getResourceType(),
-              Collections.emptyList()
-          );
           switch (op.getType()) {
             case CREATE:
-              response = response.merge(createAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op)));
+              createAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
               break;
             case UPSERT:
-              response = response.merge(createOrUpdateAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op)));
+              createOrUpdateAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
               break;
             case DELETE:
               deleteAssociations(
@@ -969,8 +962,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             default:
               break;
           }
-          results.add(new AssociationResult(null, response));
         }
+        List<Association> associations = null;
+        if (!dryRun) {
+          associations = getAssociationsByResourceId(
+              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                req.getResourceName(), req.getResourceNamespace(),
+                req.getResourceId(), req.getResourceType(), associations)));
       } catch (IllegalPropertyException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INVALID_ASSOCIATION_ERROR_CODE,
@@ -1713,7 +1714,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     log.debug(String.format("Forwarding create associations request to %s", baseUrl));
     try {
-      AssociationBatchResponse response = leaderRestService.createAssociations(
+      AssociationBatchResponse response = leaderRestService.mutateAssociations(
           headerProperties, context, dryRun, request);
       return response;
     } catch (IOException e) {

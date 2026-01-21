@@ -122,18 +122,4 @@ public class AssociationResponse {
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
-
-  public AssociationResponse merge(AssociationResponse other) {
-    if (other == null) {
-      return this;
-    }
-    List<AssociationInfo> infos = new ArrayList<>(getAssociations());
-    infos.addAll(other.getAssociations());
-    return new AssociationResponse(
-        this.resourceName,
-        this.resourceNamespace,
-        this.resourceId,
-        this.resourceType,
-        infos);
-  }
 }
