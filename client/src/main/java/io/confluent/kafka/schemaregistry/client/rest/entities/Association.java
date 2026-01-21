@@ -21,6 +21,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -243,5 +248,44 @@ public class Association implements Comparable<Association> {
     } else {
       return this.getSubject().compareTo(that.getSubject());
     }
+  }
+
+  public static AssociationResponse toAssociationResponse(
+      String resourceName,
+      String resourceNamespace,
+      String resourceId,
+      String resourceType,
+      List<Association> associations) {
+    if (associations == null || associations.isEmpty()) {
+      return new AssociationResponse(
+          resourceName,
+          resourceNamespace,
+          resourceId,
+          resourceType,
+          Collections.emptyList());
+    }
+    List<AssociationInfo> infos = new ArrayList<>();
+    for (Association a1 : associations) {
+      // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
+      if (!Objects.equals(a1.getResourceName(), resourceName)
+          || !Objects.equals(a1.getResourceNamespace(), resourceNamespace)
+          || !Objects.equals(a1.getResourceId(), resourceId)
+          || !Objects.equals(a1.getResourceType(), resourceType)) {
+        throw new IllegalArgumentException("All associations must have the same resourceName, "
+            + "resourceNamespace, resourceId, and resourceType.");
+      }
+      infos.add(new AssociationInfo(
+          a1.getSubject(),
+          a1.getAssociationType(),
+          a1.getLifecycle(),
+          a1.isFrozen(),
+          null));
+    }
+    return new AssociationResponse(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        resourceType,
+        infos);
   }
 }
