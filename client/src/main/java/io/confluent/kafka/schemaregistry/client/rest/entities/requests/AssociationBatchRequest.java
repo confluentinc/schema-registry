@@ -27,23 +27,23 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AssociationBatchCreateOrUpdateRequest {
+public class AssociationBatchRequest {
 
-  private List<AssociationCreateOrUpdateRequest> requests;
+  private List<AssociationOpRequest> requests;
 
   @JsonCreator
-  public AssociationBatchCreateOrUpdateRequest(
-      @JsonProperty("requests") List<AssociationCreateOrUpdateRequest> requests) {
+  public AssociationBatchRequest(
+      @JsonProperty("requests") List<AssociationOpRequest> requests) {
     this.requests = requests;
   }
 
   @JsonProperty("requests")
-  public List<AssociationCreateOrUpdateRequest> getRequests() {
+  public List<AssociationOpRequest> getRequests() {
     return requests;
   }
 
   @JsonProperty("requests")
-  public void setRequests(List<AssociationCreateOrUpdateRequest> requests) {
+  public void setRequests(List<AssociationOpRequest> requests) {
     this.requests = requests;
   }
 
@@ -52,7 +52,7 @@ public class AssociationBatchCreateOrUpdateRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    AssociationBatchCreateOrUpdateRequest that = (AssociationBatchCreateOrUpdateRequest) o;
+    AssociationBatchRequest that = (AssociationBatchRequest) o;
     return Objects.equals(requests, that.requests);
   }
 
