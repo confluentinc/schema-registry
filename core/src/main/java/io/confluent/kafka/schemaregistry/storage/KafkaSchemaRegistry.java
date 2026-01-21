@@ -46,6 +46,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -941,17 +942,29 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       try {
         req.validate(dryRun);
         for (AssociationOp op : req.getAssociations()) {
-          AssociationResponse response = null;
+          AssociationResponse response = new AssociationResponse(
+              req.getResourceName(),
+              req.getResourceNamespace(),
+              req.getResourceId(),
+              req.getResourceType(),
+              Collections.emptyList()
+          );
           switch (op.getType()) {
             case CREATE:
-              response = createAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op));
+              response = response.merge(createAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op)));
               break;
             case UPSERT:
-              response = createOrUpdateAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op));
+              response = response.merge(createOrUpdateAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op)));
               break;
             case DELETE:
+              deleteAssociations(
+                  req.getResourceId(),
+                  req.getResourceType(),
+                  Collections.singletonList(((AssociationDeleteOp) op).getAssociationType()),
+                  false, dryRun
+              );
               break;
             default:
               break;
@@ -1031,7 +1044,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       return mutateAssociations(context, dryRun, request);
     } else {
       if (leaderIdentity != null) {
-        return forwardCreateAssociationsRequestToLeader(
+        return forwardMutateAssociationsRequestToLeader(
             context, dryRun, request, headerProperties);
       } else {
         throw new UnknownLeaderException("Create associations request failed since leader is "
@@ -1692,7 +1705,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private AssociationBatchResponse forwardCreateAssociationsRequestToLeader(
+  private AssociationBatchResponse forwardMutateAssociationsRequestToLeader(
       String context, boolean dryRun, AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
@@ -1728,28 +1741,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryRequestForwardingException(
           String.format(
               "Unexpected error while forwarding the create or update association request to %s",
-              baseUrl),
-          e);
-    } catch (RestClientException e) {
-      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
-    }
-  }
-
-  private AssociationBatchResponse forwardCreateOrUpdateAssociationsRequestToLeader(
-      String context, boolean dryRun, AssociationBatchRequest request,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryRequestForwardingException {
-    final UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    log.debug(String.format("Forwarding create or update associations request to %s", baseUrl));
-    try {
-      AssociationBatchResponse response = leaderRestService.createOrUpdateAssociations(
-          headerProperties, context, dryRun, request);
-      return response;
-    } catch (IOException e) {
-      throw new SchemaRegistryRequestForwardingException(
-          String.format(
-              "Unexpected error while forwarding the create or update associations request to %s",
               baseUrl),
           e);
     } catch (RestClientException e) {

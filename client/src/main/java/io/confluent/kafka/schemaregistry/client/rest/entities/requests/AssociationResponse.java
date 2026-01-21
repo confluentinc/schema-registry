@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -120,5 +121,19 @@ public class AssociationResponse {
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
+  }
+
+  public AssociationResponse merge(AssociationResponse other) {
+    if (other == null) {
+      return this;
+    }
+    List<AssociationInfo> infos = new ArrayList<>(getAssociations());
+    infos.addAll(other.getAssociations());
+    return new AssociationResponse(
+        this.resourceName,
+        this.resourceNamespace,
+        this.resourceId,
+        this.resourceType,
+        infos);
   }
 }
