@@ -21,7 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
@@ -365,14 +365,14 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return null;
   }
 
-  default AssociationBatchResponse createAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
+  default AssociationBatchResponse mutateAssociations(
+      String context, boolean dryRun, AssociationBatchRequest request) {
     return null;
   }
 
-  default AssociationBatchResponse createAssociationsOrForward(
+  default AssociationBatchResponse mutateAssociationsOrForward(
       String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
+      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     return null;
@@ -386,19 +386,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default AssociationResponse createOrUpdateAssociationOrForward(String context, boolean dryRun,
       AssociationCreateOrUpdateRequest request,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryException {
-    return null;
-  }
-
-  default AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
-    return null;
-  }
-
-  default AssociationBatchResponse createOrUpdateAssociationsOrForward(
-      String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     return null;
