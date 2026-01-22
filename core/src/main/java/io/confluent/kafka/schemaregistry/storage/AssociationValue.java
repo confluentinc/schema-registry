@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import jakarta.validation.constraints.NotEmpty;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -282,34 +283,37 @@ public class AssociationValue extends SubjectValue {
 
   public static AssociationResponse toAssociationResponse(
       List<AssociationValue> associations, Map<String, Schema> schemas) {
-    // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
-    for (int i = 1; i < associations.size(); i++) {
-      AssociationValue a1 = associations.get(i - 1);
-      AssociationValue a2 = associations.get(i);
-      if (!Objects.equals(a1.getResourceName(), a2.getResourceName())
-          || !Objects.equals(a1.getResourceNamespace(), a2.getResourceNamespace())
-          || !Objects.equals(a1.getResourceId(), a2.getResourceId())
-          || !Objects.equals(a1.getResourceType(), a2.getResourceType())) {
+    if (associations == null || associations.isEmpty()) {
+      throw new IllegalArgumentException("Associations list cannot be empty.");
+    }
+    String resourceName = associations.get(0).getResourceName();
+    String resourceNamespace = associations.get(0).getResourceNamespace();
+    String resourceId = associations.get(0).getResourceId();
+    String resourceType = associations.get(0).getResourceType();
+    List<AssociationInfo> infos = new ArrayList<>();
+    for (AssociationValue a1 : associations) {
+      // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
+      if (!Objects.equals(a1.getResourceName(), resourceName)
+          || !Objects.equals(a1.getResourceNamespace(), resourceNamespace)
+          || !Objects.equals(a1.getResourceId(), resourceId)
+          || !Objects.equals(a1.getResourceType(), resourceType)) {
         throw new IllegalArgumentException("All associations must have the same resourceName, "
             + "resourceNamespace, resourceId, and resourceType.");
       }
+      infos.add(new AssociationInfo(
+          QualifiedSubject.create(a1.getTenant(), a1.getSubject()).toUnqualifiedSubject(),
+          a1.getAssociationType(),
+          a1.getLifecycle() == Lifecycle.STRONG
+              ? LifecyclePolicy.STRONG
+              : LifecyclePolicy.WEAK,
+          a1.isFrozen(),
+          schemas.get(a1.associationType)));
     }
-    List<AssociationInfo> infos = associations.stream()
-        .map(a -> new AssociationInfo(
-            QualifiedSubject.create(a.getTenant(), a.getSubject()).toUnqualifiedSubject(),
-            a.getAssociationType(),
-            a.getLifecycle() == Lifecycle.STRONG
-                ? LifecyclePolicy.STRONG
-                : LifecyclePolicy.WEAK,
-            a.isFrozen(),
-            schemas.get(a.associationType)))
-        .toList();
     return new AssociationResponse(
-        associations.get(0).getResourceName(),
-        associations.get(0).getResourceNamespace(),
-        associations.get(0).getResourceId(),
-        associations.get(0).getResourceType(),
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        resourceType,
         infos);
-
   }
 }
