@@ -21,10 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
@@ -278,38 +275,5 @@ public class AssociationValue extends SubjectValue {
                       : old.isFrozen());
         })
         .toList();
-  }
-
-  public static AssociationResponse toAssociationResponse(
-      List<AssociationValue> associations, Map<String, Schema> schemas) {
-    // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
-    for (int i = 1; i < associations.size(); i++) {
-      AssociationValue a1 = associations.get(i - 1);
-      AssociationValue a2 = associations.get(i);
-      if (!Objects.equals(a1.getResourceName(), a2.getResourceName())
-          || !Objects.equals(a1.getResourceNamespace(), a2.getResourceNamespace())
-          || !Objects.equals(a1.getResourceId(), a2.getResourceId())
-          || !Objects.equals(a1.getResourceType(), a2.getResourceType())) {
-        throw new IllegalArgumentException("All associations must have the same resourceName, "
-            + "resourceNamespace, resourceId, and resourceType.");
-      }
-    }
-    List<AssociationInfo> infos = associations.stream()
-        .map(a -> new AssociationInfo(
-            QualifiedSubject.create(a.getTenant(), a.getSubject()).toUnqualifiedSubject(),
-            a.getAssociationType(),
-            a.getLifecycle() == Lifecycle.STRONG
-                ? LifecyclePolicy.STRONG
-                : LifecyclePolicy.WEAK,
-            a.isFrozen(),
-            schemas.get(a.associationType)))
-        .toList();
-    return new AssociationResponse(
-        associations.get(0).getResourceName(),
-        associations.get(0).getResourceNamespace(),
-        associations.get(0).getResourceId(),
-        associations.get(0).getResourceType(),
-        infos);
-
   }
 }

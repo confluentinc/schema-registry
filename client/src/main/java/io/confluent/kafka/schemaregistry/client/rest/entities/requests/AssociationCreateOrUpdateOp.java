@@ -23,17 +23,13 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
-import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.io.IOException;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AssociationCreateOrUpdateInfo {
-
-  private static final String KEY_ASSOCIATION_TYPE = "key";
-  private static final String VALUE_ASSOCIATION_TYPE = "value";
+public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
 
   private String subject;
   private String associationType;
@@ -43,28 +39,21 @@ public class AssociationCreateOrUpdateInfo {
   private Boolean normalize;
 
   @JsonCreator
-  public AssociationCreateOrUpdateInfo(
+  public AssociationCreateOrUpdateOp(
+      @JsonProperty("opType") OpType opType,
       @JsonProperty("subject") String subject,
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
       @JsonProperty("frozen") Boolean frozen,
       @JsonProperty("schema") RegisterSchemaRequest schema,
       @JsonProperty("normalize") Boolean normalize) {
+    super(opType);
     this.subject = subject;
     this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
     this.schema = schema;
     this.normalize = normalize;
-  }
-
-  public AssociationCreateOrUpdateInfo(AssociationCreateOrUpdateOp op) {
-    this.subject = op.getSubject();
-    this.associationType = op.getAssociationType();
-    this.lifecycle = op.getLifecycle();
-    this.frozen = op.getFrozen();
-    this.schema = op.getSchema();
-    this.normalize = op.getNormalize();
   }
 
   @JsonProperty("subject")
@@ -129,10 +118,16 @@ public class AssociationCreateOrUpdateInfo {
 
   @Override
   public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    AssociationCreateOrUpdateInfo that = (AssociationCreateOrUpdateInfo) o;
+    if (!super.equals(o)) {
+      return false;
+    }
+    AssociationCreateOrUpdateOp that = (AssociationCreateOrUpdateOp) o;
     return Objects.equals(subject, that.subject)
         && Objects.equals(associationType, that.associationType)
         && Objects.equals(lifecycle, that.lifecycle)
@@ -144,11 +139,7 @@ public class AssociationCreateOrUpdateInfo {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, associationType, lifecycle, frozen, schema, normalize);
-  }
-
-  public String toJson() throws IOException {
-    return JacksonMapper.INSTANCE.writeValueAsString(this);
+        super.hashCode(), subject, associationType, lifecycle, frozen, schema, normalize);
   }
 
   public void validate(boolean dryRun) {
