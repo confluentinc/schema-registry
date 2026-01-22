@@ -1328,7 +1328,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (iter.hasNext()) {
         AssociationValue value = iter.next();
         if ((resourceType == null || value.getResourceType().equals(resourceType))
-            && (associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
             && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
           associations.add(value.toAssociationEntity());
         }
@@ -1353,7 +1354,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (iter.hasNext()) {
         AssociationValue value = iter.next();
         if ((resourceType == null || value.getResourceType().equals(resourceType))
-            && (associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
             && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
           associations.add(value.toAssociationEntity());
         }
@@ -1401,7 +1403,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
       while (iter.hasNext()) {
         AssociationValue value = (AssociationValue) iter.next();
-        if ((associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+        if ((associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
             && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
           associations.add(value.toAssociationEntity());
         }
