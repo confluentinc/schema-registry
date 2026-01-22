@@ -93,7 +93,6 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     super(config, x509Source);
   }
 
-
   protected SchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
     SchemaRegistry kafkaSchemaRegistry = null;
     try {
