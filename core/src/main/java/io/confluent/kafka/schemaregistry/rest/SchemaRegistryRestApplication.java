@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySer
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.Application;
 import io.confluent.rest.RestConfigException;
+import io.spiffe.workloadapi.X509Source;
 import java.util.Arrays;
 import java.util.Collection;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
@@ -86,6 +87,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
     super(config);
+  }
+
+  public SchemaRegistryRestApplication(SchemaRegistryConfig config, X509Source x509Source) {
+    super(config, x509Source);
   }
 
 
