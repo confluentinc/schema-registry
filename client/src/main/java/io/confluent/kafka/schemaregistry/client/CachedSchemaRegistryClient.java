@@ -25,6 +25,8 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -1154,6 +1156,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throws IOException, RestClientException {
     restService.deleteAssociations(DEFAULT_REQUEST_PROPERTIES,
         resourceId, resourceType, associationTypes, cascadeLifecycle, false);
+  }
+
+  @Override
+  public AssociationBatchResponse mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request)
+      throws IOException, RestClientException {
+    return restService.mutateAssociations(DEFAULT_REQUEST_PROPERTIES, context, dryRun, request);
   }
 
   private void checkMissingSchemaCache(String subject, ParsedSchema schema, boolean normalize)
