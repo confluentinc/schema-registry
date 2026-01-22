@@ -971,7 +971,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         results.add(new AssociationResult(null,
             Association.toAssociationResponse(
                 req.getResourceName(), req.getResourceNamespace(),
-                req.getResourceId(), req.getResourceType(), associations)));
+                req.getResourceId(), req.getResourceType(),
+                associations, Collections.emptyMap())));
       } catch (IllegalPropertyException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INVALID_ASSOCIATION_ERROR_CODE,
@@ -1246,7 +1247,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationValue associationValue : associationValues) {
       putAssociation(associationValue);
     }
-    return AssociationValue.toAssociationResponse(associationValues, registeredSchemas);
+    return Association.toAssociationResponse(
+        request.getResourceName(), request.getResourceNamespace(),
+        request.getResourceId(), request.getResourceType(),
+        associationValues.stream()
+            .map(AssociationValue::toAssociationEntity)
+            .collect(Collectors.toList()),
+        registeredSchemas);
   }
 
   private void putAssociation(AssociationValue associationValue) throws SchemaRegistryException {

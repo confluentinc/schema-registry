@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -255,7 +256,8 @@ public class Association implements Comparable<Association> {
       String resourceNamespace,
       String resourceId,
       String resourceType,
-      List<Association> associations) {
+      List<Association> associations,
+      Map<String, Schema> schemas) {
     if (associations == null || associations.isEmpty()) {
       return new AssociationResponse(
           resourceName,
@@ -279,7 +281,7 @@ public class Association implements Comparable<Association> {
           a1.getAssociationType(),
           a1.getLifecycle(),
           a1.isFrozen(),
-          null));
+          schemas.get(a1.getAssociationType())));
     }
     return new AssociationResponse(
         resourceName,

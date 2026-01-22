@@ -280,40 +280,4 @@ public class AssociationValue extends SubjectValue {
         })
         .toList();
   }
-
-  public static AssociationResponse toAssociationResponse(
-      List<AssociationValue> associations, Map<String, Schema> schemas) {
-    if (associations == null || associations.isEmpty()) {
-      throw new IllegalArgumentException("Associations list cannot be empty.");
-    }
-    String resourceName = associations.get(0).getResourceName();
-    String resourceNamespace = associations.get(0).getResourceNamespace();
-    String resourceId = associations.get(0).getResourceId();
-    String resourceType = associations.get(0).getResourceType();
-    List<AssociationInfo> infos = new ArrayList<>();
-    for (AssociationValue a1 : associations) {
-      // Check all associations have same resourceName, resourceNamespace, resourceId, resourceType
-      if (!Objects.equals(a1.getResourceName(), resourceName)
-          || !Objects.equals(a1.getResourceNamespace(), resourceNamespace)
-          || !Objects.equals(a1.getResourceId(), resourceId)
-          || !Objects.equals(a1.getResourceType(), resourceType)) {
-        throw new IllegalArgumentException("All associations must have the same resourceName, "
-            + "resourceNamespace, resourceId, and resourceType.");
-      }
-      infos.add(new AssociationInfo(
-          QualifiedSubject.create(a1.getTenant(), a1.getSubject()).toUnqualifiedSubject(),
-          a1.getAssociationType(),
-          a1.getLifecycle() == Lifecycle.STRONG
-              ? LifecyclePolicy.STRONG
-              : LifecyclePolicy.WEAK,
-          a1.isFrozen(),
-          schemas.get(a1.associationType)));
-    }
-    return new AssociationResponse(
-        resourceName,
-        resourceNamespace,
-        resourceId,
-        resourceType,
-        infos);
-  }
 }
