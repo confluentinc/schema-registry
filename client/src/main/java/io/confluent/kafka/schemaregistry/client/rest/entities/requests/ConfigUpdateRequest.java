@@ -39,7 +39,7 @@ public class ConfigUpdateRequest {
   private Optional<String> alias;
   private Optional<Boolean> normalize;
   private Optional<Boolean> validateFields;
-  private Optional<Boolean> validateNames;
+  private Optional<Boolean> validateNewSchemas;
   private Optional<Boolean> validateRules;
   private Optional<String> compatibilityLevel;
   private Optional<String> compatibilityPolicy;
@@ -56,7 +56,7 @@ public class ConfigUpdateRequest {
     setAlias(config.getAlias());
     setNormalize(config.isNormalize());
     setValidateFields(config.isValidateFields());
-    setValidateNames(config.isValidateNames());
+    setValidateNewSchemas(config.isValidateNewSchemas());
     setValidateRules(config.isValidateRules());
     setCompatibilityLevel(config.getCompatibilityLevel());
     setCompatibilityPolicy(config.getCompatibilityPolicy());
@@ -131,24 +131,24 @@ public class ConfigUpdateRequest {
     this.validateFields = validateFields != null ? Optional.of(validateFields) : null;
   }
 
-  @JsonProperty("validateNames")
-  public Optional<Boolean> isOptionalValidateNames() {
-    return validateNames;
+  @JsonProperty("validateNewSchemas")
+  public Optional<Boolean> isOptionalValidateNewSchemas() {
+    return validateNewSchemas;
   }
 
   @JsonIgnore
-  public Boolean isValidateNames() {
-    return validateNames != null ? validateNames.orElse(null) : null;
+  public Boolean isValidateNewSchemas() {
+    return validateNewSchemas != null ? validateNewSchemas.orElse(null) : null;
   }
 
-  @JsonProperty("validateNames")
-  public void setValidateNames(Optional<Boolean> validateNames) {
-    this.validateNames = validateNames;
+  @JsonProperty("validateNewSchemas")
+  public void setValidateNewSchemas(Optional<Boolean> validateNewSchemas) {
+    this.validateNewSchemas = validateNewSchemas;
   }
 
   @JsonIgnore
-  public void setValidateNames(Boolean validateNames) {
-    this.validateNames = validateNames != null ? Optional.of(validateNames) : null;
+  public void setValidateNewSchemas(Boolean validateNewSchemas) {
+    this.validateNewSchemas = validateNewSchemas != null ? Optional.of(validateNewSchemas) : null;
   }
 
   @JsonProperty("validateRules")
@@ -333,7 +333,7 @@ public class ConfigUpdateRequest {
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
-        && Objects.equals(validateNames, that.validateNames)
+        && Objects.equals(validateNewSchemas, that.validateNewSchemas)
         && Objects.equals(validateRules, that.validateRules)
         && Objects.equals(compatibilityLevel, that.compatibilityLevel)
         && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
@@ -346,7 +346,7 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateNames, validateRules,
+    return Objects.hash(alias, normalize, validateFields, validateNewSchemas, validateRules,
         compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
