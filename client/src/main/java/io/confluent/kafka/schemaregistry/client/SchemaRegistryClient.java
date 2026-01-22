@@ -25,6 +25,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
@@ -450,6 +452,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public default void deleteAssociations(String resourceId, String resourceType,
                                          List<String> associationTypes, boolean cascadeLifecycle)
           throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default AssociationBatchResponse mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 }
