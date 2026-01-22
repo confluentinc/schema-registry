@@ -26,12 +26,16 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.util.ArrayList;
@@ -837,14 +841,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     keyRequest2.setSchema(allSchemas.get(2));
 
     // Create batch request with multiple associations
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject1,
                 "key",
                 LifecyclePolicy.WEAK,
@@ -852,7 +856,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 keyRequest1,
                 null
             ),
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject2,
                 "value",
                 LifecyclePolicy.STRONG,
@@ -862,13 +866,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject3,
                 "key",
                 LifecyclePolicy.WEAK,
@@ -879,10 +883,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
-    AssociationBatchResponse batchResponse = restApp.restClient.createAssociations(
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
 
     // Verify batch response
@@ -938,14 +942,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     valueRequest.setSchema(allSchemas.get(1));
 
     // Create batch request
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName,
         resourceNamespace,
         resourceId,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject1,
                 "key",
                 LifecyclePolicy.WEAK,
@@ -953,7 +957,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 keyRequest,
                 null
             ),
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject2,
                 "value",
                 LifecyclePolicy.STRONG,
@@ -964,11 +968,11 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
     // Dry run
-    AssociationBatchResponse batchResponse = restApp.restClient.createAssociations(
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, true, batchRequest);
 
     // Verify dry run response
@@ -1025,14 +1029,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, existingRequest);
 
     // Create batch request where first will fail (duplicate), second will succeed
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,  // Same resource ID - will fail
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject1,
                 "key",  // Duplicate
                 LifecyclePolicy.STRONG,
@@ -1042,13 +1046,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,  // Different resource - will succeed
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationCreateOp(
                 subject2,
                 "value",
                 LifecyclePolicy.WEAK,
@@ -1059,10 +1063,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
-    AssociationBatchResponse batchResponse = restApp.restClient.createAssociations(
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
 
     // Verify batch response has both results
@@ -1119,14 +1123,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, initialRequest);
 
     // Batch upsert: update existing and create new
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,  // Existing - will be updated
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject1,
                 "key",
                 LifecyclePolicy.STRONG,  // Change from WEAK to STRONG
@@ -1136,13 +1140,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,  // New - will be created
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject2,
                 "value",
                 LifecyclePolicy.WEAK,
@@ -1153,10 +1157,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
-    AssociationBatchResponse batchResponse = restApp.restClient.createOrUpdateAssociations(
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
 
     // Verify batch response
@@ -1226,14 +1230,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, initialRequest);
 
     // Dry run update
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName,
         resourceNamespace,
         resourceId,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject1,
                 "key",
                 LifecyclePolicy.STRONG,  // Try to change to STRONG
@@ -1244,10 +1248,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
-    AssociationBatchResponse batchResponse = restApp.restClient.createOrUpdateAssociations(
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, true, batchRequest);
 
     // Verify dry run response
@@ -1304,14 +1308,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, frozenRequest);
 
     // Batch upsert: try to update frozen (will fail) and create new (will succeed)
-    List<AssociationCreateOrUpdateRequest> requests = new ArrayList<>();
-    requests.add(new AssociationCreateOrUpdateRequest(
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
         resourceName1,
         resourceNamespace,
         resourceId1,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject1,
                 "key",
                 LifecyclePolicy.WEAK,  // Try to change frozen - will fail
@@ -1321,13 +1325,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             )
         )
     ));
-    requests.add(new AssociationCreateOrUpdateRequest(
+    requests.add(new AssociationOpRequest(
         resourceName2,
         resourceNamespace,
         resourceId2,
         "topic",
         ImmutableList.of(
-            new AssociationCreateOrUpdateInfo(
+            new AssociationUpsertOp(
                 subject2,
                 "value",
                 LifecyclePolicy.WEAK,
@@ -1338,10 +1342,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         )
     ));
 
-    AssociationBatchCreateOrUpdateRequest batchRequest =
-        new AssociationBatchCreateOrUpdateRequest(requests);
+    AssociationBatchRequest batchRequest =
+        new AssociationBatchRequest(requests);
 
-    AssociationBatchResponse batchResponse = restApp.restClient.createOrUpdateAssociations(
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
 
     // Verify batch response
@@ -1372,6 +1376,127 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, resourceId2, "topic",
         Collections.singletonList("value"), null, 0, -1);
     assertEquals(1, associations2.size());
+  }
+
+  @Test
+  public void testMutateAssociationsWithAllOpTypesInSingleRequest() throws Exception {
+    // This test exercises CREATE, UPSERT, and DELETE operations in a SINGLE AssociationOpRequest
+    // (i.e., all three operation types for the same resource in one request)
+    String keySubject = "mutateKeySubject";
+    String valueSubject = "mutateValueSubject";
+    String resourceName = "mutateSingleTopic";
+    String resourceNamespace = "default";
+    String resourceId = "mutate-single-request-resource";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
+    keySchemaRequest.setSchema(allSchemas.get(0));
+    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
+    valueSchemaRequest.setSchema(allSchemas.get(1));
+
+    // First, set up initial associations: create only "key" association
+    // This allows us to:
+    // - UPSERT "key" (update existing)
+    // - CREATE "value" (new)
+    // - DELETE "key" (remove existing after update)
+    AssociationCreateOrUpdateRequest setupRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                keySubject,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                keySchemaRequest,
+                null
+            )
+        )
+    );
+
+    AssociationResponse setupResponse = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, setupRequest);
+    assertEquals(1, setupResponse.getAssociations().size());
+    assertEquals("key", setupResponse.getAssociations().get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, setupResponse.getAssociations().get(0).getLifecycle());
+
+    // Verify initial state: only "key" association exists
+    List<Association> initialAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(1, initialAssociations.size());
+    assertEquals("key", initialAssociations.get(0).getAssociationType());
+
+    // Now create a SINGLE AssociationOpRequest with all three operation types:
+    // - CREATE "value" (new association)
+    // - UPSERT "key" (update lifecycle from WEAK to STRONG)
+    // - DELETE "key" (delete the existing association)
+    // The operations are processed in order, so final state will have only "value"
+    List<AssociationOpRequest> requests = new ArrayList<>();
+    requests.add(new AssociationOpRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            // CREATE: Add new "value" association
+            new AssociationCreateOp(
+                valueSubject,
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                valueSchemaRequest,
+                null
+            ),
+            // UPSERT: Update existing "key" association
+            new AssociationUpsertOp(
+                keySubject,
+                "key",
+                LifecyclePolicy.STRONG,  // Change from WEAK to STRONG
+                false,
+                null,
+                null
+            ),
+            // DELETE: Delete the "key" association
+            new AssociationDeleteOp("key")
+        )
+    ));
+
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
+
+    // Execute the batch mutation
+    AssociationBatchResponse batchResponse = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+
+    // Verify batch response
+    assertNotNull(batchResponse);
+    assertEquals(1, batchResponse.getResults().size());
+
+    AssociationResult result = batchResponse.getResults().get(0);
+    assertNull(result.getError());
+    assertNotNull(result.getResult());
+    assertEquals(resourceId, result.getResult().getResourceId());
+    // After all operations: CREATE added "value", UPSERT updated "key", DELETE removed "key"
+    // So we should have only "value" association remaining
+    assertEquals(1, result.getResult().getAssociations().size());
+    assertEquals("value", result.getResult().getAssociations().get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, result.getResult().getAssociations().get(0).getLifecycle());
+
+    // Verify final state: only "value" association exists (key was deleted)
+    List<Association> finalAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(1, finalAssociations.size());
+    assertEquals("value", finalAssociations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, finalAssociations.get(0).getLifecycle());
+
+    // Verify "key" association is gone
+    List<Association> keyAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.singletonList("key"), null, 0, -1);
+    assertEquals(0, keyAssociations.size());
   }
 }
 

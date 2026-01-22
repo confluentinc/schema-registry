@@ -43,9 +43,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -932,22 +935,119 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public AssociationBatchResponse createAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
-    return createOrUpdateAssociations(context, dryRun, request, true);
+  public AssociationBatchResponse mutateAssociations(
+      String context, boolean dryRun, AssociationBatchRequest request) {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationOpRequest req : request.getRequests()) {
+      kafkaStore.lockFor(context).lock();
+      try {
+        req.validate(dryRun);
+        for (AssociationOp op : req.getAssociations()) {
+          switch (op.getType()) {
+            case CREATE:
+              createAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
+              break;
+            case UPSERT:
+              createOrUpdateAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
+              break;
+            case DELETE:
+              deleteAssociations(
+                  req.getResourceId(),
+                  req.getResourceType(),
+                  Collections.singletonList(((AssociationDeleteOp) op).getAssociationType()),
+                  false, dryRun
+              );
+              break;
+            default:
+              break;
+          }
+        }
+        List<Association> associations = null;
+        if (!dryRun) {
+          associations = getAssociationsByResourceId(
+              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                req.getResourceName(), req.getResourceNamespace(),
+                req.getResourceId(), req.getResourceType(),
+                associations, Collections.emptyMap())));
+      } catch (IllegalPropertyException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForResourceExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getResource()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationFrozenException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FROZEN_ERROR_CODE,
+            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getSubject()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (NoActiveSubjectVersionExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
+            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
+                e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (StrongAssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (TooManyAssociationsException e) {
+        // TODO maxKeys
+        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+      } catch (InvalidSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (SchemaTooLargeException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            SCHEMA_TOO_LARGE_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (IncompatibleSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INCOMPATIBLE_SCHEMA_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while creating association: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } finally {
+        kafkaStore.lockFor(context).unlock();
+      }
+    }
+    return new AssociationBatchResponse(results);
   }
 
-  public AssociationBatchResponse createAssociationsOrForward(
+  public AssociationBatchResponse mutateAssociationsOrForward(
       String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
+      AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryException {
     // Don't obtain lock for the entire batch request
     if (isLeader()) {
-      return createAssociations(context, dryRun, request);
+      return mutateAssociations(context, dryRun, request);
     } else {
       if (leaderIdentity != null) {
-        return forwardCreateAssociationsRequestToLeader(
+        return forwardMutateAssociationsRequestToLeader(
             context, dryRun, request, headerProperties);
       } else {
         throw new UnknownLeaderException("Create associations request failed since leader is "
@@ -1148,7 +1248,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     for (AssociationValue associationValue : associationValues) {
       putAssociation(associationValue);
     }
-    return AssociationValue.toAssociationResponse(associationValues, registeredSchemas);
+    return Association.toAssociationResponse(
+        request.getResourceName(), request.getResourceNamespace(),
+        request.getResourceId(), request.getResourceType(),
+        associationValues.stream()
+            .map(AssociationValue::toAssociationEntity)
+            .collect(Collectors.toList()),
+        registeredSchemas);
   }
 
   private void putAssociation(AssociationValue associationValue) throws SchemaRegistryException {
@@ -1208,106 +1314,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request) {
-    return createOrUpdateAssociations(context, dryRun, request, false);
-  }
-
-  private AssociationBatchResponse createOrUpdateAssociations(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request,
-      boolean isCreateOnly) {
-    List<AssociationResult> results = new ArrayList<>();
-    for (AssociationCreateOrUpdateRequest req : request.getRequests()) {
-      kafkaStore.lockFor(context).lock();
-      try {
-        req.validate(dryRun);
-        AssociationResponse response = isCreateOnly
-            ? createAssociation(context, dryRun, req)
-            : createOrUpdateAssociation(context, dryRun, req);
-        results.add(new AssociationResult(null, response));
-      } catch (IllegalPropertyException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INVALID_ASSOCIATION_ERROR_CODE,
-            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationForResourceExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
-            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
-                e.getAssociationType(), e.getResource()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationForSubjectExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
-            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationFrozenException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FROZEN_ERROR_CODE,
-            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
-                e.getAssociationType(), e.getSubject()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (NoActiveSubjectVersionExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
-            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
-                e.getMessage()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (StrongAssociationForSubjectExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
-            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (TooManyAssociationsException e) {
-        // TODO maxKeys
-        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
-      } catch (InvalidSchemaException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INVALID_ASSOCIATION_ERROR_CODE,
-            e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } catch (SchemaTooLargeException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            SCHEMA_TOO_LARGE_ERROR_CODE,
-            e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } catch (IncompatibleSchemaException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INCOMPATIBLE_SCHEMA_ERROR_CODE,
-            e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } catch (Exception e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            RestServerErrorException.DEFAULT_ERROR_CODE,
-            "Error while creating association: " + e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } finally {
-        kafkaStore.lockFor(context).unlock();
-      }
-    }
-    return new AssociationBatchResponse(results);
-  }
-
-
-  public AssociationBatchResponse createOrUpdateAssociationsOrForward(
-      String context, boolean dryRun,
-      AssociationBatchCreateOrUpdateRequest request,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryException {
-    // Don't obtain lock for the entire batch request
-    if (isLeader()) {
-      return createOrUpdateAssociations(context, dryRun, request);
-    } else {
-      if (leaderIdentity != null) {
-        return forwardCreateOrUpdateAssociationsRequestToLeader(
-            context, dryRun, request, headerProperties);
-      } else {
-        throw new UnknownLeaderException("Create associations request failed since leader is "
-            + "unknown");
-      }
-    }
-  }
-
   public Association getAssociationByGuid(String guid)
       throws SchemaRegistryException {
     try {
@@ -1330,7 +1336,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (iter.hasNext()) {
         AssociationValue value = iter.next();
         if ((resourceType == null || value.getResourceType().equals(resourceType))
-            && (associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
             && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
           associations.add(value.toAssociationEntity());
         }
@@ -1355,7 +1362,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (iter.hasNext()) {
         AssociationValue value = iter.next();
         if ((resourceType == null || value.getResourceType().equals(resourceType))
-            && (associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
             && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
           associations.add(value.toAssociationEntity());
         }
@@ -1403,7 +1411,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
       while (iter.hasNext()) {
         AssociationValue value = (AssociationValue) iter.next();
-        if ((associationTypes.isEmpty() || associationTypes.contains(value.getAssociationType()))
+        if ((associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
             && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
           associations.add(value.toAssociationEntity());
         }
@@ -1708,15 +1717,15 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private AssociationBatchResponse forwardCreateAssociationsRequestToLeader(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request,
+  private AssociationBatchResponse forwardMutateAssociationsRequestToLeader(
+      String context, boolean dryRun, AssociationBatchRequest request,
       Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug(String.format("Forwarding create associations request to %s", baseUrl));
     try {
-      AssociationBatchResponse response = leaderRestService.createAssociations(
+      AssociationBatchResponse response = leaderRestService.mutateAssociations(
           headerProperties, context, dryRun, request);
       return response;
     } catch (IOException e) {
@@ -1744,28 +1753,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryRequestForwardingException(
           String.format(
               "Unexpected error while forwarding the create or update association request to %s",
-              baseUrl),
-          e);
-    } catch (RestClientException e) {
-      throw new RestException(e.getMessage(), e.getStatus(), e.getErrorCode(), e);
-    }
-  }
-
-  private AssociationBatchResponse forwardCreateOrUpdateAssociationsRequestToLeader(
-      String context, boolean dryRun, AssociationBatchCreateOrUpdateRequest request,
-      Map<String, String> headerProperties)
-      throws SchemaRegistryRequestForwardingException {
-    final UrlList baseUrl = leaderRestService.getBaseUrls();
-
-    log.debug(String.format("Forwarding create or update associations request to %s", baseUrl));
-    try {
-      AssociationBatchResponse response = leaderRestService.createOrUpdateAssociations(
-          headerProperties, context, dryRun, request);
-      return response;
-    } catch (IOException e) {
-      throw new SchemaRegistryRequestForwardingException(
-          String.format(
-              "Unexpected error while forwarding the create or update associations request to %s",
               baseUrl),
           e);
     } catch (RestClientException e) {
