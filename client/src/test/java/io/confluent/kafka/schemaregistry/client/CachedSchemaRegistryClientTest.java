@@ -69,6 +69,8 @@ public class CachedSchemaRegistryClientTest {
   private static final int CACHE_CAPACITY = 5;
   private static final String SCHEMA_STR_0 = avroSchemaString(0);
   private static final AvroSchema AVRO_SCHEMA_0 = avroSchema(0);
+  private static final AvroSchema AVRO_SCHEMA_0_WITH_METADATA =
+      AVRO_SCHEMA_0.copy(new Metadata(null, ImmutableMap.of("confluent:version", "1"), null), null);
   private static final AvroSchema SCHEMA_WITH_DECIMAL = new AvroSchema(
           "{\n"
               + "    \"type\": \"record\",\n"
@@ -254,6 +256,21 @@ public class CachedSchemaRegistryClientTest {
 
     assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
     assertEquals(ID_25, client.getIdWithResponse(SUBJECT_0, SCHEMA_WITH_DECIMAL, false).getId());
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterFollowedByIdLookupWillReturnRegisteredSchema() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(new Schema(SUBJECT_0, 1, ID_25, AVRO_SCHEMA_0_WITH_METADATA)))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
+    assertEquals(AVRO_SCHEMA_0_WITH_METADATA, client.getSchemaById(ID_25));
 
     verify(restService);
   }
