@@ -7,7 +7,7 @@ version: v1.0
 name: build-test-release
 agent:
   machine:
-    type: s1-prod-ubuntu24-04-amd64-2
+    type: s1-prod-ubuntu24-04-amd64-1
 
 fail_fast:
   cancel:
@@ -32,12 +32,12 @@ blocks:
     dependencies: []
     run:
       # don't run the tests on non-functional changes...
-      when: "change_in('/', {exclude: ['/.deployed-versions/', '.github/'], default_branch: 'master'})"
+      when: "change_in('/', {exclude: ['/.deployed-versions/', '.github/', 'service.yml', 'README.md'], default_branch: 'master'})"
     task:
       jobs:
         - name: Test
           commands:
-            - . sem-pint -c
+            - ci-sem-pint -c
             - ci-tools ci-update-version
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cache-maven store
