@@ -548,7 +548,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
             context, () -> CacheBuilder.newBuilder()
                 .maximumSize(cacheCapacity)
                 .build());
-        idSchemaMap.put(retrievedResponse.getId(), schema);
+        ParsedSchema retrievedSchema = retrievedResponse.getSchema() != null
+            ? parseSchemaOrElseThrow(new Schema(null, retrievedResponse))
+            : schema;
+        idSchemaMap.put(retrievedResponse.getId(), retrievedSchema);
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
@@ -826,14 +829,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           return cachedId;
         }
 
-        final int retrievedId = getIdFromRegistry(subject, schema, normalize);
+        final RegisterSchemaResponse retrievedResponse =
+            getIdWithResponseFromRegistry(subject, schema, normalize, false);
+        final int retrievedId = retrievedResponse.getId();
         schemaIdMap.put(schema, retrievedId);
         String context = toQualifiedContext(subject);
         final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
             context, () -> CacheBuilder.newBuilder()
                 .maximumSize(cacheCapacity)
                 .build());
-        idSchemaMap.put(retrievedId, schema);
+        ParsedSchema retrievedSchema = retrievedResponse.getSchema() != null
+            ? parseSchemaOrElseThrow(new Schema(null, retrievedResponse))
+            : schema;
+        idSchemaMap.put(retrievedId, retrievedSchema);
         return retrievedId;
       }
     } catch (ExecutionException e) {
@@ -913,7 +921,10 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
             context, () -> CacheBuilder.newBuilder()
                 .maximumSize(cacheCapacity)
                 .build());
-        idSchemaMap.put(retrievedResponse.getId(), schema);
+        ParsedSchema retrievedSchema = retrievedResponse.getSchema() != null
+            ? parseSchemaOrElseThrow(new Schema(null, retrievedResponse))
+            : schema;
+        idSchemaMap.put(retrievedResponse.getId(), retrievedSchema);
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
