@@ -142,7 +142,7 @@ public abstract class MetadataEncoderService implements Closeable {
    * Subclasses should override {@link #doInit()} to prepare any resources
    * before the secrets are rotated.
    */
-  public final void init() {
+  public final void init() throws SchemaRegistryStoreException {
     if (encoderSecret != null && !initialized.get()) {
       doInit();
       maybeRotateSecrets();
@@ -162,14 +162,16 @@ public abstract class MetadataEncoderService implements Closeable {
   /**
    * Get the encoder wrapper for a tenant.
    */
-  protected abstract KeysetWrapper getEncoderWrapper(String tenant);
+  protected abstract KeysetWrapper getEncoderWrapper(String tenant)
+      throws SchemaRegistryStoreException;
 
   /**
    * Store an encoder wrapper for a tenant.
    */
-  protected abstract void putEncoderWrapper(String tenant, KeysetWrapper wrapper);
+  protected abstract void putEncoderWrapper(String tenant, KeysetWrapper wrapper)
+      throws SchemaRegistryStoreException;
 
-  protected void maybeRotateSecrets() {
+  protected void maybeRotateSecrets() throws SchemaRegistryStoreException {
     String oldSecret = encoderOldSecret(schemaRegistry.config());
     if (oldSecret != null) {
       log.info("Rotating encoder secret");
@@ -203,7 +205,7 @@ public abstract class MetadataEncoderService implements Closeable {
   }
 
   @VisibleForTesting
-  public abstract KeysetHandle getEncoder(String tenant);
+  public abstract KeysetHandle getEncoder(String tenant) throws SchemaRegistryStoreException;
 
   public void encodeMetadata(SchemaValue schema) throws SchemaRegistryStoreException {
     if (!initialized.get() || schema == null || isEncoded(schema)) {
@@ -305,7 +307,8 @@ public abstract class MetadataEncoderService implements Closeable {
     }
   }
 
-  protected abstract KeysetHandle getOrCreateEncoder(String tenant);
+  protected abstract KeysetHandle getOrCreateEncoder(String tenant)
+      throws SchemaRegistryStoreException;
 
   @Override
   public abstract void close();
