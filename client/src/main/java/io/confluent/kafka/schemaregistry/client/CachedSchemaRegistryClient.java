@@ -544,12 +544,16 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
             ? registerAndGetId(subject, schema, version, id, normalize, propagateSchemaTags)
             : registerAndGetId(subject, schema, normalize, propagateSchemaTags);
         schemaResponseMap.put(schema, retrievedResponse);
-        String context = toQualifiedContext(subject);
-        final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
-            context, () -> CacheBuilder.newBuilder()
-                .maximumSize(cacheCapacity)
-                .build());
-        idSchemaMap.put(retrievedResponse.getId(), schema);
+        if (retrievedResponse.getSchema() != null) {
+          String context = toQualifiedContext(subject);
+          final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
+              context, () -> CacheBuilder.newBuilder()
+                  .maximumSize(cacheCapacity)
+                  .build());
+          ParsedSchema retrievedSchema =
+              parseSchemaOrElseThrow(new Schema(null, retrievedResponse));
+          idSchemaMap.put(retrievedResponse.getId(), retrievedSchema);
+        }
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
@@ -827,14 +831,20 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           return cachedId;
         }
 
-        final int retrievedId = getIdFromRegistry(subject, schema, normalize);
+        final RegisterSchemaResponse retrievedResponse =
+            getIdWithResponseFromRegistry(subject, schema, normalize, false);
+        final int retrievedId = retrievedResponse.getId();
         schemaIdMap.put(schema, retrievedId);
-        String context = toQualifiedContext(subject);
-        final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
-            context, () -> CacheBuilder.newBuilder()
-                .maximumSize(cacheCapacity)
-                .build());
-        idSchemaMap.put(retrievedId, schema);
+        if (retrievedResponse.getSchema() != null) {
+          String context = toQualifiedContext(subject);
+          final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
+              context, () -> CacheBuilder.newBuilder()
+                  .maximumSize(cacheCapacity)
+                  .build());
+          ParsedSchema retrievedSchema =
+              parseSchemaOrElseThrow(new Schema(null, retrievedResponse));
+          idSchemaMap.put(retrievedId, retrievedSchema);
+        }
         return retrievedId;
       }
     } catch (ExecutionException e) {
@@ -909,12 +919,16 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         final RegisterSchemaResponse retrievedResponse =
             getIdWithResponseFromRegistry(subject, schema, normalize, false);
         schemaResponseMap.put(schema, retrievedResponse);
-        String context = toQualifiedContext(subject);
-        final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
-            context, () -> CacheBuilder.newBuilder()
-                .maximumSize(cacheCapacity)
-                .build());
-        idSchemaMap.put(retrievedResponse.getId(), schema);
+        if (retrievedResponse.getSchema() != null) {
+          String context = toQualifiedContext(subject);
+          final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
+              context, () -> CacheBuilder.newBuilder()
+                  .maximumSize(cacheCapacity)
+                  .build());
+          ParsedSchema retrievedSchema =
+              parseSchemaOrElseThrow(new Schema(null, retrievedResponse));
+          idSchemaMap.put(retrievedResponse.getId(), retrievedSchema);
+        }
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
