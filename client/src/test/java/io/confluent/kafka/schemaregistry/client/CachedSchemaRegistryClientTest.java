@@ -269,7 +269,7 @@ public class CachedSchemaRegistryClientTest {
 
     replay(restService);
 
-    assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
     assertEquals(AVRO_SCHEMA_0_WITH_METADATA, client.getSchemaById(ID_25));
 
     verify(restService);
