@@ -12,6 +12,7 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package io.confluent.dekregistry.web.rest;
 
 import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
@@ -43,8 +44,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -91,7 +90,7 @@ public class RestApiTest extends ClusterTestHarness {
         null,
         fakeTicker
     );
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
+    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
       public void handle(String subject, ConfigUpdateRequest request) {
       }
 
@@ -297,11 +296,23 @@ public class RestApiTest extends ClusterTestHarness {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 0, 1);
+    assertEquals(ImmutableList.of(1), versions);
+
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 1, 1);
+    assertEquals(ImmutableList.of(2), versions);
+
     List<String> kekNames = client.listKeks(Collections.singletonList(subject), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
 
     kekNames = client.listKeks(Collections.singletonList(subject2), false);
     assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 0, 1);
+    assertEquals(ImmutableList.of(kekName), kekNames);
+
+    kekNames = client.listKeksWithPagination(Collections.singletonList(subject2), false, 1, 1);
+    assertEquals(Collections.emptyList(), kekNames);
 
     try {
       client.deleteKek(headers, kekName, false);
@@ -335,6 +346,11 @@ public class RestApiTest extends ClusterTestHarness {
 
     deks = client.listDeks(kekName, true);
     assertEquals(ImmutableList.of(subject, subject2), deks);
+
+    deks = client.listDeksWithPagination(kekName, true, 0, 1);
+    assertEquals(ImmutableList.of(subject), deks);
+    deks = client.listDeksWithPagination(kekName, true, 1, 1);
+    assertEquals(ImmutableList.of(subject2), deks);
 
     client.deleteDekVersion(headers, kekName, subject2, 2, null, false);
 

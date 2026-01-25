@@ -244,7 +244,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
           schema.getDefinedSubschemas().entrySet()) {
         String defName = entry.getKey();
         Schema subschema = entry.getValue();
-        SchemaContext subctx = subschema.accept(new SchemaTranslator());
+        SchemaContext subctx = subschema.accept(this);
         subctx.close();
         defs.put(defName, subctx.schema());
       }
@@ -481,7 +481,8 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   @Override
   public SchemaContext visitPropertySchema(String property,
-      Schema schema) {
+      Schema schema,
+      CompositeSchema context) {
     SchemaContext ctx = schema.accept(this);
     assert ctx != null;
     return new SchemaContext(schema, ObjectSchema.builder().requiresObject(false)

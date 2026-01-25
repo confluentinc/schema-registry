@@ -188,14 +188,12 @@ public class JsonSchemaUtils {
               .collect(Collectors.toList());
       if (client == null) {
         if (!references.isEmpty()) {
-          throw new IllegalArgumentException("Cannot resolve schema " + schema.value()
-                  + " with refs " + references);
+          throw new IllegalArgumentException("Cannot resolve schema");
         }
         return new JsonSchema(schema.value());
       } else {
         return (JsonSchema) client.parseSchema(JsonSchema.TYPE, schema.value(), references)
-                .orElseThrow(() -> new IOException("Invalid schema " + schema.value()
-                        + " with refs " + references));
+                .orElseThrow(() -> new IOException("Invalid schema"));
       }
     }
     JsonSchemaConfigBuilder config = getConfig(useOneofForNullables, failUnknownProperties);
@@ -212,6 +210,9 @@ public class JsonSchemaUtils {
         break;
       case DRAFT_2019_09:
         draft = JsonSchemaDraft.DRAFT_2019_09;
+        break;
+      case DRAFT_2020_12:
+        draft = JsonSchemaDraft.DRAFT_2020_12;
         break;
       default:
         draft = JsonSchemaDraft.DRAFT_07;

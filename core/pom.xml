@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.0.0-0</version>
+        <version>8.3.0-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry</artifactId>
@@ -33,10 +33,22 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka_${kafka.scala.version}</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.xerial.snappy</groupId>
@@ -52,8 +64,23 @@
             <version>${io.confluent.rest-utils.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-reload4j</artifactId>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-1.2-api</artifactId>
+            <version>${log4j.version}</version>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -66,6 +93,10 @@
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -84,16 +115,6 @@
             <artifactId>commons-compress</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.zookeeper</groupId>
-            <artifactId>zookeeper</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-codec</artifactId>
             <version>${netty.version}</version>
@@ -102,6 +123,10 @@
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-alpn-java-server</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
 
         <dependency>
@@ -134,6 +159,12 @@
             <artifactId>kafka_${kafka.scala.version}</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -141,12 +172,24 @@
             <version>${kafka.version}</version>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
@@ -187,6 +230,10 @@
                     <groupId>org.apache.directory.api</groupId>
                     <artifactId>api-ldap-schema-data</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>commons-lang</groupId>
+                    <artifactId>commons-lang</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -202,6 +249,10 @@
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>commons-lang</groupId>
+                    <artifactId>commons-lang</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -385,6 +436,13 @@
                         </goals>
                     </execution>
                 </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>javax.ws.rs</groupId>
+                        <artifactId>javax.ws.rs-api</artifactId>
+                        <version>2.1.1</version>
+                    </dependency>
+                </dependencies>
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
@@ -402,6 +460,21 @@
                     <buildNumberPropertyName>gitCommitID</buildNumberPropertyName>
                     <doCheck>false</doCheck>
                     <doUpdate>false</doUpdate>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.maven.plugin.version}</version>
+                <configuration>
+                    <java>
+                        <excludes>
+                            <exclude>src/test/java/io/confluent/kafka/serializers/protobuf/test/*.java</exclude>
+                        </excludes>
+                        <licenseHeader>
+                            <file>${maven.multiModuleProjectDirectory}/config/license-headers/ccl-header.txt</file>
+                        </licenseHeader>
+                    </java>
                 </configuration>
             </plugin>
         </plugins>

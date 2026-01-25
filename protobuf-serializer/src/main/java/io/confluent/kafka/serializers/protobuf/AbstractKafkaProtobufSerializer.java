@@ -1,17 +1,17 @@
 /*
  * Copyright 2020 Confluent Inc.
  *
- * Licensed under the Confluent Community License (the "License"); you may not use
- * this file except in compliance with the License.  You may obtain a copy of the
- * License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.confluent.io/confluent-community-license
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations under the License.
- *
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.confluent.kafka.serializers.protobuf;
@@ -20,7 +20,10 @@ import com.google.protobuf.Message;
 import com.squareup.wire.schema.internal.parser.ProtoFileElement;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Optional;
@@ -28,9 +31,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +114,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
       schema = resolveDependencies(schemaRegistry, normalizeSchema, autoRegisterForDeps,
           useLatestForDeps, latestCompatStrict, latestVersionsCache(),
           skipKnownTypes, referenceSubjectNameStrategy, topic, isKey, schema);
-      int id;
+      SchemaId schemaId;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Protobuf schema: ";
         if (schemaFormat != null) {
@@ -129,7 +130,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
             schema = schema.copy(s.getVersion());
           }
         }
-        id = s.getId();
+        schemaId = new SchemaId(ProtobufSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
         if (schemaFormat != null) {
@@ -138,32 +139,39 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         }
         schema = (ProtobufSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = useSchemaId;
+        Schema schemaEntity = new Schema(subject, null, useSchemaId, schema);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, schemaEntity.getGuid());
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (ProtobufSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            ProtobufSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version: ";
         ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (ProtobufSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            ProtobufSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else {
         restClientErrorMsg = "Error retrieving Protobuf schema: ";
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response =
+            schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, response.getId(), response.getGuid());
       }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      out.write(MAGIC_BYTE);
-      out.write(ByteBuffer.allocate(idSize).putInt(id).array());
+
       MessageIndexes indexes = schema.toMessageIndexes(
           object.getDescriptorForType().getFullName(), normalizeSchema);
-      out.write(indexes.toByteArray());
-      object.writeTo(out);
-      byte[] bytes = out.toByteArray();
-      out.close();
-      return bytes;
+      schemaId.setMessageIndexes(indexes.indexes());
+      try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
+        byte[] payload = object.toByteArray();
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
+        return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
+      }
     } catch (InterruptedIOException e) {
       throw new TimeoutException("Error serializing Protobuf message", e);
     } catch (IOException | RuntimeException e) {

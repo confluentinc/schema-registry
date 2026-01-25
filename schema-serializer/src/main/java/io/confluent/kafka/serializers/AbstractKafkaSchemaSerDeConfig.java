@@ -16,6 +16,12 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
+import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
+import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -56,6 +62,14 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       + "you can specify a scope using the 'mock://' pseudo-protocol. For example, "
       + "'mock://my-scope-name' corresponds to "
       + "'MockSchemaRegistry.getClientForScope(\"my-scope-name\")'.";
+
+  public static final String SCHEMA_REGISTRY_URL_RANDOMIZE_CONFIG =
+      "schema.registry.url.randomize";
+  public static final boolean SCHEMA_REGISTRY_URL_RANDOMIZE_DEFAULT =
+      SchemaRegistryClientConfig.URL_RANDOMIZE_DEFAULT;
+  public static final String SCHEMA_REGISTRY_URL_RANDOMIZE_DOC =
+      "Whether to randomize the starting index of the schema registry URL list. This can help with"
+          + " load balancing if many schema registry clients are using a shared configuration.";
 
   public static final String MAX_SCHEMAS_PER_SUBJECT_CONFIG = "max.schemas.per.subject";
   public static final int MAX_SCHEMAS_PER_SUBJECT_DEFAULT = 1000;
@@ -148,6 +162,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String SCHEMA_FORMAT = "schema.format";
   public static final String SCHEMA_FORMAT_DOC =
       "The schema format to use when registering or looking up schemas.";
+
+  public static final String EXECUTION_ENVIRONMENT = "execution.environment";
+  public static final String EXECUTION_ENVIRONMENT_DOCS =
+      "The execution environment, one of ALL, CLIENT, GATEWAY, SERVER, or NONE";
 
   public static final String RULE_EXECUTORS = "rule.executors";
   public static final String RULE_EXECUTORS_DOCS =
@@ -270,12 +288,36 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
       "Determines how to construct the subject name under which the key schema is registered "
       + "with the schema registry. By default, <topic>-key is used as subject.";
 
+  public static final String KEY_SCHEMA_ID_SERIALIZER = "key.schema.id.serializer";
+  public static final String KEY_SCHEMA_ID_SERIALIZER_DEFAULT =
+      PrefixSchemaIdSerializer.class.getName();
+  public static final String KEY_SCHEMA_ID_SERIALIZER_DOC =
+      "Determines how to serialize the ID for the key schema.";
+
+  public static final String KEY_SCHEMA_ID_DESERIALIZER = "key.schema.id.deserializer";
+  public static final String KEY_SCHEMA_ID_DESERIALIZER_DEFAULT =
+      DualSchemaIdDeserializer.class.getName();
+  public static final String KEY_SCHEMA_ID_DESERIALIZER_DOC =
+      "Determines how to deserialize the ID for the key schema.";
+
   public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT =
       TopicNameStrategy.class.getName();
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the value schema is registered "
       + "with the schema registry. By default, <topic>-value is used as subject.";
+
+  public static final String VALUE_SCHEMA_ID_SERIALIZER = "value.schema.id.serializer";
+  public static final String VALUE_SCHEMA_ID_SERIALIZER_DEFAULT =
+      PrefixSchemaIdSerializer.class.getName();
+  public static final String VALUE_SCHEMA_ID_SERIALIZER_DOC =
+      "Determines how to serialize the ID for the value schema.";
+
+  public static final String VALUE_SCHEMA_ID_DESERIALIZER = "value.schema.id.deserializer";
+  public static final String VALUE_SCHEMA_ID_DESERIALIZER_DEFAULT =
+      DualSchemaIdDeserializer.class.getName();
+  public static final String VALUE_SCHEMA_ID_DESERIALIZER_DOC =
+      "Determines how to deserialize the ID for the value schema.";
 
   public static final String SCHEMA_REFLECTION_CONFIG = "schema.reflection";
   public static final boolean SCHEMA_REFLECTION_DEFAULT = false;
@@ -298,6 +340,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     ConfigDef configDef = new ConfigDef()
         .define(SCHEMA_REGISTRY_URL_CONFIG, Type.LIST,
                 Importance.HIGH, SCHEMA_REGISTRY_URL_DOC)
+        .define(SCHEMA_REGISTRY_URL_RANDOMIZE_CONFIG, Type.BOOLEAN,
+                SCHEMA_REGISTRY_URL_RANDOMIZE_DEFAULT,
+                Importance.LOW, SCHEMA_REGISTRY_URL_RANDOMIZE_DOC)
         .define(MAX_SCHEMAS_PER_SUBJECT_CONFIG, Type.INT, MAX_SCHEMAS_PER_SUBJECT_DEFAULT,
                 Importance.LOW, MAX_SCHEMAS_PER_SUBJECT_DOC)
         .define(NORMALIZE_SCHEMAS, Type.BOOLEAN, NORMALIZE_SCHEMAS_DEFAULT,
@@ -322,6 +367,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, USE_LATEST_WITH_METADATA_DOC)
         .define(SCHEMA_FORMAT, Type.STRING, null,
                 Importance.LOW, SCHEMA_FORMAT_DOC)
+        .define(EXECUTION_ENVIRONMENT, Type.STRING, null,
+                EnumRecommender.in(ExecutionEnvironment.values()),
+                Importance.MEDIUM, EXECUTION_ENVIRONMENT_DOCS)
         .define(RULE_EXECUTORS, Type.LIST, "",
                 Importance.LOW, RULE_EXECUTORS_DOCS)
         .define(RULE_ACTIONS, Type.LIST, "",
@@ -364,8 +412,16 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.MEDIUM, CONTEXT_NAME_STRATEGY_DOC)
         .define(KEY_SUBJECT_NAME_STRATEGY, Type.CLASS, KEY_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, KEY_SUBJECT_NAME_STRATEGY_DOC)
+        .define(KEY_SCHEMA_ID_SERIALIZER, Type.CLASS, KEY_SCHEMA_ID_SERIALIZER_DEFAULT,
+                Importance.MEDIUM, KEY_SCHEMA_ID_SERIALIZER_DOC)
+        .define(KEY_SCHEMA_ID_DESERIALIZER, Type.CLASS, KEY_SCHEMA_ID_DESERIALIZER_DEFAULT,
+                Importance.MEDIUM, KEY_SCHEMA_ID_DESERIALIZER_DOC)
         .define(VALUE_SUBJECT_NAME_STRATEGY, Type.CLASS, VALUE_SUBJECT_NAME_STRATEGY_DEFAULT,
                 Importance.MEDIUM, VALUE_SUBJECT_NAME_STRATEGY_DOC)
+        .define(VALUE_SCHEMA_ID_SERIALIZER, Type.CLASS, VALUE_SCHEMA_ID_SERIALIZER_DEFAULT,
+                Importance.MEDIUM, VALUE_SCHEMA_ID_SERIALIZER_DOC)
+        .define(VALUE_SCHEMA_ID_DESERIALIZER, Type.CLASS, VALUE_SCHEMA_ID_DESERIALIZER_DEFAULT,
+                Importance.MEDIUM, VALUE_SCHEMA_ID_DESERIALIZER_DOC)
         .define(SCHEMA_REFLECTION_CONFIG, Type.BOOLEAN, SCHEMA_REFLECTION_DEFAULT,
                 Importance.LOW, SCHEMA_REFLECTION_DOC)
         .define(PROXY_HOST, Type.STRING, PROXY_HOST_DEFAULT,
@@ -452,6 +508,11 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getString(SCHEMA_FORMAT);
   }
 
+  public ExecutionEnvironment getExecutionEnvironment() {
+    String envStr = this.getString(EXECUTION_ENVIRONMENT);
+    return envStr != null ? ExecutionEnvironment.valueOf(envStr) : null;
+  }
+
   public boolean enableRuleServiceLoader() {
     return this.getBoolean(RULE_SERVICE_LOADER_ENABLE);
   }
@@ -460,12 +521,28 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
     return this.getConfiguredInstance(CONTEXT_NAME_STRATEGY, ContextNameStrategy.class);
   }
 
-  public Object keySubjectNameStrategy() {
+  public SubjectNameStrategy keySubjectNameStrategy() {
     return subjectNameStrategyInstance(KEY_SUBJECT_NAME_STRATEGY);
   }
 
-  public Object valueSubjectNameStrategy() {
+  public SchemaIdSerializer keySchemaIdSerializer() {
+    return this.getConfiguredInstance(KEY_SCHEMA_ID_SERIALIZER, SchemaIdSerializer.class);
+  }
+
+  public SchemaIdDeserializer keySchemaIdDeserializer() {
+    return this.getConfiguredInstance(KEY_SCHEMA_ID_DESERIALIZER, SchemaIdDeserializer.class);
+  }
+
+  public SubjectNameStrategy valueSubjectNameStrategy() {
     return subjectNameStrategyInstance(VALUE_SUBJECT_NAME_STRATEGY);
+  }
+
+  public SchemaIdSerializer valueSchemaIdSerializer() {
+    return this.getConfiguredInstance(VALUE_SCHEMA_ID_SERIALIZER, SchemaIdSerializer.class);
+  }
+
+  public SchemaIdDeserializer valueSchemaIdDeserializer() {
+    return this.getConfiguredInstance(VALUE_SCHEMA_ID_DESERIALIZER, SchemaIdDeserializer.class);
   }
 
   public boolean useSchemaReflection() {
@@ -477,12 +554,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .collect(Collectors.toMap(Map.Entry::getKey, entry -> Objects.toString(entry.getValue())));
   }
 
-  private Object subjectNameStrategyInstance(String config) {
-    Class subjectNameStrategyClass = this.getClass(config);
-    Class deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
-    if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
-      return this.getConfiguredInstance(config, deprecatedClass);
-    }
+  private SubjectNameStrategy subjectNameStrategyInstance(String config) {
     return this.getConfiguredInstance(config, SubjectNameStrategy.class);
   }
 

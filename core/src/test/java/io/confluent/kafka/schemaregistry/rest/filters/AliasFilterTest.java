@@ -1,5 +1,16 @@
 /*
  * Copyright 2023 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.rest.filters;
@@ -9,12 +20,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+
 import java.net.URI;
 import java.util.Collections;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,7 +39,7 @@ public class AliasFilterTest {
 
   @Before
   public void setUp() throws Exception {
-    KafkaSchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     when(schemaRegistry.tenant()).thenReturn(DEFAULT_TENANT);
     aliasFilter = new AliasFilter(schemaRegistry);
 

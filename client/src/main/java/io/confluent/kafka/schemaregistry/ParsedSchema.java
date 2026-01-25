@@ -17,8 +17,6 @@
 package io.confluent.kafka.schemaregistry;
 
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.canLookupIgnoringVersion;
-import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.getConfluentVersion;
-import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.hasLatestVersion;
 import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.replaceLatestVersion;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -209,8 +207,24 @@ public interface ParsedSchema {
 
   /**
    * Checks the backward compatibility between this schema and the specified schema.
-   * <p/>
-   * Custom providers may choose to modify this schema during this check,
+   *
+   * <p>Custom providers may choose to modify this schema during this check,
+   * to ensure that it is compatible with the specified schema.
+   *
+   * @param policy the compatibility policy
+   * @param previousSchema previous schema
+   * @return an empty list if this schema is backward compatible with the previous schema,
+   *         otherwise the list of error messages
+   */
+  default List<String> isBackwardCompatible(
+      CompatibilityPolicy policy, ParsedSchema previousSchema) {
+    return isBackwardCompatible(previousSchema);
+  }
+
+  /**
+   * Checks the backward compatibility between this schema and the specified schema.
+   *
+   * <p>Custom providers may choose to modify this schema during this check,
    * to ensure that it is compatible with the specified schema.
    *
    * @param previousSchema previous schema
@@ -221,8 +235,27 @@ public interface ParsedSchema {
 
   /**
    * Checks the compatibility between this schema and the specified schemas.
-   * <p/>
-   * Custom providers may choose to modify this schema during this check,
+   *
+   * <p>Custom providers may choose to modify this schema during this check,
+   * to ensure that it is compatible with the specified schemas.
+   *
+   * @param level the compatibility level
+   * @param policy the compatibility policy
+   * @param previousSchemas full schema history in chronological order
+   * @return an empty list if this schema is backward compatible with the previous schema, otherwise
+   *         the list of error messages
+   */
+  default List<String> isCompatible(
+      CompatibilityLevel level, CompatibilityPolicy policy,
+      List<ParsedSchemaHolder> previousSchemas) {
+    return CompatibilityChecker.checker(level)
+        .isCompatibleWithHolders(policy, this, previousSchemas);
+  }
+
+  /**
+   * Checks the compatibility between this schema and the specified schemas.
+   *
+   * <p>Custom providers may choose to modify this schema during this check,
    * to ensure that it is compatible with the specified schemas.
    *
    * @param level the compatibility level
@@ -232,7 +265,7 @@ public interface ParsedSchema {
    */
   default List<String> isCompatible(
       CompatibilityLevel level, List<ParsedSchemaHolder> previousSchemas) {
-    return CompatibilityChecker.checker(level).isCompatibleWithHolders(this, previousSchemas);
+    return isCompatible(level, CompatibilityPolicy.STRICT, previousSchemas);
   }
 
   /**
@@ -244,7 +277,7 @@ public interface ParsedSchema {
 
   /**
    * @param field name of the field to check
-   * @return true, if the schema has {@param field} in its top level fields. false, otherwise.
+   * @return true, if the schema has field in its top level fields. false, otherwise.
    */
   default boolean hasTopLevelField(String field) {
     throw new UnsupportedOperationException();
@@ -328,15 +361,8 @@ public interface ParsedSchema {
     // and the previous schema having matching references when all versions of -1
     // are replaced by the latest version, and the schemas are the same except
     // for the one of the schemas possibly having a confluent:version.
-    String schemaVer = getConfluentVersion(metadata());
-    String prevVer = getConfluentVersion(prev.metadata());
-    if (schemaVer != null || prevVer != null
-        || hasLatestVersion(this.references())
-        || hasLatestVersion(prev.references())) {
-      boolean areRefsEquivalent = replaceLatestVersion(references(), fetcher)
-          .equals(replaceLatestVersion(prev.references(), fetcher));
-      return areRefsEquivalent && canLookupIgnoringVersion(this, prev);
-    }
-    return false;
+    boolean areRefsEquivalent = replaceLatestVersion(references(), fetcher)
+        .equals(replaceLatestVersion(prev.references(), fetcher));
+    return areRefsEquivalent && canLookupIgnoringVersion(this, prev);
   }
 }

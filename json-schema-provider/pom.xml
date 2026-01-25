@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.0.0-0</version>
+        <version>8.3.0-0</version>
     </parent>
 
     <licenses>
@@ -24,6 +24,10 @@
     <artifactId>kafka-json-schema-provider</artifactId>
     <packaging>jar</packaging>
     <name>kafka-json-schema-provider</name>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -88,5 +92,22 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.maven.plugin.version}</version>
+                <configuration>
+                    <java>
+                        <licenseHeader>
+                            <file>${maven.multiModuleProjectDirectory}/config/license-headers/ccl-header.txt</file>
+                        </licenseHeader>
+                    </java>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

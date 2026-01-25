@@ -49,14 +49,17 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.util.Utf8;
 import org.slf4j.Logger;
@@ -72,7 +75,7 @@ public class AvroSchema implements ParsedSchema {
   public static final String FIELDS_FIELD = "fields";
 
   private final Schema schemaObj;
-  private String canonicalString;
+  private transient volatile String canonicalString;
   private final Integer version;
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
@@ -80,7 +83,7 @@ public class AvroSchema implements ParsedSchema {
   private final RuleSet ruleSet;
   private final boolean isNew;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
@@ -222,8 +225,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   protected Schema.Parser getParser() {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(isNew());
+    boolean isNew = isNew();
+    NameValidator nameValidator = isNew
+        ? NameValidator.STRICT_VALIDATOR
+        : NameValidator.NO_VALIDATION;
+    Schema.Parser parser = new Schema.Parser(nameValidator);
+    parser.setValidateDefaults(isNew);
     return parser;
   }
 
@@ -257,13 +264,18 @@ public class AvroSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      Schema.Parser parser = getParser();
-      List<Schema> schemaRefs = new ArrayList<>();
-      for (String schema : resolvedReferences.values()) {
-        Schema schemaRef = parser.parse(schema);
-        schemaRefs.add(schemaRef);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          Schema.Parser parser = getParser();
+          List<Schema> schemaRefs = new ArrayList<>();
+          for (String schema : resolvedReferences.values()) {
+            Schema schemaRef = parser.parse(schema);
+            schemaRefs.add(schemaRef);
+          }
+          canonicalString = schemaObj.toString(schemaRefs, false);
+        }
       }
-      canonicalString = schemaObj.toString(schemaRefs, false);
     }
     return canonicalString;
   }
@@ -478,8 +490,13 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
-          + metaHash(schemaObj, new IdentityHashMap<>());
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(schemaObj, references, version, metadata, ruleSet)
+              + metaHash(schemaObj, new IdentityHashMap<>());
+        }
+      }
     }
     return hashCode;
   }
@@ -559,7 +576,8 @@ public class AvroSchema implements ParsedSchema {
   public Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     try {
-      return toTransformedMessage(ctx, this.rawSchema(), message, transform);
+      Schema schema = this.rawSchema();
+      return toTransformedMessage(ctx, schema, message, transform);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof RuleException) {
         throw (RuleException) e.getCause();
@@ -607,16 +625,27 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return null;
         }
-        data = AvroSchemaUtils.getData(schema, message, false, false);
-        for (Schema.Field f : schema.getFields()) {
-          String fullName = schema.getFullName() + "." + f.name();
+        Schema recordSchema = schema;
+        if (message instanceof GenericContainer) {
+          // Use the schema from the message if it exists, so schema evolution works properly
+          recordSchema = ((GenericContainer) message).getSchema();
+        }
+        data = AvroSchemaUtils.getData(recordSchema, message, false, false);
+        for (Schema.Field f : recordSchema.getFields()) {
+          // The original field has tags needed for inline tag matching
+          Schema.Field originalField = schema.getField(f.name());
+          if (originalField == null) {
+            originalField = f;
+          }
+          String fullName = recordSchema.getFullName() + "." + f.name();
           try (FieldContext fc = ctx.enterField(
-              message, fullName, f.name(), getType(f.schema()), getInlineTags(f))) {
+              message, fullName, f.name(),
+              getType(originalField.schema()), getInlineTags(originalField))) {
             Object value = data.getField(message, f.name(), f.pos());
             if (value instanceof Utf8) {
               value = value.toString();
             }
-            Object newValue = toTransformedMessage(ctx, f.schema(), value, transform);
+            Object newValue = toTransformedMessage(ctx, originalField.schema(), value, transform);
             if (ctx.rule().getKind() == RuleKind.CONDITION) {
               if (Boolean.FALSE.equals(newValue)) {
                 throw new RuntimeException(new RuleConditionException(ctx.rule()));
@@ -672,6 +701,12 @@ public class AvroSchema implements ParsedSchema {
       case MAP:
         return Type.MAP;
       case UNION:
+        // Check if the schema is a nullable type
+        List<Schema> types = schema.getTypes();
+        if (types.size() == 2
+            && types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
+          return Type.NULLABLE;
+        }
         return Type.COMBINED;
       case FIXED:
         return Type.FIXED;
@@ -896,7 +931,7 @@ public class AvroSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {

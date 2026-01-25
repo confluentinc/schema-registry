@@ -43,6 +43,7 @@ public class SchemaString {
   private List<SchemaTags> schemaTags;
   private Integer maxId;
   private Long timestamp;
+  private Boolean deleted;
 
   public SchemaString() {
   }
@@ -63,6 +64,7 @@ public class SchemaString {
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
     this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
   }
 
   public SchemaString(String subject, Integer version, Schema schema) {
@@ -76,6 +78,7 @@ public class SchemaString {
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
     this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
   }
 
   public SchemaString copy() {
@@ -91,6 +94,7 @@ public class SchemaString {
     schema.setSchemaTags(getSchemaTags());
     schema.setMaxId(getMaxId());
     schema.setTimestamp(getTimestamp());
+    schema.setDeleted(getDeleted());
     return schema;
   }
 
@@ -215,6 +219,16 @@ public class SchemaString {
   @JsonProperty("ts")
   public void setTimestamp(Long timestamp) {
     this.timestamp = timestamp;
+  }
+
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
   }
 
   public String toJson() throws IOException {

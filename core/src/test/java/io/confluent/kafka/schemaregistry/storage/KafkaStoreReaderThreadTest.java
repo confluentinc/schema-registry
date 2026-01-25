@@ -12,6 +12,7 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -38,7 +39,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     int id1 = restApp.restClient.registerSchema(schema, "subject1");
 
-    KafkaSchemaRegistry sr = (KafkaSchemaRegistry) restApp.schemaRegistry();
+    SchemaRegistry sr = restApp.schemaRegistry();
     KafkaStoreReaderThread readerThread = sr.getKafkaStore().getKafkaStoreReaderThread();
     try {
       readerThread.waitUntilOffset(50L, 500L, TimeUnit.MILLISECONDS);

@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.maven;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,11 +32,19 @@ public class RuleSet {
   @Parameter(required = false)
   protected List<Rule> domainRules = new ArrayList<>();
 
+  @Parameter(required = false)
+  protected List<Rule> encodingRules = new ArrayList<>();
+
+  @Parameter(required = false)
+  protected ExecutionEnvironment enableOnlyAt;
+
   @Override
   public String toString() {
     return "RuleSet{"
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
+        + ", encodingRules=" + encodingRules
+        + ", enableOnlyAt=" + enableOnlyAt
         + '}';
   }
 
@@ -50,7 +59,13 @@ public class RuleSet {
             ? domainRules.stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList())
-            : null
+            : null,
+        encodingRules != null
+            ? encodingRules.stream()
+            .map(Rule::toRuleEntity)
+            .collect(Collectors.toList())
+            : null,
+        enableOnlyAt
     );
   }
 }

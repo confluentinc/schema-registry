@@ -26,8 +26,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 
 import java.util.Base64;
 import java.util.Objects;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Min;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -271,7 +271,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     return Objects.hash(super.hashCode(), version, id, md5, schema, schemaType, references,
         metadata, ruleSet, deleted);
   }
-  
+
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
@@ -280,10 +280,9 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
     sb.append("id=" + this.id + ",");
     sb.append("md5=" + this.md5 + ",");
     sb.append("schemaType=" + this.schemaType + ",");
-    sb.append("references=" + this.references + ",");
     sb.append("metadata=" + this.metadata + ",");
     sb.append("ruleSet=" + this.ruleSet + ",");
-    sb.append("schema=" + this.schema + ",");
+    sb.append("schemaSize=" + (this.schema != null ? this.schema.length() : 0) + ",");
     sb.append("deleted=" + this.deleted + "}");
     return sb.toString();
   }
@@ -304,10 +303,40 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
   }
 
   public Schema toSchemaEntity() {
+    List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references =
+        getReferences() == null
+            ? null
+            : getReferences().stream()
+                .map(SchemaReference::toRefEntity)
+                .collect(Collectors.toList());
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata =
+        getMetadata() == null ? null : getMetadata().toMetadataEntity();
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet =
+        getRuleSet() == null ? null : getRuleSet().toRuleSetEntity();
+    byte[] bytes = getMd5Bytes();
+    MD5 md5 = bytes != null
+        ? new MD5(bytes)
+        : MD5.ofSchema(getSchema(), references, metadata, ruleSet);
     return new Schema(
         getSubject(),
         getVersion(),
         getId(),
+        md5.toString(),
+        getSchemaType(),
+        references,
+        metadata,
+        ruleSet,
+        getSchema(),
+        null,
+        getTimestamp(),
+        isDeleted()
+    );
+  }
+
+  public Schema toHashKey() {
+    return new Schema(
+        getSubject(),
+        null,
         null,
         getSchemaType(),
         getReferences() == null ? null : getReferences().stream()
@@ -315,9 +344,7 @@ public class SchemaValue extends SubjectValue implements Comparable<SchemaValue>
             .collect(Collectors.toList()),
         getMetadata() == null ? null : getMetadata().toMetadataEntity(),
         getRuleSet() == null ? null : getRuleSet().toRuleSetEntity(),
-        getSchema(),
-        null,
-        getTimestamp()
+        getSchema()
     );
   }
 }

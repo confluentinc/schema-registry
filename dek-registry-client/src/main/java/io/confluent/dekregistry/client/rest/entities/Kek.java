@@ -16,7 +16,6 @@
 
 package io.confluent.dekregistry.client.rest.entities;
 
-import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.KMS_TYPE_SUFFIX;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_CLIENT;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -27,8 +26,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.google.crypto.tink.Aead;
-import com.google.crypto.tink.KmsClient;
-import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
+import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -36,7 +34,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -134,25 +131,11 @@ public class Kek {
 
   @JsonIgnore
   public Aead toAead(Map<String, ?> configs) throws GeneralSecurityException {
-    String kekUrl = getKmsType() + KMS_TYPE_SUFFIX + getKmsKeyId();
     Map<String, Object> props = new HashMap<>(getKmsProps());
     if (configs.containsKey(TEST_CLIENT)) {
       props.put(TEST_CLIENT, configs.get(TEST_CLIENT));
     }
-    KmsClient kmsClient = getKmsClient(props, kekUrl);
-    if (kmsClient == null) {
-      throw new GeneralSecurityException("No kms client found for " + kekUrl);
-    }
-    return kmsClient.getAead(kekUrl);
-  }
-
-  private static KmsClient getKmsClient(Map<String, ?> configs, String kekUrl)
-      throws GeneralSecurityException {
-    try {
-      return KmsDriverManager.getDriver(kekUrl).getKmsClient(kekUrl);
-    } catch (GeneralSecurityException e) {
-      return KmsDriverManager.getDriver(kekUrl).registerKmsClient(configs, Optional.of(kekUrl));
-    }
+    return new AeadWrapper(props, getKmsType(), getKmsKeyId());
   }
 
   @Override

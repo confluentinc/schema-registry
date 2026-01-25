@@ -54,7 +54,6 @@ import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -91,7 +90,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriBuilder;
 import org.apache.kafka.common.serialization.Serde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -124,9 +123,16 @@ public class DekRegistry implements Closeable {
       new TypeReference<Void>() {
       };
 
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
   private final MetricsManager metricsManager;
   private final DekRegistryConfig config;
+
+  private final int kekSearchDefaultLimit;
+  private final int kekSearchMaxLimit;
+  private final int dekSubjectSearchDefaultLimit;
+  private final int dekSubjectSearchMaxLimit;
+  private final int dekVersionSearchDefaultLimit;
+  private final int dekVersionSearchMaxLimit;
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
   private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
@@ -141,7 +147,7 @@ public class DekRegistry implements Closeable {
       MetricsManager metricsManager
   ) {
     try {
-      this.schemaRegistry = (KafkaSchemaRegistry) schemaRegistry;
+      this.schemaRegistry = schemaRegistry;
       this.schemaRegistry.properties().put(KEY, this);
       this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
       this.metricsManager = metricsManager;
@@ -150,12 +156,23 @@ public class DekRegistry implements Closeable {
           config.topic(), getCacheUpdateHandler(config));
       this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
       this.cryptors = new ConcurrentHashMap<>();
+      this.kekSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.KEK_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.kekSearchMaxLimit = config.getInt(DekRegistryConfig.KEK_SEARCH_MAX_LIMIT_CONFIG);
+      this.dekSubjectSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.DEK_SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.dekSubjectSearchMaxLimit =
+              config.getInt(DekRegistryConfig.DEK_SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
+      this.dekVersionSearchDefaultLimit =
+              config.getInt(DekRegistryConfig.DEK_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+      this.dekVersionSearchMaxLimit =
+              config.getInt(DekRegistryConfig.DEK_VERSION_SEARCH_MAX_LIMIT_CONFIG);
     } catch (RestConfigException e) {
       throw new IllegalArgumentException("Could not instantiate DekRegistry", e);
     }
   }
 
-  public KafkaSchemaRegistry getSchemaRegistry() {
+  public SchemaRegistry getSchemaRegistry() {
     return schemaRegistry;
   }
 
@@ -416,11 +433,20 @@ public class DekRegistry implements Closeable {
 
   public DataEncryptionKey getLatestDek(String kekName, String subject, DekFormat algorithm,
       boolean lookupDeleted) throws SchemaRegistryException {
+    return getLatestDek(kekName, subject, algorithm, lookupDeleted, true);
+  }
+
+  public DataEncryptionKey getLatestDek(String kekName, String subject, DekFormat algorithm,
+      boolean lookupDeleted, boolean maybeGenerateRawDek) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     List<KeyValue<EncryptionKeyId, EncryptionKey>> deks =
         getDeks(tenant, kekName, subject, algorithm, lookupDeleted);
     Collections.reverse(deks);
-    return deks.isEmpty() ? null : (DataEncryptionKey) deks.get(0).value;
+    if (deks.isEmpty()) {
+      return null;
+    }
+    DataEncryptionKey dek = (DataEncryptionKey) deks.get(0).value;
+    return maybeGenerateRawDek ? maybeGenerateRawDek(dek) : dek;
   }
 
   public DataEncryptionKey getDek(String kekName, String subject, int version,
@@ -436,14 +462,19 @@ public class DekRegistry implements Closeable {
         tenant, kekName, subject, algorithm, version);
     DataEncryptionKey key = (DataEncryptionKey) keys.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
-      KeyEncryptionKey kek = getKek(key.getKekName(), true);
-      if (kek.isShared()) {
-        key = generateRawDek(kek, key);
-      }
-      return key;
+      return maybeGenerateRawDek(key);
     } else {
       return null;
     }
+  }
+
+  private DataEncryptionKey maybeGenerateRawDek(DataEncryptionKey key)
+      throws SchemaRegistryException {
+    KeyEncryptionKey kek = getKek(key.getKekName(), true);
+    if (kek.isShared()) {
+      key = generateRawDek(kek, key);
+    }
+    return key;
   }
 
   public Kek createKekOrForward(CreateKekRequest request,
@@ -543,17 +574,17 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public Dek createDekOrForward(String kekName, CreateDekRequest request,
+  public Dek createDekOrForward(String kekName, boolean rewrap, CreateDekRequest request,
       Map<String, String> headerProperties) throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     lock(tenant, headerProperties);
     try {
       if (isLeader(headerProperties)) {
-        return createDek(kekName, request).toDekEntity();
+        return createDek(kekName, rewrap, request).toDekEntity();
       } else {
         // forward registering request to the leader
         if (schemaRegistry.leaderIdentity() != null) {
-          return forwardCreateDekRequestToLeader(kekName, request, headerProperties);
+          return forwardCreateDekRequestToLeader(kekName, rewrap, request, headerProperties);
         } else {
           throw new UnknownLeaderException("Request failed since leader is unknown");
         }
@@ -563,14 +594,16 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  private Dek forwardCreateDekRequestToLeader(String kekName,
+  private Dek forwardCreateDekRequestToLeader(String kekName, boolean rewrap,
       CreateDekRequest request, Map<String, String> headerProperties)
       throws SchemaRegistryRequestForwardingException {
     RestService leaderRestService = schemaRegistry.leaderRestService();
     final UrlList baseUrl = leaderRestService.getBaseUrls();
 
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks");
-    String path = builder.build(kekName).toString();
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
+    String path = builder
+        .queryParam("rewrap", rewrap)
+        .build(kekName, request.getSubject()).toString();
 
     log.debug(String.format("Forwarding create key request to %s", baseUrl));
     try {
@@ -586,7 +619,7 @@ public class DekRegistry implements Closeable {
     }
   }
 
-  public DataEncryptionKey createDek(String kekName, CreateDekRequest request)
+  public DataEncryptionKey createDek(String kekName, boolean rewrap, CreateDekRequest request)
       throws SchemaRegistryException {
     // Ensure cache is up-to-date
     keys.sync();
@@ -602,27 +635,33 @@ public class DekRegistry implements Closeable {
     DataEncryptionKey key = new DataEncryptionKey(kekName, request.getSubject(),
         algorithm, version, request.getEncryptedKeyMaterial(), request.isDeleted());
     KeyEncryptionKey kek = getKek(key.getKekName(), true);
-    if (key.getEncryptedKeyMaterial() == null) {
-      if (kek.isShared()) {
-        key = generateEncryptedDek(kek, key);
-      } else {
-        throw new InvalidKeyException("encryptedKeyMaterial");
-      }
-    }
     DataEncryptionKeyId keyId = new DataEncryptionKeyId(
         tenant, kekName, request.getSubject(), algorithm, version);
     DataEncryptionKey oldKey = (DataEncryptionKey) keys.get(keyId);
     // Allow create to act like undelete if the dek is deleted
-    if (oldKey != null
-        && ((request.isDeleted() == oldKey.isDeleted()) || !oldKey.isEquivalent(key))) {
+    if (!rewrap && oldKey != null
+        && (request.isDeleted() == oldKey.isDeleted() || !oldKey.isEquivalent(key))) {
       throw new AlreadyExistsException(request.getSubject());
+    }
+    if (key.getEncryptedKeyMaterial() != null) {
+      if (kek.isShared() && oldKey != null) {
+        throw new AlreadyExistsException(request.getSubject());
+      }
+    } else if (kek.isShared()) {
+      if (oldKey != null) {
+        oldKey = generateRawDek(kek, oldKey);
+        key.setKeyMaterial(oldKey.getKeyMaterial());
+      }
+      key = generateEncryptedDek(kek, key);
+    } else {
+      throw new InvalidKeyException("encryptedKeyMaterial");
     }
     keys.put(keyId, key);
     // Retrieve key with ts set
     key = (DataEncryptionKey) keys.get(keyId);
     if (kek.isShared()) {
       Mode mode = schemaRegistry.getModeInScope(request.getSubject());
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         key = generateRawDek(kek, key);
       }
     }
@@ -633,8 +672,15 @@ public class DekRegistry implements Closeable {
       throws DekGenerationException {
     try {
       Aead aead = getAead(kek);
-      // Generate new dek
-      byte[] rawDek = getCryptor(key.getAlgorithm()).generateKey();
+      byte[] rawDek = null;
+      String rawDekStr = key.getKeyMaterial();
+      if (rawDekStr != null) {
+        rawDek = Base64.getDecoder().decode(rawDekStr.getBytes(StandardCharsets.UTF_8));
+      }
+      if (rawDek == null) {
+        // Generate new dek
+        rawDek = getCryptor(key.getAlgorithm()).generateKey();
+      }
       byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
       String encryptedDekStr =
           new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -740,11 +786,11 @@ public class DekRegistry implements Closeable {
     if (key == null || key.isDeleted()) {
       return null;
     }
-    SortedMap<String, String> kmsProps = request.getKmsProps() != null
-        ? new TreeMap<>(request.getKmsProps())
+    SortedMap<String, String> kmsProps = request.getOptionalKmsProps() != null
+        ? (request.getOptionalKmsProps().isPresent() ? new TreeMap<>(request.getKmsProps()) : null)
         : key.getKmsProps();
-    String doc = request.getDoc() != null ? request.getDoc() : key.getDoc();
-    boolean shared = request.isShared() != null ? request.isShared() : key.isShared();
+    String doc = request.getOptionalDoc() != null ? request.getDoc() : key.getDoc();
+    boolean shared = request.isOptionalShared() != null ? request.isShared() : key.isShared();
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
     if (newKey.isEquivalent(key)) {
@@ -1198,6 +1244,26 @@ public class DekRegistry implements Closeable {
           oldKey.getAlgorithm(), oldKey.getVersion(), oldKey.getEncryptedKeyMaterial(), false);
       keys.put(id, newKey);
     }
+  }
+
+  public int normalizeLimit(int suppliedLimit, int defaultLimit, int maxLimit) {
+    int limit = defaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= maxLimit) {
+      limit = suppliedLimit;
+    }
+    return limit;
+  }
+
+  public int normalizeKekLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, kekSearchDefaultLimit, kekSearchMaxLimit);
+  }
+
+  public int normalizeDekSubjectLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, dekSubjectSearchDefaultLimit, dekSubjectSearchMaxLimit);
+  }
+
+  public int normalizeDekVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, dekVersionSearchDefaultLimit, dekVersionSearchMaxLimit);
   }
 
   @PreDestroy

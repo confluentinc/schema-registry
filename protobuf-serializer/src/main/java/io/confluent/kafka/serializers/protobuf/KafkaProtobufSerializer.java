@@ -1,25 +1,26 @@
 /*
  * Copyright 2020 Confluent Inc.
  *
- * Licensed under the Confluent Community License (the "License"); you may not use
- * this file except in compliance with the License.  You may obtain a copy of the
- * License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.confluent.io/confluent-community-license
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations under the License.
- *
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.confluent.kafka.serializers.protobuf;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -39,19 +40,23 @@ public class KafkaProtobufSerializer<T extends Message>
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private Map<Descriptor, ProtobufSchema> schemaCache;
+  private Cache<Descriptor, ProtobufSchema> schemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaProtobufSerializer() {
-    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
     this.ticker = ticker(client);
-    this.schemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
   }
 
   public KafkaProtobufSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -63,7 +68,9 @@ public class KafkaProtobufSerializer<T extends Message>
     this.schemaRegistry = client;
     this.ticker = ticker(client);
     configure(serializerConfig(props));
-    this.schemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.schemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
   }
 
   @Override
@@ -87,7 +94,7 @@ public class KafkaProtobufSerializer<T extends Message>
     if (record == null) {
       return null;
     }
-    ProtobufSchema schema = schemaCache.get(record.getDescriptorForType());
+    ProtobufSchema schema = schemaCache.getIfPresent(record.getDescriptorForType());
     if (schema == null) {
       schema = ProtobufSchemaUtils.getSchema(record);
       try {

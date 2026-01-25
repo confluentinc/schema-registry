@@ -13,7 +13,6 @@
  * specific language governing permissions and limitations under the License.
  */
 
-
 package io.confluent.kafka.schemaregistry.json;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType.SR_FIELD;
@@ -51,8 +50,11 @@ import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
@@ -69,7 +71,6 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,6 +81,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -95,12 +97,14 @@ import java.util.stream.Collectors;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.NotSchema;
+import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
@@ -133,9 +137,9 @@ public class JsonSchema implements ParsedSchema {
 
   private final JsonNode jsonNode;
 
-  private transient Schema schemaObj;
+  private transient volatile Schema schemaObj;
 
-  private transient com.github.erosb.jsonsKema.Schema skemaObj;
+  private transient volatile com.github.erosb.jsonsKema.Schema skemaObj;
 
   private final Integer version;
 
@@ -149,9 +153,9 @@ public class JsonSchema implements ParsedSchema {
 
   private final boolean ignoreModernDialects;
 
-  private transient String canonicalString;
+  private transient volatile String canonicalString;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
@@ -159,29 +163,48 @@ public class JsonSchema implements ParsedSchema {
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
   private static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
 
-  private static final Map<String, Map<String, BeanPropertyWriter>> beanGetters =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
-  private static final Map<String, Map<String, SettableBeanProperty>> beanSetters =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Cache<String, Map<String, BeanPropertyWriter>> beanGetters =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
+  private static final Cache<String, Map<String, SettableBeanProperty>> beanSetters =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
 
   // prepopulate the draft 2019-09 metaschemas, as the json-sKema library
   // only prepopulates the draft 2020-12 metaschemas
-  private static final Map<URI, String> prepopulatedMetaSchemas = ImmutableMap.of(
-      URI.create("https://json-schema.org/draft/2019-09/schema"),
-      readFromClassPath("/metaschemas/draft/2019-09/schema"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/core"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/core"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/validation"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/validation"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/applicator"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/applicator"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/meta-data"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/meta-data"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/format"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/format"),
-      URI.create("https://json-schema.org/draft/2019-09/meta/content"),
-      readFromClassPath("/metaschemas/draft/2019-09/meta/content")
-  );
+  private static final Map<URI, String> prepopulatedMetaSchemas = 
+      new ImmutableMap.Builder<URI, String>()
+          .put(URI.create("https://json-schema.org/draft/2019-09/schema"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/core"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/core"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/validation"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/validation"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/applicator"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/applicator"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/meta-data"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/meta-data"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/format"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/format"))
+          .put(URI.create("https://json-schema.org/draft/2019-09/meta/content"),
+              readFromClassPath("/metaschemas/draft/2019-09/meta/content"))
+          // The following are to account for URIs with trailing #
+          .put(URI.create("https://json-schema.org/draft/2019-09/schema#"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("https://json-schema.org/draft/2020-12/schema#"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          // The following are to account for raw http
+          .put(URI.create("http://json-schema.org/draft/2019-09/schema"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("http://json-schema.org/draft/2019-09/schema#"),
+              readFromClassPath("/metaschemas/draft/2019-09/schema"))
+          .put(URI.create("http://json-schema.org/draft/2020-12/schema"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          .put(URI.create("http://json-schema.org/draft/2020-12/schema#"),
+              readFromClassPath("/metaschemas/draft/2020-12/schema"))
+          .build();
 
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
@@ -232,7 +255,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = ruleSet;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -251,7 +274,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = null;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -366,37 +389,42 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (schemaObj == null) {
-      try {
-        if (jsonNode.isBoolean()) {
-          schemaObj = jsonNode.booleanValue()
-              ? TrueSchema.builder().build()
-              : FalseSchema.builder().build();
-        } else {
-          // Extract the $schema to use for determining the id keyword
-          SpecificationVersion spec = SpecificationVersion.DRAFT_7;
-          if (jsonNode.has(SCHEMA_KEYWORD)) {
-            String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
-            SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
-            if (s != null) {
-              spec = s;
-            }
-          }
-          switch (spec) {
-            case DRAFT_2020_12:
-            case DRAFT_2019_09:
-              if (ignoreModernDialects) {
-                loadPreviousDraft(spec);
-              } else {
-                loadLatestDraft();
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (schemaObj == null) {
+          try {
+            if (jsonNode.isBoolean()) {
+              schemaObj = jsonNode.booleanValue()
+                  ? TrueSchema.builder().build()
+                  : FalseSchema.builder().build();
+            } else {
+              // Extract the $schema to use for determining the id keyword
+              SpecificationVersion spec = SpecificationVersion.DRAFT_7;
+              if (jsonNode.has(SCHEMA_KEYWORD)) {
+                String schema = jsonNode.get(SCHEMA_KEYWORD).asText();
+                SpecificationVersion s = SpecificationVersion.getFromUrl(schema);
+                if (s != null) {
+                  spec = s;
+                }
               }
-              break;
-            default:
-              loadPreviousDraft(spec);
-              break;
+              switch (spec) {
+                case DRAFT_2020_12:
+                case DRAFT_2019_09:
+                  if (ignoreModernDialects) {
+                    loadPreviousDraft(spec);
+                  } else {
+                    loadLatestDraft();
+                  }
+                  break;
+                default:
+                  loadPreviousDraft(spec);
+                  break;
+              }
+            }
+          } catch (Throwable e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
           }
         }
-      } catch (Throwable e) {
-        throw new IllegalArgumentException("Invalid JSON Schema", e);
       }
     }
     return schemaObj;
@@ -497,13 +525,28 @@ public class JsonSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      try {
-        canonicalString = objectMapper.writeValueAsString(jsonNode);
-      } catch (IOException e) {
-        throw new IllegalArgumentException("Invalid JSON", e);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          try {
+            canonicalString = objectMapper.writeValueAsString(jsonNode);
+          } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid JSON", e);
+          }
+        }
       }
     }
     return canonicalString;
+  }
+
+  @Override
+  public String formattedString(String format) {
+    if (format == null || format.trim().isEmpty()) {
+      return canonicalString();
+    }
+    // Don't throw an exception for forward compatibility of formats
+    log.warn("Unsupported format {}", format);
+    return canonicalString();
   }
 
   @Override
@@ -663,14 +706,18 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(
+      CompatibilityPolicy policy, ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
+    Set<Difference.Type> compatibleChanges = policy == CompatibilityPolicy.LENIENT
+        ? SchemaDiff.COMPATIBLE_CHANGES_LENIENT
+        : SchemaDiff.COMPATIBLE_CHANGES_STRICT;
     final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+        SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
-        .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+        .filter(diff -> !compatibleChanges.contains(diff.getType()))
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
@@ -682,6 +729,11 @@ public class JsonSchema implements ParsedSchema {
     } else {
       return new ArrayList<>();
     }
+  }
+
+  @Override
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+    return isBackwardCompatible(CompatibilityPolicy.STRICT, previousSchema);
   }
 
   @Override
@@ -704,8 +756,13 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      hashCode = Objects.hash(
-          jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          hashCode = Objects.hash(
+              jsonNode, references, version, metadata, ruleSet, ignoreModernDialects);
+        }
+      }
     }
     return hashCode;
   }
@@ -801,6 +858,9 @@ public class JsonSchema implements ParsedSchema {
             getType(propertySchema), getInlineTags(propertySchema))) {
           PropertyAccessor propertyAccessor =
               getPropertyAccessor(ctx, message, propertyName);
+          if (propertyAccessor == null) {
+            continue;
+          }
           Object value = propertyAccessor.getPropertyValue();
           Object newValue = toTransformedMessage(ctx, propertySchema, fullName, value, transform);
           if (ctx.rule().getKind() == RuleKind.CONDITION) {
@@ -865,6 +925,14 @@ public class JsonSchema implements ParsedSchema {
     } else if (schema instanceof ArraySchema) {
       return Type.ARRAY;
     } else if (schema instanceof CombinedSchema) {
+      // Check if the schema is a nullable type
+      ValidationCriterion criterion = ((CombinedSchema) schema).getCriterion();
+      Collection<Schema> subschemas = ((CombinedSchema) schema).getSubschemas();
+      if (!criterion.equals(CombinedSchema.ALL_CRITERION)
+          && subschemas.size() == 2
+          && subschemas.stream().anyMatch(s -> s instanceof NullSchema)) {
+        return Type.NULLABLE;
+      }
       return Type.COMBINED;
     } else if (schema instanceof StringSchema) {
       return Type.STRING;
@@ -1134,6 +1202,9 @@ public class JsonSchema implements ParsedSchema {
     } else {
       BeanPropertyWriter getter = getBeanGetter(ctx, message, propertyName);
       SettableBeanProperty setter = getBeanSetter(ctx, message, propertyName);
+      if (getter == null || setter == null) {
+        return null;
+      }
       return new PropertyAccessor() {
         @Override
         public Object getPropertyValue() {
@@ -1178,55 +1249,63 @@ public class JsonSchema implements ParsedSchema {
 
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
-        message.getClass().getName(),
-        k -> {
-          try {
-            Map<String, BeanPropertyWriter> m = new HashMap<>();
-            JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
-                .findValueSerializer(message.getClass());
-            Iterator<PropertyWriter> propIter = ser.properties();
-            while (propIter.hasNext()) {
-              PropertyWriter p = propIter.next();
-              if (p instanceof BeanPropertyWriter) {
-                m.put(p.getName(), (BeanPropertyWriter) p);
-              }
+    Map<String, BeanPropertyWriter> props;
+    try {
+      props = beanGetters.get(message.getClass().getName(), () -> {
+        try {
+          Map<String, BeanPropertyWriter> m = new HashMap<>();
+          JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
+              .findValueSerializer(message.getClass());
+          Iterator<PropertyWriter> propIter = ser.properties();
+          while (propIter.hasNext()) {
+            PropertyWriter p = propIter.next();
+            if (p instanceof BeanPropertyWriter) {
+              m.put(p.getName(), (BeanPropertyWriter) p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON serializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON serializer for " + message.getClass(), e);
+        }
+      });
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalArgumentException(
+          "Could not get getters for " + message.getClass(), e);
+    }
     return props.get(propertyName);
   }
 
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(
-        message.getClass().getName(),
-        k -> {
-          try {
-            Map<String, SettableBeanProperty> m = new HashMap<>();
-            JavaType type = objectMapper.constructType(message.getClass());
-            DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
-                .createDummyInstance(objectMapper.getDeserializationConfig());
-            // Call findNonContextValueDeserializer instead of findRootValueDeserializer
-            // so we don't get a wrapping TypeDeserializer
-            JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
-            if (deser instanceof BeanDeserializer) {
-              Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
-              while (propIter.hasNext()) {
-                SettableBeanProperty p = propIter.next();
-                m.put(p.getName(), p);
-              }
+    Map<String, SettableBeanProperty> props;
+    try {
+      props = beanSetters.get(message.getClass().getName(), () -> {
+        try {
+          Map<String, SettableBeanProperty> m = new HashMap<>();
+          JavaType type = objectMapper.constructType(message.getClass());
+          DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
+              .createDummyInstance(objectMapper.getDeserializationConfig());
+          // Call findNonContextValueDeserializer instead of findRootValueDeserializer
+          // so we don't get a wrapping TypeDeserializer
+          JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
+          if (deser instanceof BeanDeserializer) {
+            Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
+            while (propIter.hasNext()) {
+              SettableBeanProperty p = propIter.next();
+              m.put(p.getName(), p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON deserializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON deserializer for " + message.getClass(), e);
+        }
+      });
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalArgumentException(
+          "Could not get setters for " + message.getClass(), e);
+    }
     return props.get(propertyName);
   }
 

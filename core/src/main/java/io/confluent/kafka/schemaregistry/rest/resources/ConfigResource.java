@@ -29,7 +29,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidCompatibilityException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,22 +40,23 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.tags.Tags;
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.container.AsyncResponse;
+import jakarta.ws.rs.container.Suspended;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.Map;
 
 @Path("/config")
@@ -69,11 +70,12 @@ public class ConfigResource {
 
   public static final String apiTag = "Config (v1)";
   private static final Logger log = LoggerFactory.getLogger(ConfigResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
-  public ConfigResource(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public ConfigResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -107,6 +109,10 @@ public class ConfigResource {
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
 
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return updateTopLevelConfig(headers, request);
+    }
+
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
     try {
@@ -134,14 +140,16 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
-    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
       throw Errors.invalidSubjectException(subject);
     }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
-      schemaRegistry.updateConfigOrForward(subject, new Config(request), headerProperties);
+      Config config = schemaRegistry.updateConfigOrForward(subject, request, headerProperties);
+      return new ConfigUpdateRequest(config);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -152,8 +160,6 @@ public class ConfigResource {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
     }
-
-    return request;
   }
 
   @Path("/{subject}")
@@ -181,12 +187,15 @@ public class ConfigResource {
               + " if subject compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return getTopLevelConfig(defaultToGlobal);
+    }
+
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     Config config;
     try {
-      config =
-          defaultToGlobal
+      config = defaultToGlobal
           ? schemaRegistry.getConfigInScope(subject)
           : schemaRegistry.getConfig(subject);
       if (config == null) {
@@ -250,7 +259,8 @@ public class ConfigResource {
       }
     }
     try {
-      schemaRegistry.updateConfigOrForward(null, new Config(request), headerProperties);
+      Config config = schemaRegistry.updateConfigOrForward(null, request, headerProperties);
+      return new ConfigUpdateRequest(config);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryStoreException e) {
@@ -261,8 +271,6 @@ public class ConfigResource {
       throw Errors.requestForwardingFailedException("Error while forwarding update config request"
                                                     + " to the leader", e);
     }
-
-    return request;
   }
 
   @GET
@@ -277,10 +285,16 @@ public class ConfigResource {
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("config.get-global")
-  public Config getTopLevelConfig() {
+  public Config getTopLevelConfig(
+      @Parameter(description =
+        "Whether to return the global compatibility level "
+            + " if subject compatibility level not found")
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     Config config;
     try {
-      config = schemaRegistry.getConfig(null);
+      config = defaultToGlobal
+          ? schemaRegistry.getConfigInScope(null)
+          : schemaRegistry.getConfig(null);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get compatibility level", e);
     }
@@ -351,6 +365,11 @@ public class ConfigResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.debug("Deleting compatibility setting for subject {}", subject);
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      deleteTopLevelConfig(asyncResponse, headers);
+      return;
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

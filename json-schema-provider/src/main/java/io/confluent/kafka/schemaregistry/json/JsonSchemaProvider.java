@@ -37,14 +37,15 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
       return new JsonSchema(
               schema.getSchema(),
               schema.getReferences(),
-              resolveReferences(schema),
+              resolveReferences(schema, isNew),
               schema.getMetadata(),
               schema.getRuleSet(),
               null
       );
     } catch (Exception e) {
       log.error("Could not parse JSON schema", e);
-      throw e;
+      throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
+          + ", details: " + e.getMessage(), e);
     }
   }
 }

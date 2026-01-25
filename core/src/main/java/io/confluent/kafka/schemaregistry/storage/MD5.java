@@ -21,7 +21,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Simple wrapper for 16 byte MD5 hash.
@@ -57,13 +59,6 @@ public class MD5 {
     return new MD5(bytes);
   }
 
-  public static void main(String[] args) {
-    MD5 md5 = MD5.fromString("6da336d8-f1d3-0f98-4c47-d03ee8a14af1");
-    System.out.println(md5);
-    md5 = MD5.fromString("6da336d8f1d30f984c47d03ee8a14af1");
-    System.out.println(md5);
-  }
-
   public byte[] bytes() {
     return md5;
   }
@@ -80,7 +75,31 @@ public class MD5 {
 
   public static MD5 ofSchema(SchemaValue schema) {
     byte[] bytes = schema.getMd5Bytes();
-    return bytes != null ? new MD5(bytes) : ofSchema(schema.toSchemaEntity());
+    return bytes != null
+        ? new MD5(bytes)
+        : ofSchema(
+            schema.getSchema(),
+            schema.getReferences() == null ? null : schema.getReferences().stream()
+                .map(SchemaReference::toRefEntity)
+                .collect(Collectors.toList()),
+            schema.getMetadata() == null ? null : schema.getMetadata().toMetadataEntity() ,
+            schema.getRuleSet() == null ? null : schema.getRuleSet().toRuleSetEntity()
+        );
+  }
+
+  public static MD5 ofSchema(
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
+      io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata,
+      io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet
+  ) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("MD5");
+      Schema.updateHash(md, schema, references, metadata, ruleSet);
+      return new MD5(md.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override

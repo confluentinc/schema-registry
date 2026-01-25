@@ -35,7 +35,11 @@ import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
 
 public class SchemaDiff {
-  public static final Set<Difference.Type> COMPATIBLE_CHANGES;
+  public static final Set<Difference.Type> COMPATIBLE_CHANGES_LENIENT;
+  public static final Set<Difference.Type> COMPATIBLE_CHANGES_STRICT;
+
+  private static final String CONNECT_TYPE_PROP = "connect.type";
+  private static final String BYTES_VAL = "bytes";
 
   static {
     Set<Difference.Type> changes = new HashSet<>();
@@ -104,13 +108,27 @@ public class SchemaDiff {
     changes.add(Type.SUM_TYPE_EXTENDED);
     changes.add(Type.NOT_TYPE_NARROWED);
 
-    COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
+    COMPATIBLE_CHANGES_STRICT = Collections.unmodifiableSet(new HashSet<>(changes));
+
+    changes.add(Type.ADDITIONAL_PROPERTIES_NARROWED);
+    changes.add(Type.ADDITIONAL_PROPERTIES_REMOVED);
+    changes.add(Type.PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+
+    COMPATIBLE_CHANGES_LENIENT = Collections.unmodifiableSet(new HashSet<>(changes));
+  }
+
+  public static List<Difference> compare(
+      Set<Difference.Type> compatibleChanges, final Schema original, final Schema update) {
+    final Context ctx = new Context(compatibleChanges);
+    compare(ctx, original, update);
+    return ctx.getDifferences();
   }
 
   public static List<Difference> compare(final Schema original, final Schema update) {
-    final Context ctx = new Context(COMPATIBLE_CHANGES);
-    compare(ctx, original, update);
-    return ctx.getDifferences();
+    return compare(COMPATIBLE_CHANGES_STRICT, original, update);
   }
 
   @SuppressWarnings("ConstantConditions")
@@ -175,9 +193,22 @@ public class SchemaDiff {
 
     if (!schemaTypesEqual(original, update)) {
       // TrueSchema extends EmptySchema
-      if (!(original instanceof FalseSchema) && !(update instanceof EmptySchema)) {
-        ctx.addDifference(Type.TYPE_CHANGED);
+      if (original instanceof FalseSchema || update instanceof EmptySchema) {
+        return;
       }
+
+      String originalConnectType =
+          (String) original.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      String updateConnectType =
+          (String) update.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      if (BYTES_VAL.equals(originalConnectType) && BYTES_VAL.equals(updateConnectType)) {
+        // Allow two types with connect.type of bytes to be considered equivalent.
+        // This is to allow a fix for decimal conversions in the JSON converter to
+        // be considered backwards compatible.
+        return;
+      }
+
+      ctx.addDifference(Type.TYPE_CHANGED);
       return;
     }
 

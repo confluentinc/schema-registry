@@ -23,9 +23,9 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.InputStream;
 import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -202,12 +202,14 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
                     props, false);
 
     valueSchema = getSchema(serializer.getSchemaRegistryClient(), props, false);
-    final Object valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    final SubjectNameStrategy valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    valueSubjectNameStrategy.setSchemaRegistryClient(serializer.getSchemaRegistryClient());
     valueSubject = getSubjectName(valueSubjectNameStrategy, topic, false, valueSchema);
 
     if (needsKeySchema()) {
       keySchema = getSchema(serializer.getSchemaRegistryClient(), props, true);
-      final Object keySubjectNameStrategy = config.keySubjectNameStrategy();
+      final SubjectNameStrategy keySubjectNameStrategy = config.keySubjectNameStrategy();
+      keySubjectNameStrategy.setSchemaRegistryClient(serializer.getSchemaRegistryClient());
       keySubject = getSubjectName(keySubjectNameStrategy, topic, true, keySchema);
     }
   }
@@ -245,18 +247,9 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
   /**
    * @see AbstractKafkaSchemaSerDe#getSubjectName(String, boolean, Object, ParsedSchema)
    */
-  private String getSubjectName(Object subjectNameStrategy, String topic, boolean isKey,
-                                ParsedSchema schema) {
-    if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
-    } else {
-      // We don't have an instance of an object, only a schema, so we can't provide the necessary
-      // params to the deprecated strategy.
-      throw new RuntimeException("Classes extending deprecated "
-              + io.confluent.kafka.serializers.subject.SubjectNameStrategy.class.getCanonicalName()
-              + " are not supported. Use classes extending "
-              + SubjectNameStrategy.class.getCanonicalName() + " instead.");
-    }
+  private String getSubjectName(SubjectNameStrategy subjectNameStrategy,
+                                String topic, boolean isKey, ParsedSchema schema) {
+    return subjectNameStrategy.subjectName(topic, isKey, schema);
   }
 
   protected ParsedSchema parseSchema(
@@ -377,58 +370,83 @@ public abstract class SchemaMessageReader<T> implements RecordReader {
 
   @Override
   public Iterator<ProducerRecord<byte[], byte[]>> readRecords(InputStream inputStream) {
-    List<ProducerRecord<byte[], byte[]>> records = new ArrayList<>();
-    try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-      while (true) {
-        String line = reader.readLine();
-        if (line == null) {
-          break;
-        }
+    return new Iterator<ProducerRecord<byte[], byte[]>>() {
+      private final BufferedReader reader =
+          new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+      private ProducerRecord<byte[], byte[]> current;
 
-        String headersString = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
-        int headersOffset = headersString == null
-            ? 0
-            : headersString.length() + headersDelimiter.length();
-        Headers headers = new RecordHeaders();
-        if (headersString != null && !headersString.equals(nullMarker)) {
-          splitHeaders(headersString, line).forEach(
-              header -> headers.add(header.getKey(), header.getValue()));
-        }
+      @Override
+      public boolean hasNext() {
+        if (current != null) {
+          return true;
+        } else {
+          String line;
+          try {
+            line = reader.readLine();
+          } catch (IOException e) {
+            throw new KafkaException(e);
+          }
 
-        String keyString = parse(parseKey, line, headersOffset, keySeparator, "key separator");
-        int keyOffset = keyString == null ? 0 : keyString.length() + keySeparator.length();
-        byte[] serializedKey = null;
-        if (keyString != null && !keyString.equals(nullMarker)) {
-          if (serializer.getKeySerializer() != null) {
-            serializedKey = serializeNonSchemaKey(headers, keyString);
+          if (line == null) {
+            current = null;
           } else {
-            T key = readFrom(keyString, keySchema);
-            serializedKey = serializer.serialize(keySubject, topic, true, headers, key, keySchema);
+            String headers = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter");
+            int headerOffset = headers == null ? 0 : headers.length() + headersDelimiter.length();
+            Headers recordHeaders = new RecordHeaders();
+            if (headers != null && !headers.equals(nullMarker)) {
+              splitHeaders(headers, line).forEach(
+                  header -> recordHeaders.add(header.getKey(), header.getValue()));
+            }
+
+            String key = parse(parseKey, line, headerOffset, keySeparator, "key separator");
+            int keyOffset = key == null ? 0 : key.length() + keySeparator.length();
+            byte[] serializedKey = null;
+            if (key != null && !key.equals(nullMarker)) {
+              if (serializer.getKeySerializer() != null) {
+                serializedKey = serializeNonSchemaKey(recordHeaders, key);
+              } else {
+                T keyObj = readFrom(key, keySchema);
+                serializedKey = serializer.serialize(
+                    keySubject, topic, true, recordHeaders, keyObj, keySchema);
+              }
+            }
+
+            String value = line.substring(headerOffset + keyOffset);
+            byte[] serializedValue = null;
+            if (value != null && !value.equals(nullMarker)) {
+              T valueObj = readFrom(value, valueSchema);
+              serializedValue = serializer.serialize(
+                  valueSubject, topic, false, recordHeaders, valueObj, valueSchema);
+            }
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                topic,
+                null,
+                serializedKey,
+                serializedValue,
+                recordHeaders
+            );
+
+            current = record;
+          }
+
+          return current != null;
+        }
+      }
+
+      @Override
+      public ProducerRecord<byte[], byte[]> next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException("no more record");
+        } else {
+          try {
+            return current;
+          } finally {
+            current = null;
           }
         }
-
-        String valueString = line.substring(headersOffset + keyOffset);
-        byte[] serializedValue = null;
-        if (valueString != null && !valueString.equals(nullMarker)) {
-          T value = readFrom(valueString, valueSchema);
-          serializedValue = serializer.serialize(valueSubject, topic, false, headers,
-              value, valueSchema);
-        }
-
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-            topic,
-            null,
-            serializedKey,
-            serializedValue,
-            headers);
-
-        records.add(record);
       }
-    } catch (IOException e) {
-      throw new KafkaException("Error reading from input", e);
-    }
-    return records.iterator();
+    };
   }
 
   private String parse(

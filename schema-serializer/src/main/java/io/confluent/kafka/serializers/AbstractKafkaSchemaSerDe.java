@@ -33,8 +33,10 @@ import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
@@ -46,6 +48,11 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
+import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
@@ -57,7 +64,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.context.NullContextNameStrategy;
@@ -83,7 +89,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -104,8 +109,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractKafkaSchemaSerDe.class);
 
-  protected static final byte MAGIC_BYTE = 0x0;
-  protected static final int idSize = 4;
   protected static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   protected AbstractKafkaSchemaSerDeConfig config;
@@ -113,13 +116,18 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected SchemaRegistryClient schemaRegistry;
   protected Ticker ticker = Ticker.systemTicker();
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
-  protected Object keySubjectNameStrategy = new TopicNameStrategy();
-  protected Object valueSubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy keySubjectNameStrategy = new TopicNameStrategy();
+  protected SchemaIdSerializer keySchemaIdSerializer = new PrefixSchemaIdSerializer();
+  protected SchemaIdDeserializer keySchemaIdDeserializer = new DualSchemaIdDeserializer();
+  protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
+  protected SchemaIdSerializer valueSchemaIdSerializer = new PrefixSchemaIdSerializer();
+  protected SchemaIdDeserializer valueSchemaIdDeserializer = new DualSchemaIdDeserializer();
   protected Cache<SubjectSchema, ExtendedSchema> latestVersions;
   protected Cache<String, ExtendedSchema> latestWithMetadata;
   protected boolean useSchemaReflection;
   protected boolean useLatestVersion;
   protected Map<String, String> metadata;
+  protected ExecutionEnvironment executionEnv;
   protected boolean enableRuleServiceLoader;
   protected Map<String, Map<String, RuleBase>> ruleExecutors;
   protected Map<String, Map<String, RuleBase>> ruleActions;
@@ -179,7 +187,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
     contextNameStrategy = config.contextNameStrategy();
     keySubjectNameStrategy = config.keySubjectNameStrategy();
+    keySubjectNameStrategy.setSchemaRegistryClient(schemaRegistry);
+    keySchemaIdSerializer = config.keySchemaIdSerializer();
+    keySchemaIdDeserializer = config.keySchemaIdDeserializer();
     valueSubjectNameStrategy = config.valueSubjectNameStrategy();
+    valueSubjectNameStrategy.setSchemaRegistryClient(schemaRegistry);
+    valueSchemaIdSerializer = config.valueSchemaIdSerializer();
+    valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
     int latestCacheSize = config.getLatestCacheSize();
@@ -204,6 +218,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       MapPropertyParser parser = new MapPropertyParser();
       metadata = parser.parse(config.getLatestWithMetadataSpec());
     }
+    executionEnv = config.getExecutionEnvironment();
     enableRuleServiceLoader = config.enableRuleServiceLoader();
     ruleExecutors = initRuleObjects(
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
@@ -378,17 +393,15 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     ExtendedSchema extendedSchema = latestWithMetadata.getIfPresent(subject);
     if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestWithMetadata(subject, metadata, true);
-      Optional<ParsedSchema> optSchema =
-          schemaRegistry.parseSchema(
+      ParsedSchema schema =
+          schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
-      ParsedSchema schema = optSchema.orElseThrow(
-          () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
-              + " with refs " + schemaMetadata.getReferences()
-              + " of type " + schemaMetadata.getSchemaType()));
       schema = schema.copy(schemaMetadata.getVersion());
       extendedSchema = new ExtendedSchema(
-          schemaMetadata.getId(), schemaMetadata.getVersion(), schema);
+          schemaMetadata.getId(), schemaMetadata.getVersion(),
+          schemaMetadata.getGuid(), schema
+      );
       latestWithMetadata.put(subject, extendedSchema);
     }
     return extendedSchema;
@@ -397,14 +410,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   private ParsedSchema getSchemaMetadata(String subject, int version)
       throws IOException, RestClientException {
     SchemaMetadata schemaMetadata = schemaRegistry.getSchemaMetadata(subject, version, true);
-    Optional<ParsedSchema> optSchema =
-        schemaRegistry.parseSchema(
+    ParsedSchema schema =
+        schemaRegistry.parseSchemaOrElseThrow(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                 null, schemaMetadata));
-    ParsedSchema schema = optSchema.orElseThrow(
-        () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
-            + " with refs " + schemaMetadata.getReferences()
-            + " of type " + schemaMetadata.getSchemaType()));
     return schema.copy(schemaMetadata.getVersion());
   }
 
@@ -436,7 +445,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         previous = current;
         continue;
       }
-      if (current.ruleSet() != null && current.ruleSet().hasRules(migrationMode)) {
+      if (current.ruleSet() != null
+          && current.ruleSet().hasRules(RulePhase.MIGRATION, migrationMode)) {
         Migration m;
         if (migrationMode == RuleMode.UPGRADE) {
           m = new Migration(migrationMode, previous, current);
@@ -474,14 +484,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
    * Get the subject name for the given topic and value type.
    */
   protected String getSubjectName(String topic, boolean isKey, Object value, ParsedSchema schema) {
-    Object subjectNameStrategy = subjectNameStrategy(isKey);
-    String subject;
-    if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      subject = ((SubjectNameStrategy) subjectNameStrategy).subjectName(topic, isKey, schema);
-    } else {
-      subject = ((io.confluent.kafka.serializers.subject.SubjectNameStrategy) subjectNameStrategy)
-          .getSubjectName(topic, isKey, value);
-    }
+    SubjectNameStrategy subjectNameStrategy = subjectNameStrategy(isKey);
+    String subject = subjectNameStrategy.subjectName(topic, isKey, schema);
     return getContextName(topic, subject);
   }
 
@@ -501,23 +505,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   }
 
   protected boolean strategyUsesSchema(boolean isKey) {
-    Object subjectNameStrategy = subjectNameStrategy(isKey);
-    if (subjectNameStrategy instanceof SubjectNameStrategy) {
-      return ((SubjectNameStrategy) subjectNameStrategy).usesSchema();
-    } else {
-      return false;
-    }
+    SubjectNameStrategy subjectNameStrategy = subjectNameStrategy(isKey);
+    return subjectNameStrategy.usesSchema();
   }
 
-  protected boolean isDeprecatedSubjectNameStrategy(boolean isKey) {
-    Object subjectNameStrategy = subjectNameStrategy(isKey);
-    return !(
-        subjectNameStrategy
-            instanceof io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy);
-  }
-
-  private Object subjectNameStrategy(boolean isKey) {
+  private SubjectNameStrategy subjectNameStrategy(boolean isKey) {
     return isKey ? keySubjectNameStrategy : valueSubjectNameStrategy;
+  }
+
+  protected SchemaIdSerializer schemaIdSerializer(boolean isKey) {
+    return isKey ? keySchemaIdSerializer : valueSchemaIdSerializer;
+  }
+
+  protected SchemaIdDeserializer schemaIdDeserializer(boolean isKey) {
+    return isKey ? keySchemaIdDeserializer : valueSchemaIdDeserializer;
   }
 
   /**
@@ -575,16 +576,24 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
+  protected ParsedSchema getSchemaBySchemaId(String subject, SchemaId schemaId)
+      throws IOException, RestClientException {
+    if (schemaId.getId() != null) {
+      return schemaRegistry.getSchemaBySubjectAndId(subject, schemaId.getId());
+    } else if (schemaId.getGuid() != null) {
+      return schemaRegistry.getSchemaByGuid(schemaId.getGuid().toString(), null);
+    } else {
+      throw new SerializationException("Could not deserialize schema ID");
+    }
+  }
+
   protected ParsedSchema lookupSchemaBySubjectAndId(
       String subject, int id, ParsedSchema schema, boolean idCompatStrict)
       throws IOException, RestClientException {
     ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
-      throw new IOException("Incompatible schema '" + lookupSchema.canonicalString()
-          + "' with refs '" + lookupSchema.references()
-          + "' of type '" + lookupSchema.schemaType()
-          + "' for schema '" + schema.canonicalString()
-          + "'. Set id.compatibility.strict=false to disable this check");
+      throw new IOException("Incompatible schema of type '" + lookupSchema.schemaType()
+          + ". Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
   }
@@ -610,45 +619,31 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     if (extendedSchema == null) {
       SchemaMetadata schemaMetadata = schemaRegistry.getLatestSchemaMetadata(subject);
-      Optional<ParsedSchema> optSchema =
-          schemaRegistry.parseSchema(
+      ParsedSchema latestVersion =
+          schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                   null, schemaMetadata));
-      ParsedSchema latestVersion = optSchema.orElseThrow(
-          () -> new IOException("Invalid schema " + schemaMetadata.getSchema()
-              + " with refs " + schemaMetadata.getReferences()
-              + " of type " + schemaMetadata.getSchemaType()));
       latestVersion = latestVersion.copy(schemaMetadata.getVersion());
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
       if (latestCompatStrict) {
         List<String> errorMessages = latestVersion.isBackwardCompatible(schema);
         if (!errorMessages.isEmpty()) {
-          String baseMsg = "Incompatible schema '" + schemaMetadata.getSchema()
-                  + "' with refs '" + schemaMetadata.getReferences()
-                  + "' of type '" + schemaMetadata.getSchemaType()
-                  + "' for schema '" + schema.canonicalString()
-                  + "'. Set latest.compatibility.strict=false to disable this check.";
-          log.error(baseMsg + " Error messages: " + String.join(",", errorMessages)
-                  + "; latestVersion=" + latestVersion + "; schema=" + schema);
+          String baseMsg = "Incompatible schema of type '" + schemaMetadata.getSchemaType()
+                  + ". Set latest.compatibility.strict=false to disable this check.";
+          log.error(baseMsg + " Error messages: " + String.join(",", errorMessages));
           throw new IOException(baseMsg + " See log file for more details.");
         }
       }
       extendedSchema = new ExtendedSchema(
-          schemaMetadata.getId(), schemaMetadata.getVersion(), latestVersion);
+          schemaMetadata.getId(), schemaMetadata.getVersion(),
+          schemaMetadata.getGuid(), latestVersion
+      );
       if (cache != null) {
         cache.put(ss, extendedSchema);
       }
     }
     return extendedSchema;
-  }
-
-  protected ByteBuffer getByteBuffer(byte[] payload) {
-    ByteBuffer buffer = ByteBuffer.wrap(payload);
-    if (buffer.get() != MAGIC_BYTE) {
-      throw new SerializationException("Unknown magic byte!");
-    }
-    return buffer;
   }
 
   protected Object executeMigrations(
@@ -661,7 +656,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         message = m.getSource().toJson(message);
       }
       message = executeRules(
-          subject, topic, headers, m.getRuleMode(),
+          subject, topic, headers, message, RulePhase.MIGRATION, m.getRuleMode(),
           m.getSource(), m.getTarget(), message
       );
     }
@@ -677,23 +672,37 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected Object executeRules(
       String subject, String topic, Headers headers, Object original,
       RuleMode ruleMode, ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(
+        subject, topic, headers, original, RulePhase.DOMAIN, ruleMode, source, target, message);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RulePhase rulePhase, RuleMode ruleMode,
+      ParsedSchema source, ParsedSchema target, Object message) {
     if (message == null || target == null) {
       return message;
     }
+    ExecutionEnvironment enabledEnv = null;
     List<Rule> rules = Collections.emptyList();
     if (ruleMode == RuleMode.UPGRADE) {
       if (target.ruleSet() != null) {
+        enabledEnv = target.ruleSet().getEnableOnlyAt();
         rules = target.ruleSet().getMigrationRules();
       }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
       if (source.ruleSet() != null) {
+        enabledEnv = source.ruleSet().getEnableOnlyAt();
         rules = new ArrayList<>(source.ruleSet().getMigrationRules());
         // Execute downgrade rules in reverse order for symmetry
         Collections.reverse(rules);
       }
     } else {
       if (target.ruleSet() != null) {
-        rules = target.ruleSet().getDomainRules();
+        enabledEnv = target.ruleSet().getEnableOnlyAt();
+        rules = rulePhase == RulePhase.ENCODING
+            ? target.ruleSet().getEncodingRules()
+            : target.ruleSet().getDomainRules();
         if (ruleMode == RuleMode.READ) {
           rules = new ArrayList<>(rules);
           // Execute read rules in reverse order for symmetry
@@ -703,7 +712,12 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
     for (int i = 0; i < rules.size(); i++) {
       Rule rule = rules.get(i);
-      if (skipRule(rule, headers)) {
+      RuleContext ctx = new RuleContext(configOriginals, enabledEnv, source, target,
+          subject, topic, headers,
+          isKey ? original : key(),
+          isKey ? null : original,
+          isKey, ruleMode, rule, i, rules);
+      if (skipRule(ctx, rule, headers)) {
         continue;
       }
       if (rule.getMode() == RuleMode.WRITEREAD) {
@@ -717,11 +731,6 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       } else if (ruleMode != rule.getMode()) {
         continue;
       }
-      RuleContext ctx = new RuleContext(configOriginals, source, target,
-          subject, topic, headers,
-          isKey ? original : key(),
-          isKey ? null : original,
-          isKey, ruleMode, rule, i, rules);
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
@@ -790,8 +799,9 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     });
   }
 
-  private boolean isDisabled(Rule rule) {
+  private boolean isDisabled(RuleContext ctx, Rule rule) {
     return disabledFlags.computeIfAbsent(rule, r -> {
+      // 1. Check config overrides
       Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
@@ -804,6 +814,20 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
       }
+
+      // 2. Check ruleSet setting
+      ExecutionEnvironment enabledEnv = ctx.enabledEnv();
+      if (enabledEnv == null) {
+        enabledEnv = ExecutionEnvironment.ALL;
+      }
+      if (enabledEnv == ExecutionEnvironment.NONE) {
+        return true;
+      }
+      if (enabledEnv != ExecutionEnvironment.ALL && enabledEnv != this.executionEnv) {
+        return true;
+      }
+
+      // 3. Check rule setting
       return rule.isDisabled();
     });
   }
@@ -813,8 +837,8 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return configOriginals.get(propertyName);
   }
 
-  private boolean skipRule(Rule rule, Headers headers) {
-    if (isDisabled(rule)) {
+  private boolean skipRule(RuleContext ctx, Rule rule, Headers headers) {
+    if (isDisabled(ctx, rule)) {
       return true;
     }
     if (headers != null) {
@@ -962,11 +986,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected static class ExtendedSchema {
     private final Integer id;
     private final Integer version;
+    private final String guid;
     private final ParsedSchema schema;
 
-    public ExtendedSchema(Integer id, Integer version, ParsedSchema schema) {
+    public ExtendedSchema(Integer id, Integer version, String guid, ParsedSchema schema) {
       this.id = id;
       this.version = version;
+      this.guid = guid;
       this.schema = schema;
     }
 
@@ -976,6 +1002,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
 
     public Integer getVersion() {
       return version;
+    }
+
+    public String getGuid() {
+      return guid;
     }
 
     public ParsedSchema getSchema() {
@@ -993,12 +1023,13 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       ExtendedSchema that = (ExtendedSchema) o;
       return id.equals(that.id)
           && version.equals(that.version)
+          && Objects.equals(guid, that.guid)
           && schema.equals(that.schema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(id, version, schema);
+      return Objects.hash(id, version, guid, schema);
     }
   }
 

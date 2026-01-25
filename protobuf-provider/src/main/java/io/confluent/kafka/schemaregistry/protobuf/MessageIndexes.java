@@ -11,7 +11,6 @@
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
- *
  */
 
 package io.confluent.kafka.schemaregistry.protobuf;
@@ -25,7 +24,7 @@ import java.util.List;
 
 public class MessageIndexes {
 
-  private static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
+  public static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
 
   private List<Integer> indexes;
 

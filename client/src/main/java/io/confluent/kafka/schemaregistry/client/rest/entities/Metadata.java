@@ -60,12 +60,16 @@ public class Metadata {
       @JsonProperty("sensitive") Set<String> sensitive
   ) {
     SortedMap<String, SortedSet<String>> sortedTags = tags != null
-        ? tags.entrySet().stream()
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            e -> e.getValue().stream().sorted().collect(Collectors.toCollection(TreeSet::new)),
-            (e1, e2) -> e1,
-            TreeMap::new))
+        ? tags.entrySet()
+              .stream()
+              .collect(Collectors.toMap(Entry::getKey,
+                  e -> Collections.unmodifiableSortedSet(
+                          e.getValue()
+                              .stream()
+                              .sorted()
+                              .collect(Collectors.toCollection(TreeSet::new))),
+                  (e1, e2) -> e1,
+                  TreeMap::new))
         : Collections.emptySortedMap();
     SortedMap<String, String> sortedProperties = properties != null
         ? new TreeMap<>(properties)

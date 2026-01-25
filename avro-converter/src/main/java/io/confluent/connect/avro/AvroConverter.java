@@ -18,8 +18,10 @@ package io.confluent.connect.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
 import io.confluent.kafka.serializers.GenericContainerWithVersion;
@@ -27,9 +29,13 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumWriter;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -103,10 +109,18 @@ public class AvroConverter implements Converter {
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(
-          String.format("Failed to serialize Avro data from topic %s :", topic),
-          e
-      );
+      if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
+        throw new NetworkException(
+            String.format("Network connection error while serializing Avro data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Failed to serialize Avro data from topic %s:", topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
@@ -144,10 +158,18 @@ public class AvroConverter implements Converter {
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(
-          String.format("Failed to deserialize data for topic %s to Avro: ", topic),
-          e
-      );
+      if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
+        throw new NetworkException(
+            String.format("Network connection error while deserializing data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Failed to deserialize data for topic %s to Avro:", topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
@@ -156,7 +178,7 @@ public class AvroConverter implements Converter {
   }
 
 
-  private static class Serializer extends AbstractKafkaAvroSerializer {
+  static class Serializer extends AbstractKafkaAvroSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -181,9 +203,19 @@ public class AvroConverter implements Converter {
           value,
           schema);
     }
+
+    @Override
+    protected DatumWriter<?> getDatumWriter(
+        Object value, org.apache.avro.Schema schema, boolean useLogicalTypes, boolean allowNull) {
+      GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
+      if (data == null) {
+        data = AvroSchemaUtils.getGenericData(useLogicalTypes);
+      }
+      return new GenericDatumWriter<>(schema, data);
+    }
   }
 
-  private static class Deserializer extends AbstractKafkaAvroDeserializer {
+  static class Deserializer extends AbstractKafkaAvroDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;

@@ -21,15 +21,11 @@ import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.jdk.javaapi.CollectionConverters;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -37,7 +33,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
 import java.util.List;
-import java.util.LinkedList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Map;
@@ -168,6 +163,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
   public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
   /**
+   * <code>associations.enable</code>*
+   */
+  public static final String ASSOCIATIONS_ENABLE = "associations.enable";
+  public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -190,6 +190,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
+
+  public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
+  public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
 
   /**
    * <code>schema.cache.size</code>
@@ -318,6 +321,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "resource.extension.class";
   public static final String ENABLE_FIPS_CONFIG =
       "enable.fips";
+  public static final String ENABLE_FIPS_MODE_CONFIG =
+      "enable.fips.mode";
+  public static final String ENABLE_FIPS_MODE_CONFIG_DEFAULT =
+      "fips-140-3";
   public static final String RESOURCE_STATIC_LOCATIONS_CONFIG =
       "resource.static.locations";
   @Deprecated
@@ -407,6 +414,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
+  protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
+      + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -450,6 +459,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELECTION_STICKY_DOC =
       "If true, leader election will prefer to keep the current leader if possible. This is a "
       + "cluster wide setting i.e all nodes should have either true or false.";
+  protected static final String ASSOCIATIONS_ENABLE_DOC =
+      "If true, enable support for associations between resources and subjects.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -508,6 +519,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String ENABLE_FIPS_DOC =
       "Enable FIPS mode on the server. If FIPS mode is enabled, broker listener security protocols,"
       + " TLS versions and cipher suites will be validated based on FIPS compliance requirement.";
+  protected static final String ENABLE_FIPS_MODE_DOC =
+      "The FIPS mode to enable on the server. Valid values are 'fips-140-2' and 'fips-140-3'."
+      + " This config is only applicable when FIPS is enabled.";
   protected static final String SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC =
       "  A list of classes to use as SchemaRegistryResourceExtension. Implementing the interface "
       + " <code>SchemaRegistryResourceExtension</code> allows you to inject user defined resources "
@@ -633,6 +647,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
     )
+    .define(SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
@@ -700,6 +718,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
             ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
+    )
+    .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
+        ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -800,6 +821,9 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(ENABLE_FIPS_CONFIG, ConfigDef.Type.BOOLEAN, false,
         ConfigDef.Importance.LOW, ENABLE_FIPS_DOC
     )
+    .define(ENABLE_FIPS_MODE_CONFIG, ConfigDef.Type.STRING, ENABLE_FIPS_MODE_CONFIG_DEFAULT,
+        ConfigDef.Importance.LOW, ENABLE_FIPS_MODE_DOC
+    )
     .define(RESOURCE_EXTENSION_CONFIG, ConfigDef.Type.LIST, "",
             ConfigDef.Importance.LOW, SCHEMAREGISTRY_RESOURCE_EXTENSION_DOC
     )
@@ -888,22 +912,6 @@ public class SchemaRegistryConfig extends RestConfig {
         endpoints,
         this.getString(KAFKASTORE_SECURITY_PROTOCOL_CONFIG)
     );
-  }
-
-  static List<String> brokersToEndpoints(List<Broker> brokers) {
-    final List<String> endpoints = new LinkedList<>();
-    for (Broker broker : brokers) {
-      for (EndPoint ep : CollectionConverters.asJavaCollection(broker.endPoints())) {
-        String
-            hostport =
-            ep.host() == null ? ":" + ep.port() : Utils.formatAddress(ep.host(), ep.port());
-        String endpoint = ep.securityProtocol() + "://" + hostport;
-
-        endpoints.add(endpoint);
-      }
-    }
-
-    return endpoints;
   }
 
   static String endpointsToBootstrapServers(List<String> endpoints, String securityProtocol) {
@@ -998,6 +1006,10 @@ public class SchemaRegistryConfig extends RestConfig {
       }
     }
     return overridden;
+  }
+
+  public boolean enableAssociations() {
+    return getBoolean(ASSOCIATIONS_ENABLE);
   }
 
   public static void main(String[] args) {

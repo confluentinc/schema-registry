@@ -12,12 +12,13 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
@@ -28,24 +29,34 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.util.List;
 
 import java.util.Arrays;
 import java.util.Collections;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiRegisterSchemaTagsTest {
+
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
 
   public final String schemaString = "{" +
       "\"type\":\"record\"," +
@@ -53,35 +64,10 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
       "\"fields\":[{\"name\":\"f1\",\"type\":\"string\"}]" +
       "}";
 
-  public RestApiRegisterSchemaTagsTest() {
-    super(1, true);
-  }
-
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
-      public void handle(String subject, ConfigUpdateRequest request) {
-      }
-
-      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
-      }
-
-      public void handle(String subject, TagSchemaRequest request) {
-      }
-
-      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
-        return ruleSet != null
-            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
-            : null;
-      }
-    });
-  }
-
   @Test
   public void testRegisterSchemaTagsBasic() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     List<SchemaTags> schemaTags = Collections.singletonList(
         new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
@@ -97,7 +83,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
     RegisterSchemaResponse responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
 
     Schema result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, Collections.singleton("*"));
@@ -119,7 +105,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\"]}";
     responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(3, responses.getId());
+    assertEquals(expectedSchemaId(3), responses.getId());
 
     result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, Collections.singleton("*"));
@@ -132,7 +118,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     assertEquals(expectedSchemaTags, result.getSchemaTags());
 
     SchemaString schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
-        3, subject, Collections.singleton("TAG1"), false);
+        expectedSchemaId(3), subject, Collections.singleton("TAG1"), false);
     assertEquals(expectedSchemaTags, schemaString.getSchemaTags());
 
     String evolvedSchemaString = "{" +
@@ -151,7 +137,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
 
     responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(4, responses.getId());
+    assertEquals(expectedSchemaId(4), responses.getId());
 
     result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, Collections.singleton("*"));
@@ -163,7 +149,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     assertEquals(expectedSchemaTags, result.getSchemaTags());
 
     schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
-        4, subject, Collections.singleton("TAG1"), false);
+        expectedSchemaId(4), subject, Collections.singleton("TAG1"), false);
     assertEquals(expectedSchemaTags, schemaString.getSchemaTags());
 
     evolvedSchemaString = "{" +
@@ -182,7 +168,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
 
     responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(5, responses.getId());
+    assertEquals(expectedSchemaId(5), responses.getId());
 
     result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, Collections.singleton("*"));
@@ -196,14 +182,14 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     assertEquals(expectedSchemaTags, result.getSchemaTags());
 
     schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
-        5, subject, ImmutableSet.of("TAG1", "TAG2"), false);
+        expectedSchemaId(5), subject, ImmutableSet.of("TAG1", "TAG2"), false);
     assertEquals(expectedSchemaTags, schemaString.getSchemaTags());
   }
 
   @Test
   public void testRegisterSchemaWithoutNewVersionInput() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest(new AvroSchema(schemaString));
     tagSchemaRequest.setSchemaTagsToAdd(Collections.singletonList(
@@ -217,7 +203,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
     RegisterSchemaResponse responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
 
     Schema result = restApp.restClient.getLatestVersion(subject);
     assertEquals(newSchemaString, result.getSchema());
@@ -236,7 +222,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\"]}";
     responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(3, responses.getId());
+    assertEquals(expectedSchemaId(3), responses.getId());
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(newSchemaString, result.getSchema());
@@ -247,7 +233,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   @Test
   public void testRegisterSchemaTagsInDiffContext() throws Exception {
     String subject = ":.ctx:testSubject";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest(new AvroSchema(schemaString));
     tagSchemaRequest.setVersion(2);
@@ -262,7 +248,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
     RegisterSchemaResponse responses = restApp.restClient
         .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, false);
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
 
     Schema result = restApp.restClient.getLatestVersion(subject);
     assertEquals(newSchemaString, result.getSchema());
@@ -286,7 +272,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     }
 
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     // create tag on existing subject version
     tagSchemaRequest.setVersion(1);
@@ -301,7 +287,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   @Test
   public void testRegisterSchemaTagsWithInvalidTags() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     // invalid path
     RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest(new AvroSchema(schemaString));
@@ -320,7 +306,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   @Test
   public void testRegisterSchemaTagsBasicDeprecated() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     List<SchemaTags> schemaTags = Collections.singletonList(
         new SchemaTags(new SchemaEntity("myrecord", SchemaEntity.EntityType.SR_RECORD),
@@ -336,7 +322,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
     RegisterSchemaResponse responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
 
     Schema result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, Collections.singleton("*"));
@@ -358,7 +344,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\"]}";
     responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(3, responses.getId());
+    assertEquals(expectedSchemaId(3), responses.getId());
 
     result = restApp.restClient.getLatestVersion(RestService.DEFAULT_REQUEST_PROPERTIES,
         subject, Collections.singleton("*"));
@@ -371,14 +357,14 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     assertEquals(expectedSchemaTags, result.getSchemaTags());
 
     SchemaString schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
-        3, subject, Collections.singleton("TAG1"), false);
+        expectedSchemaId(3), subject, Collections.singleton("TAG1"), false);
     assertEquals(expectedSchemaTags, schemaString.getSchemaTags());
   }
 
   @Test
   public void testRegisterSchemaWithoutNewVersionInputDeprecated() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setTagsToAdd(Collections.singletonList(
@@ -392,7 +378,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
     RegisterSchemaResponse responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
 
     Schema result = restApp.restClient.getLatestVersion(subject);
     assertEquals(expectedSchema, result.getSchema());
@@ -411,7 +397,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\"]}";
     responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(3, responses.getId());
+    assertEquals(expectedSchemaId(3), responses.getId());
 
     result = restApp.restClient.getLatestVersion(subject);
     assertEquals(expectedSchema, result.getSchema());
@@ -422,7 +408,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   @Test
   public void testRegisterSchemaTagsInDiffContextDeprecated() throws Exception {
     String subject = ":.ctx:testSubject";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(2);
@@ -437,7 +423,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         "\"confluent:tags\":[\"TAG1\",\"TAG2\"]}";
     RegisterSchemaResponse responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
 
     Schema result = restApp.restClient.getLatestVersion(subject);
     assertEquals(expectedSchema, result.getSchema());
@@ -461,7 +447,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
     }
 
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     // version doesn't exist
     try {
@@ -492,7 +478,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   @Test
   public void testRegisterSchemaTagsWithInvalidTagsDeprecated() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     // invalid path
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
@@ -511,7 +497,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
   @Test
   public void testRegisterSchemaTagsIncrementalRuleSetDeprecated() throws Exception {
     String subject = "test";
-    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, 1, subject);
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemaString, expectedSchemaId(1), subject);
 
     TagSchemaRequest tagSchemaRequest = new TagSchemaRequest();
     tagSchemaRequest.setNewVersion(2);
@@ -532,7 +518,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
 
     RegisterSchemaResponse responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(2, responses.getId());
+    assertEquals(expectedSchemaId(2), responses.getId());
     assertEquals(ruleSet, responses.getRuleSet());
 
     Schema result = restApp.restClient.getLatestVersion(subject);
@@ -558,7 +544,7 @@ public class RestApiRegisterSchemaTagsTest extends ClusterTestHarness {
         ImmutableList.of(domainRule3, domainRule5, domainRule4, domainRule2));
     responses = restApp.restClient
         .modifySchemaTags(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, subject, "latest");
-    assertEquals(3, responses.getId());
+    assertEquals(expectedSchemaId(3), responses.getId());
     assertEquals(expectedRuleSet, responses.getRuleSet());
 
     result = restApp.restClient.getLatestVersion(subject);

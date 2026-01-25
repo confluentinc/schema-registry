@@ -1,16 +1,27 @@
 /*
  * Copyright 2023 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import org.eclipse.jetty.http.HttpFields;
+import org.eclipse.jetty.server.Request;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import javax.servlet.http.HttpServletRequest;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -24,15 +35,15 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.class)
 public class MutableHttpServletRequestTest {
 
-  MutableHttpServletRequest mutableRequest;
+  MutableRequest mutableRequest;
 
   @Mock
-  HttpServletRequest httpServletRequest;
+  Request httpServletRequest;
 
   @Before
   public void setup(){
     reset(httpServletRequest);
-    mutableRequest = new MutableHttpServletRequest(httpServletRequest);
+    mutableRequest = new MutableRequest(httpServletRequest);
   }
 
   @Test
@@ -42,9 +53,7 @@ public class MutableHttpServletRequestTest {
     Enumeration<String> headerNames;
 
     // Mock no header return values from HttpServletRequest
-    when(httpServletRequest.getHeader("header-key-0")).thenReturn(null);
-    when(httpServletRequest.getHeaders("header-key-0")).thenReturn(Collections.emptyEnumeration());
-    when(httpServletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+    when(httpServletRequest.getHeaders()).thenReturn(HttpFields.build());
 
     // Validate gets
     headerValue = mutableRequest.getHeader("header-key-0");
@@ -64,7 +73,7 @@ public class MutableHttpServletRequestTest {
     List<String> headerNamesList;
 
     // Mock no header return values from HttpServletRequest
-    when(httpServletRequest.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+    when(httpServletRequest.getHeaders()).thenReturn(HttpFields.build());
 
     // Add a "header-key-0" header
     mutableRequest.putHeader("header-key-0", "new-header-value-98");
@@ -118,18 +127,12 @@ public class MutableHttpServletRequestTest {
     List<String> headerNamesList;
 
     // Mock HttpServletRequest with two headers
-    when(httpServletRequest.getHeader("header-key-0")).thenReturn("header-value-78.1");
-    when(httpServletRequest.getHeaders("header-key-0")).thenReturn(
-        Collections.enumeration(Arrays.asList("header-value-78.1", "header-value-78.2")));
-
-    when(httpServletRequest.getHeader("header-key-2")).thenReturn("header-value-62.1");
-    when(httpServletRequest.getHeaders("header-key-2")).thenReturn(
-        Collections.enumeration(Arrays.asList("header-value-62.1", "header-value-62.2")));
-
-    // Include "header-KEY-0" here to make sure that getHeaderNames() filters it out.
-    when(httpServletRequest.getHeaderNames()).thenReturn(
-        Collections.enumeration(Arrays.asList("header-key-0", "header-KEY-0", "header-key-2")));
-
+    HttpFields headers = HttpFields.build()
+        .add("header-key-0", "header-value-78.1")
+        .add("header-key-0", "header-value-78.2")
+        .add("header-key-2", "header-value-62.1")
+        .add("header-key-2", "header-value-62.2");
+    when(httpServletRequest.getHeaders()).thenReturn(headers);
 
     // Test getting header values from HttpServletRequest (should match the mock values above)
     Assert.assertEquals("header-value-78.1", mutableRequest.getHeader("header-key-0"));
@@ -194,5 +197,67 @@ public class MutableHttpServletRequestTest {
     Assert.assertTrue(headerNamesList.contains("header-key-0"));
     Assert.assertTrue(headerNamesList.contains("header-key-1"));
     Assert.assertTrue(headerNamesList.contains("header-key-2"));
+  }
+
+  @Test
+  public void testPutHeaderOverwritesInGetHeaders() {
+    // Test that putHeader() properly overwrites headers when using getHeaders()
+    // This verifies that custom headers replace original headers, not append to them
+
+    // Mock HttpServletRequest with initial headers
+    HttpFields headers = HttpFields.build()
+        .add("Content-Type", "application/json")
+        .add("Authorization", "Bearer original-token")
+        .add("X-Custom-Header", "original-value-1")
+        .add("X-Custom-Header", "original-value-2");
+    when(httpServletRequest.getHeaders()).thenReturn(headers);
+
+    // Verify initial state - should have original values
+    HttpFields initialFields = mutableRequest.getHeaders();
+    List<String> initialAuthValues = initialFields.getFields("Authorization")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals(1, initialAuthValues.size());
+    Assert.assertEquals("Bearer original-token", initialAuthValues.get(0));
+
+    List<String> initialCustomValues = initialFields.getFields("X-Custom-Header")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals(2, initialCustomValues.size());
+    Assert.assertTrue(initialCustomValues.contains("original-value-1"));
+    Assert.assertTrue(initialCustomValues.contains("original-value-2"));
+
+    // Overwrite the Authorization header
+    mutableRequest.putHeader("Authorization", "Bearer new-token");
+
+    // Overwrite the X-Custom-Header (which had multiple values)
+    mutableRequest.putHeader("X-Custom-Header", "new-single-value");
+
+    // Verify that getHeaders() returns ONLY the new values, not the original ones
+    HttpFields updatedFields = mutableRequest.getHeaders();
+
+    List<String> authValues = updatedFields.getFields("Authorization")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals("Should have exactly one Authorization value", 1, authValues.size());
+    Assert.assertEquals("Bearer new-token", authValues.get(0));
+
+    List<String> customValues = updatedFields.getFields("X-Custom-Header")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals("Should have exactly one X-Custom-Header value", 1, customValues.size());
+    Assert.assertEquals("new-single-value", customValues.get(0));
+
+    // Verify Content-Type (not overwritten) is still present
+    List<String> contentTypeValues = updatedFields.getFields("Content-Type")
+        .stream()
+        .map(field -> field.getValue())
+        .toList();
+    Assert.assertEquals(1, contentTypeValues.size());
+    Assert.assertEquals("application/json", contentTypeValues.get(0));
   }
 }

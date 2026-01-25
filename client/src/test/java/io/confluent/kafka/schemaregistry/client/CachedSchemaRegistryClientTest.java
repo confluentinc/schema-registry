@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.client;
 
 import com.google.common.collect.ImmutableMap;
@@ -21,6 +22,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import java.util.ArrayList;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -65,6 +69,8 @@ public class CachedSchemaRegistryClientTest {
   private static final int CACHE_CAPACITY = 5;
   private static final String SCHEMA_STR_0 = avroSchemaString(0);
   private static final AvroSchema AVRO_SCHEMA_0 = avroSchema(0);
+  private static final AvroSchema AVRO_SCHEMA_0_WITH_METADATA =
+      AVRO_SCHEMA_0.copy(new Metadata(null, ImmutableMap.of("confluent:version", "1"), null), null);
   private static final AvroSchema SCHEMA_WITH_DECIMAL = new AvroSchema(
           "{\n"
               + "    \"type\": \"record\",\n"
@@ -143,6 +149,27 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRandomizeConfiguration() {
+    reset(restService);
+
+    Map<String, ?> configs = Collections.singletonMap(
+        SchemaRegistryClientConfig.URL_RANDOMIZE, "true");
+    restService.configure(configs);
+    expectLastCall();
+    replay(restService);
+
+    Map<String, ?> clientConfigs = Collections.singletonMap(
+        "schema.registry.url.randomize", "true");
+    new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        clientConfigs
+    );
+
+    verify(restService);
+  }
+
+  @Test
   public void testDuplicateClientNamespaceConfiguration() {
     Map<String, String> configs = Collections.singletonMap("key", "value");
     restService.configure(configs);
@@ -215,6 +242,40 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRegisterFollowedByLookupWillSkipCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25))
+        .once();
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, ID_25))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, SCHEMA_WITH_DECIMAL, VERSION_1, ID_25));
+    assertEquals(ID_25, client.getIdWithResponse(SUBJECT_0, SCHEMA_WITH_DECIMAL, false).getId());
+
+    verify(restService);
+  }
+
+  @Test
+  public void testRegisterFollowedByIdLookupWillReturnRegisteredSchema() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(new Schema(SUBJECT_0, 1, ID_25, AVRO_SCHEMA_0_WITH_METADATA)))
+        .once();
+
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0, VERSION_1, ID_25));
+    assertEquals(AVRO_SCHEMA_0_WITH_METADATA, client.getSchemaById(ID_25));
+
+    verify(restService);
+  }
+
+  @Test
   public void testRegisterOverCapacity() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
         anyString(), anyBoolean()))
@@ -259,6 +320,40 @@ public class CachedSchemaRegistryClientTest {
         AVRO_SCHEMA_0.rawSchema(),
         ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
     ); // hit the cache
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGuidCache() throws Exception {
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+
+    // Expect only one call to getId (the rest should hit the cache)
+
+    SchemaString result = new SchemaString(SCHEMA_STR_0);
+    String guid = new Schema(SUBJECT_0, 1, ID_25, result).getGuid();
+    expect(restService.getByGuid(guid, null)).andReturn(result);
+
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), anyBoolean()))
+        .andReturn(new Schema(SUBJECT_0, 1, ID_25, result))
+        .once();
+    replay(restService);
+
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    );
+    assertEquals(
+        AVRO_SCHEMA_0.rawSchema(),
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema()
+    ); // hit the cache
+
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(guid, client.getGuid(SUBJECT_0, AVRO_SCHEMA_0)); // Hit cache
 
     verify(restService);
   }
@@ -443,8 +538,7 @@ public class CachedSchemaRegistryClientTest {
 
     reset(restService);
 
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(mode);
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(mode);
     expect(restService.setMode(eq(mode))).andReturn(modeUpdateRequest);
 
     replay(restService);
@@ -813,6 +907,91 @@ public class CachedSchemaRegistryClientTest {
     Thread.sleep(100);
     client.getId(SUBJECT_0, AVRO_SCHEMA_0);
   }
+
+  @Test
+  public void testGetSchemaRegistryDeployment() throws Exception {
+    List<String> deploymentAttributes = new ArrayList<>(Collections.singleton("deploymentScope:opensource"));
+    SchemaRegistryDeployment expectedDeployment = new SchemaRegistryDeployment(deploymentAttributes);
+
+    expect(restService.getSchemaRegistryDeployment())
+        .andReturn(expectedDeployment);
+
+    replay(restService);
+
+    SchemaRegistryDeployment deployment = client.getSchemaRegistryDeployment();
+
+    assertNotNull(deployment);
+    assertEquals(expectedDeployment.getAttributes(), deployment.getAttributes());
+
+    verify(restService);
+  }
+
+  @Test
+  public void testGetSchemaRegistryServerVersion() throws Exception {
+    String version = "7.5.0";
+    String commitId = "abc123def456";
+    SchemaRegistryServerVersion expectedVersion = new SchemaRegistryServerVersion(version, commitId);
+
+    expect(restService.getSchemaRegistryServerVersion())
+        .andReturn(expectedVersion);
+
+    replay(restService);
+
+    SchemaRegistryServerVersion serverVersion = client.getSchemaRegistryServerVersion();
+
+    assertNotNull(serverVersion);
+    assertEquals(version, serverVersion.getVersion());
+    assertEquals(commitId, serverVersion.getCommitId());
+
+    verify(restService);
+  }
+  @Test
+  public void testLatestVersionCacheInvalidatedOnRegister() throws Exception {
+    String schemaStr1 = avroSchemaString(1);
+    String schemaStr2 = avroSchemaString(2);
+    AvroSchema schema = avroSchema(2);
+
+    // Mock the initial getLatestSchemaMetadata call - returns version 1
+    expect(restService.getLatestVersion(eq(SUBJECT_0)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                SUBJECT_0, VERSION_1, ID_25, AvroSchema.TYPE, Collections.emptyList(), schemaStr1))
+        .once();
+
+    // Mock the register call for schema2 - returns version 2
+    RegisterSchemaResponse registerResponse = new RegisterSchemaResponse(ID_50);
+    registerResponse.setVersion(VERSION_2);
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(registerResponse)
+        .once();
+
+    // Mock the second getLatestSchemaMetadata call after registration - should return version 2
+    expect(restService.getLatestVersion(eq(SUBJECT_0)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                SUBJECT_0, VERSION_2, ID_50, AvroSchema.TYPE, Collections.emptyList(), schemaStr2))
+        .once();
+
+    replay(restService);
+
+    SchemaMetadata metadata1 = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(VERSION_1, metadata1.getVersion());
+    assertEquals(ID_25, metadata1.getId());
+
+    // Register a new schema version
+    int registeredId = client.register(SUBJECT_0, schema);
+    assertEquals(ID_50, registeredId);
+
+    // Get latest schema metadata again - should return version 2 (not cached version 1)
+    // This verifies that the latestVersionCache was invalidated on registration
+    SchemaMetadata metadata2 = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(VERSION_2, metadata2.getVersion());
+    assertEquals(ID_50, metadata2.getId());
+
+    verify(restService);
+  }
+
 
 
   private static AvroSchema avroSchema(final int i) {

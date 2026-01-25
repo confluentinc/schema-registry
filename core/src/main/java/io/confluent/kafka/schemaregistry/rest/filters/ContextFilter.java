@@ -1,5 +1,16 @@
 /*
  * Copyright 2021 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.rest.filters;
@@ -10,21 +21,22 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Priority;
-import javax.ws.rs.Priorities;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.container.PreMatching;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.annotation.Priority;
+import jakarta.ws.rs.Priorities;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.PreMatching;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import java.io.IOException;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
@@ -44,13 +56,14 @@ public class ContextFilter implements ContainerRequestFilter {
   @Override
   public void filter(ContainerRequestContext requestContext) throws IOException {
 
+    String method = requestContext.getMethod();
     String path = requestContext.getUriInfo().getPath(false);
     if (path.startsWith("contexts/")) {
       try {
         UriBuilder builder = requestContext.getUriInfo().getRequestUriBuilder();
         MultivaluedMap<String, String> queryParams =
             requestContext.getUriInfo().getQueryParameters(false);
-        URI uri = modifyUri(builder, path, queryParams);
+        URI uri = modifyUri(builder, method, path, queryParams);
         requestContext.setRequestUri(uri);
       } catch (IllegalArgumentException e) {
         requestContext.abortWith(
@@ -64,9 +77,15 @@ public class ContextFilter implements ContainerRequestFilter {
 
   @VisibleForTesting
   URI modifyUri(UriBuilder builder, String path, MultivaluedMap<String, String> queryParams) {
+    return modifyUri(builder, null, path, queryParams);
+  }
+
+  @VisibleForTesting
+  URI modifyUri(UriBuilder builder, String method,
+      String path, MultivaluedMap<String, String> queryParams) {
     ContextAndPath contextAndPath = modifyUriPath(path);
     builder.replacePath(contextAndPath.path);
-    replaceQueryParams(builder, contextAndPath, queryParams);
+    replaceQueryParams(builder, method, contextAndPath, queryParams);
     return builder.build();
   }
 
@@ -93,28 +112,26 @@ public class ContextFilter implements ContainerRequestFilter {
         context = uriPathStr;
         contextPathFound = false;
         continue;
-      }
-
-      if (uriPathStr.equals("contexts")) {
+      } else if (isFirst && uriPathStr.equals("contexts")) {
         contextPathFound = true;
         continue;
       }
 
       if (subjectPathFound) {
-        if (!uriPathStr.startsWith(CONTEXT_PREFIX) && !uriPathStr.startsWith(CONTEXT_WILDCARD)) {
+        if (!startsWithContext(uriPathStr)) {
           modifiedUriPathStr = QualifiedSubject.normalizeContext(context) + uriPathStr;
         }
 
         subjectPathFound = false;
-      }
-
-      boolean isRootConfigOrMode = isRootConfigOrMode(isFirst, uriPathStr);
-      if (uriPathStr.equals("subjects")
-          || uriPathStr.equals("deks")
-          || isRootConfigOrMode) {
-        subjectPathFound = true;
-        if (isRootConfigOrMode) {
-          configOrModeFound = true;
+      } else {
+        boolean isRootConfigOrMode = isRootConfigOrMode(isFirst, uriPathStr);
+        if (uriPathStr.equals("subjects")
+            || uriPathStr.equals("deks")
+            || isRootConfigOrMode) {
+          subjectPathFound = true;
+          if (isRootConfigOrMode) {
+            configOrModeFound = true;
+          }
         }
       }
 
@@ -131,6 +148,10 @@ public class ContextFilter implements ContainerRequestFilter {
     } else if (contextPathFound) {
       // Must be a root contexts only
       modifiedPath.append("contexts").append("/");
+    } else if ((modifiedPath.isEmpty() || modifiedPath.toString().equals("/"))
+        && !DEFAULT_CONTEXT.equals(context)) {
+      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      modifiedPath.append("contexts").append("/").append(normalizedContext).append("/");
     }
 
     return new ContextAndPath(context, modifiedPath.toString());
@@ -142,6 +163,7 @@ public class ContextFilter implements ContainerRequestFilter {
 
   private void replaceQueryParams(
       UriBuilder builder,
+      String method,
       ContextAndPath contextAndPath,
       MultivaluedMap<String, String> queryParams) {
     String context = contextAndPath.getContext();
@@ -158,7 +180,7 @@ public class ContextFilter implements ContainerRequestFilter {
       if (subject == null) {
         subject = "";
       }
-      if (!subject.startsWith(CONTEXT_PREFIX) && !subject.startsWith(CONTEXT_WILDCARD)) {
+      if (!startsWithContext(subject)) {
         subject = QualifiedSubject.normalizeContext(context) + subject;
         builder.replaceQueryParam("subject", subject);
       }
@@ -170,14 +192,32 @@ public class ContextFilter implements ContainerRequestFilter {
       }
       Object[] newSubjectPrefixes = subjectPrefixes.stream()
           .map(prefix -> {
-            if (!prefix.startsWith(CONTEXT_PREFIX) && !prefix.startsWith(CONTEXT_WILDCARD)) {
+            if (!startsWithContext(prefix)) {
               return QualifiedSubject.normalizeContext(context) + prefix;
             }
             return prefix;
           })
           .toArray();
       builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
+    } else if (isCreateOrUpdate(method) && path.startsWith("associations")) {
+      builder.replaceQueryParam("context", QualifiedSubject.normalizeContext(context));
     }
+  }
+
+  private static boolean isCreateOrUpdate(String method) {
+    return method != null
+        && (method.equalsIgnoreCase("POST")
+        || method.equalsIgnoreCase("PUT")
+        || method.equalsIgnoreCase("PATCH"));
+  }
+
+  private static boolean startsWithContext(String path) {
+    try {
+      path = URLDecoder.decode(path, "UTF-8");
+    } catch (Exception e) {
+      // ignore
+    }
+    return path.startsWith(CONTEXT_PREFIX) || path.startsWith(CONTEXT_WILDCARD);
   }
 
   public static String getErrorResponse(Response.Status status,

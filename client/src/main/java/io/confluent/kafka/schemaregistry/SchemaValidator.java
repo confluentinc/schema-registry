@@ -1,15 +1,11 @@
 /*
  * Copyright 2018 Confluent Inc.
  *
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,10 +37,17 @@ public interface SchemaValidator {
    * are the most "recent" in order to validate only against the most recent
    * schema(s).
    *
+   * @param policy The compatibility policy to use for validation
    * @param toValidate The schema to validate
    * @param existing The schemas to validate against, in order from most recent to latest if
    *     applicable
    * @return List of error message, otherwise empty list
    */
-  List<String> validate(ParsedSchema toValidate, Iterable<ParsedSchemaHolder> existing);
+  List<String> validate(
+      CompatibilityPolicy policy, ParsedSchema toValidate, Iterable<ParsedSchemaHolder> existing);
+
+  default List<String> validate(
+      ParsedSchema toValidate, Iterable<ParsedSchemaHolder> existing) {
+    return validate(CompatibilityPolicy.STRICT, toValidate, existing);
+  }
 }

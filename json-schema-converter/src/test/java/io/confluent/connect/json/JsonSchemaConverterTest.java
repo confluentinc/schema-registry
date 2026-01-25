@@ -18,10 +18,15 @@ package io.confluent.connect.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -32,6 +37,10 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -64,7 +73,7 @@ public class JsonSchemaConverterTest {
   private final JsonSchemaConverter converter;
 
   public JsonSchemaConverterTest() {
-    schemaRegistry = new MockSchemaRegistryClient();
+    schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(new JsonSchemaProvider()));
     converter = new JsonSchemaConverter(schemaRegistry);
   }
 
@@ -283,7 +292,8 @@ public class JsonSchemaConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForValue() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     JsonSchemaConverter jsonConverter = new JsonSchemaConverter(schemaRegistry);
     jsonConverter.configure(SR_CONFIG, false);
     assertSameSchemaMultipleTopic(jsonConverter, schemaRegistry, false);
@@ -291,7 +301,8 @@ public class JsonSchemaConverterTest {
 
   @Test
   public void testSameSchemaMultipleTopicForKey() throws IOException, RestClientException {
-    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     JsonSchemaConverter jsonConverter = new JsonSchemaConverter(schemaRegistry);
     jsonConverter.configure(SR_CONFIG, true);
     assertSameSchemaMultipleTopic(jsonConverter, schemaRegistry, true);
@@ -305,7 +316,8 @@ public class JsonSchemaConverterTest {
             .build()
     ).name("biz.baz").version(1).build();
     final JsonSchemaConverter jsonConverter =
-        new JsonSchemaConverter(new MockSchemaRegistryClient());
+        new JsonSchemaConverter(new MockSchemaRegistryClient(
+            ImmutableList.of(new JsonSchemaProvider())));
     jsonConverter.configure(Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
         "localhost"
     ), false);
@@ -357,5 +369,46 @@ public class JsonSchemaConverterTest {
 
     converted2 = converter.toConnectData("topic2", serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
+    JsonSchemaConverter.Serializer serializer = mock(JsonSchemaConverter.Serializer.class);
+    SerializationException serializationException = new SerializationException("fail", new SocketException("io fail"));
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    when(serializer.serialize(TOPIC, null, false,
+        jsonSchemaData.fromConnectData(Schema.STRING_SCHEMA, "value"),
+        jsonSchemaData.fromConnectSchema(Schema.STRING_SCHEMA))).thenThrow(serializationException);
+
+    try {
+      java.lang.reflect.Field serializerField = JsonSchemaConverter.class.getDeclaredField("serializer");
+      serializerField.setAccessible(true);
+      serializerField.set(converter, serializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, "value");
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByNetworkConnectionException() {
+    JsonSchemaConverter.Deserializer deserializer = mock(JsonSchemaConverter.Deserializer.class);
+    SerializationException serializationException = new SerializationException("fail", new UnknownHostException("io fail"));
+    SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
+    byte[] valueBytes =
+        converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
+    when(deserializer.deserialize(TOPIC, false, null, valueBytes)).thenThrow(
+        serializationException);
+
+    try {
+      java.lang.reflect.Field deserializerField = JsonSchemaConverter.class.getDeclaredField("deserializer");
+      deserializerField.setAccessible(true);
+      deserializerField.set(converter, deserializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.toConnectData(TOPIC, valueBytes);
   }
 }

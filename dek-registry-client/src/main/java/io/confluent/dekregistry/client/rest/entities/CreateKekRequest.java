@@ -154,4 +154,48 @@ public class CreateKekRequest {
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
+
+  public void validate() {
+    // Perform minimal validation, the actual validation is done by the KMS client
+    switch (kmsType) {
+      case "aws-kms":
+        validateAwsKeyId();
+        break;
+      case "azure-kms":
+        validateAzureKeyId();
+        break;
+      case "gcp-kms":
+        validateGcpKeyId();
+        break;
+      case "hcvault":
+        validateHcVaultKeyId();
+        break;
+      default:
+        break;
+    }
+  }
+
+  private void validateAwsKeyId() {
+    if (!kmsKeyId.startsWith("arn:aws:kms:")) {
+      throw new IllegalStateException("Invalid AWS KMS key ID");
+    }
+  }
+
+  private void validateAzureKeyId() {
+    if (!kmsKeyId.startsWith("https://")) {
+      throw new IllegalStateException("Invalid Azure Vault key ID");
+    }
+  }
+
+  private void validateGcpKeyId() {
+    if (!kmsKeyId.startsWith("projects/")) {
+      throw new IllegalStateException("Invalid GCP KMS key ID");
+    }
+  }
+
+  private void validateHcVaultKeyId() {
+    if (!kmsKeyId.startsWith("https://") && !kmsKeyId.startsWith("http://")) {
+      throw new IllegalStateException("Invalid HashiCorp Vault key ID");
+    }
+  }
 }

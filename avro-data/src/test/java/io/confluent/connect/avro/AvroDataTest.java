@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import java.util.LinkedHashMap;
@@ -999,7 +1000,7 @@ public class AvroDataTest {
     arraySchema.addProp("connect.default", arrayNode);
     org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
-        .name("array").type(arraySchema).noDefault()  // no default
+        .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
         .endRecord();
 
     assertEquals(expectedAvroSchema, avroSchema);
@@ -1202,9 +1203,24 @@ public class AvroDataTest {
   }
 
   private static org.apache.avro.Schema createDecimalSchema(boolean required, int precision, int scale) {
-    org.apache.avro.Schema avroSchema
-        = required ? org.apache.avro.SchemaBuilder.builder().bytesType() :
-          org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and().bytesType().endUnion();
+    return createDecimalSchema(required, precision, scale, 0);
+  }
+
+  private static org.apache.avro.Schema createDecimalSchema(boolean required, int precision, int scale, int fixedSize) {
+    org.apache.avro.Schema avroSchema;
+    if (fixedSize > 0) {
+      avroSchema = required
+          ? org.apache.avro.SchemaBuilder.builder().fixed("Decimal")
+          .namespace("org.apache.kafka.connect.data").size(fixedSize)
+          : org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and()
+              .fixed("Decimal")
+              .namespace("org.apache.kafka.connect.data").size(fixedSize).endUnion();
+    } else {
+      avroSchema = required
+          ? org.apache.avro.SchemaBuilder.builder().bytesType()
+          : org.apache.avro.SchemaBuilder.builder().unionOf().nullType().and().bytesType().endUnion();
+    }
+
     org.apache.avro.Schema decimalSchema = required ? avroSchema : avroSchema.getTypes().get(1);
     decimalSchema.addProp("scale", scale);
     decimalSchema.addProp("precision", precision);
@@ -1212,6 +1228,9 @@ public class AvroDataTest {
     ObjectNode avroParams = JsonNodeFactory.instance.objectNode();
     avroParams.put("scale", Integer.toString(scale));
     avroParams.put(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, Integer.toString(precision));
+    if (fixedSize > 0) {
+      avroParams.put(CONNECT_AVRO_FIXED_SIZE_PROP, Integer.toString(fixedSize));
+    }
     decimalSchema.addProp("connect.parameters", avroParams);
     decimalSchema.addProp("connect.name", "org.apache.kafka.connect.data.Decimal");
     decimalSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
@@ -1227,6 +1246,16 @@ public class AvroDataTest {
   public void testFromConnectLogicalDecimalNew() {
     org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64);
     checkNonRecordConversionNew(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES), Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64").build(), TEST_DECIMAL, avroData);
+    checkNonRecordConversionNull(Decimal.builder(2).optional().build());
+  }
+
+  // test for new way of logical type handling
+  @Test
+  public void testFromConnectLogicalDecimalFixedNew() {
+    org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64, TEST_SCALE, 100);
+    checkNonRecordConversionNew(avroSchema, new GenericData.Fixed(avroSchema, TEST_DECIMAL_BYTES), Decimal.builder(2)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "100").build(), TEST_DECIMAL, avroData);
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
   }
 
@@ -1282,6 +1311,16 @@ public class AvroDataTest {
   public void testFromConnectLogicalDecimal() {
     org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64);
     checkNonRecordConversion(avroSchema, ByteBuffer.wrap(TEST_DECIMAL_BYTES), Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64").build(), TEST_DECIMAL, avroData);
+    checkNonRecordConversionNull(Decimal.builder(2).optional().build());
+  }
+
+  // test for old way of logical type handling
+  @Test
+  public void testFromConnectLogicalDecimalFixed() {
+    org.apache.avro.Schema avroSchema = createDecimalSchema(true, 64, TEST_SCALE, 100);
+    checkNonRecordConversion(avroSchema, new GenericData.Fixed(avroSchema, TEST_DECIMAL_BYTES), Decimal.builder(2)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "100").build(), TEST_DECIMAL, avroData);
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
   }
 
@@ -1449,7 +1488,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaFromConnectConversion() {
-    Map<org.apache.avro.Schema, Schema> cache =
+    Cache<org.apache.avro.Schema, Schema> cache =
         Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -1873,6 +1912,28 @@ public class AvroDataTest {
 
     final SchemaAndValue expected = new SchemaAndValue(
         Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "50").build(),
+        TEST_DECIMAL
+    );
+
+    final SchemaAndValue actual = avroData.toConnectData(avroSchema, TEST_DECIMAL_BYTES);
+    assertThat("schema.parameters() does not match.",
+        actual.schema().parameters(),
+        IsEqual.equalTo(expected.schema().parameters())
+    );
+    assertEquals("schema does not match.", expected.schema(), actual.schema());
+    assertEquals("value does not match.", expected.value(), actual.value());
+  }
+
+  @Test
+  public void testToConnectDecimalAvroFixed() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().fixed("fixed").size(100);
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_DECIMAL);
+    avroSchema.addProp("precision", 50);
+    avroSchema.addProp("scale", 2);
+
+    final SchemaAndValue expected = new SchemaAndValue(
+        Decimal.builder(2).parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "50")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "100").build(),
         TEST_DECIMAL
     );
 
@@ -2580,7 +2641,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaToConnectConversion() {
-    Map<Schema, org.apache.avro.Schema> cache =
+    Cache<Schema, org.apache.avro.Schema> cache =
         Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 

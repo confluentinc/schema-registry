@@ -75,7 +75,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final Condition offsetReachedThreshold;
   private Consumer<byte[], byte[]> consumer;
   private final Producer<byte[], byte[]> producer;
-  private long offsetInSchemasTopic = -1L;
+  private volatile long offsetInSchemasTopic = -1L;
   private OffsetCheckpoint checkpointFile;
   private Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
   // Noop key is only used to help reliably determine last offset; reader thread ignores

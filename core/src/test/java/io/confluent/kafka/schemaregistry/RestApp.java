@@ -12,6 +12,7 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry;
 
 
@@ -73,6 +74,8 @@ public class RestApp {
     restConnect = restServer.getURI().toString();
     if (restConnect.endsWith("/"))
       restConnect = restConnect.substring(0, restConnect.length()-1);
+    // For testing with Apache Http Client
+    // restClient = new RestService(restConnect, false, true);
     restClient = new RestService(restConnect);
   }
 

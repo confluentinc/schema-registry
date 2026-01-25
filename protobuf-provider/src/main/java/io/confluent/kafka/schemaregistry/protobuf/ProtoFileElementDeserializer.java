@@ -11,7 +11,6 @@
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
- *
  */
 
 package io.confluent.kafka.schemaregistry.protobuf;
@@ -101,6 +100,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       Syntax.valueOf(node.get("syntax").asText()),
       Arrays.asList(mapper.convertValue(node.get("imports"), String[].class)),
       Arrays.asList(mapper.convertValue(node.get("publicImports"), String[].class)),
+      Arrays.asList(mapper.convertValue(node.get("weakImports"), String[].class)),
       typeElementBuilder.build(),
       serviceElementBuilder.build(),
       extendElementBuilder.build(),

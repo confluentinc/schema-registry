@@ -15,9 +15,10 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.eclipse.jetty.util.StringUtil;
 
-import javax.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.HttpHeaders;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,7 @@ public class RequestHeaderBuilder {
   private void addStaticHeaders(Map<String, String> headerProperties, HttpHeaders httpHeaders) {
     addIfNotEmpty(httpHeaders, headerProperties, "Content-Type");
     addIfNotEmpty(httpHeaders, headerProperties, "Accept");
+    addIfNotEmpty(httpHeaders, headerProperties, RestService.ACCEPT_UNKNOWN_PROPERTIES);
     addIfNotEmpty(httpHeaders, headerProperties, "Authorization");
     addIfNotEmpty(httpHeaders, headerProperties, "X-Request-ID");
   }

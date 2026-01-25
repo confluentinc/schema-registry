@@ -92,7 +92,7 @@ public class KafkaStore<K, V> implements Store<K, V> {
     this.desiredReplicationFactor =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
     this.config = config;
-    int port = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    int port = AbstractSchemaRegistry.getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(),
         config.interInstanceProtocol()).getUri().getPort();
     this.groupId = config.getString(SchemaRegistryConfig.KAFKASTORE_GROUP_ID_CONFIG).isEmpty()
@@ -146,6 +146,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
     // checkpoint could be updated once the reader thread starts. This could result in a
     // race condition where schemas after the checkpoint during startup would be double counted.
     final Map<TopicPartition, Long> checkpoints = new HashMap<>(kafkaTopicReader.checkpoints());
+    this.storeUpdateHandler.init(checkpoints);
+
     this.kafkaTopicReader.start();
 
     if (initWaitForReader) {

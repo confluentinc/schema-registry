@@ -45,6 +45,7 @@ public class RegisterSchemaResponse {
   private RuleSet ruleSet = null;
   private String schema;
   private Long timestamp;
+  private Boolean deleted;
 
   public RegisterSchemaResponse() {
   }
@@ -65,6 +66,7 @@ public class RegisterSchemaResponse {
     this.ruleSet = schema.getRuleSet();
     this.schema = schema.getSchema();
     this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
   }
 
   public RegisterSchemaResponse copy() {
@@ -78,6 +80,7 @@ public class RegisterSchemaResponse {
     response.setRuleSet(getRuleSet());
     response.setSchema(getSchema());
     response.setTimestamp(getTimestamp());
+    response.setDeleted(getDeleted());
     return response;
   }
 
@@ -183,6 +186,16 @@ public class RegisterSchemaResponse {
     this.timestamp = timestamp;
   }
 
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -221,7 +234,8 @@ public class RegisterSchemaResponse {
     buf.append("metadata=").append(this.metadata).append(", ");
     buf.append("ruleSet=").append(this.ruleSet).append(", ");
     buf.append("schema=").append(schema).append(",");
-    buf.append("ts=").append(timestamp).append("}");
+    buf.append("ts=").append(timestamp).append(",");
+    buf.append("deleted=").append(deleted).append("}");
     return buf.toString();
   }
 

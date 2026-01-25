@@ -17,13 +17,21 @@
 package io.confluent.kafka.schemaregistry.rules;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -46,6 +54,8 @@ public class DlqAction implements RuleAction {
 
   public static final String DLQ_TOPIC = "dlq.topic";
   public static final String DLQ_AUTO_FLUSH = "dlq.auto.flush";
+  public static final String DLQ_REDACT_RULE_TYPES = "dlq.redact.rule.types";
+  public static final String DLQ_REDACT_RULE_TYPES_DEFAULT = "ENCRYPT,ENCRYPT_PAYLOAD";
   public static final String PRODUCER = "producer";  // for testing
 
   public static final String HEADER_PREFIX = "__rule.";
@@ -63,7 +73,8 @@ public class DlqAction implements RuleAction {
 
   private Map<String, ?> configs;
   private String topic;
-  private boolean autoFlush;
+  private volatile boolean autoFlush;
+  private List<String> redactRuleTypes;
   private volatile KafkaProducer<byte[], byte[]> producer;
 
   @Override
@@ -80,6 +91,14 @@ public class DlqAction implements RuleAction {
     if (autoFlushConfig != null) {
       this.autoFlush = Boolean.parseBoolean(autoFlushConfig.toString());
     }
+    String redactRuleTypesConfig = (String) configs.get(DLQ_REDACT_RULE_TYPES);
+    if (redactRuleTypesConfig == null) {
+      redactRuleTypesConfig = DLQ_REDACT_RULE_TYPES_DEFAULT;
+    }
+    this.redactRuleTypes = Arrays.stream(redactRuleTypesConfig.split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
+
     // used by tests
     this.producer = (KafkaProducer<byte[], byte[]>) configs.get(PRODUCER);
   }
@@ -169,8 +188,45 @@ public class DlqAction implements RuleAction {
   }
 
   private byte[] convertToJsonBytes(RuleContext ctx, Object message) throws IOException {
+    message = redactFields(ctx, message, redactRuleTypes);
     JsonNode json = ctx.target().toJson(message);
     return JacksonMapper.INSTANCE.writeValueAsBytes(json);
+  }
+
+  @VisibleForTesting
+  protected static Object redactFields(
+      RuleContext ctx, Object message, List<String> redactRuleTypes) {
+    List<Rule> redactRules = getRulesToRedact(ctx, redactRuleTypes);
+    if (redactRules.isEmpty()) {
+      // No rules require redaction
+      return message;
+    }
+    try (RuleExecutor executor = new FieldRedactionExecutor()) {
+      Set<String> tags = getTagsToRedact(redactRules);
+      Rule newRule = new Rule("redact", null, RuleKind.TRANSFORM, ctx.ruleMode(), TYPE,
+          tags, null, null, null, null, false);
+      RuleContext newCtx = new RuleContext(ctx.configs(), ctx.enabledEnv(),
+          ctx.source(), ctx.target(),
+          ctx.subject(), ctx.topic(), ctx.headers(),
+          ctx.originalKey(), ctx.originalValue(), ctx.isKey(),
+          ctx.ruleMode(), newRule, 0, Collections.singletonList(newRule));
+      return executor.transform(newCtx, message);
+    } catch (RuleException e) {
+      log.error("Could not redact fields", e);
+      return message;
+    }
+  }
+
+  private static List<Rule> getRulesToRedact(RuleContext ctx, List<String> redactRuleTypes) {
+    return ctx.rules().stream()
+        .filter(rule -> redactRuleTypes.contains(rule.getType()))
+        .collect(Collectors.toList());
+  }
+
+  private static Set<String> getTagsToRedact(List<Rule> redactRules) {
+    return redactRules.stream()
+        .flatMap(rule -> rule.getTags().stream())
+        .collect(Collectors.toSet());
   }
 
   private void populateHeaders(

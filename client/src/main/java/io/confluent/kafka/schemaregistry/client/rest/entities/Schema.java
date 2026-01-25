@@ -26,11 +26,15 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -69,6 +73,7 @@ public class Schema implements Comparable<Schema> {
   private String schema;
   private List<SchemaTags> schemaTags;
   private Long timestamp;
+  private Boolean deleted;
 
   @JsonCreator
   public Schema(@JsonProperty("subject") String subject,
@@ -81,7 +86,8 @@ public class Schema implements Comparable<Schema> {
       @JsonProperty("ruleset") RuleSet ruleSet,
       @JsonProperty("schema") String schema,
       @JsonProperty("schemaTags") List<SchemaTags> schemaTags,
-      @JsonProperty("ts") Long timestamp) {
+      @JsonProperty("ts") Long timestamp,
+      @JsonProperty("deleted") Boolean deleted) {
     this.subject = subject;
     this.version = version;
     this.id = id;
@@ -93,6 +99,7 @@ public class Schema implements Comparable<Schema> {
     this.schema = schema;
     this.schemaTags = schemaTags;
     this.timestamp = timestamp;
+    this.deleted = deleted;
   }
 
   public Schema(@JsonProperty("subject") String subject,
@@ -162,6 +169,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = schemaMetadata.getRuleSet();
     this.schema = schemaMetadata.getSchema();
     this.timestamp = schemaMetadata.getTimestamp();
+    this.deleted = schemaMetadata.getDeleted();
   }
 
   public Schema(String subject, Integer version, Integer id, SchemaString schemaString) {
@@ -177,6 +185,7 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = schemaString.getRuleSet();
     this.schema = schemaString.getSchemaString();
     this.timestamp = schemaString.getTimestamp();
+    this.deleted = schemaString.getDeleted();
   }
 
   public Schema(String subject, Integer version, Integer id, ParsedSchema schema) {
@@ -229,18 +238,35 @@ public class Schema implements Comparable<Schema> {
     this.ruleSet = response.getRuleSet();
     this.schema = response.getSchema();
     this.timestamp = response.getTimestamp();
+    this.deleted = response.getDeleted();
   }
 
   public Schema copy() {
-    return new Schema(
-        subject, version, id, guid, schemaType, references, metadata,
-        ruleSet, schema, schemaTags, timestamp);
+    return copy(version, id);
   }
 
   public Schema copy(Integer version, Integer id) {
+    // Deep copy the references list if it's not null
+    List<SchemaReference> referencesCopy = references != null
+                                               ? references.stream()
+                                                     .map(SchemaReference::copy)
+                                                     .collect(Collectors.toList())
+                                               : null;
+
     return new Schema(
-        subject, version, id, guid, schemaType, references, metadata,
-        ruleSet, schema, schemaTags, timestamp);
+        subject, version, id, guid, schemaType, referencesCopy, metadata,
+        ruleSet, schema, schemaTags, timestamp, deleted);
+  }
+
+  public Schema toHashKey() {
+    // Deep copy the references list if it's not null
+    List<SchemaReference> referencesCopy = references != null
+        ? references.stream()
+        .map(SchemaReference::copy)
+        .collect(Collectors.toList())
+        : null;
+
+    return new Schema(subject, null, null, schemaType, referencesCopy, metadata, ruleSet, schema);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
@@ -278,12 +304,21 @@ public class Schema implements Comparable<Schema> {
 
   @JsonProperty("guid")
   public String getGuid() {
+    if (guid == null) {
+      try {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        updateHash(md);
+        byte[] md5 = md.digest();
+        ByteBuffer byteBuffer = ByteBuffer.wrap(md5);
+        long high = byteBuffer.getLong();
+        long low = byteBuffer.getLong();
+        UUID uuid = new UUID(high, low);
+        guid = uuid.toString();
+      } catch (NoSuchAlgorithmException e) {
+        throw new RuntimeException(e);
+      }
+    }
     return guid;
-  }
-
-  @JsonProperty("guid")
-  public void setGuid(String guid) {
-    this.guid = guid;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC, example = TYPE_EXAMPLE)
@@ -362,6 +397,21 @@ public class Schema implements Comparable<Schema> {
     this.timestamp = timestamp;
   }
 
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
+  }
+
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -374,7 +424,6 @@ public class Schema implements Comparable<Schema> {
     return Objects.equals(subject, schema1.subject)
         && Objects.equals(version, schema1.version)
         && Objects.equals(id, schema1.id)
-        && Objects.equals(guid, schema1.guid)
         && Objects.equals(schemaType, schema1.schemaType)
         && Objects.equals(references, schema1.references)
         && Objects.equals(metadata, schema1.metadata)
@@ -385,24 +434,22 @@ public class Schema implements Comparable<Schema> {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, version, id, guid, schemaType, references, metadata, ruleSet, schema);
+        subject, version, id, schemaType, references, metadata, ruleSet, schema);
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{subject=" + this.subject + ",");
-    sb.append("version=" + this.version + ",");
-    sb.append("id=" + this.id + ",");
-    sb.append("guid=" + this.guid + ",");
-    sb.append("schemaType=" + this.schemaType + ",");
-    sb.append("references=" + this.references + ",");
-    sb.append("metadata=" + this.metadata + ",");
-    sb.append("ruleSet=" + this.ruleSet + ",");
-    sb.append("schema=" + this.schema + ",");
-    sb.append("schemaTags=" + this.schemaTags + ",");
-    sb.append("ts=" + this.timestamp + "}");
-    return sb.toString();
+    return "{subject=" + this.subject + ","
+               + "version=" + this.version + ","
+               + "id=" + this.id + ","
+               + "schemaType=" + this.schemaType + ","
+               + "references=" + this.references + ","
+               + "metadata=" + this.metadata + ","
+               + "ruleSet=" + this.ruleSet + ","
+               + "schema=" + this.schema + ","
+               + "schemaTags=" + this.schemaTags + ","
+               + "ts=" + this.timestamp + ","
+               + "deleted=" + this.deleted + "}";
   }
 
   @Override
@@ -416,6 +463,16 @@ public class Schema implements Comparable<Schema> {
   }
 
   public void updateHash(MessageDigest md) {
+    updateHash(md, schema, references, metadata, ruleSet);
+  }
+
+  public static void updateHash(
+      MessageDigest md,
+      String schema,
+      List<SchemaReference> references,
+      Metadata metadata,
+      RuleSet ruleSet
+  ) {
     if (schema != null) {
       md.update(schema.getBytes(StandardCharsets.UTF_8));
     }

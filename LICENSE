@@ -1,4 +1,5 @@
-The project is licensed under the Confluent Community License, except for client
-libs, which is under the Apache 2.0 license.
+The project is licensed under the Confluent Community License, except some 
+modules such as the client-* and avro-* libs, which are licensed under the 
+Apache 2.0 license.
 
-See LICENSE file in each subfolder for detailed license agreement.
+See the LICENSE file in each subfolder for its respective license agreement.

@@ -84,7 +84,7 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
 
 
   @Override
-  protected Properties getSchemaRegistryProperties() {
+  public Properties getSchemaRegistryProperties() {
     Configuration.setConfiguration(null);
 
     props.put(SchemaRegistryConfig.AUTHENTICATION_METHOD_CONFIG, SchemaRegistryConfig
@@ -99,7 +99,7 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
           new File(SchemaRegistryErrorHandlerTest.class.getResource("/testauth.properties").getFile());
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
       List<String> lines = new ArrayList<>();
-      lines.add("SchemaRegistry { org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required "
+      lines.add("SchemaRegistry { org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule required "
                 + "file=\"" + userPropsFile.getAbsolutePath()
                 + "\";};");
       Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
@@ -110,7 +110,7 @@ public class SchemaRegistryErrorHandlerTest extends ClusterTestHarness {
   }
 
   @Override
-  protected String getSchemaRegistryProtocol() {
+  public String getSchemaRegistryProtocol() {
     return "http";
   }
 }

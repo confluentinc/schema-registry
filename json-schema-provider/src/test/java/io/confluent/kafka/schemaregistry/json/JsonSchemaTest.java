@@ -361,6 +361,18 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testSchemaWithDraft_2020_12() throws Exception {
+    TestObj testObj = new TestObj();
+    String actual =
+        JsonSchemaUtils.getSchema(testObj, SpecificationVersion.DRAFT_2020_12, true, null).toString();
+    String expected = "{\"$schema\":\"http://json-schema.org/draft/2020-12/schema#\","
+        + "\"title\":\"Test Obj\",\"type\":\"object\",\"additionalProperties\":false,"
+        + "\"properties\":{\"prop\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},"
+        + "{\"type\":\"string\"}]}}}";
+    assertEquals(expected, actual);
+  }
+
+  @Test
   public void testSchemaWithPackageScan() throws Exception {
     TestObj testObj = new TestObj();
     String actual =
@@ -422,6 +434,42 @@ public class JsonSchemaTest {
   @Test
   public void testEnvelopeWithReferencesDraft_2020_12() throws Exception {
     String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2019_09_TrailingHash() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2019-09/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12_TrailingHash() throws Exception {
+    String draft = "\"$schema\": \"https://json-schema.org/draft/2020-12/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2019_09_RawHttp() throws Exception {
+    String draft = "\"$schema\": \"http://json-schema.org/draft/2019-09/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2019_09_RawHttpTrailingHash() throws Exception {
+    String draft = "\"$schema\": \"http://json-schema.org/draft/2019-09/schema#\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12_RawHttp() throws Exception {
+    String draft = "\"$schema\": \"http://json-schema.org/draft/2020-12/schema\"";
+    testEnvelopeWithReferences(draft);
+  }
+
+  @Test
+  public void testEnvelopeWithReferencesDraft_2020_12_RawHttpTrailingHash() throws Exception {
+    String draft = "\"$schema\": \"http://json-schema.org/draft/2020-12/schema#\"";
     testEnvelopeWithReferences(draft);
   }
 
@@ -1210,6 +1258,28 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testBadFormat() throws Exception {
+    String schema = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"title\": \"Task\",\n"
+        + "  \"description\": \"A task\",\n"
+        + "  \"type\": [\"null\", \"object\"],\n"
+        + "  \"properties\": {\n"
+        + "    \"parent\": {\n"
+        + "        \"$ref\": \"task.schema.json\"\n"
+        + "    },    \n"
+        + "    \"title\": {\n"
+        + "        \"description\": \"Task title\",\n"
+        + "        \"type\": \"string\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    assertEquals(jsonSchema.canonicalString(), jsonSchema.formattedString("serialized"));
+  }
+
+  @Test
   public void testRestrictedFields() {
     String schema = "{\n"
         + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
@@ -1732,6 +1802,31 @@ public class JsonSchemaTest {
     defs = (Map<String, Object>)
         jsonSchema.rawSchema().getUnprocessedProperties().get("$defs");
     assertEquals(applicationDefSchema.rawSchema(), defs.get("ApplicationSchema"));
+  }
+
+  @Test
+  public void testRecursiveDefinition() {
+    String schema = "{\n"
+        + "  \"$schema\" : \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"$defs\" : {\n"
+        + "    \"Permission\" : {\n"
+        + "      \"type\" : \"object\",\n"
+        + "      \"properties\" : {\n"
+        + "        \"service\" : {\n"
+        + "          \"$ref\" : \"#\"\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"type\" : \"object\",\n"
+        + "  \"properties\" : {\n"
+        + "    \"permission\" : {\n"
+        + "      \"$ref\" : \"#/$defs/Permission\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    ParsedSchema parsedSchema = new JsonSchema(schema);
+    parsedSchema.validate(true);
   }
 
   private static Map<String, String> getJsonSchemaWithReferences(String draft) {

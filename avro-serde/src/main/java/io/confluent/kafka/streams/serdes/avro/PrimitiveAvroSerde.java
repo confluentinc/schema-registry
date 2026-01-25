@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package io.confluent.kafka.streams.serdes.avro;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;

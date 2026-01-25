@@ -11,7 +11,6 @@
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
- *
  */
 
 package io.confluent.kafka.schemaregistry.protobuf;
@@ -3120,7 +3119,7 @@ public class ProtobufSchemaTest {
   @Test
   public void testGoogleDescriptor() throws Exception {
     ResourceLoader resourceLoader = new ResourceLoader("/");
-    for (int i = 19; i < 30; i++) {
+    for (int i = 19; i < 33; i++) {
       ProtoFileElement original = resourceLoader.readObj("com/google/protobuf/descriptor-v" + i + ".proto");
       ProtobufSchema schema = new ProtobufSchema(original, Collections.emptyList(), Collections.emptyMap());
       Descriptor desc = schema.toDescriptor();

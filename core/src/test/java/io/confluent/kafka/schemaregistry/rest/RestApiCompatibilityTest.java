@@ -12,12 +12,13 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
@@ -36,12 +37,13 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidSchemaException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
@@ -50,28 +52,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class RestApiCompatibilityTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiCompatibilityTest {
 
-  public RestApiCompatibilityTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
   }
 
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).setRuleSetHandler(new RuleSetHandler() {
-      public void handle(String subject, ConfigUpdateRequest request) {
-      }
-
-      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
-      }
-
-      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
-        return ruleSet != null
-            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
-            : null;
-      }
-    });
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
   }
 
   @Test
@@ -83,7 +74,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -132,7 +123,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(schemaString2, subject),
@@ -149,7 +140,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -199,7 +190,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -233,7 +224,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(schemaString2, subject),
@@ -281,7 +272,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"},"
         + " {\"type\":\"string\",\"name\":\"f3\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema4 = 3;
+    int expectedIdSchema4 = expectedSchemaId(3);
     assertEquals(
         expectedIdSchema4,
         restApp.restClient.registerSchema(schemaString4, subject),
@@ -313,7 +304,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     Metadata metadata1 = new Metadata(null, properties, null);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setMetadata(metadata1);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request1, subject, false).getId(),
@@ -350,7 +341,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     properties.put("application.version", "2");
     Metadata metadata2 = new Metadata(null, properties, null);
     request2.setMetadata(metadata2);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false).getId(),
@@ -372,7 +363,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     Metadata metadata1 = new Metadata(null, properties, null);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setMetadata(metadata1);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request1, subject, false).getId(),
@@ -420,7 +411,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     properties.put("application.version", "2");
     Metadata metadata2 = new Metadata(null, properties, null);
     request2.setMetadata(metadata2);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false).getId(),
@@ -437,11 +428,36 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     Metadata metadata3 = new Metadata(null, properties, null);
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
     request3.setMetadata(metadata3);
-    int expectedIdSchema3 = 3;
+    int expectedIdSchema3 = expectedSchemaId(3);
     assertEquals(
         expectedIdSchema3,
         restApp.restClient.registerSchema(request3, subject, false).getId(),
         "Registering should succeed"
+    );
+  }
+
+  @Test
+  public void testClearCompatibilityGroup() throws Exception {
+    String subject = "testSubject";
+
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setCompatibilityGroup("application.version");
+    config.setValidateFields(true);
+    // add compatibility group
+    assertEquals(
+        config,
+        restApp.restClient.updateConfig(config, null)
+    );
+
+    ConfigUpdateRequest expectedConfig = new ConfigUpdateRequest();
+    expectedConfig.setValidateFields(true);
+
+    ConfigUpdateRequest newConfig = new ConfigUpdateRequest();
+    newConfig.setCompatibilityGroup(Optional.empty());
+    // clear compatibility group
+    assertEquals(
+        expectedConfig,
+        restApp.restClient.updateConfig(newConfig, null)
     );
   }
 
@@ -472,7 +488,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     Metadata metadata1 = new Metadata(null, properties, null);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setMetadata(metadata1);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     RegisterSchemaResponse response = restApp.restClient.registerSchema(request1, subject, false);
     assertEquals(
         expectedIdSchema1,
@@ -521,7 +537,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"}]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     response = restApp.restClient.registerSchema(request2, subject, false);
     assertEquals(
         expectedIdSchema2,
@@ -568,7 +584,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     Metadata metadata3 = new Metadata(null, properties, null);
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
     request3.setMetadata(metadata3);
-    int expectedIdSchema3 = 3;
+    int expectedIdSchema3 = expectedSchemaId(3);
     response = restApp.restClient.registerSchema(request3, subject, false);
     assertEquals(
         expectedIdSchema3,
@@ -622,7 +638,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     RegisterSchemaResponse response = restApp.restClient.registerSchema(request1, subject, false);
     assertEquals(
         expectedIdSchema1,
@@ -678,7 +694,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\"}]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(schema2);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     response = restApp.restClient.registerSchema(request2, subject, false);
     assertEquals(
         expectedIdSchema2,
@@ -732,7 +748,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     ruleSet = new RuleSet(rules, null);
     RegisterSchemaRequest request3 = new RegisterSchemaRequest(schema3);
     request3.setRuleSet(ruleSet);
-    int expectedIdSchema3 = 3;
+    int expectedIdSchema3 = expectedSchemaId(3);
     response = restApp.restClient.registerSchema(request3, subject, false);
     assertEquals(
         expectedIdSchema3,
@@ -780,7 +796,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request1, subject, false).getId(),
@@ -793,7 +809,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     properties.put("subjectKey", "subjectValue");
     Metadata metadata = new Metadata(null, properties, null);
     request2.setMetadata(metadata);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false).getId(),
@@ -815,7 +831,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request1, subject, false).getId(),
@@ -828,7 +844,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     List<Rule> rules = Collections.singletonList(r1);
     RuleSet ruleSet = new RuleSet(rules, null);
     request2.setRuleSet(ruleSet);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false).getId(),
@@ -849,7 +865,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -878,7 +894,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
 
     // register a backward compatible avro with right version number
     request2.setVersion(2);
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(request2, subject, false).getId(),
@@ -955,7 +971,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testRegisterBadDefaultWithNormalizeConfig() throws Exception {
+  public void testRegisterBadDefaultWithValidateNewSchemaConfig() throws Exception {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
@@ -965,13 +981,19 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"f" + "\"}]}";
     String schema = AvroUtils.parseSchema(schemaString).canonicalString();
 
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setValidateNewSchemas(false);
+    assertEquals(
+        config,
+        restApp.restClient.updateConfig(config, null),
+        "Setting normalize config should succeed"
+    );
+
     List<String> errors = restApp.restClient.testCompatibility(schema, subject, "latest");
     assertTrue(errors.isEmpty());
 
-    ConfigUpdateRequest config = new ConfigUpdateRequest();
-    config.setNormalize(true);
-    config.setValidateFields(false);
-    // set normalize config
+    config = new ConfigUpdateRequest();
+    config.setValidateNewSchemas(true);
     assertEquals(
         config,
         restApp.restClient.updateConfig(config, null),
@@ -1006,7 +1028,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -1035,7 +1057,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -1059,13 +1081,18 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
   public void testSubjectAliasWithContext() throws Exception {
     RestService restClient1 = new RestService(restApp.restConnect + "/contexts/.mycontext");
     RestService restClient2 = new RestService(restApp.restConnect + "/contexts/.mycontext2");
+    testSubjectAliasWithContextImpl(restClient1, restClient2);
+  }
 
+  public void testSubjectAliasWithContextImpl(
+      RestService restClient1,
+      RestService restClient2) throws Exception {
     // register a valid avro
     String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restClient1.registerSchema(schemaString1, "testSubject"),
@@ -1094,7 +1121,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -1124,7 +1151,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -1137,7 +1164,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(schemaString2, subject),
@@ -1151,7 +1178,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"x1\"}]}").canonicalString();
-    int expectedIdUnrelated1 = 3;
+    int expectedIdUnrelated1 = expectedSchemaId(3);
     assertEquals(
         expectedIdUnrelated1,
         restApp.restClient.registerSchema(unrelated1, subject),
@@ -1164,7 +1191,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"x1\"},"
         + " {\"type\":\"string\",\"name\":\"x2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdUnrelated2 = 4;
+    int expectedIdUnrelated2 = expectedSchemaId(4);
     assertEquals(
         expectedIdUnrelated2,
         restApp.restClient.registerSchema(unrelated2, subject),
@@ -1201,7 +1228,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"a1\"},"
         + " {\"type\":\"string\",\"name\":\"a2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema3 = 5;
+    int expectedIdSchema3 = expectedSchemaId(5);
     assertEquals(
         expectedIdSchema3,
         restApp.restClient.registerSchema(schemaString3, subject),
@@ -1290,7 +1317,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
             + "\"name\":\"myrecord\","
             + "\"fields\":"
             + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(schemaString1, subject),
@@ -1303,7 +1330,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"f1\"},"
         + " {\"type\":\"string\",\"name\":\"f2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(schemaString2, subject),
@@ -1317,7 +1344,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"name\":\"myrecord\","
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"x1\"}]}").canonicalString();
-    int expectedIdUnrelated1 = 3;
+    int expectedIdUnrelated1 = expectedSchemaId(3);
     assertEquals(
         expectedIdUnrelated1,
         restApp.restClient.registerSchema(unrelated1, subject),
@@ -1330,7 +1357,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"x1\"},"
         + " {\"type\":\"string\",\"name\":\"x2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdUnrelated2 = 4;
+    int expectedIdUnrelated2 = expectedSchemaId(4);
     assertEquals(
         expectedIdUnrelated2,
         restApp.restClient.registerSchema(unrelated2, subject),
@@ -1367,7 +1394,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"a1\"},"
         + " {\"type\":\"string\",\"name\":\"a2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema3 = 5;
+    int expectedIdSchema3 = expectedSchemaId(5);
     assertEquals(
         expectedIdSchema3,
         restApp.restClient.registerSchema(schemaString3, subject),
@@ -1417,7 +1444,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
         + "\"fields\":"
         + "[{\"type\":\"string\",\"name\":\"b1\"},"
         + " {\"type\":\"string\",\"name\":\"b2\", \"default\": \"foo\"}]}").canonicalString();
-    int expectedIdSchema4 = 1;
+    int expectedIdSchema4 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema4,
         restApp.restClient.registerSchema(schemaString4, subject),
@@ -1465,7 +1492,7 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request1, subject, false).getId());
@@ -1473,5 +1500,75 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
     request1.setRuleSet(null);
     Schema s = restApp.restClient.lookUpSubjectVersion(request1, subject, false, false);
     assertEquals(expectedIdSchema1, s.getId().intValue());
+
+    Rule r1 = new Rule("foo", null, null, RuleMode.READ, "IGNORE", null, null, null, null, null, false);
+    rules = ImmutableList.of(r1);
+    ruleSet = new RuleSet(null, rules);
+    RegisterSchemaRequest request2 = new RegisterSchemaRequest();
+    request2.setRuleSet(ruleSet);
+
+    // Register a rule set w/o a schema
+    int expectedIdSchema2 = expectedSchemaId(2);
+    assertEquals(
+        expectedIdSchema2,
+        restApp.restClient.registerSchema(request2, subject, false).getId());
+
+    // Lookup the schema w/o the rule set
+    s = restApp.restClient.lookUpSubjectVersion(request1, subject, false, false);
+    assertEquals(expectedIdSchema2, s.getId().intValue());
+  }
+
+  @Test
+  public void testGlobalContextWithNone() throws Exception {
+    String subject = "testSubject";
+
+    // register a valid avro
+    String schemaString1 = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(schemaString1, subject),
+        "Registering should succeed"
+    );
+
+    // register an incompatible avro
+    String incompatibleSchemaString = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"},"
+        + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
+    try {
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
+      fail("Registering an incompatible schema should fail");
+    } catch (RestClientException e) {
+      // this is expected.
+      assertEquals(
+          RestIncompatibleSchemaException.DEFAULT_ERROR_CODE,
+          e.getStatus(),
+          "Should get a conflict status"
+      );
+    }
+
+    // change compatibility level to none in the global context and try again
+    assertEquals(
+        CompatibilityLevel.NONE.name,
+        restApp.restClient
+            .updateCompatibility(CompatibilityLevel.NONE.name, ":.__GLOBAL:")
+            .getCompatibilityLevel(),
+        "Changing compatibility level should succeed"
+    );
+
+    Config config = restApp.restClient.getConfig(RestService.DEFAULT_REQUEST_PROPERTIES, null, true);
+    assertEquals("none", config.getCompatibilityLevel().toLowerCase());
+
+    try {
+      restApp.restClient.registerSchema(incompatibleSchemaString, subject);
+    } catch (RestClientException e) {
+      fail("Registering an incompatible schema should succeed after bumping down the compatibility "
+          + "level to none");
+    }
   }
 }

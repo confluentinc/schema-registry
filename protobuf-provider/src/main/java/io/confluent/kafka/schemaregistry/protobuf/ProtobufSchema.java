@@ -11,7 +11,6 @@
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
- *
  */
 
 package io.confluent.kafka.schemaregistry.protobuf;
@@ -158,6 +157,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -406,13 +406,13 @@ public class ProtobufSchema implements ParsedSchema {
 
   private final RuleSet ruleSet;
 
-  private transient String canonicalString;
+  private transient volatile String canonicalString;
 
-  private transient DynamicSchema dynamicSchema;
+  private transient volatile DynamicSchema dynamicSchema;
 
-  private transient Descriptor descriptor;
+  private transient volatile Descriptor descriptor;
 
-  private transient int hashCode = NO_HASHCODE;
+  private transient volatile int hashCode = NO_HASHCODE;
 
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
@@ -461,8 +461,7 @@ public class ProtobufSchema implements ParsedSchema {
       this.metadata = metadata;
       this.ruleSet = ruleSet;
     } catch (IllegalStateException e) {
-      log.error("Could not parse Protobuf schema {} with references {}", schemaString,
-          references, e);
+      log.error("Could not parse Protobuf schema", e);
       throw e;
     }
   }
@@ -733,12 +732,16 @@ public class ProtobufSchema implements ParsedSchema {
     }
     ImmutableList.Builder<String> imports = ImmutableList.builder();
     ImmutableList.Builder<String> publicImports = ImmutableList.builder();
+    ImmutableList.Builder<String> weakImports = ImmutableList.builder();
     List<String> dependencyList = file.getDependencyList();
     Set<Integer> publicDependencyList = new HashSet<>(file.getPublicDependencyList());
+    Set<Integer> weakDependencyList = new HashSet<>(file.getWeakDependencyList());
     for (int i = 0; i < dependencyList.size(); i++) {
       String depName = dependencyList.get(i);
       if (publicDependencyList.contains(i)) {
         publicImports.add(depName);
+      } else if (weakDependencyList.contains(i)) {
+        weakImports.add(depName);
       } else {
         imports.add(depName);
       }
@@ -840,6 +843,7 @@ public class ProtobufSchema implements ParsedSchema {
         syntax,
         imports.build(),
         publicImports.build(),
+        weakImports.build(),
         types.build(),
         services.build(),
         extendElements.build(),
@@ -1462,7 +1466,12 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (descriptor == null) {
-      descriptor = toDescriptor(name());
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (descriptor == null) {
+          descriptor = toDescriptor(name());
+        }
+      }
     }
     return descriptor;
   }
@@ -1514,10 +1523,16 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (dynamicSchema == null) {
-      Map<String, DynamicSchema> cache = new HashMap<>();
-      Context ctx = new Context();
-      ctx.collectTypeInfo(this, true);
-      dynamicSchema = toDynamicSchema(ctx, name, schemaObj, dependenciesWithLogicalTypes(), cache);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (dynamicSchema == null) {
+          Map<String, DynamicSchema> cache = new HashMap<>();
+          Context ctx = new Context();
+          ctx.collectTypeInfo(this, true);
+          dynamicSchema = toDynamicSchema(ctx, name, schemaObj,
+              dependenciesWithLogicalTypes(), cache);
+        }
+      }
     }
     return dynamicSchema;
   }
@@ -2361,7 +2376,12 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     if (canonicalString == null) {
-      canonicalString = ProtobufSchemaUtils.toString(schemaObj);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (canonicalString == null) {
+          canonicalString = ProtobufSchemaUtils.toString(schemaObj);
+        }
+      }
     }
     return canonicalString;
   }
@@ -2500,8 +2520,13 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public int hashCode() {
     if (hashCode == NO_HASHCODE) {
-      // Can't use schemaObj as locations may differ
-      hashCode = Objects.hash(canonicalString(), references, version, metadata, ruleSet);
+      // Use double-checked locking to avoid unnecessary synchronization
+      synchronized (this) {
+        if (hashCode == NO_HASHCODE) {
+          // Can't use schemaObj as locations may differ
+          hashCode = Objects.hash(canonicalString(), references, version, metadata, ruleSet);
+        }
+      }
     }
     return hashCode;
   }
@@ -2651,7 +2676,12 @@ public class ProtobufSchema implements ParsedSchema {
     StringBuilder sb = new StringBuilder();
     List<TypeElement> types = schemaObj.getTypes();
     boolean first = true;
-    for (Integer index : indexes.indexes()) {
+    List<Integer> indexList = indexes.indexes();
+    if (indexList.isEmpty()) {
+      // Default to the first message
+      indexList = MessageIndexes.DEFAULT_INDEX;
+    }
+    for (Integer index : indexList) {
       if (!first) {
         sb.append(".");
       } else {
@@ -3146,7 +3176,7 @@ public class ProtobufSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {

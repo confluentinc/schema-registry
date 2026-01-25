@@ -59,6 +59,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
 import io.confluent.kafka.schemaregistry.rules.PiiProto;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.SpecificWidget;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto2;
@@ -66,6 +67,7 @@ import io.confluent.kafka.schemaregistry.rules.WidgetProto2.Widget2;
 import io.confluent.kafka.schemaregistry.rules.WidgetWithRefProto.WidgetWithRef;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
@@ -102,6 +104,8 @@ public class CelExecutorTest {
   private final KafkaAvroDeserializer avroDeserializer;
   private final KafkaAvroSerializer avroKeySerializer;
   private final KafkaAvroDeserializer avroKeyDeserializer;
+  private final KafkaAvroSerializer specificAvroSerializer;
+  private final KafkaAvroDeserializer specificAvroDeserializer;
   private final KafkaAvroSerializer reflectionAvroSerializer;
   private final KafkaAvroDeserializer reflectionAvroDeserializer;
   private final KafkaProtobufSerializer<Widget> protobufSerializer;
@@ -165,6 +169,14 @@ public class CelExecutorTest {
     avroKeySerializer.configure(defaultConfig, true);
     avroKeyDeserializer = new KafkaAvroDeserializer(schemaRegistry);
     avroKeyDeserializer.configure(defaultConfig, true);
+
+    Map<String, Object> specificSerProps = new HashMap<>(defaultConfig);
+    specificSerProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroSerializer = new KafkaAvroSerializer(schemaRegistry, specificSerProps);
+    Map<String, Object> specificDeserProps = new HashMap<>(defaultConfig);
+    specificDeserProps.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, "false");
+    specificDeserProps.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true");
+    specificAvroDeserializer = new KafkaAvroDeserializer(schemaRegistry, specificDeserProps);
 
     Map<String, Object> reflectionProps = new HashMap<>(defaultConfig);
     reflectionProps.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, "true");
@@ -775,6 +787,180 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerSpecificFieldTransform() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    SpecificWidget widget = new SpecificWidget("alice", 5, 1);
+    Schema schema = widget.getSchema();
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITEREAD,
+        CelFieldExecutor.TYPE, null, null, "typeName == 'STRING'; value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    bytes = specificAvroSerializer.serialize(topic, widget);
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        SpecificWidget.class.isInstance(obj)
+    );
+    assertEquals("alice-suffix-suffix", ((SpecificWidget)obj).getName().toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSpecificFieldTransformWithTag() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String schemaStr = "{\n"
+        + "  \"namespace\": \"io.confluent.kafka.schemaregistry.rules\",\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"SpecificWidget\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\",\n"
+        + "      \"confluent:tags\": [ \"PII\" ]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"size\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"version\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Schema schema = new Schema.Parser().parse(schemaStr);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITEREAD,
+        CelFieldExecutor.TYPE, Collections.singleton("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    SpecificWidget widget = new SpecificWidget("alice", 5, 1);
+    bytes = specificAvroSerializer.serialize(topic, widget);
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        SpecificWidget.class.isInstance(obj)
+    );
+    assertEquals("alice-suffix-suffix", ((SpecificWidget)obj).getName().toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSpecificFieldTransformWithMissingProp() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String schemaStr = "{\n"
+        + "  \"namespace\": \"io.confluent.kafka.schemaregistry.rules\",\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"SpecificWidget\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"size\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"version\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"missing\",\n"
+        + "      \"type\": [\"null\", \"string\"],\n"
+        + "      \"default\": null\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Schema schema = new Schema.Parser().parse(schemaStr);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITEREAD,
+        CelFieldExecutor.TYPE, null, null, "typeName == 'STRING'; value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "alice");
+    avroRecord.put("size", 5);
+    avroRecord.put("version", 1);
+    bytes = specificAvroSerializer.serialize(topic, avroRecord);
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        SpecificWidget.class.isInstance(obj)
+    );
+    assertEquals("alice-suffix-suffix", ((SpecificWidget)obj).getName().toString());
+  }
+
+  @Test
+  public void testKafkaAvroSerializerSpecificFieldTransformWithMissingPropReordered()
+      throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String schemaStr = "{\n"
+        + "  \"namespace\": \"io.confluent.kafka.schemaregistry.rules\",\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"name\": \"SpecificWidget\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"missing\",\n"
+        + "      \"type\": [\"null\", \"string\"],\n"
+        + "      \"default\": null\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"name\",\n"
+        + "      \"type\": \"string\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"size\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"version\",\n"
+        + "      \"type\": \"int\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Schema schema = new Schema.Parser().parse(schemaStr);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITEREAD,
+        CelFieldExecutor.TYPE, null, null, "typeName == 'STRING'; value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    avroSchema = avroSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "alice");
+    avroRecord.put("size", 5);
+    avroRecord.put("version", 1);
+    bytes = specificAvroSerializer.serialize(topic, avroRecord);
+    obj = specificAvroDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        SpecificWidget.class.isInstance(obj)
+    );
+    assertEquals("alice-suffix-suffix", ((SpecificWidget)obj).getName().toString());
+  }
+
+  @Test
   public void testKafkaAvroSerializerReflection() throws Exception {
     byte[] bytes;
     Object obj;
@@ -1365,6 +1551,7 @@ public class CelExecutorTest {
         ((DynamicMessage)obj).getField(dynamicDesc.findFieldByName("name"))
     );
   }
+
   @Test
   public void testKafkaProtobuf2Serializer() throws Exception {
     byte[] bytes;
@@ -2017,6 +2204,79 @@ public class CelExecutorTest {
     widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
     String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
         + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
+        + "\"myint\":{\"type\":\"integer\"},"
+        + "\"mylong\":{\"type\":\"integer\"},"
+        + "\"myfloat\":{\"type\":\"number\"},"
+        + "\"mydouble\":{\"type\":\"number\"},"
+        + "\"myboolean\":{\"type\":\"boolean\"},"
+        + "\"ssn\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"piiArray\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"piiMap\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/definitions/OldPii\"}}]},"
+        + "\"size\":{\"type\":\"integer\"},"
+        + "\"version\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"size\",\"version\"],"
+        + "\"definitions\":{\"OldPii\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{"
+        + "\"pii\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]}}}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    bytes = jsonSchemaSerializer.serialize(topic, widget);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object does not match",
+        "alice-suffix",
+        ((JsonNode)obj).get("name").textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "123-suffix",
+        ((JsonNode)obj).get("ssn").get(0).textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "456-suffix",
+        ((JsonNode)obj).get("ssn").get(1).textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "789-suffix",
+        ((JsonNode)obj).get("piiArray").get(0).get("pii").textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "012-suffix",
+        ((JsonNode)obj).get("piiArray").get(1).get("pii").textValue()
+    );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformWithMissingPropInClass() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    OldWidget widget = new OldWidget("alice");
+    widget.setSize(123);
+    widget.setSsn(ImmutableList.of("123", "456"));
+    widget.setPiiArray(ImmutableList.of(new OldPii("789"), new OldPii("012")));
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"title\":\"Old Widget\",\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\n"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\": [ \"PII\" ]},"
+        + "\"missing\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}],"
         + "\"confluent:tags\": [ \"PII\" ]},"
         + "\"lastName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"
         + "\"fullName\":{\"oneOf\":[{\"type\":\"null\",\"title\":\"Not included\"},{\"type\":\"string\"}]},"

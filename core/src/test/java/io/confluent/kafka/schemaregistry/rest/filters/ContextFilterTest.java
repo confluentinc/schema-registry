@@ -1,14 +1,25 @@
 /*
  * Copyright 2021 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
 import java.net.URI;
 import java.util.Collections;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -22,6 +33,16 @@ public class ContextFilterTest {
     Assert.assertEquals(
         "URI most not change",
         "/contexts/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSpecificContext() {
+    String path = "/contexts/.foo/";
+    Assert.assertEquals(
+        "Context must be delimited",
+        "/contexts/:.foo:/",
         contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
@@ -109,6 +130,26 @@ public class ContextFilterTest {
         "Query param must not change",
         "subjectPrefix=:*:",
         uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testContextAlreadyExists() {
+    String path = "/contexts/.test-ctx/subjects/:.test-ctx:test-subject/versions";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/:.test-ctx:test-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testUriWithEncodedContext() {
+    String path = "/contexts/.test-ctx/subjects/%3A.test-ctx%3Atest-subject/versions";
+    Assert.assertEquals(
+        "Subject must be prefixed",
+        "/subjects/%3A.test-ctx%3Atest-subject/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getRawPath()
     );
   }
 
@@ -222,4 +263,99 @@ public class ContextFilterTest {
     );
   }
 
+  @Test
+  public void testSubjectNamedFoo() {
+    String path = "/subjects/foo/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/foo/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+    path = "/contexts/.ctx/subjects/foo/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/:.ctx:foo/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSubjectNamedSubjects() {
+    String path = "/subjects/subjects/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/subjects/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+    path = "/contexts/.ctx/subjects/subjects/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/:.ctx:subjects/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSubjectNamedContexts() {
+    String path = "/subjects/contexts/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/contexts/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+    path = "/contexts/.ctx/subjects/contexts/versions";
+    Assert.assertEquals(
+        "Subject must be preserved",
+        "/subjects/:.ctx:contexts/versions/",
+        contextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testAssociationsContextQueryParam() {
+    String path = "/contexts/.ctx/associations";
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), "POST", path, new MultivaluedHashMap<>());
+    Assert.assertEquals(
+        "URI must not change",
+        "/associations/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Context must change",
+        "context=:.ctx:",
+        uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testPutAssociationsContextQueryParam() {
+    String path = "/contexts/.ctx/associations/resources/myresource";
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), "PUT", path, new MultivaluedHashMap<>());
+    Assert.assertEquals(
+        "URI must not change",
+        "/associations/resources/myresource/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Context must change",
+        "context=:.ctx:",
+        uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testPatchAssociationsContextQueryParam() {
+    String path = "/contexts/.ctx/associations/resources/myresource";
+    URI uri = contextFilter.modifyUri(UriBuilder.fromPath(path), "PATCH", path, new MultivaluedHashMap<>());
+    Assert.assertEquals(
+        "URI must not change",
+        "/associations/resources/myresource/",
+        uri.getPath()
+    );
+    Assert.assertEquals(
+        "Context must change",
+        "context=:.ctx:",
+        uri.getQuery()
+    );
+  }
 }

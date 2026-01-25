@@ -12,19 +12,31 @@
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestIncompatibleSchemaException;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiTransitiveCompatibilityTest {
+
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
 
   String baseSchema = AvroUtils.parseSchema("{\"type\":\"record\","
       + "\"name\":\"myrecord\","
@@ -42,11 +54,6 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
       + "\"fields\":"
       + "[{\"type\":\"string\",\"name\":\"f1\"},"
       + " {\"type\":\"string\",\"name\":\"f2\"}]}").canonicalString();
-  
-  
-  public RestApiTransitiveCompatibilityTest() {
-    super(1, true, CompatibilityLevel.BACKWARD_TRANSITIVE.name);
-  }
 
   /* Confirm that removing a default in from a column that was added earlier is not compatible. */
   @Test
@@ -54,7 +61,7 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
     String subject = "testSubject";
 
     // register a valid avro
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(baseSchema, subject),
@@ -62,7 +69,7 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
     );
 
     // register a backward compatible avro
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject),
@@ -90,7 +97,7 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
     String subject = "testSubject";
 
     // register a valid avro
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(baseSchemaWithColumnWithDefault, subject),
@@ -98,7 +105,7 @@ public class RestApiTransitiveCompatibilityTest extends ClusterTestHarness {
     );
 
     // register a backward compatible avro
-    int expectedIdSchema2 = 2;
+    int expectedIdSchema2 = expectedSchemaId(2);
     assertEquals(
         expectedIdSchema2,
         restApp.restClient.registerSchema(baseSchemaWithColumnNoDefault, subject),

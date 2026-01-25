@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.0.0-0</version>
+        <version>8.3.0-0</version>
     </parent>
 
     <licenses>
@@ -21,6 +21,10 @@
     <artifactId>kafka-schema-rules</artifactId>
     <packaging>jar</packaging>
     <name>kafka-schema-rules</name>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -54,6 +58,10 @@
             <artifactId>JSONata4Java</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.hubspot.jackson</groupId>
             <artifactId>jackson-datatype-protobuf</artifactId>
         </dependency>
@@ -76,6 +84,12 @@
             <artifactId>kafka_${kafka.scala.version}</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -83,12 +97,24 @@
             <version>${kafka.version}</version>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -156,6 +182,29 @@
             <plugin>
                 <groupId>io.github.ascopes</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.maven.plugin.version}</version>
+                <configuration>
+                    <java>
+                        <excludes>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/ExpiringSpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewerSpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewSpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/SpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto2.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java</exclude>
+                        </excludes>
+                        <licenseHeader>
+                            <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
+                        </licenseHeader>
+                    </java>
+                </configuration>
             </plugin>
         </plugins>
     </build>

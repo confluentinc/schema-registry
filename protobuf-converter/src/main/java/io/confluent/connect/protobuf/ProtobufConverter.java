@@ -11,15 +11,16 @@
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations under the License.
- *
  */
 
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -110,10 +111,19 @@ public class ProtobufConverter implements Converter {
           topic
       ), e);
     } catch (SerializationException e) {
-      throw new DataException(String.format(
-          "Failed to serialize Protobuf data from topic %s :",
-          topic
-      ), e);
+      if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
+        throw new NetworkException(
+            String.format(
+                "Network connection error while serializing Protobuf data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(String.format(
+            "Failed to serialize Protobuf data from topic %s:",
+            topic
+        ), e);
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
@@ -151,10 +161,18 @@ public class ProtobufConverter implements Converter {
           topic
       ), e);
     } catch (SerializationException e) {
-      throw new DataException(String.format(
-          "Failed to deserialize data for topic %s to Protobuf: ",
-          topic
-      ), e);
+      if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
+        throw new NetworkException(
+            String.format("Network connection error while deserializing data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(String.format(
+            "Failed to deserialize data for topic %s to Protobuf:",
+            topic
+        ), e);
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
@@ -162,7 +180,7 @@ public class ProtobufConverter implements Converter {
     }
   }
 
-  private static class Serializer extends AbstractKafkaProtobufSerializer {
+  static class Serializer extends AbstractKafkaProtobufSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -184,7 +202,7 @@ public class ProtobufConverter implements Converter {
     }
   }
 
-  private static class Deserializer extends AbstractKafkaProtobufDeserializer {
+  static class Deserializer extends AbstractKafkaProtobufDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;

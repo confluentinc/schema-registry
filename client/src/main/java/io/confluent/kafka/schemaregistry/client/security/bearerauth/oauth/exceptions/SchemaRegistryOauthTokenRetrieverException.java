@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.exceptions;
 
 /**

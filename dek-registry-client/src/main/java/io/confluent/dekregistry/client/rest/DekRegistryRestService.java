@@ -92,6 +92,23 @@ public class DekRegistryRestService extends RestService implements Configurable 
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);
   }
 
+  public List<String> listKeksWithPagination(List<String> subjectPrefix, boolean lookupDeleted,
+                                             int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks")
+            .queryParam("deleted", lookupDeleted);
+    if (subjectPrefix != null && !subjectPrefix.isEmpty()) {
+      for (String prefix : subjectPrefix) {
+        builder = builder.queryParam("subjectPrefix", prefix);
+      }
+    }
+    builder.queryParam("offset", offset);
+    builder.queryParam("limit", limit);
+    String path = builder.build().toString();
+
+    return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, STRINGS_TYPE);
+  }
+
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     return getKek(DEFAULT_REQUEST_PROPERTIES, name, lookupDeleted);
@@ -121,6 +138,18 @@ public class DekRegistryRestService extends RestService implements Configurable 
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);
   }
 
+  public List<String> listDeksWithPagination(String kekName, boolean lookupDeleted,
+                                             int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks")
+            .queryParam("deleted", lookupDeleted);
+    builder = builder.queryParam("offset", offset);
+    builder = builder.queryParam("limit", limit);
+    String path = builder.build(kekName).toString();
+
+    return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, STRINGS_TYPE);
+  }
+
   public List<Integer> listDekVersions(String kekName, String subject,
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
@@ -138,6 +167,22 @@ public class DekRegistryRestService extends RestService implements Configurable 
     String path = builder.build(kekName, subject).toString();
 
     return httpRequest(path, "GET", null, requestProperties, INTEGERS_TYPE);
+  }
+
+  public List<Integer> listDekVersionsWithPagination(String kekName, String subject,
+                                                     DekFormat algorithm,
+                                                     boolean lookupDeleted, int offset, int limit)
+          throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}/versions")
+            .queryParam("deleted", lookupDeleted);
+    if (algorithm != null) {
+      builder = builder.queryParam("algorithm", algorithm.name());
+    }
+    builder = builder.queryParam("offset", offset);
+    builder = builder.queryParam("limit", limit);
+    String path = builder.build(kekName, subject).toString();
+
+    return httpRequest(path, "GET", null, DEFAULT_REQUEST_PROPERTIES, INTEGERS_TYPE);
   }
 
   public Dek getDek(String name, String subject, boolean lookupDeleted)
@@ -211,22 +256,46 @@ public class DekRegistryRestService extends RestService implements Configurable 
 
   public Dek createDek(String kekName, CreateDekRequest request)
       throws IOException, RestClientException {
-    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, request);
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, false, request);
+  }
+
+  public Dek createDek(String kekName, boolean rewrap, CreateDekRequest request)
+      throws IOException, RestClientException {
+    return createDek(DEFAULT_REQUEST_PROPERTIES, kekName, rewrap, request);
   }
 
   public Dek createDek(
       Map<String, String> requestProperties,
       String kekName,
+      boolean rewrap,
       CreateDekRequest request)
       throws IOException, RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks");
-    String path = builder.build(kekName).toString();
+    try {
+      UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks/{subject}");
+      String path = builder
+          .queryParam("rewrap", rewrap)
+          .build(kekName, request.getSubject()).toString();
 
-    return httpRequest(
-        path, "POST",
-        request.toJson().getBytes(StandardCharsets.UTF_8),
-        requestProperties,
-        DEK_TYPE);
+      return httpRequest(
+          path, "POST",
+          request.toJson().getBytes(StandardCharsets.UTF_8),
+          requestProperties,
+          DEK_TYPE);
+    } catch (RestClientException e) {
+      if (e.getErrorCode() == 405) {
+        // Try fallback to older API that does not have subject in the path
+        UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/deks");
+        String path = builder.build(kekName).toString();
+
+        return httpRequest(
+            path, "POST",
+            request.toJson().getBytes(StandardCharsets.UTF_8),
+            requestProperties,
+            DEK_TYPE);
+      } else {
+        throw e;
+      }
+    }
   }
 
   public Kek updateKek(String name, UpdateKekRequest request)

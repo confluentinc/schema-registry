@@ -20,13 +20,13 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -75,7 +75,7 @@ public class SchemaDiffTest {
 
       List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
-          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(diff.getType()))
           .collect(Collectors.toList());
       assertThat(description,
           differences.stream()
@@ -84,6 +84,17 @@ public class SchemaDiffTest {
           is(errorMessages)
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
+
+      boolean isCompatibleLenient = isCompatible;
+      if (testCase.has("compatible_lenient")) {
+        isCompatibleLenient = testCase.getBoolean("compatible_lenient");
+      }
+      List<Difference> differencesLenient = SchemaDiff.compare(SchemaDiff.COMPATIBLE_CHANGES_LENIENT,
+          original.rawSchema(), update.rawSchema());
+      final List<Difference> incompatibleDiffsLenient = differences.stream()
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_LENIENT.contains(diff.getType()))
+          .collect(Collectors.toList());
+      assertEquals(description, isCompatibleLenient, incompatibleDiffsLenient.isEmpty());
     }
   }
 
@@ -102,6 +113,18 @@ public class SchemaDiffTest {
     final List<Difference> changes = SchemaDiff.compare(first, second);
     // Changing from empty schema to empty object schema is incompatible
     Assert.assertFalse(changes.isEmpty());
+  }
+
+  @Test
+  public void testConnectTypeAsBytes() {
+    String firstSchema = "{\"type\":\"string\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.version\":1,\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"2\"}}";
+    String secondSchema = "{\"type\":\"number\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.version\":1,\"connect.type\":\"bytes\",\"connect.parameters\":{\"scale\":\"2\"}}";
+    final Schema first = SchemaLoader.load(new JSONObject(firstSchema));
+    final Schema second = SchemaLoader.load(new JSONObject(secondSchema));
+    final List<Difference> changes = SchemaDiff.compare(first, second);
+    Assert.assertTrue(changes.isEmpty());
   }
 
   public static String readFile(String fileName) {

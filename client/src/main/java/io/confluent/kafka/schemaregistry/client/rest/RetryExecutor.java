@@ -1,16 +1,17 @@
 /*
  * Copyright 2023 Confluent Inc.
  *
- * Licensed under the Confluent Community License (the "License"); you may not use
- * this file except in compliance with the License.  You may obtain a copy of the
- * License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * http://www.confluent.io/confluent-community-license
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package io.confluent.kafka.schemaregistry.client.rest;
@@ -47,35 +48,34 @@ public class RetryExecutor {
   }
 
   public <T> T retry(Callable<T> callable) throws RestClientException, IOException {
-    T result = null;
     for (int i = 0; i < maxRetries + 1; i++) {
-      boolean retry = false;
       try {
-        result = callable.call();
+        return callable.call();
       } catch (RestClientException e) {
-        if (i < maxRetries && RestService.isRetriable(e)) {
-          retry = true;
-        } else {
+        if (i >= maxRetries || !RestService.isRestClientExceptionRetriable(e)) {
           throw e;
         }
       } catch (IOException e) {
-        throw e;
-      } catch (Exception e) {
-        throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
-      }
-      if (!retry) {
-        break;
-      }
-      long delayMs = computeDelayBeforeNextRetry(i).toMillis();
-      if (delayMs > 0) {
-        try {
-          Thread.sleep(delayMs);
-        } catch (InterruptedException e) {
-          // ignore
+        if (i >= maxRetries) {
+          throw e;
         }
+      } catch (Exception e) {
+        throw (e instanceof RuntimeException) ? (RuntimeException) e : new RuntimeException(e);
+      }
+      sleepBeforeRetry(i);
+    }
+    return null;
+  }
+
+  private void sleepBeforeRetry(int attempt) {
+    long delayMs = computeDelayBeforeNextRetry(attempt).toMillis();
+    if (delayMs > 0) {
+      try {
+        Thread.sleep(delayMs);
+      } catch (InterruptedException ignored) {
+        // ignore
       }
     }
-    return result;
   }
 
   protected Duration computeDelayBeforeNextRetry(int retriesAttempted) {

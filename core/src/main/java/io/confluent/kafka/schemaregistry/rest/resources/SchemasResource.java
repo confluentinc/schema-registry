@@ -15,11 +15,14 @@
 
 package io.confluent.kafka.schemaregistry.rest.resources;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
 import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -27,9 +30,9 @@ import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
-import io.confluent.kafka.schemaregistry.storage.MD5;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -41,16 +44,18 @@ import io.swagger.v3.oas.annotations.tags.Tags;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.function.Predicate;
+
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.PathParam;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.PathParam;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -67,9 +72,10 @@ public class SchemasResource {
 
   public static final String apiTag = "Schemas (v1)";
   private static final Logger log = LoggerFactory.getLogger(SchemasResource.class);
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
-  public SchemasResource(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public SchemasResource(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -155,6 +161,8 @@ public class SchemasResource {
       @QueryParam("subject") String subject,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Desired output format for references")
+      @DefaultValue("") @QueryParam("referenceFormat") String referenceFormat,
       @Parameter(description = "Find tagged entities for the given tags or * for all tags")
       @QueryParam("findTags") List<String> tags,
       @Parameter(description = "Whether to fetch the maximum schema identifier that exists")
@@ -172,7 +180,25 @@ public class SchemasResource {
         schemaRegistry.extractSchemaTags(s, tags);
         schema.setSchemaTags(s.getSchemaTags());
       }
-      schema.setGuid(MD5.ofSchema(new Schema(null, null, null, schema)).toString());
+      QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
+      boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+      List<SchemaReference> refs = schema.getReferences();
+      boolean hasRefs = refs != null && !refs.isEmpty();
+      if (isQualifiedSubject
+          && hasRefs
+          && referenceFormat != null
+          && referenceFormat.equals("qualified")) {
+        // Convert references to be qualified with the parent subject
+        List<SchemaReference> qualifiedRefs = refs.stream()
+            .map(ref -> {
+              QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+                  schemaRegistry.tenant(), qs.toQualifiedSubject(), ref.getSubject());
+              return new SchemaReference(
+                  ref.getName(), refSubject.toUnqualifiedSubject(), ref.getVersion());
+            })
+            .collect(Collectors.toList());
+        schema.setReferences(qualifiedRefs);
+      }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
@@ -375,7 +401,6 @@ public class SchemasResource {
       if (schema == null) {
         throw Errors.schemaNotFoundException(guid);
       }
-      schema.setGuid(MD5.ofSchema(new Schema(null, null, null, schema)).toString());
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
