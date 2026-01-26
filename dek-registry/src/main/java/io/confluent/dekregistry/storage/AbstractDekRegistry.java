@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -146,44 +147,49 @@ public abstract class AbstractDekRegistry implements Closeable {
    * Get all KEKs for a tenant.
    */
   protected abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeksFromStore(
-      String tenant, boolean lookupDeleted);
+      String tenant, boolean lookupDeleted) throws SchemaRegistryStoreException;
 
   /**
    * Get all DEKs for a tenant within a KEK name range.
    */
   protected abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
-      String tenant, String minKekName, String maxKekName, boolean lookupDeleted);
+      String tenant, String minKekName, String maxKekName, boolean lookupDeleted)
+      throws SchemaRegistryStoreException;
 
   /**
    * Get DEKs for a specific subject and algorithm.
    */
   protected abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
-      String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted);
+      String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
+      throws SchemaRegistryStoreException;
 
   /**
    * Get a KEK by its ID.
    */
-  protected abstract KeyEncryptionKey getKekById(KeyEncryptionKeyId keyId);
+  protected abstract KeyEncryptionKey getKekById(KeyEncryptionKeyId keyId) throws
+      SchemaRegistryStoreException;
 
   /**
    * Get a DEK by its ID.
    */
-  protected abstract DataEncryptionKey getDekById(DataEncryptionKeyId keyId);
+  protected abstract DataEncryptionKey getDekById(DataEncryptionKeyId keyId) throws
+      SchemaRegistryStoreException;
 
   /**
    * Store a key (KEK or DEK).
    */
-  protected abstract void putKey(EncryptionKeyId id, EncryptionKey key);
+  protected abstract void putKey(EncryptionKeyId id, EncryptionKey key) throws
+      SchemaRegistryStoreException;
 
   /**
    * Remove a key from storage.
    */
-  protected abstract void removeKey(EncryptionKeyId id);
+  protected abstract void removeKey(EncryptionKeyId id) throws SchemaRegistryStoreException;
 
   /**
    * Sync/refresh the store to ensure it's up-to-date.
    */
-  protected abstract void syncStore();
+  protected abstract void syncStore() throws SchemaRegistryStoreException;
 
   /**
    * Get the shared keys multimap for tracking shared KEKs.
@@ -278,34 +284,42 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   public List<String> getKekNames(List<String> subjectPrefix, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    if (subjectPrefix == null || subjectPrefix.isEmpty()) {
-      return getKeks(tenant, lookupDeleted).stream()
-          .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
-          .collect(Collectors.toList());
-    } else {
-      return getDeks(tenant, lookupDeleted).stream()
-          .filter(kv -> subjectPrefix.stream()
-              .anyMatch(prefix -> ((DataEncryptionKeyId) kv.key).getSubject().startsWith(prefix)))
-          .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
-          .sorted()
-          .distinct()
-          .collect(Collectors.toList());
+    try {
+      if (subjectPrefix == null || subjectPrefix.isEmpty()) {
+        return getKeks(tenant, lookupDeleted).stream()
+            .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
+            .collect(Collectors.toList());
+      } else {
+        return getDeks(tenant, lookupDeleted).stream()
+            .filter(kv -> subjectPrefix.stream()
+                .anyMatch(prefix -> ((DataEncryptionKeyId) kv.key).getSubject().startsWith(prefix)))
+            .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
+            .sorted()
+            .distinct()
+            .collect(Collectors.toList());
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw new RuntimeException("Error retrieving KEK names", e);
     }
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeks(
-      String tenant, boolean lookupDeleted) {
+      String tenant, boolean lookupDeleted) throws SchemaRegistryStoreException {
     return getKeksFromStore(tenant, lookupDeleted);
   }
 
   public KeyEncryptionKey getKek(String name, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
     KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
-    KeyEncryptionKey key = getKekById(keyId);
-    if (key != null && (!key.isDeleted() || lookupDeleted)) {
-      return key;
-    } else {
-      return null;
+    try {
+      KeyEncryptionKey key = getKekById(keyId);
+      if (key != null && (!key.isDeleted() || lookupDeleted)) {
+        return key;
+      } else {
+        return null;
+      }
+    } catch (SchemaRegistryStoreException e) {
+      throw new RuntimeException("Error retrieving KEK", e);
     }
   }
 
@@ -615,39 +629,49 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getDeks(tenant, kekName, lookupDeleted).stream()
-        .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
-        .sorted()
-        .distinct()
-        .collect(Collectors.toList());
+    try {
+      return getDeks(tenant, kekName, lookupDeleted).stream()
+          .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
+          .sorted()
+          .distinct()
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryStoreException e) {
+      throw new RuntimeException("Error retrieving DEK subjects", e);
+    }
   }
 
   public List<Integer> getDekVersions(
       String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
     String tenant = schemaRegistry.tenant();
-    return getDeks(tenant, kekName, subject, algorithm, lookupDeleted).stream()
-        .map(kv -> ((DataEncryptionKeyId) kv.key).getVersion())
-        .collect(Collectors.toList());
+    try {
+      return getDeks(tenant, kekName, subject, algorithm, lookupDeleted).stream()
+          .map(kv -> ((DataEncryptionKeyId) kv.key).getVersion())
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryStoreException e) {
+      throw new RuntimeException("Error retrieving DEK versions", e);
+    }
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
-      String tenant, boolean lookupDeleted) {
+      String tenant, boolean lookupDeleted) throws SchemaRegistryStoreException {
     return getDeksFromStore(tenant, String.valueOf(Character.MIN_VALUE),
         String.valueOf(Character.MAX_VALUE), lookupDeleted);
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
-      String tenant, String kekName, boolean lookupDeleted) {
+      String tenant, String kekName, boolean lookupDeleted) throws SchemaRegistryStoreException {
     return getDeksFromStore(tenant, kekName, kekName, lookupDeleted);
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
-      String tenant, String minKekName, String maxKekName, boolean lookupDeleted) {
+      String tenant, String minKekName, String maxKekName, boolean lookupDeleted)
+      throws SchemaRegistryStoreException {
     return getDeksFromStore(tenant, minKekName, maxKekName, lookupDeleted);
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
-      String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
+      String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
+      throws SchemaRegistryStoreException {
     return getDeksFromStore(tenant, kekName, subject, algorithm, lookupDeleted);
   }
 
