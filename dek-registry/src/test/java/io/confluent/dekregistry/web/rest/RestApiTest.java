@@ -15,11 +15,11 @@
 
 package io.confluent.dekregistry.web.rest;
 
-import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static io.confluent.dekregistry.storage.AbstractDekRegistry.X_FORWARD_HEADER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.FakeTicker;
@@ -542,9 +542,10 @@ public class RestApiTest extends ClusterTestHarness {
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
     int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false).getId());
+        restApp.restClient.registerSchema(request1, subject, false).getId(),
+        "Registering should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     Map<String, String> newParams = schemaString.getRuleSet().getDomainRules().get(0).getParams();
