@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Confluent Inc.
+ * Copyright 2026 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -229,7 +229,7 @@ public abstract class AbstractDekRegistry implements Closeable {
       initStore();
       boolean isInitialized = initialized.compareAndSet(false, true);
       if (!isInitialized) {
-        throw new IllegalStateException("DekRegistry was already initialized");
+        throw new IllegalStateException("AbstractDekRegistry was already initialized");
       }
       initLatch.countDown();
     }
