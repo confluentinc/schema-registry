@@ -22,6 +22,7 @@ import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.metrics.MetricsManager;
+import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.testutil.TestKmsDriver;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DekRegistryTest extends ClusterTestHarness {
 
@@ -316,5 +318,20 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("kekName1", dek.getKekName());
         assertEquals(KeyType.DEK, dek.getType());
         assertEquals(2, dek.getVersion());
+    }
+
+    @Test
+    public void testTestKek() throws Exception {
+        // Test that a shared KEK can be successfully tested
+        dekRegistry.testKek(kek);
+        
+        // Verify the test passes without throwing an exception for shared KEK
+        assertNotNull(kek);
+        assertEquals("kekName1", kek.getName());
+
+        // Test that a non-shared KEK cannot be tested
+        CreateKekRequest k2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": true}");
+        KeyEncryptionKey kek2 = dekRegistry.createKek(k2);
+        assertThrows(InvalidKeyException.class, () -> dekRegistry.testKek(kek2));
     }
 }
