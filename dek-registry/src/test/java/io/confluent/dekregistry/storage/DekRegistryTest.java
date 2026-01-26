@@ -52,13 +52,12 @@ public class DekRegistryTest extends ClusterTestHarness {
 
     private SchemaRegistry schemaRegistry;
 
-    private MetricsManager metricsManager;
-
-    private AbstractDekRegistry dekRegistry;
+  private AbstractDekRegistry dekRegistry;
 
     private KeyEncryptionKey kek;
 
-    @Override @BeforeEach
+    @Override
+    @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
         Properties props = new Properties();
@@ -67,7 +66,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
         SchemaRegistryConfig config = new SchemaRegistryConfig(props);
         schemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
-        metricsManager = new MetricsManager(schemaRegistry);
+        MetricsManager metricsManager = new MetricsManager(schemaRegistry);
         dekRegistry = new KafkaDekRegistry(schemaRegistry, metricsManager);
         dekRegistry.init();
 
