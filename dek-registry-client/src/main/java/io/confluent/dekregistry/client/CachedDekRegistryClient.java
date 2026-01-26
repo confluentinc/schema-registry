@@ -470,6 +470,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   }
 
   @Override
+  public void testKek(String name)
+      throws IOException, RestClientException {
+    restService.testKek(DEFAULT_REQUEST_PROPERTIES, name);
+  }
+
+  @Override
   public void reset() {
     kekCache.invalidateAll();
     dekCache.invalidateAll();
