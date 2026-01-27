@@ -77,6 +77,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.NamedURI;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.Arrays;
@@ -994,7 +995,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
-      if (!lookupCache.referencesSchema(key).isEmpty()) {
+      Set<Integer> refs = getReferencedBy(key, permanentDelete);
+      if (!refs.isEmpty()) {
         throw new ReferenceExistsException(key.toString());
       }
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
@@ -1066,7 +1068,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!lookupCache.referencesSchema(key).isEmpty()) {
+        Set<Integer> refs = getReferencedBy(key, permanentDelete);
+        if (!refs.isEmpty()) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
@@ -1658,13 +1661,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         version = getLatestVersion(subject).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
-      List<Integer> ids = new ArrayList<>(lookupCache.referencesSchema(key));
+      List<Integer> ids = new ArrayList<>(getReferencedBy(key, false));
       Collections.sort(ids);
       return ids;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Error from the backend Kafka store", e);
     }
+  }
+
+  private Set<Integer> getReferencedBy(SchemaKey key, boolean permanentDelete)
+      throws StoreException, SchemaRegistryException {
+    Set<Integer> ids = lookupCache.referencesSchema(key);
+    if (permanentDelete) {
+      return ids;
+    }
+    // Filter out references that are soft-deleted
+    Set<Integer> undeletedIds = new HashSet<>();
+    for (Integer id : ids) {
+      List<SubjectVersion> versions = listVersionsForId(id, null, false);
+      if (!versions.isEmpty()) {
+        undeletedIds.add(id);
+      }
+    }
+    return undeletedIds;
   }
 
   public List<String> listContexts() throws SchemaRegistryException {
