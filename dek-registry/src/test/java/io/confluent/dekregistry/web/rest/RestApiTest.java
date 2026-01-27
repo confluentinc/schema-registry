@@ -24,85 +24,44 @@ import static org.junit.jupiter.api.Assertions.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.Aead;
-import io.confluent.dekregistry.DekRegistryResourceExtension;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
-import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-public class RestApiTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiTest {
 
   FakeTicker fakeTicker;
   CachedDekRegistryClient client;
 
-  public RestApiTest() {
-    super(1, true);
-  }
+  protected RestApp restApp = null;
 
-  @Override
-  public Properties getSchemaRegistryProperties() throws Exception {
-    Properties props = new Properties();
-    props.put(
-        SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG,
-        DekRegistryResourceExtension.class.getName()
-    );
-    props.put(
-        SchemaRegistryConfig.INTER_INSTANCE_HEADERS_WHITELIST_CONFIG,
-        DekRegistryRestService.X_FORWARD_HEADER
-    );
-    return props;
-  }
-
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
-    fakeTicker = new FakeTicker();
-    client = new CachedDekRegistryClient(
-        new DekRegistryRestService(restApp.restClient.getBaseUrls().urls()),
-        1000,
-        60,
-        null,
-        null,
-        fakeTicker
-    );
-    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
-      public void handle(String subject, ConfigUpdateRequest request) {
-      }
-
-      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
-      }
-
-      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
-        return ruleSet != null
-            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
-            : null;
-      }
-    });
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
   }
 
   @Test

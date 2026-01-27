@@ -664,12 +664,6 @@ public abstract class AbstractDekRegistry implements Closeable {
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
-      String tenant, String minKekName, String maxKekName, boolean lookupDeleted)
-      throws SchemaRegistryStoreException {
-    return getDeksFromStore(tenant, minKekName, maxKekName, lookupDeleted);
-  }
-
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(
       String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws SchemaRegistryStoreException {
     return getDeksFromStore(tenant, kekName, subject, algorithm, lookupDeleted);

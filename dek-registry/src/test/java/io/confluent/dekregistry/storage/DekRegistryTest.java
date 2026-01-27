@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Tag("IntegrationTest")
 public class DekRegistryTest extends ClusterTestHarness {
 
     private SchemaRegistry schemaRegistry;
