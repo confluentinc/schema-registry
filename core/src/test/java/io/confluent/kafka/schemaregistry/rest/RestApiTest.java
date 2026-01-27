@@ -1606,7 +1606,7 @@ public class RestApiTest extends ClusterTestHarness {
         (Integer) 1,
         restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "ref", "1"));
 
-    // Step 3: Hard delete base
+    // Step 4.5: Hard delete base
     assertEquals(
         (Integer) 1,
         restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "base", "1", true));
