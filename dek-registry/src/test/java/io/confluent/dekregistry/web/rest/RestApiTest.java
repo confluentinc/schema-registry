@@ -267,6 +267,9 @@ public class RestApiTest extends ClusterTestHarness {
     newKek = client.updateKek(headers, kekName, kmsProps, doc, true);
     assertEquals(kek2, newKek);
 
+    // Test shared kek
+    client.testKek(kekName);
+
     // Advance ticker
     fakeTicker.advance(61, TimeUnit.SECONDS);
 
