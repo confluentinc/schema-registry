@@ -1030,6 +1030,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throws StoreException, SchemaRegistryException {
     Set<Integer> ids = lookupCache.referencesSchema(key);
     if (!permanentDelete) {
+      // Filter out references that are soft-deleted
       Set<Integer> undeletedIds = new HashSet<>();
       for (Integer id : ids) {
         List<SubjectVersion> versions = listVersionsForId(id, null, false);
