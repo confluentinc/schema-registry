@@ -55,13 +55,29 @@ import org.junit.jupiter.api.Test;
 @Tag("IntegrationTest")
 public abstract class RestApiTest {
 
-  FakeTicker fakeTicker;
-  CachedDekRegistryClient client;
+  protected FakeTicker fakeTicker;
+  protected CachedDekRegistryClient client;
 
   protected RestApp restApp = null;
 
+  protected String kmsType = "test-kms";
+  protected String kmsKeyId = "myid";
+  protected String kmsKeyId3 = "myid2";
+
   public void setRestApp(RestApp restApp) {
     this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
+
+  /**
+   * Returns configs to pass to Kek.toAead() for test encryption.
+   * Subclasses can override to inject a TEST_CLIENT for fake KMS implementations.
+   */
+  protected Map<String, ?> getTestClientConfigs() {
+    return Collections.emptyMap();
   }
 
   @Test
@@ -89,9 +105,6 @@ public abstract class RestApiTest {
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
     String kekName = "kek1";
     String kek3Name = "kek3";
-    String kmsType = "test-kms";
-    String kmsKeyId = "myid";
-    String kmsKeyId3 = "myid2";
     String subject = "mysubject";
     String badSubject = "badSubject";
     String subject2 = "mysubject2";
@@ -188,7 +201,7 @@ public abstract class RestApiTest {
     byte[] rawDek = new Cryptor(algorithm).generateKey();
     String rawDekStr =
         new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
-    Aead aead = kek.toAead(Collections.emptyMap());
+    Aead aead = kek.toAead(getTestClientConfigs());
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -444,7 +457,7 @@ public abstract class RestApiTest {
     // Use the test-kms type to generate a dummy dek locally
     Kek testKek = new Kek(kekName, "test-kms", kmsKeyId, null, null, false, null, null);
     byte[] rawDek = new Cryptor(algorithm).generateKey();
-    Aead aead = testKek.toAead(Collections.emptyMap());
+    Aead aead = testKek.toAead(getTestClientConfigs());
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -503,7 +516,7 @@ public abstract class RestApiTest {
     RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    int expectedIdSchema1 = 1;
+    int expectedIdSchema1 = expectedSchemaId(1);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(request1, subject, false).getId(),
