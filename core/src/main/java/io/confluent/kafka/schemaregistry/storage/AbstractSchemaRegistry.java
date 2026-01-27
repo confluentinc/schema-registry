@@ -58,6 +58,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import java.util.Comparator;
+import java.util.HashSet;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
 import org.eclipse.jetty.server.Handler;
@@ -1407,20 +1408,37 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   @Override
   public List<Integer> getReferencedBy(String subject, VersionId versionId)
-          throws SchemaRegistryException {
+      throws SchemaRegistryException {
     try {
       int version = versionId.getVersionId();
       if (versionId.isLatest()) {
         version = getLatestVersion(subject).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
-      List<Integer> ids = new ArrayList<>(lookupCache.referencesSchema(key));
+      List<Integer> ids = new ArrayList<>(getReferencedBy(key, false));
       Collections.sort(ids);
       return ids;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
-              "Error from the backend Kafka store", e);
+          "Error from the backend Kafka store", e);
     }
+  }
+
+  private Set<Integer> getReferencedBy(SchemaKey key, boolean permanentDelete)
+      throws StoreException, SchemaRegistryException {
+    Set<Integer> ids = lookupCache.referencesSchema(key);
+    if (permanentDelete) {
+      return ids;
+    }
+    // Filter out references that are soft-deleted
+    Set<Integer> undeletedIds = new HashSet<>();
+    for (Integer id : ids) {
+      List<SubjectVersion> versions = listVersionsForId(id, null, false);
+      if (!versions.isEmpty()) {
+        undeletedIds.add(id);
+      }
+    }
+    return undeletedIds;
   }
 
   @Override

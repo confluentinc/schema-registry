@@ -197,24 +197,6 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
-    for (SchemaReference ref : schemaValue.getReferences()) {
-      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-          tenant(), schemaKey.getSubject(), ref.getSubject());
-      SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
-          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-      Map<SchemaKey, Set<Integer>> refBy =
-          ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
-      if (refBy != null) {
-        Set<Integer> ids = refBy.get(refKey);
-        if (ids != null) {
-          ids.remove(schemaValue.getId());
-          if (ids.isEmpty()) {
-            refBy.remove(refKey);
-          }
-        }
-      }
-    }
   }
 
   @Override
@@ -234,6 +216,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
         (k, v) -> schemaKey.getVersion() == v ? null : v);
     if (subjectVersions.isEmpty()) {
       guids.remove(schemaValue.getId());
+    }
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schemaKey.getSubject(), ref.getSubject());
+      SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
+      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+      Map<SchemaKey, Set<Integer>> refBy =
+          ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
+      if (refBy != null) {
+        Set<Integer> ids = refBy.get(refKey);
+        if (ids != null) {
+          ids.remove(schemaValue.getId());
+          if (ids.isEmpty()) {
+            refBy.remove(refKey);
+          }
+        }
+      }
     }
   }
 

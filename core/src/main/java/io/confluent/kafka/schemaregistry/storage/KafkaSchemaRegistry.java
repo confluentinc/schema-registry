@@ -727,7 +727,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
 
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
-      if (!lookupCache.referencesSchema(key).isEmpty()) {
+      if (!getReferencedBy(key, permanentDelete).isEmpty()) {
         throw new ReferenceExistsException(key.toString());
       }
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
@@ -809,7 +809,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!lookupCache.referencesSchema(key).isEmpty()) {
+        if (!getReferencedBy(key, permanentDelete).isEmpty()) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
@@ -1678,7 +1678,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String subject,
       boolean recursive,
       Map<String, String> headerProperties)
-      throws SchemaRegistryRequestForwardingException {
+    throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug("Forwarding delete subject mode request {} to {} with recursive={}",
