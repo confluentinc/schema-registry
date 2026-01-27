@@ -163,7 +163,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
   // ==================== Abstract Method Implementations ====================
 
   @Override
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeksFromStore(
+  public List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeksFromStore(
       String tenant, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     KeyEncryptionKeyId key1 = new KeyEncryptionKeyId(tenant, String.valueOf(Character.MIN_VALUE));
@@ -181,7 +181,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
   }
 
   @Override
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
+  public List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
       String tenant, String minKekName, String maxKekName, boolean lookupDeleted) {
     List<KeyValue<EncryptionKeyId, EncryptionKey>> result = new ArrayList<>();
     DataEncryptionKeyId key1 = new DataEncryptionKeyId(
@@ -203,7 +203,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
   }
 
   @Override
-  protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
+  public List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
       String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
     if (algorithm == null) {
       algorithm = DekFormat.AES256_GCM;
@@ -228,32 +228,32 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
   }
 
   @Override
-  protected KeyEncryptionKey getKekById(KeyEncryptionKeyId keyId) {
+  public KeyEncryptionKey getKekById(KeyEncryptionKeyId keyId) {
     return (KeyEncryptionKey) keys.get(keyId);
   }
 
   @Override
-  protected DataEncryptionKey getDekById(DataEncryptionKeyId keyId) {
+  public DataEncryptionKey getDekById(DataEncryptionKeyId keyId) {
     return (DataEncryptionKey) keys.get(keyId);
   }
 
   @Override
-  protected void putKey(EncryptionKeyId id, EncryptionKey key) {
+  public void putKey(EncryptionKeyId id, EncryptionKey key) {
     keys.put(id, key);
   }
 
   @Override
-  protected void removeKey(EncryptionKeyId id) {
+  public void removeKey(EncryptionKeyId id) {
     keys.remove(id);
   }
 
   @Override
-  protected void syncStore() {
+  public void syncStore() {
     keys.sync();
   }
 
   @Override
-  protected void initStore() {
+  public void initStore() {
     keys.init();
   }
 

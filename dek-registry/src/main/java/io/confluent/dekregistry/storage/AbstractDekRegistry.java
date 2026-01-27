@@ -146,50 +146,50 @@ public abstract class AbstractDekRegistry implements Closeable {
   /**
    * Get all KEKs for a tenant.
    */
-  protected abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeksFromStore(
+  public abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getKeksFromStore(
       String tenant, boolean lookupDeleted) throws SchemaRegistryStoreException;
 
   /**
    * Get all DEKs for a tenant within a KEK name range.
    */
-  protected abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
+  public abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
       String tenant, String minKekName, String maxKekName, boolean lookupDeleted)
       throws SchemaRegistryStoreException;
 
   /**
    * Get DEKs for a specific subject and algorithm.
    */
-  protected abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
+  public abstract List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeksFromStore(
       String tenant, String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws SchemaRegistryStoreException;
 
   /**
    * Get a KEK by its ID.
    */
-  protected abstract KeyEncryptionKey getKekById(KeyEncryptionKeyId keyId) throws
+  public abstract KeyEncryptionKey getKekById(KeyEncryptionKeyId keyId) throws
       SchemaRegistryStoreException;
 
   /**
    * Get a DEK by its ID.
    */
-  protected abstract DataEncryptionKey getDekById(DataEncryptionKeyId keyId) throws
+  public abstract DataEncryptionKey getDekById(DataEncryptionKeyId keyId) throws
       SchemaRegistryStoreException;
 
   /**
    * Store a key (KEK or DEK).
    */
-  protected abstract void putKey(EncryptionKeyId id, EncryptionKey key) throws
+  public abstract void putKey(EncryptionKeyId id, EncryptionKey key) throws
       SchemaRegistryStoreException;
 
   /**
    * Remove a key from storage.
    */
-  protected abstract void removeKey(EncryptionKeyId id) throws SchemaRegistryStoreException;
+  public abstract void removeKey(EncryptionKeyId id) throws SchemaRegistryStoreException;
 
   /**
    * Sync/refresh the store to ensure it's up-to-date.
    */
-  protected abstract void syncStore() throws SchemaRegistryStoreException;
+  public abstract void syncStore() throws SchemaRegistryStoreException;
 
   /**
    * Get the shared keys multimap for tracking shared KEKs.
@@ -199,7 +199,7 @@ public abstract class AbstractDekRegistry implements Closeable {
   /**
    * Perform any initialization required by the storage backend.
    */
-  protected abstract void initStore();
+  public abstract void initStore();
 
   // ==================== Accessors ====================
 
