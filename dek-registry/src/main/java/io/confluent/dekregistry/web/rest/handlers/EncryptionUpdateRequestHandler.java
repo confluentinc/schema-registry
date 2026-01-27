@@ -15,7 +15,7 @@
 
 package io.confluent.dekregistry.web.rest.handlers;
 
-import static io.confluent.dekregistry.storage.DekRegistry.AWS_KMS;
+import static io.confluent.dekregistry.storage.AbstractDekRegistry.AWS_KMS;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
