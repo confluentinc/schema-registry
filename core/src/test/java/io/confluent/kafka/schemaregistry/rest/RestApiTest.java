@@ -972,6 +972,24 @@ public class RestApiTest extends ClusterTestHarness {
     assertEquals("Schema references should be found",
         Arrays.asList(r1, r2),
         schemaString.getReferences());
+
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "root", "1", false);
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "ref1", "1", false);
+    try {
+      restApp.restClient.deleteSchemaVersion(
+          RestService.DEFAULT_REQUEST_PROPERTIES, "ref1", "1", true);
+      fail("Hard-deleting ref should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.REFERENCE_EXISTS_ERROR_CODE,
+          rce.getErrorCode());
+    }
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "root", "1", true);
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "ref1", "1", true);
   }
 
   @Test(expected = RestClientException.class)

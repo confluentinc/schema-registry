@@ -77,6 +77,7 @@ import io.confluent.rest.RestConfig;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.NamedURI;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.Arrays;
@@ -994,9 +995,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
-      if (!lookupCache.referencesSchema(key).isEmpty()) {
-        throw new ReferenceExistsException(key.toString());
-      }
+      checkReferenceExists(key, permanentDelete);
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
       if (permanentDelete && schemaValue != null && !schemaValue.isDeleted()) {
         throw new SchemaVersionNotSoftDeletedException(subject, schema.getVersion().toString());
@@ -1024,6 +1023,24 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error while deleting the schema for subject '"
                                             + subject + "' in the backend Kafka store", e);
+    }
+  }
+
+  private void checkReferenceExists(SchemaKey key, boolean permanentDelete)
+      throws StoreException, SchemaRegistryException {
+    Set<Integer> ids = lookupCache.referencesSchema(key);
+    if (!permanentDelete) {
+      Set<Integer> undeletedIds = new HashSet<>();
+      for (Integer id : ids) {
+        List<SubjectVersion> versions = listVersionsForId(id, null, false);
+        if (!versions.isEmpty()) {
+          undeletedIds.add(id);
+        }
+      }
+      ids = undeletedIds;
+    }
+    if (!ids.isEmpty()) {
+      throw new ReferenceExistsException(key.toString());
     }
   }
 
@@ -1066,9 +1083,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!lookupCache.referencesSchema(key).isEmpty()) {
-          throw new ReferenceExistsException(key.toString());
-        }
+        checkReferenceExists(key, permanentDelete);
         if (permanentDelete) {
           SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
           if (schemaValue != null && !schemaValue.isDeleted()) {
