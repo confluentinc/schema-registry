@@ -995,8 +995,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
         throw new OperationNotPermittedException("Subject " + subject + " is in read-only mode");
       }
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
-      Set<Integer> refs = getReferencedBy(key, permanentDelete);
-      if (!refs.isEmpty()) {
+      if (!getReferencedBy(key, permanentDelete).isEmpty()) {
         throw new ReferenceExistsException(key.toString());
       }
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
@@ -1068,8 +1067,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        Set<Integer> refs = getReferencedBy(key, permanentDelete);
-        if (!refs.isEmpty()) {
+        if (!getReferencedBy(key, permanentDelete).isEmpty()) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
