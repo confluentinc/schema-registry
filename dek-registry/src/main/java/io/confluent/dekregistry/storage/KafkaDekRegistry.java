@@ -62,7 +62,6 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
 
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
-  private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
 
   @Inject
   public KafkaDekRegistry(
@@ -81,7 +80,6 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
     this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
     this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
         config.topic(), getCacheUpdateHandler(config));
-    this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
   }
 
   private static DekRegistryConfig createConfig(SchemaRegistry schemaRegistry) {
@@ -153,11 +151,6 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
 
   public Cache<EncryptionKeyId, EncryptionKey> keys() {
     return keys;
-  }
-
-  @Override
-  public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys() {
-    return sharedKeys;
   }
 
   // ==================== Abstract Method Implementations ====================

@@ -17,7 +17,9 @@ package io.confluent.dekregistry.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
+import com.google.common.collect.TreeMultimap;
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
@@ -113,6 +115,7 @@ public abstract class AbstractDekRegistry implements Closeable {
   protected final int dekVersionSearchDefaultLimit;
   protected final int dekVersionSearchMaxLimit;
 
+  protected final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
   protected final Map<DekFormat, Cryptor> cryptors;
   protected final Map<String, Lock> tenantToLock = new ConcurrentHashMap<>();
   protected final AtomicBoolean initialized = new AtomicBoolean();
@@ -127,6 +130,7 @@ public abstract class AbstractDekRegistry implements Closeable {
     this.schemaRegistry.properties().put(KEY, this);
     this.metricsManager = metricsManager;
     this.config = config;
+    this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
     this.cryptors = new ConcurrentHashMap<>();
     this.kekSearchDefaultLimit =
         config.getInt(DekRegistryConfig.KEK_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -192,11 +196,6 @@ public abstract class AbstractDekRegistry implements Closeable {
   protected abstract void syncStore() throws SchemaRegistryStoreException;
 
   /**
-   * Get the shared keys multimap for tracking shared KEKs.
-   */
-  public abstract SetMultimap<String, KeyEncryptionKeyId> getSharedKeys();
-
-  /**
    * Perform any initialization required by the storage backend.
    */
   protected abstract void initStore();
@@ -213,6 +212,10 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   public DekRegistryConfig config() {
     return config;
+  }
+
+  public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys() {
+    return sharedKeys;
   }
 
   // ==================== Cryptor Management ====================
