@@ -50,6 +50,7 @@ import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.exceptions.RestException;
+import io.kcache.Cache;
 import io.kcache.KeyValue;
 import jakarta.ws.rs.core.UriBuilder;
 import java.io.Closeable;
@@ -216,6 +217,17 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys() {
     return sharedKeys;
+  }
+
+  /**
+   * Get the underlying keys kcache (only kafka-based implementations override this).
+   * Provides backward compatibility for external components relying on direct cache access.
+   * @return the keys cache
+   */
+  @Deprecated
+  public Cache<EncryptionKeyId, EncryptionKey> keys() {
+    throw new UnsupportedOperationException(
+        "Direct access to the keys cache is not supported in AbstractDekRegistry");
   }
 
   // ==================== Cryptor Management ====================

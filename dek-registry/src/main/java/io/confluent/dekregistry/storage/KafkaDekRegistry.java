@@ -146,6 +146,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
     return new CompositeCacheUpdateHandler<>(customCacheHandlers);
   }
 
+  @Override
   public Cache<EncryptionKeyId, EncryptionKey> keys() {
     return keys;
   }
