@@ -21,8 +21,11 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import java.util.Objects;
+import java.util.Optional;
 
 @JsonInclude(Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -30,7 +33,11 @@ public class ConfigValue extends SubjectValue {
 
   private String alias;
   private Boolean normalize;
+  private Boolean validateFields;
+  private Boolean validateNewSchemas;
+  private Boolean validateRules;
   private CompatibilityLevel compatibilityLevel;
+  private CompatibilityPolicy compatibilityPolicy;
   private String compatibilityGroup;
   private Metadata defaultMetadata;
   private Metadata overrideMetadata;
@@ -40,7 +47,11 @@ public class ConfigValue extends SubjectValue {
   public ConfigValue(@JsonProperty("subject") String subject,
                      @JsonProperty("alias") String alias,
                      @JsonProperty("normalize") Boolean normalize,
+                     @JsonProperty("validateFields") Boolean validateFields,
+                     @JsonProperty("validateNewSchemas") Boolean validateNewSchemas,
+                     @JsonProperty("validateRules") Boolean validateRules,
                      @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
+                     @JsonProperty("compatibilityPolicy") CompatibilityPolicy compatibilityPolicy,
                      @JsonProperty("compatibilityGroup") String compatibilityGroup,
                      @JsonProperty("defaultMetadata") Metadata defaultMetadata,
                      @JsonProperty("overrideMetadata") Metadata overrideMetadata,
@@ -49,7 +60,11 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = alias;
     this.normalize = normalize;
+    this.validateFields = validateFields;
+    this.validateNewSchemas = validateNewSchemas;
+    this.validateRules = validateRules;
     this.compatibilityLevel = compatibilityLevel;
+    this.compatibilityPolicy = compatibilityPolicy;
     this.compatibilityGroup = compatibilityGroup;
     this.defaultMetadata = defaultMetadata;
     this.overrideMetadata = overrideMetadata;
@@ -61,7 +76,11 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = configEntity.getAlias();
     this.normalize = configEntity.isNormalize();
+    this.validateFields = configEntity.isValidateFields();
+    this.validateNewSchemas = configEntity.isValidateNewSchemas();
+    this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
+    this.compatibilityPolicy = CompatibilityPolicy.forName(configEntity.getCompatibilityPolicy());
     this.compatibilityGroup = configEntity.getCompatibilityGroup();
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata defaultMetadata =
         configEntity.getDefaultMetadata();
@@ -81,7 +100,11 @@ public class ConfigValue extends SubjectValue {
     super(subject);
     this.alias = configEntity.getAlias();
     this.normalize = configEntity.isNormalize();
+    this.validateFields = configEntity.isValidateFields();
+    this.validateNewSchemas = configEntity.isValidateNewSchemas();
+    this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
+    this.compatibilityPolicy = CompatibilityPolicy.forName(configEntity.getCompatibilityPolicy());
     this.compatibilityGroup = configEntity.getCompatibilityGroup();
     io.confluent.kafka.schemaregistry.client.rest.entities.Metadata defaultMetadata =
         configEntity.getDefaultMetadata();
@@ -118,6 +141,36 @@ public class ConfigValue extends SubjectValue {
     this.normalize = normalize;
   }
 
+  @JsonProperty("validateFields")
+  public Boolean isValidateFields() {
+    return validateFields;
+  }
+
+  @JsonProperty("validateFields")
+  public void setValidateFields(Boolean validateFields) {
+    this.validateFields = validateFields;
+  }
+
+  @JsonProperty("validateNewSchemas")
+  public Boolean isValidateNewSchemas() {
+    return validateNewSchemas;
+  }
+
+  @JsonProperty("validateNewSchemas")
+  public void setValidateNewSchemas(Boolean validateNewSchemas) {
+    this.validateNewSchemas = validateNewSchemas;
+  }
+
+  @JsonProperty("validateRules")
+  public Boolean isValidateRules() {
+    return validateRules;
+  }
+
+  @JsonProperty("validateRules")
+  public void setValidateRules(Boolean validateRules) {
+    this.validateRules = validateRules;
+  }
+
   @JsonProperty("compatibilityLevel")
   public CompatibilityLevel getCompatibilityLevel() {
     return compatibilityLevel;
@@ -126,6 +179,16 @@ public class ConfigValue extends SubjectValue {
   @JsonProperty("compatibilityLevel")
   public void setCompatibilityLevel(CompatibilityLevel compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel;
+  }
+
+  @JsonProperty("compatibilityPolicy")
+  public CompatibilityPolicy getCompatibilityPolicy() {
+    return this.compatibilityPolicy;
+  }
+
+  @JsonProperty("compatibilityPolicy")
+  public void setCompatibilityPolicy(CompatibilityPolicy compatibilityPolicy) {
+    this.compatibilityPolicy = compatibilityPolicy;
   }
 
   @JsonProperty("compatibilityGroup")
@@ -192,7 +255,11 @@ public class ConfigValue extends SubjectValue {
     ConfigValue that = (ConfigValue) o;
     return Objects.equals(alias, that.alias)
         && Objects.equals(normalize, that.normalize)
+        && Objects.equals(validateFields, that.validateFields)
+        && Objects.equals(validateNewSchemas, that.validateNewSchemas)
+        && Objects.equals(validateRules, that.validateRules)
         && compatibilityLevel == that.compatibilityLevel
+        && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
         && Objects.equals(overrideMetadata, that.overrideMetadata)
@@ -202,8 +269,11 @@ public class ConfigValue extends SubjectValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), alias, normalize, compatibilityLevel, compatibilityGroup,
-        defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
+    return Objects.hash(super.hashCode(), alias, normalize,
+            validateFields, validateNewSchemas, validateRules,
+            compatibilityLevel, compatibilityPolicy, compatibilityGroup,
+            defaultMetadata, overrideMetadata, defaultRuleSet,
+            overrideRuleSet);
   }
 
   @Override
@@ -211,7 +281,11 @@ public class ConfigValue extends SubjectValue {
     return "ConfigValue{"
         + "alias='" + alias + '\''
         + ", normalize=" + normalize
+        + ", validateFields=" + validateFields
+        + ", validateNewSchemas=" + validateNewSchemas
+        + ", validateRules=" + validateRules
         + ", compatibilityLevel=" + compatibilityLevel
+        + ", compatibilityPolicy='" + compatibilityPolicy + '\''
         + ", compatibilityGroup='" + compatibilityGroup + '\''
         + ", defaultMetadata=" + defaultMetadata
         + ", overrideMetadata=" + overrideMetadata
@@ -229,7 +303,11 @@ public class ConfigValue extends SubjectValue {
     return new Config(
         alias,
         normalize,
+        validateFields,
+        validateNewSchemas,
+        validateRules,
         compatibilityLevel != null ? compatibilityLevel.name : null,
+        compatibilityPolicy != null ? compatibilityPolicy.name : null,
         compatibilityGroup,
         defaultMetadata != null ? defaultMetadata.toMetadataEntity() : null,
         overrideMetadata != null ? overrideMetadata.toMetadataEntity() : null,
@@ -238,31 +316,59 @@ public class ConfigValue extends SubjectValue {
     );
   }
 
-  public static ConfigValue update(ConfigValue oldConfig, ConfigValue newConfig) {
+  public static ConfigValue update(
+      String subject, ConfigValue oldConfig,
+      ConfigUpdateRequest newConfig, RuleSetHandler ruleSetHandler
+  ) {
     if (oldConfig == null) {
-      return newConfig;
+      return new ConfigValue(subject, new Config(newConfig), ruleSetHandler);
     } else if (newConfig == null) {
       return oldConfig;
     } else {
+      Optional<io.confluent.kafka.schemaregistry.client.rest.entities.Metadata> optDefaultMd =
+          newConfig.getOptionalDefaultMetadata();
+      Optional<io.confluent.kafka.schemaregistry.client.rest.entities.Metadata> optOverrideMd =
+          newConfig.getOptionalOverrideMetadata();
+      Optional<io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet> optDefaultRs =
+          newConfig.getOptionalDefaultRuleSet();
+      Optional<io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet> optOverrideRs =
+          newConfig.getOptionalOverrideRuleSet();
+      Metadata defaultMetadata = optDefaultMd != null
+          ? (optDefaultMd.isPresent() ? new Metadata(optDefaultMd.get()) : null)
+          : oldConfig.getDefaultMetadata();
+      Metadata overrideMetadata = optOverrideMd != null
+          ? (optOverrideMd.isPresent() ? new Metadata(optOverrideMd.get()) : null)
+          : oldConfig.getOverrideMetadata();
+      RuleSet defaultRuleSet = optDefaultRs != null
+          ? (optDefaultRs.isPresent() ? ruleSetHandler.transform(optDefaultRs.get()) : null)
+          : oldConfig.getDefaultRuleSet();
+      RuleSet overrideRuleSet = optOverrideRs != null
+          ? (optOverrideRs.isPresent() ? ruleSetHandler.transform(optOverrideRs.get()) : null)
+          : oldConfig.getOverrideRuleSet();
       return new ConfigValue(
-          newConfig.getSubject() != null
-              ? newConfig.getSubject() : oldConfig.getSubject(),
-          newConfig.getAlias() != null
+          subject,
+          newConfig.getOptionalAlias() != null
               ? newConfig.getAlias() : oldConfig.getAlias(),
-          newConfig.isNormalize() != null
+          newConfig.isOptionalNormalize() != null
               ? newConfig.isNormalize() : oldConfig.isNormalize(),
-          newConfig.getCompatibilityLevel() != null
-              ? newConfig.getCompatibilityLevel() : oldConfig.getCompatibilityLevel(),
-          newConfig.getCompatibilityGroup() != null
+          newConfig.isOptionalValidateFields() != null
+              ? newConfig.isValidateFields() : oldConfig.isValidateFields(),
+          newConfig.isOptionalValidateNewSchemas() != null
+              ? newConfig.isValidateNewSchemas() : oldConfig.isValidateNewSchemas(),
+          newConfig.isOptionalValidateRules() != null
+              ? newConfig.isValidateRules() : oldConfig.isValidateRules(),
+          newConfig.getOptionalCompatibilityLevel() != null
+              ? CompatibilityLevel.forName(newConfig.getCompatibilityLevel())
+              : oldConfig.getCompatibilityLevel(),
+          newConfig.getOptionalCompatibilityPolicy() != null
+              ? CompatibilityPolicy.forName(newConfig.getCompatibilityPolicy())
+              : oldConfig.getCompatibilityPolicy(),
+          newConfig.getOptionalCompatibilityGroup() != null
               ? newConfig.getCompatibilityGroup() : oldConfig.getCompatibilityGroup(),
-          newConfig.getDefaultMetadata() != null
-              ? newConfig.getDefaultMetadata() : oldConfig.getDefaultMetadata(),
-          newConfig.getOverrideMetadata() != null
-              ? newConfig.getOverrideMetadata() : oldConfig.getOverrideMetadata(),
-          newConfig.getDefaultRuleSet() != null
-              ? newConfig.getDefaultRuleSet() : oldConfig.getDefaultRuleSet(),
-          newConfig.getOverrideRuleSet() != null
-              ? newConfig.getOverrideRuleSet() : oldConfig.getOverrideRuleSet()
+          defaultMetadata,
+          overrideMetadata,
+          defaultRuleSet,
+          overrideRuleSet
       );
     }
   }

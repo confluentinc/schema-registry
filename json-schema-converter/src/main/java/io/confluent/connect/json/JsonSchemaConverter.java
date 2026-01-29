@@ -18,8 +18,10 @@ package io.confluent.connect.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -103,11 +105,20 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(String.format("Converting Kafka Connect data to byte[] failed due to "
-          + "serialization error of topic %s: ",
-          topic),
-          e
-      );
+      if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
+        throw new NetworkException(
+            String.format("Network connection error while serializing Json data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Converting Kafka Connect data to byte[] failed due to "
+                    + "serialization error of topic %s: ",
+                topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access JSON Schema data from "
@@ -141,11 +152,20 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           e
       );
     } catch (SerializationException e) {
-      throw new DataException(String.format("Converting byte[] to Kafka Connect data failed due to "
-          + "serialization error of topic %s: ",
-          topic),
-          e
-      );
+      if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
+        throw new NetworkException(
+            String.format("Network connection error while deserializing data for topic %s: %s",
+                topic, e.getCause().getMessage()),
+            e
+        );
+      } else {
+        throw new DataException(
+            String.format("Converting byte[] to Kafka Connect data failed due to "
+                    + "serialization error of topic %s: ",
+                topic),
+            e
+        );
+      }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
           String.format("Failed to access JSON Schema data from "
@@ -154,7 +174,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
-  private static class Serializer extends AbstractKafkaJsonSchemaSerializer {
+  static class Serializer extends AbstractKafkaJsonSchemaSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
       schemaRegistry = client;
@@ -177,7 +197,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
-  private static class Deserializer extends AbstractKafkaJsonSchemaDeserializer {
+  static class Deserializer extends AbstractKafkaJsonSchemaDeserializer {
 
     public Deserializer(SchemaRegistryClient client) {
       schemaRegistry = client;

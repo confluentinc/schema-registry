@@ -23,3 +23,6 @@ target/
 # Log file from schema registry daemon
 logs/
 nohup.out
+
+# jenv version
+.java-version

@@ -14,10 +14,10 @@
   {
     "description": "Detect changes to id",
     "original_schema": {
-      "id": "something"
+      "$id": "something"
     },
     "update_schema": {
-      "id": "something_else"
+      "$id": "something_else"
     },
     "changes": [
       "ID_CHANGED #/"
@@ -534,7 +534,8 @@
       "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar",
       "PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL #/properties/foo"
     ],
-    "compatible": false
+    "compatible": false,
+    "compatible_lenient": true
   },
   {
     "description": "Detect change type of properties",
@@ -879,7 +880,8 @@
     "changes": [
       "PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL #/properties/bar"
     ],
-    "compatible": false
+    "compatible": false,
+    "compatible_lenient": true
   },
   {
     "description": "Detect changes to composed schema type",
@@ -1649,7 +1651,8 @@
     "changes": [
       "ADDITIONAL_PROPERTIES_REMOVED #/additionalProperties"
     ],
-    "compatible": false
+    "compatible": false,
+    "compatible_lenient": true
   },
   {
     "description": "Detect narrowing changes to additional properties schema",
@@ -1664,7 +1667,8 @@
     "changes": [
       "ADDITIONAL_PROPERTIES_NARROWED #/additionalProperties"
     ],
-    "compatible": false
+    "compatible": false,
+    "compatible_lenient": true
   },
   {
     "description": "Detect adding empty schema to open content model",
@@ -2148,6 +2152,42 @@
     "changes": [
       "MAX_LENGTH_REMOVED #/maxLength",
       "SUM_TYPE_EXTENDED #/"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Allow addition of un-reserved property",
+    "original_metadata": {
+      "properties": {
+        "confluent:reserved": "cost,status"
+      }
+    },
+    "original_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update_metadata": {
+      "properties": {
+        "confluent:reserved": "cost,status"
+      }
+    },
+    "update_schema": {
+      "properties": {
+        "foo": {
+          "type": "string"
+        },
+        "bar": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "changes": [
+      "OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL #/properties/bar"
     ],
     "compatible": true
   }

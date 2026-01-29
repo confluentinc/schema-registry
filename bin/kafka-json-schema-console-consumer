@@ -47,4 +47,4 @@ do
       ;;
     esac
 done
-exec $(dirname $0)/schema-registry-run-class kafka.tools.ConsoleConsumer $DEFAULT_PROTOBUF_FORMATTER $DEFAULT_SCHEMA_REGISTRY_URL "$@"
+exec $(dirname $0)/schema-registry-run-class org.apache.kafka.tools.consumer.ConsoleConsumer $DEFAULT_PROTOBUF_FORMATTER $DEFAULT_SCHEMA_REGISTRY_URL "$@"

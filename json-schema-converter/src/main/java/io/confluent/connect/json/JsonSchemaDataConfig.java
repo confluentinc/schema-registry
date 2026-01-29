@@ -16,7 +16,6 @@
 package io.confluent.connect.json;
 
 import io.confluent.connect.schema.AbstractDataConfig;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.json.DecimalFormat;
 
 import java.util.Arrays;
@@ -42,11 +41,20 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
   public static final String USE_OPTIONAL_FOR_NON_REQUIRED_DOC =
       "Whether to set non-required properties to be optional.";
 
+  public static final String IGNORE_MODERN_DIALECTS_CONFIG = "ignore.modern.dialects";
+  public static final boolean IGNORE_MODERN_DIALECTS_DEFAULT = false;
+  public static final String IGNORE_MODERN_DIALECTS_DOC = "Whether to ignore modern dialects "
+      + "of JSON Schema after draft 7, in which case draft 7 will be used.";
+
   public static final String DECIMAL_FORMAT_CONFIG = "decimal.format";
   public static final String DECIMAL_FORMAT_DEFAULT = DecimalFormat.BASE64.name();
-  private static final String DECIMAL_FORMAT_DOC =
+  public static final String DECIMAL_FORMAT_DOC =
       "Controls which format this converter will serialize decimals in."
       + " This value is case insensitive and can be either 'BASE64' (default) or 'NUMERIC'";
+
+  public static final String FLATTEN_SINGLETON_UNIONS_CONFIG = "flatten.singleton.unions";
+  public static final boolean FLATTEN_SINGLETON_UNIONS_DEFAULT = true;
+  public static final String FLATTEN_SINGLETON_UNIONS_DOC = "Whether to flatten singleton unions";
 
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef().define(
@@ -62,6 +70,12 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
         ConfigDef.Importance.MEDIUM,
         USE_OPTIONAL_FOR_NON_REQUIRED_DOC
     ).define(
+        IGNORE_MODERN_DIALECTS_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        IGNORE_MODERN_DIALECTS_DEFAULT,
+        ConfigDef.Importance.LOW,
+        IGNORE_MODERN_DIALECTS_DOC
+    ).define(
         DECIMAL_FORMAT_CONFIG,
         ConfigDef.Type.STRING,
         DECIMAL_FORMAT_DEFAULT,
@@ -69,7 +83,13 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
             DecimalFormat.BASE64.name(),
             DecimalFormat.NUMERIC.name()),
         ConfigDef.Importance.LOW,
-        DECIMAL_FORMAT_DOC);
+        DECIMAL_FORMAT_DOC
+    ).define(
+        FLATTEN_SINGLETON_UNIONS_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        FLATTEN_SINGLETON_UNIONS_DEFAULT,
+        ConfigDef.Importance.LOW,
+        FLATTEN_SINGLETON_UNIONS_DOC);
   }
 
   public JsonSchemaDataConfig(Map<?, ?> props) {
@@ -91,6 +111,14 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
    */
   public DecimalFormat decimalFormat() {
     return DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
+  }
+
+  public boolean ignoreModernDialects() {
+    return getBoolean(IGNORE_MODERN_DIALECTS_CONFIG);
+  }
+
+  public boolean isFlattenSingletonUnions() {
+    return this.getBoolean(FLATTEN_SINGLETON_UNIONS_CONFIG);
   }
 
   public static class Builder {
@@ -126,12 +154,12 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
       String s = (String) o;
       if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
         throw new ConfigException(name, o, "String must be one of (case insensitive): "
-            + Utils.join(validStrings, ", "));
+            + String.join(", ", validStrings));
       }
     }
 
     public String toString() {
-      return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+      return "(case insensitive) [" + String.join(", ", validStrings) + "]";
     }
   }
 }

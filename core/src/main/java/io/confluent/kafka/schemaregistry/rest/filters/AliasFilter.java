@@ -15,29 +15,29 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.TENANT_DELIMITER;
-
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
-import javax.annotation.Priority;
-import javax.ws.rs.Priorities;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.container.PreMatching;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.annotation.Priority;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.Priorities;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.PreMatching;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 
 @PreMatching
 @Priority(Priorities.USER + 100) // ensure runs after ContextFilter and MultiTenantSubjectFilter
 public class AliasFilter implements ContainerRequestFilter {
-  private final KafkaSchemaRegistry schemaRegistry;
+  private final SchemaRegistry schemaRegistry;
 
-  public AliasFilter(KafkaSchemaRegistry schemaRegistry) {
+  @Inject
+  public AliasFilter(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
@@ -81,9 +81,7 @@ public class AliasFilter implements ContainerRequestFilter {
       if (subjectPathFound) {
         modifiedUriPathStr = replaceAlias(uriPathStr);
         subjectPathFound = false;
-      }
-
-      if (uriPathStr.equals("subjects") || uriPathStr.equals("deks")) {
+      } else if (uriPathStr.equals("subjects") || uriPathStr.equals("deks")) {
         subjectPathFound = true;
       }
 
@@ -120,6 +118,13 @@ public class AliasFilter implements ContainerRequestFilter {
     if (subject.isEmpty()) {
       return subject;
     }
+    String tenant = schemaRegistry.tenant();
+    String originalSubject = subject;
+    boolean isQualified = QualifiedSubject.isQualified(tenant, originalSubject);
+    if (!isQualified) {
+      subject = QualifiedSubject.createFromUnqualified(tenant, originalSubject)
+          .toQualifiedSubject();
+    }
     Config config = null;
     try {
       config = schemaRegistry.getConfig(URLDecoder.decode(subject, "UTF-8"));
@@ -127,16 +132,15 @@ public class AliasFilter implements ContainerRequestFilter {
       // fall through
     }
     if (config == null) {
-      return subject;
+      return originalSubject;
     }
     String alias = config.getAlias();
     if (alias != null && !alias.isEmpty()) {
-      if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
-        alias = schemaRegistry.tenant() + TENANT_DELIMITER + alias;
-      }
-      return alias;
+      QualifiedSubject qualAlias =
+          QualifiedSubject.qualifySubjectWithParent(tenant, subject, alias, true);
+      return isQualified ? qualAlias.toQualifiedSubject() : qualAlias.toUnqualifiedSubject();
     } else {
-      return subject;
+      return originalSubject;
     }
   }
 }

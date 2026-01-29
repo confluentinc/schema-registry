@@ -24,8 +24,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -170,19 +171,24 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
+    avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
     avroData.addLogicalTypeConversion(new Conversions.UUIDConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.DateConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+    avroData.addLogicalTypeConversion(new TimeConversions.LocalTimestampNanosConversion());
   }
 
   private static final EncoderFactory encoderFactory = EncoderFactory.get();
@@ -206,8 +212,10 @@ public class AvroSchemaUtils {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
   private static final Map<String, Schema> primitiveSchemas;
-  private static final Map<Schema, Schema> transformedSchemas =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Cache<Schema, Schema> transformedSchemas =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
 
   static {
     primitiveSchemas = new HashMap<>();
@@ -282,7 +290,11 @@ public class AvroSchemaUtils {
       Schema schema = ((GenericContainer) object).getSchema();
       if (removeJavaProperties) {
         final Schema s = schema;
-        schema = transformedSchemas.computeIfAbsent(s, k -> removeJavaProperties(s));
+        try {
+          schema = transformedSchemas.get(s, () -> removeJavaProperties(s));
+        } catch (java.util.concurrent.ExecutionException e) {
+          schema = removeJavaProperties(s);
+        }
       }
       return schema;
     } else if (object instanceof Map) {
@@ -324,7 +336,7 @@ public class AvroSchemaUtils {
       AvroSchema avroSchema = new AvroSchema(node.toString());
       return avroSchema.rawSchema();
     } catch (IOException e) {
-      throw new SerializationException("Could not parse schema: " + schema.toString());
+      throw new SerializationException("Could not parse Avro schema");
     }
   }
 
@@ -406,7 +418,7 @@ public class AvroSchemaUtils {
     if (message instanceof SpecificRecord) {
       SpecificData data = AvroSchemaUtils.getThreadLocalSpecificData();
       return data != null ? data : getSpecificDataForSchema(schema, useLogicalTypes);
-    } else if (message instanceof GenericRecord) {
+    } else if (message instanceof GenericContainer) {
       GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
       return data != null ? data : getGenericData(useLogicalTypes);
     } else if (message != null) {
@@ -429,7 +441,7 @@ public class AvroSchemaUtils {
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
-    } else if (value instanceof GenericRecord) {
+    } else if (value instanceof GenericContainer) {
       return new GenericDatumWriter<>(schema, data);
     } else {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);

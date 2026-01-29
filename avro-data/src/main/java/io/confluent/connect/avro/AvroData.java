@@ -22,9 +22,10 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import org.apache.avro.AvroTypeException;
@@ -326,8 +327,8 @@ public class AvroData {
 
   private int unionIndex = 0;
 
-  private Map<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
-  private Map<AvroSchema, Schema> toConnectSchemaCache;
+  private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
+  private Cache<AvroSchema, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean generalizedSumTypeSupport;
   private boolean ignoreDefaultForNullables;
@@ -335,6 +336,7 @@ public class AvroData {
   private boolean scrubInvalidNames;
   private boolean discardTypeDocDefault;
   private boolean allowOptionalMapKey;
+  private boolean flattenSingletonUnions;
 
   public AvroData(int cacheSize) {
     this(new AvroDataConfig.Builder()
@@ -343,8 +345,12 @@ public class AvroData {
   }
 
   public AvroData(AvroDataConfig avroDataConfig) {
-    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.schemaCacheSize());
-    toConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.schemaCacheSize());
+    fromConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(avroDataConfig.schemaCacheSize())
+        .build();
+    toConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(avroDataConfig.schemaCacheSize())
+        .build();
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.generalizedSumTypeSupport = avroDataConfig.isGeneralizedSumTypeSupport();
     this.ignoreDefaultForNullables = avroDataConfig.ignoreDefaultForNullables();
@@ -352,6 +358,7 @@ public class AvroData {
     this.scrubInvalidNames = avroDataConfig.isScrubInvalidNames();
     this.discardTypeDocDefault = avroDataConfig.isDiscardTypeDocDefault();
     this.allowOptionalMapKey = avroDataConfig.isAllowOptionalMapKeys();
+    this.flattenSingletonUnions = avroDataConfig.isFlattenSingletonUnions();
   }
 
   /**
@@ -767,7 +774,7 @@ public class AvroData {
       return ANYTHING_SCHEMA;
     }
 
-    org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
+    org.apache.avro.Schema cached = fromConnectSchemaCache.getIfPresent(schema);
     if (cached != null) {
       return cached;
     }
@@ -1717,7 +1724,7 @@ public class AvroData {
     // conversions take extra flags (like forceOptional) which means the resulting schema might not
     // exactly match the Avro schema.
     AvroSchema schemaAndVersion = new AvroSchema(schema, version);
-    Schema cachedSchema = toConnectSchemaCache.get(schemaAndVersion);
+    Schema cachedSchema = toConnectSchemaCache.getIfPresent(schemaAndVersion);
     if (cachedSchema != null) {
       if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
         // cycleReferences is only populated with record type schemas. We need to initialize it here
@@ -1920,7 +1927,10 @@ public class AvroData {
         break;
 
       case UNION: {
-        if (schema.getTypes().size() == 2) {
+        if (schema.getTypes().size() == 1 && flattenSingletonUnions) {
+          return toConnectSchemaWithCycles(schema.getTypes().get(0), getForceOptionalDefault(),
+              null, docDefaultVal, toConnectContext);
+        } else if (schema.getTypes().size() == 2) {
           if (schema.getTypes().contains(NULL_AVRO_SCHEMA)) {
             for (org.apache.avro.Schema memberSchema : schema.getTypes()) {
               if (!memberSchema.equals(NULL_AVRO_SCHEMA)) {

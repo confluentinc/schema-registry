@@ -50,16 +50,14 @@ import java.util.Map;
  * <p>Example for configuring this serde as a Kafka Streams application's default serde for both
  * record keys and record values:</p>
  *
- * <p>
  * <pre>{@code
  * Properties streamsConfiguration = new Properties();
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, PrimitiveAvroSerde.class);
  * streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, PrimitiveAvroSerde.class);
  * streamsConfiguration.put(
- *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *     AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
- * </p>
  *
  * <p>
  * In practice, it's expected that the {@link PrimitiveAvroSerde} primary use case will be keys.
@@ -68,13 +66,12 @@ import java.util.Map;
  * <p>Example for explicitly overriding the application's default serdes (whatever they were
  * configured to) so that only specific operations such as {@code KStream#to()} use this serde:</p>
  *
- * <p>
  * <pre>{@code
  * Serde<Long> longAvroSerde = new PrimitiveAvroSerde<Long>();
  * boolean isKeySerde = true;
  * longAvroSerde.configure(
  *     Collections.singletonMap(
- *         AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *         "http://confluent-schema-registry-server:8081/"),
  *     isKeySerde);
  *
@@ -82,7 +79,7 @@ import java.util.Map;
  * isKeySerde = false;
  * genericAvroSerde.configure(
  * Collections.singletonMap(
- * AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ * AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *  "http://confluent-schema-registry-server:8081/"),
  *  isKeySerde);
  *
@@ -90,7 +87,6 @@ import java.util.Map;
  * Consumed.with(longAvroSerde, genericAvroSerde));
  *
  * }</pre>
- * </p>
  */
 
 // need to have this as KafkaAvro(De)Serializer uses type Object

@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -94,13 +93,12 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
       Schema valueSchema,
       String topic,
       boolean parseKey,
-      BufferedReader reader,
       boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(url, new AvroSchema(keySchema), new AvroSchema(valueSchema), topic,
-        parseKey, reader, normalizeSchema, autoRegister, useLatest);
+        parseKey, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
@@ -164,7 +162,13 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
         Object object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, headers, object, (AvroSchema) schema);
+      boolean oldIsKey = this.isKey;
+      this.isKey = isKey;
+      try {
+        return super.serializeImpl(subject, topic, headers, object, (AvroSchema) schema);
+      } finally {
+        this.isKey = oldIsKey;
+      }
     }
 
     @Override

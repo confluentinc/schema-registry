@@ -19,24 +19,12 @@ package io.confluent.kafka.schemaregistry.avro;
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class AvroSchemaProvider extends AbstractSchemaProvider {
 
   private static final Logger log = LoggerFactory.getLogger(AvroSchemaProvider.class);
-
-  public static final String AVRO_VALIDATE_DEFAULTS = "avro.validate.defaults";
-
-  private boolean validateDefaults = false;
-
-  @Override
-  public void configure(Map<String, ?> configs) {
-    super.configure(configs);
-    String validate = (String) configs.get(AVRO_VALIDATE_DEFAULTS);
-    validateDefaults = Boolean.parseBoolean(validate);
-  }
 
   @Override
   public String schemaType() {
@@ -53,11 +41,12 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
           schema.getMetadata(),
           schema.getRuleSet(),
           null,
-          (validateDefaults || normalize) && isNew
+          isNew
       );
     } catch (Exception e) {
       log.error("Could not parse Avro schema", e);
-      throw e;
+      throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
+          + ", details: " + e.getMessage(), e);
     }
   }
 }

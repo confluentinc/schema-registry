@@ -17,7 +17,7 @@ package io.confluent.kafka.schemaregistry.rest.extensions;
 
 import java.io.Closeable;
 
-import javax.ws.rs.core.Configurable;
+import jakarta.ws.rs.core.Configurable;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
@@ -33,6 +33,10 @@ public interface SchemaRegistryResourceExtension extends Closeable {
 
 
   default boolean initialized() {
+    return true;
+  }
+
+  default boolean healthy() {
     return true;
   }
 }

@@ -20,13 +20,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
 import java.util.Map;
-import kafka.common.MessageReader;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.everit.json.schema.ValidationException;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 
 import io.confluent.kafka.formatter.SchemaMessageReader;
@@ -79,8 +77,7 @@ import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
  * <p>In the shell, type in the following.
  * "key1" \t {"f1": "value1"}
  */
-public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
-    implements MessageReader {
+public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode> {
 
   private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
@@ -99,13 +96,12 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
       JsonSchema valueSchema,
       String topic,
       boolean parseKey,
-      BufferedReader reader,
       boolean normalizeSchema,
       boolean autoRegister,
       boolean useLatest
   ) {
     super(url, keySchema, valueSchema, topic,
-        parseKey, reader, normalizeSchema, autoRegister, useLatest);
+        parseKey, normalizeSchema, autoRegister, useLatest);
   }
 
   @Override
@@ -164,7 +160,13 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode>
         JsonNode object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, headers, object, (JsonSchema) schema);
+      boolean oldIsKey = this.isKey;
+      this.isKey = isKey;
+      try {
+        return super.serializeImpl(subject, topic, headers, object, (JsonSchema) schema);
+      } finally {
+        this.isKey = oldIsKey;
+      }
     }
 
     @Override

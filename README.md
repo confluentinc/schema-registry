@@ -192,6 +192,6 @@ Thanks for helping us to make Schema Registry even better!
 License
 -------
 
-The project is licensed under the [Confluent Community License](LICENSE-ConfluentCommunity), except for the `client` and `avro-*` libs,
+The project is licensed under the [Confluent Community License](LICENSE-ConfluentCommunity), except for the `client-*` and `avro-*` libs,
 which are under the [Apache 2.0 license](LICENSE-Apache).
 See LICENSE file in each subfolder for detailed license agreement.

@@ -37,6 +37,9 @@ public interface DekRegistryClient extends Closeable {
   List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException;
 
+  List<String> listKeks(List<String> subjectPrefix, boolean lookupDeleted)
+      throws IOException, RestClientException;
+
   Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException;
 
@@ -136,6 +139,11 @@ public interface DekRegistryClient extends Closeable {
 
   void undeleteDekVersion(String kekName, String subject, int version, DekFormat algorithm)
       throws IOException, RestClientException;
+
+  default void testKek(String name)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   void reset();
 

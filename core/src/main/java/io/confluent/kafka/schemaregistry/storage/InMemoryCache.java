@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -37,7 +38,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 
 
 /**
@@ -47,13 +50,20 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentNavigableMap<K, V> store;
   private final Map<String, Map<String, Map<Integer, Map<String, Integer>>>> guidToSubjectVersions;
   private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
-  private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
+  private final Map<String, Map<String, Map<SchemaKey, Set<ContextId>>>> referencedBy;
+
+  private final Map<String, Map<String, AssociationValue>> associationsByGuid;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsBySubject;
+  private final Map<String, Map<String, Set<AssociationValue>>> associationsByResourceId;
 
   public InMemoryCache(Serializer<K, V> serializer) {
     this.store = new ConcurrentSkipListMap<>(new SubjectKeyComparator<>(this));
     this.guidToSubjectVersions = new ConcurrentHashMap<>();
     this.hashToGuid = new ConcurrentHashMap<>();
     this.referencedBy = new ConcurrentHashMap<>();
+    this.associationsByGuid = new ConcurrentHashMap<>();
+    this.associationsBySubject = new ConcurrentHashMap<>();
+    this.associationsByResourceId = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -130,11 +140,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
+  public Set<ContextId> referencesSchema(SchemaKey schema) throws StoreException {
     String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
-    Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+    Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
         referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-    Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
+    Map<SchemaKey, Set<ContextId>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
     return refBy.getOrDefault(schema, Collections.emptySet());
   }
 
@@ -159,6 +169,22 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public Integer idByGuid(String guid, String context) throws StoreException {
+    MD5 md5;
+    try {
+      md5 = MD5.fromString(guid);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context);
+    String ctx = qs != null ? qs.getContext() : DEFAULT_CONTEXT;
+    Map<String, Map<MD5, Integer>> ctxIds =
+        hashToGuid.getOrDefault(tenant(), Collections.emptyMap());
+    Map<MD5, Integer> ids = ctxIds.getOrDefault(ctx, Collections.emptyMap());
+    return ids.get(md5);
+  }
+
+  @Override
   public void schemaDeleted(
       SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
     String ctx = QualifiedSubject.contextFor(tenant(), schemaKey.getSubject());
@@ -172,24 +198,6 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
-    for (SchemaReference ref : schemaValue.getReferences()) {
-      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-          tenant(), schemaKey.getSubject(), ref.getSubject());
-      SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
-          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-      Map<SchemaKey, Set<Integer>> refBy =
-          ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
-      if (refBy != null) {
-        Set<Integer> ids = refBy.get(refKey);
-        if (ids != null) {
-          ids.remove(schemaValue.getId());
-          if (ids.isEmpty()) {
-            refBy.remove(refKey);
-          }
-        }
-      }
-    }
   }
 
   @Override
@@ -210,6 +218,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (subjectVersions.isEmpty()) {
       guids.remove(schemaValue.getId());
     }
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schemaKey.getSubject(), ref.getSubject());
+      SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
+      Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
+          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+      Map<SchemaKey, Set<ContextId>> refBy =
+          ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
+      if (refBy != null) {
+        Set<ContextId> ids = refBy.get(refKey);
+        if (ids != null) {
+          ids.remove(new ContextId(refSubject.getContext(), schemaValue.getId()));
+          if (ids.isEmpty()) {
+            refBy.remove(refKey);
+          }
+        }
+      }
+    }
   }
 
   @Override
@@ -228,13 +254,13 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
           tenant(), schemaKey.getSubject(), ref.getSubject());
       SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+      Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
           referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-      Map<SchemaKey, Set<Integer>> refBy =
+      Map<SchemaKey, Set<ContextId>> refBy =
           ctxRefBy.computeIfAbsent(refSubject.getContext(), k -> new ConcurrentHashMap<>());
-      Set<Integer> ids = refBy.computeIfAbsent(
+      Set<ContextId> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-      ids.add(schemaValue.getId());
+      ids.add(new ContextId(refSubject.getContext(), schemaValue.getId()));
     }
   }
 
@@ -248,6 +274,81 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
+  public AssociationValue associationByGuid(String guid)
+      throws StoreException {
+    Map<String, AssociationValue> tenantAssociations =
+        associationsByGuid.getOrDefault(tenant(), Collections.emptyMap());
+    return tenantAssociations.get(guid);
+  }
+
+  @Override
+  public CloseableIterator<AssociationValue> associationsBySubject(String subject)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsBySubject.getOrDefault(tenant(), Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(subject, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  @Override
+  public CloseableIterator<AssociationValue> associationsByResourceId(String resourceId)
+      throws StoreException {
+    Map<String, Set<AssociationValue>> tenantAssociations =
+        associationsByResourceId.getOrDefault(tenant(), Collections.emptyMap());
+    Set<AssociationValue> associations =
+        tenantAssociations.getOrDefault(resourceId, Collections.emptySet());
+    return new DelegatingIterator<>(associations.iterator());
+  }
+
+  @Override
+  public void associationRegistered(
+      AssociationKey key, AssociationValue value, AssociationValue oldValue) {
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.computeIfAbsent(key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByGuid.put(value.getGuid(), value);
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsBySubject.computeIfAbsent(
+        key.getSubject(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsBySubject.get(key.getSubject()).add(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.computeIfAbsent(
+            key.getTenant(), k -> new ConcurrentHashMap<>());
+    tenantAssociationsByResourceId.computeIfAbsent(
+        value.getResourceId(), k -> ConcurrentHashMap.newKeySet());
+    tenantAssociationsByResourceId.get(value.getResourceId()).add(value);
+
+    if (oldValue != null && !oldValue.equals(value)) {
+      // Remove old association if it exists
+      associationTombstoned(key, oldValue);
+    }
+  }
+
+  @Override
+  public void associationTombstoned(AssociationKey key, AssociationValue value) {
+    if (value == null) {
+      return;
+    }
+    Map<String, AssociationValue> tenantAssociationsByGuid =
+        associationsByGuid.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByGuid.remove(value.getGuid());
+    Map<String, Set<AssociationValue>> tenantAssociationsBySubject =
+        associationsBySubject.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsBySubject.get(key.getSubject()).remove(value);
+    Map<String, Set<AssociationValue>> tenantAssociationsByResourceId =
+        associationsByResourceId.getOrDefault(key.getTenant(), Collections.emptyMap());
+    tenantAssociationsByResourceId.get(value.getResourceId()).remove(value);
+    if (tenantAssociationsBySubject.get(key.getSubject()).isEmpty()) {
+      tenantAssociationsBySubject.remove(key.getSubject());
+    }
+    if (tenantAssociationsByResourceId.get(value.getResourceId()).isEmpty()) {
+      tenantAssociationsByResourceId.remove(value.getResourceId());
+    }
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public Config config(String subject,
                        boolean returnTopLevelIfNotFound,
@@ -255,23 +356,35 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   ) throws StoreException {
     ConfigKey subjectConfigKey = new ConfigKey(subject);
     ConfigValue configValue = (ConfigValue) get((K) subjectConfigKey);
-    if (configValue == null && subject == null) {
-      return defaultForTopLevel;
-    }
-    Config config = null;
     if (configValue != null) {
-      config = configValue.toConfigEntity();
-    } else if (returnTopLevelIfNotFound) {
-      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
-      } else {
-        configValue = (ConfigValue) get((K) new ConfigKey(null));
-      }
-      config = configValue != null ? configValue.toConfigEntity() : defaultForTopLevel;
+      return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
     }
-    if (config != null && config.getCompatibilityLevel() == null) {
-      config.setCompatibilityLevel(defaultForTopLevel.getCompatibilityLevel());
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!returnTopLevelIfNotFound) {
+      return subject == null || qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+          ? defaultForTopLevel
+          : null;
+    }
+    if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+      configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+    } else {
+      configValue = (ConfigValue) get((K) new ConfigKey(null));
+    }
+    if (configValue != null) {
+      return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
+    }
+    qs = QualifiedSubject.createFromUnqualified(tenant(),
+        CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER);
+    configValue = (ConfigValue) get((K) new ConfigKey(qs.toQualifiedContext()));
+    if (configValue != null) {
+      return populateCompatibilityLevel(configValue.toConfigEntity(), defaultForTopLevel);
+    }
+    return defaultForTopLevel;
+  }
+
+  private Config populateCompatibilityLevel(Config config, Config defaultConfig) {
+    if (config != null && config.getCompatibilityLevel() == null && defaultConfig != null) {
+      config.setCompatibilityLevel(defaultConfig.getCompatibilityLevel());
     }
     return config;
   }
@@ -284,22 +397,30 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   ) throws StoreException {
     ModeKey modeKey = new ModeKey(subject);
     ModeValue modeValue = (ModeValue) get((K) modeKey);
-    if (modeValue == null && subject == null) {
-      return defaultForTopLevel;
+    if (modeValue != null) {
+      return modeValue.getMode();
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (!returnTopLevelIfNotFound) {
+      return subject == null || qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+          ? defaultForTopLevel
+          : null;
+    }
+    if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
+      modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
+    } else {
+      modeValue = (ModeValue) get((K) new ModeKey(null));
     }
     if (modeValue != null) {
       return modeValue.getMode();
-    } else if (returnTopLevelIfNotFound) {
-      QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-      if (qs != null && !DEFAULT_CONTEXT.equals(qs.getContext())) {
-        modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
-      } else {
-        modeValue = (ModeValue) get((K) new ModeKey(null));
-      }
-      return modeValue != null ? modeValue.getMode() : defaultForTopLevel;
-    } else {
-      return null;
     }
+    qs = QualifiedSubject.createFromUnqualified(tenant(),
+        CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + CONTEXT_DELIMITER);
+    modeValue = (ModeValue) get((K) new ModeKey(qs.toQualifiedContext()));
+    if (modeValue != null) {
+      return modeValue.getMode();
+    }
+    return defaultForTopLevel;
   }
 
   @Override
@@ -392,8 +513,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     return s -> qs == null
         || subject.equals(s)
         // check context match for a qualified subject with an empty subject
-        || (qs.getSubject().isEmpty() && qs.toQualifiedContext().equals(
-            QualifiedSubject.qualifiedContextFor(tenant(), s)));
+        || QualifiedSubject.isSubjectInContext(tenant(), s, qs);
   }
 
   private BiPredicate<String, Integer> matchDeleted(Predicate<String> match) {

@@ -19,9 +19,7 @@ package io.confluent.kafka.schemaregistry.protobuf.dynamic;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
-import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
-import com.google.protobuf.DescriptorProtos.FieldOptions.CType;
-import com.google.protobuf.DescriptorProtos.FieldOptions.JSType;
+import com.google.protobuf.DescriptorProtos.FeatureSet;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
 import com.google.protobuf.DescriptorProtos.FileOptions;
@@ -454,26 +452,8 @@ public class DynamicSchema {
       return this;
     }
 
-    public Builder addExtendDefinition(
-        Context ctx,
-        String extendee,
-        String label,
-        String type,
-        String name,
-        int num,
-        String defaultVal,
-        String jsonName,
-        ProtobufMeta meta,
-        CType ctype,
-        Boolean isPacked,
-        JSType jstype,
-        Boolean isDeprecated
-    ) {
-      FieldDescriptorProto.Builder fieldBuilder = MessageDefinition.getFieldBuilder(ctx,
-          label, false, type, name, num, defaultVal, jsonName, meta, ctype, isPacked, jstype,
-          isDeprecated, null);
-      fieldBuilder.setExtendee(extendee);
-      mFileDescProtoBuilder.addExtension(fieldBuilder.build());
+    public Builder addExtendDefinition(Context ctx, FieldDefinition fd) {
+      mFileDescProtoBuilder.addExtension(fd.getFieldType());
       return this;
     }
 
@@ -592,15 +572,6 @@ public class DynamicSchema {
     }
 
     // Note: added
-    public Builder setPhpGenericServices(boolean phpGenericServices) {
-      FileOptions.Builder optionsBuilder =
-          DescriptorProtos.FileOptions.newBuilder();
-      optionsBuilder.setPhpGenericServices(phpGenericServices);
-      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
-      return this;
-    }
-
-    // Note: added
     public Builder setDeprecated(boolean isDeprecated) {
       FileOptions.Builder optionsBuilder =
           DescriptorProtos.FileOptions.newBuilder();
@@ -677,6 +648,14 @@ public class DynamicSchema {
       FileOptions.Builder optionsBuilder =
           DescriptorProtos.FileOptions.newBuilder();
       optionsBuilder.setRubyPackage(rubyPackage);
+      mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
+      return this;
+    }
+
+    public Builder setFeatures(FeatureSet features) {
+      FileOptions.Builder optionsBuilder =
+          DescriptorProtos.FileOptions.newBuilder();
+      optionsBuilder.setFeatures(features);
       mFileDescProtoBuilder.mergeOptions(optionsBuilder.build());
       return this;
     }

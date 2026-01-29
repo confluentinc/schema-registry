@@ -34,9 +34,14 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -46,13 +51,10 @@ public class MetricsContainer {
   public static final String JMX_PREFIX = "kafka.schema.registry";
 
   public static final String RESOURCE_LABEL_PREFIX = "resource.";
+
   public static final String RESOURCE_LABEL_KAFKA_CLUSTER_ID =
           RESOURCE_LABEL_PREFIX + "kafka.cluster.id";
-  public static final String RESOURCE_LABEL_CLUSTER_ID = RESOURCE_LABEL_PREFIX + "cluster.id";
-  public static final String RESOURCE_LABEL_GROUP_ID = RESOURCE_LABEL_PREFIX + "group.id";
-  public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
-  public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
-  public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+
   public static final String METRIC_NAME_MASTER_SLAVE_ROLE = "master-slave-role";
   public static final String METRIC_NAME_NODE_COUNT = "node-count";
   public static final String METRIC_NAME_CUSTOM_SCHEMA_PROVIDER = "custom-schema-provider-count";
@@ -66,6 +68,8 @@ public class MetricsContainer {
   public static final String METRIC_NAME_JSON_SCHEMAS_DELETED = "json-schemas-deleted";
   public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
   public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
+  public static final String METRIC_LEADER_INITIALIZATION_LATENCY = "leader-initialization-latency";
+  public static final String METRIC_CERTIFICATE_EXPIRATION = "certificate-expiration";
 
   private final Metrics metrics;
   private final Map<String, String> configuredTags;
@@ -86,12 +90,16 @@ public class MetricsContainer {
   private final SchemaRegistryMetric avroSchemasDeleted;
   private final SchemaRegistryMetric jsonSchemasDeleted;
   private final SchemaRegistryMetric protobufSchemasDeleted;
+  private final SchemaRegistryMetric leaderInitializationLatency;
+
+  private final SchemaRegistryMetric certificateExpirationKeystore;
+  private final SchemaRegistryMetric certificateExpirationTruststore;
 
   private final MetricsContext metricsContext;
 
   public MetricsContainer(SchemaRegistryConfig config, String kafkaClusterId) {
     this.configuredTags =
-            Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
+        Application.parseListToMap(config.getList(RestConfig.METRICS_TAGS_CONFIG));
 
     List<MetricsReporter> reporters = config.getConfiguredInstances(
         config.getList(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG),
@@ -107,7 +115,7 @@ public class MetricsContainer {
             new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                             TimeUnit.MILLISECONDS);
-    this.metrics = new Metrics(metricConfig, reporters, new SystemTime(), metricsContext);
+    this.metrics = new Metrics(metricConfig, reporters, Time.SYSTEM, metricsContext);
 
     this.isLeaderNode = createMetric(METRIC_NAME_MASTER_SLAVE_ROLE,
             "1.0 indicates the node is the active leader in the cluster and is the"
@@ -146,6 +154,18 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric(METRIC_NAME_PB_SCHEMAS_DELETED,
             "Number of deleted Protobuf schemas", new CumulativeCount());
+
+    this.leaderInitializationLatency = createMetric(METRIC_LEADER_INITIALIZATION_LATENCY,
+            "Time spent initializing the leader's kafka store", new Value());
+
+    this.certificateExpirationKeystore = createMetric(METRIC_CERTIFICATE_EXPIRATION + "-keystore",
+            "Epoch timestamp when the keystore certificate expires, if its a certificate chain, "
+                + "then its the certificate with the shortest time to live", new Value());
+
+    this.certificateExpirationTruststore =
+        createMetric(METRIC_CERTIFICATE_EXPIRATION + "-truststore",
+            "Epoch timestamp when the truststore certificate expires, if its a certificate chain, "
+                + "then its the certificate with the shortest time to live", new Value());
   }
 
   public Metrics getMetrics() {
@@ -227,19 +247,57 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsContext buildMetricsContext(SchemaRegistryConfig config,
-                                                    String kafkaClusterId) {
+  public SchemaRegistryMetric getLeaderInitializationLatencyMetric() {
+    return leaderInitializationLatency;
+  }
+
+  public SchemaRegistryMetric getCertificateExpirationKeystore() {
+    return certificateExpirationKeystore;
+  }
+
+  public SchemaRegistryMetric getCertificateExpirationTruststore() {
+    return certificateExpirationTruststore;
+  }
+
+  public void emitCertificateExpirationMetric(KeyStore keystore, SchemaRegistryMetric metric) {
+    try {
+      long shortestExpiration = Long.MAX_VALUE;
+
+      Enumeration<String> aliases = keystore.aliases();
+      while (aliases.hasMoreElements()) {
+        String alias = aliases.nextElement();
+
+        if (keystore.isCertificateEntry(alias)) {
+          Certificate certificate = keystore.getCertificate(alias);
+
+          if (certificate instanceof X509Certificate) {
+            X509Certificate crt = (X509Certificate) certificate;
+            if (crt.getNotAfter().getTime() < shortestExpiration) {
+              shortestExpiration = crt.getNotAfter().getTime();
+            }
+          }
+        }
+      }
+      metric.record(shortestExpiration);
+    } catch (KeyStoreException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static MetricsContext buildMetricsContext(
+      SchemaRegistryConfig config, String kafkaClusterId) {
+
     String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
 
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
 
     metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
-    metadata.put(RESOURCE_LABEL_CLUSTER_ID, srGroupId);
-    metadata.put(RESOURCE_LABEL_GROUP_ID, srGroupId);
-    metadata.put(RESOURCE_LABEL_TYPE,  "schema_registry");
-    metadata.put(RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
-    metadata.put(RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_CLUSTER_ID, srGroupId);
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_GROUP_ID, srGroupId);
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_TYPE,  "schema_registry");
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_VERSION, AppInfoParser.getVersion());
+    metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_COMMIT_ID, AppInfoParser.getCommitId());
 
     return new KafkaMetricsContext(JMX_PREFIX, metadata);
   }

@@ -22,6 +22,8 @@ import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FeatureSet;
+import com.google.protobuf.DescriptorProtos.FieldOptions.FeatureSupport;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -33,11 +35,12 @@ public class EnumDefinition {
   // --- public static ---
 
   public static Builder newBuilder(String enumName) {
-    return newBuilder(enumName, null, null);
+    return newBuilder(enumName, null, null, null);
   }
 
-  public static Builder newBuilder(String enumName, Boolean allowAlias, Boolean isDeprecated) {
-    return new Builder(enumName, allowAlias, isDeprecated);
+  public static Builder newBuilder(
+      String enumName, Boolean allowAlias, Boolean isDeprecated, FeatureSet features) {
+    return new Builder(enumName, allowAlias, isDeprecated, features);
   }
 
   // --- public ---
@@ -71,18 +74,37 @@ public class EnumDefinition {
     }
 
     public Builder addValue(String name, int num) {
-      return addValue(name, num, null, null);
+      return addValue(name, num, null, null, null, null, null);
     }
 
     // Note: added
-    public Builder addValue(
-        String name, int num, ProtobufMeta meta, Boolean isDeprecated) {
+    public Builder addValue(String name, int num, ProtobufMeta meta,
+        Boolean isDeprecated, Boolean isDebugRedact,
+        FeatureSet features, FeatureSupport featureSupport) {
       EnumValueDescriptorProto.Builder enumValBuilder = EnumValueDescriptorProto.newBuilder();
       enumValBuilder.setName(name).setNumber(num);
       if (isDeprecated != null) {
         DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
                 DescriptorProtos.EnumValueOptions.newBuilder();
         optionsBuilder.setDeprecated(isDeprecated);
+        enumValBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (isDebugRedact != null) {
+        DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
+            DescriptorProtos.EnumValueOptions.newBuilder();
+        optionsBuilder.setDebugRedact(isDebugRedact);
+        enumValBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (features != null) {
+        DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
+            DescriptorProtos.EnumValueOptions.newBuilder();
+        optionsBuilder.setFeatures(features);
+        enumValBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (featureSupport != null) {
+        DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
+            DescriptorProtos.EnumValueOptions.newBuilder();
+        optionsBuilder.setFeatureSupport(featureSupport);
         enumValBuilder.mergeOptions(optionsBuilder.build());
       }
       Meta m = toMeta(meta);
@@ -128,7 +150,8 @@ public class EnumDefinition {
 
     // --- private ---
 
-    private Builder(String enumName, Boolean allowAlias, Boolean isDeprecated) {
+    private Builder(
+        String enumName, Boolean allowAlias, Boolean isDeprecated, FeatureSet features) {
       mEnumTypeBuilder = EnumDescriptorProto.newBuilder();
       mEnumTypeBuilder.setName(enumName);
       if (allowAlias != null) {
@@ -141,6 +164,12 @@ public class EnumDefinition {
         DescriptorProtos.EnumOptions.Builder optionsBuilder =
             DescriptorProtos.EnumOptions.newBuilder();
         optionsBuilder.setDeprecated(isDeprecated);
+        mEnumTypeBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (features != null) {
+        DescriptorProtos.EnumOptions.Builder optionsBuilder =
+            DescriptorProtos.EnumOptions.newBuilder();
+        optionsBuilder.setFeatures(features);
         mEnumTypeBuilder.mergeOptions(optionsBuilder.build());
       }
     }

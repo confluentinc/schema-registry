@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import java.util.LinkedHashMap;
@@ -999,7 +1000,7 @@ public class AvroDataTest {
     arraySchema.addProp("connect.default", arrayNode);
     org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
-        .name("array").type(arraySchema).noDefault()  // no default
+        .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
         .endRecord();
 
     assertEquals(expectedAvroSchema, avroSchema);
@@ -1487,7 +1488,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaFromConnectConversion() {
-    Map<org.apache.avro.Schema, Schema> cache =
+    Cache<org.apache.avro.Schema, Schema> cache =
         Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -2393,6 +2394,16 @@ public class AvroDataTest {
   }
 
   @Test
+  public void testToConnectSingletonUnion() {
+    org.apache.avro.Schema avroStringSchema = org.apache.avro.SchemaBuilder.builder().stringType();
+    org.apache.avro.Schema unionAvroSchema = org.apache.avro.SchemaBuilder.builder()
+        .unionOf().type(avroStringSchema).endUnion();
+    SchemaBuilder builder = SchemaBuilder.string();
+    assertEquals(new SchemaAndValue(builder.build(), "bar"),
+        avroData.toConnectData(unionAvroSchema, "bar"));
+  }
+
+  @Test
   public void testToConnectEnum() {
     // Enums are just converted to strings, original enum is preserved in parameters
     org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder()
@@ -2630,7 +2641,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaToConnectConversion() {
-    Map<Schema, org.apache.avro.Schema> cache =
+    Cache<Schema, org.apache.avro.Schema> cache =
         Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -3285,6 +3296,7 @@ public class AvroDataTest {
 
     AvroDataConfig avroDataConfig = new AvroDataConfig.Builder()
         .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .with(AvroDataConfig.FLATTEN_SINGLETON_UNIONS_CONFIG, false)
         .build();
     AvroData testAvroData = new AvroData(avroDataConfig);
 
