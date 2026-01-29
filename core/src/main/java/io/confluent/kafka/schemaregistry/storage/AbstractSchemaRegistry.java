@@ -1407,7 +1407,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
-  public List<Integer> getReferencedBy(String subject, VersionId versionId)
+  public List<ContextId> getReferencedBy(String subject, VersionId versionId)
       throws SchemaRegistryException {
     try {
       int version = versionId.getVersionId();
@@ -1415,7 +1415,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         version = getLatestVersion(subject).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
-      List<Integer> ids = new ArrayList<>(getReferencedBy(key, false));
+      List<ContextId> ids = new ArrayList<>(getReferencedBy(key, false));
       Collections.sort(ids);
       return ids;
     } catch (StoreException e) {
@@ -1424,17 +1424,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
-  private Set<Integer> getReferencedBy(SchemaKey key, boolean permanentDelete)
+  protected Set<ContextId> getReferencedBy(SchemaKey key, boolean lookupDeletedSchema)
       throws StoreException, SchemaRegistryException {
-    Set<Integer> ids = lookupCache.referencesSchema(key);
-    if (permanentDelete) {
+    Set<ContextId> ids = lookupCache.referencesSchema(key);
+    if (lookupDeletedSchema) {
       return ids;
     }
     // Filter out references that are soft-deleted
-    Set<Integer> undeletedIds = new HashSet<>();
-    for (Integer id : ids) {
-      List<SubjectVersion> versions = listVersionsForId(id, null, false);
-      if (!versions.isEmpty()) {
+    Set<ContextId> undeletedIds = new HashSet<>();
+    for (ContextId id : ids) {
+      String ctx = CONTEXT_DELIMITER + id.getContext() + CONTEXT_DELIMITER;
+      List<SubjectVersion> versions = listVersionsForId(id.getId(), ctx, false);
+      if (versions != null && !versions.isEmpty()) {
         undeletedIds.add(id);
       }
     }

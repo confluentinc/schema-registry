@@ -1678,7 +1678,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String subject,
       boolean recursive,
       Map<String, String> headerProperties)
-    throws SchemaRegistryRequestForwardingException {
+      throws SchemaRegistryRequestForwardingException {
     UrlList baseUrl = leaderRestService.getBaseUrls();
 
     log.debug("Forwarding delete subject mode request {} to {} with recursive={}",
@@ -1971,7 +1971,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           Iterator<SchemaKey> schemasToBeDeleted = getAllVersions(s, LookupFilter.INCLUDE_DELETED);
           while (schemasToBeDeleted.hasNext()) {
             SchemaKey key = schemasToBeDeleted.next();
-            if (!lookupCache.referencesSchema(key).isEmpty()) {
+            if (!getReferencedBy(key, true).isEmpty()) {
               throw new ReferenceExistsException(key.toString());
             }
             deletedVersions.add(key);
