@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
@@ -49,7 +50,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   private final ConcurrentNavigableMap<K, V> store;
   private final Map<String, Map<String, Map<Integer, Map<String, Integer>>>> guidToSubjectVersions;
   private final Map<String, Map<String, Map<MD5, Integer>>> hashToGuid;
-  private final Map<String, Map<String, Map<SchemaKey, Set<Integer>>>> referencedBy;
+  private final Map<String, Map<String, Map<SchemaKey, Set<ContextId>>>> referencedBy;
 
   private final Map<String, Map<String, AssociationValue>> associationsByGuid;
   private final Map<String, Map<String, Set<AssociationValue>>> associationsBySubject;
@@ -139,11 +140,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
   }
 
   @Override
-  public Set<Integer> referencesSchema(SchemaKey schema) throws StoreException {
+  public Set<ContextId> referencesSchema(SchemaKey schema) throws StoreException {
     String ctx = QualifiedSubject.contextFor(tenant(), schema.getSubject());
-    Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+    Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
         referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-    Map<SchemaKey, Set<Integer>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
+    Map<SchemaKey, Set<ContextId>> refBy = ctxRefBy.getOrDefault(ctx, Collections.emptyMap());
     return refBy.getOrDefault(schema, Collections.emptySet());
   }
 
@@ -197,24 +198,6 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     // We ensure the schema is registered by its hash; this is necessary in case of a
     // compaction when the previous non-deleted schemaValue will not get registered
     addToSchemaHashToGuid(schemaKey, schemaValue);
-    for (SchemaReference ref : schemaValue.getReferences()) {
-      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
-          tenant(), schemaKey.getSubject(), ref.getSubject());
-      SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
-          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
-      Map<SchemaKey, Set<Integer>> refBy =
-          ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
-      if (refBy != null) {
-        Set<Integer> ids = refBy.get(refKey);
-        if (ids != null) {
-          ids.remove(schemaValue.getId());
-          if (ids.isEmpty()) {
-            refBy.remove(refKey);
-          }
-        }
-      }
-    }
   }
 
   @Override
@@ -235,6 +218,24 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
     if (subjectVersions.isEmpty()) {
       guids.remove(schemaValue.getId());
     }
+    for (SchemaReference ref : schemaValue.getReferences()) {
+      QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schemaKey.getSubject(), ref.getSubject());
+      SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
+      Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
+          referencedBy.getOrDefault(tenant(), Collections.emptyMap());
+      Map<SchemaKey, Set<ContextId>> refBy =
+          ctxRefBy.getOrDefault(refSubject.getContext(), Collections.emptyMap());
+      if (refBy != null) {
+        Set<ContextId> ids = refBy.get(refKey);
+        if (ids != null) {
+          ids.remove(new ContextId(ctx, schemaValue.getId()));
+          if (ids.isEmpty()) {
+            refBy.remove(refKey);
+          }
+        }
+      }
+    }
   }
 
   @Override
@@ -253,13 +254,13 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
           tenant(), schemaKey.getSubject(), ref.getSubject());
       SchemaKey refKey = new SchemaKey(refSubject.toQualifiedSubject(), ref.getVersion());
-      Map<String, Map<SchemaKey, Set<Integer>>> ctxRefBy =
+      Map<String, Map<SchemaKey, Set<ContextId>>> ctxRefBy =
           referencedBy.computeIfAbsent(tenant(), k -> new ConcurrentHashMap<>());
-      Map<SchemaKey, Set<Integer>> refBy =
+      Map<SchemaKey, Set<ContextId>> refBy =
           ctxRefBy.computeIfAbsent(refSubject.getContext(), k -> new ConcurrentHashMap<>());
-      Set<Integer> ids = refBy.computeIfAbsent(
+      Set<ContextId> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-      ids.add(schemaValue.getId());
+      ids.add(new ContextId(ctx, schemaValue.getId()));
     }
   }
 
