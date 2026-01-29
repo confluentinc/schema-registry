@@ -2036,6 +2036,11 @@ public abstract class RestApiTest {
           rce.getErrorCode());
     }
 
+    // Hard delete referrer
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1", true));
+
     // Hard delete reference
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
