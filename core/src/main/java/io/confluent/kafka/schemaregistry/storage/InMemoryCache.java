@@ -229,7 +229,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
       if (refBy != null) {
         Set<ContextId> ids = refBy.get(refKey);
         if (ids != null) {
-          ids.remove(new ContextId(refSubject.getContext(), schemaValue.getId()));
+          ids.remove(new ContextId(ctx, schemaValue.getId()));
           if (ids.isEmpty()) {
             refBy.remove(refKey);
           }
@@ -260,7 +260,7 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           ctxRefBy.computeIfAbsent(refSubject.getContext(), k -> new ConcurrentHashMap<>());
       Set<ContextId> ids = refBy.computeIfAbsent(
               refKey, k -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
-      ids.add(new ContextId(refSubject.getContext(), schemaValue.getId()));
+      ids.add(new ContextId(ctx, schemaValue.getId()));
     }
   }
 
