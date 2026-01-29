@@ -1354,6 +1354,24 @@ public abstract class RestApiTest {
         expectedSchemaId(4), "root", "resolved", null, false);
     // Ensure the guids match even though we are formatting the schema
     assertEquals(schemaString.getGuid(), schemaString2.getGuid());
+
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "root", "1", false);
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "ref1", "1", false);
+    try {
+      restApp.restClient.deleteSchemaVersion(
+          RestService.DEFAULT_REQUEST_PROPERTIES, "ref1", "1", true);
+      fail("Hard-deleting ref should fail with " + Errors.REFERENCE_EXISTS_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.REFERENCE_EXISTS_ERROR_CODE,
+          rce.getErrorCode());
+    }
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "root", "1", true);
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, "ref1", "1", true);
   }
 
   @Test
@@ -2018,6 +2036,11 @@ public abstract class RestApiTest {
           rce.getErrorCode());
     }
 
+    // Hard delete referrer
+    assertEquals((Integer) 1, restApp.restClient
+        .deleteSchemaVersion
+            (RestService.DEFAULT_REQUEST_PROPERTIES, subject2, "1", true));
+
     // Hard delete reference
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion
@@ -2061,6 +2084,11 @@ public abstract class RestApiTest {
     assertEquals(
         (Integer) 1,
         restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "ref", "1"));
+
+    // Step 4.5: Hard delete base
+    assertEquals(
+        (Integer) 1,
+        restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, "base", "1", true));
 
     // Step 5: Hard delete ref
     assertEquals(

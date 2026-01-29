@@ -20,6 +20,7 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_C
 import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -304,10 +305,11 @@ public class SubjectVersionsResource {
         + " from the schema registry";
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
-      List<Integer> schemas = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      List<ContextId> schemas = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
       return schemas.stream()
         .skip(offset)
         .limit(limit)
+        .map(ContextId::getId)
         .collect(Collectors.toList());
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
