@@ -1407,7 +1407,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
-  public List<ContextId> getReferencedBy(String subject, VersionId versionId)
+  public List<ContextId> getReferencedBy(
+      String subject, VersionId versionId, boolean lookupDeletedSchema)
       throws SchemaRegistryException {
     try {
       int version = versionId.getVersionId();
@@ -1415,7 +1416,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         version = getLatestVersion(subject).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
-      List<ContextId> ids = new ArrayList<>(getReferencedBy(key, false));
+      List<ContextId> ids = new ArrayList<>(getReferencedBy(key, lookupDeletedSchema));
       Collections.sort(ids);
       return ids;
     } catch (StoreException e) {

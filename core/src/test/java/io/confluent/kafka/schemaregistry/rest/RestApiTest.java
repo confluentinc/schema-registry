@@ -2036,6 +2036,9 @@ public abstract class RestApiTest {
           rce.getErrorCode());
     }
 
+    List<Integer> refs = restApp.restClient.getReferencedBy(subject, 1, true);
+    assertFalse(refs.isEmpty());
+
     // Hard delete referrer
     assertEquals((Integer) 1, restApp.restClient
         .deleteSchemaVersion

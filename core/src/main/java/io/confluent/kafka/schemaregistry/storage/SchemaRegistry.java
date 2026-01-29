@@ -233,8 +233,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   Schema getUsingContexts(String subject, int version, boolean returnDeletedSchema) throws
           SchemaRegistryException;
 
-  List<ContextId> getReferencedBy(String subject, VersionId versionId) throws
-          SchemaRegistryException;
+  List<ContextId> getReferencedBy(String subject, VersionId versionId, boolean lookupDeletedSchema)
+          throws SchemaRegistryException;
 
   boolean schemaVersionExists(String subject, VersionId versionId, boolean returnDeletedSchema)
           throws SchemaRegistryException;

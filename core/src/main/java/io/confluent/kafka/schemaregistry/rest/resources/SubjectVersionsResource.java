@@ -283,6 +283,8 @@ public class SubjectVersionsResource {
       @PathParam("subject") String subject,
       @Parameter(description = VERSION_PARAM_DESC, required = true)
       @PathParam("version") String version,
+      @Parameter(description = "Whether to include deleted schema")
+      @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -305,7 +307,8 @@ public class SubjectVersionsResource {
         + " from the schema registry";
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
-      List<ContextId> schemas = schemaRegistry.getReferencedBy(schema.getSubject(), versionId);
+      List<ContextId> schemas =
+          schemaRegistry.getReferencedBy(schema.getSubject(), versionId, lookupDeletedSchema);
       return schemas.stream()
         .skip(offset)
         .limit(limit)
