@@ -1456,13 +1456,19 @@ public class RestService implements Closeable, Configurable {
 
   public List<Integer> getReferencedBy(String subject, int version) throws IOException,
       RestClientException {
-    return getReferencedBy(DEFAULT_REQUEST_PROPERTIES, subject, version);
+    return getReferencedBy(DEFAULT_REQUEST_PROPERTIES, subject, version, false);
+  }
+
+  public List<Integer> getReferencedBy(String subject, int version, boolean lookupDeletedSchema)
+      throws IOException, RestClientException {
+    return getReferencedBy(DEFAULT_REQUEST_PROPERTIES, subject, version, lookupDeletedSchema);
   }
 
   public List<Integer> getReferencedBy(Map<String, String> requestProperties,
-                                       String subject, int version)
+                                       String subject, int version, boolean lookupDeletedSchema)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}/versions/{version}/referencedby");
+    builder.queryParam("deleted", lookupDeletedSchema);
     String path = builder.build(subject, version).toString();
 
     List<Integer> response = httpRequest(path, "GET", null, requestProperties,

@@ -58,6 +58,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import java.util.Comparator;
+import java.util.HashSet;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
 import org.eclipse.jetty.server.Handler;
@@ -1407,21 +1408,40 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
-  public List<Integer> getReferencedBy(String subject, VersionId versionId)
-          throws SchemaRegistryException {
+  public List<ContextId> getReferencedBy(
+      String subject, VersionId versionId, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
     try {
       int version = versionId.getVersionId();
       if (versionId.isLatest()) {
         version = getLatestVersion(subject).getVersion();
       }
       SchemaKey key = new SchemaKey(subject, version);
-      List<Integer> ids = new ArrayList<>(lookupCache.referencesSchema(key));
+      List<ContextId> ids = new ArrayList<>(getReferencedBy(key, lookupDeletedSchema));
       Collections.sort(ids);
       return ids;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
-              "Error from the backend Kafka store", e);
+          "Error from the backend Kafka store", e);
     }
+  }
+
+  protected Set<ContextId> getReferencedBy(SchemaKey key, boolean lookupDeletedSchema)
+      throws StoreException, SchemaRegistryException {
+    Set<ContextId> ids = lookupCache.referencesSchema(key);
+    if (lookupDeletedSchema) {
+      return ids;
+    }
+    // Filter out references that are soft-deleted
+    Set<ContextId> undeletedIds = new HashSet<>();
+    for (ContextId id : ids) {
+      String ctx = CONTEXT_DELIMITER + id.getContext() + CONTEXT_DELIMITER;
+      List<SubjectVersion> versions = listVersionsForId(id.getId(), ctx, false);
+      if (versions != null && !versions.isEmpty()) {
+        undeletedIds.add(id);
+      }
+    }
+    return undeletedIds;
   }
 
   @Override
