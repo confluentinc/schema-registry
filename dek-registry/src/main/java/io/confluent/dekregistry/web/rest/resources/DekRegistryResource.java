@@ -15,12 +15,13 @@
 
 package io.confluent.dekregistry.web.rest.resources;
 
-import static io.confluent.dekregistry.storage.DekRegistry.MIN_VERSION;
+import static io.confluent.dekregistry.storage.AbstractDekRegistry.MIN_VERSION;
 
 import com.google.common.base.CharMatcher;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.dekregistry.storage.AbstractDekRegistry;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.storage.exceptions.KeySoftDeletedException;
@@ -28,7 +29,6 @@ import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.storage.DataEncryptionKey;
-import io.confluent.dekregistry.storage.DekRegistry;
 import io.confluent.dekregistry.storage.KeyEncryptionKey;
 import io.confluent.dekregistry.storage.exceptions.AlreadyExistsException;
 import io.confluent.dekregistry.storage.exceptions.KeyNotSoftDeletedException;
@@ -90,11 +90,11 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
   public static final int NAME_MAX_LENGTH = 256;
 
-  private final DekRegistry dekRegistry;
+  private final AbstractDekRegistry dekRegistry;
   private final RequestHeaderBuilder requestHeaderBuilder = new RequestHeaderBuilder();
 
   @Inject
-  public DekRegistryResource(SchemaRegistry schemaRegistry, DekRegistry dekRegistry) {
+  public DekRegistryResource(SchemaRegistry schemaRegistry, AbstractDekRegistry dekRegistry) {
     super(schemaRegistry);
     this.dekRegistry = dekRegistry;
   }
