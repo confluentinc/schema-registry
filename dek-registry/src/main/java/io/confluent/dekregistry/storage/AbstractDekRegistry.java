@@ -105,9 +105,10 @@ public abstract class AbstractDekRegistry implements Closeable {
       new TypeReference<Void>() {
       };
 
-  protected final SchemaRegistry schemaRegistry;
-  protected final MetricsManager metricsManager;
-  protected final DekRegistryConfig config;
+  private final SchemaRegistry schemaRegistry;
+  private final MetricsManager metricsManager;
+  private final DekRegistryConfig config;
+  private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
 
   protected final int kekSearchDefaultLimit;
   protected final int kekSearchMaxLimit;
@@ -116,7 +117,6 @@ public abstract class AbstractDekRegistry implements Closeable {
   protected final int dekVersionSearchDefaultLimit;
   protected final int dekVersionSearchMaxLimit;
 
-  protected final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
   protected final Map<DekFormat, Cryptor> cryptors;
   protected final Map<String, Lock> tenantToLock = new ConcurrentHashMap<>();
   protected final AtomicBoolean initialized = new AtomicBoolean();
@@ -497,8 +497,8 @@ public abstract class AbstractDekRegistry implements Closeable {
     SortedMap<String, String> kmsProps = request.getOptionalKmsProps() != null
         ? (request.getOptionalKmsProps().isPresent() ? new TreeMap<>(request.getKmsProps()) : null)
         : key.getKmsProps();
-    String doc = request.getOptionalDoc() != null ? request.getDoc() : key.getDoc();
-    boolean shared = request.isOptionalShared() != null ? request.isShared() : key.isShared();
+    String doc = request.getOptionalDoc().orElse(key.getDoc());
+    boolean shared = request.isOptionalShared().orElse(key.isShared());
     KeyEncryptionKey newKey = new KeyEncryptionKey(name, key.getKmsType(),
         key.getKmsKeyId(), kmsProps, doc, shared, false);
     if (newKey.isEquivalent(key)) {

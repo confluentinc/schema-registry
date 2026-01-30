@@ -74,7 +74,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
       DekRegistryConfig config
   ) {
     super(schemaRegistry, metricsManager, config);
-    this.schemaRegistry.addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
+    this.getSchemaRegistry().addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
     this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
         config.topic(), getCacheUpdateHandler(config));
   }
@@ -113,7 +113,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
 
   private Properties getKafkaCacheProperties(String topic) {
     Properties props = new Properties();
-    props.putAll(schemaRegistry.config().originalProperties());
+    props.putAll(getSchemaRegistry().config().originalProperties());
     Set<String> keys = props.stringPropertyNames();
     for (String key : keys) {
       if (key.startsWith("kafkastore.")) {
