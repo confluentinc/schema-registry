@@ -728,7 +728,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
 
       SchemaKey key = new SchemaKey(subject, schema.getVersion());
-      if (!lookupCache.referencesSchema(key).isEmpty()) {
+      if (!getReferencedBy(key, permanentDelete).isEmpty()) {
         throw new ReferenceExistsException(key.toString());
       }
       SchemaValue schemaValue = (SchemaValue) lookupCache.get(key);
@@ -810,7 +810,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!lookupCache.referencesSchema(key).isEmpty()) {
+        if (!getReferencedBy(key, permanentDelete).isEmpty()) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
@@ -1972,7 +1972,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           Iterator<SchemaKey> schemasToBeDeleted = getAllVersions(s, LookupFilter.INCLUDE_DELETED);
           while (schemasToBeDeleted.hasNext()) {
             SchemaKey key = schemasToBeDeleted.next();
-            if (!lookupCache.referencesSchema(key).isEmpty()) {
+            if (!getReferencedBy(key, true).isEmpty()) {
               throw new ReferenceExistsException(key.toString());
             }
             deletedVersions.add(key);
