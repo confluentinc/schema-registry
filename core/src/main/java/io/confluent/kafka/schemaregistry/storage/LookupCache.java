@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.DEFAULT_TENANT;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import java.util.Map;
 import java.util.Set;
 
@@ -59,7 +60,7 @@ public interface LookupCache<K,V> extends Store<K,V> {
    * @param schema schema object
    * @return the ids of schemas that reference the given schema
    */
-  Set<Integer> referencesSchema(SchemaKey schema) throws StoreException;
+  Set<ContextId> referencesSchema(SchemaKey schema) throws StoreException;
 
   /**
    * Provides the {@link SchemaKey} for the provided schema id.
