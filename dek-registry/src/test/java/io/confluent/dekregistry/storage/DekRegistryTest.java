@@ -227,7 +227,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetDekVersions() {
+    public void testGetDekVersions() throws Exception {
         List<Integer> versions = dekRegistry.getDekVersions("kekName1", "subject1", DekFormat.AES256_GCM, true);
         assertEquals(1, versions.size());
         assertEquals(2, (int)versions.get(0));
@@ -331,7 +331,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("kekName1", kek.getName());
 
         // Test that a non-shared KEK cannot be tested
-        CreateKekRequest k2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": true}");
+        CreateKekRequest k2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": false}");
         KeyEncryptionKey kek2 = dekRegistry.createKek(k2);
         assertThrows(InvalidKeyException.class, () -> dekRegistry.testKek(kek2));
     }
