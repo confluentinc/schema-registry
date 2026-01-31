@@ -297,24 +297,21 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   // ==================== KEK Operations ====================
 
-  public List<String> getKekNames(List<String> subjectPrefix, boolean lookupDeleted) {
+  public List<String> getKekNames(List<String> subjectPrefix, boolean lookupDeleted)
+      throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
-    try {
-      if (subjectPrefix == null || subjectPrefix.isEmpty()) {
-        return getKeks(tenant, lookupDeleted).stream()
-            .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
-            .collect(Collectors.toList());
-      } else {
-        return getDeks(tenant, lookupDeleted).stream()
-            .filter(kv -> subjectPrefix.stream()
-                .anyMatch(prefix -> ((DataEncryptionKeyId) kv.key).getSubject().startsWith(prefix)))
-            .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
-            .sorted()
-            .distinct()
-            .collect(Collectors.toList());
-      }
-    } catch (SchemaRegistryStoreException e) {
-      throw new RuntimeException("Error retrieving KEK names", e);
+    if (subjectPrefix == null || subjectPrefix.isEmpty()) {
+      return getKeks(tenant, lookupDeleted).stream()
+          .map(kv -> ((KeyEncryptionKeyId) kv.key).getName())
+          .collect(Collectors.toList());
+    } else {
+      return getDeks(tenant, lookupDeleted).stream()
+          .filter(kv -> subjectPrefix.stream()
+              .anyMatch(prefix -> ((DataEncryptionKeyId) kv.key).getSubject().startsWith(prefix)))
+          .map(kv -> ((DataEncryptionKeyId) kv.key).getKekName())
+          .sorted()
+          .distinct()
+          .collect(Collectors.toList());
     }
   }
 
@@ -323,18 +320,15 @@ public abstract class AbstractDekRegistry implements Closeable {
     return getKeksFromStore(tenant, lookupDeleted);
   }
 
-  public KeyEncryptionKey getKek(String name, boolean lookupDeleted) {
+  public KeyEncryptionKey getKek(String name, boolean lookupDeleted)
+      throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
     KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, name);
-    try {
-      KeyEncryptionKey key = getKekById(keyId);
-      if (key != null && (!key.isDeleted() || lookupDeleted)) {
-        return key;
-      } else {
-        return null;
-      }
-    } catch (SchemaRegistryStoreException e) {
-      throw new RuntimeException("Error retrieving KEK", e);
+    KeyEncryptionKey key = getKekById(keyId);
+    if (key != null && (!key.isDeleted() || lookupDeleted)) {
+      return key;
+    } else {
+      return null;
     }
   }
 
@@ -642,29 +636,23 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   // ==================== DEK Operations ====================
 
-  public List<String> getDekSubjects(String kekName, boolean lookupDeleted) {
+  public List<String> getDekSubjects(String kekName, boolean lookupDeleted)
+      throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
-    try {
-      return getDeks(tenant, kekName, lookupDeleted).stream()
-          .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
-          .sorted()
-          .distinct()
-          .collect(Collectors.toList());
-    } catch (SchemaRegistryStoreException e) {
-      throw new RuntimeException("Error retrieving DEK subjects", e);
-    }
+    return getDeks(tenant, kekName, lookupDeleted).stream()
+        .map(kv -> ((DataEncryptionKeyId) kv.key).getSubject())
+        .sorted()
+        .distinct()
+        .collect(Collectors.toList());
   }
 
   public List<Integer> getDekVersions(
-      String kekName, String subject, DekFormat algorithm, boolean lookupDeleted) {
+      String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
+      throws SchemaRegistryException {
     String tenant = schemaRegistry.tenant();
-    try {
-      return getDeks(tenant, kekName, subject, algorithm, lookupDeleted).stream()
-          .map(kv -> ((DataEncryptionKeyId) kv.key).getVersion())
-          .collect(Collectors.toList());
-    } catch (SchemaRegistryStoreException e) {
-      throw new RuntimeException("Error retrieving DEK versions", e);
-    }
+    return getDeks(tenant, kekName, subject, algorithm, lookupDeleted).stream()
+        .map(kv -> ((DataEncryptionKeyId) kv.key).getVersion())
+        .collect(Collectors.toList());
   }
 
   protected List<KeyValue<EncryptionKeyId, EncryptionKey>> getDeks(

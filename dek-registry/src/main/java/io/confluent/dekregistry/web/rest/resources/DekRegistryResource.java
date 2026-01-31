@@ -117,12 +117,16 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    limit = dekRegistry.normalizeKekLimit(limit);
-    List<String> kekNames = dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
-    return kekNames.stream()
-      .skip(offset)
-      .limit(limit)
-      .collect(Collectors.toList());
+    try {
+      limit = dekRegistry.normalizeKekLimit(limit);
+      List<String> kekNames = dekRegistry.getKekNames(subjectPrefix, lookupDeleted);
+      return kekNames.stream()
+          .skip(offset)
+          .limit(limit)
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while retrieving KEK names", e);
+    }
   }
 
   @GET
@@ -143,11 +147,15 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(name);
 
-    KeyEncryptionKey key = dekRegistry.getKek(name, lookupDeleted);
-    if (key == null) {
-      throw DekRegistryErrors.keyNotFoundException(name);
+    try {
+      KeyEncryptionKey key = dekRegistry.getKek(name, lookupDeleted);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(name);
+      }
+      return dekRegistry.toKekEntity(key);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while retrieving KEK", e);
     }
-    return dekRegistry.toKekEntity(key);
   }
 
   @GET
@@ -174,16 +182,20 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(kekName);
 
-    KeyEncryptionKey key = dekRegistry.getKek(kekName, lookupDeleted);
-    if (key == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
+    try {
+      KeyEncryptionKey key = dekRegistry.getKek(kekName, lookupDeleted);
+      if (key == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      limit = dekRegistry.normalizeDekSubjectLimit(limit);
+      List<String> dekSubjects = dekRegistry.getDekSubjects(kekName, lookupDeleted);
+      return dekSubjects.stream()
+          .skip(offset)
+          .limit(limit)
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while retrieving DEK subjects", e);
     }
-    limit = dekRegistry.normalizeDekSubjectLimit(limit);
-    List<String> dekSubjects = dekRegistry.getDekSubjects(kekName, lookupDeleted);
-    return dekSubjects.stream()
-      .skip(offset)
-      .limit(limit)
-      .collect(Collectors.toList());
   }
 
   @GET
@@ -258,17 +270,21 @@ public class DekRegistryResource extends SchemaRegistryResource {
     checkName(kekName);
     checkSubject(subject);
 
-    KeyEncryptionKey kek = dekRegistry.getKek(kekName, lookupDeleted);
-    if (kek == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
+    try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, lookupDeleted);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+      limit = dekRegistry.normalizeDekVersionLimit(limit);
+      List<Integer> dekVersions = dekRegistry.getDekVersions(
+              kekName, subject, algorithm, lookupDeleted);
+      return dekVersions.stream()
+          .skip(offset)
+          .limit(limit)
+          .collect(Collectors.toList());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while retrieving DEK versions", e);
     }
-    limit = dekRegistry.normalizeDekVersionLimit(limit);
-    List<Integer> dekVersions = dekRegistry.getDekVersions(
-            kekName, subject, algorithm, lookupDeleted);
-    return dekVersions.stream()
-      .skip(offset)
-      .limit(limit)
-      .collect(Collectors.toList());
   }
 
   @GET
@@ -398,12 +414,12 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(kekName);
 
-    KeyEncryptionKey kek = dekRegistry.getKek(kekName, false);
-    if (kek == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
-    }
-
     try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, false);
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+
       dekRegistry.testKek(kek);
       asyncResponse.resume(kek);
     } catch (DekGenerationException e) {
@@ -475,15 +491,15 @@ public class DekRegistryResource extends SchemaRegistryResource {
     checkName(kekName);
     checkSubject(subject);
 
-    KeyEncryptionKey kek = dekRegistry.getKek(kekName, request.isDeleted());
-    if (kek == null) {
-      throw DekRegistryErrors.keyNotFoundException(kekName);
-    }
-
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      KeyEncryptionKey kek = dekRegistry.getKek(kekName, request.isDeleted());
+      if (kek == null) {
+        throw DekRegistryErrors.keyNotFoundException(kekName);
+      }
+
       Dek dek = dekRegistry.createDekOrForward(kekName, rewrap, request, headerProperties);
       asyncResponse.resume(dek);
     } catch (AlreadyExistsException e) {
@@ -524,14 +540,15 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(name);
 
-    KeyEncryptionKey oldKek = dekRegistry.getKek(name, false);
-    if (oldKek == null) {
-      throw DekRegistryErrors.keyNotFoundException(name);
-    }
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
 
     try {
+      KeyEncryptionKey oldKek = dekRegistry.getKek(name, false);
+      if (oldKek == null) {
+        throw DekRegistryErrors.keyNotFoundException(name);
+      }
+
       boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
       if (shared && testSharing) {
         SortedMap<String, String> kmsProps = request.getKmsProps() != null
@@ -550,7 +567,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException("Error while creating key: " + e.getMessage(), e);
+      throw Errors.schemaRegistryException("Error while updating key: " + e.getMessage(), e);
     }
   }
 

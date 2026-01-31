@@ -84,7 +84,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testCreateKek() throws Exception {
+    public void testCreateKek() {
         assertNotNull(kek);
         assertFalse(kek.isDeleted());
         assertEquals("kekName1", kek.getName());
@@ -208,7 +208,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetKeks() throws Exception {
+    public void testGetKeks() throws SchemaRegistryException {
         List<KeyValue<EncryptionKeyId, EncryptionKey>> keks = dekRegistry.getKeks(schemaRegistry.tenant(), true);
         assertEquals(1, keks.size());
         KeyValue<EncryptionKeyId, EncryptionKey> kv = keks.get(0);
@@ -219,7 +219,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetDekSubjects() throws Exception {
+    public void testGetDekSubjects() throws SchemaRegistryException {
         List<String> subjects = dekRegistry.getDekSubjects("kekName1", true);
         assertEquals(1, subjects.size());
         String subject = subjects.get(0);
@@ -227,7 +227,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetDekVersions() {
+    public void testGetDekVersions() throws SchemaRegistryException {
         List<Integer> versions = dekRegistry.getDekVersions("kekName1", "subject1", DekFormat.AES256_GCM, true);
         assertEquals(1, versions.size());
         assertEquals(2, (int)versions.get(0));
@@ -331,7 +331,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("kekName1", kek.getName());
 
         // Test that a non-shared KEK cannot be tested
-        CreateKekRequest k2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": true}");
+        CreateKekRequest k2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": false}");
         KeyEncryptionKey kek2 = dekRegistry.createKek(k2);
         assertThrows(InvalidKeyException.class, () -> dekRegistry.testKek(kek2));
     }
