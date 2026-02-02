@@ -15,94 +15,69 @@
 
 package io.confluent.dekregistry.web.rest;
 
-import static io.confluent.dekregistry.storage.DekRegistry.X_FORWARD_HEADER;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static io.confluent.dekregistry.storage.AbstractDekRegistry.X_FORWARD_HEADER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.Aead;
-import io.confluent.dekregistry.DekRegistryResourceExtension;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
-import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
-import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.RuleSetHandler;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-public class RestApiTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiTest {
 
-  FakeTicker fakeTicker;
-  CachedDekRegistryClient client;
+  protected FakeTicker fakeTicker;
+  protected CachedDekRegistryClient client;
 
-  public RestApiTest() {
-    super(1, true);
+  protected RestApp restApp = null;
+
+  protected String kmsType = "test-kms";
+  protected String kmsKeyId = "myid";
+  protected String kmsKeyId3 = "myid2";
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
   }
 
-  @Override
-  public Properties getSchemaRegistryProperties() throws Exception {
-    Properties props = new Properties();
-    props.put(
-        SchemaRegistryConfig.RESOURCE_EXTENSION_CONFIG,
-        DekRegistryResourceExtension.class.getName()
-    );
-    props.put(
-        SchemaRegistryConfig.INTER_INSTANCE_HEADERS_WHITELIST_CONFIG,
-        DekRegistryRestService.X_FORWARD_HEADER
-    );
-    return props;
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
   }
 
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
-    fakeTicker = new FakeTicker();
-    client = new CachedDekRegistryClient(
-        new DekRegistryRestService(restApp.restClient.getBaseUrls().urls()),
-        1000,
-        60,
-        null,
-        null,
-        fakeTicker
-    );
-    restApp.schemaRegistry().setRuleSetHandler(new RuleSetHandler() {
-      public void handle(String subject, ConfigUpdateRequest request) {
-      }
-
-      public void handle(String subject, boolean normalize, RegisterSchemaRequest request) {
-      }
-
-      public io.confluent.kafka.schemaregistry.storage.RuleSet transform(RuleSet ruleSet) {
-        return ruleSet != null
-            ? new io.confluent.kafka.schemaregistry.storage.RuleSet(ruleSet)
-            : null;
-      }
-    });
+  /**
+   * Returns configs to pass to Kek.toAead() for test encryption.
+   * Subclasses can override to inject a TEST_CLIENT for fake KMS implementations.
+   */
+  protected Map<String, ?> getTestClientConfigs() {
+    return Collections.emptyMap();
   }
 
   @Test
@@ -130,9 +105,6 @@ public class RestApiTest extends ClusterTestHarness {
   private void testBasic(Map<String, String> headers, boolean isImport) throws Exception {
     String kekName = "kek1";
     String kek3Name = "kek3";
-    String kmsType = "test-kms";
-    String kmsKeyId = "myid";
-    String kmsKeyId3 = "myid2";
     String subject = "mysubject";
     String badSubject = "badSubject";
     String subject2 = "mysubject2";
@@ -229,7 +201,7 @@ public class RestApiTest extends ClusterTestHarness {
     byte[] rawDek = new Cryptor(algorithm).generateKey();
     String rawDekStr =
         new String(Base64.getEncoder().encode(rawDek), StandardCharsets.UTF_8);
-    Aead aead = kek.toAead(Collections.emptyMap());
+    Aead aead = kek.toAead(getTestClientConfigs());
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -266,6 +238,9 @@ public class RestApiTest extends ClusterTestHarness {
     // Set shared flag to true
     newKek = client.updateKek(headers, kekName, kmsProps, doc, true);
     assertEquals(kek2, newKek);
+
+    // Test shared kek
+    client.testKek(kekName);
 
     // Advance ticker
     fakeTicker.advance(61, TimeUnit.SECONDS);
@@ -482,7 +457,7 @@ public class RestApiTest extends ClusterTestHarness {
     // Use the test-kms type to generate a dummy dek locally
     Kek testKek = new Kek(kekName, "test-kms", kmsKeyId, null, null, false, null, null);
     byte[] rawDek = new Cryptor(algorithm).generateKey();
-    Aead aead = testKek.toAead(Collections.emptyMap());
+    Aead aead = testKek.toAead(getTestClientConfigs());
     byte[] encryptedDek = aead.encrypt(rawDek, new byte[0]);
     String encryptedDekStr =
         new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
@@ -541,10 +516,11 @@ public class RestApiTest extends ClusterTestHarness {
     RuleSet ruleSet = new RuleSet(null, rules);
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(schema1);
     request1.setRuleSet(ruleSet);
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request1, subject, false).getId());
+        restApp.restClient.registerSchema(request1, subject, false).getId(),
+        "Registering should succeed");
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1, subject);
     Map<String, String> newParams = schemaString.getRuleSet().getDomainRules().get(0).getParams();
