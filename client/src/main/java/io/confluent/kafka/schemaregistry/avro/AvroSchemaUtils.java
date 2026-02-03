@@ -418,7 +418,7 @@ public class AvroSchemaUtils {
     if (message instanceof SpecificRecord) {
       SpecificData data = AvroSchemaUtils.getThreadLocalSpecificData();
       return data != null ? data : getSpecificDataForSchema(schema, useLogicalTypes);
-    } else if (message instanceof GenericContainer) {
+    } else if (message instanceof GenericRecord) {
       GenericData data = AvroSchemaUtils.getThreadLocalGenericData();
       return data != null ? data : getGenericData(useLogicalTypes);
     } else if (message != null) {
@@ -441,7 +441,7 @@ public class AvroSchemaUtils {
     GenericData data = getData(schema, value, useLogicalTypes, allowNull);
     if (value instanceof SpecificRecord) {
       return new SpecificDatumWriter<>(schema, (SpecificData) data);
-    } else if (value instanceof GenericContainer) {
+    } else if (value instanceof GenericRecord) {
       return new GenericDatumWriter<>(schema, data);
     } else {
       return new ReflectDatumWriter<>(schema, (ReflectData) data);
