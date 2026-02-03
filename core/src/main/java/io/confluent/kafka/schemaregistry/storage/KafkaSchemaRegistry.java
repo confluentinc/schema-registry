@@ -490,7 +490,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       }
 
       int schemaId = schema.getId();
-      boolean doValidation = schemaId < 0 && isSchemaNewSchemaValidationEnabled(config);
+      boolean doValidation = schemaId < 0 && isSchemaNameValidationEnabled(config);
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
 
       if (parsedSchema != null) {
