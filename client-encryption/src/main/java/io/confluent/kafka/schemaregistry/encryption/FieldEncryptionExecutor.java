@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -99,6 +100,11 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
         throws RuleException {
       return transform.transform(ctx, fieldCtx.getType(), fieldValue);
     }
+  }
+
+  @Override
+  public void setSchemaRegistryClient(SchemaRegistryClient client) {
+    encryptionExecutor.setSchemaRegistryClient(client);
   }
 }
 
