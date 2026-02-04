@@ -1215,6 +1215,52 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public List<ExtendedSchema> getSchemas(Map<String, String> requestProperties,
+      String subjectPrefix,
+      boolean includeAliases,
+      boolean lookupDeletedSchema,
+      boolean latestOnly,
+      String ruleType,
+      String resourceType,
+      List<String> associationTypes,
+      LifecyclePolicy lifecycle,
+      Integer offset,
+      Integer limit)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/schemas");
+    if (subjectPrefix != null) {
+      builder.queryParam("subjectPrefix", subjectPrefix);
+    }
+    builder.queryParam("aliases", includeAliases);
+    builder.queryParam("deleted", lookupDeletedSchema);
+    builder.queryParam("latestOnly", latestOnly);
+    if (ruleType != null) {
+      builder.queryParam("ruleType", ruleType);
+    }
+    if (resourceType != null) {
+      builder.queryParam("resourceType", resourceType);
+    }
+    if (associationTypes != null) {
+      for (String associationType : associationTypes) {
+        builder.queryParam("associationType", associationType);
+      }
+    }
+    if (lifecycle != null) {
+      builder.queryParam("lifecycle", lifecycle.name());
+    }
+    if (offset != null) {
+      builder.queryParam("offset", offset);
+    }
+    if (limit != null) {
+      builder.queryParam("limit", limit);
+    }
+    String path = builder.build().toString();
+
+    List<ExtendedSchema> response = httpRequest(path, "GET", null, requestProperties,
+        GET_EXTENDED_SCHEMAS_RESPONSE_TYPE);
+    return response;
+  }
+
   public SchemaString getId(int id) throws IOException, RestClientException {
     return getId(DEFAULT_REQUEST_PROPERTIES, id, null, false);
   }

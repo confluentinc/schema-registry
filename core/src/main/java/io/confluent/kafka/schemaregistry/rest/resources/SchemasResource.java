@@ -19,8 +19,10 @@ import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_C
 
 import com.google.common.collect.Streams;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -107,6 +109,12 @@ public class SchemasResource {
       @DefaultValue("false") @QueryParam("latestOnly") boolean latestOnly,
       @Parameter(description = "Filters results by the given rule type")
       @DefaultValue("") @QueryParam("ruleType") String ruleType,
+      @Parameter(description = "Resource type")
+      @QueryParam("resourceType") String resourceType,
+      @Parameter(description = "Association type")
+      @QueryParam("associationType") List<String> associationTypes,
+      @Parameter(description = "Lifecycle")
+      @QueryParam("lifecycle") LifecyclePolicy lifecycle,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -131,6 +139,20 @@ public class SchemasResource {
     return Streams.stream(schemas)
       .skip(offset)
       .limit(limit)
+      .map(s -> {
+        try {
+          if (associationTypes != null && !associationTypes.isEmpty()) {
+            List<Association> associations = schemaRegistry.getAssociationsBySubject(s.getSubject(),
+                resourceType, associationTypes, lifecycle);
+            return s.copy(associations);
+          } else {
+            return s;
+          }
+        } catch (SchemaRegistryException e) {
+          throw Errors.schemaRegistryException(
+              "Error while retrieving associations for subject " + s.getSubject(), e);
+        }
+      })
       .collect(Collectors.toList());
   }
 
