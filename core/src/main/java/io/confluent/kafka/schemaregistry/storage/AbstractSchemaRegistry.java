@@ -966,7 +966,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         continue;
       }
       List<String> aliases = subjectByAliases.get(schemaValue.getSubject());
-      ExtendedSchema schema = new ExtendedSchema(schemaEntity, aliases);
+      ExtendedSchema schema = new ExtendedSchema(schemaEntity, aliases, null);
       List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
               schemaValue.getSubject(), k -> new ArrayList<>());
       if (returnLatestOnly) {
