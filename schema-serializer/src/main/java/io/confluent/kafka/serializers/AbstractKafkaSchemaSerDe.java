@@ -320,6 +320,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     // Add named params
     prefix = configName + "." + name + PARAM;
     params.putAll(config.originalsWithPrefix(prefix));
+    ruleObject.setSchemaRegistryClient(schemaRegistry);
     ruleObject.configure(params);
   }
 
