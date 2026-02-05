@@ -26,6 +26,7 @@ import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
@@ -101,6 +102,13 @@ public class EncryptionExecutor implements RuleExecutor {
   }
 
   @Override
+  public void setSchemaRegistryClient(SchemaRegistryClient schemaRegistryClient) {
+    if (schemaRegistryClient instanceof DekRegistryClient) {
+      this.client = (DekRegistryClient) schemaRegistryClient;
+    }
+  }
+
+  @Override
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
     Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
@@ -128,8 +136,10 @@ public class EncryptionExecutor implements RuleExecutor {
       throw new ConfigException("Missing schema registry url!");
     }
     List<String> baseUrls = Arrays.asList(url.toString().split("\\s*,\\s*"));
-    this.client = DekRegistryClientFactory.newClient(
-        baseUrls, cacheSize, cacheExpirySecs, configs, Collections.emptyMap());
+    if (this.client == null) {
+      this.client = DekRegistryClientFactory.newClient(
+          baseUrls, cacheSize, cacheExpirySecs, configs, Collections.emptyMap());
+    }
     this.cryptors = new ConcurrentHashMap<>();
   }
 
