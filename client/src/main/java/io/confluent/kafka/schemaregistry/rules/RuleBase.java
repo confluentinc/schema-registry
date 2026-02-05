@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import java.util.Map;
 import org.apache.kafka.common.Configurable;
 
@@ -28,6 +29,9 @@ public interface RuleBase extends AutoCloseable, Configurable {
 
   default boolean addOriginalConfigs() {
     return false;
+  }
+
+  default void setSchemaRegistryClient(SchemaRegistryClient client) {
   }
 
   default void configure(Map<String, ?> configs) {
