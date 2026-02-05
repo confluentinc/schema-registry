@@ -21,11 +21,14 @@ import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.TEST_C
 import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.withSettings;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
@@ -420,6 +423,29 @@ public abstract class EncryptionExecutorTest {
 
   protected Metadata getMetadata(Map<String, String> properties) {
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
+  }
+
+  @Test
+  public void testSetSchemaRegistryClient() throws Exception {
+    SchemaRegistryClient mockClient = mock(SchemaRegistryClient.class,
+        withSettings().extraInterfaces(DekRegistryClient.class));
+
+    EncryptionExecutor executor = new EncryptionExecutor();
+    try {
+      // Call setSchemaRegistryClient with our mock
+      executor.setSchemaRegistryClient(mockClient);
+
+      // Configure the executor - this should NOT create a new client since one is already set
+      Map<String, Object> configs = new HashMap<>();
+      configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+      configs.put(TEST_CLIENT, encryptionProps.getTestClient());
+      executor.configure(configs);
+
+      // Verify that cryptors map was initialized (configure was successful)
+      assertNotNull(executor.getCryptors());
+    } finally {
+      executor.close();
+    }
   }
 
   public static class OldWidget {
