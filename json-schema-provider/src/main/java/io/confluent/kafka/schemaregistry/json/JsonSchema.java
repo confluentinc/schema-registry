@@ -410,9 +410,15 @@ public class JsonSchema implements ParsedSchema {
       JsonNode jsonNode = objectMapperWithOrderedProps.readTree(canonical);
       return new JsonSchema(
           jsonNode,
+          null,
+          null,
+          this.version,
           this.references.stream().sorted().distinct().collect(Collectors.toList()),
           this.resolvedReferences,
-          this.version
+          this.metadata,
+          this.ruleSet,
+          this.ignoreModernDialects,
+          null
       );
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON", e);
