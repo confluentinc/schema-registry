@@ -23,6 +23,7 @@ queue:
 global_job_config:
   prologue:
     commands:
+      - cache clear
       - checkout
       - sem-version java 17
       - . cache-maven restore
