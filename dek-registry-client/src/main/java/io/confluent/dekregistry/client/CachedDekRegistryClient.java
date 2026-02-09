@@ -23,6 +23,7 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
@@ -70,7 +71,19 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       Map<String, ?> configs,
       Map<String, String> httpHeaders,
       Ticker ticker) {
-    super(restService, cacheCapacity, Collections.emptyList(), configs, httpHeaders, ticker);
+    this(restService, cacheCapacity, cacheExpirySecs, configs,
+        Collections.emptyList(), httpHeaders, ticker);
+  }
+
+  public CachedDekRegistryClient(
+      DekRegistryRestService restService,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
+      List<SchemaProvider> providers,
+      Map<String, String> httpHeaders,
+      Ticker ticker) {
+    super(restService, cacheCapacity, providers, configs, httpHeaders, ticker);
     this.restService = restService;
     CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)

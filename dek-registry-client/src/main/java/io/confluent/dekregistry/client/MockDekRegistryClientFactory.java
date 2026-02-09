@@ -16,6 +16,8 @@
 
 package io.confluent.dekregistry.client;
 
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -60,9 +62,14 @@ public final class MockDekRegistryClientFactory {
    * @return A client for the specified scope.
    */
   public static DekRegistryClient getClientForScope(final String scope, Map<String, ?> configs) {
+    return getClientForScope(scope, configs, Collections.emptyList());
+  }
+
+  public static DekRegistryClient getClientForScope(final String scope,
+      Map<String, ?> configs, List<SchemaProvider> providers) {
     synchronized (SCOPED_CLIENTS) {
       if (!SCOPED_CLIENTS.containsKey(scope)) {
-        SCOPED_CLIENTS.put(scope, new MockDekRegistryClient(configs));
+        SCOPED_CLIENTS.put(scope, new MockDekRegistryClient(configs, providers));
       }
     }
     return SCOPED_CLIENTS.get(scope);
