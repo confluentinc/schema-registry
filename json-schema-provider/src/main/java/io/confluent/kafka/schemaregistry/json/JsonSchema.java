@@ -165,6 +165,22 @@ public class JsonSchema implements ParsedSchema {
   }
 
   public JsonSchema(
+        JsonNode jsonNode,
+        List<SchemaReference> references,
+        Map<String, String> resolvedReferences,
+        Metadata metadata,
+        RuleSet ruleSet,
+        Integer version
+    ) {
+        this.jsonNode = jsonNode;
+        this.references = Collections.unmodifiableList(references);
+        this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+        this.metadata = metadata;
+        this.ruleSet = ruleSet;
+        this.version = version;
+     }
+
+  public JsonSchema(
       String schemaString,
       List<SchemaReference> references,
       Map<String, String> resolvedReferences,
@@ -412,6 +428,8 @@ public class JsonSchema implements ParsedSchema {
           jsonNode,
           this.references.stream().sorted().distinct().collect(Collectors.toList()),
           this.resolvedReferences,
+          this.metadata,
+          this.ruleSet,
           this.version
       );
     } catch (IOException e) {
