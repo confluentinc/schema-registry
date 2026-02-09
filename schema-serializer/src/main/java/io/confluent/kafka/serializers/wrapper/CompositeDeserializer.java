@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 
 public class CompositeDeserializer implements Deserializer<Object> {
 
-  protected Logger log = LoggerFactory.getLogger(CompositeDeserializer.class);
+  private static final Logger log = LoggerFactory.getLogger(CompositeDeserializer.class);
 
   private boolean isKey;
   private SchemaIdDeserializer schemaIdDeserializer;
