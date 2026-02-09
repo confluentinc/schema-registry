@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.kafka.common.errors.SerializationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A {@link SubjectNameStrategy} that will query schema registry for
@@ -44,6 +46,8 @@ import org.apache.kafka.common.errors.SerializationException;
  */
 public class AssociatedNameStrategy implements SubjectNameStrategy {
 
+  private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
+
   public static final String KAFKA_CLUSTER_ID = "kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String FALLBACK_SUBJECT_NAME_STRATEGY_TYPE =
@@ -52,8 +56,19 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private SchemaRegistryClient client;
   private String kafkaClusterId;
-  private SubjectNameStrategy fallbackSubjectNameStrategy;
+  private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
   private LoadingCache<CacheKey, String> subjectNameCache;
+
+  public AssociatedNameStrategy() {
+    this.subjectNameCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build(new CacheLoader<CacheKey, String>() {
+          @Override
+          public String load(CacheKey key) throws Exception {
+            return loadSubjectName(key.topic, key.isKey, key.schema);
+          }
+        });
+  }
 
   @Override
   public void configure(Map<String, ?> configs) {
@@ -74,6 +89,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
           this.fallbackSubjectNameStrategy = new TopicRecordNameStrategy();
           break;
         case "NONE":
+          this.fallbackSubjectNameStrategy = null;
           break;
         default:
           throw new IllegalArgumentException("Invalid value for "
@@ -83,14 +99,6 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       // default is TopicNameStrategy
       this.fallbackSubjectNameStrategy = new TopicNameStrategy();
     }
-    this.subjectNameCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build(new CacheLoader<CacheKey, String>() {
-          @Override
-          public String load(CacheKey key) throws Exception {
-            return loadSubjectName(key.topic, key.isKey, key.schema);
-          }
-        });
   }
 
   @Override
@@ -103,7 +111,18 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     if (topic == null) {
       return null;
     }
-    
+
+    if (client == null) {
+      if (fallbackSubjectNameStrategy != null) {
+        log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
+            + " was not called, using fallback strategy");
+        return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
+      } else {
+        throw new SerializationException("Client is not set in AssociatedNameStrategy, "
+            + " perhaps configure() on serde was not called");
+      }
+    }
+
     try {
       return subjectNameCache.get(new CacheKey(topic, isKey, schema));
     } catch (Exception e) {
@@ -116,15 +135,28 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private String loadSubjectName(String topic, boolean isKey, ParsedSchema schema)
       throws IOException, RestClientException {
-    List<Association> associations = client.getAssociationsByResourceName(
-        topic,
-        kafkaClusterId != null ? kafkaClusterId : NAMESPACE_WILDCARD,
-        "topic",
-        Collections.singletonList(isKey ? "key" : "value"),
-        null,
-        0,
-        -1
-    );
+    List<Association> associations;
+    try {
+      associations = client.getAssociationsByResourceName(
+          topic,
+          kafkaClusterId != null ? kafkaClusterId : NAMESPACE_WILDCARD,
+          "topic",
+          Collections.singletonList(isKey ? "key" : "value"),
+          null,
+          0,
+          -1
+      );
+    } catch (RestClientException e) {
+      if (e.getStatus() == 404) {
+        if (fallbackSubjectNameStrategy != null) {
+          log.warn("Associations endpoint not found (404), using fallback strategy");
+          return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
+        } else {
+          throw new SerializationException("No associated subject found for topic " + topic);
+        }
+      }
+      throw e;
+    }
     if (associations.size() > 1) {
       throw new SerializationException("Multiple associated subjects found for topic " + topic);
     } else if (associations.size() == 1) {
