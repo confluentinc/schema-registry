@@ -252,6 +252,7 @@ public class JsonSchema implements ParsedSchema {
     this.metadata = metadata;
     this.ruleSet = ruleSet;
     this.version = version;
+    this.ignoreModernDialects = false;
   }
 
   public JsonSchema(
