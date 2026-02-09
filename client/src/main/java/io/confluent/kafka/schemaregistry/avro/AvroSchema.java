@@ -327,6 +327,8 @@ public class AvroSchema implements ParsedSchema {
         normalized,
         this.references.stream().sorted().distinct().collect(Collectors.toList()),
         this.resolvedReferences,
+        this.metadata,
+        this.ruleSet,
         this.version,
         this.isNew
     );
