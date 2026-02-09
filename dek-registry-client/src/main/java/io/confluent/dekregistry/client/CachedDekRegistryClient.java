@@ -50,6 +50,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       int cacheCapacity,
       int cacheExpirySecs,
       Map<String, ?> configs,
+      List<SchemaProvider> providers,
+      Map<String, String> httpHeaders) {
+    this(new DekRegistryRestService(baseUrls),
+        cacheCapacity, cacheExpirySecs, configs, providers, httpHeaders, Ticker.systemTicker());
+  }
+
+  public CachedDekRegistryClient(
+      List<String> baseUrls,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
       Map<String, String> httpHeaders) {
     this(new DekRegistryRestService(baseUrls),
         cacheCapacity, cacheExpirySecs, configs, httpHeaders, Ticker.systemTicker());

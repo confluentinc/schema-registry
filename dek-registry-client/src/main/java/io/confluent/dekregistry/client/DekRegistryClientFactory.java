@@ -49,6 +49,7 @@ public class DekRegistryClientFactory {
           cacheCapacity,
           cacheExpirySecs,
           configs,
+          providers,
           httpHeaders
       );
     }
