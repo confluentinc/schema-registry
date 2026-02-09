@@ -91,6 +91,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
+import io.confluent.kafka.schemaregistry.storage.garbagecollection.GarbageCollectionIngestor;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
@@ -128,6 +129,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
+  private GarbageCollectionIngestor assocGcIngestor;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final int kafkaStoreTimeoutMs;
@@ -184,6 +186,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     this.kafkaStore = kafkaStore(config);
     this.store = kafkaStore;
     this.metadataEncoder = new KafkaMetadataEncoderService(this);
+
+    boolean assocGcEnabled = config.getBoolean(SchemaRegistryConfig.ASSOC_GC_ENABLE_CONFIG);
+    if (assocGcEnabled) {
+      this.assocGcIngestor = new GarbageCollectionIngestor(this);
+    }
   }
 
   private static MetricsContainer initMetricsContainer(
@@ -265,6 +272,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     } catch (Exception e) {
       throw new SchemaRegistryInitializationException(
           "Error initializing metadata encoder while initializing schema registry", e);
+    }
+    try {
+      if (assocGcIngestor != null) {
+        assocGcIngestor.init();
+      }
+    } catch (Exception e) {
+      throw new SchemaRegistryInitializationException(
+              "Error initializing GarbageCollectionIngestor while initializing schema registry", e);
     }
 
     config.checkBootstrapServers();
@@ -1824,6 +1839,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
     if (leaderRestService != null) {
       leaderRestService.close();
+    }
+    if (assocGcIngestor != null) {
+      assocGcIngestor.close();
     }
     kafkaStore.close();
     metadataEncoder.close();

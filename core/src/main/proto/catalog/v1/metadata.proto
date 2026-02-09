@@ -1,0 +1,300 @@
+syntax = "proto3";
+
+package catalog.v1;
+
+import "google/protobuf/timestamp.proto";
+option java_package = "io.confluent.protobuf.events.catalog.v1";
+option java_multiple_files = true;
+option go_package = "github.com/confluentinc/events-schema/go/catalog/v1";
+
+// NOTE: keep this in sync with https://github.com/confluentinc/events-schema
+// metadata wrapper
+message MetadataChange {
+  string source = 1;
+  OpType op = 2;
+  repeated MetadataEvent events = 3;
+}
+
+enum OpType {
+  UNSPECIFIED = 0;
+  SNAPSHOT = 1;
+  CREATE = 2;
+  UPDATE = 3;
+  DELETE = 4;
+  PURGE = 5;
+}
+
+// metadata events container
+message MetadataEvent {
+  // will have more entry once we support other metadata types
+  oneof metadata {
+    TopicMetadata topic_metadata = 1;
+    LogicalClusterMetadata logical_cluster_metadata = 2;
+    ConnectMetadata connect_metadata = 3;
+    PipelineMetadata pipeline_metadata = 4;
+    ClusterLinkMetadata cluster_link_metadata = 5;
+    EnvironmentMetadata environment_metadata = 6;
+    FlinkComputePoolMetadata flink_compute_pool_metadata = 7;
+  }
+}
+
+message FlinkComputePoolMetadata {
+  enum Cloud {
+    UNSPECIFIED = 0;
+    AWS = 1;
+    GCP = 2;
+    AZURE = 3;
+  }
+
+  string id = 1;
+  string name = 2;
+  Cloud cloud = 3;
+  string region = 4;
+  google.protobuf.Timestamp created = 6;
+  google.protobuf.Timestamp modified = 7;
+  google.protobuf.Timestamp deactivated = 8;
+}
+
+// metadata for a single cluster link
+message ClusterLinkMetadata {
+  string cluster_link_name = 1;
+  string cluster_link_id = 2;
+  string link_mode = 3;
+  string connection_mode = 4;
+  string remote_cluster_id = 5;
+  string local_cluster_id = 6;
+  google.protobuf.Timestamp create_time = 7;
+  google.protobuf.Timestamp update_time = 8;
+}
+
+// metadata for a single topic
+message TopicMetadata {
+  enum CleanupPolicy {
+    UNSPECIFIED = 0;
+    DELETE = 1;
+    COMPACT = 2;
+    COMPACT_DELETE = 3;
+  }
+
+  enum CompressionType {
+    COMPRESSION_UNSPECIFIED = 0;
+    UNCOMPRESSED = 1;
+    ZSTD = 2;
+    LZ4 = 3;
+    SNAPPY = 4;
+    GZIP = 5;
+    PRODUCER = 6;
+  }
+
+  string topic_id = 1;
+  string topic_name = 2;
+  google.protobuf.Timestamp create_time = 3;
+  google.protobuf.Timestamp update_time = 4;
+  int64 retention_ms = 5;
+  sint64 retention_bytes = 6; // use sint64 since default value is -1
+  int32 replication_factor = 7;
+  int32 partitions_count = 8;
+  CleanupPolicy cleanup_policy = 9;
+  bool key_schema_validation = 10;
+  bool value_schema_validation = 11;
+  string owner = 12;
+  MirrorTopicMetadata mirror_topic_metadata = 13;
+  CompressionType compression_type = 14;
+  int64 file_delete_delay_ms = 15;
+  int64 flush_messages = 16;
+  int64 flush_ms = 17;
+  repeated string follower_replication_throttled_replicas = 18;
+  repeated string leader_replication_throttled_replicas = 19;
+  int32 index_interval_bytes = 20;
+  int64 max_compaction_lag_ms = 21;
+  int32 max_message_bytes = 22;
+  bool message_downconversion_enable = 23;
+  string message_format_version = 24;
+  int64 message_timestamp_difference_max_ms = 25;
+  string message_timestamp_type = 26;
+  double min_cleanable_dirty_ratio = 27;
+  int64 min_compaction_lag_ms = 28;
+  int32 min_insync_replicas = 29;
+  bool preallocate = 30;
+  int32 segment_bytes = 31;
+  int32 segment_index_bytes = 32;
+  int64 segment_jitter_ms = 33;
+  int64 segment_ms = 34;
+  bool unclean_leader_election_enable = 35;
+  int64 delete_retention_ms = 36;
+}
+
+// metadata for a single mirror topic
+message MirrorTopicMetadata {
+  string link_id = 1;
+  string link_name = 2;
+  string source_topic_id = 3;
+  string source_topic_name = 4;
+  string mirror_topic_state = 5;
+  // time the state was last updated
+  google.protobuf.Timestamp update_time = 6;
+  string remote_cluster_id = 7;
+}
+
+// metadata for a single connector
+message ConnectMetadata {
+  enum ConnectorType {
+    SOURCE = 0;
+    SINK = 1;
+  }
+
+  enum ConnectorStatus { // Defined in connect.proto -> DesiredState in cc-structs
+    NONE = 0;
+    PROVISIONING = 1;
+    RUNNING = 2;
+    DEGRADED = 3;
+    FAILED = 4;
+    PAUSED = 5;
+    DELETED = 6;
+  }
+
+  enum KafkaAuthMode {
+    KAFKA_API_KEY = 0;
+    SERVICE_ACCOUNT = 1;
+  }
+
+  string cluster_id = 1;
+  string name = 2;
+  string kafka_cluster_id = 3;
+  string class = 4;
+  ConnectorType type = 5;
+  ConnectorStatus status = 6;
+  int32 tasks_max = 7;
+  repeated string topics = 8;
+  google.protobuf.Timestamp create_time = 9;
+  google.protobuf.Timestamp update_time = 10;
+  KafkaAuthMode kafka_auth_mode = 11;
+  string kafka_service_account_id = 12;
+  string kafka_api_key = 13;
+  string dlq_topic = 14;
+  string input_format = 15;
+  string output_format = 16;
+  string source_schema = 17;
+  string source_endpoint = 18;
+  string owner = 19;
+}
+
+// metadata for a single environment
+message EnvironmentMetadata {
+  string environment_id = 1;
+  string environment_name = 2;
+  google.protobuf.Timestamp create_time = 3;
+  google.protobuf.Timestamp update_time = 4;
+}
+
+// metadata for logical cluster
+message LogicalClusterMetadata {
+  enum ClusterStatus {
+    PROVISIONING = 0;
+    UP = 1;
+    DOWN = 2;
+    DELETING = 3;
+    DELETED = 4;
+    EXPANSION_PENDING = 5;
+    EXPANDING = 6;
+    SHRINK_PENDING = 7;
+    SHRINKING = 8;
+    STORAGE_EXPANDING = 9;
+  }
+
+  enum Sku {
+    UNDEFINED = 0;
+    BASIC_LEGACY = 1;
+    BASIC = 2;
+    STANDARD = 3;
+    DEDICATED = 4;
+    DEDICATED_LEGACY = 5;
+    ENTERPRISE = 6;
+    FREIGHT = 7;
+  }
+
+  enum Cloud {
+    UNSPECIFIED = 0;
+    AWS = 1;
+    GCP = 2;
+    AZURE = 3;
+  }
+
+  enum Availability {
+    SINGLE_ZONE = 0;
+    MULTI_ZONE = 1;
+  }
+
+  string environment = 1;
+  string cluster_id = 2;
+  string name = 3;
+  ClusterStatus cluster_status = 4;
+  Sku sku = 5;
+  Cloud cloud = 6;
+  string region = 7;
+  Availability availability = 8;
+  uint32 cku = 9;
+  string selected_network_type = 10;
+  google.protobuf.Timestamp deactivated = 11;
+  google.protobuf.Timestamp created = 12;
+  google.protobuf.Timestamp modified = 13;
+}
+
+// metadata for a single pipeline. More details on each fields are defined here:
+// https://confluentinc.atlassian.net/wiki/spaces/DI/pages/2813919363/Design+Note+Stream+Designer+Integration+with+Stream+Catalog#Pipeline-Change-Events
+message PipelineMetadata {
+  enum Method {
+    UNSPECIFIED = 0;
+    CREATED = 1;
+    UPDATED = 2;
+    ACTIVATED = 3;
+    DEACTIVATED = 4;
+    DELETED = 5;
+  }
+  string id = 1;  // Pipeline ID
+  string name = 2; // Pipeline Name
+  string description = 3; // Pipeline Description
+  // public resource ids for org, env, lkc, sr and ksql
+  string organization_id = 4;
+  string environment_id = 5;
+  string kafka_cluster_id = 6;
+  string ksql_cluster_id = 7;
+  string sr_cluster_id = 8;
+  Method method_name = 9; // SD operation generating this event
+  PipelineStatus status = 10; // Pipeline status
+  repeated string input_topic_names = 11; // list of input topic names
+  repeated string output_topic_names = 12; // list of output topic names
+  ActivatedResources activated_resources = 13; // Resources activated by this pipeline
+}
+
+message PipelineStatus {
+  enum State {
+    UNSPECIFIED = 0;
+    DRAFT = 1;
+    ACTIVATING = 2;
+    DEACTIVATING = 3;
+    ACTIVE = 4;
+    FAILED = 5;
+    DELETED = 6;
+  }
+
+  State state = 1;
+  google.protobuf.Timestamp create_time = 2;
+  string created_by = 3;
+  google.protobuf.Timestamp update_time = 4;
+  string updated_by = 5;
+  google.protobuf.Timestamp activate_time = 6;
+  string activated_by = 7;
+  int32 topic_count = 8;
+  int32 connector_count = 9;
+  int32 stream_count = 10;
+  int32 table_count = 11;
+  int32 query_count = 12;
+}
+
+message ActivatedResources {
+  repeated string topic_names = 1;
+  repeated string connector_ids = 2;
+  repeated string stream_names = 3;
+  repeated string table_names = 4;
+}

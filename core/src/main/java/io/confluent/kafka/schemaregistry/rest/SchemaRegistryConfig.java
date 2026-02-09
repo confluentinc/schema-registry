@@ -173,6 +173,59 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String ASSOCIATIONS_ENABLE = "associations.enable";
   public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
   /**
+   * <code>associations.gc.enable</code>
+   */
+  public static final String ASSOC_GC_ENABLE_CONFIG = "associations.gc.enable";
+  public static final boolean DEFAULT_ASSOC_GC_ENABLE = true;
+  /**
+   * <code>associations.gc.ingestor.topics</code>
+   */
+  public static final String ASSOC_GC_INGESTOR_TOPICS_CONFIG = "associations.gc.ingestor.topics";
+  public static final String DEFAULT_ASSOC_GC_INGESTOR_TOPICS = "";
+  /**
+   * <code>associations.gc.ingestor.consumer.group.override</code>
+   */
+  public static final String ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_CONFIG =
+          "associations.gc.ingestor.consumer.group.override";
+  public static final String DEFAULT_ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE = "";
+  /**
+   * <code>associations.gc.ingestor.max.poll.interval.ms</code>
+   */
+  public static final String ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_CONFIG =
+          "associations.gc.ingestor.max.poll.interval.ms";
+  public static final int DEFAULT_ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS = 1000;
+  /**
+   * <code>associations.gc.topic.snapshot.backoff.secs</code>
+   */
+  public static final String ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_CONFIG =
+          "associations.gc.topic.snapshot.backoff.secs";
+  public static final int DEFAULT_ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS = 7200; // 2 hours
+  /**
+   * <code>associations.gc.kafka.cluster.snapshot.backoff.secs</code>
+   */
+  public static final String ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_CONFIG =
+          "associations.gc.kafka.cluster.snapshot.backoff.secs";
+  public static final int DEFAULT_ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS = 7200; // 2 hours
+  /**
+   * <code>associations.gc.executor.service.core.pool.size</code>
+   */
+  public static final String ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE_CONFIG =
+          "associations.gc.executor.service.core.pool.size";
+  public static final int DEFAULT_ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE = 2;
+  /**
+   * <code>associations.gc.executor.service.max.pool.size</code>
+   */
+  public static final String ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE_CONFIG =
+          "associations.gc.executor.service.max.pool.size";
+  public static final int DEFAULT_ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE = 4;
+  /**
+   * <code>associations.gc.executor.service.queue.size</code>
+   */
+  public static final String ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE_CONFIG =
+          "associations.gc.executor.service.queue.size";
+  public static final int DEFAULT_ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE = 512;
+
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -462,6 +515,26 @@ public class SchemaRegistryConfig extends RestConfig {
       + "cluster wide setting i.e all nodes should have either true or false.";
   protected static final String ASSOCIATIONS_ENABLE_DOC =
       "If true, enable support for associations between resources and subjects.";
+  protected static final String ASSOC_GC_ENABLE_DOC =
+          "Enable associations garbage collection.";
+  protected static final String ASSOC_GC_INGESTOR_TOPICS_DOC =
+          "A comma separated list of topics for the associations garbage collection ingestion pipeline.";
+  protected static final String ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_DOC =
+          "Override for the consumer group used by the associations garbage collection ingestor.";
+  protected static final String ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_DOC =
+          "Maximum delay between two calls of poll().";
+  protected static final String ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_DOC =
+          "For topic snapshot, the amount of time we should subtract from the cloud event timestamp "
+                  + "before comparing with the associations create timestamp.";
+  protected static final String ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_DOC =
+          "For kafka cluster snapshot, the amount of time we should subtract from the cloud event "
+                  + "timestamp before comparing with the associations create timestamp.";
+  protected static final String ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE_DOC =
+          "Associations garbage collection executor service core pool size.";
+  protected static final String ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE_DOC =
+          "Associations garbage collection executor service max pool size.";
+  protected static final String ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE_DOC =
+          "Associations garbage collection executor service queue size.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -719,6 +792,40 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
         ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
+    )
+    .define(ASSOC_GC_ENABLE_CONFIG, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOC_GC_ENABLE,
+            ConfigDef.Importance.LOW, ASSOC_GC_ENABLE_DOC
+    )
+    .define(ASSOC_GC_INGESTOR_TOPICS_CONFIG, ConfigDef.Type.LIST, DEFAULT_ASSOC_GC_INGESTOR_TOPICS,
+            ConfigDef.Importance.MEDIUM, ASSOC_GC_INGESTOR_TOPICS_DOC
+    )
+    .define(ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_CONFIG, ConfigDef.Type.STRING,
+            DEFAULT_ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE,
+            ConfigDef.Importance.MEDIUM, ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_DOC
+    )
+    .define(ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
+            DEFAULT_ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS,
+            ConfigDef.Importance.LOW, ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_DOC
+    )
+    .define(ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_CONFIG, ConfigDef.Type.INT,
+            DEFAULT_ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS,
+            ConfigDef.Importance.LOW, ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_DOC
+    )
+    .define(ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_CONFIG, ConfigDef.Type.INT,
+            DEFAULT_ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS,
+            ConfigDef.Importance.LOW, ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_DOC
+    )
+    .define(ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE_CONFIG, ConfigDef.Type.INT,
+            DEFAULT_ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE,
+            ConfigDef.Importance.LOW, ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE_DOC
+    )
+    .define(ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE_CONFIG, ConfigDef.Type.INT,
+            DEFAULT_ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE,
+            ConfigDef.Importance.LOW, ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE_DOC
+    )
+    .define(ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE_CONFIG, ConfigDef.Type.INT,
+            DEFAULT_ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE,
+            ConfigDef.Importance.LOW, ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
