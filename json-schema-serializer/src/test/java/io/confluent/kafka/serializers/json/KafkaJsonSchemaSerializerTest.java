@@ -43,6 +43,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.serializers.jackson.Jackson;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -209,7 +210,10 @@ public class KafkaJsonSchemaSerializerTest {
     RecordHeaders headers = new RecordHeaders();
     assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.serialize("foo", headers, user));
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
-    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, new HashMap(config));
+    HashMap serializerConfig = new HashMap(config);
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        TopicNameStrategy.class.getName());
+    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, serializerConfig);
 
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
     assertThrows(ThrottlingQuotaExceededException.class, () -> serializer.serialize("foo", headers, user));
@@ -246,7 +250,10 @@ public class KafkaJsonSchemaSerializerTest {
 
 
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
-    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, new HashMap(config));
+    HashMap deserializerConfig = new HashMap(config);
+    deserializerConfig.put(KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        TopicNameStrategy.class.getName());
+    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, deserializerConfig);
 
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaByGuid(any(), any());

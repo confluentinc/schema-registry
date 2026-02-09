@@ -22,6 +22,7 @@ import io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,7 +36,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import  org.apache.kafka.common.config.ConfigDef.Type;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
-import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 
 /**
@@ -283,7 +283,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public static final String KEY_SUBJECT_NAME_STRATEGY = "key.subject.name.strategy";
   public static final String KEY_SUBJECT_NAME_STRATEGY_DEFAULT =
-      TopicNameStrategy.class.getName();
+      AssociatedNameStrategy.class.getName();
   public static final String KEY_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the key schema is registered "
       + "with the schema registry. By default, <topic>-key is used as subject.";
@@ -302,7 +302,7 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public static final String VALUE_SUBJECT_NAME_STRATEGY = "value.subject.name.strategy";
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DEFAULT =
-      TopicNameStrategy.class.getName();
+      AssociatedNameStrategy.class.getName();
   public static final String VALUE_SUBJECT_NAME_STRATEGY_DOC =
       "Determines how to construct the subject name under which the value schema is registered "
       + "with the schema registry. By default, <topic>-value is used as subject.";
