@@ -19,7 +19,9 @@ package io.confluent.kafka.serializers.schema.id;
 import static io.confluent.kafka.serializers.schema.id.SchemaId.KEY_SCHEMA_ID_HEADER;
 import static io.confluent.kafka.serializers.schema.id.SchemaId.VALUE_SCHEMA_ID_HEADER;
 
+import java.util.Arrays;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 
 /**
@@ -35,7 +37,15 @@ public class HeaderSchemaIdSerializer implements SchemaIdSerializer {
       throw new SerializationException("Missing headers");
     }
     String headerKey = isKey ? KEY_SCHEMA_ID_HEADER : VALUE_SCHEMA_ID_HEADER;
-    headers.add(headerKey, schemaId.guidToBytes());
+    byte[] headerValue = schemaId.guidToBytes();
+
+    // Check if header already exists with the same value
+    Header existingHeader = headers.lastHeader(headerKey);
+    if (existingHeader != null && Arrays.equals(existingHeader.value(), headerValue)) {
+      return payload;
+    }
+
+    headers.add(headerKey, headerValue);
     return payload;
   }
 }
