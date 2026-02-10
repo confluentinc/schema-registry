@@ -121,6 +121,13 @@ public abstract class RestApiTest {
     Kek newKek = client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
     assertEquals(kek, newKek);
 
+    try {
+      client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, false, false);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.ALREADY_EXISTS_ERROR_CODE, e.getErrorCode());
+    }
+
     // Delete kek
     client.deleteKek(headers, kekName, false);
 
