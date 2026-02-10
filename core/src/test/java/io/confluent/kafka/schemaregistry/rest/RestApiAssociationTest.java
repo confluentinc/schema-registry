@@ -112,6 +112,20 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(1).getLifecycle());
     assertEquals(allSchemas.get(1), response.getAssociations().get(1).getSchema().getSchema());
 
+    // Verify createTs and updateTs are set after creation
+    List<Association> createdAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, createdAssociations.size());
+    Association keyAssocAfterCreate = createdAssociations.stream()
+        .filter(a -> "key".equals(a.getAssociationType()))
+        .findFirst().orElse(null);
+    assertNotNull(keyAssocAfterCreate);
+    assertNotNull(keyAssocAfterCreate.getCreateTimestamp());
+    assertNotNull(keyAssocAfterCreate.getUpdateTimestamp());
+    Long keyCreateTs = keyAssocAfterCreate.getCreateTimestamp();
+    Long keyUpdateTsAfterCreate = keyAssocAfterCreate.getUpdateTimestamp();
+
     List<Association> associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
         Collections.singletonList("key"), null, 0, -1);
@@ -208,6 +222,19 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("key", response.getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
     assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
+
+    // Verify createTs remains the same but updateTs is updated after update
+    List<Association> updatedAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key"), null, 0, -1);
+    assertEquals(1, updatedAssociations.size());
+    Association keyAssocAfterUpdate = updatedAssociations.get(0);
+    assertNotNull(keyAssocAfterUpdate.getCreateTimestamp());
+    assertNotNull(keyAssocAfterUpdate.getUpdateTimestamp());
+    // createTs should remain the same
+    assertEquals(keyCreateTs, keyAssocAfterUpdate.getCreateTimestamp());
+    // updateTs should be >= the original updateTs (updated or same if very fast)
+    assertTrue(keyAssocAfterUpdate.getUpdateTimestamp() >= keyUpdateTsAfterCreate);
 
     boolean cascadeDelete = false;
     restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
