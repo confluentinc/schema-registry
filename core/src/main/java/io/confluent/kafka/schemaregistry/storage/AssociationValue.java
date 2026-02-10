@@ -46,6 +46,7 @@ public class AssociationValue extends SubjectValue {
   private Lifecycle lifecycle;
   @NotEmpty
   private boolean frozen;
+  private Long createTimestamp;
 
   @JsonCreator
   public AssociationValue(
@@ -58,7 +59,8 @@ public class AssociationValue extends SubjectValue {
       @JsonProperty("associationType") String associationType,
       @JsonProperty("subject") String subject,
       @JsonProperty("lifecycle") Lifecycle lifecycle,
-      @JsonProperty("frozen") boolean frozen) {
+      @JsonProperty("frozen") boolean frozen,
+      @JsonProperty("createTs") Long createTimestamp) {
     super(subject);
     this.guid = guid;
     this.tenant = tenant;
@@ -69,6 +71,7 @@ public class AssociationValue extends SubjectValue {
     this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
+    this.createTimestamp = createTimestamp;
   }
 
   // getters and setters
@@ -162,6 +165,16 @@ public class AssociationValue extends SubjectValue {
     this.frozen = frozen;
   }
 
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == null || getClass() != o.getClass()) {
@@ -179,14 +192,15 @@ public class AssociationValue extends SubjectValue {
         && Objects.equals(resourceId, that.resourceId)
         && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(associationType, that.associationType)
-        && lifecycle == that.lifecycle;
+        && lifecycle == that.lifecycle
+        && Objects.equals(createTimestamp, that.createTimestamp);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
         super.hashCode(), guid, tenant, resourceName, resourceNamespace, resourceId,
-        resourceType, associationType, lifecycle, frozen);
+        resourceType, associationType, lifecycle, frozen, createTimestamp);
   }
 
   @Override
@@ -202,6 +216,7 @@ public class AssociationValue extends SubjectValue {
         + ", subject='" + getSubject() + '\''
         + ", lifecycle=" + lifecycle
         + ", frozen=" + frozen
+        + ", createTs=" + createTimestamp
         + '}';
   }
 
@@ -224,7 +239,9 @@ public class AssociationValue extends SubjectValue {
         lifecycle == Lifecycle.STRONG
             ? LifecyclePolicy.STRONG
             : LifecyclePolicy.WEAK,
-        frozen
+        frozen,
+        createTimestamp,
+        timestamp
     );
   }
 
@@ -253,7 +270,8 @@ public class AssociationValue extends SubjectValue {
                   info.getLifecycle() == LifecyclePolicy.STRONG
                       ? Lifecycle.STRONG
                       : Lifecycle.WEAK,
-                  Boolean.TRUE.equals(info.getFrozen()))
+                  Boolean.TRUE.equals(info.getFrozen()),
+                  null)
               : new AssociationValue(
                   old.getGuid(),
                   tenant,
@@ -272,7 +290,8 @@ public class AssociationValue extends SubjectValue {
                           : Lifecycle.WEAK),
                   info.getFrozen() != null
                       ? info.getFrozen()
-                      : old.isFrozen());
+                      : old.isFrozen(),
+                  null);
         })
         .toList();
   }

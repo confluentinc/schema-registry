@@ -10,7 +10,7 @@
               files="ErrorMessage.java"/>
 
     <suppress checks="ParameterNumber"
-              files="(AbstractKafkaProtobufSerializer|DynamicSchema|MessageDefinition|ProtobufSchema|Rule|RuleContext|SchemaRegistryCoordinator|Config.*|Schema|RestService).java"/>
+              files="(AbstractKafkaProtobufSerializer|DynamicSchema|MessageDefinition|ProtobufSchema|Rule|RuleContext|SchemaRegistryCoordinator|Config.*|Schema|RestService|Association|AssociationValue).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(.*).java"/>
