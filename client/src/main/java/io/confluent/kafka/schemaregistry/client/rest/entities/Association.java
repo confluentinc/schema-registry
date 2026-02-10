@@ -42,6 +42,21 @@ public class Association implements Comparable<Association> {
   private String associationType;
   private LifecyclePolicy lifecycle;
   private boolean frozen;
+  private Long createTimestamp;
+  private Long updateTimestamp;
+
+  public Association(@JsonProperty("subject") String subject,
+      @JsonProperty("guid") String guid,
+      @JsonProperty("resourceName") String resourceName,
+      @JsonProperty("resourceNamespace") String resourceNamespace,
+      @JsonProperty("resourceId") String resourceId,
+      @JsonProperty("resourceType") String resourceType,
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
+      @JsonProperty("frozen") boolean frozen) {
+    this(subject, guid, resourceName, resourceNamespace, resourceId, resourceType, associationType,
+        lifecycle, frozen, null, null);
+  }
 
   @JsonCreator
   public Association(@JsonProperty("subject") String subject,
@@ -52,7 +67,9 @@ public class Association implements Comparable<Association> {
       @JsonProperty("resourceType") String resourceType,
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
-      @JsonProperty("frozen") boolean frozen) {
+      @JsonProperty("frozen") boolean frozen,
+      @JsonProperty("createTs") Long createTimestamp,
+      @JsonProperty("updateTs") Long updateTimestamp) {
     this.subject = subject;
     this.guid = guid;
     this.resourceName = resourceName;
@@ -62,6 +79,8 @@ public class Association implements Comparable<Association> {
     this.associationType = associationType;
     this.lifecycle = lifecycle;
     this.frozen = frozen;
+    this.createTimestamp = createTimestamp;
+    this.updateTimestamp = updateTimestamp;
   }
 
   @JsonProperty("subject")
@@ -154,6 +173,26 @@ public class Association implements Comparable<Association> {
     this.frozen = frozen;
   }
 
+  @JsonProperty("createTs")
+  public Long getCreateTimestamp() {
+    return createTimestamp;
+  }
+
+  @JsonProperty("createTs")
+  public void setCreateTimestamp(Long createTimestamp) {
+    this.createTimestamp = createTimestamp;
+  }
+
+  @JsonProperty("updateTs")
+  public Long getUpdateTimestamp() {
+    return updateTimestamp;
+  }
+
+  @JsonProperty("updateTs")
+  public void setUpdateTimestamp(Long updateTimestamp) {
+    this.updateTimestamp = updateTimestamp;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == null || getClass() != o.getClass()) {
@@ -168,14 +207,16 @@ public class Association implements Comparable<Association> {
         && Objects.equals(resourceId, that.resourceId)
         && Objects.equals(resourceType, that.resourceType)
         && Objects.equals(associationType, that.associationType)
-        && lifecycle == that.lifecycle;
+        && lifecycle == that.lifecycle
+        && Objects.equals(createTimestamp, that.createTimestamp)
+        && Objects.equals(updateTimestamp, that.updateTimestamp);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
         subject, guid, resourceName, resourceNamespace, resourceId,
-        resourceType, associationType, lifecycle, frozen);
+        resourceType, associationType, lifecycle, frozen, createTimestamp, updateTimestamp);
   }
 
   public boolean isEquivalent(AssociationCreateOrUpdateInfo info) {
