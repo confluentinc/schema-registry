@@ -16,6 +16,8 @@
 
 package io.confluent.dekregistry.client;
 
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -27,15 +29,27 @@ public class DekRegistryClientFactory {
       int cacheExpirySecs,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
+    return newClient(baseUrls, cacheCapacity, cacheExpirySecs,
+        Collections.emptyList(), configs, httpHeaders);
+  }
+
+  public static DekRegistryClient newClient(
+      List<String> baseUrls,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      List<SchemaProvider> providers,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
     String mockScope = MockDekRegistryClientFactory.validateAndMaybeGetMockScope(baseUrls);
     if (mockScope != null) {
-      return MockDekRegistryClientFactory.getClientForScope(mockScope, configs);
+      return MockDekRegistryClientFactory.getClientForScope(mockScope, configs, providers);
     } else {
       return new CachedDekRegistryClient(
           baseUrls,
           cacheCapacity,
           cacheExpirySecs,
           configs,
+          providers,
           httpHeaders
       );
     }
