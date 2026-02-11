@@ -148,14 +148,16 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       );
     } catch (RestClientException e) {
       if (e.getStatus() == 404) {
-        if (fallbackSubjectNameStrategy != null) {
-          log.warn("Associations endpoint not found (404), using fallback strategy");
-          return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
-        } else {
-          throw new SerializationException("No associated subject found for topic " + topic);
-        }
+        log.warn("Associations endpoint not found (404), using fallback strategy");
+        // empty list will invoke fallback strategy
+        associations = Collections.emptyList();
+      } else {
+        throw e;
       }
-      throw e;
+    } catch (UnsupportedOperationException e) {
+      log.warn("Associations endpoint not implemented in the client, using fallback strategy");
+      // empty list will invoke fallback strategy
+      associations = Collections.emptyList();
     }
     if (associations.size() > 1) {
       throw new SerializationException("Multiple associated subjects found for topic " + topic);
