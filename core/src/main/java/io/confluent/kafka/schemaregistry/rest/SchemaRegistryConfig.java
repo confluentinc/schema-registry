@@ -156,7 +156,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>leader.read.timeout.ms</code>*
    */
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
-  public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
+  public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 120000;
   /**
    * <code>leader.election.delay</code>*
    */
