@@ -57,7 +57,6 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
-import java.util.Comparator;
 import java.util.HashSet;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Time;
@@ -653,7 +652,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       case DEFAULT -> !isDeleted;
       case INCLUDE_DELETED -> true;
       case DELETED_ONLY -> isDeleted;
-      case DELETED_AS_NEGATIVE -> true;
     };
   }
 
@@ -667,9 +665,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         continue;
       }
       SchemaKey schemaKey = schemaValue.toKey();
-      if (filter == LookupFilter.DELETED_AS_NEGATIVE && schemaValue.isDeleted()) {
-        schemaKey = new SchemaKey(schemaKey.getSubject(), -schemaKey.getVersion());
-      }
       schemaList.add(schemaKey);
     }
     return schemaList;
@@ -1333,8 +1328,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           throws SchemaRegistryException {
     try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
       List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, filter);
-      // sort schemaKeys by the absolute value of version in ascending order
-      schemaKeys.sort(Comparator.comparingInt(k -> Math.abs(k.getVersion())));
+      Collections.sort(schemaKeys);
       return schemaKeys.iterator();
     }
   }
