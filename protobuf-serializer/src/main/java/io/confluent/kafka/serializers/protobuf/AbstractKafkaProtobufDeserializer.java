@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -120,10 +122,17 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     return deserialize(includeSchemaAndVersion, topic, isKey, null, payload);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(includeSchemaAndVersion, topic, isKey, headers, payload, null);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -156,23 +165,27 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       );
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
-      ProtobufSchema readerSchema = null;
-      if (metadata != null) {
-        readerSchema = (ProtobufSchema) getLatestWithMetadata(subject).getSchema();
-      } else if (useLatestVersion) {
-        readerSchema = (ProtobufSchema) lookupLatestVersion(subject, schema, false).getSchema();
-      }
-      if (readerSchema != null && readerSchema.toDescriptor(name) != null) {
-        readerSchema = schemaWithName(readerSchema, name);
-      }
-      if (includeSchemaAndVersion || readerSchema != null) {
-        Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
-        schema = schema.copy(version);
-        schema = schemaWithName(schema, name);
-      }
       List<Migration> migrations = Collections.emptyList();
-      if (readerSchema != null) {
-        migrations = getMigrations(subject, schema, readerSchema);
+      ProtobufSchema readerSchema = writerToReaderSchemaFunc != null
+          ? (ProtobufSchema) writerToReaderSchemaFunc.apply(schema)
+          : null;
+      if (readerSchema == null) {
+        if (metadata != null) {
+          readerSchema = (ProtobufSchema) getLatestWithMetadata(subject).getSchema();
+        } else if (useLatestVersion) {
+          readerSchema = (ProtobufSchema) lookupLatestVersion(subject, schema, false).getSchema();
+        }
+        if (readerSchema != null && readerSchema.toDescriptor(name) != null) {
+          readerSchema = schemaWithName(readerSchema, name);
+        }
+        if (includeSchemaAndVersion || readerSchema != null) {
+          Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
+          schema = schema.copy(version);
+          schema = schemaWithName(schema, name);
+        }
+        if (readerSchema != null) {
+          migrations = getMigrations(subject, schema, readerSchema);
+        }
       }
 
       int length = buffer.remaining();
@@ -316,6 +329,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       String topic, boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException {
     return (ProtobufSchemaAndValue) deserialize(true, topic, isKey, headers, payload);
+  }
+
+  protected ProtobufSchemaAndValue deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+  ) throws SerializationException {
+    return (ProtobufSchemaAndValue) deserialize(
+        true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
   }
 
   static class Pair<K, V> {
