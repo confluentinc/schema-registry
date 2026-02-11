@@ -148,12 +148,14 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       );
     } catch (RestClientException e) {
       if (e.getStatus() == 404) {
+        log.warn("Associations endpoint not found (404), using fallback strategy");
         // empty list will invoke fallback strategy
         associations = Collections.emptyList();
       } else {
         throw e;
       }
     } catch (UnsupportedOperationException e) {
+      log.warn("Associations endpoint not implemented in the client, using fallback strategy");
       // empty list will invoke fallback strategy
       associations = Collections.emptyList();
     }
