@@ -21,6 +21,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -276,7 +277,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload,
-      Function<AvroSchema, AvroSchema> writerToReaderSchemaFunc)
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc)
       throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
@@ -296,7 +297,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
     AvroSchema schema = context.schemaForDeserialize();
     AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
-        ? writerToReaderSchemaFunc.apply(schema)
+        ? (AvroSchema) writerToReaderSchemaFunc.apply(schema)
         : specificAvroReaderSchema != null
             ? new AvroSchema(specificAvroReaderSchema)
             : null;

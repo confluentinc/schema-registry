@@ -948,4 +948,25 @@ public class KafkaProtobufSerializerTest {
     assertEquals(2, id);
   }
 
+  @Test
+  public void testDeserializeWithSchemaFunction() {
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+
+    // Test deserializeWithSchema with a function that returns the same schema
+    ParsedSchemaAndValue schemaAndValue = testMessageDeserializer.deserializeWithSchema(
+        topic, headers, bytes, writerSchema -> writerSchema);
+
+    ProtobufSchema expectedSchema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(HELLO_WORLD_MESSAGE, schemaAndValue.getValue());
+
+    // Test with null function (should use default behavior)
+    schemaAndValue = testMessageDeserializer.deserializeWithSchema(topic, headers, bytes, null);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(HELLO_WORLD_MESSAGE, schemaAndValue.getValue());
+  }
+
 }
