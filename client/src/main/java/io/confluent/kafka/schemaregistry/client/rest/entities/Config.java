@@ -31,6 +31,7 @@ import java.util.Objects;
 public class Config {
 
   private String alias;
+  private String aliasForDeks;
   private Boolean normalize;
   private Boolean validateFields;
   private Boolean validateNewSchemas;
@@ -45,6 +46,7 @@ public class Config {
 
   @JsonCreator
   public Config(@JsonProperty("alias") String alias,
+                @JsonProperty("aliasForDeks") String aliasForDeks,
                 @JsonProperty("normalize") Boolean normalize,
                 @JsonProperty("validateFields") Boolean validateFields,
                 @JsonProperty("validateNewSchemas") Boolean validateNewSchemas,
@@ -57,6 +59,7 @@ public class Config {
                 @JsonProperty("defaultRuleSet") RuleSet defaultRuleSet,
                 @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
     this.alias = alias;
+    this.aliasForDeks = aliasForDeks;
     this.normalize = normalize;
     this.validateFields = validateFields;
     this.validateNewSchemas = validateNewSchemas;
@@ -101,6 +104,7 @@ public class Config {
 
   public Config(ConfigUpdateRequest request) {
     this.alias = request.getAlias();
+    this.aliasForDeks = request.getAliasForDeks();
     this.normalize = request.isNormalize();
     this.validateFields = request.isValidateFields();
     this.validateNewSchemas = request.isValidateNewSchemas();
@@ -122,6 +126,16 @@ public class Config {
   @JsonProperty("alias")
   public void setAlias(String alias) {
     this.alias = alias;
+  }
+
+  @JsonProperty("aliasForDeks")
+  public String getAliasForDeks() {
+    return aliasForDeks;
+  }
+
+  @JsonProperty("aliasForDeks")
+  public void setAliasForDeks(String aliasForDeks) {
+    this.aliasForDeks = aliasForDeks;
   }
 
   @JsonProperty("normalize")
@@ -256,6 +270,7 @@ public class Config {
     }
     Config config = (Config) o;
     return Objects.equals(alias, config.alias)
+        && Objects.equals(aliasForDeks, config.aliasForDeks)
         && Objects.equals(normalize, config.normalize)
         && Objects.equals(validateFields, config.validateFields)
         && Objects.equals(validateNewSchemas, config.validateNewSchemas)
@@ -271,8 +286,8 @@ public class Config {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateNewSchemas, validateRules,
-        compatibilityLevel, compatibilityPolicy, compatibilityGroup,
+    return Objects.hash(alias, aliasForDeks, normalize, validateFields, validateNewSchemas,
+        validateRules, compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 
@@ -280,6 +295,7 @@ public class Config {
   public String toString() {
     return "Config{"
         + "alias='" + alias + '\''
+        + ", aliasForDeks=" + aliasForDeks
         + ", normalize=" + normalize
         + ", validateFields=" + validateFields
         + ", validateNewSchemas=" + validateNewSchemas

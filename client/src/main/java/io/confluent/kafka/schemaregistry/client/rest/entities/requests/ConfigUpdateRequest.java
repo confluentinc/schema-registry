@@ -37,6 +37,7 @@ import java.util.Optional;
 public class ConfigUpdateRequest {
 
   private Optional<String> alias;
+  private Optional<String> aliasForDeks;
   private Optional<Boolean> normalize;
   private Optional<Boolean> validateFields;
   private Optional<Boolean> validateNewSchemas;
@@ -54,6 +55,7 @@ public class ConfigUpdateRequest {
 
   public ConfigUpdateRequest(Config config) {
     setAlias(config.getAlias());
+    setAliasForDeks(config.getAliasForDeks());
     setNormalize(config.isNormalize());
     setValidateFields(config.isValidateFields());
     setValidateNewSchemas(config.isValidateNewSchemas());
@@ -89,6 +91,26 @@ public class ConfigUpdateRequest {
   @JsonIgnore
   public void setAlias(String alias) {
     this.alias = alias != null ? Optional.of(alias) : null;
+  }
+
+  @JsonProperty("aliasForDeks")
+  public Optional<String> getOptionalAliasForDeks() {
+    return this.aliasForDeks;
+  }
+
+  @JsonIgnore
+  public String getAliasForDeks()  {
+    return aliasForDeks != null ? aliasForDeks.orElse(null) : null;
+  }
+
+  @JsonProperty("aliasForDeks")
+  public void setAliasForDeks(Optional<String> aliasForDeks) {
+    this.aliasForDeks = aliasForDeks;
+  }
+
+  @JsonIgnore
+  public void setAliasForDeks(String aliasForDeks) {
+    this.aliasForDeks = aliasForDeks != null ? Optional.of(aliasForDeks) : null;
   }
 
   @JsonProperty("normalize")
@@ -331,6 +353,7 @@ public class ConfigUpdateRequest {
     }
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
     return Objects.equals(alias, that.alias)
+        && Objects.equals(aliasForDeks, that.aliasForDeks)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
         && Objects.equals(validateNewSchemas, that.validateNewSchemas)
@@ -346,8 +369,8 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateNewSchemas, validateRules,
-        compatibilityLevel, compatibilityPolicy, compatibilityGroup,
+    return Objects.hash(alias, aliasForDeks, normalize, validateFields, validateNewSchemas,
+        validateRules, compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 }
