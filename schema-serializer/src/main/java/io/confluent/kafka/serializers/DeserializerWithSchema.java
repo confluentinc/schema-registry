@@ -16,11 +16,16 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import java.util.function.Function;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 public interface DeserializerWithSchema<T> extends Deserializer<T> {
 
   ParsedSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] data);
+
+  ParsedSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] data,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc);
 }

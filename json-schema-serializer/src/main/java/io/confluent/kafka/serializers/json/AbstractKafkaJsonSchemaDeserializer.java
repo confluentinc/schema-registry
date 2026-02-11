@@ -30,6 +30,7 @@ import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -111,10 +112,17 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return deserialize(includeSchemaAndVersion, topic, isKey, null, payload);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(includeSchemaAndVersion, topic, isKey, headers, payload, null);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -144,19 +152,23 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       );
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
-      ParsedSchema readerSchema = null;
-      if (metadata != null) {
-        readerSchema = getLatestWithMetadata(subject).getSchema();
-      } else if (useLatestVersion) {
-        readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
-      }
-      if (includeSchemaAndVersion || readerSchema != null) {
-        Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
-        schema = schema.copy(version);
-      }
       List<Migration> migrations = Collections.emptyList();
-      if (readerSchema != null) {
-        migrations = getMigrations(subject, schema, readerSchema);
+      ParsedSchema readerSchema = writerToReaderSchemaFunc != null
+          ? writerToReaderSchemaFunc.apply(schema)
+          : null;
+      if (readerSchema == null) {
+        if (metadata != null) {
+          readerSchema = getLatestWithMetadata(subject).getSchema();
+        } else if (useLatestVersion) {
+          readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
+        }
+        if (includeSchemaAndVersion || readerSchema != null) {
+          Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
+          schema = schema.copy(version);
+        }
+        if (readerSchema != null) {
+          migrations = getMigrations(subject, schema, readerSchema);
+        }
       }
 
       int length = buffer.remaining();
@@ -319,5 +331,13 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String topic, boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException {
     return (JsonSchemaAndValue) deserialize(true, topic, isKey, headers, payload);
+  }
+
+  protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+  ) throws SerializationException {
+    return (JsonSchemaAndValue) deserialize(
+        true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
   }
 }
