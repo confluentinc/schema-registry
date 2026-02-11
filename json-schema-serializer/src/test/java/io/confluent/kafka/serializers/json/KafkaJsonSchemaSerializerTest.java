@@ -573,4 +573,29 @@ public class KafkaJsonSchemaSerializerTest {
       return Objects.hash(firstName, lastName, age, nickName, birthdate);
     }
   }
+
+  @Test
+  public void testDeserializeWithSchemaFunction() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+
+    // Test deserializeWithSchema with a function that returns the same schema
+    ParsedSchemaAndValue schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes, writerSchema -> writerSchema);
+
+    ParsedSchema expectedSchema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
+
+    // Test with null function (should use default behavior)
+    schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes, null);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
+  }
 }
