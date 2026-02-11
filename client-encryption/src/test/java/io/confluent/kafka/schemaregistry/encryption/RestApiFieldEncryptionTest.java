@@ -37,8 +37,10 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -167,7 +169,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     AvroSchema schema = createUserSchema();
     registerAndVerifySchema(schemaRegistry, schema, 1, subject);
 
-    IndexedRecord avroRecord = createUserRecord();
+    IndexedRecord avroRecord = createUserRecord("testUser");
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
@@ -233,7 +235,7 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     AvroSchema schema = createUserSchema();
     registerAndVerifySchema(schemaRegistry, schema, 1, subject);
 
-    IndexedRecord avroRecord = createUserRecord();
+    IndexedRecord avroRecord = createUserRecord("testUser");
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
@@ -271,6 +273,69 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     dekRegistry.deleteDek("kek1", subject, null, true);
   }
 
+  @Test
+  public void testFieldEncryptionWithDekAlias() throws Exception {
+    List<String> ruleNames = ImmutableList.of("myRule");
+    EncryptionProperties fieldEncryptionProps = getFieldEncryptionProperties(ruleNames);
+
+    String topic1 = "test";
+    String topic2 = "test2";
+    Map<String, Object> clientProps = fieldEncryptionProps.getClientProperties(
+        restApp.restClient.getBaseUrls().toString());
+    FakeTicker fakeTicker = new FakeTicker();
+    FakeClock fakeClock = new FakeClock();
+    clientProps.put(CLOCK, fakeClock);
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(
+        restApp.restClient,
+        10,
+        ImmutableList.of(
+            new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap(),
+        fakeTicker
+    );
+
+    KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer(schemaRegistry, clientProps);
+    KafkaAvroDeserializer avroDeserializer = new KafkaAvroDeserializer(schemaRegistry, clientProps);
+
+    String subject1 = "test-value";
+    Rule rule = new Rule("myRule", null, null, RuleMode.WRITE,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, "ERROR", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata(fieldEncryptionProps, "kek1");
+    AvroSchema ruleSchema = new AvroSchema(
+        createUserSchema().canonicalString(), Collections.emptyList(), Collections.emptyMap(), metadata, ruleSet, null, true);
+    registerAndVerifySchema(schemaRegistry, ruleSchema, 1, subject1);
+
+    IndexedRecord avroRecord = createUserRecord("testUser");
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic1, headers, avroRecord);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic1, headers, bytes);
+    String encryptedName = record.get("name").toString();
+    assertNotEquals("testUser", encryptedName);
+
+    String subject2 = "test2-value";
+    rule = new Rule("myRule", null, null, RuleMode.READ,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, "ERROR", false);
+    ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    metadata = getMetadata(fieldEncryptionProps, "kek1");
+    ruleSchema = new AvroSchema(
+        createUser2Schema().canonicalString(), Collections.emptyList(), Collections.emptyMap(), metadata, ruleSet, null, true);
+    registerAndVerifySchema(schemaRegistry, ruleSchema, 2, subject2);
+
+    // Set DEK alias for subject2 to subject1's DEK
+    Config config = new Config();
+    config.setAliasForDeks(subject1);
+    schemaRegistry.updateConfig(subject2, config);
+
+    avroRecord = createUser2Record(encryptedName);
+    headers = new RecordHeaders();
+    bytes = avroSerializer.serialize(topic2, headers, avroRecord);
+    record = (GenericRecord) avroDeserializer.deserialize(topic2, headers, bytes);
+    String decryptedName = record.get("name2").toString();
+    assertEquals("testUser", decryptedName);
+  }
+
   private AvroSchema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
         + "\"name\": \"User\","
@@ -281,10 +346,27 @@ public abstract class RestApiFieldEncryptionTest extends ClusterTestHarness {
     return new AvroSchema(schema);
   }
 
-  private IndexedRecord createUserRecord() {
+  private AvroSchema createUser2Schema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User2\","
+        + "\"fields\": [{\"name\": \"name2\", \"type\": [\"null\", \"string\"], "
+        + "\"confluent:tags\": [\"PII\"]}]}";
+    org.apache.avro.Schema.Parser parser = new org.apache.avro.Schema.Parser();
+    org.apache.avro.Schema schema = parser.parse(userSchema);
+    return new AvroSchema(schema);
+  }
+
+  private IndexedRecord createUserRecord(String name) {
     org.apache.avro.Schema schema = createUserSchema().rawSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
+    return avroRecord;
+  }
+
+  private IndexedRecord createUser2Record(String name) {
+    org.apache.avro.Schema schema = createUser2Schema().rawSchema();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name2", name);
     return avroRecord;
   }
 
