@@ -186,6 +186,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         if (readerSchema != null) {
           migrations = getMigrations(subject, schema, readerSchema);
         }
+      } else if (readerSchema.toDescriptor(name) != null) {
+         readerSchema = schemaWithName(readerSchema, name);
       }
 
       int length = buffer.remaining();
