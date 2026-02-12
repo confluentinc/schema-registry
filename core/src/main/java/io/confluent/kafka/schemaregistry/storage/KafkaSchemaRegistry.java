@@ -1113,6 +1113,19 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
       if (association == null) {
+        // If on create, frozen is set to true, ensure that a schema is being
+        // passed in, and that no other schemas exist in the subject
+        if (Boolean.TRUE.equals(info.getFrozen())) {
+          if (info.getSchema() == null) {
+            throw new IllegalPropertyException(
+                "schema", "schema must be provided when creating a frozen association");
+          }
+          if (getLatestVersion(qualifiedSubject) != null) {
+            throw new IllegalPropertyException(
+                "frozen", "cannot create a frozen association when schemas already exist "
+                    + "in the subject");
+          }
+        }
         continue;
       }
       if (association.isEquivalent(info)) {
@@ -1137,7 +1150,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         throw new IllegalPropertyException(
             "subject", "subject of association cannot be changed");
       }
-      if (association.isFrozen() && !Boolean.FALSE.equals(info.getFrozen())) {
+      // Don't allow the frozen attribute to be updated
+      if (info.getFrozen() != null && association.isFrozen() != info.getFrozen()) {
+        throw new IllegalPropertyException(
+            "frozen", "frozen attribute of association cannot be changed");
+      }
+      if (association.isFrozen()) {
         throw new AssociationFrozenException(
             association.getAssociationType(), association.getSubject());
       }
@@ -1453,9 +1471,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           + qs.getContext() + " is in read-only mode");
     }
 
-    if (!cascadeLifecycle
-        && oldAssociation.getLifecycle() == LifecyclePolicy.STRONG
-        && oldAssociation.isFrozen()) {
+    // If the association is frozen, cascadeLifecycle must be true when deleting
+    if (!cascadeLifecycle && oldAssociation.isFrozen()) {
       throw new AssociationFrozenException(
           oldAssociation.getAssociationType(), oldAssociation.getSubject());
     }
