@@ -17,11 +17,10 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.annotations.PerformanceMetric;
@@ -48,7 +47,6 @@ import jakarta.ws.rs.container.Suspended;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -146,18 +144,13 @@ public class ContextsResource {
 
     delimitedContext = QualifiedSubject.normalize(schemaRegistry.tenant(), delimitedContext);
 
-    Iterator<ExtendedSchema> schemas;
     try {
-      schemas = schemaRegistry.getVersionsWithSubjectPrefix(
-          delimitedContext, false, LookupFilter.INCLUDE_DELETED, false, null);
-      if (schemas.hasNext()) {
-        throw Errors.contextNotEmptyException(delimitedContext);
-      }
-
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.deleteContextOrForward(headerProperties, delimitedContext);
       asyncResponse.resume(Response.status(204).build());
+    } catch (OperationNotPermittedException e) {
+      throw Errors.contextNotEmptyException(delimitedContext);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting context", e);
     }

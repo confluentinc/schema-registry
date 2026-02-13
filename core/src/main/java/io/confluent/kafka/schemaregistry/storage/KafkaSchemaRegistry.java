@@ -891,6 +891,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String delimitedContext) throws SchemaRegistryException {
     kafkaStore.lockFor(delimitedContext).lock();
     try {
+
+      if (hasSubjects(delimitedContext, true)) {
+        throw new OperationNotPermittedException(
+            "Context " + delimitedContext + " is not empty");
+      }
+
       if (isLeader()) {
         deleteContext(delimitedContext);
       } else {
