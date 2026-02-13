@@ -945,6 +945,53 @@ public class CachedSchemaRegistryClientTest {
 
     verify(restService);
   }
+  @Test
+  public void testLatestVersionCacheInvalidatedOnRegister() throws Exception {
+    String schemaStr1 = avroSchemaString(1);
+    String schemaStr2 = avroSchemaString(2);
+    AvroSchema schema = avroSchema(2);
+
+    // Mock the initial getLatestSchemaMetadata call - returns version 1
+    expect(restService.getLatestVersion(eq(SUBJECT_0)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                SUBJECT_0, VERSION_1, ID_25, AvroSchema.TYPE, Collections.emptyList(), schemaStr1))
+        .once();
+
+    // Mock the register call for schema2 - returns version 2
+    RegisterSchemaResponse registerResponse = new RegisterSchemaResponse(ID_50);
+    registerResponse.setVersion(VERSION_2);
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(registerResponse)
+        .once();
+
+    // Mock the second getLatestSchemaMetadata call after registration - should return version 2
+    expect(restService.getLatestVersion(eq(SUBJECT_0)))
+        .andReturn(
+            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                SUBJECT_0, VERSION_2, ID_50, AvroSchema.TYPE, Collections.emptyList(), schemaStr2))
+        .once();
+
+    replay(restService);
+
+    SchemaMetadata metadata1 = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(VERSION_1, metadata1.getVersion());
+    assertEquals(ID_25, metadata1.getId());
+
+    // Register a new schema version
+    int registeredId = client.register(SUBJECT_0, schema);
+    assertEquals(ID_50, registeredId);
+
+    // Get latest schema metadata again - should return version 2 (not cached version 1)
+    // This verifies that the latestVersionCache was invalidated on registration
+    SchemaMetadata metadata2 = client.getLatestSchemaMetadata(SUBJECT_0);
+    assertEquals(VERSION_2, metadata2.getVersion());
+    assertEquals(ID_50, metadata2.getId());
+
+    verify(restService);
+  }
+
 
 
   private static AvroSchema avroSchema(final int i) {

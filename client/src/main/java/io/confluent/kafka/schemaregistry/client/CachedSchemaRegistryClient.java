@@ -554,6 +554,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
               parseSchemaOrElseThrow(new Schema(null, retrievedResponse));
           idSchemaMap.put(retrievedResponse.getId(), retrievedSchema);
         }
+        // Invalidate latest version cache since a new schema version was registered
+        latestVersionCache.invalidate(subject);
+        latestWithMetadataCache.invalidateAll();
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
