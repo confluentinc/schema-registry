@@ -23,9 +23,9 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(DefaultDekCacheUpdateHandler.class);
 
-  private final AbstractDekRegistry dekRegistry;
+  private final KafkaDekRegistry dekRegistry;
 
-  public DefaultDekCacheUpdateHandler(AbstractDekRegistry dekRegistry) {
+  public DefaultDekCacheUpdateHandler(KafkaDekRegistry dekRegistry) {
     this.dekRegistry = dekRegistry;
   }
 
@@ -51,6 +51,7 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
    * @param key   Key associated with the schema.
    * @param value Value written to the Kafka lookupCache
    */
+  @SuppressWarnings("checkstyle:CyclomaticComplexity")
   @Override
   public void handleUpdate(
       EncryptionKeyId key,
