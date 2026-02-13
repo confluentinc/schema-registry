@@ -452,8 +452,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       throw rce;
     }
     Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
-    return schema.orElseThrow(() -> new IOException("Invalid schema of type "
-        + restSchema.getSchemaType()));
+    return schema.orElseThrow(() -> new IOException("Invalid schema " + restSchema.getSchemaString()
+        + " with refs " + restSchema.getReferences()
+        + " of type " + restSchema.getSchemaType()));
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema, boolean normalize)
@@ -1070,7 +1071,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaRegistryDeployment getSchemaRegistryDeployment()
+  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
       throws IOException, RestClientException {
     return restService.getSchemaRegistryDeployment();
   }

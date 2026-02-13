@@ -336,7 +336,7 @@ public class AvroSchemaUtils {
       AvroSchema avroSchema = new AvroSchema(node.toString());
       return avroSchema.rawSchema();
     } catch (IOException e) {
-      throw new SerializationException("Could not parse Avro schema");
+      throw new SerializationException("Could not parse schema: " + schema.toString());
     }
   }
 
