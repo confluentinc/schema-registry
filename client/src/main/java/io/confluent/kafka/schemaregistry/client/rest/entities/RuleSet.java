@@ -45,14 +45,14 @@ public class RuleSet {
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
   private final List<Rule> encodingRules;
-  private final ExecutionEnvironment enableOnlyAt;
+  private final ExecutionEnvironment enableAt;
 
   @JsonCreator
   public RuleSet(
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules,
       @JsonProperty("encodingRules") List<Rule> encodingRules,
-      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt
+      @JsonProperty("enableAt") ExecutionEnvironment enableAt
   ) {
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
@@ -63,7 +63,7 @@ public class RuleSet {
     this.encodingRules = encodingRules != null
         ? Collections.unmodifiableList(encodingRules)
         : Collections.emptyList();
-    this.enableOnlyAt = enableOnlyAt;
+    this.enableAt = enableAt;
   }
 
   public RuleSet(
@@ -93,8 +93,8 @@ public class RuleSet {
     return encodingRules;
   }
 
-  public ExecutionEnvironment getEnableOnlyAt() {
-    return enableOnlyAt;
+  public ExecutionEnvironment getEnableAt() {
+    return enableAt;
   }
 
   @JsonIgnore
@@ -153,12 +153,12 @@ public class RuleSet {
     return Objects.equals(migrationRules, ruleSet.migrationRules)
         && Objects.equals(domainRules, ruleSet.domainRules)
         && Objects.equals(encodingRules, ruleSet.encodingRules)
-        && enableOnlyAt == ruleSet.enableOnlyAt;
+        && enableAt == ruleSet.enableAt;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules, encodingRules, enableOnlyAt);
+    return Objects.hash(migrationRules, domainRules, encodingRules, enableAt);
   }
 
   @Override
@@ -167,7 +167,7 @@ public class RuleSet {
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
-        + ", enableOnlyAt=" + enableOnlyAt
+        + ", enableAt=" + enableAt
         + '}';
   }
 
@@ -181,8 +181,8 @@ public class RuleSet {
     if (encodingRules != null) {
       encodingRules.forEach(r -> r.updateHash(md));
     }
-    if (enableOnlyAt != null) {
-      md.update(enableOnlyAt.name().getBytes(StandardCharsets.UTF_8));
+    if (enableAt != null) {
+      md.update(enableAt.name().getBytes(StandardCharsets.UTF_8));
     }
   }
 
@@ -235,14 +235,14 @@ public class RuleSet {
     } else if (newRuleSet == null) {
       return oldRuleSet;
     } else {
-      ExecutionEnvironment enableOnlyAt = newRuleSet.getEnableOnlyAt() != null
-          ? newRuleSet.getEnableOnlyAt()
-          : oldRuleSet.getEnableOnlyAt();
+      ExecutionEnvironment enableAt = newRuleSet.getEnableAt() != null
+          ? newRuleSet.getEnableAt()
+          : oldRuleSet.getEnableAt();
       return new RuleSet(
           merge(oldRuleSet.migrationRules, newRuleSet.migrationRules),
           merge(oldRuleSet.domainRules, newRuleSet.domainRules),
           merge(oldRuleSet.encodingRules, newRuleSet.encodingRules),
-          enableOnlyAt
+          enableAt
       );
     }
   }
