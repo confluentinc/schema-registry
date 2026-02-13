@@ -53,6 +53,7 @@ import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.PrefixSchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
@@ -98,7 +99,6 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
-import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,10 +116,10 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
   protected SchemaRegistryClient schemaRegistry;
   protected Ticker ticker = Ticker.systemTicker();
   protected ContextNameStrategy contextNameStrategy = new NullContextNameStrategy();
-  protected SubjectNameStrategy keySubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy keySubjectNameStrategy = new AssociatedNameStrategy();
   protected SchemaIdSerializer keySchemaIdSerializer = new PrefixSchemaIdSerializer();
   protected SchemaIdDeserializer keySchemaIdDeserializer = new DualSchemaIdDeserializer();
-  protected SubjectNameStrategy valueSubjectNameStrategy = new TopicNameStrategy();
+  protected SubjectNameStrategy valueSubjectNameStrategy = new AssociatedNameStrategy();
   protected SchemaIdSerializer valueSchemaIdSerializer = new PrefixSchemaIdSerializer();
   protected SchemaIdDeserializer valueSchemaIdDeserializer = new DualSchemaIdDeserializer();
   protected Cache<SubjectSchema, ExtendedSchema> latestVersions;
@@ -320,6 +320,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     // Add named params
     prefix = configName + "." + name + PARAM;
     params.putAll(config.originalsWithPrefix(prefix));
+    ruleObject.setSchemaRegistryClient(schemaRegistry);
     ruleObject.configure(params);
   }
 

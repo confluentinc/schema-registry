@@ -208,6 +208,9 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
       AssociationValue value,
       AssociationValue oldValue) {
     if (value != null) {
+      value.setCreateTimestamp(oldValue != null
+          ? oldValue.getCreateTimestamp()
+          : value.getTimestamp());
       lookupCache.associationRegistered(key, value, oldValue);
     } else {
       lookupCache.associationTombstoned(key, oldValue);

@@ -43,6 +43,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.serializers.jackson.Jackson;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -209,7 +210,10 @@ public class KafkaJsonSchemaSerializerTest {
     RecordHeaders headers = new RecordHeaders();
     assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.serialize("foo", headers, user));
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
-    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, new HashMap(config));
+    HashMap serializerConfig = new HashMap(config);
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        TopicNameStrategy.class.getName());
+    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, serializerConfig);
 
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
     assertThrows(ThrottlingQuotaExceededException.class, () -> serializer.serialize("foo", headers, user));
@@ -246,7 +250,10 @@ public class KafkaJsonSchemaSerializerTest {
 
 
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
-    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, new HashMap(config));
+    HashMap deserializerConfig = new HashMap(config);
+    deserializerConfig.put(KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        TopicNameStrategy.class.getName());
+    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, deserializerConfig);
 
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaByGuid(any(), any());
@@ -565,5 +572,30 @@ public class KafkaJsonSchemaSerializerTest {
     public int hashCode() {
       return Objects.hash(firstName, lastName, age, nickName, birthdate);
     }
+  }
+
+  @Test
+  public void testDeserializeWithSchemaFunction() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+
+    // Test deserializeWithSchema with a function that returns the same schema
+    ParsedSchemaAndValue schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes, writerSchema -> writerSchema);
+
+    ParsedSchema expectedSchema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
+
+    // Test with null function (should use default behavior)
+    schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes, null);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
   }
 }

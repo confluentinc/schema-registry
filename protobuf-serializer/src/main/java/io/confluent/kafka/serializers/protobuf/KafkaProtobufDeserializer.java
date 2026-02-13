@@ -18,7 +18,9 @@ package io.confluent.kafka.serializers.protobuf;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.serializers.DeserializerWithSchema;
+import java.util.function.Function;
 import org.apache.kafka.common.header.Headers;
 
 import java.io.IOException;
@@ -88,6 +90,12 @@ public class KafkaProtobufDeserializer<T extends Message>
   @Override
   public ProtobufSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] bytes) {
     return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes);
+  }
+
+  @Override
+  public ProtobufSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] bytes,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc) {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, bytes, writerToReaderSchemaFunc);
   }
 
   @Override

@@ -948,4 +948,38 @@ public class KafkaProtobufSerializerTest {
     assertEquals(2, id);
   }
 
+  @Test
+  public void testDeserializeWithSchemaFunction() {
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+
+    // Create a reader schema from the message descriptor
+    ProtobufSchema readerSchema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+
+    // Test deserializeWithSchema with a function that returns a different schema instance
+    // This exercises the else-if branch that calls schemaWithName on the reader schema
+    ParsedSchemaAndValue schemaAndValue = testMessageDeserializer.deserializeWithSchema(
+        topic, headers, bytes, writerSchema -> readerSchema);
+
+    // The returned schema should have the correct message name set via schemaWithName
+    assertEquals("io.confluent.kafka.serializers.protobuf.test.TestMessage", schemaAndValue.getSchema().name());
+    assertEquals(HELLO_WORLD_MESSAGE, schemaAndValue.getValue());
+  }
+
+  @Test
+  public void testDeserializeNestedMessageWithSchemaFunction() {
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, NESTED_MESSAGE);
+
+    // Create a reader schema from the nested message descriptor
+    ProtobufSchema readerSchema = new ProtobufSchema(NESTED_MESSAGE.getDescriptorForType());
+
+    // Test with nested message to ensure schemaWithName handles nested types correctly
+    ParsedSchemaAndValue schemaAndValue = nestedMessageDeserializer.deserializeWithSchema(
+        topic, headers, bytes, writerSchema -> readerSchema);
+
+    // The returned schema should have the correct message name
+    assertEquals("io.confluent.kafka.serializers.protobuf.test.NestedMessage", schemaAndValue.getSchema().name());
+    assertEquals(NESTED_MESSAGE, schemaAndValue.getValue());
+  }
 }

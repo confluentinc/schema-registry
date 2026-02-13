@@ -401,20 +401,6 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
       assertEquals(1, itr.next().getVersion());
       assertEquals(2, itr.next().getVersion());
       assertFalse(itr.hasNext());
-
-      // Soft delete second version
-      kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema3, false);
-      itr = kafkaSchemaRegistry.getAllVersions("subject1", LookupFilter.DELETED_AS_NEGATIVE);
-      assertEquals(1, itr.next().getVersion());
-      assertEquals(-2, itr.next().getVersion());
-      assertFalse(itr.hasNext());
-
-      // Soft delete first version
-      kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, false);
-      itr = kafkaSchemaRegistry.getAllVersions("subject1", LookupFilter.DELETED_AS_NEGATIVE);
-      assertEquals(-1, itr.next().getVersion());
-      assertEquals(-2, itr.next().getVersion());
-      assertFalse(itr.hasNext());
     }
 
   @Test

@@ -19,11 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
@@ -109,6 +111,20 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("value", response.getAssociations().get(1).getAssociationType());
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(1).getLifecycle());
     assertEquals(allSchemas.get(1), response.getAssociations().get(1).getSchema().getSchema());
+
+    // Verify createTs and updateTs are set after creation
+    List<Association> createdAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, createdAssociations.size());
+    Association keyAssocAfterCreate = createdAssociations.stream()
+        .filter(a -> "key".equals(a.getAssociationType()))
+        .findFirst().orElse(null);
+    assertNotNull(keyAssocAfterCreate);
+    assertNotNull(keyAssocAfterCreate.getCreateTimestamp());
+    assertNotNull(keyAssocAfterCreate.getUpdateTimestamp());
+    Long keyCreateTs = keyAssocAfterCreate.getCreateTimestamp();
+    Long keyUpdateTsAfterCreate = keyAssocAfterCreate.getUpdateTimestamp();
 
     List<Association> associations = restApp.restClient.getAssociationsBySubject(
         RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
@@ -206,6 +222,19 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("key", response.getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
     assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
+
+    // Verify createTs remains the same but updateTs is updated after update
+    List<Association> updatedAssociations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key"), null, 0, -1);
+    assertEquals(1, updatedAssociations.size());
+    Association keyAssocAfterUpdate = updatedAssociations.get(0);
+    assertNotNull(keyAssocAfterUpdate.getCreateTimestamp());
+    assertNotNull(keyAssocAfterUpdate.getUpdateTimestamp());
+    // createTs should remain the same
+    assertEquals(keyCreateTs, keyAssocAfterUpdate.getCreateTimestamp());
+    // updateTs should be >= the original updateTs (updated or same if very fast)
+    assertTrue(keyAssocAfterUpdate.getUpdateTimestamp() >= keyUpdateTsAfterCreate);
 
     boolean cascadeDelete = false;
     restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
@@ -339,15 +368,71 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   @Test
   public void testAssociationFrozen() throws Exception {
     String subject1 = "subject1";
+    String subject2 = "subject2";
+    String subject3 = "subject3";
     String resourceName = "topic1";
     String resourceNamespace = "default";
     String resourceId = "frozen-123";
-    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+    String resourceId2 = "frozen-456";
+    String resourceId3 = "frozen-789";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
     RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
     keyRequest.setSchema(allSchemas.get(0));
 
-    // Create frozen association
+    // Test creating frozen association without schema fails
+    AssociationCreateOrUpdateRequest noSchemaRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId2,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject2,
+                "key",
+                LifecyclePolicy.STRONG,
+                true,  // Frozen
+                null,  // No schema provided
+                null
+            )
+        )
+    );
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, noSchemaRequest)
+    );
+
+    // Test creating frozen association when schemas already exist fails
+    // First register a schema in subject3
+    restApp.restClient.registerSchema(allSchemas.get(1), subject3);
+
+    RegisterSchemaRequest anotherSchemaRequest = new RegisterSchemaRequest();
+    anotherSchemaRequest.setSchema(allSchemas.get(0));
+
+    AssociationCreateOrUpdateRequest existingSchemasRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId3,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject3,
+                "key",
+                LifecyclePolicy.STRONG,
+                true,  // Frozen
+                anotherSchemaRequest,
+                null
+            )
+        )
+    );
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, existingSchemasRequest)
+    );
+
+    // Create frozen association successfully
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
@@ -390,6 +475,45 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         restApp.restClient.createOrUpdateAssociation(
             RestService.DEFAULT_REQUEST_PROPERTIES, null, false, updateRequest)
     );
+
+    // Test that frozen attribute cannot be changed
+    AssociationCreateOrUpdateRequest unfreezeRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.STRONG,
+                false,  // Try to unfreeze
+                null,
+                null
+            )
+        )
+    );
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createOrUpdateAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, unfreezeRequest)
+    );
+
+    // Test deleting frozen association without cascadeLifecycle fails
+    assertThrows(Exception.class, () ->
+        restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+            resourceId, "topic", Collections.singletonList("key"), false, false)
+    );
+
+    // Test deleting frozen association with cascadeLifecycle succeeds
+    restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+        resourceId, "topic", Collections.singletonList("key"), true, false);
+
+    // Verify association is deleted
+    List<Association> associations = restApp.restClient.getAssociationsBySubject(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
+        Collections.singletonList("key"), null, 0, -1);
+    assertTrue(associations.isEmpty());
   }
 
   @Test
@@ -1497,6 +1621,466 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
         Collections.singletonList("key"), null, 0, -1);
     assertEquals(0, keyAssociations.size());
+  }
+
+  @Test
+  public void testGetSchemasWithSubjectPrefixAndAssociations() throws Exception {
+    String subject1 = "prefixSubject1";
+    String subject2 = "prefixSubject2";
+    String subject3 = "otherSubject3";
+    String resourceName1 = "prefixTopic1";
+    String resourceName2 = "prefixTopic2";
+    String resourceNamespace = "default";
+    String resourceId1 = "prefix-resource-1";
+    String resourceId2 = "prefix-resource-2";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(3);
+
+    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
+    schemaRequest1.setSchema(allSchemas.get(0));
+    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
+    schemaRequest2.setSchema(allSchemas.get(1));
+    RegisterSchemaRequest schemaRequest3 = new RegisterSchemaRequest();
+    schemaRequest3.setSchema(allSchemas.get(2));
+
+    // Create associations for prefixSubject1 and prefixSubject2
+    AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
+        resourceName1,
+        resourceNamespace,
+        resourceId1,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest1,
+                null
+            ),
+            new AssociationCreateOrUpdateInfo(
+                subject2,
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                schemaRequest2,
+                null
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request1);
+
+    // Create association for otherSubject3
+    AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
+        resourceName2,
+        resourceNamespace,
+        resourceId2,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject3,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest3,
+                null
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request2);
+
+    // Get schemas with "prefix" subject prefix and associations
+    List<ExtendedSchema> schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "prefix",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        null,
+        null,
+        null);
+
+    // Should match prefixSubject1 and prefixSubject2 (not otherSubject3)
+    assertEquals(2, schemas.size());
+
+    // Verify first schema (prefixSubject1)
+    ExtendedSchema schema1 = schemas.stream()
+        .filter(s -> subject1.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(schema1);
+    assertNotNull(schema1.getAssociations());
+    assertEquals(1, schema1.getAssociations().size());
+    assertEquals("key", schema1.getAssociations().get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, schema1.getAssociations().get(0).getLifecycle());
+    assertEquals(resourceId1, schema1.getAssociations().get(0).getResourceId());
+
+    // Verify second schema (prefixSubject2)
+    ExtendedSchema schema2 = schemas.stream()
+        .filter(s -> subject2.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(schema2);
+    assertNotNull(schema2.getAssociations());
+    assertEquals(1, schema2.getAssociations().size());
+    assertEquals("value", schema2.getAssociations().get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, schema2.getAssociations().get(0).getLifecycle());
+    assertEquals(resourceId1, schema2.getAssociations().get(0).getResourceId());
+  }
+
+  @Test
+  public void testGetSchemasWithSubjectPrefixAndLifecycleFilter() throws Exception {
+    String subject1 = "lifecycleSubject1";
+    String subject2 = "lifecycleSubject2";
+    String resourceName = "lifecycleTopic";
+    String resourceNamespace = "default";
+    String resourceId = "lifecycle-resource-1";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
+    schemaRequest1.setSchema(allSchemas.get(0));
+    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
+    schemaRequest2.setSchema(allSchemas.get(1));
+
+    // Create associations with different lifecycle policies
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest1,
+                null
+            ),
+            new AssociationCreateOrUpdateInfo(
+                subject2,
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                schemaRequest2,
+                null
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    // Get schemas with WEAK lifecycle filter
+    List<ExtendedSchema> weakSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "lifecycle",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        LifecyclePolicy.WEAK,
+        null,
+        null);
+
+    // Both subjects are returned (subject prefix matches), but only WEAK associations included
+    assertEquals(2, weakSchemas.size());
+
+    ExtendedSchema weakSchema1 = weakSchemas.stream()
+        .filter(s -> subject1.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(weakSchema1);
+    assertNotNull(weakSchema1.getAssociations());
+    assertEquals(1, weakSchema1.getAssociations().size());
+    assertEquals(LifecyclePolicy.WEAK, weakSchema1.getAssociations().get(0).getLifecycle());
+
+    ExtendedSchema weakSchema2 = weakSchemas.stream()
+        .filter(s -> subject2.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(weakSchema2);
+    // subject2 has STRONG lifecycle, so with WEAK filter its associations should be empty
+    assertTrue(weakSchema2.getAssociations() == null || weakSchema2.getAssociations().isEmpty());
+
+    // Get schemas with STRONG lifecycle filter
+    List<ExtendedSchema> strongSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "lifecycle",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        LifecyclePolicy.STRONG,
+        null,
+        null);
+
+    assertEquals(2, strongSchemas.size());
+
+    ExtendedSchema strongSchema1 = strongSchemas.stream()
+        .filter(s -> subject1.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(strongSchema1);
+    // subject1 has WEAK lifecycle, so with STRONG filter its associations should be empty
+    assertTrue(strongSchema1.getAssociations() == null || strongSchema1.getAssociations().isEmpty());
+
+    ExtendedSchema strongSchema2 = strongSchemas.stream()
+        .filter(s -> subject2.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(strongSchema2);
+    assertNotNull(strongSchema2.getAssociations());
+    assertEquals(1, strongSchema2.getAssociations().size());
+    assertEquals(LifecyclePolicy.STRONG, strongSchema2.getAssociations().get(0).getLifecycle());
+  }
+
+  @Test
+  public void testGetSchemasWithSubjectPrefixNoMatchingSubjects() throws Exception {
+    String subject1 = "existingSubject1";
+    String resourceName = "existingTopic";
+    String resourceNamespace = "default";
+    String resourceId = "existing-resource-1";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Create an association
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest,
+                null
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    // Get schemas with a non-matching prefix
+    List<ExtendedSchema> schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "nonexistent",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key"),
+        null,
+        null,
+        null);
+
+    // Should return no schemas
+    assertEquals(0, schemas.size());
+  }
+
+  @Test
+  public void testGetSchemasWithSubjectPrefixAndAssociationTypeFilter() throws Exception {
+    String subject1 = "typeFilterSubject1";
+    String subject2 = "typeFilterSubject2";
+    String resourceName = "typeFilterTopic";
+    String resourceNamespace = "default";
+    String resourceId = "type-filter-resource";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
+    schemaRequest1.setSchema(allSchemas.get(0));
+    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
+    schemaRequest2.setSchema(allSchemas.get(1));
+
+    // Create associations with different types
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest1,
+                null
+            ),
+            new AssociationCreateOrUpdateInfo(
+                subject2,
+                "value",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest2,
+                null
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    // Get schemas filtering by "key" association type only
+    List<ExtendedSchema> keySchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "typeFilter",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        Collections.singletonList("key"),
+        null,
+        null,
+        null);
+
+    assertEquals(2, keySchemas.size());
+
+    // subject1 has "key" type, should have associations
+    ExtendedSchema keySchema1 = keySchemas.stream()
+        .filter(s -> subject1.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(keySchema1);
+    assertNotNull(keySchema1.getAssociations());
+    assertEquals(1, keySchema1.getAssociations().size());
+    assertEquals("key", keySchema1.getAssociations().get(0).getAssociationType());
+
+    // subject2 has "value" type, should not have associations when filtering by "key"
+    ExtendedSchema keySchema2 = keySchemas.stream()
+        .filter(s -> subject2.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(keySchema2);
+    assertTrue(keySchema2.getAssociations() == null || keySchema2.getAssociations().isEmpty());
+
+    // Get schemas filtering by "value" association type only
+    List<ExtendedSchema> valueSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "typeFilter",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        Collections.singletonList("value"),
+        null,
+        null,
+        null);
+
+    assertEquals(2, valueSchemas.size());
+
+    // subject1 has "key" type, should not have associations when filtering by "value"
+    ExtendedSchema valueSchema1 = valueSchemas.stream()
+        .filter(s -> subject1.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(valueSchema1);
+    assertTrue(valueSchema1.getAssociations() == null || valueSchema1.getAssociations().isEmpty());
+
+    // subject2 has "value" type, should have associations
+    ExtendedSchema valueSchema2 = valueSchemas.stream()
+        .filter(s -> subject2.equals(s.getSubject()))
+        .findFirst()
+        .orElse(null);
+    assertNotNull(valueSchema2);
+    assertNotNull(valueSchema2.getAssociations());
+    assertEquals(1, valueSchema2.getAssociations().size());
+    assertEquals("value", valueSchema2.getAssociations().get(0).getAssociationType());
+  }
+
+  @Test
+  public void testGetSchemasWithSubjectPrefixLatestOnly() throws Exception {
+    String subject = "latestOnlySubject";
+    String resourceName = "latestOnlyTopic";
+    String resourceNamespace = "default";
+    String resourceId = "latest-only-resource";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
+    schemaRequest1.setSchema(allSchemas.get(0));
+
+    // Create first version
+    AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                schemaRequest1,
+                null
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request1);
+
+    // Register a second version of the schema under the same subject
+    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
+    schemaRequest2.setSchema(allSchemas.get(1));
+    restApp.restClient.registerSchema(schemaRequest2, subject, false);
+
+    // Get schemas with latestOnly=true
+    List<ExtendedSchema> latestSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "latestOnly",
+        false,
+        false,
+        true,  // latestOnly
+        null,
+        "topic",
+        ImmutableList.of("key"),
+        null,
+        null,
+        null);
+
+    // Should return only the latest version
+    assertEquals(1, latestSchemas.size());
+    assertEquals(subject, latestSchemas.get(0).getSubject());
+    assertEquals(Integer.valueOf(2), latestSchemas.get(0).getVersion());
+    assertNotNull(latestSchemas.get(0).getAssociations());
+    assertEquals(1, latestSchemas.get(0).getAssociations().size());
+
+    // Get schemas with latestOnly=false (should return both versions)
+    List<ExtendedSchema> allVersionSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "latestOnly",
+        false,
+        false,
+        false,  // latestOnly=false
+        null,
+        "topic",
+        ImmutableList.of("key"),
+        null,
+        null,
+        null);
+
+    // Should return both versions
+    assertEquals(2, allVersionSchemas.size());
   }
 }
 
