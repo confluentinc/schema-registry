@@ -36,14 +36,14 @@ public class RuleSet {
   private final List<Rule> migrationRules;
   private final List<Rule> domainRules;
   private final List<Rule> encodingRules;
-  private final ExecutionEnvironment enableOnlyAt;
+  private final ExecutionEnvironment enableAt;
 
   @JsonCreator
   public RuleSet(
       @JsonProperty("migrationRules") List<Rule> migrationRules,
       @JsonProperty("domainRules") List<Rule> domainRules,
       @JsonProperty("encodingRules") List<Rule> encodingRules,
-      @JsonProperty("enableOnlyAt") ExecutionEnvironment enableOnlyAt
+      @JsonProperty("enableAt") ExecutionEnvironment enableAt
   ) {
     this.migrationRules = migrationRules != null
         ? Collections.unmodifiableList(migrationRules)
@@ -54,7 +54,7 @@ public class RuleSet {
     this.encodingRules = encodingRules != null
         ? Collections.unmodifiableList(encodingRules)
         : Collections.emptyList();
-    this.enableOnlyAt = enableOnlyAt;
+    this.enableAt = enableAt;
   }
 
   public RuleSet(io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet) {
@@ -67,8 +67,8 @@ public class RuleSet {
     this.encodingRules = ruleSet.getEncodingRules().stream()
         .map(Rule::new)
         .collect(Collectors.toList());
-    this.enableOnlyAt = ruleSet.getEnableOnlyAt() != null
-        ? ExecutionEnvironment.fromEntity(ruleSet.getEnableOnlyAt())
+    this.enableAt = ruleSet.getEnableAt() != null
+        ? ExecutionEnvironment.fromEntity(ruleSet.getEnableAt())
         : null;
   }
 
@@ -84,8 +84,8 @@ public class RuleSet {
     return encodingRules;
   }
 
-  public ExecutionEnvironment getEnableOnlyAt() {
-    return enableOnlyAt;
+  public ExecutionEnvironment getEnableAt() {
+    return enableAt;
   }
 
   public boolean equals(Object o) {
@@ -99,12 +99,12 @@ public class RuleSet {
     return Objects.equals(migrationRules, ruleSet.migrationRules)
         && Objects.equals(domainRules, ruleSet.domainRules)
         && Objects.equals(encodingRules, ruleSet.encodingRules)
-        && enableOnlyAt == ruleSet.enableOnlyAt;
+        && enableAt == ruleSet.enableAt;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(migrationRules, domainRules, encodingRules, enableOnlyAt);
+    return Objects.hash(migrationRules, domainRules, encodingRules, enableAt);
   }
 
   @Override
@@ -113,7 +113,7 @@ public class RuleSet {
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
-        + ", enableOnlyAt=" + enableOnlyAt
+        + ", enableAt=" + enableAt
         + '}';
   }
 
@@ -128,7 +128,7 @@ public class RuleSet {
         getEncodingRules().stream()
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList()),
-        getEnableOnlyAt() != null ? getEnableOnlyAt().toEntity() : null
+        getEnableAt() != null ? getEnableAt().toEntity() : null
     );
   }
 }
