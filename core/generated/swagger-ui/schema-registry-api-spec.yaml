@@ -3,6 +3,55 @@ info:
   title: Confluent Schema Registry
   version: v1
 paths:
+  /associations:
+    post:
+      summary: Create an association.
+      operationId: createAssociation_1
+      parameters:
+      - name: context
+        in: query
+        description: Context
+        schema:
+          type: string
+      - name: dryRun
+        in: query
+        description: Dry run
+        schema:
+          type: boolean
+      requestBody:
+        description: The create request
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+          application/octet-stream:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+        required: true
+      responses:
+        "200":
+          description: The create response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/AssociationResponse"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/AssociationResponse"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/AssociationResponse"
+        "409":
+          description: Conflict. Error code 40911 -- Association already exists. Error
+            code 40912 -- Too many associations.
+        "422":
+          description: Error code 42212 -- Invalid association
   /compatibility/subjects/{subject}/versions/{version}:
     post:
       tags:
@@ -262,6 +311,13 @@ paths:
       summary: Get global compatibility level
       description: Retrieves the global compatibility level.
       operationId: getTopLevelConfig_1
+      parameters:
+      - name: defaultToGlobal
+        in: query
+        description: Whether to return the global compatibility level  if subject
+          compatibility level not found
+        schema:
+          type: boolean
       responses:
         "200":
           description: The global compatibility level.
@@ -635,7 +691,7 @@ paths:
       tags:
       - Contexts (v1)
       summary: List contexts
-      description: Retrieves a list of contexts.
+      description: Retrieves a list of contexts. Optionally filter by context prefix.
       operationId: listContexts
       parameters:
       - name: offset
@@ -652,6 +708,12 @@ paths:
           type: integer
           format: int32
           default: -1
+      - name: contextPrefix
+        in: query
+        description: Filter contexts by prefix. Only contexts starting with this prefix
+          will be returned
+        schema:
+          type: string
       responses:
         "200":
           description: The contexts.
@@ -694,6 +756,12 @@ paths:
       summary: Get global mode
       description: Retrieves global mode.
       operationId: getTopLevelMode_1
+      parameters:
+      - name: defaultToGlobal
+        in: query
+        description: Whether to return the global mode if subject mode not found
+        schema:
+          type: boolean
       responses:
         "200":
           description: The global mode
@@ -769,6 +837,61 @@ paths:
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store. Error code 50003 indicates a failure forwarding
             the request to the primary. Error code 50004 indicates unknown leader.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+    delete:
+      tags:
+      - Modes (v1)
+      summary: Delete global mode
+      description: "Deletes the global mode and reverts to the default mode. If recursive\
+        \ is true, also deletes mode for all subjects in the default context."
+      operationId: deleteGlobalMode_1
+      parameters:
+      - name: recursive
+        in: query
+        description: Whether to recursively delete mode for all subjects in the default
+          context
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: "Operation succeeded. Returns old mode.If recursive is enabled\
+            \ and mode is not found, returns 200 and returns null mode as it would\
+            \ delete mode for all subjects under it"
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/Mode"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/Mode"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/Mode"
+        "422":
+          description: Unprocessable Entity. Error code 42205 indicates operation
+            not permitted.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
@@ -916,8 +1039,9 @@ paths:
       tags:
       - Modes (v1)
       summary: Delete subject mode
-      description: Deletes the specified subject-level mode and reverts to the global
-        default.
+      description: "Deletes the specified subject-level mode and reverts to the global\
+        \ default. If the subject is a context and recursive is true, also deletes\
+        \ mode for all subjects under that context."
       operationId: deleteSubjectMode_1
       parameters:
       - name: subject
@@ -926,9 +1050,17 @@ paths:
         required: true
         schema:
           type: string
+      - name: recursive
+        in: query
+        description: "Whether to recursively delete mode for all subjects under the\
+          \ context, if the subject is a context"
+        schema:
+          type: boolean
       responses:
         "200":
-          description: Operation succeeded. Returns old mode.
+          description: "Operation succeeded. Returns old mode.If recursive is enabled\
+            \ and mode is not found, returns 200 and returns nullmode as it would\
+            \ delete mode for all subjects under it"
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
@@ -1003,6 +1135,26 @@ paths:
         schema:
           type: string
           default: ""
+      - name: resourceType
+        in: query
+        description: Resource type
+        schema:
+          type: string
+      - name: associationType
+        in: query
+        description: Association type
+        schema:
+          type: array
+          items:
+            type: string
+      - name: lifecycle
+        in: query
+        description: Lifecycle
+        schema:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
       - name: offset
         in: query
         description: Pagination offset for results
@@ -1053,13 +1205,13 @@ paths:
     get:
       tags:
       - Schemas (v1)
-      summary: Get schema string by ID
-      description: Retrieves the schema string identified by the input ID.
+      summary: Get schema by ID
+      description: Retrieves the schema identified by the input ID.
       operationId: getSchema_1
       parameters:
       - name: id
         in: path
-        description: Globally unique identifier of the schema
+        description: unique identifier of the schema
         required: true
         schema:
           type: integer
@@ -1072,6 +1224,12 @@ paths:
       - name: format
         in: query
         description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
+      - name: referenceFormat
+        in: query
+        description: Desired output format for references
         schema:
           type: string
           default: ""
@@ -1090,7 +1248,7 @@ paths:
           default: false
       responses:
         "200":
-          description: The schema string.
+          description: The schema.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
@@ -1137,7 +1295,7 @@ paths:
       parameters:
       - name: id
         in: path
-        description: Globally unique identifier of the schema
+        description: Unique identifier of the schema
         required: true
         schema:
           type: integer
@@ -1223,7 +1381,7 @@ paths:
       parameters:
       - name: id
         in: path
-        description: Globally unique identifier of the schema
+        description: Unique identifier of the schema
         required: true
         schema:
           type: integer
@@ -1781,6 +1939,12 @@ paths:
         schema:
           type: string
           default: ""
+      - name: referenceFormat
+        in: query
+        description: Desired output format for references
+        schema:
+          type: string
+          default: ""
       - name: deleted
         in: query
         description: Whether to include deleted schema
@@ -1960,6 +2124,11 @@ paths:
         required: true
         schema:
           type: string
+      - name: deleted
+        in: query
+        description: Whether to include deleted schema
+        schema:
+          type: boolean
       - name: offset
         in: query
         description: Pagination offset for results
@@ -2045,7 +2214,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly_2
       parameters:
       - name: subject
         in: path
@@ -2145,11 +2314,11 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly
       parameters:
       - name: id
         in: path
-        description: Globally unique identifier of the schema
+        description: Unique identifier of the schema
         required: true
         schema:
           type: integer
@@ -2366,6 +2535,517 @@ paths:
             application/json; qs=0.5:
               schema:
                 $ref: "#/components/schemas/ErrorMessage"
+  /associations/resources/{resourceId}:
+    get:
+      summary: Get a list of associations by resource ID.
+      operationId: getAssociationsByResourceId_1
+      parameters:
+      - name: resourceId
+        in: path
+        description: Resource ID
+        required: true
+        schema:
+          type: string
+      - name: resourceType
+        in: query
+        description: Resource type
+        schema:
+          type: string
+      - name: associationType
+        in: query
+        description: Association type
+        schema:
+          type: array
+          items:
+            type: string
+      - name: lifecycle
+        in: query
+        description: Lifecycle
+        schema:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
+      responses:
+        "200":
+          description: List of associations
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+            application/json; qs=0.5:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+    put:
+      summary: Create or update an association.
+      operationId: createOrUpdateAssociation_1
+      parameters:
+      - name: resourceId
+        in: path
+        description: Resource ID
+        required: true
+        schema:
+          type: string
+      - name: context
+        in: query
+        description: Context
+        schema:
+          type: string
+      - name: dryRun
+        in: query
+        description: Dry run
+        schema:
+          type: boolean
+      requestBody:
+        description: The create or update request
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+          application/octet-stream:
+            schema:
+              $ref: "#/components/schemas/AssociationCreateOrUpdateRequest"
+        required: true
+      responses:
+        "200":
+          description: The create or update response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/AssociationResponse"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/AssociationResponse"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/AssociationResponse"
+        "409":
+          description: Conflict. Error code 40911 -- Association already exists. Error
+            code 40912 -- Too many associations.
+        "422":
+          description: Error code 42212 -- Invalid association
+    delete:
+      summary: Delete associations.
+      operationId: deleteAssociations_1
+      parameters:
+      - name: resourceId
+        in: path
+        description: Resource ID
+        required: true
+        schema:
+          type: string
+      - name: resourceType
+        in: query
+        description: Resource type
+        schema:
+          type: string
+      - name: associationType
+        in: query
+        description: Association type
+        schema:
+          type: array
+          items:
+            type: string
+      - name: cascadeLifecycle
+        in: query
+        description: Cascade lifecycle
+        schema:
+          type: boolean
+      - name: dryRun
+        in: query
+        description: Dry run
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: The delete response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/Association"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/Association"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/Association"
+        "422":
+          description: Error code 42212 -- Invalid association
+  /associations/resources/{resourceNamespace}/{resourceName}:
+    get:
+      summary: Get a list of associations by resource name.
+      operationId: getAssociationsByResourceName_1
+      parameters:
+      - name: resourceName
+        in: path
+        description: Resource name
+        required: true
+        schema:
+          type: string
+      - name: resourceNamespace
+        in: path
+        description: Resource namespace
+        required: true
+        schema:
+          type: string
+      - name: resourceType
+        in: query
+        description: Resource type
+        schema:
+          type: string
+      - name: associationType
+        in: query
+        description: Association type
+        schema:
+          type: array
+          items:
+            type: string
+      - name: lifecycle
+        in: query
+        description: Lifecycle
+        schema:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
+      responses:
+        "200":
+          description: List of associations
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+            application/json; qs=0.5:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+  /associations/subjects/{subject}:
+    get:
+      summary: Get a list of associations by subject.
+      operationId: getAssociationsBySubject_1
+      parameters:
+      - name: subject
+        in: path
+        description: Subject
+        required: true
+        schema:
+          type: string
+      - name: resourceType
+        in: query
+        description: Resource type
+        schema:
+          type: string
+      - name: associationType
+        in: query
+        description: Association type
+        schema:
+          type: array
+          items:
+            type: string
+      - name: lifecycle
+        in: query
+        description: Lifecycle
+        schema:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
+      responses:
+        "200":
+          description: List of associations
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+            application/json; qs=0.5:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Association"
+  /associations:batch:
+    post:
+      summary: Mutate associations in batch.
+      operationId: mutateAssociations_1
+      parameters:
+      - name: context
+        in: query
+        description: Context
+        schema:
+          type: string
+      - name: dryRun
+        in: query
+        description: Dry run
+        schema:
+          type: boolean
+      requestBody:
+        description: The create requests
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+          application/octet-stream:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+        required: true
+      responses:
+        "207":
+          description: The batch response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+  /contexts/{context}:
+    delete:
+      tags:
+      - Contexts (v1)
+      summary: Delete a context.
+      description: Deletes the specified context if it is empty.
+      operationId: deleteContext_1
+      parameters:
+      - name: context
+        in: path
+        description: Name of the context
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found. Error code 40401 indicates context not found.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+  /schemas/guids/{guid}/ids:
+    get:
+      tags:
+      - Schemas (v1)
+      summary: Get IDs by GUID
+      description: Retrieves the IDs identified by the input GUID.
+      operationId: getIdsByGuid_1
+      parameters:
+      - name: guid
+        in: path
+        description: Globally unique identifier of the schema
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: List of IDs for the given GUID.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContextId"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContextId"
+            application/json; qs=0.5:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContextId"
+        "404":
+          description: Not Found. Error code 40403 indicates schema not found.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+  /schemas/guids/{guid}:
+    get:
+      tags:
+      - Schemas (v1)
+      summary: Get schema by GUID
+      description: Retrieves the schema identified by the input GUID.
+      operationId: getSchemaByGuid_1
+      parameters:
+      - name: guid
+        in: path
+        description: Globally unique identifier of the schema
+        required: true
+        schema:
+          type: string
+      - name: format
+        in: query
+        description: "Desired output format, dependent on schema type"
+        schema:
+          type: string
+          default: ""
+      responses:
+        "200":
+          description: The schema.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/SchemaString"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/SchemaString"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/SchemaString"
+        "404":
+          description: Not Found. Error code 40403 indicates schema not found.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "500":
+          description: Internal Server Error. Error code 50001 indicates a failure
+            in the backend data store.
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+  /v1/metadata/deployment:
+    get:
+      tags:
+      - Server Metadata (v1)
+      summary: Get Schema Registry deployment
+      operationId: getSchemaRegistryDeployment_1
+      responses:
+        "500":
+          description: |
+            Error code 50001 -- Error in the backend data store
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2442,9 +3122,13 @@ components:
       properties:
         alias:
           type: string
+        aliasForDeks:
+          type: string
         normalize:
           type: boolean
         validateFields:
+          type: boolean
+        validateNewSchemas:
           type: boolean
         validateRules:
           type: boolean
@@ -2460,6 +3144,8 @@ components:
           - FULL
           - FULL_TRANSITIVE
           - NONE
+        compatibilityPolicy:
+          type: string
         compatibilityGroup:
           type: string
         defaultMetadata:
@@ -2476,9 +3162,13 @@ components:
       properties:
         alias:
           type: string
+        aliasForDeks:
+          type: string
         normalize:
           type: boolean
         validateFields:
+          type: boolean
+        validateNewSchemas:
           type: boolean
         validateRules:
           type: boolean
@@ -2494,6 +3184,8 @@ components:
           - FULL
           - FULL_TRANSITIVE
           - NONE
+        compatibilityPolicy:
+          type: string
         compatibilityGroup:
           type: string
         defaultMetadata:
@@ -2534,6 +3226,13 @@ components:
     SchemaString:
       type: object
       properties:
+        subject:
+          type: string
+        version:
+          type: integer
+          format: int32
+        guid:
+          type: string
         schemaType:
           type: string
           description: Schema type
@@ -2561,6 +3260,11 @@ components:
           description: Maximum ID
           format: int32
           example: 1
+        ts:
+          type: integer
+          format: int64
+        deleted:
+          type: boolean
       description: Schema definition
     Schema:
       type: object
@@ -2579,6 +3283,8 @@ components:
           description: Globally unique identifier of the schema
           format: int32
           example: 100001
+        guid:
+          type: string
         schemaType:
           type: string
           description: Schema type
@@ -2601,6 +3307,11 @@ components:
           description: Schema tags
           items:
             $ref: "#/components/schemas/SchemaTags"
+        ts:
+          type: integer
+          format: int64
+        deleted:
+          type: boolean
         ruleSet:
           $ref: "#/components/schemas/RuleSet"
       description: Schema
@@ -2638,6 +3349,8 @@ components:
           type: integer
           description: Version number
           format: int32
+        guid:
+          type: string
         schemaType:
           type: string
           description: Schema type
@@ -2653,6 +3366,11 @@ components:
         schema:
           type: string
           description: Schema definition string
+        ts:
+          type: integer
+          format: int64
+        deleted:
+          type: boolean
       description: Schema register response
     ErrorMessage:
       type: object
@@ -2757,8 +3475,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Rule"
-        empty:
-          type: boolean
+        encodingRules:
+          type: array
+          items:
+            $ref: "#/components/schemas/Rule"
+        enableAt:
+          type: string
+          enum:
+          - ALL
+          - CLIENT
+          - GATEWAY
+          - SERVER
+          - NONE
       description: Schema rule set
     SchemaEntity:
       type: object
@@ -2796,6 +3524,8 @@ components:
           description: Globally unique identifier of the schema
           format: int32
           example: 100001
+        guid:
+          type: string
         schemaType:
           type: string
           description: Schema type
@@ -2819,6 +3549,11 @@ components:
           items:
             type: string
             description: Aliases for the given subject
+        associations:
+          type: array
+          description: Associations for the given subject
+          items:
+            $ref: "#/components/schemas/Association"
         ruleSet:
           $ref: "#/components/schemas/RuleSet"
         schemaTags:
@@ -2826,6 +3561,11 @@ components:
           description: Schema tags
           items:
             $ref: "#/components/schemas/SchemaTags"
+        ts:
+          type: integer
+          format: int64
+        deleted:
+          type: boolean
       description: ExtendedSchema
     TagSchemaRequest:
       type: object
@@ -2854,3 +3594,211 @@ components:
           items:
             type: string
       description: Schema tags register request
+    AssociationInfo:
+      type: object
+      properties:
+        subject:
+          type: string
+        associationType:
+          type: string
+        lifecycle:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
+        frozen:
+          type: boolean
+        schema:
+          $ref: "#/components/schemas/Schema"
+    AssociationResponse:
+      type: object
+      properties:
+        resourceName:
+          type: string
+        resourceNamespace:
+          type: string
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        associations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssociationInfo"
+    AssociationCreateOrUpdateInfo:
+      type: object
+      properties:
+        subject:
+          type: string
+        associationType:
+          type: string
+        lifecycle:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
+        frozen:
+          type: boolean
+        schema:
+          $ref: "#/components/schemas/RegisterSchemaRequest"
+        normalize:
+          type: boolean
+    AssociationCreateOrUpdateRequest:
+      type: object
+      properties:
+        resourceName:
+          type: string
+        resourceNamespace:
+          type: string
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        associations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssociationCreateOrUpdateInfo"
+    Association:
+      type: object
+      properties:
+        subject:
+          type: string
+        guid:
+          type: string
+        resourceName:
+          type: string
+        resourceNamespace:
+          type: string
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        associationType:
+          type: string
+        lifecycle:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
+        frozen:
+          type: boolean
+        createTs:
+          type: integer
+          format: int64
+        updateTs:
+          type: integer
+          format: int64
+      description: Associations for the given subject
+    AssociationBatchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssociationResult"
+    AssociationResult:
+      type: object
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorMessage"
+        result:
+          $ref: "#/components/schemas/AssociationResponse"
+    AssociationBatchRequest:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssociationOpRequest"
+    AssociationCreateOp:
+      type: object
+      allOf:
+      - $ref: "#/components/schemas/AssociationOp"
+      - type: object
+        properties:
+          subject:
+            type: string
+          associationType:
+            type: string
+          lifecycle:
+            type: string
+            enum:
+            - STRONG
+            - WEAK
+          frozen:
+            type: boolean
+          schema:
+            $ref: "#/components/schemas/RegisterSchemaRequest"
+          normalize:
+            type: boolean
+    AssociationDeleteOp:
+      type: object
+      allOf:
+      - $ref: "#/components/schemas/AssociationOp"
+      - type: object
+        properties:
+          associationType:
+            type: string
+    AssociationOp:
+      type: object
+      properties:
+        opType:
+          type: string
+          enum:
+          - CREATE
+          - UPSERT
+          - DELETE
+      discriminator:
+        propertyName: opType
+    AssociationOpRequest:
+      type: object
+      properties:
+        resourceName:
+          type: string
+        resourceNamespace:
+          type: string
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        associations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssociationOp"
+    AssociationUpsertOp:
+      type: object
+      allOf:
+      - $ref: "#/components/schemas/AssociationOp"
+      - type: object
+        properties:
+          subject:
+            type: string
+          associationType:
+            type: string
+          lifecycle:
+            type: string
+            enum:
+            - STRONG
+            - WEAK
+          frozen:
+            type: boolean
+          schema:
+            $ref: "#/components/schemas/RegisterSchemaRequest"
+          normalize:
+            type: boolean
+    ContextId:
+      type: object
+      properties:
+        context:
+          type: string
+        id:
+          type: integer
+          format: int32
+      description: Context ID pair
+    SchemaRegistryDeployment:
+      type: object
+      properties:
+        attributes:
+          type: array
+          items:
+            type: string
