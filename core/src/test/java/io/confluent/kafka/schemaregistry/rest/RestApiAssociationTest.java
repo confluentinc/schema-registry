@@ -368,15 +368,71 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   @Test
   public void testAssociationFrozen() throws Exception {
     String subject1 = "subject1";
+    String subject2 = "subject2";
+    String subject3 = "subject3";
     String resourceName = "topic1";
     String resourceNamespace = "default";
     String resourceId = "frozen-123";
-    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+    String resourceId2 = "frozen-456";
+    String resourceId3 = "frozen-789";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
     RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
     keyRequest.setSchema(allSchemas.get(0));
 
-    // Create frozen association
+    // Test creating frozen association without schema fails
+    AssociationCreateOrUpdateRequest noSchemaRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId2,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject2,
+                "key",
+                LifecyclePolicy.STRONG,
+                true,  // Frozen
+                null,  // No schema provided
+                null
+            )
+        )
+    );
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, noSchemaRequest)
+    );
+
+    // Test creating frozen association when schemas already exist fails
+    // First register a schema in subject3
+    restApp.restClient.registerSchema(allSchemas.get(1), subject3);
+
+    RegisterSchemaRequest anotherSchemaRequest = new RegisterSchemaRequest();
+    anotherSchemaRequest.setSchema(allSchemas.get(0));
+
+    AssociationCreateOrUpdateRequest existingSchemasRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId3,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject3,
+                "key",
+                LifecyclePolicy.STRONG,
+                true,  // Frozen
+                anotherSchemaRequest,
+                null
+            )
+        )
+    );
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, existingSchemasRequest)
+    );
+
+    // Create frozen association successfully
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
@@ -419,6 +475,45 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         restApp.restClient.createOrUpdateAssociation(
             RestService.DEFAULT_REQUEST_PROPERTIES, null, false, updateRequest)
     );
+
+    // Test that frozen attribute cannot be changed
+    AssociationCreateOrUpdateRequest unfreezeRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.STRONG,
+                false,  // Try to unfreeze
+                null,
+                null
+            )
+        )
+    );
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createOrUpdateAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, unfreezeRequest)
+    );
+
+    // Test deleting frozen association without cascadeLifecycle fails
+    assertThrows(Exception.class, () ->
+        restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+            resourceId, "topic", Collections.singletonList("key"), false, false)
+    );
+
+    // Test deleting frozen association with cascadeLifecycle succeeds
+    restApp.restClient.deleteAssociations(RestService.DEFAULT_REQUEST_PROPERTIES,
+        resourceId, "topic", Collections.singletonList("key"), true, false);
+
+    // Verify association is deleted
+    List<Association> associations = restApp.restClient.getAssociationsBySubject(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
+        Collections.singletonList("key"), null, 0, -1);
+    assertTrue(associations.isEmpty());
   }
 
   @Test
