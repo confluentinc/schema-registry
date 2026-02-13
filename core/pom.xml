@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.1.2-0</version>
+        <version>8.2.0-0</version>
     </parent>
 
     <artifactId>kafka-schema-registry</artifactId>
@@ -33,10 +33,22 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka_${kafka.scala.version}</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.xerial.snappy</groupId>
@@ -147,6 +159,12 @@
             <artifactId>kafka_${kafka.scala.version}</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -154,12 +172,24 @@
             <version>${kafka.version}</version>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
