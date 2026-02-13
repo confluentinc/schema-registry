@@ -62,6 +62,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -215,8 +216,14 @@ public abstract class AbstractDekRegistry implements Closeable {
     return config;
   }
 
-  public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys() {
+  public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys()
+      throws SchemaRegistryStoreException {
     return sharedKeys;
+  }
+
+  public Set<KeyEncryptionKeyId> getSharedKeysForKmsKeyId(String kmsKeyId)
+      throws SchemaRegistryStoreException {
+    return getSharedKeys().get(kmsKeyId);
   }
 
   /**
