@@ -176,7 +176,6 @@
             <plugin>
                 <groupId>io.swagger.core.v3</groupId>
                 <artifactId>swagger-maven-plugin-jakarta</artifactId>
-                <version>2.2.42</version>
                 <configuration>
                     <resourcePackages>
                         <package>io.confluent.dekregistry.web.rest.resources</package>
