@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.utils;
 
 import com.google.common.base.CharMatcher;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A qualified subject consists of a tenant, a context, and a subject name.
@@ -34,6 +36,8 @@ import java.util.Objects;
  * The special subject name "__EMPTY" represents an empty string.
  */
 public class QualifiedSubject implements Comparable<QualifiedSubject> {
+
+  private static final Logger log = LoggerFactory.getLogger(QualifiedSubject.class);
 
   public static final String DEFAULT_TENANT = "default";
 
@@ -407,7 +411,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
       context = context.substring(0, context.length() - 1);
     }
     if (context.contains(CONTEXT_DELIMITER)) {
-      throw new IllegalArgumentException("Context name cannot contain a colon");
+      log.error("Context name '{}' cannot contain a colon", context);
+      throw new IllegalArgumentException("Context name '" + context + "' cannot contain a colon");
     }
     if (!context.startsWith(CONTEXT_SEPARATOR)) {
       context = CONTEXT_SEPARATOR + context;
