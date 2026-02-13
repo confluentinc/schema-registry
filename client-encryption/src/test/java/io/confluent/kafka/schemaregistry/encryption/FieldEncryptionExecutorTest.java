@@ -438,8 +438,8 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testKafkaAvroSerializerEnableOnlyAtNone() throws Exception {
-    // Set enableOnlyAt to NONE, encryption should be skipped
+  public void testKafkaAvroSerializerEnableAtNone() throws Exception {
+    // Set enableAt to NONE, encryption should be skipped
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule = new Rule("rule1", null, null, null,
@@ -463,8 +463,8 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testKafkaAvroSerializerEnableOnlyAtGatewayNotRun() throws Exception {
-    // Set enableOnlyAt to GATEWAY, but don't configure execution.environment
+  public void testKafkaAvroSerializerEnableAtGatewayNotRun() throws Exception {
+    // Set enableAt to GATEWAY, but don't configure execution.environment
     // The default execution environment is CLIENT, so the rule should be skipped
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -489,8 +489,8 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testKafkaAvroSerializerEnableOnlyAtGatewayWithGateway() throws Exception {
-    // Set enableOnlyAt to GATEWAY and also set execution.environment to GATEWAY
+  public void testKafkaAvroSerializerEnableAtGatewayWithGateway() throws Exception {
+    // Set enableAt to GATEWAY and also set execution.environment to GATEWAY
     // The rule should be executed
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
@@ -521,8 +521,8 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testKafkaAvroSerializerEnableOnlyAtAllWithGateway() throws Exception {
-    // Set enableOnlyAt to ALL and also set execution.environment to GATEWAY
+  public void testKafkaAvroSerializerEnableAtAllWithGateway() throws Exception {
+    // Set enableAt to ALL and also set execution.environment to GATEWAY
     // The rule should be executed since ALL matches any environment
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
