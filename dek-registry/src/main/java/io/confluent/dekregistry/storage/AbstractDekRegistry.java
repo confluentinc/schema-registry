@@ -17,9 +17,6 @@ package io.confluent.dekregistry.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.google.common.collect.Multimaps;
-import com.google.common.collect.SetMultimap;
-import com.google.common.collect.TreeMultimap;
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
@@ -62,7 +59,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -109,7 +105,6 @@ public abstract class AbstractDekRegistry implements Closeable {
   private final SchemaRegistry schemaRegistry;
   private final MetricsManager metricsManager;
   private final DekRegistryConfig config;
-  private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
 
   protected final int kekSearchDefaultLimit;
   protected final int kekSearchMaxLimit;
@@ -132,7 +127,6 @@ public abstract class AbstractDekRegistry implements Closeable {
     this.schemaRegistry.properties().put(KEY, this);
     this.metricsManager = metricsManager;
     this.config = config;
-    this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
     this.cryptors = new ConcurrentHashMap<>();
     this.kekSearchDefaultLimit =
         config.getInt(DekRegistryConfig.KEK_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -214,16 +208,6 @@ public abstract class AbstractDekRegistry implements Closeable {
 
   public DekRegistryConfig config() {
     return config;
-  }
-
-  public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys()
-      throws SchemaRegistryStoreException {
-    return sharedKeys;
-  }
-
-  public Set<KeyEncryptionKeyId> getSharedKeysForKmsKeyId(String kmsKeyId)
-      throws SchemaRegistryStoreException {
-    return getSharedKeys().get(kmsKeyId);
   }
 
   /**

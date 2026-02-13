@@ -15,7 +15,6 @@
 
 package io.confluent.dekregistry.storage;
 
-import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,9 +23,9 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(DefaultDekCacheUpdateHandler.class);
 
-  private final AbstractDekRegistry dekRegistry;
+  private final KafkaDekRegistry dekRegistry;
 
-  public DefaultDekCacheUpdateHandler(AbstractDekRegistry dekRegistry) {
+  public DefaultDekCacheUpdateHandler(KafkaDekRegistry dekRegistry) {
     this.dekRegistry = dekRegistry;
   }
 
@@ -69,11 +68,7 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
         if (oldValue instanceof KeyEncryptionKey) {
           KeyEncryptionKey oldKek = (KeyEncryptionKey) oldValue;
           if (oldKek.isShared()) {
-            try {
-              dekRegistry.getSharedKeys().remove(oldKek.getKmsKeyId(), (KeyEncryptionKeyId) key);
-            } catch (SchemaRegistryStoreException e) {
-              throw new RuntimeException(e);
-            }
+            dekRegistry.getSharedKeys().remove(oldKek.getKmsKeyId(), (KeyEncryptionKeyId) key);
             dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
           }
         }
@@ -84,11 +79,7 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
       if (value instanceof KeyEncryptionKey) {
         KeyEncryptionKey kek = (KeyEncryptionKey) value;
         if (kek.isShared()) {
-          try {
-            dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
-          } catch (SchemaRegistryStoreException e) {
-            throw new RuntimeException(e);
-          }
+          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
           dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
         }
       }
@@ -99,19 +90,11 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
         KeyEncryptionKey oldKek = (KeyEncryptionKey) oldValue;
         if (!oldKek.isShared() && kek.isShared()) {
           // Not Shared -> Shared
-          try {
-            dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
-          } catch (SchemaRegistryStoreException e) {
-            throw new RuntimeException(e);
-          }
+          dekRegistry.getSharedKeys().put(kek.getKmsKeyId(), (KeyEncryptionKeyId) key);
           dekRegistry.getMetricsManager().incrementSharedKeyCount(tenant);
         } else if (oldKek.isShared() && !kek.isShared()) {
           // Shared -> Not Shared
-          try {
-            dekRegistry.getSharedKeys().remove(oldKek.getKmsKeyId(), (KeyEncryptionKeyId) key);
-          } catch (SchemaRegistryStoreException e) {
-            throw new RuntimeException(e);
-          }
+          dekRegistry.getSharedKeys().remove(oldKek.getKmsKeyId(), (KeyEncryptionKeyId) key);
           dekRegistry.getMetricsManager().decrementSharedKeyCount(tenant);
         }
       }
