@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.filters;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.entities.ErrorMessage;
 import java.net.URI;
@@ -50,7 +51,10 @@ public class ContextFilter implements ContainerRequestFilter {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  public ContextFilter() {
+  private final SchemaRegistry schemaRegistry;
+
+  public ContextFilter(SchemaRegistry schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
   }
 
   @Override
@@ -119,7 +123,7 @@ public class ContextFilter implements ContainerRequestFilter {
 
       if (subjectPathFound) {
         if (!startsWithContext(uriPathStr)) {
-          modifiedUriPathStr = QualifiedSubject.normalizeContext(context) + uriPathStr;
+          modifiedUriPathStr = normalizeContext(context) + uriPathStr;
         }
 
         subjectPathFound = false;
@@ -141,7 +145,7 @@ public class ContextFilter implements ContainerRequestFilter {
       }
     }
     if (configOrModeFound && subjectPathFound) {
-      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      String normalizedContext = normalizeContext(context);
       if (!normalizedContext.isEmpty()) {
         modifiedPath.append(normalizedContext).append("/");
       }
@@ -150,7 +154,7 @@ public class ContextFilter implements ContainerRequestFilter {
       modifiedPath.append("contexts").append("/");
     } else if ((modifiedPath.isEmpty() || modifiedPath.toString().equals("/"))
         && !DEFAULT_CONTEXT.equals(context)) {
-      String normalizedContext = QualifiedSubject.normalizeContext(context);
+      String normalizedContext = normalizeContext(context);
       modifiedPath.append("contexts").append("/").append(normalizedContext).append("/");
     }
 
@@ -181,7 +185,7 @@ public class ContextFilter implements ContainerRequestFilter {
         subject = "";
       }
       if (!startsWithContext(subject)) {
-        subject = QualifiedSubject.normalizeContext(context) + subject;
+        subject = normalizeContext(context) + subject;
         builder.replaceQueryParam("subject", subject);
       }
     } else if (path.equals("schemas") || path.equals("subjects") || path.startsWith("keks")) {
@@ -193,15 +197,23 @@ public class ContextFilter implements ContainerRequestFilter {
       Object[] newSubjectPrefixes = subjectPrefixes.stream()
           .map(prefix -> {
             if (!startsWithContext(prefix)) {
-              return QualifiedSubject.normalizeContext(context) + prefix;
+              return normalizeContext(context) + prefix;
             }
             return prefix;
           })
           .toArray();
       builder.replaceQueryParam("subjectPrefix", newSubjectPrefixes);
     } else if (isCreateOrUpdate(method) && path.startsWith("associations")) {
-      builder.replaceQueryParam("context", QualifiedSubject.normalizeContext(context));
+      builder.replaceQueryParam("context", normalizeContext(context));
     }
+  }
+
+  private String normalizeContext(String context) {
+    String tenant = schemaRegistry.tenant();
+    if (QualifiedSubject.isQualified(tenant, context)) {
+      context = QualifiedSubject.create(tenant, context).getContext();
+    }
+    return QualifiedSubject.normalizeContext(context);
   }
 
   private static boolean isCreateOrUpdate(String method) {
