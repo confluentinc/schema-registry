@@ -47,6 +47,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   private final EncoderFactory encoderFactory = EncoderFactory.get();
   protected boolean normalizeSchema;
   protected boolean autoRegisterSchema;
+  protected boolean propagateSchemaTags;
   protected boolean removeJavaProperties;
   protected int useSchemaId = -1;
   protected boolean idCompatStrict;
@@ -68,6 +69,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     configureClientProperties(config, new AvroSchemaProvider());
     normalizeSchema = config.normalizeSchema();
     autoRegisterSchema = config.autoRegisterSchema();
+    propagateSchemaTags = config.propagateSchemaTags();
     removeJavaProperties =
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useSchemaId = config.useSchemaId();
@@ -115,7 +117,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema";
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
-            registerWithResponse(subject, schema, normalizeSchema);
+            registerWithResponse(subject, schema, normalizeSchema, propagateSchemaTags);
         if (s.getSchema() != null) {
           Optional<ParsedSchema> optSchema = schemaRegistry.parseSchema(s);
           if (optSchema.isPresent()) {

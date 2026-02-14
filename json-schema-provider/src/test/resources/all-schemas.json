@@ -1,0 +1,2373 @@
+[
+  {
+    "target_schema": {
+      "items": [
+        {}
+      ],
+      "additionalItems": {
+        "type": "integer"
+      }
+    },
+    "source_schema": {
+      "prefixItems": [
+        {}
+      ],
+      "items": {
+        "type": "integer"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": {}
+    },
+    "source_schema": {
+      "items": {}
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": [
+        {},
+        {},
+        {}
+      ],
+      "additionalItems": false
+    },
+    "source_schema": {
+      "prefixItems": [
+        {},
+        {},
+        {}
+      ],
+      "items": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "additionalItems": false
+    },
+    "source_schema": {
+      "items": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": [
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "source_schema": {
+      "prefixItems": [
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      },
+      "patternProperties": {
+        "^v": {}
+      },
+      "additionalProperties": false
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      },
+      "patternProperties": {
+        "^v": {}
+      },
+      "additionalProperties": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "source_schema": {
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "allOf": [
+        {
+          "properties": {
+            "bar": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bar"
+          ]
+        },
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        }
+      ]
+    },
+    "source_schema": {
+      "allOf": [
+        {
+          "properties": {
+            "bar": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bar"
+          ]
+        },
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "bar": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bar"
+      ],
+      "allOf": [
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        },
+        {
+          "properties": {
+            "baz": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "baz"
+          ]
+        }
+      ]
+    },
+    "source_schema": {
+      "properties": {
+        "bar": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bar"
+      ],
+      "allOf": [
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        },
+        {
+          "properties": {
+            "baz": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "baz"
+          ]
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "allOf": [
+        {
+          "maximum": 30
+        },
+        {
+          "minimum": 20
+        }
+      ]
+    },
+    "source_schema": {
+      "allOf": [
+        {
+          "maximum": 30
+        },
+        {
+          "minimum": 20
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "allOf": [
+        true,
+        true
+      ]
+    },
+    "source_schema": {
+      "allOf": [
+        true,
+        true
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "allOf": [
+        true,
+        false
+      ]
+    },
+    "source_schema": {
+      "allOf": [
+        true,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "allOf": [
+        false,
+        false
+      ]
+    },
+    "source_schema": {
+      "allOf": [
+        false,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "minimum": 2
+        }
+      ]
+    },
+    "source_schema": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "minimum": 2
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "string",
+      "anyOf": [
+        {
+          "maxLength": 2
+        },
+        {
+          "minLength": 4
+        }
+      ]
+    },
+    "source_schema": {
+      "type": "string",
+      "anyOf": [
+        {
+          "maxLength": 2
+        },
+        {
+          "minLength": 4
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "anyOf": [
+        true,
+        true
+      ]
+    },
+    "source_schema": {
+      "anyOf": [
+        true,
+        true
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "anyOf": [
+        true,
+        false
+      ]
+    },
+    "source_schema": {
+      "anyOf": [
+        true,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "anyOf": [
+        false,
+        false
+      ]
+    },
+    "source_schema": {
+      "anyOf": [
+        false,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "anyOf": [
+        {
+          "properties": {
+            "bar": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bar"
+          ]
+        },
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        }
+      ]
+    },
+    "source_schema": {
+      "anyOf": [
+        {
+          "properties": {
+            "bar": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bar"
+          ]
+        },
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": true,
+    "source_schema": true,
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": false,
+    "source_schema": false,
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "const": 2
+    },
+    "source_schema": {
+      "const": 2
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "const": {
+        "foo": "bar",
+        "baz": "bax"
+      }
+    },
+    "source_schema": {
+      "const": {
+        "foo": "bar",
+        "baz": "bax"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "const": [
+        {
+          "foo": "bar"
+        }
+      ]
+    },
+    "source_schema": {
+      "const": [
+        {
+          "foo": "bar"
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "const": null
+    },
+    "source_schema": {
+      "const": null
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "contains": {
+        "minimum": 5
+      }
+    },
+    "source_schema": {
+      "contains": {
+        "minimum": 5
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "contains": {
+        "const": 5
+      }
+    },
+    "source_schema": {
+      "contains": {
+        "const": 5
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "contains": true
+    },
+    "source_schema": {
+      "contains": true
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "contains": false
+    },
+    "source_schema": {
+      "contains": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "date-time"
+    },
+    "source_schema": {
+      "format": "date-time"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "format": "date"
+    },
+    "source_schema": {
+      "format": "date"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "type": "integer",
+          "default": []
+        }
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {
+          "type": "integer",
+          "default": []
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "bar": {
+          "type": "string",
+          "minLength": 4,
+          "default": "bad"
+        }
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "bar": {
+          "type": "string",
+          "minLength": 4,
+          "default": "bad"
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "dependencies": {
+        "bar": [
+          "foo"
+        ]
+      }
+    },
+    "source_schema": {
+      "dependentRequired": {
+        "bar": [
+          "foo"
+        ]
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+    },
+    "source_schema": {
+      "dependentRequired": {
+        "bar": []
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "dependencies": {
+        "quux": [
+          "bar",
+          "foo"
+        ]
+      }
+    },
+    "source_schema": {
+      "dependentRequired": {
+        "quux": [
+          "foo",
+          "bar"
+        ]
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "dependencies": {
+        "bar": {
+          "properties": {
+            "foo": {
+              "type": "integer"
+            },
+            "bar": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "source_schema": {
+      "dependentSchemas": {
+        "bar": {
+          "properties": {
+            "foo": {
+              "type": "integer"
+            },
+            "bar": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "dependencies": {
+        "foo": true,
+        "bar": false
+      }
+    },
+    "source_schema": {
+      "dependentSchemas": {
+        "foo": true,
+        "bar": false
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "email"
+    },
+    "source_schema": {
+      "format": "email"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "source_schema": {
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "enum": [
+        [],
+        6,
+        "foo",
+        {
+          "foo": 12
+        },
+        true
+      ]
+    },
+    "source_schema": {
+      "enum": [
+        6,
+        "foo",
+        [],
+        true,
+        {
+          "foo": 12
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "object",
+      "properties": {
+        "foo": {
+          "enum": [
+            "foo"
+          ]
+        },
+        "bar": {
+          "enum": [
+            "bar"
+          ]
+        }
+      },
+      "required": [
+        "bar"
+      ]
+    },
+    "source_schema": {
+      "type": "object",
+      "properties": {
+        "foo": {
+          "enum": [
+            "foo"
+          ]
+        },
+        "bar": {
+          "enum": [
+            "bar"
+          ]
+        }
+      },
+      "required": [
+        "bar"
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "exclusiveMaximum": 3
+    },
+    "source_schema": {
+      "exclusiveMaximum": 3
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "exclusiveMinimum": 1.1
+    },
+    "source_schema": {
+      "exclusiveMinimum": 1.1
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "hostname"
+    },
+    "source_schema": {
+      "format": "hostname"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "if": {
+        "const": 0
+      }
+    },
+    "source_schema": {
+      "if": {
+        "const": 0
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "then": {
+        "const": 0
+      }
+    },
+    "source_schema": {
+      "then": {
+        "const": 0
+      }
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "else": {
+        "const": 0
+      }
+    },
+    "source_schema": {
+      "else": {
+        "const": 0
+      }
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "if": {
+        "exclusiveMaximum": 0
+      },
+      "then": {
+        "minimum": -10
+      }
+    },
+    "source_schema": {
+      "if": {
+        "exclusiveMaximum": 0
+      },
+      "then": {
+        "minimum": -10
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "if": {
+        "exclusiveMaximum": 0
+      },
+      "else": {
+        "multipleOf": 2
+      }
+    },
+    "source_schema": {
+      "if": {
+        "exclusiveMaximum": 0
+      },
+      "else": {
+        "multipleOf": 2
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "if": {
+        "exclusiveMaximum": 0
+      },
+      "then": {
+        "minimum": -10
+      },
+      "else": {
+        "multipleOf": 2
+      }
+    },
+    "source_schema": {
+      "if": {
+        "exclusiveMaximum": 0
+      },
+      "then": {
+        "minimum": -10
+      },
+      "else": {
+        "multipleOf": 2
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "allOf": [
+        {
+          "if": {
+            "exclusiveMaximum": 0
+          }
+        },
+        {
+          "then": {
+            "minimum": -10
+          }
+        },
+        {
+          "else": {
+            "multipleOf": 2
+          }
+        }
+      ]
+    },
+    "source_schema": {
+      "allOf": [
+        {
+          "if": {
+            "exclusiveMaximum": 0
+          }
+        },
+        {
+          "then": {
+            "minimum": -10
+          }
+        },
+        {
+          "else": {
+            "multipleOf": 2
+          }
+        }
+      ]
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "format": "ipv4"
+    },
+    "source_schema": {
+      "format": "ipv4"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "format": "ipv6"
+    },
+    "source_schema": {
+      "format": "ipv6"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "items": {
+        "type": "integer"
+      }
+    },
+    "source_schema": {
+      "items": {
+        "type": "integer"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "source_schema": {
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+    },
+    "source_schema": {
+      "items": true
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "additionalItems": false
+    },
+    "source_schema": {
+      "items": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": [
+        true,
+        false
+      ]
+    },
+    "source_schema": {
+      "prefixItems": [
+        true,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "json-pointer"
+    },
+    "source_schema": {
+      "format": "json-pointer"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "maxItems": 2
+    },
+    "source_schema": {
+      "maxItems": 2
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "maxLength": 2
+    },
+    "source_schema": {
+      "maxLength": 2
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "maxProperties": 2
+    },
+    "source_schema": {
+      "maxProperties": 2
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "maximum": 3
+    },
+    "source_schema": {
+      "maximum": 3
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "minItems": 1
+    },
+    "source_schema": {
+      "minItems": 1
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "minLength": 2
+    },
+    "source_schema": {
+      "minLength": 2
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "minProperties": 1
+    },
+    "source_schema": {
+      "minProperties": 1
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "minimum": 1.1
+    },
+    "source_schema": {
+      "minimum": 1.1
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "multipleOf": 2
+    },
+    "source_schema": {
+      "multipleOf": 2
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "multipleOf": 1.5
+    },
+    "source_schema": {
+      "multipleOf": 1.5
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "multipleOf": 0.0001
+    },
+    "source_schema": {
+      "multipleOf": 0.0001
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "not": {
+        "type": "integer"
+      }
+    },
+    "source_schema": {
+      "not": {
+        "type": "integer"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "not": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    },
+    "source_schema": {
+      "not": {
+        "type": [
+          "integer",
+          "boolean"
+        ]
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "not": {
+        "type": "object",
+        "properties": {
+          "foo": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "source_schema": {
+      "not": {
+        "type": "object",
+        "properties": {
+          "foo": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "not": {}
+        }
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {
+          "not": {}
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "not": true
+    },
+    "source_schema": {
+      "not": true
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "not": false
+    },
+    "source_schema": {
+      "not": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "minimum": 2
+        }
+      ]
+    },
+    "source_schema": {
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "minimum": 2
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "string",
+      "oneOf": [
+        {
+          "minLength": 2
+        },
+        {
+          "maxLength": 4
+        }
+      ]
+    },
+    "source_schema": {
+      "type": "string",
+      "oneOf": [
+        {
+          "minLength": 2
+        },
+        {
+          "maxLength": 4
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "oneOf": [
+        true,
+        true,
+        true
+      ]
+    },
+    "source_schema": {
+      "oneOf": [
+        true,
+        true,
+        true
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "oneOf": [
+        true,
+        false,
+        false
+      ]
+    },
+    "source_schema": {
+      "oneOf": [
+        true,
+        false,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "oneOf": [
+        true,
+        true,
+        false
+      ]
+    },
+    "source_schema": {
+      "oneOf": [
+        true,
+        true,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "oneOf": [
+        false,
+        false,
+        false
+      ]
+    },
+    "source_schema": {
+      "oneOf": [
+        false,
+        false,
+        false
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "oneOf": [
+        {
+          "properties": {
+            "bar": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bar"
+          ]
+        },
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        }
+      ]
+    },
+    "source_schema": {
+      "oneOf": [
+        {
+          "properties": {
+            "bar": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bar"
+          ]
+        },
+        {
+          "properties": {
+            "foo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "foo"
+          ]
+        }
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "pattern": "^a*$"
+    },
+    "source_schema": {
+      "pattern": "^a*$"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "pattern": "a+"
+    },
+    "source_schema": {
+      "pattern": "a+"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "patternProperties": {
+        "f.*o": {
+          "type": "integer"
+        }
+      }
+    },
+    "source_schema": {
+      "patternProperties": {
+        "f.*o": {
+          "type": "integer"
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "patternProperties": {
+        "a*": {
+          "type": "integer"
+        },
+        "aaa*": {
+          "maximum": 20
+        }
+      }
+    },
+    "source_schema": {
+      "patternProperties": {
+        "a*": {
+          "type": "integer"
+        },
+        "aaa*": {
+          "maximum": 20
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "patternProperties": {
+        "[0-9]{2,}": {
+          "type": "boolean"
+        },
+        "X_": {
+          "type": "string"
+        }
+      }
+    },
+    "source_schema": {
+      "patternProperties": {
+        "[0-9]{2,}": {
+          "type": "boolean"
+        },
+        "X_": {
+          "type": "string"
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "patternProperties": {
+        "f.*": true,
+        "b.*": false
+      }
+    },
+    "source_schema": {
+      "patternProperties": {
+        "f.*": true,
+        "b.*": false
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "type": "integer"
+        },
+        "bar": {
+          "type": "string"
+        }
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {
+          "type": "integer"
+        },
+        "bar": {
+          "type": "string"
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "type": "array",
+          "maxItems": 3
+        },
+        "bar": {
+          "type": "array"
+        }
+      },
+      "patternProperties": {
+        "f.o": {
+          "minItems": 2
+        }
+      },
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {
+          "type": "array",
+          "maxItems": 3
+        },
+        "bar": {
+          "type": "array"
+        }
+      },
+      "patternProperties": {
+        "f.o": {
+          "minItems": 2
+        }
+      },
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": true,
+        "bar": false
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": true,
+        "bar": false
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "propertyNames": {
+        "maxLength": 3
+      }
+    },
+    "source_schema": {
+      "propertyNames": {
+        "maxLength": 3
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "propertyNames": true
+    },
+    "source_schema": {
+      "propertyNames": true
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "propertyNames": false
+    },
+    "source_schema": {
+      "propertyNames": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "$ref": "#"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {
+          "$ref": "#"
+        }
+      },
+      "additionalProperties": false
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "type": "integer"
+        },
+        "bar": {
+          "$ref": "#/properties/foo"
+        }
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {
+          "type": "integer"
+        },
+        "bar": {
+          "$ref": "#/properties/foo"
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": [
+        {
+          "type": "integer"
+        },
+        {
+          "$ref": "#/prefixItems/0"
+        }
+      ]
+    },
+    "source_schema": {
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "$ref": "#/prefixItems/0"
+        }
+      ]
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "tilda~field": {
+        "type": "integer"
+      },
+      "slash/field": {
+        "type": "integer"
+      },
+      "percent%field": {
+        "type": "integer"
+      },
+      "properties": {
+        "tilda": {
+          "$ref": "#/tilda~0field"
+        },
+        "slash": {
+          "$ref": "#/slash~1field"
+        },
+        "percent": {
+          "$ref": "#/percent%25field"
+        }
+      }
+    },
+    "source_schema": {
+      "tilda~field": {
+        "type": "integer"
+      },
+      "slash/field": {
+        "type": "integer"
+      },
+      "percent%field": {
+        "type": "integer"
+      },
+      "properties": {
+        "tilda": {
+          "$ref": "#/tilda~0field"
+        },
+        "slash": {
+          "$ref": "#/slash~1field"
+        },
+        "percent": {
+          "$ref": "#/percent%25field"
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "#/$defs/c"
+    },
+    "source_schema": {
+      "$defs": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "$ref": "#/$defs/a"
+        },
+        "c": {
+          "$ref": "#/$defs/b"
+        }
+      },
+      "$ref": "#/$defs/c"
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {
+          "$ref": "#/$defs/reffed",
+          "maxItems": 2
+        }
+      }
+    },
+    "source_schema": {
+      "$defs": {
+        "reffed": {
+          "type": "array"
+        }
+      },
+      "properties": {
+        "foo": {
+          "$ref": "#/$defs/reffed",
+          "maxItems": 2
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "http://json-schema.org/draft-07/schema#"
+    },
+    "source_schema": {
+      "$ref": "http://json-schema.org/draft-07/schema#"
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "$ref": {
+          "type": "string"
+        }
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "$ref": {
+          "type": "string"
+        }
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "#/$defs/bool"
+    },
+    "source_schema": {
+      "$ref": "#/$defs/bool",
+      "$defs": {
+        "bool": true
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "#/$defs/bool"
+    },
+    "source_schema": {
+      "$ref": "#/$defs/bool",
+      "$defs": {
+        "bool": false
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "description": "tree of nodes",
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "http://localhost:1234/node"
+          }
+        }
+      },
+      "required": [
+        "meta",
+        "nodes"
+      ]
+    },
+    "source_schema": {
+      "$id": "http://localhost:1234/tree",
+      "description": "tree of nodes",
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "node"
+          }
+        }
+      },
+      "required": [
+        "meta",
+        "nodes"
+      ],
+      "$defs": {
+        "node": {
+          "$id": "http://localhost:1234/node",
+          "description": "node",
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "subtree": {
+              "$ref": "tree"
+            }
+          },
+          "required": [
+            "value"
+          ]
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "http://localhost:1234/integer.json"
+    },
+    "source_schema": {
+      "$ref": "http://localhost:1234/integer.json"
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "http://localhost:1234/subSchemas.json#/integer"
+    },
+    "source_schema": {
+      "$ref": "http://localhost:1234/subSchemas.json#/integer"
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "$ref": "http://localhost:1234/subSchemas.json#/refToInteger"
+    },
+    "source_schema": {
+      "$ref": "http://localhost:1234/subSchemas.json#/refToInteger"
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "items": {
+        "items": {
+          "$ref": "http://localhost:1234/folder/folderInteger.json"
+        }
+      }
+    },
+    "source_schema": {
+      "$id": "http://localhost:1234/",
+      "items": {
+        "$id": "folder/",
+        "items": {
+          "$ref": "folderInteger.json"
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "object",
+      "properties": {
+        "list": {
+          "$ref": "http://localhost:1234/scope_change_defs1.json#/$defs/baz"
+        }
+      }
+    },
+    "source_schema": {
+      "$id": "http://localhost:1234/scope_change_defs1.json",
+      "type": "object",
+      "properties": {
+        "list": {
+          "$ref": "#/$defs/baz"
+        }
+      },
+      "$defs": {
+        "baz": {
+          "$id": "folder/",
+          "type": "array",
+          "items": {
+            "$ref": "folderInteger.json"
+          }
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "object",
+      "properties": {
+        "list": {
+          "$ref": "http://localhost:1234/scope_change_defs2.json#/$defs/baz/$defs/bar"
+        }
+      }
+    },
+    "source_schema": {
+      "$id": "http://localhost:1234/scope_change_defs2.json",
+      "type": "object",
+      "properties": {
+        "list": {
+          "$ref": "#/$defs/baz/$defs/bar"
+        }
+      },
+      "$defs": {
+        "baz": {
+          "$id": "folder/",
+          "$defs": {
+            "bar": {
+              "type": "array",
+              "items": {
+                "$ref": "folderInteger.json"
+              }
+            }
+          }
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "http://localhost:1234/name.json#/$defs/orNull"
+        }
+      }
+    },
+    "source_schema": {
+      "$id": "http://localhost:1234/object",
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "name.json#/$defs/orNull"
+        }
+      }
+    },
+    "refs": true,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "regex"
+    },
+    "source_schema": {
+      "format": "regex"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "format": "relative-json-pointer"
+    },
+    "source_schema": {
+      "format": "relative-json-pointer"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      },
+      "required": [
+        "foo"
+      ]
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {},
+        "bar": {}
+      },
+      "required": [
+        "foo"
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {}
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {}
+      }
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "properties": {
+        "foo": {}
+      }
+    },
+    "source_schema": {
+      "properties": {
+        "foo": {}
+      },
+      "required": []
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "time"
+    },
+    "source_schema": {
+      "format": "time"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "type": "integer"
+    },
+    "source_schema": {
+      "type": "integer"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "number"
+    },
+    "source_schema": {
+      "type": "number"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "string"
+    },
+    "source_schema": {
+      "type": "string"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "object"
+    },
+    "source_schema": {
+      "type": "object"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "array"
+    },
+    "source_schema": {
+      "type": "array"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "boolean"
+    },
+    "source_schema": {
+      "type": "boolean"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "type": "null"
+    },
+    "source_schema": {
+      "type": "null"
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "source_schema": {
+      "type": [
+        "integer",
+        "string"
+      ]
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "uniqueItems": true
+    },
+    "source_schema": {
+      "uniqueItems": true
+    },
+    "refs": false,
+    "skip": false
+  },
+  {
+    "target_schema": {
+      "format": "uri-reference"
+    },
+    "source_schema": {
+      "format": "uri-reference"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "format": "uri-template"
+    },
+    "source_schema": {
+      "format": "uri-template"
+    },
+    "refs": false,
+    "skip": true
+  },
+  {
+    "target_schema": {
+      "format": "uri"
+    },
+    "source_schema": {
+      "format": "uri"
+    },
+    "refs": false,
+    "skip": true
+  }
+]

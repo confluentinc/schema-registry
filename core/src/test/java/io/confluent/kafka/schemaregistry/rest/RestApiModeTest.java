@@ -442,6 +442,49 @@ public class RestApiModeTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testImportModeWithSameSchemaDifferentIdAndSubject() throws Exception {
+    String subject = "testSubject";
+    String subject2 = "testSubject2";
+    String mode = "IMPORT";
+
+    // set mode to import
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    int expectedIdSchema1 = 100;
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+
+    assertEquals(
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject, 1).getSchema());
+
+    int versionOfRegisteredSubject1 =
+        restApp.restClient.lookUpSubjectVersion(SCHEMA_WITH_DECIMAL, subject).getVersion();
+    assertEquals(1, versionOfRegisteredSubject1);
+
+    // register equivalent schema with different id
+    expectedIdSchema1 = 200;
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject2, 1, expectedIdSchema1));
+
+    assertEquals(
+        SCHEMA_WITH_DECIMAL,
+        restApp.restClient.getVersion(subject2, 1).getSchema());
+
+    versionOfRegisteredSubject1 =
+        restApp.restClient.lookUpSubjectVersion(SCHEMA_WITH_DECIMAL, subject).getVersion();
+    assertEquals(1, versionOfRegisteredSubject1);
+
+    int versionOfRegisteredSubject2 =
+        restApp.restClient.lookUpSubjectVersion(SCHEMA_WITH_DECIMAL, subject2).getVersion();
+    assertEquals(1, versionOfRegisteredSubject2);
+  }
+
+  @Test
   public void testRegisterIncompatibleSchemaDuringImport() throws Exception {
     String subject = "testSubject";
     String mode = "READWRITE";
