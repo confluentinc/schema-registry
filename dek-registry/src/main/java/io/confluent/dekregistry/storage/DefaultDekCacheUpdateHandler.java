@@ -51,7 +51,6 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
    * @param key   Key associated with the schema.
    * @param value Value written to the Kafka lookupCache
    */
-  @SuppressWarnings("checkstyle:CyclomaticComplexity")
   @Override
   public void handleUpdate(
       EncryptionKeyId key,
