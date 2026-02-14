@@ -15,17 +15,30 @@
 
 package io.confluent.kafka.schemaregistry.rest.filters;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import java.net.URI;
 import java.util.Collections;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.UriBuilder;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 public class ContextFilterTest {
 
-  ContextFilter contextFilter = new ContextFilter();
+  ContextFilter contextFilter;
+
+  @Before
+  public void setUp() throws Exception {
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.tenant()).thenReturn(DEFAULT_TENANT);
+    contextFilter = new ContextFilter(schemaRegistry);
+  }
 
   @Test
   public void testContextsRoot() {
@@ -356,6 +369,51 @@ public class ContextFilterTest {
         "Context must change",
         "context=:.ctx:",
         uri.getQuery()
+    );
+  }
+
+  @Test
+  public void testAlreadyQualifiedContextIsIdempotent() {
+    // The context "mytenant-:.myCtx:" should be parsed to extract ".myCtx" and re-normalized.
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.tenant()).thenReturn("mytenant");
+    ContextFilter tenantContextFilter = new ContextFilter(schemaRegistry);
+
+    String path = "/contexts/mytenant_:.myCtx:/";
+    Assert.assertEquals(
+        "Already qualified context must be normalized without error",
+        "/contexts/:.myCtx:/",
+        tenantContextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testAlreadyQualifiedContextWithSubjects() {
+    // Simulate forwarded request with subjects path
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.tenant()).thenReturn("mytenant");
+    ContextFilter tenantContextFilter = new ContextFilter(schemaRegistry);
+
+    String path = "/contexts/mytenant_:.myCtx:/subjects/mytenant_:.myCtx:mySubject/versions";
+    Assert.assertEquals(
+        "Already qualified context and subject must be handled correctly",
+        "/subjects/:.myCtx:mytenant_:.myCtx:mySubject/versions/",
+        tenantContextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testAlreadyQualifiedContextWithConfig() {
+    // Simulate forwarded request for config endpoint
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    when(schemaRegistry.tenant()).thenReturn("mytenant");
+    ContextFilter tenantContextFilter = new ContextFilter(schemaRegistry);
+
+    String path = "/contexts/mytenant_:.myCtx:/config";
+    Assert.assertEquals(
+        "Already qualified context for config must be normalized",
+        "/config/:.myCtx:/",
+        tenantContextFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
 }
