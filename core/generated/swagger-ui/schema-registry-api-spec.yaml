@@ -2214,7 +2214,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly_2
+      operationId: getSchemaOnly
       parameters:
       - name: subject
         in: path
@@ -2314,7 +2314,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_1
       parameters:
       - name: id
         in: path
@@ -3228,14 +3228,22 @@ components:
       properties:
         subject:
           type: string
+          description: "Name of the subject. In Confluent Cloud, this field is returned\
+            \ only if Confluent-Accept-Unknown-Properties header is passed in"
         version:
           type: integer
+          description: "Version number. In Confluent Cloud, this field is returned\
+            \ only if Confluent-Accept-Unknown-Properties header is passed in"
           format: int32
         guid:
           type: string
+          description: "Globally unique identifier of the schema. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
         schemaType:
           type: string
-          description: Schema type
+          description: "Schema type. In Confluent Cloud, this field is returned only\
+            \ if Confluent-Accept-Unknown-Properties header is passed in"
           example: AVRO
         schema:
           type: string
@@ -3262,9 +3270,15 @@ components:
           example: 1
         ts:
           type: integer
+          description: "Timestamp when the schema was created. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
           format: int64
         deleted:
           type: boolean
+          description: "Whether the schema has been deleted. In Confluent Cloud, this\
+            \ field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
       description: Schema definition
     Schema:
       type: object
@@ -3285,9 +3299,11 @@ components:
           example: 100001
         guid:
           type: string
+          description: Globally unique identifier of the schema
         schemaType:
           type: string
-          description: Schema type
+          description: "Schema type. In Confluent Cloud, this field is returned only\
+            \ if Confluent-Accept-Unknown-Properties header is passed in"
           example: AVRO
         references:
           type: array
@@ -3309,9 +3325,15 @@ components:
             $ref: "#/components/schemas/SchemaTags"
         ts:
           type: integer
+          description: "Timestamp when the schema was created. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
           format: int64
         deleted:
           type: boolean
+          description: "Whether the schema has been deleted. In Confluent Cloud, this\
+            \ field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
         ruleSet:
           $ref: "#/components/schemas/RuleSet"
       description: Schema
@@ -3347,16 +3369,23 @@ components:
           example: 100001
         version:
           type: integer
-          description: Version number
+          description: "Version number. In Confluent Cloud, this field is returned\
+            \ only if Confluent-Accept-Unknown-Properties header is passed in"
           format: int32
         guid:
           type: string
+          description: "Globally unique identifier of the schema. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
         schemaType:
           type: string
-          description: Schema type
+          description: "Schema type. In Confluent Cloud, this field is returned only\
+            \ if Confluent-Accept-Unknown-Properties header is passed in"
         references:
           type: array
-          description: References to other schemas
+          description: "References to other schemas. In Confluent Cloud, this field\
+            \ is returned only if Confluent-Accept-Unknown-Properties header is passed\
+            \ in"
           items:
             $ref: "#/components/schemas/SchemaReference"
         metadata:
@@ -3365,12 +3394,20 @@ components:
           $ref: "#/components/schemas/RuleSet"
         schema:
           type: string
-          description: Schema definition string
+          description: "Schema definition string. In Confluent Cloud, this field is\
+            \ returned only if Confluent-Accept-Unknown-Properties header is passed\
+            \ in"
         ts:
           type: integer
+          description: "Timestamp when the schema was created. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
           format: int64
         deleted:
           type: boolean
+          description: "Whether the schema has been deleted. In Confluent Cloud, this\
+            \ field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
       description: Schema register response
     ErrorMessage:
       type: object
@@ -3526,9 +3563,11 @@ components:
           example: 100001
         guid:
           type: string
+          description: Globally unique identifier of the schema
         schemaType:
           type: string
-          description: Schema type
+          description: "Schema type. In Confluent Cloud, this field is returned only\
+            \ if Confluent-Accept-Unknown-Properties header is passed in"
           example: AVRO
         references:
           type: array
@@ -3563,9 +3602,15 @@ components:
             $ref: "#/components/schemas/SchemaTags"
         ts:
           type: integer
+          description: "Timestamp when the schema was created. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
           format: int64
         deleted:
           type: boolean
+          description: "Whether the schema has been deleted. In Confluent Cloud, this\
+            \ field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
       description: ExtendedSchema
     TagSchemaRequest:
       type: object
