@@ -18,6 +18,9 @@ package io.confluent.dekregistry.storage;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.TreeMultimap;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.confluent.dekregistry.metrics.MetricsManager;
@@ -57,6 +60,8 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
 
   private static final Logger log = LoggerFactory.getLogger(KafkaDekRegistry.class);
 
+  private final SetMultimap<String, KeyEncryptionKeyId> sharedKeys;
+
   // visible for testing
   final Cache<EncryptionKeyId, EncryptionKey> keys;
 
@@ -75,6 +80,7 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
   ) {
     super(schemaRegistry, metricsManager, config);
     this.getSchemaRegistry().addUpdateRequestHandler(new EncryptionUpdateRequestHandler());
+    this.sharedKeys = Multimaps.synchronizedSetMultimap(TreeMultimap.create());
     this.keys = createCache(new EncryptionKeyIdSerde(), new EncryptionKeySerde(),
         config.topic(), getCacheUpdateHandler(config));
   }
@@ -243,12 +249,16 @@ public class KafkaDekRegistry extends AbstractDekRegistry {
     keys.sync();
   }
 
+  public SetMultimap<String, KeyEncryptionKeyId> getSharedKeys() {
+    return sharedKeys;
+  }
+
+  // ==================== Lifecycle ====================
+
   @Override
   protected void initStore() {
     keys.init();
   }
-
-  // ==================== Lifecycle ====================
 
   @PostConstruct
   public void init() {
