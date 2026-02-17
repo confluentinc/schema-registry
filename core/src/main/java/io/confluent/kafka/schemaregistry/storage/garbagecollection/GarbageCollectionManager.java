@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Confluent Inc.
+ * Copyright 2026 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -16,6 +16,7 @@
 package io.confluent.kafka.schemaregistry.storage.garbagecollection;
 
 import io.confluent.kafka.schemaregistry.exceptions.GarbageCollectionException;
+import io.confluent.kafka.schemaregistry.storage.garbagecollection.entities.WireEvent;
 
 import java.io.Closeable;
 

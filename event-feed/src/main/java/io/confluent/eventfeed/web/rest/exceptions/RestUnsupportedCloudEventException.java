@@ -13,22 +13,18 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.eventfeed.web.rest.exceptions;
 
-public class GarbageCollectionInitializationException extends GarbageCollectionException {
-  public GarbageCollectionInitializationException(String message, Throwable cause) {
-    super(message, cause);
-  }
+import io.confluent.rest.exceptions.RestConstraintViolationException;
 
-  public GarbageCollectionInitializationException(String message) {
-    super(message);
-  }
+/**
+ * Indicates an unsupported CloudEvent subject type
+ */
+public class RestUnsupportedCloudEventException extends RestConstraintViolationException {
 
-  public GarbageCollectionInitializationException(Throwable cause) {
-    super(cause);
-  }
+  public static final int ERROR_CODE = Errors.UNSUPPORTED_CLOUD_EVENT_ERROR_CODE;
 
-  public GarbageCollectionInitializationException() {
-    super();
+  public RestUnsupportedCloudEventException(String message) {
+    super(message, ERROR_CODE);
   }
 }

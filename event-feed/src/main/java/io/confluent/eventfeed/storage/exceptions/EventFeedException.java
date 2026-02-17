@@ -13,22 +13,21 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.eventfeed.storage.exceptions;
 
-public class GarbageCollectionInitializationException extends GarbageCollectionException {
-  public GarbageCollectionInitializationException(String message, Throwable cause) {
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+
+public class EventFeedException extends SchemaRegistryException {
+  public EventFeedException(String message, Throwable cause) {
     super(message, cause);
   }
-
-  public GarbageCollectionInitializationException(String message) {
+  public EventFeedException(String message) {
     super(message);
   }
-
-  public GarbageCollectionInitializationException(Throwable cause) {
+  public EventFeedException(Throwable cause) {
     super(cause);
   }
-
-  public GarbageCollectionInitializationException() {
+  public EventFeedException() {
     super();
   }
 }

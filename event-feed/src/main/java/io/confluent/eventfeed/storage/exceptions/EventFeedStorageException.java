@@ -13,22 +13,25 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.eventfeed.storage.exceptions;
 
-public class GarbageCollectionInitializationException extends GarbageCollectionException {
-  public GarbageCollectionInitializationException(String message, Throwable cause) {
+import io.cloudevents.CloudEvent;
+import io.confluent.eventfeed.storage.entities.CloudEventLoggingEntity;
+
+public class EventFeedStorageException extends EventFeedException {
+  public EventFeedStorageException(String message, Throwable cause) {
     super(message, cause);
   }
-
-  public GarbageCollectionInitializationException(String message) {
+  public EventFeedStorageException(String message) {
     super(message);
   }
-
-  public GarbageCollectionInitializationException(Throwable cause) {
+  public EventFeedStorageException(Throwable cause) {
     super(cause);
   }
-
-  public GarbageCollectionInitializationException() {
+  public EventFeedStorageException() {
     super();
+  }
+  public EventFeedStorageException(String message, CloudEvent event, Throwable cause) {
+    this(String.format("%s. cloud event: %s", message, CloudEventLoggingEntity.of(event)), cause);
   }
 }

@@ -13,22 +13,22 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.eventfeed.web.rest.exceptions;
 
-public class GarbageCollectionInitializationException extends GarbageCollectionException {
-  public GarbageCollectionInitializationException(String message, Throwable cause) {
-    super(message, cause);
+import io.confluent.rest.exceptions.RestServerErrorException;
+
+/**
+ * Indicates an error while performing an operation on the event feed storage
+ */
+public class RestStoreException extends RestServerErrorException {
+
+  private static final int ERROR_CODE = Errors.STORE_ERROR_CODE;
+
+  public RestStoreException(String message) {
+    super(message, ERROR_CODE);
   }
 
-  public GarbageCollectionInitializationException(String message) {
-    super(message);
-  }
-
-  public GarbageCollectionInitializationException(Throwable cause) {
-    super(cause);
-  }
-
-  public GarbageCollectionInitializationException() {
-    super();
+  public RestStoreException(String message, Throwable cause) {
+    super(message, ERROR_CODE, cause);
   }
 }

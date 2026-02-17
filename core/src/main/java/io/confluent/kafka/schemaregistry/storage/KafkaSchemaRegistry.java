@@ -91,7 +91,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
-import io.confluent.kafka.schemaregistry.storage.garbagecollection.GarbageCollectionIngestor;
+import io.confluent.kafka.schemaregistry.storage.garbagecollection.AssociationGarbageCollectionIngestor;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
@@ -129,7 +129,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private static final Logger log = LoggerFactory.getLogger(KafkaSchemaRegistry.class);
   // visible for testing
   final KafkaStore<SchemaRegistryKey, SchemaRegistryValue> kafkaStore;
-  private GarbageCollectionIngestor assocGcIngestor;
+  private AssociationGarbageCollectionIngestor assocGcIngestor;
   private final Serializer<SchemaRegistryKey, SchemaRegistryValue> serializer;
   private final SchemaRegistryIdentity myIdentity;
   private final int kafkaStoreTimeoutMs;
@@ -189,7 +189,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     boolean assocGcEnabled = config.getBoolean(SchemaRegistryConfig.ASSOC_GC_ENABLE_CONFIG);
     if (assocGcEnabled) {
-      this.assocGcIngestor = new GarbageCollectionIngestor(this);
+      this.assocGcIngestor = new AssociationGarbageCollectionIngestor(this);
     }
   }
 

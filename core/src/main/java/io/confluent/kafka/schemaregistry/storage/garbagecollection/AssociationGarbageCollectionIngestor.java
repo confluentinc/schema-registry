@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Confluent Inc.
+ * Copyright 2026 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -21,6 +21,8 @@ import io.confluent.kafka.schemaregistry.exceptions.GarbageCollectionInitializat
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
+import io.confluent.kafka.schemaregistry.storage.garbagecollection.entities.WireEvent;
+import io.confluent.kafka.schemaregistry.storage.garbagecollection.serde.CloudEventSerde;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -44,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -57,26 +58,25 @@ import java.util.concurrent.TimeoutException;
 
 import static io.confluent.kafka.schemaregistry.storage.KafkaStore.addSchemaRegistryConfigsToClientProperties;
 
-public class GarbageCollectionIngestor extends DefaultGarbageCollectionManager {
+public class AssociationGarbageCollectionIngestor extends AssociationGarbageCollectionManager {
   private KafkaStreams streams;
   private List<String> topics;
   private SchemaRegistry schemaRegistry;
   private SchemaRegistryConfig config;
   private static final int STREAM_CLOSE_TIMEOUT_MILLIS = 60 * 1000;
-  private static final Logger log = LoggerFactory.getLogger(GarbageCollectionIngestor.class);
+  private static final Logger log = LoggerFactory.getLogger(AssociationGarbageCollectionIngestor.class);
 
-  public GarbageCollectionIngestor(GarbageCollector garbageCollector, SchemaRegistry schemaRegistry) {
+  public AssociationGarbageCollectionIngestor(GarbageCollector garbageCollector, SchemaRegistry schemaRegistry) {
     super(garbageCollector, schemaRegistry);
     log.info("Initializing GarbageCollectionIngestor.");
     this.schemaRegistry = schemaRegistry;
     config = schemaRegistry.config();
-    // FIXME
     this.topics = config.getList(SchemaRegistryConfig.ASSOC_GC_INGESTOR_TOPICS_CONFIG);
     addLeaderChangeListener();
   }
 
-  public GarbageCollectionIngestor(SchemaRegistry schemaRegistry) {
-    this(new KafkaAssociationGarbageCollector(schemaRegistry), schemaRegistry);
+  public AssociationGarbageCollectionIngestor(SchemaRegistry schemaRegistry) {
+    this(new AssociationKafkaGarbageCollector(schemaRegistry), schemaRegistry);
   }
 
   private void addLeaderChangeListener() {
@@ -96,10 +96,10 @@ public class GarbageCollectionIngestor extends DefaultGarbageCollectionManager {
   }
 
   private boolean isKafkaStreamsActive(KafkaStreams streams) {
-    return streams != null &&
-            (streams.state() == KafkaStreams.State.CREATED ||
-            streams.state() == KafkaStreams.State.REBALANCING ||
-            streams.state() == KafkaStreams.State.RUNNING);
+    return streams != null
+            && (streams.state() == KafkaStreams.State.CREATED
+            || streams.state() == KafkaStreams.State.REBALANCING
+            || streams.state() == KafkaStreams.State.RUNNING);
   }
 
   @Override
@@ -128,7 +128,10 @@ public class GarbageCollectionIngestor extends DefaultGarbageCollectionManager {
   @Override
   public void close() throws IOException {
     super.close();
-    streams.close();
+    if (streams != null) {
+      streams.close(Duration.ofMillis(STREAM_CLOSE_TIMEOUT_MILLIS));
+      streams = null;
+    }
   }
 
   private void createTopics() throws StoreInitializationException {
@@ -251,6 +254,7 @@ public class GarbageCollectionIngestor extends DefaultGarbageCollectionManager {
 
     @Override
     public void process(Record<String, CloudEvent> record) {
+      log.info(String.format("Ingestor processing input record at ts: %s", record.timestamp()));
       Map<String, String> headersMap = new HashMap<>();
       for (Header header : record.headers()) {
         headersMap.put(header.key(), new String(header.value(), StandardCharsets.UTF_8));
@@ -265,10 +269,6 @@ public class GarbageCollectionIngestor extends DefaultGarbageCollectionManager {
 
     @Override
     public void close() {
-      if (streams != null) {
-        streams.close(Duration.ofMillis(STREAM_CLOSE_TIMEOUT_MILLIS));
-        streams = null;
-      }
     }
   }
 }

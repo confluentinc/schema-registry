@@ -32,6 +32,7 @@ public class Versions {
       SCHEMA_REGISTRY_DEFAULT_JSON
       + "; qs=0.9";
   public static final String JSON = "application/json";
+  public static final String PROTOBUF = "application/protobuf";
   public static final String JSON_WEIGHTED = JSON + "; qs=0.5";
 
   public static final List<String> PREFERRED_RESPONSE_TYPES = Arrays

@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
 package io.confluent.kafka.schemaregistry.storage.garbagecollection;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
@@ -18,16 +33,16 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
-public class KafkaAssociationGarbageCollector implements GarbageCollector {
+public class AssociationKafkaGarbageCollector implements GarbageCollector {
   private SchemaRegistry schemaRegistry;
   private KafkaStore kafkaStore;
   private static final String TOPIC = "topic";
   private static final Boolean TRUE = Boolean.TRUE;
   private static final Boolean FALSE = Boolean.FALSE;
-  private static final Logger log = LoggerFactory.getLogger(KafkaAssociationGarbageCollector.class);
+  private static final Logger log = LoggerFactory.getLogger(AssociationKafkaGarbageCollector.class);
   ThreadLocal<String> tenantId = new ThreadLocal<>();
 
-  public KafkaAssociationGarbageCollector(SchemaRegistry schemaRegistry) {
+  public AssociationKafkaGarbageCollector(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
     this.kafkaStore = schemaRegistry.getKafkaStore();
   }
@@ -39,7 +54,7 @@ public class KafkaAssociationGarbageCollector implements GarbageCollector {
   @Override
   public void processDeletedResource(String tenant, String resourceId)
           throws GarbageCollectionException {
-    log.debug("Processing resource garbage collection for tenant {}, resourceId {}",
+    log.info("Processing resource garbage collection for tenant {}, resourceId {}",
             tenant, resourceId);
     try {
       tenantId.set(tenant);
@@ -58,8 +73,8 @@ public class KafkaAssociationGarbageCollector implements GarbageCollector {
               null);
     } catch (SchemaRegistryException e) {
       throw new GarbageCollectionException(String.format(
-              "Failed to garbage collect resourceId %s from tenant %s."
-              + resourceId, tenant), e);
+              "Failed to garbage collect resourceId %s from tenant %s.",
+              resourceId, tenant), e);
     } finally {
       tenantId.remove();
     }
@@ -98,7 +113,7 @@ public class KafkaAssociationGarbageCollector implements GarbageCollector {
     log.info("Processing topic snapshot garbage collection for tenant {}", tenant);
     List<String> resourceIdsToDelete = new LinkedList<>();
     try (CloseableIterator<AssociationValue> iter = getAllForTenant(tenant)) {
-      if (iter.hasNext()) {
+      while (iter.hasNext()) {
         AssociationValue value = iter.next();
         // FIXME change the timestamp to createTs after SR supports it
         if (!resourceIds.contains(value.getResourceId())

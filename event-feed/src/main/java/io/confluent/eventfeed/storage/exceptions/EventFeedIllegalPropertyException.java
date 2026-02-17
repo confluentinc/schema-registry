@@ -13,22 +13,18 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.eventfeed.storage.exceptions;
 
-public class GarbageCollectionInitializationException extends GarbageCollectionException {
-  public GarbageCollectionInitializationException(String message, Throwable cause) {
-    super(message, cause);
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+
+public class EventFeedIllegalPropertyException extends IllegalPropertyException {
+  private static final String MISSING_OR_INVALID = "missing or invalid property";
+
+  public EventFeedIllegalPropertyException(String propertyName, String detail) {
+    super(propertyName, detail);
   }
 
-  public GarbageCollectionInitializationException(String message) {
-    super(message);
-  }
-
-  public GarbageCollectionInitializationException(Throwable cause) {
-    super(cause);
-  }
-
-  public GarbageCollectionInitializationException() {
-    super();
+  public EventFeedIllegalPropertyException(String propertyName) {
+    this(propertyName, MISSING_OR_INVALID);
   }
 }

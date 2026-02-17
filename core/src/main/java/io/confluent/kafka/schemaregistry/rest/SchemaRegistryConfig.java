@@ -195,6 +195,12 @@ public class SchemaRegistryConfig extends RestConfig {
           "associations.gc.ingestor.max.poll.interval.ms";
   public static final int DEFAULT_ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS = 1000;
   /**
+   * <code>associations.gc.cache.expiration.secs</code>
+   */
+  public static final String ASSOC_GC_CACHE_EXPIRY_SECONDS_CONFIG =
+          "associations.gc.cache.expiration.secs";
+  public static final int ASSOC_GC_CACHE_EXPIRY_SECONDS_DEFAULT = 300;
+  /**
    * <code>associations.gc.topic.snapshot.backoff.secs</code>
    */
   public static final String ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_CONFIG =
@@ -523,6 +529,8 @@ public class SchemaRegistryConfig extends RestConfig {
           "Override for the consumer group used by the associations garbage collection ingestor.";
   protected static final String ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_DOC =
           "Maximum delay between two calls of poll().";
+  protected static final String ASSOC_GC_CACHE_EXPIRY_SECONDS_DOC =
+          "Association GC manager cache entry expiration time.";
   protected static final String ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_DOC =
           "For topic snapshot, the amount of time we should subtract from the cloud event timestamp "
                   + "before comparing with the associations create timestamp.";
@@ -806,6 +814,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_CONFIG, ConfigDef.Type.INT,
             DEFAULT_ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS,
             ConfigDef.Importance.LOW, ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_DOC
+    )
+    .define(ASSOC_GC_CACHE_EXPIRY_SECONDS_CONFIG, ConfigDef.Type.INT,
+            ASSOC_GC_CACHE_EXPIRY_SECONDS_DEFAULT,
+            ConfigDef.Importance.LOW, ASSOC_GC_CACHE_EXPIRY_SECONDS_DOC
     )
     .define(ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_CONFIG, ConfigDef.Type.INT,
             DEFAULT_ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS,

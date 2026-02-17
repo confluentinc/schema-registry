@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Confluent Inc.
+ * Copyright 2021 Confluent Inc.
  *
  * Licensed under the Confluent Community License (the "License"); you may not use
  * this file except in compliance with the License.  You may obtain a copy of the
@@ -13,22 +13,19 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.exceptions;
+package io.confluent.eventfeed.web.rest.resources;
 
-public class GarbageCollectionInitializationException extends GarbageCollectionException {
-  public GarbageCollectionInitializationException(String message, Throwable cause) {
-    super(message, cause);
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+
+public abstract class SchemaRegistryResource {
+
+  private SchemaRegistry schemaRegistry;
+
+  public SchemaRegistryResource(SchemaRegistry schemaRegistry) {
+    this.schemaRegistry = schemaRegistry;
   }
 
-  public GarbageCollectionInitializationException(String message) {
-    super(message);
-  }
-
-  public GarbageCollectionInitializationException(Throwable cause) {
-    super(cause);
-  }
-
-  public GarbageCollectionInitializationException() {
-    super();
+  public SchemaRegistry getSchemaRegistry() {
+    return schemaRegistry;
   }
 }
