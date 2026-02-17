@@ -27,6 +27,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DELETED_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DESCRIPTION_CONDITION;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.GUID_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.SUBJECT_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.TIMESTAMP_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.VERSION_DESC;
+
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema definition")
@@ -102,6 +109,7 @@ public class SchemaString {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("subject")
   public String getSubject() {
     return subject;
@@ -112,6 +120,7 @@ public class SchemaString {
     this.subject = subject;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = VERSION_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -122,6 +131,7 @@ public class SchemaString {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("guid")
   public String getGuid() {
     return guid;
@@ -132,7 +142,7 @@ public class SchemaString {
     this.guid = guid;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC,
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC + ". " + DESCRIPTION_CONDITION,
       example = Schema.TYPE_EXAMPLE)
   @JsonProperty("schemaType")
   public String getSchemaType() {
@@ -211,6 +221,7 @@ public class SchemaString {
     this.maxId = maxId;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
@@ -221,6 +232,7 @@ public class SchemaString {
     this.timestamp = timestamp;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(description = DELETED_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("deleted")
   public Boolean getDeleted() {
     return this.deleted;
