@@ -311,7 +311,7 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = GUID_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("guid")
   public String getGuid() {
     if (guid == null) {
