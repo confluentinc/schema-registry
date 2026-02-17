@@ -142,7 +142,7 @@ public class SchemaString {
     this.guid = guid;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = "Schema type. " + DESCRIPTION_CONDITION,
+  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC + ". " + DESCRIPTION_CONDITION,
       example = Schema.TYPE_EXAMPLE)
   @JsonProperty("schemaType")
   public String getSchemaType() {
