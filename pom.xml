@@ -671,6 +671,7 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
+                            <!-- Unit Tests -->
                             <argLine>
                                 @{argLine} --add-opens java.base/java.lang=ALL-UNNAMED
                             </argLine>
@@ -681,9 +682,14 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
+                            <!-- Integration Tests -->
                             <argLine>
-                                @{argLine} --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
+                                @{argLine} -Xmx4g -Xms1g --add-opens java.security.jgss/sun.security.krb5=ALL-UNNAMED
                             </argLine>
+                            <forkCount>3</forkCount>
+                            <reuseForks>false</reuseForks>
+                            <parallel>classes</parallel>
+                            <threadCount>5</threadCount>
                             <rerunFailingTestsCount>3</rerunFailingTestsCount>
                             <groups>IntegrationTest</groups>
                         </configuration>
