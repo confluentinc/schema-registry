@@ -31,6 +31,10 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.List;
 import java.util.Objects;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DESCRIPTION_CONDITION;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.GUID_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.VERSION_DESC;
+
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema register response")
@@ -100,7 +104,8 @@ public class RegisterSchemaResponse {
     this.id = id;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.VERSION_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = VERSION_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("version")
   public Integer getVersion() {
     return this.version;
@@ -111,6 +116,8 @@ public class RegisterSchemaResponse {
     this.version = version;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("guid")
   public String getGuid() {
     return guid;
@@ -121,7 +128,8 @@ public class RegisterSchemaResponse {
     this.guid = guid;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.TYPE_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("schemaType")
   public String getSchemaType() {
     return this.schemaType;
@@ -132,7 +140,8 @@ public class RegisterSchemaResponse {
     this.schemaType = schemaType;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.REFERENCES_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.REFERENCES_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("references")
   public List<SchemaReference> getReferences() {
     return this.references;
@@ -165,7 +174,8 @@ public class RegisterSchemaResponse {
     this.ruleSet = ruleSet;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.SCHEMA_DESC)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.SCHEMA_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("schema")
   public String getSchema() {
     return this.schema;
@@ -176,6 +186,8 @@ public class RegisterSchemaResponse {
     this.schema = schema;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
@@ -186,6 +198,8 @@ public class RegisterSchemaResponse {
     this.timestamp = timestamp;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.DELETED_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("deleted")
   public Boolean getDeleted() {
     return this.deleted;
