@@ -19,12 +19,25 @@ package io.confluent.kafka.schemaregistry.utils;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 /**
  * A utility class wrapping a generic ObjectMapper singleton.
  */
 public class JacksonMapper {
-  public static final ObjectMapper INSTANCE = JsonMapper.builder()
-      .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
-      .build();
+  public static final ObjectMapper INSTANCE = newObjectMapper();
+
+  public static ObjectMapper newObjectMapper() {
+    final ObjectMapper mapper = JsonMapper.builder()
+        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+        .build();
+
+    return configure(mapper);
+  }
+
+  private static ObjectMapper configure(ObjectMapper mapper) {
+    // For Optional support
+    mapper.registerModule(new Jdk8Module());
+    return mapper;
+  }
 }

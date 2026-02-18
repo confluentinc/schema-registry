@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpd
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,8 +35,8 @@ public class RuleSetHandler implements UpdateRequestHandler {
   public void handle(String subject, ConfigUpdateRequest request) {
     if (request.getDefaultRuleSet() != null || request.getOverrideRuleSet() != null) {
       log.warn("RuleSets are only supported by Confluent Enterprise and Confluent Cloud");
-      request.setDefaultRuleSet(null);
-      request.setOverrideRuleSet(null);
+      request.setDefaultRuleSet(Optional.empty());
+      request.setOverrideRuleSet(Optional.empty());
     }
   }
 

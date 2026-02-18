@@ -144,6 +144,27 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testRandomizeConfiguration() {
+    reset(restService);
+
+    Map<String, ?> configs = Collections.singletonMap(
+        SchemaRegistryClientConfig.URL_RANDOMIZE, "true");
+    restService.configure(configs);
+    expectLastCall();
+    replay(restService);
+
+    Map<String, ?> clientConfigs = Collections.singletonMap(
+        "schema.registry.url.randomize", "true");
+    new CachedSchemaRegistryClient(
+        restService,
+        CACHE_CAPACITY,
+        clientConfigs
+    );
+
+    verify(restService);
+  }
+
+  @Test
   public void testDuplicateClientNamespaceConfiguration() {
     Map<String, String> configs = Collections.singletonMap("key", "value");
     restService.configure(configs);
@@ -404,8 +425,7 @@ public class CachedSchemaRegistryClientTest {
 
     reset(restService);
 
-    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest();
-    modeUpdateRequest.setMode(mode);
+    ModeUpdateRequest modeUpdateRequest = new ModeUpdateRequest(mode);
     expect(restService.setMode(eq(mode))).andReturn(modeUpdateRequest);
 
     replay(restService);

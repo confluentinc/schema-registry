@@ -16,8 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.IOException;
@@ -27,29 +29,51 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Objects;
+import java.util.Optional;
 
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Schema(description = "Mode update request")
 public class ModeUpdateRequest {
 
-  private String mode;
+  private Optional<String> mode;
 
   public static ModeUpdateRequest fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, ModeUpdateRequest.class);
+  }
+
+  public ModeUpdateRequest() {
+  }
+
+  public ModeUpdateRequest(Optional<String> mode) {
+    setMode(mode);
+  }
+
+  public ModeUpdateRequest(String mode) {
+    setMode(mode);
   }
 
   @Schema(description = Mode.MODE_DESC,
           allowableValues = {"READWRITE", "READONLY", "READONLY_OVERRIDE", "IMPORT"},
           example = "READWRITE")
   @JsonProperty("mode")
-  public String getMode() {
+  public Optional<String> getOptionalMode() {
     return this.mode;
   }
 
+  @JsonIgnore
+  public String getMode() {
+    return mode != null ? mode.orElse(null) : null;
+  }
+
   @JsonProperty("mode")
-  public void setMode(String mode) {
+  public void setMode(Optional<String> mode) {
     this.mode = mode;
+  }
+
+  @JsonIgnore
+  public void setMode(String mode) {
+    this.mode = mode != null ? Optional.of(mode) : null;
   }
 
   public String toJson() throws IOException {
