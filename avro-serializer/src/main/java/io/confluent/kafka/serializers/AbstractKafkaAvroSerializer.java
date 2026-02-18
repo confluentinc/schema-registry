@@ -137,7 +137,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema schemaEntity =
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
                 subject, null, useSchemaId, schema);
-        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, schemaEntity.getGuid());
+        // omit the GUID when useSchemaId is set
+        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, (String) null);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
