@@ -49,6 +49,10 @@ public class AliasFilterTest {
     Config config2 = new Config();
     config2.setAlias("mySubject2");
     when(schemaRegistry.getConfig("slash/in/middle")).thenReturn(config2);
+    Config config3 = new Config();
+    config3.setAlias("mySubject3");
+    config3.setAliasForDeks("myDekSubject3");
+    when(schemaRegistry.getConfig("dek-registry")).thenReturn(config3);
   }
 
   @Test
@@ -163,6 +167,18 @@ public class AliasFilterTest {
     Assert.assertEquals(
         "Subject must not change",
         "/mode/myAlias",
+        aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
+    );
+  }
+
+  @Test
+  public void testSubjectNamedDekRegistry() {
+    // "dek-registry" as a subject name in a non-dek path should use the regular alias,
+    // not aliasForDeks
+    String path = "/subjects/dek-registry/versions";
+    Assert.assertEquals(
+        "Subject must be replaced with regular alias, not dek alias",
+        "/subjects/mySubject3/versions",
         aliasFilter.modifyUri(UriBuilder.fromPath(path), path, new MultivaluedHashMap<>()).getPath()
     );
   }
