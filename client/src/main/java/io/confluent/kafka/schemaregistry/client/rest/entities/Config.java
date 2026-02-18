@@ -33,7 +33,7 @@ public class Config {
   private String alias;
   private Boolean normalize;
   private Boolean validateFields;
-  private Boolean validateNewSchemas;
+  private Boolean validateNames;
   private Boolean validateRules;
   private String compatibilityLevel;
   private String compatibilityPolicy;
@@ -47,7 +47,7 @@ public class Config {
   public Config(@JsonProperty("alias") String alias,
                 @JsonProperty("normalize") Boolean normalize,
                 @JsonProperty("validateFields") Boolean validateFields,
-                @JsonProperty("validateNewSchemas") Boolean validateNewSchemas,
+                @JsonProperty("validateNames") Boolean validateNames,
                 @JsonProperty("validateRules") Boolean validateRules,
                 @JsonProperty("compatibilityLevel") String compatibilityLevel,
                 @JsonProperty("compatibilityPolicy") String compatibilityPolicy,
@@ -59,7 +59,7 @@ public class Config {
     this.alias = alias;
     this.normalize = normalize;
     this.validateFields = validateFields;
-    this.validateNewSchemas = validateNewSchemas;
+    this.validateNames = validateNames;
     this.validateRules = validateRules;
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityPolicy = compatibilityPolicy;
@@ -103,7 +103,7 @@ public class Config {
     this.alias = request.getAlias();
     this.normalize = request.isNormalize();
     this.validateFields = request.isValidateFields();
-    this.validateNewSchemas = request.isValidateNewSchemas();
+    this.validateNames = request.isValidateNames();
     this.validateRules = request.isValidateRules();
     this.compatibilityLevel = request.getCompatibilityLevel();
     this.compatibilityPolicy = request.getCompatibilityPolicy();
@@ -144,14 +144,14 @@ public class Config {
     this.validateFields = validateFields;
   }
 
-  @JsonProperty("validateNewSchemas")
-  public Boolean isValidateNewSchemas() {
-    return validateNewSchemas;
+  @JsonProperty("validateNames")
+  public Boolean isValidateNames() {
+    return validateNames;
   }
 
-  @JsonProperty("validateNewSchemas")
-  public void setValidateNewSchemas(Boolean validateNewSchemas) {
-    this.validateNewSchemas = validateNewSchemas;
+  @JsonProperty("validateNames")
+  public void setValidateNames(Boolean validateNames) {
+    this.validateNames = validateNames;
   }
 
   @JsonProperty("validateRules")
@@ -258,7 +258,7 @@ public class Config {
     return Objects.equals(alias, config.alias)
         && Objects.equals(normalize, config.normalize)
         && Objects.equals(validateFields, config.validateFields)
-        && Objects.equals(validateNewSchemas, config.validateNewSchemas)
+        && Objects.equals(validateNames, config.validateNames)
         && Objects.equals(validateRules, config.validateRules)
         && Objects.equals(compatibilityLevel, config.compatibilityLevel)
         && Objects.equals(compatibilityPolicy, config.compatibilityPolicy)
@@ -271,7 +271,7 @@ public class Config {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateNewSchemas, validateRules,
+    return Objects.hash(alias, normalize, validateFields, validateNames, validateRules,
         compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
@@ -282,7 +282,7 @@ public class Config {
         + "alias='" + alias + '\''
         + ", normalize=" + normalize
         + ", validateFields=" + validateFields
-        + ", validateNewSchemas=" + validateNewSchemas
+        + ", validateNames=" + validateNames
         + ", validateRules=" + validateRules
         + ", compatibilityLevel='" + compatibilityLevel + '\''
         + ", compatibilityPolicy='" + compatibilityPolicy + '\''
