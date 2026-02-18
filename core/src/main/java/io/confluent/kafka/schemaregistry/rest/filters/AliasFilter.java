@@ -136,7 +136,8 @@ public class AliasFilter implements ContainerRequestFilter {
     }
 
     String alias = config.getAlias();
-    if (path.contains("dek-registry")) {
+    String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
+    if (normalizedPath.startsWith("dek-registry")) {
       String aliasForDeks = config.getAliasForDeks();
       if (aliasForDeks != null && !aliasForDeks.isEmpty()) {
         alias = aliasForDeks;
