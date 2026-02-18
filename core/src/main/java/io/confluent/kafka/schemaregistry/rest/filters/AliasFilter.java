@@ -79,7 +79,7 @@ public class AliasFilter implements ContainerRequestFilter {
       String modifiedUriPathStr = uriPathStr;
 
       if (subjectPathFound) {
-        modifiedUriPathStr = replaceAlias(path, uriPathStr);
+        modifiedUriPathStr = replaceAlias(uriPathStr);
         subjectPathFound = false;
       } else if (uriPathStr.equals("subjects") || uriPathStr.equals("deks")) {
         subjectPathFound = true;
@@ -110,11 +110,11 @@ public class AliasFilter implements ContainerRequestFilter {
       if (subject == null) {
         subject = "";
       }
-      builder.replaceQueryParam("subject", replaceAlias(path, subject));
+      builder.replaceQueryParam("subject", replaceAlias(subject));
     }
   }
 
-  private String replaceAlias(String path, String subject) {
+  private String replaceAlias(String subject) {
     if (subject.isEmpty()) {
       return subject;
     }
@@ -134,14 +134,7 @@ public class AliasFilter implements ContainerRequestFilter {
     if (config == null) {
       return originalSubject;
     }
-
     String alias = config.getAlias();
-    if (path.contains("dek-registry")) {
-      String aliasForDeks = config.getAliasForDeks();
-      if (aliasForDeks != null && !aliasForDeks.isEmpty()) {
-        alias = aliasForDeks;
-      }
-    }
     if (alias != null && !alias.isEmpty()) {
       QualifiedSubject qualAlias =
           QualifiedSubject.qualifySubjectWithParent(tenant, subject, alias, true);

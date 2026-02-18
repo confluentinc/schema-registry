@@ -32,7 +32,6 @@ import java.util.Optional;
 public class ConfigValue extends SubjectValue {
 
   private String alias;
-  private String aliasForDeks;
   private Boolean normalize;
   private Boolean validateFields;
   private Boolean validateNewSchemas;
@@ -47,7 +46,6 @@ public class ConfigValue extends SubjectValue {
 
   public ConfigValue(@JsonProperty("subject") String subject,
                      @JsonProperty("alias") String alias,
-                     @JsonProperty("aliasForDeks") String aliasForDeks,
                      @JsonProperty("normalize") Boolean normalize,
                      @JsonProperty("validateFields") Boolean validateFields,
                      @JsonProperty("validateNewSchemas") Boolean validateNewSchemas,
@@ -61,7 +59,6 @@ public class ConfigValue extends SubjectValue {
                      @JsonProperty("overrideRuleSet") RuleSet overrideRuleSet) {
     super(subject);
     this.alias = alias;
-    this.aliasForDeks = aliasForDeks;
     this.normalize = normalize;
     this.validateFields = validateFields;
     this.validateNewSchemas = validateNewSchemas;
@@ -78,7 +75,6 @@ public class ConfigValue extends SubjectValue {
   public ConfigValue(String subject, Config configEntity) {
     super(subject);
     this.alias = configEntity.getAlias();
-    this.aliasForDeks = configEntity.getAliasForDeks();
     this.normalize = configEntity.isNormalize();
     this.validateFields = configEntity.isValidateFields();
     this.validateNewSchemas = configEntity.isValidateNewSchemas();
@@ -103,7 +99,6 @@ public class ConfigValue extends SubjectValue {
   public ConfigValue(String subject, Config configEntity, RuleSetHandler ruleSetHandler) {
     super(subject);
     this.alias = configEntity.getAlias();
-    this.aliasForDeks = configEntity.getAliasForDeks();
     this.normalize = configEntity.isNormalize();
     this.validateFields = configEntity.isValidateFields();
     this.validateNewSchemas = configEntity.isValidateNewSchemas();
@@ -134,16 +129,6 @@ public class ConfigValue extends SubjectValue {
   @JsonProperty("alias")
   public void setAlias(String alias) {
     this.alias = alias;
-  }
-
-  @JsonProperty("aliasForDeks")
-  public String getAliasForDeks() {
-    return aliasForDeks;
-  }
-
-  @JsonProperty("aliasForDeks")
-  public void setAliasForDeks(String aliasForDeks) {
-    this.aliasForDeks = aliasForDeks;
   }
 
   @JsonProperty("normalize")
@@ -269,7 +254,6 @@ public class ConfigValue extends SubjectValue {
     }
     ConfigValue that = (ConfigValue) o;
     return Objects.equals(alias, that.alias)
-        && Objects.equals(aliasForDeks, that.aliasForDeks)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
         && Objects.equals(validateNewSchemas, that.validateNewSchemas)
@@ -285,7 +269,7 @@ public class ConfigValue extends SubjectValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), alias, aliasForDeks, normalize,
+    return Objects.hash(super.hashCode(), alias, normalize,
             validateFields, validateNewSchemas, validateRules,
             compatibilityLevel, compatibilityPolicy, compatibilityGroup,
             defaultMetadata, overrideMetadata, defaultRuleSet,
@@ -296,7 +280,6 @@ public class ConfigValue extends SubjectValue {
   public String toString() {
     return "ConfigValue{"
         + "alias='" + alias + '\''
-        + ", aliasForDeks=" + aliasForDeks
         + ", normalize=" + normalize
         + ", validateFields=" + validateFields
         + ", validateNewSchemas=" + validateNewSchemas
@@ -319,7 +302,6 @@ public class ConfigValue extends SubjectValue {
   public Config toConfigEntity() {
     return new Config(
         alias,
-        aliasForDeks,
         normalize,
         validateFields,
         validateNewSchemas,
@@ -367,8 +349,6 @@ public class ConfigValue extends SubjectValue {
           subject,
           newConfig.getOptionalAlias() != null
               ? newConfig.getAlias() : oldConfig.getAlias(),
-          newConfig.getOptionalAliasForDeks() != null
-              ? newConfig.getAliasForDeks() : oldConfig.getAliasForDeks(),
           newConfig.isOptionalNormalize() != null
               ? newConfig.isNormalize() : oldConfig.isNormalize(),
           newConfig.isOptionalValidateFields() != null
