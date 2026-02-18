@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -75,7 +76,7 @@ public class Schema implements Comparable<Schema> {
   private String subject;
   private Integer version;
   private Integer id;
-  private String guid;
+  private volatile String guid;
   private String schemaType;
   private List<SchemaReference> references;
   private Metadata metadata;
@@ -316,7 +317,7 @@ public class Schema implements Comparable<Schema> {
       description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("guid")
   public String getGuid() {
-    if (guid == null) {
+    if (guid == null && schema != null) {
       try {
         MessageDigest md = MessageDigest.getInstance("MD5");
         updateHash(md);
@@ -354,6 +355,7 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("references")
   public void setReferences(List<SchemaReference> references) {
     this.references = references;
+    this.guid = null;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = METADATA_DESC)
@@ -365,6 +367,7 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("metadata")
   public void setMetadata(Metadata metadata) {
     this.metadata = metadata;
+    this.guid = null;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = RULESET_DESC)
@@ -376,6 +379,7 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("ruleSet")
   public void setRuleSet(RuleSet ruleSet) {
     this.ruleSet = ruleSet;
+    this.guid = null;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_DESC, example = SCHEMA_EXAMPLE)
@@ -387,6 +391,7 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("schema")
   public void setSchema(String schema) {
     this.schema = schema;
+    this.guid = null;
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SCHEMA_TAGS_DESC)
@@ -471,12 +476,14 @@ public class Schema implements Comparable<Schema> {
 
   @Override
   public int compareTo(Schema that) {
-    int result = this.subject.compareTo(that.subject);
+    int result = Objects.compare(this.subject, that.subject,
+        Comparator.nullsFirst(String::compareTo));
     if (result != 0) {
       return result;
     }
-    result = this.version - that.version;
-    return result;
+    return Integer.compare(
+        this.version != null ? this.version : 0,
+        that.version != null ? that.version : 0);
   }
 
   public void updateHash(MessageDigest md) {
