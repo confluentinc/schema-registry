@@ -69,7 +69,8 @@ public class Schema implements Comparable<Schema> {
   public static final String GUID_DESC = "Globally unique identifier of the schema";
 
   public static final String DESCRIPTION_CONDITION = 
-      "In Confluent Cloud, this field is returned only if Confluent-Accept-Unknown-Properties header is passed in";
+      "In Confluent Cloud, this field is returned only if "
+      + "Confluent-Accept-Unknown-Properties header is passed in";
 
   private String subject;
   private Integer version;
@@ -311,7 +312,8 @@ public class Schema implements Comparable<Schema> {
     this.id = id;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("guid")
   public String getGuid() {
     if (guid == null) {
@@ -331,7 +333,8 @@ public class Schema implements Comparable<Schema> {
     return guid;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC + ". " + DESCRIPTION_CONDITION, example = TYPE_EXAMPLE)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = TYPE_DESC + ". " + DESCRIPTION_CONDITION, example = TYPE_EXAMPLE)
   @JsonProperty("schemaType")
   public String getSchemaType() {
     return this.schemaType;
@@ -397,7 +400,8 @@ public class Schema implements Comparable<Schema> {
     this.schemaTags = schemaTags;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("ts")
   public Long getTimestamp() {
     return this.timestamp;
@@ -408,7 +412,8 @@ public class Schema implements Comparable<Schema> {
     this.timestamp = timestamp;
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = DELETED_DESC + ". " + DESCRIPTION_CONDITION)
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = DELETED_DESC + ". " + DESCRIPTION_CONDITION)
   @JsonProperty("deleted")
   public Boolean getDeleted() {
     return this.deleted;
