@@ -151,7 +151,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         schema = (JsonSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
         Schema schemaEntity = new Schema(subject, null, useSchemaId, schema);
-        schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, schemaEntity.getGuid());
+        // omit the GUID when useSchemaId is set
+        schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, (String) null);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
