@@ -512,7 +512,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             tenant(), schema.getId(), schema.getSubject(), operation);
   }
 
-  protected boolean isSchemaFieldValidationEnabled(Config config) {
+  private boolean isSchemaFieldValidationEnabled(Config config) {
     return config.isValidateFields() != null ? config.isValidateFields() : defaultValidateFields;
   }
 

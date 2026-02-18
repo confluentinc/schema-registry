@@ -78,6 +78,7 @@ import java.util.Set;
 
 import org.apache.avro.Schema.Parser;
 import org.junit.jupiter.api.Tag;
+import org.apache.avro.SchemaParseException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -298,7 +299,7 @@ public abstract class RestApiTest {
     try {
         new Parser().parse(badSchemaString);
         fail("Parsing invalid schema string should fail with SchemaParseException");
-    } catch (Exception spe) {
+    } catch (SchemaParseException spe) {
         expectedErrorMessage = spe.getMessage();
     }
 
@@ -2774,13 +2775,13 @@ public abstract class RestApiTest {
   public void testRegisterSchemaWithReservedFields() throws RestClientException, IOException {
     String subject0 = "testSubject0";
     ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "[{\"type\":\"string\",\"name\":"
-        + "\"f" + "\"},"
-        + "{\"type\":\"string\",\"name\":"
-        + "\"g\" , \"default\":\"d\"}"
-        + "]}");
+                                                     + "\"name\":\"myrecord\","
+                                                     + "\"fields\":"
+                                                     + "[{\"type\":\"string\",\"name\":"
+                                                     + "\"f" + "\"},"
+                                                     + "{\"type\":\"string\",\"name\":"
+                                                     + "\"g\" , \"default\":\"d\"}"
+                                                     + "]}");
     RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
     request1.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "f"),
@@ -2871,12 +2872,12 @@ public abstract class RestApiTest {
 
     // remove reserved fields for subject0
     schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-        + "\"name\":\"myrecord\","
-        + "\"fields\":"
-        + "["
-        + "{\"type\":\"string\",\"name\":"
-        + "\"g\" , \"default\":\"d\"}"
-        + "]}");
+                                        + "\"name\":\"myrecord\","
+                                        + "\"fields\":"
+                                        + "["
+                                        + "{\"type\":\"string\",\"name\":"
+                                        + "\"g\" , \"default\":\"d\"}"
+                                        + "]}");
     RegisterSchemaRequest request2 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
     request2.setMetadata(new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "g"),
