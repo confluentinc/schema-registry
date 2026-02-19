@@ -16,7 +16,11 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.canLookupIgnoringVersion;
+import static io.confluent.kafka.schemaregistry.AbstractSchemaProvider.replaceLatestVersion;
+
 import com.fasterxml.jackson.databind.JsonNode;
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -131,6 +135,15 @@ public interface ParsedSchema {
   }
 
   /**
+   * Returns the inline tagged entities of the schema.
+   *
+   * @return a map of entity name to tags
+   */
+  default Map<SchemaEntity, Set<String>> inlineTaggedEntities() {
+    return Collections.emptyMap();
+  }
+
+  /**
    * Returns a copy of this schema.
    *
    * @return a copy of this schema
@@ -194,8 +207,8 @@ public interface ParsedSchema {
 
   /**
    * Checks the backward compatibility between this schema and the specified schema.
-   * <p/>
-   * Custom providers may choose to modify this schema during this check,
+   *
+   * <p>Custom providers may choose to modify this schema during this check,
    * to ensure that it is compatible with the specified schema.
    *
    * @param previousSchema previous schema
@@ -206,8 +219,8 @@ public interface ParsedSchema {
 
   /**
    * Checks the compatibility between this schema and the specified schemas.
-   * <p/>
-   * Custom providers may choose to modify this schema during this check,
+   *
+   * <p>Custom providers may choose to modify this schema during this check,
    * to ensure that it is compatible with the specified schemas.
    *
    * @param level the compatibility level
@@ -229,19 +242,37 @@ public interface ParsedSchema {
 
   /**
    * @param field name of the field to check
-   * @return true, if the schema has {@param field} in its top level fields. false, otherwise.
+   * @return true, if the schema has field in its top level fields. false, otherwise.
    */
   default boolean hasTopLevelField(String field) {
     throw new UnsupportedOperationException();
   }
 
   /**
-   * Returns whether the underlying raw representations are equal.
+   * Returns whether the underlying raw representations are equivalent,
+   * ignoring version and references.
    *
-   * @return whether the underlying raw representations are equal
+   * @return whether the underlying raw representations are equivalent
+   * @deprecated use {@link #equivalent(ParsedSchema)} instead
    */
   default boolean deepEquals(ParsedSchema schema) {
-    return Objects.equals(rawSchema(), schema.rawSchema())
+    return equivalent(schema);
+  }
+
+  /**
+   * Returns whether the underlying raw representations are equivalent,
+   * ignoring version and references.
+   *
+   * @return whether the underlying raw representations are equivalent
+   */
+  default boolean equivalent(ParsedSchema schema) {
+    if (this == schema) {
+      return true;
+    }
+    if (schema == null || getClass() != schema.getClass()) {
+      return false;
+    }
+    return Objects.equals(canonicalString(), schema.canonicalString())
         && Objects.equals(metadata(), schema.metadata())
         && Objects.equals(ruleSet(), schema.ruleSet());
   }
@@ -272,5 +303,31 @@ public interface ParsedSchema {
             .map(String::trim)
             .filter(field -> !field.isEmpty())
             .collect(Collectors.toSet());
+  }
+
+  /**
+   * Returns whether the schema can be used to lookup the specified schema.
+   *
+   * @param prev the schema to lookup
+   * @return whether the schema can be used to lookup the specified schema
+   */
+  default boolean canLookup(ParsedSchema prev, SchemaVersionFetcher fetcher) {
+    // This schema can be used to lookup a previous schema if this schema
+    // has no references and the previous schema has references,
+    // (which can happen with Avro schemas) and the schemas are the same except
+    // for the one of the schemas possibly having a confluent:version.
+    if (references().isEmpty() && !prev.references().isEmpty()) {
+      if (canLookupIgnoringVersion(this, prev)) {
+        // This handles the case where a schema is sent with all references resolved
+        return true;
+      }
+    }
+    // This schema can be used to lookup a previous schema if this schema
+    // and the previous schema having matching references when all versions of -1
+    // are replaced by the latest version, and the schemas are the same except
+    // for the one of the schemas possibly having a confluent:version.
+    boolean areRefsEquivalent = replaceLatestVersion(references(), fetcher)
+        .equals(replaceLatestVersion(prev.references(), fetcher));
+    return areRefsEquivalent && canLookupIgnoringVersion(this, prev);
   }
 }

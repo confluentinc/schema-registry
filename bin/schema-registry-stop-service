@@ -25,7 +25,7 @@ kill $TARGET
 for i in `seq 20`; do
   sleep 0.25
   ps ax | egrep -i "$1" | grep "$TARGET" > /dev/null
-  if [ $? -eq 0 ]; then
+  if [ $? -ne 0 ]; then
     exit 0
   fi
 done
