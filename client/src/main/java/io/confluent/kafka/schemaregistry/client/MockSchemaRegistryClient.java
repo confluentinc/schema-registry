@@ -957,6 +957,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       Association existingAssociation = resourceAndAssocTypeCache.get(key);
 
       if (existingAssociation == null) {
+        // If on create, frozen is set to true, ensure that a schema is being
+        // passed in, and that no other schemas exist in the subject
+        if (Boolean.TRUE.equals(associationInRequest.getFrozen())) {
+          if (schema == null) {
+            throw new RestClientException(
+                "schema must be provided when creating a frozen association", 422, 42212);
+          }
+          if (latestVersion(subject) >= 0) {
+            throw new RestClientException(
+                "cannot create a frozen association when schemas already exist in the subject",
+                422, 42212);
+          }
+        }
         continue;
       }
       if (existingAssociation.isEquivalent(associationInRequest)) {
@@ -980,11 +993,17 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                   "subject", "subject of association cannot be changed"),
                   422, 42212);
         }
-        // If existing association is frozen but request is not frozen, return false
-        if (existingAssociation.isFrozen() && !associationInRequest.getFrozen()) {
+        // Don't allow the frozen attribute to be updated
+        if (associationInRequest.getFrozen() != null
+                && existingAssociation.isFrozen() != associationInRequest.getFrozen()) {
           throw new RestClientException(String.format(
-                  "The association of type  '%s' is frozen for subject '%s'",
-                  associationType, subject), 404, 40410);
+                  "The association specified an invalid value for property: '%s', detail: %s",
+                  "frozen", "frozen attribute of association cannot be changed"), 422, 42212);
+        }
+        if (existingAssociation.isFrozen()) {
+          throw new RestClientException(String.format(
+                  "The association of type '%s' is frozen for subject '%s'",
+                  associationType, subject), 409, 40410);
         }
         // If existing association is weak but request is frozen, return false
         if (existingAssociation.getLifecycle() == LifecyclePolicy.WEAK
@@ -1348,8 +1367,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private void checkDeleteAssociation(Association association, boolean cascadeLifecycle)
           throws RestClientException {
-    if (!cascadeLifecycle && association.getLifecycle() == LifecyclePolicy.STRONG
-            && association.isFrozen()) {
+    if (!cascadeLifecycle && association.isFrozen()) {
       throw new RestClientException(String.format(
               "The association of type '%s' is frozen for subject '%s",
               association.getAssociationType(), association.getSubject()), 409, 40908);
