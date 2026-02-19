@@ -127,6 +127,8 @@ public class ExtendedSchema extends Schema {
     sb.append("ruleSet=" + getRuleSet() + ",");
     sb.append("schema=" + getSchema() + ",");
     sb.append("schemaTags=" + getSchemaTags() + ",");
+    sb.append("ts=" + getTimestamp() + ",");
+    sb.append("deleted=" + getDeleted() + ",");
     sb.append("aliases=" + getAliases() + ",");
     sb.append("associations=" + getAssociations() + "}");
     return sb.toString();
