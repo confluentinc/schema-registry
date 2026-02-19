@@ -86,6 +86,7 @@ public class AssociationKafkaGarbageCollectorTest extends ClusterTestHarness {
     if (schemaRegistry != null) {
       schemaRegistry.close();
     }
+    super.tearDown();
   }
 
   private Schema createUserSchema() {

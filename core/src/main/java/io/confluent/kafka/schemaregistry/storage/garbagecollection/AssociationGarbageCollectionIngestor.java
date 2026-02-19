@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage.garbagecollection;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.cloudevents.CloudEvent;
 import io.confluent.kafka.schemaregistry.exceptions.GarbageCollectionException;
 import io.confluent.kafka.schemaregistry.exceptions.GarbageCollectionInitializationException;
@@ -240,6 +241,11 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
     KafkaStreams streams = new KafkaStreams(topology, streamsConfig);
     streams.setUncaughtExceptionHandler(exception ->
             StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD);
+    return streams;
+  }
+
+  @VisibleForTesting
+  protected KafkaStreams getStreams() {
     return streams;
   }
 

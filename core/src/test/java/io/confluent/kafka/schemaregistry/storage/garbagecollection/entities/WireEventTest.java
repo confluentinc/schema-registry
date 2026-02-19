@@ -13,12 +13,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.garbagecollection;
+package io.confluent.kafka.schemaregistry.storage.garbagecollection.entities;
 
 import io.cloudevents.CloudEvent;
 import io.cloudevents.CloudEventData;
 import io.cloudevents.SpecVersion;
-import io.confluent.kafka.schemaregistry.storage.garbagecollection.entities.WireEvent;
 import org.junit.Test;
 
 import java.net.URI;

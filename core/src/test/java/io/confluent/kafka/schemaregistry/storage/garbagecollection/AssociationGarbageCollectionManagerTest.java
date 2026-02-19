@@ -109,6 +109,7 @@ public class AssociationGarbageCollectionManagerTest extends ClusterTestHarness 
     if (mocks != null) {
       mocks.close();
     }
+    super.tearDown();
   }
 
   private WireEvent wireEventTopicDeletion(String topicId) {

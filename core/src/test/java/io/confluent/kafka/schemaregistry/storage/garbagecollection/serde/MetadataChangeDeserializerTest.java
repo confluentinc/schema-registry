@@ -13,9 +13,8 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage.garbagecollection;
+package io.confluent.kafka.schemaregistry.storage.garbagecollection.serde;
 
-import io.confluent.kafka.schemaregistry.storage.garbagecollection.serde.MetadataChangeDeserializer;
 import io.confluent.protobuf.events.catalog.v1.MetadataChange;
 import io.confluent.protobuf.events.catalog.v1.MetadataEvent;
 import io.confluent.protobuf.events.catalog.v1.OpType;
