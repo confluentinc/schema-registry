@@ -1003,7 +1003,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         if (existingAssociation.isFrozen()) {
           throw new RestClientException(String.format(
                   "The association of type '%s' is frozen for subject '%s'",
-                  associationType, subject), 409, 40410);
+                  associationType, subject), 409, 40908);
         }
         // If existing association is weak but request is frozen, return false
         if (existingAssociation.getLifecycle() == LifecyclePolicy.WEAK
@@ -1098,8 +1098,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return results;
   }
 
-  private synchronized AssociationResponse createOrUpdateAssociationHelper(
-          AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
+  private synchronized AssociationResponse createOrUpdateAssociationHelper(AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
           throws IOException, RestClientException {
     // Check that association types are unique
     checkAssociationTypeUniqueness(request);
