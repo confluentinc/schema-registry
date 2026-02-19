@@ -153,6 +153,9 @@ public class AssociationCreateOrUpdateRequest {
     } else {
       setResourceType(TOPIC_RESOURCE_TYPE);
     }
+    if (getAssociations() == null || getAssociations().isEmpty()) {
+      throw new IllegalPropertyException("associations", "cannot be null or empty");
+    }
     for (AssociationCreateOrUpdateInfo info : getAssociations()) {
       info.validate(dryRun);
     }
