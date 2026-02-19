@@ -76,7 +76,9 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutExcepti
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectNotFoundException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
 import io.confluent.kafka.schemaregistry.id.IdGenerator;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
@@ -852,6 +854,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
+
+      if (!hasSubjects(subject, true)) {
+        throw new SubjectNotFoundException(subject);
+      }
+      if (!permanentDelete && !hasSubjects(subject, false)) {
+        throw new SubjectSoftDeletedException(subject);
+      }
+
       if (isLeader()) {
         return deleteSubject(subject, permanentDelete);
       } else {
