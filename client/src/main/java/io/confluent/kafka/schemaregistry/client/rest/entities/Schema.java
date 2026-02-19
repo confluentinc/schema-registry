@@ -464,6 +464,7 @@ public class Schema implements Comparable<Schema> {
     return "{subject=" + this.subject + ","
                + "version=" + this.version + ","
                + "id=" + this.id + ","
+               + "guid=" + getGuid() + ","
                + "schemaType=" + this.schemaType + ","
                + "references=" + this.references + ","
                + "metadata=" + this.metadata + ","

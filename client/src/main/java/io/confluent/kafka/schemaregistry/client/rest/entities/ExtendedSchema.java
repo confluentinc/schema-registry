@@ -45,9 +45,12 @@ public class ExtendedSchema extends Schema {
       @JsonProperty("metadata") Metadata metadata,
       @JsonProperty("ruleset") RuleSet ruleSet,
       @JsonProperty("schema") String schema,
+      @JsonProperty("ts") Long timestamp,
+      @JsonProperty("deleted") Boolean deleted,
       @JsonProperty("aliases") List<String> aliases,
       @JsonProperty("associations") List<Association> associations) {
-    super(subject, version, id, guid, schemaType, references, metadata, ruleSet, schema);
+    super(subject, version, id, guid, schemaType, references, metadata, ruleSet, schema,
+        null, timestamp, deleted);
     this.aliases = aliases;
     this.associations = associations;
   }
@@ -55,7 +58,7 @@ public class ExtendedSchema extends Schema {
   public ExtendedSchema(Schema schema, List<String> aliases, List<Association> associations) {
     super(schema.getSubject(), schema.getVersion(), schema.getId(), schema.getGuid(),
         schema.getSchemaType(), schema.getReferences(), schema.getMetadata(), schema.getRuleSet(),
-        schema.getSchema());
+        schema.getSchema(), schema.getSchemaTags(), schema.getTimestamp(), schema.getDeleted());
     this.aliases = aliases;
     this.associations = associations;
   }
@@ -124,6 +127,8 @@ public class ExtendedSchema extends Schema {
     sb.append("ruleSet=" + getRuleSet() + ",");
     sb.append("schema=" + getSchema() + ",");
     sb.append("schemaTags=" + getSchemaTags() + ",");
+    sb.append("ts=" + getTimestamp() + ",");
+    sb.append("deleted=" + getDeleted() + ",");
     sb.append("aliases=" + getAliases() + ",");
     sb.append("associations=" + getAssociations() + "}");
     return sb.toString();
