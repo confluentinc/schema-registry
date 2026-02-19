@@ -1,6 +1,6 @@
 name: schema-registry
 lang: java
-lang_version: 11
+lang_version: "11"
 codeowners:
   enable: true
 semaphore:
@@ -11,7 +11,7 @@ semaphore:
     enable: true
     project_name: schema-registry
   status_level: block
-  execution_time_limit: {"hours": 2}
+  execution_time_limit: {"hours": 3}
   downstream_projects: ["kafka-rest", "ksql",
     "confluent-security-plugins", "kafka-connect-replicator",
     "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]

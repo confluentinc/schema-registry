@@ -14,7 +14,7 @@ fail_fast:
     when: "true"
 
 execution_time_limit:
-  hours: 2
+  hours: 3
 
 queue:
   - when: "branch != 'master' and branch !~ '[0-9]+\\.[0-9]+\\.x'"
