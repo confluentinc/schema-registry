@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType.READER_FIELD_MISSING_DEFAULT_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1570,5 +1571,32 @@ public abstract class RestApiCompatibilityTest {
       fail("Registering an incompatible schema should succeed after bumping down the compatibility "
           + "level to none");
     }
+  }
+
+  @Test
+  public void testGetSchemasDeletedProperty() throws Exception {
+    String subject = "testSubject";
+
+    String schemaString = AvroUtils.parseSchema("{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"f1\"}]}").canonicalString();
+    restApp.restClient.registerSchema(schemaString, subject);
+
+    // Soft-delete the schema version
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "1");
+
+    // getSchemas with lookupDeletedSchema=true should include the deleted schema
+    List<ExtendedSchema> schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, false, true, false, null, null, null);
+    assertEquals(1, schemas.size());
+    assertTrue(schemas.get(0).getDeleted());
+    assertNotNull(schemas.get(0).getTimestamp());
+
+    // getSchemas with lookupDeletedSchema=false should not include the deleted schema
+    schemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, false, false, false, null, null, null);
+    assertEquals(0, schemas.size());
   }
 }
