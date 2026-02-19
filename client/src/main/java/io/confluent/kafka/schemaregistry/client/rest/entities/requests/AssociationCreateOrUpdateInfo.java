@@ -164,8 +164,9 @@ public class AssociationCreateOrUpdateInfo {
       setAssociationType(VALUE_ASSOCIATION_TYPE);
     }
     if (getLifecycle() == null) {
-      throw new IllegalPropertyException("lifecycle", "cannot be null");
-    } else if (getLifecycle() == LifecyclePolicy.WEAK) {
+      setLifecycle(LifecyclePolicy.WEAK);
+    }
+    if (getLifecycle() == LifecyclePolicy.WEAK) {
       if (Boolean.TRUE.equals(getFrozen())) {
         throw new IllegalPropertyException(
             "frozen", "association with lifecycle of WEAK cannot be frozen");
