@@ -1098,8 +1098,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return results;
   }
 
-  private synchronized AssociationResponse createOrUpdateAssociationHelper(AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
-          throws IOException, RestClientException {
+  private synchronized AssociationResponse createOrUpdateAssociationHelper(
+      AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
+      throws IOException, RestClientException {
     // Check that association types are unique
     checkAssociationTypeUniqueness(request);
 
