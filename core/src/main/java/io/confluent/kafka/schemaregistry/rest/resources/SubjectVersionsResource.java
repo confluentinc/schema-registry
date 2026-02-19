@@ -176,7 +176,9 @@ public class SubjectVersionsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
+        String originalGuid = schema.getGuid();
         schema.setSchema(parsedSchema.formattedString(format));
+        schema.setGuid(originalGuid);
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
       boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
@@ -484,7 +486,9 @@ public class SubjectVersionsResource {
           schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
+        String originalGuid = result.getGuid();
         result.setSchema(parsedSchema.formattedString(format));
+        result.setGuid(originalGuid);
       }
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {

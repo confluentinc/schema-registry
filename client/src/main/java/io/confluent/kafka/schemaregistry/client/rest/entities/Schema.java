@@ -322,6 +322,11 @@ public class Schema implements Comparable<Schema> {
     return guid;
   }
 
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
+  }
+
   @io.swagger.v3.oas.annotations.media.Schema(description = TYPE_DESC, example = TYPE_EXAMPLE)
   @JsonProperty("schemaType")
   public String getSchemaType() {
@@ -410,11 +415,6 @@ public class Schema implements Comparable<Schema> {
   @JsonProperty("deleted")
   public void setDeleted(Boolean deleted) {
     this.deleted = deleted;
-  }
-
-  @JsonProperty("guid")
-  public void setGuid(String guid) {
-    this.guid = guid;
   }
 
   @Override
