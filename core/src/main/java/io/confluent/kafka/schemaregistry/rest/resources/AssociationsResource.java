@@ -405,6 +405,10 @@ public class AssociationsResource {
       @Parameter(description = "The create requests", required = true)
       @NotNull AssociationBatchRequest request) {
 
+    if (request.getRequests() == null || request.getRequests().isEmpty()) {
+      throw Errors.invalidAssociationException("requests", "cannot be null or empty");
+    }
+
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
 
