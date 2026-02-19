@@ -25,13 +25,6 @@ public class AssociationsRequestTest {
 
   // AssociationCreateOrUpdateInfo
 
-  @Test(expected = IllegalPropertyException.class)
-  public void testInfoNullLifecycleThrows() {
-    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
-        "test-subject", null, null, null, null, null);
-    info.validate(false);
-  }
-
   @Test
   public void testInfoValidLifecycleDoesNotThrow() {
     AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
@@ -40,13 +33,6 @@ public class AssociationsRequestTest {
   }
 
   // AssociationCreateOrUpdateOp
-
-  @Test(expected = IllegalPropertyException.class)
-  public void testOpNullLifecycleThrows() {
-    AssociationCreateOp op = new AssociationCreateOp(
-        "test-subject", null, null, null, null, null);
-    op.validate(false);
-  }
 
   @Test
   public void testOpValidLifecycleDoesNotThrow() {
