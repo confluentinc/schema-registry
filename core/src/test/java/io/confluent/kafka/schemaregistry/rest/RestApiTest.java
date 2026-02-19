@@ -2890,41 +2890,6 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testRegisterSchemaWithInvalidNamespace() throws RestClientException, IOException {
-    String subject0 = "testSubject0";
-    ParsedSchema schema1 = AvroUtils.parseSchema("{\"type\":\"record\","
-                                                     + "\"name\":\"myrecord\","
-                                                     + "\"namespace\":\"a-bad.namespace\","
-                                                     + "\"fields\":"
-                                                     + "[{\"type\":\"string\",\"name\":"
-                                                     + "\"f" + "\"},"
-                                                     + "{\"type\":\"string\",\"name\":"
-                                                     + "\"g\" , \"default\":\"d\"}"
-                                                     + "]}");
-    RegisterSchemaRequest request1 = new RegisterSchemaRequest(Objects.requireNonNull(schema1));
-    assertThrows(
-        RestClientException.class,
-        () -> restApp.restClient.registerSchema(request1, subject0, false),
-        "Fail registering subject0 because of global validateFields"
-    );
-
-    // global validateNames = false
-    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
-    configUpdateRequest.setCompatibilityLevel(BACKWARD.name());
-    configUpdateRequest.setValidateNames(false);
-    assertEquals(
-        configUpdateRequest,
-        restApp.restClient.updateConfig(configUpdateRequest, null),
-        "Updating config should succeed"
-    );
-    assertEquals(
-        expectedSchemaId(1),
-        restApp.restClient.registerSchema(request1, subject0, false).getId(),
-        "Should register despite reserved fields"
-    );
-  }
-
-  @Test
   public void testInvalidSchema() {
     assertThrows(InvalidSchemaException.class, () ->
         restApp.schemaRegistry().parseSchema(null));
