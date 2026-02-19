@@ -144,7 +144,9 @@ public class SubjectsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        String originalGuid = matchingSchema.getGuid();
         matchingSchema.setSchema(parsedSchema.formattedString(format));
+        matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
@@ -203,7 +205,9 @@ public class SubjectsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        String originalGuid = matchingSchema.getGuid();
         matchingSchema.setSchema(parsedSchema.formattedString(format));
+        matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
