@@ -154,6 +154,9 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
     } else {
       setAssociationType(VALUE_ASSOCIATION_TYPE);
     }
+    if (getLifecycle() == null) {
+      setLifecycle(LifecyclePolicy.WEAK);
+    }
     if (getLifecycle() == LifecyclePolicy.WEAK) {
       if (Boolean.TRUE.equals(getFrozen())) {
         throw new IllegalPropertyException(
