@@ -80,17 +80,17 @@ import static org.junit.Assert.fail;
 
 public class KafkaAvroSerializerTest {
 
-  private final Properties defaultConfig;
-  private final SchemaRegistryClient schemaRegistry;
-  private final KafkaAvroSerializer avroSerializer;
-  private final KafkaAvroDeserializer avroDeserializer;
-  private final KafkaAvroSerializer reflectionAvroSerializer;
-  private final KafkaAvroDecoder avroDecoder;
-  private final String topic;
-  private final KafkaAvroDeserializer specificAvroDeserializer;
-  private final KafkaAvroDecoder specificAvroDecoder;
-  private final KafkaAvroDeserializer reflectionAvroDeserializer;
-  private final KafkaAvroDecoder reflectionAvroDecoder;
+  protected final Properties defaultConfig;
+  protected final SchemaRegistryClient schemaRegistry;
+  protected final KafkaAvroSerializer avroSerializer;
+  protected final KafkaAvroDeserializer avroDeserializer;
+  protected final KafkaAvroSerializer reflectionAvroSerializer;
+  protected final KafkaAvroDecoder avroDecoder;
+  protected final String topic;
+  protected final KafkaAvroDeserializer specificAvroDeserializer;
+  protected final KafkaAvroDecoder specificAvroDecoder;
+  protected final KafkaAvroDeserializer reflectionAvroDeserializer;
+  protected final KafkaAvroDecoder reflectionAvroDecoder;
 
   public KafkaAvroSerializerTest() {
     defaultConfig = createSerializerConfig();
@@ -152,7 +152,7 @@ public class KafkaAvroSerializerTest {
     return deserializerConfig;
   }
 
-  private Schema createUserSchema() {
+  protected Schema createUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"User\"," +
         "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
@@ -161,14 +161,14 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createUserRecord() {
+  protected IndexedRecord createUserRecord() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private Schema createExtendUserSchema() {
+  protected Schema createExtendUserSchema() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"User\"," +
         "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, " +
@@ -178,14 +178,14 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createExtendUserRecordWithNullField() {
+  protected IndexedRecord createExtendUserRecordWithNullField() {
     Schema schema = createExtendUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
     return avroRecord;
   }
 
-  private IndexedRecord createExtendUserRecord() {
+  protected IndexedRecord createExtendUserRecord() {
     Schema schema = createExtendUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", "testUser");
@@ -193,14 +193,14 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
-  private IndexedRecord createUserRecordUtf8() {
+  protected IndexedRecord createUserRecordUtf8() {
     Schema schema = createUserSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("name", new Utf8("testUser"));
     return avroRecord;
   }
 
-  private Schema createAccountSchema() {
+  protected Schema createAccountSchema() {
     String accountSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
         "\"name\": \"Account\"," +
         "\"fields\": [{\"name\": \"accountNumber\", \"type\": \"string\"}]}";
@@ -209,18 +209,18 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createAccountRecord() {
+  protected IndexedRecord createAccountRecord() {
     return createAccountRecord("0123456789");
   }
 
-  private IndexedRecord createAccountRecord(String accountNumber) {
+  protected IndexedRecord createAccountRecord(String accountNumber) {
     Schema schema = createAccountSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", accountNumber);
     return avroRecord;
   }
 
-  private Schema createBalanceSchema() {
+  protected Schema createBalanceSchema() {
     String balanceSchema = "{\n" +
             "\t\"namespace\": \"example.avro\", \"type\": \"record\",\n" +
             "    \"name\": \"Account\",\n" +
@@ -241,7 +241,7 @@ public class KafkaAvroSerializerTest {
     return schema;
   }
 
-  private IndexedRecord createBalanceRecord() {
+  protected IndexedRecord createBalanceRecord() {
     Schema schema = createBalanceSchema();
     GenericRecord avroRecord = new GenericData.Record(schema);
     avroRecord.put("accountNumber", "0123456789");
@@ -256,11 +256,11 @@ public class KafkaAvroSerializerTest {
     return avroRecord;
   }
 
-  private IndexedRecord createSpecificAvroRecord() {
+  protected IndexedRecord createSpecificAvroRecord() {
     return User.newBuilder().setName("testUser").build();
   }
 
-  private IndexedRecord createExtendedSpecificAvroRecord() {
+  protected IndexedRecord createExtendedSpecificAvroRecord() {
     return ExtendedUser.newBuilder()
         .setName("testUser")
         .setAge(99)
@@ -268,11 +268,11 @@ public class KafkaAvroSerializerTest {
         .build();
   }
 
-  private IndexedRecord createAnnotatedUserRecord() {
+  protected IndexedRecord createAnnotatedUserRecord() {
     return io.confluent.kafka.example.annotated.User.newBuilder().setName("testUser").build();
   }
 
-  private IndexedRecord createInvalidAvroRecord() {
+  protected IndexedRecord createInvalidAvroRecord() {
     String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", " +
                         "\"name\": \"User\"," +
                         "\"fields\": [{\"name\": \"f1\", \"type\": \"string\"}," +

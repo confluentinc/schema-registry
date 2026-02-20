@@ -54,6 +54,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean propagateSchemaTags;
   protected boolean removeJavaProperties;
   protected int useSchemaId = -1;
+  protected String useSchemaGuid = null;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
@@ -77,6 +78,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     removeJavaProperties =
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useSchemaId = config.useSchemaId();
+    useSchemaGuid = config.useSchemaGuid();
     idCompatStrict = config.getIdCompatibilityStrict();
     latestCompatStrict = config.getLatestCompatibilityStrict();
     avroReflectionAllowNull = config
@@ -134,11 +136,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (AvroSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        io.confluent.kafka.schemaregistry.client.rest.entities.Schema schemaEntity =
-            new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                subject, null, useSchemaId, schema);
         // omit the GUID when useSchemaId is set
         schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, (String) null);
+      } else if (useSchemaGuid != null) {
+        restClientErrorMsg = "Error retrieving schema GUID";
+        schema = (AvroSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
+        // omit the ID when useSchemaGuid is set
+        schemaId = new SchemaId(AvroSchema.TYPE, null, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
