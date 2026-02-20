@@ -95,6 +95,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final int USE_SCHEMA_ID_DEFAULT = -1;
   public static final String USE_SCHEMA_ID_DOC = "Schema ID to use for serialization";
 
+  public static final String USE_SCHEMA_GUID = "use.schema.guid";
+  public static final String USE_SCHEMA_GUID_DOC = "Schema GUID to use for serialization";
+
   public static final String ID_COMPATIBILITY_STRICT = "id.compatibility.strict";
   public static final boolean ID_COMPATIBILITY_STRICT_DEFAULT = true;
   public static final String ID_COMPATIBILITY_STRICT_DOC =
@@ -353,6 +356,8 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, PROPAGATE_SCHEMA_TAGS_DOC)
         .define(USE_SCHEMA_ID, Type.INT, USE_SCHEMA_ID_DEFAULT,
                 Importance.LOW, USE_SCHEMA_ID_DOC)
+        .define(USE_SCHEMA_GUID, Type.STRING, null,
+                Importance.LOW, USE_SCHEMA_GUID_DOC)
         .define(ID_COMPATIBILITY_STRICT, Type.BOOLEAN, ID_COMPATIBILITY_STRICT_DEFAULT,
                 Importance.LOW, ID_COMPATIBILITY_STRICT_DOC)
         .define(USE_LATEST_VERSION, Type.BOOLEAN, USE_LATEST_VERSION_DEFAULT,
@@ -478,6 +483,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public int useSchemaId() {
     return this.getInt(USE_SCHEMA_ID);
+  }
+
+  public String useSchemaGuid() {
+    return this.getString(USE_SCHEMA_GUID);
   }
 
   public boolean getIdCompatibilityStrict() {

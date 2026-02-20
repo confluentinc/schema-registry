@@ -56,6 +56,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected boolean propagateSchemaTags;
   protected boolean onlyLookupReferencesBySchema;
   protected int useSchemaId = -1;
+  protected String useSchemaGuid = null;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
   protected String schemaFormat;
@@ -69,6 +70,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.propagateSchemaTags = config.propagateSchemaTags();
     this.onlyLookupReferencesBySchema = config.onlyLookupReferencesBySchema();
     this.useSchemaId = config.useSchemaId();
+    this.useSchemaGuid = config.useSchemaGuid();
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     this.schemaFormat = config.getSchemaFormat();
@@ -139,9 +141,17 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
         }
         schema = (ProtobufSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        Schema schemaEntity = new Schema(subject, null, useSchemaId, schema);
         // omit the GUID when useSchemaId is set
         schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, (String) null);
+      } else if (useSchemaGuid != null) {
+        restClientErrorMsg = "Error retrieving schema GUID";
+        if (schemaFormat != null) {
+          String formatted = schema.formattedString(schemaFormat);
+          schema = schema.copyWithSchema(formatted);
+        }
+        schema = (ProtobufSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
+        // omit the ID when useSchemaGuid is set
+        schemaId = new SchemaId(ProtobufSchema.TYPE, null, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
