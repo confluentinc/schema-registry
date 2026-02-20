@@ -21,7 +21,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -32,6 +33,10 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -357,5 +362,46 @@ public class JsonSchemaConverterTest {
 
     converted2 = converter.toConnectData("topic2", serializedRecord2);
     assertEquals(2L, (long) converted2.schema().version());
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testFromConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+    JsonSchemaConverter.Serializer serializer = mock(JsonSchemaConverter.Serializer.class);
+    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    JsonSchemaData jsonSchemaData = new JsonSchemaData();
+    when(serializer.serialize(TOPIC, null, false,
+        jsonSchemaData.fromConnectData(Schema.STRING_SCHEMA, "value"),
+        jsonSchemaData.fromConnectSchema(Schema.STRING_SCHEMA))).thenThrow(serializationException);
+
+    try {
+      java.lang.reflect.Field serializerField = JsonSchemaConverter.class.getDeclaredField("serializer");
+      serializerField.setAccessible(true);
+      serializerField.set(converter, serializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, "value");
+  }
+
+  @Test(expected = NetworkException.class)
+  public void testToConnectDataThrowsNetworkExceptionOnSerializationExceptionCausedByIOException() {
+    JsonSchemaConverter.Deserializer deserializer = mock(JsonSchemaConverter.Deserializer.class);
+    SerializationException serializationException = new SerializationException("fail", new java.io.IOException("io fail"));
+    SchemaAndValue schemaAndValue = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true);
+    byte[] valueBytes =
+        converter.fromConnectData(TOPIC, schemaAndValue.schema(), schemaAndValue.value());
+    when(deserializer.deserialize(TOPIC, false, null, valueBytes)).thenThrow(
+        serializationException);
+
+    try {
+      java.lang.reflect.Field deserializerField = JsonSchemaConverter.class.getDeclaredField("deserializer");
+      deserializerField.setAccessible(true);
+      deserializerField.set(converter, deserializer);
+    } catch (Exception e) {
+      fail("Reflection failed: " + e);
+    }
+
+    converter.toConnectData(TOPIC, valueBytes);
   }
 }

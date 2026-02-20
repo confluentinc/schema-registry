@@ -184,6 +184,26 @@ public class RestApiModeTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testClearMode() throws Exception {
+    String mode = "READONLY";
+
+    // set mode to read only
+    assertEquals(
+        mode,
+        restApp.restClient.setMode(mode).getMode());
+
+    // clear mode
+    assertEquals(
+        null,
+        restApp.restClient.setMode(null).getMode());
+
+    // get mode
+    assertEquals(
+        "READWRITE",
+        restApp.restClient.getMode().getMode());
+  }
+
+  @Test
   public void testInvalidImportMode() throws Exception {
     String subject = "testSubject";
     String mode = "IMPORT";
