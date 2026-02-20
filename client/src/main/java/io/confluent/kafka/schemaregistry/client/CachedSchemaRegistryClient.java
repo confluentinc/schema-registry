@@ -77,12 +77,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   private final RestService restService;
   private final int cacheCapacity;
-  private final Cache<String, Cache<ParsedSchema, RegisterSchemaResponse>> schemaToResponseCache;
-  private final Cache<String, Cache<ParsedSchema, Integer>> schemaToIdCache;
+  private final Cache<String, Cache<SchemaAndNormalize, RegisterSchemaResponse>>
+      schemaToResponseCache;
+  private final Cache<String, Cache<SchemaAndNormalize, Integer>> schemaToIdCache;
   private final Cache<String, Cache<Integer, ParsedSchema>> idToSchemaCache;
   private final Cache<String, ParsedSchema> guidToSchemaCache;
-  private final Cache<String, Cache<ParsedSchema, String>> schemaToGuidCache;
-  private final Cache<String, Cache<ParsedSchema, Integer>> schemaToVersionCache;
+  private final Cache<String, Cache<SchemaAndNormalize, String>> schemaToGuidCache;
+  private final Cache<String, Cache<SchemaAndNormalize, Integer>> schemaToVersionCache;
   private final Cache<String, Cache<Integer, Schema>> versionToSchemaCache;
   private final Cache<String, SchemaMetadata> latestVersionCache;
   private final Cache<SubjectAndMetadata, SchemaMetadata> latestWithMetadataCache;
@@ -523,18 +524,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
     try {
-      final Cache<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
+      final Cache<SchemaAndNormalize, RegisterSchemaResponse> schemaResponseMap =
           schemaToResponseCache.get(subject, () -> CacheBuilder.newBuilder()
               .maximumSize(cacheCapacity)
               .build());
 
-      RegisterSchemaResponse cachedResponse = schemaResponseMap.getIfPresent(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      RegisterSchemaResponse cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
       if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
         return cachedResponse;
       }
 
       synchronized (this) {
-        cachedResponse = schemaResponseMap.getIfPresent(schema);
+        cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
         if (cachedResponse != null && (id < 0 || id == cachedResponse.getId())) {
           return cachedResponse;
         }
@@ -542,7 +544,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         final RegisterSchemaResponse retrievedResponse = id >= 0
             ? registerAndGetId(subject, schema, version, id, normalize, propagateSchemaTags)
             : registerAndGetId(subject, schema, normalize, propagateSchemaTags);
-        schemaResponseMap.put(schema, retrievedResponse);
+        schemaResponseMap.put(cacheKey, retrievedResponse);
         if (retrievedResponse.getSchema() != null) {
           String context = toQualifiedContext(subject);
           final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
@@ -766,24 +768,25 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public int getVersion(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     try {
-      final Cache<ParsedSchema, Integer> schemaVersionMap = schemaToVersionCache.get(
+      final Cache<SchemaAndNormalize, Integer> schemaVersionMap = schemaToVersionCache.get(
           subject, () -> CacheBuilder.newBuilder()
               .maximumSize(cacheCapacity)
               .build());
 
-      Integer cachedVersion = schemaVersionMap.getIfPresent(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      Integer cachedVersion = schemaVersionMap.getIfPresent(cacheKey);
       if (cachedVersion != null) {
         return cachedVersion;
       }
 
       synchronized (this) {
-        cachedVersion = schemaVersionMap.getIfPresent(schema);
+        cachedVersion = schemaVersionMap.getIfPresent(cacheKey);
         if (cachedVersion != null) {
           return cachedVersion;
         }
 
         final int retrievedVersion = getVersionFromRegistry(subject, schema, normalize);
-        schemaVersionMap.put(schema, retrievedVersion);
+        schemaVersionMap.put(cacheKey, retrievedVersion);
         return retrievedVersion;
       }
     } catch (ExecutionException e) {
@@ -814,18 +817,19 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public int getId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     try {
-      final Cache<ParsedSchema, Integer> schemaIdMap = schemaToIdCache.get(
+      final Cache<SchemaAndNormalize, Integer> schemaIdMap = schemaToIdCache.get(
           subject, () -> CacheBuilder.newBuilder()
               .maximumSize(cacheCapacity)
               .build());
 
-      Integer cachedId = schemaIdMap.getIfPresent(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      Integer cachedId = schemaIdMap.getIfPresent(cacheKey);
       if (cachedId != null) {
         return cachedId;
       }
 
       synchronized (this) {
-        cachedId = schemaIdMap.getIfPresent(schema);
+        cachedId = schemaIdMap.getIfPresent(cacheKey);
         if (cachedId != null) {
           return cachedId;
         }
@@ -833,7 +837,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         final RegisterSchemaResponse retrievedResponse =
             getIdWithResponseFromRegistry(subject, schema, normalize, false);
         final int retrievedId = retrievedResponse.getId();
-        schemaIdMap.put(schema, retrievedId);
+        schemaIdMap.put(cacheKey, retrievedId);
         if (retrievedResponse.getSchema() != null) {
           String context = toQualifiedContext(subject);
           final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
@@ -860,24 +864,25 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     try {
-      final Cache<ParsedSchema, String> guidMap = schemaToGuidCache.get(
+      final Cache<SchemaAndNormalize, String> guidMap = schemaToGuidCache.get(
           subject, () -> CacheBuilder.newBuilder()
               .maximumSize(cacheCapacity)
               .build());
 
-      String cachedGuid = guidMap.getIfPresent(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      String cachedGuid = guidMap.getIfPresent(cacheKey);
       if (cachedGuid != null) {
         return cachedGuid;
       }
 
       synchronized (this) {
-        cachedGuid = guidMap.getIfPresent(schema);
+        cachedGuid = guidMap.getIfPresent(cacheKey);
         if (cachedGuid != null) {
           return cachedGuid;
         }
 
         final String retrievedGuid = getGuidFromRegistry(subject, schema, normalize);
-        guidMap.put(schema, retrievedGuid);
+        guidMap.put(cacheKey, retrievedGuid);
         guidToSchemaCache.put(retrievedGuid, schema);
         return retrievedGuid;
       }
@@ -891,12 +896,13 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     try {
-      final Cache<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
+      final Cache<SchemaAndNormalize, RegisterSchemaResponse> schemaResponseMap =
           schemaToResponseCache.get(subject, () -> CacheBuilder.newBuilder()
               .maximumSize(cacheCapacity)
               .build());
 
-      RegisterSchemaResponse cachedResponse = schemaResponseMap.getIfPresent(schema);
+      SchemaAndNormalize cacheKey = new SchemaAndNormalize(schema, normalize);
+      RegisterSchemaResponse cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
       if (cachedResponse != null) {
         // Allow the schema to be looked up again if version is not valid
         // This is for backward compatibility with versions before CP 8.0
@@ -906,7 +912,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
 
       synchronized (this) {
-        cachedResponse = schemaResponseMap.getIfPresent(schema);
+        cachedResponse = schemaResponseMap.getIfPresent(cacheKey);
         if (cachedResponse != null) {
           // Allow the schema to be looked up again if version is not valid
           // This is for backward compatibility with versions before CP 8.0
@@ -917,7 +923,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
         final RegisterSchemaResponse retrievedResponse =
             getIdWithResponseFromRegistry(subject, schema, normalize, false);
-        schemaResponseMap.put(schema, retrievedResponse);
+        schemaResponseMap.put(cacheKey, retrievedResponse);
         if (retrievedResponse.getSchema() != null) {
           String context = toQualifiedContext(subject);
           final Cache<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.get(
@@ -971,7 +977,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       String version,
       boolean isPermanent)
       throws IOException, RestClientException {
-    Cache<ParsedSchema, Integer> versionCache = schemaToVersionCache.getIfPresent(subject);
+    Cache<SchemaAndNormalize, Integer> versionCache = schemaToVersionCache.getIfPresent(subject);
     if (versionCache != null) {
       versionCache.asMap().values().remove(Integer.valueOf(version));
     }
@@ -1202,6 +1208,33 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     QualifiedSubject qualifiedSubject =
         QualifiedSubject.create(QualifiedSubject.DEFAULT_TENANT, subject);
     return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
+  }
+
+  static class SchemaAndNormalize {
+    private final ParsedSchema schema;
+    private final boolean normalize;
+
+    SchemaAndNormalize(ParsedSchema schema, boolean normalize) {
+      this.schema = schema;
+      this.normalize = normalize;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      SchemaAndNormalize that = (SchemaAndNormalize) o;
+      return normalize == that.normalize && schema.equals(that.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schema, normalize);
+    }
   }
 
   static class SubjectAndSchema {
