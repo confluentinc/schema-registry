@@ -17,19 +17,11 @@ package io.confluent.kafka.schemaregistry.storage.garbagecollection.entities;
 
 import io.cloudevents.CloudEvent;
 
-import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Objects;
 
 public class WireEvent {
   private final Map<String, String> headers;
-  // A list of headers in the very outer envelop
-  /*
-  private final int ce_page;
-  private final boolean ce_lastpage; // Used by topic snapshot
-  private final int ce_total; // Used by cluster snapshot
-  private final String _lsrc/ce_lsrc;
-   */
   private final CloudEvent cloudEvent;
 
   public WireEvent(Map<String, String> headers, CloudEvent cloudEvent) {
@@ -40,6 +32,7 @@ public class WireEvent {
   public Map<String, String> getHeaders() {
     return headers;
   }
+
   public CloudEvent getCloudEvent() {
     return cloudEvent;
   }
@@ -48,15 +41,23 @@ public class WireEvent {
     if (cloudEvent == null) {
       throw new IllegalArgumentException("WireEvent missing required field: cloudEvent");
     }
-    String id = cloudEvent.getId();
-    String type = cloudEvent.getType();
-    String subject = cloudEvent.getSubject();
-    String contentType = cloudEvent.getDataContentType();
-    byte[] data = cloudEvent.getData().toBytes();
-    OffsetDateTime time = cloudEvent.getTime();
-    if (id == null || type == null || subject == null || contentType == null || data == null || time == null) {
-      throw new IllegalArgumentException("CloudEvent missing required fields: " +
-              "id/type/subject/datacontenttype/data/time");
+    if (cloudEvent.getId() == null) {
+      throw new IllegalArgumentException("CloudEvent missing required field: id");
+    }
+    if (cloudEvent.getType() == null) {
+      throw new IllegalArgumentException("CloudEvent missing required field: type");
+    }
+    if (cloudEvent.getSubject() == null) {
+      throw new IllegalArgumentException("CloudEvent missing required field: subject");
+    }
+    if (cloudEvent.getDataContentType() == null) {
+      throw new IllegalArgumentException("CloudEvent missing required field: datacontenttype");
+    }
+    if (cloudEvent.getData() == null) {
+      throw new IllegalArgumentException("CloudEvent missing required field: data");
+    }
+    if (cloudEvent.getTime() == null) {
+      throw new IllegalArgumentException("CloudEvent missing required field: time");
     }
   }
 

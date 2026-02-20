@@ -17,11 +17,7 @@ package io.confluent.kafka.schemaregistry.storage.garbagecollection.entities;
 
 import io.confluent.protobuf.events.catalog.v1.MetadataChange;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 public class GarbageCollectionEvent {
   // From cloud event
@@ -66,30 +62,39 @@ public class GarbageCollectionEvent {
   public String getSubject() {
     return subject;
   }
+
   public String getType() {
     return type;
   }
+
   public String getId() {
     return id;
   }
+
   public String getTenant() {
     return tenant;
   }
+
   public MetadataChange getMetadataChange() {
     return metadataChange;
   }
+
   public long getTimestampMs() {
     return timestampMs;
   }
+
   public String getSnapshotId() {
     return snapshotId;
   }
+
   public Integer getPage() {
     return page;
   }
+
   public Integer getTotalPages() {
     return totalPages;
   }
+
   public Boolean isLastPage() {
     return isLastPage;
   }

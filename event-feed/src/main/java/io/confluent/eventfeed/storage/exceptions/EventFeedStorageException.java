@@ -19,18 +19,23 @@ import io.cloudevents.CloudEvent;
 import io.confluent.eventfeed.storage.entities.CloudEventLoggingEntity;
 
 public class EventFeedStorageException extends EventFeedException {
+
   public EventFeedStorageException(String message, Throwable cause) {
     super(message, cause);
   }
+
   public EventFeedStorageException(String message) {
     super(message);
   }
+
   public EventFeedStorageException(Throwable cause) {
     super(cause);
   }
+
   public EventFeedStorageException() {
     super();
   }
+
   public EventFeedStorageException(String message, CloudEvent event, Throwable cause) {
     this(String.format("%s. cloud event: %s", message, CloudEventLoggingEntity.of(event)), cause);
   }

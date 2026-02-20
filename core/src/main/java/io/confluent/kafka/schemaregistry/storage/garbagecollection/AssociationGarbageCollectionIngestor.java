@@ -65,14 +65,17 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
   private SchemaRegistry schemaRegistry;
   private SchemaRegistryConfig config;
   private static final int STREAM_CLOSE_TIMEOUT_MILLIS = 60 * 1000;
-  private static final Logger log = LoggerFactory.getLogger(AssociationGarbageCollectionIngestor.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(AssociationGarbageCollectionIngestor.class);
 
-  public AssociationGarbageCollectionIngestor(GarbageCollector garbageCollector, SchemaRegistry schemaRegistry) {
+  public AssociationGarbageCollectionIngestor(GarbageCollector garbageCollector,
+      SchemaRegistry schemaRegistry) {
     super(garbageCollector, schemaRegistry);
     log.info("Initializing GarbageCollectionIngestor.");
     this.schemaRegistry = schemaRegistry;
     config = schemaRegistry.config();
-    this.topics = config.getList(SchemaRegistryConfig.ASSOC_GC_INGESTOR_TOPICS_CONFIG);
+    this.topics = config.getList(
+        SchemaRegistryConfig.ASSOC_GC_INGESTOR_TOPICS_CONFIG);
     addLeaderChangeListener();
   }
 
@@ -90,7 +93,8 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
             close();
           }
         } catch (Exception e) {
-          throw new RuntimeException("Failure occurred during GarbageCollectionIngestor leader change process.", e);
+          throw new RuntimeException(
+              "Failure occurred during GarbageCollectionIngestor leader change process.", e);
         }
       }
     });
@@ -98,9 +102,9 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
 
   private boolean isKafkaStreamsActive(KafkaStreams streams) {
     return streams != null
-            && (streams.state() == KafkaStreams.State.CREATED
-            || streams.state() == KafkaStreams.State.REBALANCING
-            || streams.state() == KafkaStreams.State.RUNNING);
+        && (streams.state() == KafkaStreams.State.CREATED
+        || streams.state() == KafkaStreams.State.REBALANCING
+        || streams.state() == KafkaStreams.State.RUNNING);
   }
 
   @Override
@@ -109,7 +113,8 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
     if (schemaRegistry.isLeader()) {
       super.init();
       if (topics == null || topics.isEmpty()) {
-        throw new GarbageCollectionInitializationException("No topics specified for GarbageCollectionIngestor.");
+        throw new GarbageCollectionInitializationException(
+            "No topics specified for GarbageCollectionIngestor.");
       }
       try {
         // Check topics existence and create topics if needed
@@ -121,7 +126,8 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
           streams.start();
         }
       } catch (Exception e) {
-        throw new GarbageCollectionInitializationException("Failed to initialize GarbageCollectionIngestor", e);
+        throw new GarbageCollectionInitializationException(
+            "Failed to initialize GarbageCollectionIngestor", e);
       }
     }
   }
@@ -208,9 +214,9 @@ public class AssociationGarbageCollectionIngestor extends AssociationGarbageColl
     String groupId = config.getString(
             SchemaRegistryConfig.ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_CONFIG);
     if (groupId == null) {
-      throw new IllegalArgumentException("Missing config" +
-              SchemaRegistryConfig.ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_CONFIG
-              + "for GarbageCollectionIngestor.");
+      throw new IllegalArgumentException("Missing config"
+          + SchemaRegistryConfig.ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_CONFIG
+          + "for GarbageCollectionIngestor.");
     }
     String applicationId = groupId + "-ingest";
 

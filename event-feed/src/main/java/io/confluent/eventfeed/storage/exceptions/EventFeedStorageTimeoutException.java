@@ -19,20 +19,24 @@ import io.cloudevents.CloudEvent;
 import io.confluent.eventfeed.storage.entities.CloudEventLoggingEntity;
 
 public class EventFeedStorageTimeoutException extends EventFeedStorageException {
+
   public EventFeedStorageTimeoutException(String message, Throwable cause) {
     super(message, cause);
   }
+
   public EventFeedStorageTimeoutException(String message) {
     super(message);
   }
+
   public EventFeedStorageTimeoutException(Throwable cause) {
     super(cause);
   }
+
   public EventFeedStorageTimeoutException() {
     super();
   }
 
-  public EventFeedStorageTimeoutException(String message, CloudEvent event,Throwable cause) {
+  public EventFeedStorageTimeoutException(String message, CloudEvent event, Throwable cause) {
     this(String.format("%s. cloud event: %s", message, CloudEventLoggingEntity.of(event)), cause);
   }
 }

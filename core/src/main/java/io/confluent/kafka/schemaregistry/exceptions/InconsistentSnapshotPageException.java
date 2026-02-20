@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.exceptions;
 
-public class InconsistentSnapshotPageException extends GarbageCollectionException{
+public class InconsistentSnapshotPageException extends GarbageCollectionException {
   public InconsistentSnapshotPageException(String name, Throwable cause) {
     super(name, cause);
   }

@@ -96,9 +96,9 @@ public class AssociationKafkaGarbageCollector implements GarbageCollector {
       }
     } catch (StoreException e) {
       throw new GarbageCollectionException(
-              String.format("Error while getting all association values for tenant %s " +
-                      "from the backing Kafka store when processing deleted cluster id %s",
-                      tenant, resourceNamespace), e);
+          String.format("Error while getting all association values for tenant %s "
+              + "from the backing Kafka store when processing deleted cluster id %s",
+              tenant, resourceNamespace), e);
     }
     for (String resourceId : resourceIdsToDelete) {
       processDeletedResource(tenant, resourceId);
@@ -117,14 +117,14 @@ public class AssociationKafkaGarbageCollector implements GarbageCollector {
         AssociationValue value = iter.next();
         // FIXME change the timestamp to createTs after SR supports it
         if (!resourceIds.contains(value.getResourceId())
-          && value.getTimestamp() <= cutOffTimestamp) {
-            resourceIdsToDelete.add(value.getResourceId());
+            && value.getTimestamp() <= cutOffTimestamp) {
+          resourceIdsToDelete.add(value.getResourceId());
         }
       }
     } catch (StoreException e) {
       throw new GarbageCollectionException(
-              String.format("Error while getting all association values for tenant %s " +
-                      "from the backing Kafka store when processing topic snapshot", tenant), e);
+          String.format("Error while getting all association values for tenant %s "
+              + "from the backing Kafka store when processing topic snapshot", tenant), e);
     }
     for (String resourceId : resourceIdsToDelete) {
       processDeletedResource(tenant, resourceId);
@@ -148,9 +148,9 @@ public class AssociationKafkaGarbageCollector implements GarbageCollector {
       }
     } catch (StoreException e) {
       throw new GarbageCollectionException(
-              String.format("Error while getting all association values for tenant %s " +
-                      "from the backing Kafka store when processing kafka cluster snapshot",
-                      tenant), e);
+          String.format("Error while getting all association values for tenant %s "
+              + "from the backing Kafka store when processing kafka cluster snapshot",
+              tenant), e);
     }
     for (String resourceId : resourceIdsToDelete) {
       processDeletedResource(tenant, resourceId);

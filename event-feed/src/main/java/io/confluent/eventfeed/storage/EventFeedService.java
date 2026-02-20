@@ -22,7 +22,6 @@ import io.cloudevents.SpecVersion;
 import io.cloudevents.kafka.CloudEventSerializer;
 import io.confluent.eventfeed.storage.entities.CloudEventLoggingEntity;
 import io.confluent.eventfeed.storage.entities.ValidatedCloudEvent;
-import io.confluent.eventfeed.storage.exceptions.EventFeedException;
 import io.confluent.eventfeed.storage.exceptions.EventFeedUnsupportedCloudEventException;
 import io.confluent.eventfeed.storage.exceptions.EventFeedIllegalPropertyException;
 import io.confluent.eventfeed.storage.exceptions.EventFeedInitializationException;
@@ -31,7 +30,6 @@ import io.confluent.eventfeed.storage.exceptions.EventFeedStorageTimeoutExceptio
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
-import io.confluent.kafka.schemaregistry.storage.garbagecollection.entities.WireEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -150,7 +148,8 @@ public class EventFeedService {
     Set<String> topics = Collections.singleton(topic);
     Map<String, TopicDescription> topicDescription;
     try {
-      topicDescription = admin.describeTopics(topics).allTopicNames().get(initTimeout, TimeUnit.MILLISECONDS);
+      topicDescription = admin.describeTopics(topics).allTopicNames()
+          .get(initTimeout, TimeUnit.MILLISECONDS);
     } catch (ExecutionException e) {
       if (e.getCause() instanceof UnknownTopicOrPartitionException) {
         log.warn("Could not validate existing topic {}", topic);
@@ -188,14 +187,14 @@ public class EventFeedService {
               + "replacing your old data with new data with the same key";
       log.error(message);
       throw new EventFeedInitializationException("The retention policy of the topic " + topic
-              + " is incorrect. Expected cleanup.policy to be "
-              + "'delete' but it is " + cleanupPolicy);
+              + " is incorrect. Expected cleanup.policy to be 'delete' but it is "
+              + cleanupPolicy);
     }
     long retentionMs = Long.parseLong(
             topicConfigs.get(TopicConfig.RETENTION_MS_CONFIG).value());
     if (retentionMs < DESIRED_RETENTION_MS) {
-      String message = String.format("The retention ms for the topic %s is %s, " +
-              "which is less than the desired time %s.",
+      String message = String.format("The retention ms for the topic %s is %s, "
+              + "which is less than the desired time %s.",
               topic, retentionMs, DESIRED_RETENTION_MS);
       log.warn(message);
     }
@@ -221,8 +220,9 @@ public class EventFeedService {
               + " using a replication factor of "
               + topicReplicationFactor
               + ", which is less than the desired one of "
-              + DESIRED_REPLICATION_FACTOR + ". If this is a production environment, it's "
-              + "crucial to add more brokers and increase the replication factor of the topic.");
+              + DESIRED_REPLICATION_FACTOR
+              + ". If this is a production environment, it's crucial to add more brokers "
+              + "and increase the replication factor of the topic.");
     }
 
     SchemaRegistryConfig config = schemaRegistry.config();
@@ -256,7 +256,8 @@ public class EventFeedService {
 
   @FunctionalInterface
   private interface Validator {
-    ValidatedCloudEvent validate(CloudEvent cloudEvent) throws EventFeedUnsupportedCloudEventException;
+    ValidatedCloudEvent validate(CloudEvent cloudEvent)
+            throws EventFeedUnsupportedCloudEventException;
   }
 
   private ValidatedCloudEvent validateTopicCloudEvent(CloudEvent cloudEvent)
@@ -285,8 +286,8 @@ public class EventFeedService {
     String type = cloudEvent.getType();
     if (type == null || type.isEmpty() || !SUBJECT_TYPE_ALLOWLIST.get(subject).contains(type)) {
       throw new EventFeedUnsupportedCloudEventException(
-              String.format("cloud event subject=%s and type=%s combination " +
-                      "is not supported by the server.", subject, type));
+              String.format("cloud event subject=%s and type=%s combination "
+                      + "is not supported by the server.", subject, type));
     }
     String partitionKey = partitionKeyObj.toString();
     return new ValidatedCloudEvent(topicEventsTopic, partitionKey, cloudEvent);
@@ -328,7 +329,8 @@ public class EventFeedService {
       } else if (e instanceof TimeoutException) {
         future.completeExceptionally(
                 new EventFeedStorageTimeoutException(
-                        String.format("Timed out while publishing event to topic=%s", topicEventsTopic),
+                        String.format("Timed out while publishing event to topic=%s",
+                                topicEventsTopic),
                         cloudEvent, e));
       } else {
         future.completeExceptionally(

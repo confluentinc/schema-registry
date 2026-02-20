@@ -16,15 +16,19 @@
 package io.confluent.eventfeed.storage.exceptions;
 
 public class EventFeedInitializationException extends EventFeedException {
+
   public EventFeedInitializationException() {
     super();
   }
+
   public EventFeedInitializationException(String message) {
     super(message);
   }
+
   public EventFeedInitializationException(String message, Throwable cause) {
     super(message, cause);
   }
+
   public EventFeedInitializationException(Throwable cause) {
     super(cause);
   }

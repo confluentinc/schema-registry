@@ -40,6 +40,9 @@ public class EventFeedRestService extends RestService implements Configurable {
           new TypeReference<SendResult>() {
           };
 
+  private static final String PARTITION_KEY_EXTENSION = "partitionkey";
+  private static final String LSRC_EXTENSION = "lsrc";
+
   public EventFeedRestService(UrlList baseUrls) {
     super(baseUrls);
   }
@@ -54,25 +57,42 @@ public class EventFeedRestService extends RestService implements Configurable {
 
   public SendResult send(CloudEvent event) throws IOException, RestClientException {
     String id = event.getId();
+    if (id == null) {
+      throw new IllegalArgumentException("Missing required field in cloud event: id");
+    }
     String contentType = event.getDataContentType();
+    if (contentType == null) {
+      throw new IllegalArgumentException("Missing required field in cloud event: datacontenttype");
+    }
     String subject = event.getSubject();
+    if (subject == null) {
+      throw new IllegalArgumentException("Missing required field in cloud event: subject");
+    }
     URI source = event.getSource();
+    if (source == null) {
+      throw new IllegalArgumentException("Missing required field in cloud event: source");
+    }
     String type = event.getType();
+    if (type == null) {
+      throw new IllegalArgumentException("Missing required field in cloud event: type");
+    }
     OffsetDateTime time = event.getTime();
-    if (id == null || contentType == null || subject == null
-            || source == null || type == null || time == null) {
-      throw new IllegalArgumentException("Missing the following required fields in cloud event:" +
-              "id, datacontenttype, subject, source, type, time");
+    if (time == null) {
+      throw new IllegalArgumentException("Missing required field in cloud event: time");
     }
     SpecVersion specVersion = event.getSpecVersion();
     if (specVersion != SpecVersion.V1) {
       throw new IllegalArgumentException("cloud event spec version must be: " + SpecVersion.V1);
     }
-    Object partitionKey = event.getExtension("partitionkey");
-    Object lsrc = event.getExtension("lsrc");
-    if (partitionKey == null || lsrc == null) {
-      throw new IllegalArgumentException("Missing the following required fields in cloud event extensions: "
-              + "partitionkey, lsrc.");
+    Object partitionKey = event.getExtension(PARTITION_KEY_EXTENSION);
+    if (partitionKey == null) {
+      throw new IllegalArgumentException(
+              "Missing required field in cloud event extensions: " + PARTITION_KEY_EXTENSION);
+    }
+    Object lsrc = event.getExtension(LSRC_EXTENSION);
+    if (lsrc == null) {
+      throw new IllegalArgumentException(
+              "Missing required field in cloud event extensions: " + LSRC_EXTENSION);
     }
 
     Map<String, String> headers = new HashMap<>();

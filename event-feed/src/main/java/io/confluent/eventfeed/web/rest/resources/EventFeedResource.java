@@ -51,9 +51,11 @@ import java.util.concurrent.CompletionException;
 
 @Path("/events")
 @Singleton
-@Produces({Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
-        Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
-        Versions.JSON_WEIGHTED})
+@Produces({
+    Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED,
+    Versions.SCHEMA_REGISTRY_DEFAULT_JSON_WEIGHTED,
+    Versions.JSON_WEIGHTED
+})
 public class EventFeedResource extends SchemaRegistryResource {
   private final EventFeedService eventFeedService;
 
@@ -70,9 +72,9 @@ public class EventFeedResource extends SchemaRegistryResource {
   @Consumes({Versions.JSON, Versions.PROTOBUF})
   @Operation(summary = "Publish an external event to backing kafka for async ingestion.",
           responses = {
-            @ApiResponse(responseCode="200", description = "The post event result",
-            content = @Content(schema = @Schema(implementation = SendResult.class))),
-  })
+              @ApiResponse(responseCode = "200", description = "The post event result",
+                      content = @Content(schema = @Schema(implementation = SendResult.class))),
+          })
   @PerformanceMetric("events.publish")
   @DocumentedName("publishEvent")
   public void publishEvent(
@@ -89,15 +91,15 @@ public class EventFeedResource extends SchemaRegistryResource {
               asyncResponse.resume(sendResult);
             })
             .exceptionally(ex -> {
-              Throwable cause =
-                      ex instanceof CompletionException && ex.getCause() != null
+              Throwable cause = ex instanceof CompletionException && ex.getCause() != null
                       ? ex.getCause() : ex;
               if (cause instanceof IllegalPropertyException) {
                 asyncResponse.resume(Errors.invalidCloudEventException(cause.getMessage()));
               } else if (cause instanceof EventFeedUnsupportedCloudEventException) {
                 asyncResponse.resume(Errors.unsupportedCloudEventException(cause.getMessage()));
               } else if (cause instanceof EventFeedStorageTimeoutException) {
-                asyncResponse.resume(Errors.storeTimeoutException(cause.getMessage(), ex.getCause()));
+                asyncResponse.resume(Errors.storeTimeoutException(
+                        cause.getMessage(), ex.getCause()));
               } else if (cause instanceof EventFeedStorageException) {
                 asyncResponse.resume(Errors.storeException(cause.getMessage(), ex.getCause()));
               } else {

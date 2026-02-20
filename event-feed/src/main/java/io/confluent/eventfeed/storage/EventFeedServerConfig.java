@@ -42,6 +42,7 @@ public class EventFeedServerConfig extends SchemaRegistryConfig {
   }
 
   private static final ConfigDef serverConfig;
+
   static {
     serverConfig = baseSchemaRegistryConfigDef()
             .define(EVENT_FEED_TOPIC_EVENTS_TOPIC_CONFIG, STRING,

@@ -176,7 +176,7 @@ public class SchemaRegistryConfig extends RestConfig {
    * <code>associations.gc.enable</code>
    */
   public static final String ASSOC_GC_ENABLE_CONFIG = "associations.gc.enable";
-  public static final boolean DEFAULT_ASSOC_GC_ENABLE = true;
+  public static final boolean DEFAULT_ASSOC_GC_ENABLE = false;
   /**
    * <code>associations.gc.ingestor.topics</code>
    */
@@ -524,7 +524,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String ASSOC_GC_ENABLE_DOC =
           "Enable associations garbage collection.";
   protected static final String ASSOC_GC_INGESTOR_TOPICS_DOC =
-          "A comma separated list of topics for the associations garbage collection ingestion pipeline.";
+          "A comma separated list of topics for the associations "
+                  + "garbage collection ingestion pipeline.";
   protected static final String ASSOC_GC_INGESTOR_CONSUMER_GROUP_OVERRIDE_DOC =
           "Override for the consumer group used by the associations garbage collection ingestor.";
   protected static final String ASSOC_GC_INGESTOR_MAX_POLL_INTERVAL_MS_DOC =
@@ -532,8 +533,9 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String ASSOC_GC_CACHE_EXPIRY_SECONDS_DOC =
           "Association GC manager cache entry expiration time.";
   protected static final String ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_DOC =
-          "For topic snapshot, the amount of time we should subtract from the cloud event timestamp "
-                  + "before comparing with the associations create timestamp.";
+          "For topic snapshot, the amount of time we should subtract from the "
+                  + "cloud event timestamp before comparing "
+                  + "with the associations create timestamp.";
   protected static final String ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_DOC =
           "For kafka cluster snapshot, the amount of time we should subtract from the cloud event "
                   + "timestamp before comparing with the associations create timestamp.";

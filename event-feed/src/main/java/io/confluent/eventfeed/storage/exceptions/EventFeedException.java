@@ -18,15 +18,19 @@ package io.confluent.eventfeed.storage.exceptions;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 
 public class EventFeedException extends SchemaRegistryException {
+
   public EventFeedException(String message, Throwable cause) {
     super(message, cause);
   }
+
   public EventFeedException(String message) {
     super(message);
   }
+
   public EventFeedException(Throwable cause) {
     super(cause);
   }
+
   public EventFeedException() {
     super();
   }

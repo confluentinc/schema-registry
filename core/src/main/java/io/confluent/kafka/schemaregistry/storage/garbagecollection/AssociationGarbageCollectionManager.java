@@ -29,7 +29,6 @@ import io.confluent.protobuf.events.catalog.v1.MetadataChange;
 import io.confluent.protobuf.events.catalog.v1.MetadataEvent;
 import io.confluent.protobuf.events.catalog.v1.OpType;
 import io.confluent.protobuf.events.catalog.v1.TopicMetadata;
-import org.checkerframework.checker.units.qual.C;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,14 +61,15 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
   private static final long KEEP_ALIVE_SECONDS = 120; // 2min
 
   // subjects
-  private static final String TOPIC = "topic"; // cloudEvent subject for topic delta event
-  private static final String TOPIC_AND_CLUSTERLINK = "topicAndClusterLink"; // cloudEvent subject for topic snapshot
-  private static final String KAFKA_CLUSTER = "kafkaCluster"; // cloudEvent subject for kafkaCluster delta event and snapshot
+  private static final String TOPIC = "topic";
+  private static final String TOPIC_AND_CLUSTERLINK = "topicAndClusterLink";
+  private static final String KAFKA_CLUSTER = "kafkaCluster";
 
+  private static final Logger log =
+      LoggerFactory.getLogger(AssociationGarbageCollectionManager.class);
 
-  private static final Logger log = LoggerFactory.getLogger(AssociationGarbageCollectionManager.class);
-
-  public AssociationGarbageCollectionManager(GarbageCollector garbageCollector, SchemaRegistry schemaRegistry,
+  public AssociationGarbageCollectionManager(GarbageCollector garbageCollector,
+                                             SchemaRegistry schemaRegistry,
                                              RejectedExecutionHandler handler) {
     this.garbageCollector = garbageCollector;
     this.config = schemaRegistry.config();
@@ -82,23 +82,26 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
             .build();
     this.executorService = createExecutorService(handler);
     this.topicSnapshotBackoffMs = this.config.getInt(
-            SchemaRegistryConfig.ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_CONFIG) * 1000;
+        SchemaRegistryConfig.ASSOC_GC_TOPIC_SNAPSHOT_BACKOFF_SECS_CONFIG) * 1000;
     this.kafkaClusterSnapshotBackoffMs = this.config.getInt(
-            SchemaRegistryConfig.ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_CONFIG) * 1000;
+        SchemaRegistryConfig.ASSOC_GC_KAFKA_CLUSTER_SNAPSHOT_BACKOFF_SECS_CONFIG) * 1000;
     this.handler = handler;
     this.gcEventFactory = new GarbageCollectionEventFactory(new MetadataChangeDeserializer());
   }
 
-  public AssociationGarbageCollectionManager(GarbageCollector garbageCollector, SchemaRegistry schemaRegistry) {
+  public AssociationGarbageCollectionManager(GarbageCollector garbageCollector,
+                                             SchemaRegistry schemaRegistry) {
     this(garbageCollector, schemaRegistry, new ThreadPoolExecutor.CallerRunsPolicy());
   }
 
   private ExecutorService createExecutorService(RejectedExecutionHandler handler) {
-    int corePoolSize = config.getInt(SchemaRegistryConfig.ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE_CONFIG);
-    int maxPoolSize = config.getInt(SchemaRegistryConfig.ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE_CONFIG);
+    int corePoolSize = config.getInt(
+        SchemaRegistryConfig.ASSOC_GC_EXECUTOR_SERVICE_CORE_POOL_SIZE_CONFIG);
+    int maxPoolSize = config.getInt(
+        SchemaRegistryConfig.ASSOC_GC_EXECUTOR_SERVICE_MAX_POOL_SIZE_CONFIG);
     int queueSize = config.getInt(SchemaRegistryConfig.ASSOC_GC_EXECUTOR_SERVICE_QUEUE_SIZE_CONFIG);
     return new ThreadPoolExecutor(corePoolSize, maxPoolSize, KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(queueSize), handler);
+        new ArrayBlockingQueue<>(queueSize), handler);
   }
 
   @FunctionalInterface
@@ -109,23 +112,30 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
   private static class EventHandlerKey {
     private final String subject;
     private final OpType opType;
+
     public EventHandlerKey(String subject, OpType opType) {
       this.subject = subject;
       this.opType = opType;
     }
+
     @Override
     public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
       EventHandlerKey that = (EventHandlerKey) o;
       return subject.equals(that.subject) && opType.equals(that.opType);
     }
+
     @Override
     public int hashCode() {
       return Objects.hash(subject, opType);
     }
 
-    public static EventHandlerKey CreateFrom(GarbageCollectionEvent gcEvent) {
+    public static EventHandlerKey createFrom(GarbageCollectionEvent gcEvent) {
       return new EventHandlerKey(gcEvent.getSubject(), gcEvent.getMetadataChange().getOp());
     }
   }
@@ -145,11 +155,20 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
           throws GarbageCollectionException {
     validateSnapshotMetadata(gcEvent);
     MetadataChange metadataChange = gcEvent.getMetadataChange();
+    if (metadataChange == null) {
+      throw new GarbageCollectionException("MetadataChange is null for topic snapshot.");
+    }
     String snapshotId = gcEvent.getSnapshotId();
     String tenant = gcEvent.getTenant();
     long timestamp = gcEvent.getTimestampMs();
 
     CacheValue cacheValue = snapshotCache.get(snapshotId, k -> new CacheValue(tenant));
+    if (cacheValue == null) {
+      throw new GarbageCollectionException(
+              String.format("Retrieved null cacheValue for snapshotId=%s "
+                      + "from cloud event: id=%s, subject=%s, type=%s",
+                      snapshotId, gcEvent.getId(), gcEvent.getSubject(), gcEvent.getType()));
+    }
     cacheValue.update(gcEvent, GarbageCollectionEvent::isLastPage);
 
     if (cacheValue.allPagesReceived()) {
@@ -173,6 +192,9 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
           throws GarbageCollectionException {
     validateSnapshotMetadata(gcEvent);
     MetadataChange metadataChange = gcEvent.getMetadataChange();
+    if (metadataChange == null) {
+      throw new GarbageCollectionException("MetadataChange is null for kafka cluster snapshot.");
+    }
     validateLogicalClusterMetadata(metadataChange, true);
 
     String snapshotId = gcEvent.getSnapshotId();
@@ -180,6 +202,12 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
     long timestamp = gcEvent.getTimestampMs();
 
     CacheValue cacheValue = snapshotCache.get(snapshotId, k -> new CacheValue(tenant));
+    if (cacheValue == null) {
+      throw new GarbageCollectionException(
+              String.format("Retrieved null cacheValue for snapshotId=%s "
+                              + "from cloud event: id=%s, subject=%s, type=%s",
+                      snapshotId, gcEvent.getId(), gcEvent.getSubject(), gcEvent.getType()));
+    }
     cacheValue.update(gcEvent,
             event -> gcEvent.getPage() == gcEvent.getTotalPages() - 1);
 
@@ -190,8 +218,8 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
         for (int i = 0; i < cacheValue.totalPages; i++) {
           metadataChange.getEventsList()
                   .stream()  // ← Stream the list first
-                  .filter(event ->
-                          event.getMetadataCase() == MetadataEvent.MetadataCase.LOGICAL_CLUSTER_METADATA)
+                  .filter(event -> event.getMetadataCase()
+                      == MetadataEvent.MetadataCase.LOGICAL_CLUSTER_METADATA)
                   .map(MetadataEvent::getLogicalClusterMetadata)
                   .forEach(clusterMetadata -> {
                     clusters.add(clusterMetadata.getClusterId());
@@ -211,8 +239,9 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
     MetadataChange metadataChange = gcEvent.getMetadataChange();
     // Call garbageCollector to delete each topic for that tenant
     List<TopicMetadata> topics = metadataChange.getEventsList()
-            .stream()  // ← Stream the list first
-            .filter(event -> event.getMetadataCase() == MetadataEvent.MetadataCase.TOPIC_METADATA)
+            .stream()
+            .filter(event -> event.getMetadataCase()
+                == MetadataEvent.MetadataCase.TOPIC_METADATA)
             .map(MetadataEvent::getTopicMetadata)
             .toList();
     for (TopicMetadata topic : topics) {
@@ -238,7 +267,8 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
     }
   }
 
-  private boolean validateLogicalClusterMetadata(MetadataChange metadataChange, boolean shouldBeActive) {
+  private boolean validateLogicalClusterMetadata(MetadataChange metadataChange,
+                                                 boolean shouldBeActive) {
     /*
       Performs the following checks:
       - LogicalClusterMetadata environment == MetadataChange source
@@ -256,16 +286,17 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
     for (LogicalClusterMetadata clusterMetadata : clusters) {
       String environment = clusterMetadata.getEnvironment();
       if (!environment.equals(source)) {
-        throw new IllegalArgumentException(String.format("LogicalClusterMetadata environment doesn't match source." +
-                        "environment: %s, source: %s", source, environment));
+        throw new IllegalArgumentException(
+            String.format("LogicalClusterMetadata environment doesn't match source. "
+                + "environment: %s, source: %s", source, environment));
       }
       if (shouldBeActive && clusterMetadata.hasDeactivated()) {
         throw new IllegalArgumentException(
-                "LogicalClusterMetadata should be active but was deactivated. Source: " + source );
+            "LogicalClusterMetadata should be active but was deactivated. Source: " + source);
       }
       if (!shouldBeActive && !clusterMetadata.hasDeactivated()) {
         throw new IllegalArgumentException(
-                "LogicalClusterMetadata should be deactivated but was active. Source: " + source );
+            "LogicalClusterMetadata should be deactivated but was active. Source: " + source);
       }
     }
     return true;
@@ -277,19 +308,17 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
       case TOPIC_AND_CLUSTERLINK:
         if (gcEvent.isLastPage() == null) {
           throw new IllegalArgumentException(
-                  String.format("Snapshot header ce_lastpage is missing for cloudEvent: " +
-                          "id={}, subject={}, source={}", gcEvent.getId(), gcEvent.getSubject(),
-                          gcEvent.getMetadataChange().getSource())
-          );
+              String.format("Snapshot header ce_lastpage is missing for cloudEvent: "
+                  + "id={}, subject={}, source={}", gcEvent.getId(), gcEvent.getSubject(),
+                  gcEvent.getMetadataChange().getSource()));
         }
         break;
       case KAFKA_CLUSTER:
         if (gcEvent.getTotalPages() == null) {
           throw new IllegalArgumentException(
-                  String.format("Snapshot header ce_total is missing for cloudEvent: " +
-                                  "id={}, subject={}, source={}", gcEvent.getId(), gcEvent.getSubject(),
-                          gcEvent.getMetadataChange().getSource())
-          );
+              String.format("Snapshot header ce_total is missing for cloudEvent: "
+                  + "id={}, subject={}, source={}", gcEvent.getId(), gcEvent.getSubject(),
+                  gcEvent.getMetadataChange().getSource()));
         }
         break;
       default:
@@ -319,7 +348,7 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
       String type = gcEvent.getType();
       String subject = gcEvent.getSubject();
       // Find the event handler based on op and subject
-      Handler eventHandler = eventHandlers.get(EventHandlerKey.CreateFrom(gcEvent));
+      Handler eventHandler = eventHandlers.get(EventHandlerKey.createFrom(gcEvent));
       if (eventHandler == null) {
         log.debug("No handler is found for type {} and subject {}", type, subject);
         return;
@@ -397,8 +426,10 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
       int pageNumber = gcEvent.getPage();
       MetadataChange metadataChange = gcEvent.getMetadataChange();
       if (pages.containsKey(pageNumber) && !pages.get(pageNumber).equals(metadataChange)) {
-        throw new InconsistentSnapshotPageException("Received the same snapshot page twice with different content. " +
-                String.format("source: %s, pageNumber: %s", metadataChange.getSource(), pageNumber));
+        throw new InconsistentSnapshotPageException(
+            "Received the same snapshot page twice with different content. "
+                + String.format("source: %s, pageNumber: %s",
+                metadataChange.getSource(), pageNumber));
       }
       pages.put(pageNumber, metadataChange);
 
@@ -407,8 +438,8 @@ public class AssociationGarbageCollectionManager implements GarbageCollectionMan
         int totalPages = pageNumber + 1;
         if (this.totalPages != -1 && this.totalPages != totalPages) {
           throw new InconsistentSnapshotPageException(
-                  String.format("totalPages was already set to %s. " +
-                          "It was tried to be updated to %s.", this.totalPages, totalPages));
+              String.format("totalPages was already set to %s. "
+                  + "It was tried to be updated to %s.", this.totalPages, totalPages));
         }
         this.totalPages = totalPages;
       }

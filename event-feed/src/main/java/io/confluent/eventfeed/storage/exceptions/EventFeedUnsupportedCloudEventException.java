@@ -16,15 +16,19 @@
 package io.confluent.eventfeed.storage.exceptions;
 
 public class EventFeedUnsupportedCloudEventException extends EventFeedException {
+
   public EventFeedUnsupportedCloudEventException(String message, Throwable cause) {
     super(message, cause);
   }
+
   public EventFeedUnsupportedCloudEventException(String message) {
     super(message);
   }
+
   public EventFeedUnsupportedCloudEventException(Throwable cause) {
     super(cause);
   }
+
   public EventFeedUnsupportedCloudEventException() {
     super();
   }
