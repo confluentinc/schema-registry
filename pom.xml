@@ -109,7 +109,7 @@
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
-        <spotless.maven.plugin.version>2.30.0</spotless.maven.plugin.version>
+        <spotless.maven.plugin.version>3.2.1</spotless.maven.plugin.version>
     </properties>
 
     <repositories>
