@@ -27,7 +27,9 @@ import io.confluent.kafka.schemaregistry.exceptions.ReferenceExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectNotFoundException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
+import io.confluent.kafka.schemaregistry.exceptions.SubjectSoftDeletedException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
@@ -144,7 +146,9 @@ public class SubjectsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        String originalGuid = matchingSchema.getGuid();
         matchingSchema.setSchema(parsedSchema.formattedString(format));
+        matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
@@ -203,7 +207,9 @@ public class SubjectsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(matchingSchema, false, false);
+        String originalGuid = matchingSchema.getGuid();
         matchingSchema.setSchema(parsedSchema.formattedString(format));
+        matchingSchema.setGuid(originalGuid);
       }
     } catch (InvalidSchemaException e) {
       throw Errors.invalidSchemaException(e);
@@ -305,12 +311,6 @@ public class SubjectsResource {
 
     List<Integer> deletedVersions;
     try {
-      if (!schemaRegistry.hasSubjects(subject, true)) {
-        throw Errors.subjectNotFoundException(subject);
-      }
-      if (!permanentDelete && !schemaRegistry.hasSubjects(subject, false)) {
-        throw Errors.subjectSoftDeletedException(subject);
-      }
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
           headers, schemaRegistry.config().whitelistHeaders());
       deletedVersions = schemaRegistry.deleteSubjectOrForward(headerProperties,
@@ -322,6 +322,10 @@ public class SubjectsResource {
       throw Errors.referenceExistsException(e.getMessage());
     } catch (SubjectNotSoftDeletedException e) {
       throw Errors.subjectNotSoftDeletedException(subject);
+    } catch (SubjectNotFoundException e) {
+      throw Errors.subjectNotFoundException(subject);
+    } catch (SubjectSoftDeletedException e) {
+      throw Errors.subjectSoftDeletedException(subject);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
     } catch (SchemaRegistryTimeoutException e) {

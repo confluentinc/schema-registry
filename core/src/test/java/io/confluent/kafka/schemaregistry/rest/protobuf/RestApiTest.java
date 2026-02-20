@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -832,6 +833,41 @@ public abstract class RestApiTest {
     assertEquals(schemaString, result.getSchema());
     assertEquals((Integer) 8, result.getVersion());
     assertEquals("8", result.getMetadata().getProperties().get("confluent:version"));
+  }
+
+  @Test
+  public void testGuidIsCorrectWithSerializedFormat() throws Exception {
+    String subject = "testSubject";
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package io.confluent.kafka.serializers.protobuf.test;\n"
+        + "\n"
+        + "message MyRecord {\n"
+        + "  string f1 = 1;\n"
+        + "}\n";
+
+    restApp.restClient.registerSchema(schemaString, ProtobufSchema.TYPE,
+        Collections.emptyList(), subject);
+
+    // Fetch the canonical version and record the guid
+    Schema canonical = restApp.restClient.getLatestVersion(subject);
+    String expectedGuid = canonical.getGuid();
+
+    // getLatestVersion with format=serialized (SubjectVersionsResource.getSchemaByVersion)
+    Schema serializedByVersion = restApp.restClient.getLatestVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, "serialized", null);
+    assertFalse(schemaString.equals(serializedByVersion.getSchema()),
+        "Serialized schema string should differ from the canonical string");
+    assertEquals(expectedGuid, serializedByVersion.getGuid(),
+        "Guid should be unchanged when format=serialized is used in getLatestVersion");
+
+    // lookUpSubjectVersion with format=serialized (SubjectsResource.lookUpSchemaUnderSubject)
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType(ProtobufSchema.TYPE);
+    Schema serializedByLookup = restApp.restClient.lookUpSubjectVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, request, subject, false, "serialized", false);
+    assertEquals(expectedGuid, serializedByLookup.getGuid(),
+        "Guid should be unchanged when format=serialized is used in lookUpSubjectVersion");
   }
 
   public void registerAndVerifySchema(

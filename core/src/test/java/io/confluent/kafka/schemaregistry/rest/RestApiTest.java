@@ -2494,6 +2494,33 @@ public abstract class RestApiTest {
 
 
   @Test
+  public void testDeleteNonExistentSubject() throws Exception {
+    String subject = "never-registered-subject";
+
+    // Soft delete of a subject that was never registered should return SUBJECT_NOT_FOUND.
+    try {
+      restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject);
+      fail(String.format("Subject %s should not be found", subject));
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode(),
+          "Soft-deleting a non-existent subject should return subject not found error code"
+      );
+    }
+
+    // Permanent delete of a subject that was never registered should also return SUBJECT_NOT_FOUND.
+    try {
+      restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true);
+      fail(String.format("Subject %s should not be found", subject));
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.SUBJECT_NOT_FOUND_ERROR_CODE, rce.getErrorCode(),
+          "Hard-deleting a non-existent subject should return subject not found error code"
+      );
+    }
+  }
+
+  @Test
   public void testDeleteSubjectPermanent() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";

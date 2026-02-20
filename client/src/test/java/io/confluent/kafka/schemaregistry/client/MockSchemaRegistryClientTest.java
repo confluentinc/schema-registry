@@ -496,36 +496,41 @@ public class MockSchemaRegistryClientTest {
         assertNull("Update association back to strong should succeed.", e);
       }
 
-      // Change to frozen should succeed.
-      // final state: strong, frozen
+      // Changing the frozen attribute on an existing association is not allowed.
       createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueFrozen(true).build();
+              .valueLifecycle(LifecyclePolicy.STRONG).valueFrozen(true).build();
       try {
         client.createOrUpdateAssociation(createRequest);
+        fail("Expected exception - changing frozen attribute is not allowed");
       } catch (Exception e) {
-        assertNull("Update association to strong frozen should succeed.", e);
+        assertNotNull("Changing the frozen attribute should fail.", e);
       }
 
-      // Change to non-frozen should fail.
-      // final state: strong, frozen
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueFrozen(false).build();
+      // Creating a frozen association on a new subject with a schema should succeed.
+      String frozenSubject = "frozenValue";
+      String frozenResourceId = "frozen-resource-id";
+      createRequest = new AssociationCreateOrUpdateRequest(
+              "frozen-resource", defaultResourceNamespace, frozenResourceId, TOPIC,
+              Collections.singletonList(new AssociationCreateOrUpdateInfo(
+                      frozenSubject, VALUE, LifecyclePolicy.STRONG, true,
+                      new RegisterSchemaRequest(new Schema(null, null, null, null, null, SIMPLE_AVRO_SCHEMA)),
+                      false)));
       try {
         client.createOrUpdateAssociation(createRequest);
-        fail();
       } catch (Exception e) {
-        assertNotNull("Update association back to strong non-frozen should fail.", e);
+        assertNull("Creating a frozen association with schema on new subject should succeed.", e);
       }
 
-      // Change to weak should fail.
-      // final state: strong, frozen
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueLifecycle(LifecyclePolicy.WEAK).build();
+      // Any update to a frozen association should fail.
+      AssociationCreateOrUpdateRequest updateRequest = new AssociationCreateOrUpdateRequest(
+              "frozen-resource", defaultResourceNamespace, frozenResourceId, TOPIC,
+              Collections.singletonList(new AssociationCreateOrUpdateInfo(
+                      frozenSubject, VALUE, LifecyclePolicy.STRONG, false, null, false)));
       try {
-        client.createOrUpdateAssociation(createRequest);
-        fail();
+        client.createOrUpdateAssociation(updateRequest);
+        fail("Expected exception - updating a frozen association is not allowed");
       } catch (Exception e) {
-        assertNotNull("Update association back to weak when frozen was set should fail.", e);
+        assertNotNull("Updating a frozen association should fail.", e);
       }
     }
 
