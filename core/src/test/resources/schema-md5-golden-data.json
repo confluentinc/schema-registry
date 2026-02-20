@@ -1,0 +1,129 @@
+{
+  "schemas": {
+    "avro": "{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"io.confluent.kafka.example\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"age\",\"type\":\"int\"},{\"name\":\"ssn\",\"type\":\"string\"},{\"name\":\"user\",\"type\":\"io.confluent.kafka.example.User\"},{\"name\":\"address\",\"type\":\"io.confluent.kafka.example.Address\"}]}",
+    "protobuf": "syntax = \"proto3\";\npackage io.confluent.kafka.example;\nimport \"google/protobuf/timestamp.proto\";\nmessage Person {\n  string name = 1;\n  int32 age = 2;\n  string ssn = 3;\n  User user = 4;\n  Address address = 5;\n}\nmessage User {\n  string id = 1;\n  string email = 2;\n}\nmessage Address {\n  string street = 1;\n  string city = 2;\n  string zip = 3;\n}",
+    "json": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"type\": \"object\",\n  \"title\": \"Person\",\n  \"properties\": {\n    \"name\": {\n      \"type\": \"string\"\n    },\n    \"age\": {\n      \"type\": \"integer\",\n      \"minimum\": 0\n    },\n    \"ssn\": {\n      \"type\": \"string\",\n      \"pattern\": \"^[0-9]{3}-[0-9]{2}-[0-9]{4}$\"\n    },\n    \"user\": {\n      \"$ref\": \"#/definitions/User\"\n    },\n    \"address\": {\n      \"$ref\": \"#/definitions/Address\"\n    }\n  },\n  \"required\": [\"name\", \"age\"],\n  \"definitions\": {\n    \"User\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"id\": {\"type\": \"string\"},\n        \"email\": {\"type\": \"string\", \"format\": \"email\"}\n      }\n    },\n    \"Address\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"street\": {\"type\": \"string\"},\n        \"city\": {\"type\": \"string\"},\n        \"zip\": {\"type\": \"string\"}\n      }\n    }\n  }\n}"
+  },
+  "references": [
+    {
+      "name": "io.confluent.kafka.example.User",
+      "subject": "User",
+      "version": 1
+    },
+    {
+      "name": "io.confluent.kafka.example.Address",
+      "subject": "Address",
+      "version": 2
+    }
+  ],
+  "metadata": {
+    "tags": {
+      "environment": ["production", "staging"],
+      "team": ["data-engineering"]
+    },
+    "properties": {
+      "description": "Person schema for user management",
+      "owner": "data-team",
+      "version": "1.0.0"
+    },
+    "sensitive": ["credit-card", "ssn"]
+  },
+  "rules": {
+    "migrationRules": [
+      {
+        "name": "upgrade-rule-1",
+        "doc": "Upgrade rule for field changes",
+        "kind": "TRANSFORM",
+        "mode": "UPGRADE",
+        "type": "FIELD_UPDATE",
+        "tags": ["PERSON"],
+        "params": {
+          "field": "name"
+        },
+        "expr": "field.name = field.name.toUpperCase()",
+        "onSuccess": "none",
+        "onFailure": "error",
+        "disabled": false
+      },
+      {
+        "name": "downgrade-rule-1",
+        "doc": "Downgrade rule for compatibility",
+        "kind": "TRANSFORM",
+        "mode": "DOWNGRADE",
+        "type": "FIELD_DELETE",
+        "tags": ["PERSON"],
+        "params": {
+          "field": "ssn"
+        },
+        "expr": "delete field.ssn",
+        "onSuccess": "none",
+        "onFailure": "error",
+        "disabled": false
+      }
+    ],
+    "domainRules": [
+      {
+        "name": "validation-rule-1",
+        "doc": "Validate age field",
+        "kind": "CONDITION",
+        "mode": "WRITE",
+        "type": "FIELD_VALIDATION",
+        "tags": ["PERSON"],
+        "params": {
+          "field": "age"
+        },
+        "expr": "field.age >= 0 && field.age <= 150",
+        "onSuccess": "none",
+        "onFailure": "error",
+        "disabled": false
+      },
+      {
+        "name": "masking-rule-1",
+        "doc": "Mask sensitive data on read",
+        "kind": "TRANSFORM",
+        "mode": "READ",
+        "type": "DATA_MASKING",
+        "tags": ["PERSON"],
+        "params": {
+          "field": "ssn"
+        },
+        "expr": "field.ssn = '***-**-****'",
+        "onSuccess": "none",
+        "onFailure": "error",
+        "disabled": false
+      }
+    ]
+  },
+  "expectedHashes": {
+    "AVRO": {
+      "000": "d629bb05-ad85-3d20-fbcb-895de3c459f7",
+      "001": "c0708b8f-65f6-b698-bffe-45c1dfa8987c",
+      "010": "2034166c-90a8-1166-0ff2-f5f62c80dbe0",
+      "011": "d9877161-cfdf-d8c5-4eb4-ab37ed50e9d5",
+      "100": "5c08d70e-5347-41b2-6369-199425d044eb",
+      "101": "96825311-eb10-b7f5-48be-2a023b4c018e",
+      "110": "3619d8e0-2ee8-de51-0d9e-2520d39174d5",
+      "111": "589556fb-ad98-e8e0-94fa-e6da3455433a"
+    },
+    "PROTOBUF": {
+      "000": "fd291f54-9ebf-6b66-69c4-d7c94f57d765",
+      "001": "e0a5944a-07ec-f8b3-2e65-d618095d9b93",
+      "010": "56052a3d-b48e-0af1-2f4e-fb4fc5defed4",
+      "011": "89665e7a-68a3-0750-503e-cab9c5ab6494",
+      "100": "2acee2f0-10ab-9e39-ff5e-a3c6301a16fc",
+      "101": "ca144a0b-d04f-9cdf-5576-bc3e0872c2ec",
+      "110": "1b1cd912-56b3-5aec-ed5e-628e4f8d6b99",
+      "111": "6e27c5d9-341f-eedd-8d14-8e32f414f50e"
+    },
+    "JSON": {
+      "000": "8d9ce1c2-8624-0d98-53ec-66d14051c703",
+      "001": "b1dd5216-670b-476a-bba4-2763ff8720d6",
+      "010": "c1410156-b1ec-346c-3b3b-e8ef9df4fd20",
+      "011": "4f438fbe-c518-fea5-e433-82bd8c77e72f",
+      "100": "ee6044f3-6476-c191-e6b6-e3eceeea87d6",
+      "101": "0476399c-ee06-5d92-14fd-f3afe300b400",
+      "110": "916dad4b-fef3-50ed-25ab-de84bd91c74a",
+      "111": "fbab57e1-71f5-063c-288a-03fbfb24c505"
+      }
+  }
+}

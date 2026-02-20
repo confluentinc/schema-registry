@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
+import java.util.Iterator;
 import java.util.Optional;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
@@ -32,11 +33,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.Map;
@@ -92,12 +91,11 @@ public class KafkaAvroFormatterTest {
     formatter.init(props);
 
     String inputJson = "{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -112,17 +110,47 @@ public class KafkaAvroFormatterTest {
   }
 
   @Test
+  public void testKafkaAvroValueFormatterMultipleRecords() {
+    formatter.init(props);
+
+    String inputJson = "{\"name\":\"myname\"}\n{\"name\":\"myname2\"}\n";
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
+    AvroMessageReader avroReader =
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
+            false, true, false);
+    Iterator<ProducerRecord<byte[], byte[]>> iter = avroReader.readRecords(is);
+    ProducerRecord<byte[], byte[]> message1 = iter.next();
+    ProducerRecord<byte[], byte[]> message2 = iter.next();
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+
+    byte[] serializedValue = message1.value();
+    ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, null, serializedValue);
+    formatter.writeTo(crecord, ps);
+
+    serializedValue = message2.value();
+    crecord = new ConsumerRecord<>(
+        "topic1", 0, 200, null, serializedValue);
+    formatter.writeTo(crecord, ps);
+
+    String outputJson = baos.toString();
+
+    assertEquals("Input value json should match output value json", inputJson, outputJson);
+  }
+
+  @Test
   public void testKafkaAvroKeyValueFormatter() {
     props.put("print.key", "true");
     formatter.init(props);
 
     String inputJson = "10\t{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, intSchema, recordSchema, "topic1", true, reader,
+        new AvroMessageReader(url, intSchema, recordSchema, "topic1", true,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedKey = message.key();
     byte[] serializedValue = message.value();
@@ -147,13 +175,12 @@ public class KafkaAvroFormatterTest {
 
     String inputJson = "{\"name\":\"myname\"}\n";
     String expectedJson = String.format("%s:%d\t%s",
-            timestampType.name, timestamp, inputJson);
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+          timestampType.name, timestamp, inputJson);
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -170,13 +197,12 @@ public class KafkaAvroFormatterTest {
   @Test
   public void testInvalidFormat() {
     String inputJson = "{\"invalid-field-name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
     try {
-      avroReader.readMessage();
+      avroReader.readRecords(is).next();
       fail("Registering an invalid schema should fail");
     } catch (SerializationException e) {
       assertTrue("The cause of the exception should be avro",
@@ -192,12 +218,11 @@ public class KafkaAvroFormatterTest {
 
     String inputJson = "{\"name\":\"myname\"}\n";
     String expectedJson = "TestKey\t"+inputJson;
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedKey = "TestKey".getBytes();
     byte[] serializedValue = message.value();
@@ -225,12 +250,11 @@ public class KafkaAvroFormatterTest {
     String inputJson = "{\"name\":\"myname\"}\n";
     String expectedJson = String.format("%s:%d\tTestKey\t%s",
         timestampType.name, timestamp, inputJson);
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
             false, true, false);
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedKey = "TestKey".getBytes();
     byte[] serializedValue = message.value();
@@ -252,12 +276,11 @@ public class KafkaAvroFormatterTest {
     schemaRegistry.register("topic1-value", new AvroSchema(recordSchema));
 
     String inputJson = "{\"name\":\"myname\"}\n";
-    BufferedReader reader =
-        new BufferedReader(new InputStreamReader(new ByteArrayInputStream(inputJson.getBytes())));
+    InputStream is = new ByteArrayInputStream(inputJson.getBytes());
     AvroMessageReader avroReader =
-        new AvroMessageReader(url, null, recordSchema, "topic1", false, reader,
+        new AvroMessageReader(url, null, recordSchema, "topic1", false,
             false, false, true);
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -294,10 +317,10 @@ public class KafkaAvroFormatterTest {
     // Initialize AvroMessageReader using the same approach that ConsoleProducer uses so we exercise that code
     final Properties properties = new Properties();
     properties.putAll(propertyMap);
-    avroReader.init(is, properties);
+    avroReader.init(properties);
 
     try {
-      ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+      ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
       fail("Expected exception was not thrown. Exception should have been thrown due to schema not present in the " +
               "mock schema registry with the TopicRecordNameStrategy, and auto-register disabled.");
     } catch (SerializationException e) {
@@ -308,7 +331,7 @@ public class KafkaAvroFormatterTest {
     schemaRegistryClient.register(topicName + "-" + recordSchema.getFullName(), new AvroSchema(recordSchema));
 
     is.reset();
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
 
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -352,9 +375,9 @@ public class KafkaAvroFormatterTest {
     // Initialize AvroMessageReader using the same approach that ConsoleProducer uses so we exercise that code
     final Properties properties = new Properties();
     properties.putAll(propertyMap);
-    avroReader.init(is, properties);
+    avroReader.init(properties);
 
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
     byte[] serializedKey = message.key();
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -400,9 +423,9 @@ public class KafkaAvroFormatterTest {
     // Initialize AvroMessageReader using the same approach that ConsoleProducer uses so we exercise that code
     final Properties properties = new Properties();
     properties.putAll(propertyMap);
-    avroReader.init(is, properties);
+    avroReader.init(properties);
 
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
     byte[] serializedKey = message.key();
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -450,9 +473,9 @@ public class KafkaAvroFormatterTest {
     // Initialize AvroMessageReader using the same approach that ConsoleProducer uses so we exercise that code
     final Properties properties = new Properties();
     properties.putAll(propertyMap);
-    avroReader.init(is, properties);
+    avroReader.init(properties);
 
-    ProducerRecord<byte[], byte[]> message = avroReader.readMessage();
+    ProducerRecord<byte[], byte[]> message = avroReader.readRecords(is).next();
     byte[] serializedKey = message.key();
     byte[] serializedValue = message.value();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
