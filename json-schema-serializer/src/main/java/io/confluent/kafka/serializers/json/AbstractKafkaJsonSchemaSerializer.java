@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.json.SpecificationVersion;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
@@ -54,6 +53,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean autoRegisterSchema;
   protected boolean propagateSchemaTags;
   protected int useSchemaId = -1;
+  protected String useSchemaGuid = null;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
@@ -69,6 +69,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.autoRegisterSchema = config.autoRegisterSchema();
     this.propagateSchemaTags = config.propagateSchemaTags();
     this.useSchemaId = config.useSchemaId();
+    this.useSchemaGuid = config.useSchemaGuid();
     this.idCompatStrict = config.getIdCompatibilityStrict();
     this.latestCompatStrict = config.getLatestCompatibilityStrict();
     boolean prettyPrint = config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_INDENT_OUTPUT);
@@ -150,9 +151,13 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         restClientErrorMsg = "Error retrieving schema ID";
         schema = (JsonSchema)
             lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        Schema schemaEntity = new Schema(subject, null, useSchemaId, schema);
         // omit the GUID when useSchemaId is set
         schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, (String) null);
+      } else if (useSchemaGuid != null) {
+        restClientErrorMsg = "Error retrieving schema GUID";
+        schema = (JsonSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
+        // omit the ID when useSchemaGuid is set
+        schemaId = new SchemaId(JsonSchema.TYPE, null, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
