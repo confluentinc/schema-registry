@@ -18,7 +18,6 @@ package io.confluent.kafka.schemaregistry.utils;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -218,13 +217,17 @@ public class QualifiedSubjectTest {
   }
 
   @Test
-  public void testIsGlobalContext() {
-    assertFalse(QualifiedSubject.isGlobalContext("default", ":" + DEFAULT_CONTEXT + ":foo"));
-    assertFalse(QualifiedSubject.isGlobalContext("default", ":" + DEFAULT_CONTEXT + ":"));
-    assertFalse(QualifiedSubject.isGlobalContext("default", "foo"));
-    assertFalse(QualifiedSubject.isGlobalContext("default", ":" + GLOBAL_CONTEXT_NAME + ":foo"));
-    assertTrue(QualifiedSubject.isGlobalContext("default", ":" + GLOBAL_CONTEXT_NAME + ":"));
-    assertTrue(QualifiedSubject.isGlobalContext("default", ":" + GLOBAL_CONTEXT_NAME));
+  public void testSubjectInContextCheck() {
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", "foo", QualifiedSubject.create("default", ":.:")));
+    assertFalse(QualifiedSubject.isSubjectInContext(
+        "default", "foo", QualifiedSubject.create("default", ":.bar:")));
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", ":.bar:foo", QualifiedSubject.create("default", ":.bar:")));
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", "foo", QualifiedSubject.create("default", ":.__GLOBAL:")));
+    assertTrue(QualifiedSubject.isSubjectInContext(
+        "default", ":.bar:foo", QualifiedSubject.create("default", ":.__GLOBAL:")));
   }
 
   @Test

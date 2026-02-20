@@ -31,10 +31,10 @@ for %%i in (confluent-common, rest-utils, schema-registry) do (
 
 rem Log4j settings
 IF ["%SCHEMA_REGISTRY_LOG4J_OPTS%"] EQU [""] (
-	if exist %~dp0../../etc/schema-registry/log4j.properties (
-		set SCHEMA_REGISTRY_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../etc/schema-registry/log4j.properties
+	if exist %~dp0../../etc/schema-registry/log4j2.yaml (
+		set SCHEMA_REGISTRY_LOG4J_OPTS=-Dlog4j2.configurationFile=%~dp0../../etc/schema-registry/log4j2.yaml
 	) else (
-		set SCHEMA_REGISTRY_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/log4j.properties
+		set SCHEMA_REGISTRY_LOG4J_OPTS=-Dlog4j2.configurationFile=%BASE_DIR%/config/log4j2.yaml
 	)
 )
 

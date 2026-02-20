@@ -23,7 +23,12 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -32,12 +37,14 @@ import io.confluent.kafka.serializers.protobuf.test.CustomOptions2;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValueOuterClass.DecimalValue;
 import io.confluent.kafka.serializers.protobuf.test.DecimalValuePb2OuterClass.DecimalValuePb2;
 import io.confluent.kafka.serializers.protobuf.test.Ranges;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -129,11 +136,7 @@ public class KafkaProtobufSerializerTest {
           .build();
 
   public KafkaProtobufSerializerTest() {
-    serializerConfig = new Properties();
-    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
-    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
-    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_FORMAT, "ignore_extensions");
+    serializerConfig = createSerializerConfig();
     schemaRegistry = new MockSchemaRegistryClient(ImmutableList.of(new ProtobufSchemaProvider()));
     protobufSerializer = new KafkaProtobufSerializer(schemaRegistry, new HashMap(serializerConfig));
 
@@ -198,6 +201,15 @@ public class KafkaProtobufSerializerTest {
     topic = "test";
   }
 
+  protected Properties createSerializerConfig() {
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaProtobufSerializerConfig.NORMALIZE_SCHEMAS, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_FORMAT, "ignore_extensions");
+    return serializerConfig;
+  }
+
   public static Object getField(DynamicMessage message, String fieldName) {
     for (Map.Entry<Descriptors.FieldDescriptor, Object> entry : message.getAllFields().entrySet()) {
       if (entry.getKey().getName().equals(fieldName)) {
@@ -212,88 +224,111 @@ public class KafkaProtobufSerializerTest {
     byte[] bytes;
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
-    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
+
+    ParsedSchemaAndValue schemaAndValue = testMessageDeserializer.deserializeWithSchema(topic, headers, bytes);
+    ProtobufSchema expectedSchema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(HELLO_WORLD_MESSAGE, schemaAndValue.getValue());
 
     // specific -> derived
-    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
-    assertEquals(HELLO_WORLD_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, deriveTypeDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
-    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(HELLO_WORLD_MESSAGE.getTestString(), getField(message, "test_string"));
     assertEquals(HELLO_WORLD_MESSAGE.getTestInt32(), getField(message, "test_int32"));
 
     // dynamic -> specific
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> derived
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(HELLO_WORLD_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(HELLO_WORLD_MESSAGE, deriveTypeDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> dynamic
-    bytes = protobufSerializer.serialize(topic, message);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(HELLO_WORLD_MESSAGE.getTestString(), getField(message, "test_string"));
     assertEquals(HELLO_WORLD_MESSAGE.getTestInt32(), getField(message, "test_int32"));
 
 
     // specific -> derived
-    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE2);
-    assertEquals(HELLO_WORLD_MESSAGE2, deriveTypeDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE2);
+    assertEquals(HELLO_WORLD_MESSAGE2, deriveTypeDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE2);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE2);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(HELLO_WORLD_MESSAGE2.getTestString(), getField(message, "test_string"));
     assertEquals(HELLO_WORLD_MESSAGE2.getTestInt32(), getField(message, "test_int32"));
 
     // dynamic -> derived
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(HELLO_WORLD_MESSAGE2, deriveTypeDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(HELLO_WORLD_MESSAGE2, deriveTypeDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> dynamic
-    bytes = protobufSerializer.serialize(topic, message);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(HELLO_WORLD_MESSAGE2.getTestString(), getField(message, "test_string"));
     assertEquals(HELLO_WORLD_MESSAGE2.getTestInt32(), getField(message, "test_int32"));
 
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);
-    assertEquals(NESTED_MESSAGE, nestedMessageDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, NESTED_MESSAGE);
+    assertEquals(NESTED_MESSAGE, nestedMessageDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> derived
-    bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);
-    assertEquals(NESTED_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, NESTED_MESSAGE);
+    assertEquals(NESTED_MESSAGE, deriveTypeDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, NESTED_MESSAGE);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, NESTED_MESSAGE);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(NESTED_MESSAGE.getUserId().getKafkaUserId(),
         getField((DynamicMessage) getField(message, "user_id"), "kafka_user_id")
     );
 
     // dynamic -> specific
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(NESTED_MESSAGE, nestedMessageDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(NESTED_MESSAGE, nestedMessageDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> derived
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(NESTED_MESSAGE, deriveTypeDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(NESTED_MESSAGE, deriveTypeDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, message);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(NESTED_MESSAGE.getUserId().getKafkaUserId(),
         getField((DynamicMessage) getField(message, "user_id"), "kafka_user_id")
     );
 
     // null -> null
-    bytes = protobufSerializer.serialize(topic, null);
-    assertEquals(null, protobufDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, null);
+    assertEquals(null, protobufDeserializer.deserialize(topic, headers, bytes));
   }
 
 
@@ -315,12 +350,14 @@ public class KafkaProtobufSerializerTest {
     byte[] bytes;
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, DEPENDENCY_MESSAGE);
-    assertEquals(DEPENDENCY_MESSAGE, dependencyMessageDeserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, DEPENDENCY_MESSAGE);
+    assertEquals(DEPENDENCY_MESSAGE, dependencyMessageDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, DEPENDENCY_MESSAGE);
-    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, DEPENDENCY_MESSAGE);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(DEPENDENCY_MESSAGE.getNestedMessage().getUserId().getKafkaUserId(),
         getField((DynamicMessage) getField((DynamicMessage) getField(message, "nested_message"),
             "user_id"
@@ -333,12 +370,14 @@ public class KafkaProtobufSerializerTest {
     byte[] bytes;
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, ENUM_REF);
-    assertEquals(ENUM_REF, enumRefDeserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, ENUM_REF);
+    assertEquals(ENUM_REF, enumRefDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, ENUM_REF);
-    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, ENUM_REF);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(ENUM_REF.getEnumRoot().name(), ((EnumValueDescriptor) getField(message, "enum_root")).getName());
   }
 
@@ -347,12 +386,14 @@ public class KafkaProtobufSerializerTest {
     byte[] bytes;
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, INNER_MESSAGE);
-    assertEquals(INNER_MESSAGE, innerMessageDeserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, INNER_MESSAGE);
+    assertEquals(INNER_MESSAGE, innerMessageDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, INNER_MESSAGE);
-    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, INNER_MESSAGE);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(INNER_MESSAGE.getId(), getField(message, "id"));
   }
 
@@ -376,43 +417,51 @@ public class KafkaProtobufSerializerTest {
     byte[] bytes;
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE);
-    assertEquals(OPTIONAL_MESSAGE, optionalMessageDeserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, OPTIONAL_MESSAGE);
+    assertEquals(OPTIONAL_MESSAGE, optionalMessageDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE);
-    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, OPTIONAL_MESSAGE);
+    DynamicMessage message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
     assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
     // dynamic -> specific
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(OPTIONAL_MESSAGE, optionalMessageDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(OPTIONAL_MESSAGE, optionalMessageDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> dynamic
-    bytes = protobufSerializer.serialize(topic, message);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(OPTIONAL_MESSAGE.getTestString(), getField(message, "test_string"));
     assertEquals(false, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
 
     // specific -> specific
-    bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE_DEFAULT);
-    assertEquals(OPTIONAL_MESSAGE_DEFAULT, optionalMessageDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, OPTIONAL_MESSAGE_DEFAULT);
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT, optionalMessageDeserializer.deserialize(topic, headers, bytes));
 
     // specific -> dynamic
-    bytes = protobufSerializer.serialize(topic, OPTIONAL_MESSAGE_DEFAULT);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, OPTIONAL_MESSAGE_DEFAULT);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
     assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
     // dynamic -> specific
-    bytes = protobufSerializer.serialize(topic, message);
-    assertEquals(OPTIONAL_MESSAGE_DEFAULT, optionalMessageDeserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    assertEquals(OPTIONAL_MESSAGE_DEFAULT, optionalMessageDeserializer.deserialize(topic, headers, bytes));
 
     // dynamic -> dynamic
-    bytes = protobufSerializer.serialize(topic, message);
-    message = (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    headers = new RecordHeaders();
+    bytes = protobufSerializer.serialize(topic, headers, message);
+    message = (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
     assertEquals(OPTIONAL_MESSAGE_DEFAULT.getTestString(), getField(message, "test_string"));
     assertEquals(true, message.hasField(message.getDescriptorForType().findFieldByName("test_optional_string")));
 
@@ -589,7 +638,8 @@ public class KafkaProtobufSerializerTest {
     String noCustSchema = schema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
     assertEquals(expected, noCustSchema);
 
-    protobufSerializer.serialize(topic, CUSTOM_MESSAGE_OPTIONS);
+    RecordHeaders headers = new RecordHeaders();
+    protobufSerializer.serialize(topic, headers, CUSTOM_MESSAGE_OPTIONS);
     ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 1);
     assertEquals(expected, retrievedSchema.canonicalString());
   }
@@ -687,7 +737,8 @@ public class KafkaProtobufSerializerTest {
     String noCustSchema = schema.formattedString(Format.IGNORE_EXTENSIONS.symbol());
     assertEquals(expected, noCustSchema);
 
-    protobufSerializer.serialize(topic, FOO_BAR);
+    RecordHeaders headers = new RecordHeaders();
+    protobufSerializer.serialize(topic, headers, FOO_BAR);
     ParsedSchema retrievedSchema = schemaRegistry.getSchemaBySubjectAndId(topic + "-value", 1);
     assertEquals(expected, retrievedSchema.canonicalString());
   }
@@ -792,6 +843,50 @@ public class KafkaProtobufSerializerTest {
   }
 
   @Test
+  public void testKafkaProtobufDeserializerWithAssociatedNameStrategy()
+      throws IOException, RestClientException {
+    ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
+    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        topic,
+        "myresourcens",
+        "123",
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                "mysubject",
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                valueRequest,
+                null
+            )
+        )
+    );
+    schemaRegistry.createAssociation(request);
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaProtobufDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaProtobufDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+    );
+    protobufSerializer.configure(configs, false);
+    protobufDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
+
+    // restore configs
+    protobufSerializer.configure(new HashMap(serializerConfig), false);
+    testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test
   public void testKafkaProtobufDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
       throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
@@ -808,8 +903,9 @@ public class KafkaProtobufSerializerTest {
     testMessageDeserializer.configure(configs, false);
     ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
     schemaRegistry.register("io.confluent.kafka.serializers.protobuf.test.TestMessage", schema);
-    byte[] bytes = protobufSerializer.serialize(topic, HELLO_WORLD_MESSAGE);
-    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
 
     // restore configs
     protobufSerializer.configure(new HashMap(serializerConfig), false);
@@ -852,4 +948,38 @@ public class KafkaProtobufSerializerTest {
     assertEquals(2, id);
   }
 
+  @Test
+  public void testDeserializeWithSchemaFunction() {
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+
+    // Create a reader schema from the message descriptor
+    ProtobufSchema readerSchema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+
+    // Test deserializeWithSchema with a function that returns a different schema instance
+    // This exercises the else-if branch that calls schemaWithName on the reader schema
+    ParsedSchemaAndValue schemaAndValue = testMessageDeserializer.deserializeWithSchema(
+        topic, headers, bytes, writerSchema -> readerSchema);
+
+    // The returned schema should have the correct message name set via schemaWithName
+    assertEquals("io.confluent.kafka.serializers.protobuf.test.TestMessage", schemaAndValue.getSchema().name());
+    assertEquals(HELLO_WORLD_MESSAGE, schemaAndValue.getValue());
+  }
+
+  @Test
+  public void testDeserializeNestedMessageWithSchemaFunction() {
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, NESTED_MESSAGE);
+
+    // Create a reader schema from the nested message descriptor
+    ProtobufSchema readerSchema = new ProtobufSchema(NESTED_MESSAGE.getDescriptorForType());
+
+    // Test with nested message to ensure schemaWithName handles nested types correctly
+    ParsedSchemaAndValue schemaAndValue = nestedMessageDeserializer.deserializeWithSchema(
+        topic, headers, bytes, writerSchema -> readerSchema);
+
+    // The returned schema should have the correct message name
+    assertEquals("io.confluent.kafka.serializers.protobuf.test.NestedMessage", schemaAndValue.getSchema().name());
+    assertEquals(NESTED_MESSAGE, schemaAndValue.getValue());
+  }
 }

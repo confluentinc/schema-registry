@@ -15,40 +15,50 @@
 
 package io.confluent.kafka.schemaregistry.storage.encoder;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaValue;
-import io.kcache.Cache;
-import io.kcache.utils.InMemoryCache;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import org.junit.Test;
 
-public class MetadataEncoderServiceTest {
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-  @Test
-  public void testEncoding() throws Exception {
-    KafkaSchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
+public abstract class MetadataEncoderServiceTest {
+  protected SchemaRegistry schemaRegistry;
+  protected MetadataEncoderService encoderService;
+
+  public MetadataEncoderServiceTest() throws Exception {
+    this.schemaRegistry = mock(SchemaRegistry.class);
     Properties props = new Properties();
     props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     when(schemaRegistry.config()).thenReturn(config);
-    Cache<String, KeysetWrapper> encoders = new InMemoryCache<>();
-    MetadataEncoderService encoderService = new MetadataEncoderService(schemaRegistry, encoders);
-    encoderService.init();
+  }
 
+  @BeforeEach
+  public void setup() throws Exception {
+    encoderService.init();
+  }
+
+  @AfterEach
+  public void teardown() {
+    encoderService.close();
+  }
+
+  @Test
+  public void testEncoding() throws Exception {
     Map<String, String> properties = new HashMap<>();
     properties.put("nonsensitive", "foo");
     properties.put("sensitive", "foo");
@@ -58,9 +68,9 @@ public class MetadataEncoderServiceTest {
         "mysubject", null, null, null, null, null,
         new io.confluent.kafka.schemaregistry.storage.Metadata(metadata), null, "true", false);
     encoderService.encodeMetadata(schema);
-    assertEquals(schema.getMetadata().getProperties().get("nonsensitive"), "foo");
+    assertEquals("foo", schema.getMetadata().getProperties().get("nonsensitive"));
     // the value of "sensitive" is encrypted
-    assertNotEquals(schema.getMetadata().getProperties().get("sensitive"), "foo");
+    assertNotEquals("foo", schema.getMetadata().getProperties().get("sensitive"));
     assertNotNull(schema.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
 
     SchemaValue schema2 = new SchemaValue(
@@ -68,9 +78,9 @@ public class MetadataEncoderServiceTest {
         new io.confluent.kafka.schemaregistry.storage.Metadata(
             schema.getMetadata().toMetadataEntity()), null, "true", false);
     encoderService.decodeMetadata(schema2);
-    assertEquals(schema2.getMetadata().getProperties().get("nonsensitive"), "foo");
+    assertEquals("foo", schema2.getMetadata().getProperties().get("nonsensitive"));
     // the value of "sensitive" is decrypted
-    assertEquals(schema2.getMetadata().getProperties().get("sensitive"), "foo");
+    assertEquals("foo", schema2.getMetadata().getProperties().get("sensitive"));
     assertNull(schema2.getMetadata().getProperties().get(SchemaValue.ENCODED_PROPERTY));
   }
 }

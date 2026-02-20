@@ -18,18 +18,37 @@ package io.confluent.kafka.schemaregistry.client;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+
 import java.util.LinkedHashSet;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.Arrays;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,9 +57,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
 import java.io.IOException;
@@ -64,39 +80,120 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final Logger log = LoggerFactory.getLogger(MockSchemaRegistryClient.class);
 
+  private static final int DEFAULT_CAPACITY = 1000;
+  private static final String RESOURCE_WILDCARD = "-";
   private static final String WILDCARD = "*";
+  private static final String DEFAULT_RESOURCE_TYPE = "topic";
+  private static final String DEFAULT_ASSOCIATION_TYPE = "value";
+  private static final LifecyclePolicy DEFAULT_LIFECYCLE_POLICY = LifecyclePolicy.STRONG;
+  private static final Map<String, List<String>> RESOURCE_TYPE_TO_ASSOC_TYPE_MAP =
+          new HashMap<String, List<String>>() {{
+            put(DEFAULT_RESOURCE_TYPE, Arrays.asList("key", DEFAULT_ASSOCIATION_TYPE));
+          }};
 
   private Config defaultConfig = new Config("BACKWARD");
-  private final Map<String, Map<ParsedSchema, Integer>> schemaToIdCache;
+  private final Map<String, Map<ParsedSchema, RegisterSchemaResponse>> schemaToResponseCache;
   private final Map<String, Map<ParsedSchema, Integer>> registeredSchemaCache;
   private final Map<String, Map<Integer, ParsedSchema>> idToSchemaCache;
+  private final Map<String, ParsedSchema> guidToSchemaCache;
   private final Map<String, Map<ParsedSchema, Integer>> schemaToVersionCache;
   private final Map<String, Config> configCache;
+  private final Map<String, List<Association>> subjectToAssocCache;
+  private final Map<ResourceAndAssocType, Association> resourceAndAssocTypeCache;
+  private final Map<String, List<Association>> resourceIdToAssocCache;
+  private final Map<String, Map<String, List<Association>>> resourceNameToAssocCache;
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
-  private final Map<String, SchemaProvider> providers;
+  private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
+  private final Map<String, SchemaProvider> providers = new HashMap<>();
 
   private static final String NO_SUBJECT = "";
+
+  private static class ResourceAndAssocType {
+    String resourceId;
+    String resourceType;
+    String associationType;
+
+    public ResourceAndAssocType(String resourceId,
+                                String resourceType,
+                                String associationType) {
+      this.resourceId = resourceId;
+      this.resourceType = resourceType;
+      this.associationType = associationType;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(resourceId, resourceType, associationType);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (obj == null || getClass() != obj.getClass()) {
+        return false;
+      }
+      ResourceAndAssocType other = (ResourceAndAssocType) obj;
+      return Objects.equals(resourceId, other.resourceId)
+              && Objects.equals(resourceType, other.resourceType)
+              && Objects.equals(associationType, other.associationType);
+    }
+  }
 
   public MockSchemaRegistryClient() {
     this(null);
   }
 
   public MockSchemaRegistryClient(List<SchemaProvider> providers) {
-    schemaToIdCache = new ConcurrentHashMap<>();
+    schemaToResponseCache = new ConcurrentHashMap<>();
     registeredSchemaCache = new ConcurrentHashMap<>();
     idToSchemaCache = new ConcurrentHashMap<>();
+    guidToSchemaCache = new ConcurrentHashMap<>();
     schemaToVersionCache = new ConcurrentHashMap<>();
     configCache = new ConcurrentHashMap<>();
+    subjectToAssocCache = new ConcurrentHashMap<>();
+    resourceAndAssocTypeCache = new ConcurrentHashMap<>();
+    resourceIdToAssocCache = new ConcurrentHashMap<>();
+    resourceNameToAssocCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
     ids = new ConcurrentHashMap<>();
-    this.providers = providers != null && !providers.isEmpty()
-                     ? providers.stream()
-                           .collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
-                     : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
-    Map<String, Object> schemaProviderConfigs = new HashMap<>();
-    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
-    for (SchemaProvider provider : this.providers.values()) {
+    if (providers == null || providers.isEmpty()) {
+      providers = Collections.singletonList(new AvroSchemaProvider());
+    }
+    addProviders(providers);
+
+    final Map<String, SchemaProvider> schemaProviders = this.providers;
+    this.parsedSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CAPACITY)
+        .build(new CacheLoader<Schema, ParsedSchema>() {
+          @Override
+          public ParsedSchema load(Schema schema) throws Exception {
+            String schemaType = schema.getSchemaType();
+            if (schemaType == null) {
+              schemaType = AvroSchema.TYPE;
+            }
+            SchemaProvider schemaProvider = schemaProviders.get(schemaType);
+            if (schemaProvider == null) {
+              log.error("Invalid schema type {}", schemaType);
+              throw new IllegalStateException("Invalid schema type " + schemaType);
+            }
+            return schemaProvider.parseSchema(schema, false, false).orElseThrow(
+                () -> new IOException("Invalid schema of type " + schema.getSchemaType()));
+          }
+        });
+  }
+
+  public Map<String, SchemaProvider> getProviders() {
+    return Collections.unmodifiableMap(providers);
+  }
+
+  public void addProviders(List<SchemaProvider> providers) {
+    for (SchemaProvider provider : providers) {
+      this.providers.put(provider.schemaType(), provider);
+      Map<String, Object> schemaProviderConfigs = new HashMap<>();
+      schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
       provider.configure(schemaProviderConfigs);
     }
   }
@@ -106,29 +203,16 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String schemaType,
       String schemaString,
       List<SchemaReference> references) {
-    if (schemaType == null) {
-      schemaType = AvroSchema.TYPE;
-    }
-    SchemaProvider schemaProvider = providers.get(schemaType);
-    if (schemaProvider == null) {
-      log.error("No provider found for schema type {}", schemaType);
-      return Optional.empty();
-    }
-    return schemaProvider.parseSchema(schemaString, references);
+    return parseSchema(new Schema(null, null, null, schemaType, references, schemaString));
   }
 
   @Override
   public Optional<ParsedSchema> parseSchema(Schema schema) {
-    String schemaType = schema.getSchemaType();
-    if (schemaType == null) {
-      schemaType = AvroSchema.TYPE;
-    }
-    SchemaProvider schemaProvider = providers.get(schemaType);
-    if (schemaProvider == null) {
-      log.error("Invalid schema type {}", schemaType);
+    try {
+      return Optional.of(parsedSchemaCache.get(schema));
+    } catch (ExecutionException e) {
       return Optional.empty();
     }
-    return schemaProvider.parseSchema(schema, false, false);
   }
 
   private int getIdFromRegistry(
@@ -246,27 +330,30 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     if (normalize) {
       schema = schema.normalize();
     }
-    Map<ParsedSchema, Integer> schemaIdMap =
-        schemaToIdCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    Map<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
+        schemaToResponseCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
-    Integer schemaId = schemaIdMap.get(schema);
-    if (schemaId != null && (id < 0 || id == schemaId)) {
-      return new RegisterSchemaResponse(schemaId);
+    RegisterSchemaResponse schemaResponse = schemaResponseMap.get(schema);
+    if (schemaResponse != null && (id < 0 || id == schemaResponse.getId())) {
+      return schemaResponse;
     }
 
     synchronized (this) {
-      schemaId = schemaIdMap.get(schema);
-      if (schemaId != null && (id < 0 || id == schemaId)) {
-        return new RegisterSchemaResponse(schemaId);
+      schemaResponse = schemaResponseMap.get(schema);
+      if (schemaResponse != null && (id < 0 || id == schemaResponse.getId())) {
+        return schemaResponse;
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, true, id);
-      schemaIdMap.put(schema, retrievedId);
+      Schema schemaEntity = new Schema(subject, version, retrievedId, schema);
+      schemaResponse = new RegisterSchemaResponse(schemaEntity);
+      schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      return new RegisterSchemaResponse(retrievedId);
+      guidToSchemaCache.put(schemaEntity.getGuid(), schema);
+      return schemaResponse;
     }
   }
 
@@ -300,6 +387,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       idSchemaMap.put(id, retrievedSchema);
       return retrievedSchema;
     }
+  }
+
+  @Override
+  public ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    return guidToSchemaCache.get(guid);
   }
 
   private Stream<ParsedSchema> getSchemasForSubject(
@@ -493,7 +586,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       schema = schema.normalize();
     }
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
-    if (versions != null) {
+    if (versions != null && versions.containsKey(schema)) {
       return versions.get(schema);
     } else {
       throw new RestClientException("Subject Not Found", 404, 40401);
@@ -519,6 +612,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       Collections.sort(allVersions);
     }
     return allVersions;
+  }
+
+  private int latestVersion(String subject) {
+    List<Integer> versions = allVersions(subject);
+    if (versions.isEmpty()) {
+      return -1;
+    }
+    return versions.get(versions.size() - 1);
   }
 
   @Override
@@ -553,30 +654,50 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public int getId(String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
+    return getIdWithResponse(subject, schema, normalize).getId();
+  }
+
+  public String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  public String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    return getIdWithResponse(subject, schema, normalize).getGuid();
+  }
+
+  @Override
+  public RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
     if (normalize) {
       schema = schema.normalize();
     }
-    Map<ParsedSchema, Integer> schemaIdMap =
-        schemaToIdCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
+    Map<ParsedSchema, RegisterSchemaResponse> schemaResponseMap =
+        schemaToResponseCache.computeIfAbsent(subject, k -> new ConcurrentHashMap<>());
 
-    Integer schemaId = schemaIdMap.get(schema);
-    if (schemaId != null) {
-      return schemaId;
+    RegisterSchemaResponse schemaResponse = schemaResponseMap.get(schema);
+    if (schemaResponse != null) {
+      return schemaResponse;
     }
 
     synchronized (this) {
-      schemaId = schemaIdMap.get(schema);
-      if (schemaId != null) {
-        return schemaId;
+      schemaResponse = schemaResponseMap.get(schema);
+      if (schemaResponse != null) {
+        return schemaResponse;
       }
 
       int retrievedId = getIdFromRegistry(subject, schema, false, -1);
-      schemaIdMap.put(schema, retrievedId);
+      Schema schemaEntity = new Schema(subject, null, retrievedId, schema);
+      schemaResponse = new RegisterSchemaResponse(schemaEntity);
+      schemaResponseMap.put(schema, schemaResponse);
       String context = toQualifiedContext(subject);
       final Map<Integer, ParsedSchema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schema);
-      return retrievedId;
+      return schemaResponse;
     }
   }
 
@@ -592,13 +713,26 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String subject,
       boolean isPermanent)
       throws IOException, RestClientException {
-    schemaToIdCache.remove(subject);
+    // make sure this subject has no associations
+    List<Association> associations = getAssociationsBySubject(subject, null, null, null, 0, -1);
+    if (!associations.isEmpty()) {
+      throw new RestClientException("Associations found", 409, 40921);
+    }
+    return deleteSubjectNoAssociationsCheck(requestProperties, subject, isPermanent);
+  }
+
+  private List<Integer> deleteSubjectNoAssociationsCheck(
+          Map<String, String> requestProperties,
+          String subject,
+          boolean isPermanent)
+          throws IOException, RestClientException {
+    schemaToResponseCache.remove(subject);
     idToSchemaCache.remove(subject);
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.remove(subject);
     configCache.remove(subject);
     return versions != null
-        ? versions.values().stream().sorted().collect(Collectors.toList())
-        : Collections.emptyList();
+            ? versions.values().stream().sorted().collect(Collectors.toList())
+            : Collections.emptyList();
   }
 
   @Override
@@ -622,7 +756,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
           if (isPermanent) {
             idToSchemaCache.get(subject).remove(entry.getValue());
-            schemaToIdCache.get(subject).remove(entry.getKey());
+            schemaToResponseCache.get(subject).remove(entry.getKey());
           }
           return Integer.valueOf(version);
         }
@@ -715,7 +849,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Collection<String> getAllContexts() throws IOException, RestClientException {
-    List<String> results = new ArrayList<>(schemaToIdCache.keySet()).stream()
+    List<String> results = new ArrayList<>(schemaToResponseCache.keySet()).stream()
         .map(s -> QualifiedSubject.create(DEFAULT_TENANT, s).getContext())
         .sorted()
         .distinct()
@@ -724,7 +858,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
-  public SchemaRegistryDeployment getSchemaRegistryDeployment() 
+  public SchemaRegistryDeployment getSchemaRegistryDeployment()
       throws IOException, RestClientException {
     // For the mock client, return an empty deployment (default behavior)
     return new SchemaRegistryDeployment();
@@ -732,7 +866,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public Collection<String> getAllSubjects() throws IOException, RestClientException {
-    List<String> results = new ArrayList<>(schemaToIdCache.keySet());
+    List<String> results = new ArrayList<>(schemaToResponseCache.keySet());
     Collections.sort(results);
     return results;
   }
@@ -747,10 +881,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public synchronized void reset() {
-    schemaToIdCache.clear();
+    schemaToResponseCache.clear();
     registeredSchemaCache.clear();
     idToSchemaCache.clear();
+    guidToSchemaCache.clear();
     schemaToVersionCache.clear();
+    subjectToAssocCache.clear();
+    resourceAndAssocTypeCache.clear();
+    resourceIdToAssocCache.clear();
+    resourceNameToAssocCache.clear();
     configCache.clear();
     modes.clear();
     ids.clear();
@@ -760,5 +899,528 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     QualifiedSubject qualifiedSubject =
         QualifiedSubject.create(DEFAULT_TENANT, subject);
     return qualifiedSubject != null ? qualifiedSubject.toQualifiedContext() : NO_SUBJECT;
+  }
+
+  private boolean validateResourceTypeAndAssociationType(
+          String resourceType, String associationType) {
+    if (!RESOURCE_TYPE_TO_ASSOC_TYPE_MAP.containsKey(resourceType)) {
+      return false;
+    }
+    if (!RESOURCE_TYPE_TO_ASSOC_TYPE_MAP.get(resourceType).contains(associationType)) {
+      return false;
+    }
+    return true;
+  }
+
+  private void checkAssociationTypeUniqueness(AssociationCreateOrUpdateRequest request)
+          throws RestClientException {
+    Map<String, AssociationCreateOrUpdateInfo> infosByType = new HashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      if (infosByType.containsKey(associationType)) {
+        throw new RestClientException(
+                String.format(
+                        "The association specified an invalid value for property: %s",
+                        associationType), 422, 42212);
+      }
+      infosByType.put(associationType, info);
+    }
+  }
+
+  private void checkSubjectExists(AssociationCreateOrUpdateRequest request)
+          throws RestClientException {
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
+      String subject = associationInRequest.getSubject();
+      int latestVersion = latestVersion(subject);
+      if (associationInRequest.getSchema() == null && latestVersion < 0) {
+        throw new RestClientException(
+                String.format("No active (non-deleted) version exists for subject '%s", subject),
+                409, 40907);
+      }
+    }
+  }
+
+  private void checkExistingAssociationsByResourceId(AssociationCreateOrUpdateRequest request,
+                                                     boolean isCreateOnly)
+          throws RestClientException {
+    String resourceId = request.getResourceId();
+    String resourceType = request.getResourceType();
+
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
+      String subject = associationInRequest.getSubject();
+      String associationType = associationInRequest.getAssociationType();
+      RegisterSchemaRequest schema = associationInRequest.getSchema();
+
+      ResourceAndAssocType key = new ResourceAndAssocType(
+              resourceId, resourceType, associationType);
+
+      Association existingAssociation = resourceAndAssocTypeCache.get(key);
+
+      if (existingAssociation == null) {
+        // If on create, frozen is set to true, ensure that a schema is being
+        // passed in, and that no other schemas exist in the subject
+        if (Boolean.TRUE.equals(associationInRequest.getFrozen())) {
+          if (schema == null) {
+            throw new RestClientException(
+                "schema must be provided when creating a frozen association", 422, 42212);
+          }
+          if (latestVersion(subject) >= 0) {
+            throw new RestClientException(
+                "cannot create a frozen association when schemas already exist in the subject",
+                422, 42212);
+          }
+        }
+        continue;
+      }
+      if (existingAssociation.isEquivalent(associationInRequest)) {
+        if (isCreateOnly && schema != null && !schemaExistsInRegistry(subject, schema)) {
+          throw new RestClientException(String.format(
+                  "An association of type '%s' already exists for resource '%s",
+                  associationType, resourceId), 422, 42212);
+        }
+      } else {
+        if (isCreateOnly) {
+          throw new RestClientException(String.format(
+                  "An association of type '%s' already exists for resource '%s",
+                  associationType, resourceId), 422, 42212);
+        }
+        // Only lifecycle and frozen can be updated
+        // frozen can only be changed from weak to strong, not the other way around
+        // subject must stay the same
+        if (!existingAssociation.getSubject().equals(subject)) {
+          throw new RestClientException(String.format(
+                  "The association specified an invalid value for property: '%s', detail: %s",
+                  "subject", "subject of association cannot be changed"),
+                  422, 42212);
+        }
+        // Don't allow the frozen attribute to be updated
+        if (associationInRequest.getFrozen() != null
+                && existingAssociation.isFrozen() != associationInRequest.getFrozen()) {
+          throw new RestClientException(String.format(
+                  "The association specified an invalid value for property: '%s', detail: %s",
+                  "frozen", "frozen attribute of association cannot be changed"), 422, 42212);
+        }
+        if (existingAssociation.isFrozen()) {
+          throw new RestClientException(String.format(
+                  "The association of type '%s' is frozen for subject '%s'",
+                  associationType, subject), 409, 40908);
+        }
+        // If existing association is weak but request is frozen, return false
+        if (existingAssociation.getLifecycle() == LifecyclePolicy.WEAK
+                && Boolean.TRUE.equals(associationInRequest.getFrozen())) {
+          throw new RestClientException(String.format(
+                  "The association specified an invalid value for property: '%s', detail: %s",
+                  "frozen", "association with lifecycle of WEAK cannot be frozen"),
+                  422, 42212);
+        }
+      }
+    }
+  }
+
+  private void checkExistingAssociationsBySubject(AssociationCreateOrUpdateRequest request)
+          throws RestClientException {
+    String resourceId = request.getResourceId();
+    String resourceType = request.getResourceType();
+
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
+      String subject = associationInRequest.getSubject();
+      String associationType = associationInRequest.getAssociationType();
+      // Filter out the associationInRequest
+      List<Association> existingAssociations = subjectToAssocCache.get(subject);
+      if (existingAssociations != null) {
+        existingAssociations = existingAssociations.stream().filter(associationBySubject ->
+                        !associationBySubject.getResourceType().equals(resourceType)
+                     || !associationBySubject.getResourceId().equals(resourceId)
+                     || !associationBySubject.getAssociationType().equals(associationType))
+                .collect(Collectors.toList());
+        if (!existingAssociations.isEmpty()) {
+          if (associationInRequest.getLifecycle() == LifecyclePolicy.STRONG) {
+            throw new RestClientException(String.format(
+                    "An association of type '%s', already exists for subject '%s",
+                    associationType, subject), 409, 40904);
+          }
+          if (existingAssociations.get(0).getLifecycle() == LifecyclePolicy.STRONG) {
+            throw new RestClientException(
+                    String.format(
+                            "A strong association of type '%s' already exists for subject '%s",
+                            associationInRequest.getAssociationType(), subject), 409, 40905);
+          }
+        }
+      }
+    }
+  }
+
+  private List<Association> writeAssociationsToCaches(AssociationCreateOrUpdateRequest request) {
+    String resourceId = request.getResourceId();
+    String resourceType = request.getResourceType();
+    String resourceName = request.getResourceName();
+    String resourceNamespace = request.getResourceNamespace();
+
+    List<Association> results = new ArrayList<>();
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
+      ResourceAndAssocType key = new ResourceAndAssocType(resourceId, resourceType,
+              associationInRequest.getAssociationType());
+
+      if (resourceAndAssocTypeCache.containsKey(key)) {
+        // Modify existing association in place
+        Association existingAssociation = resourceAndAssocTypeCache.get(key);
+        if (associationInRequest.getLifecycle() != null) {
+          existingAssociation.setLifecycle(associationInRequest.getLifecycle());
+        }
+        if (associationInRequest.getFrozen() != null) {
+          existingAssociation.setFrozen(associationInRequest.getFrozen());
+        }
+        results.add(resourceAndAssocTypeCache.get(key));
+        continue;
+      }
+
+      Association newAssociation = new Association(
+              associationInRequest.getSubject(), UUID.randomUUID().toString(),
+              resourceName, resourceNamespace, resourceId, resourceType,
+              associationInRequest.getAssociationType(),
+              associationInRequest.getLifecycle() == LifecyclePolicy.STRONG
+                      ? LifecyclePolicy.STRONG
+                      : LifecyclePolicy.WEAK,
+              Boolean.TRUE.equals(associationInRequest.getFrozen()));
+
+      // Update all caches
+      resourceAndAssocTypeCache.put(key, newAssociation);
+      subjectToAssocCache.computeIfAbsent(newAssociation.getSubject(),
+              k -> new ArrayList<>()).add(newAssociation);
+      resourceIdToAssocCache.computeIfAbsent(resourceId,
+              k -> new ArrayList<>()).add(newAssociation);
+      resourceNameToAssocCache
+              .computeIfAbsent(resourceName, k -> new ConcurrentHashMap<>())
+              .computeIfAbsent(resourceNamespace,
+                      k -> new CopyOnWriteArrayList<>()).add(newAssociation);
+      results.add(newAssociation);
+    }
+    return results;
+  }
+
+  private synchronized AssociationResponse createOrUpdateAssociationHelper(
+      AssociationCreateOrUpdateRequest request, boolean isCreateOnly)
+      throws IOException, RestClientException {
+    // Check that association types are unique
+    checkAssociationTypeUniqueness(request);
+
+    // Make sure subject exists if the schema in request is null
+    // The schema compatibility check will be done through post new schema directly
+    checkSubjectExists(request);
+
+    // Check whether the resource already has an association
+    checkExistingAssociationsByResourceId(request, isCreateOnly);
+
+    // Check if subject can accept new association
+    checkExistingAssociationsBySubject(request);
+
+    // Post all schemas
+    postAllSchemasFromAssociationRequest(request);
+
+    // Write associations to caches
+    List<Association> results = writeAssociationsToCaches(request);
+
+    // Create response
+    return createResponseFromAssociationCreateOrUpdateRequest(request, results);
+  }
+
+  private AssociationResponse createResponseFromAssociationCreateOrUpdateRequest(
+          AssociationCreateOrUpdateRequest request, List<Association> associations) {
+    String resourceId = request.getResourceId();
+    String resourceType = request.getResourceType();
+    String resourceName = request.getResourceName();
+    String resourceNamespace = request.getResourceNamespace();
+    List<AssociationInfo> infos = new ArrayList<>();
+    for (int i = 0; i < associations.size(); i++) {
+      Association association = associations.get(i);
+      AssociationCreateOrUpdateInfo createOrUpdateInfo = request.getAssociations().get(i);
+      infos.add(new AssociationInfo(association.getSubject(),
+              association.getAssociationType(),
+              association.getLifecycle(),
+              association.isFrozen(),
+              createOrUpdateInfo.getSchema() != null
+                      ? new Schema(createOrUpdateInfo.getSubject(),
+                      createOrUpdateInfo.getSchema())
+                      : null));
+    }
+    return new AssociationResponse(
+            resourceName, resourceNamespace, resourceId, resourceType, infos);
+  }
+
+  private void postAllSchemasFromAssociationRequest(AssociationCreateOrUpdateRequest request)
+          throws RestClientException, IOException {
+    for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
+      if (associationInRequest.getSchema() != null) {
+        register(associationInRequest.getSubject(),
+                parseSchema(new Schema(
+                        associationInRequest.getSubject(),
+                        associationInRequest.getSchema())).get(),
+                Boolean.TRUE.equals(associationInRequest.getNormalize()));
+      }
+    }
+  }
+
+  private boolean schemaExistsInRegistry(String subject, RegisterSchemaRequest schema) {
+    ParsedSchema parsedSchema = parseSchema(new Schema(subject, schema)).get();
+    try {
+      getIdFromRegistry(subject, parsedSchema, false, -1);
+    } catch (RestClientException e) {
+      return false;
+    }
+    return true;
+  }
+
+  private void validateAssociationCreateOrUpdateRequest(AssociationCreateOrUpdateRequest request) {
+    request.validate(false);
+    // Validate each association
+    for (AssociationCreateOrUpdateInfo associationCreateInfo : request.getAssociations()) {
+      // Validate resource type and association type
+      if (!validateResourceTypeAndAssociationType(
+              request.getResourceType(), associationCreateInfo.getAssociationType())) {
+        throw new IllegalArgumentException(
+                String.format("resourceType {} and associationType {} don't match",
+                        request.getResourceType(), associationCreateInfo.getAssociationType()));
+      }
+    }
+  }
+
+  public AssociationResponse createOrUpdateAssociation(AssociationCreateOrUpdateRequest request)
+          throws IOException, RestClientException {
+    try {
+      validateAssociationCreateOrUpdateRequest(request);
+    } catch (Exception e) {
+      throw new RestClientException(
+              String.format(
+                      "The association specified an invalid value for property, %s",
+                      e.getMessage()),
+              422, 42212);
+    }
+    AssociationResponse response = createOrUpdateAssociationHelper(request, false);
+    return response;
+  }
+
+  public AssociationResponse createAssociation(AssociationCreateOrUpdateRequest request)
+          throws IOException, RestClientException {
+    try {
+      validateAssociationCreateOrUpdateRequest(request);
+    } catch (Exception e) {
+      throw new RestClientException(
+              String.format(
+                      "The association specified an invalid value for property, %s",
+                      e.getMessage()),
+              422, 42212);
+    }
+    AssociationResponse response = createOrUpdateAssociationHelper(request, true);
+    return response;
+  }
+
+  public List<Association> getAssociationsBySubject(String subject, String resourceType,
+                                                    List<String> associationTypes,
+                                                    String lifecycle, int offset, int limit)
+          throws IOException, RestClientException {
+    if (subject == null || subject.isEmpty()) {
+      throw new RestClientException("Association parameters are invalid", 422, 42212);
+    }
+    if (lifecycle != null) {
+      try {
+        LifecyclePolicy.valueOf(lifecycle);
+      } catch (IllegalArgumentException e) {
+        throw new RestClientException("Association parameters are invalid", 422, 42212);
+      }
+    }
+
+    List<Association> associations = subjectToAssocCache.get(subject);
+
+    if (associations == null || associations.isEmpty()) {
+      return new ArrayList<>();  // Return empty list
+    }
+    List<Association> filtered = associations.stream()
+            .filter(association ->
+                    resourceType == null || association.getResourceType().equals(resourceType))
+            .filter(association ->
+                    associationTypes == null
+                            || associationTypes.isEmpty()
+                            || associationTypes.contains(association.getAssociationType()))
+            .filter(association ->
+                    lifecycle == null || association.getLifecycle().toString().equals(lifecycle))
+            .collect(Collectors.toList());
+
+    // Apply pagination
+    int start = offset;
+    if (start > filtered.size()) {
+      start = filtered.size();
+    }
+
+    int end = start + limit;
+    if (limit <= 0 || end > filtered.size()) {
+      end = filtered.size();
+    }
+    return filtered.subList(start, end);
+  }
+
+  public List<Association> getAssociationsByResourceId(String resourceId, String resourceType,
+                                                       List<String> associationTypes,
+                                                       String lifecycle, int offset, int limit)
+          throws IOException, RestClientException {
+    if (resourceId == null || resourceId.isEmpty()) {
+      throw new RestClientException("Association parameters are invalid", 422, 42212);
+    }
+    List<Association> associations = resourceIdToAssocCache.get(resourceId);
+    if (lifecycle != null) {
+      try {
+        LifecyclePolicy.valueOf(lifecycle);
+      } catch (IllegalArgumentException e) {
+        throw new RestClientException("Association parameters are invalid", 422, 42212);
+      }
+    }
+
+    if (associations == null || associations.isEmpty()) {
+      return new ArrayList<>();  // Return empty list
+    }
+    List<Association> filtered = associations.stream()
+            .filter(association ->
+                    resourceType == null || association.getResourceType().equals(resourceType))
+            .filter(association ->
+                    associationTypes == null
+                            || associationTypes.isEmpty()
+                            || associationTypes.contains(association.getAssociationType()))
+            .filter(association ->
+                    lifecycle == null || association.getLifecycle().toString().equals(lifecycle))
+            .collect(Collectors.toList());
+
+    // Apply pagination
+    int start = offset;
+    if (start > filtered.size()) {
+      start = filtered.size();
+    }
+
+    int end = start + limit;
+    if (limit <= 0 || end > filtered.size()) {
+      end = filtered.size();
+    }
+    return filtered.subList(start, end);
+  }
+
+  public List<Association> getAssociationsByResourceName(String resourceName,
+                                                         String resourceNamespace,
+                                                         String resourceType,
+                                                         List<String> associationTypes,
+                                                         String lifecycle, int offset, int limit)
+          throws IOException, RestClientException {
+    if (resourceName == null || resourceName.isEmpty()) {
+      throw new RestClientException("Association parameters are invalid", 422, 42212);
+    }
+    if (lifecycle != null) {
+      try {
+        LifecyclePolicy.valueOf(lifecycle);
+      } catch (IllegalArgumentException e) {
+        throw new RestClientException("Association parameters are invalid", 422, 42212);
+      }
+    }
+
+    Map<String, List<Association>> namespaceMap = resourceNameToAssocCache.get(resourceName);
+    if (namespaceMap == null || namespaceMap.isEmpty()) {
+      return new ArrayList<>();  // Return empty list
+    }
+
+    List<Association> associations = new ArrayList<>();
+    // If resourceNamespace is null or "-", collect from all namespaces
+    if (resourceNamespace == null || RESOURCE_WILDCARD.equals(resourceNamespace)) {
+      for (List<Association> assocList : namespaceMap.values()) {
+        associations.addAll(assocList);
+      }
+    } else {
+      // Get associations from specific namespace
+      List<Association> namespaceAssociations = namespaceMap.get(resourceNamespace);
+      if (namespaceAssociations != null) {
+        associations.addAll(namespaceAssociations);
+      }
+    }
+
+    if (associations.isEmpty()) {
+      return new ArrayList<>();  // Return empty list
+    }
+
+    List<Association> filtered = associations.stream()
+            .filter(association ->
+                    resourceType == null || association.getResourceType().equals(resourceType))
+            .filter(association ->
+                    associationTypes == null
+                            || associationTypes.isEmpty()
+                            || associationTypes.contains(association.getAssociationType()))
+            .filter(association ->
+                    lifecycle == null || association.getLifecycle().toString().equals(lifecycle))
+            .collect(Collectors.toList());
+
+    // Apply pagination
+    int start = offset;
+    if (start > filtered.size()) {
+      start = filtered.size();
+    }
+
+    int end = start + limit;
+    if (limit <= 0 || end > filtered.size()) {
+      end = filtered.size();
+    }
+    return filtered.subList(start, end);
+  }
+
+  private void checkDeleteAssociation(Association association, boolean cascadeLifecycle)
+          throws RestClientException {
+    if (!cascadeLifecycle && association.isFrozen()) {
+      throw new RestClientException(String.format(
+              "The association of type '%s' is frozen for subject '%s",
+              association.getAssociationType(), association.getSubject()), 409, 40908);
+    }
+  }
+
+  private void deleteAssociation(Association association, boolean cascadeLifecycle)
+          throws IOException, RestClientException {
+    String subject = association.getSubject();
+    String resourceId = association.getResourceId();
+    if (cascadeLifecycle && association.getLifecycle() == LifecyclePolicy.STRONG) {
+      deleteSubjectNoAssociationsCheck(null, subject, false);
+      deleteSubjectNoAssociationsCheck(null, subject, true);
+    }
+    resourceNameToAssocCache.computeIfPresent(association.getResourceName(), (k, map) -> {
+      map.computeIfPresent(association.getResourceNamespace(), (k2, list) -> {
+        list.remove(association);
+        return list.isEmpty() ? null : list;
+      });
+      return map.isEmpty() ? null : map;
+    });
+    resourceIdToAssocCache.computeIfPresent(resourceId, (k, list) -> {
+      list.remove(association);
+      return list.isEmpty() ? null : list;
+    });
+    subjectToAssocCache.computeIfPresent(subject, (k, list) -> {
+      list.remove(association);
+      return list.isEmpty() ? null : list;
+    });
+    ResourceAndAssocType resourceAndAssocType = new ResourceAndAssocType(
+            association.getResourceId(), association.getResourceType(),
+            association.getAssociationType()
+    );
+    resourceAndAssocTypeCache.remove(resourceAndAssocType);
+  }
+
+  public synchronized void deleteAssociations(String resourceId, String resourceType,
+                                              List<String> associationTypes,
+                                              boolean cascadeLifecycle)
+          throws IOException, RestClientException {
+    List<Association> associationsToDelete = getAssociationsByResourceId(
+            resourceId, resourceType, associationTypes, null, 0, -1);
+
+    if (associationsToDelete == null || associationsToDelete.isEmpty()) {
+      return;
+    }
+
+    for (Association associationToDelete : associationsToDelete) {
+      checkDeleteAssociation(associationToDelete, cascadeLifecycle);
+    }
+
+    for (Association associationToDelete : associationsToDelete) {
+      deleteAssociation(associationToDelete, cascadeLifecycle);
+    }
   }
 }

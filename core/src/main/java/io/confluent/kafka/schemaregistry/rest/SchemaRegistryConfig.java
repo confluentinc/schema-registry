@@ -168,6 +168,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
   public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
   /**
+   * <code>associations.enable</code>*
+   */
+  public static final String ASSOCIATIONS_ENABLE = "associations.enable";
+  public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -190,6 +195,9 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
+
+  public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
+  public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
 
   /**
    * <code>schema.cache.size</code>
@@ -407,6 +415,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
+  protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
+      + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -450,6 +460,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELECTION_STICKY_DOC =
       "If true, leader election will prefer to keep the current leader if possible. This is a "
       + "cluster wide setting i.e all nodes should have either true or false.";
+  protected static final String ASSOCIATIONS_ENABLE_DOC =
+      "If true, enable support for associations between resources and subjects.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -633,6 +645,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
     )
+    .define(SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
@@ -700,6 +716,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
             ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
+    )
+    .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
+        ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -998,6 +1017,10 @@ public class SchemaRegistryConfig extends RestConfig {
       }
     }
     return overridden;
+  }
+
+  public boolean enableAssociations() {
+    return getBoolean(ASSOCIATIONS_ENABLE);
   }
 
   public static void main(String[] args) {

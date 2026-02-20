@@ -49,12 +49,14 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
@@ -223,8 +225,12 @@ public class AvroSchema implements ParsedSchema {
   }
 
   protected Schema.Parser getParser() {
-    Schema.Parser parser = new Schema.Parser();
-    parser.setValidateDefaults(isNew());
+    boolean isNew = isNew();
+    NameValidator nameValidator = isNew
+        ? NameValidator.STRICT_VALIDATOR
+        : NameValidator.NO_VALIDATION;
+    Schema.Parser parser = new Schema.Parser(nameValidator);
+    parser.setValidateDefaults(isNew);
     return parser;
   }
 
@@ -697,6 +703,12 @@ public class AvroSchema implements ParsedSchema {
       case MAP:
         return Type.MAP;
       case UNION:
+        // Check if the schema is a nullable type
+        List<Schema> types = schema.getTypes();
+        if (types.size() == 2
+            && types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
+          return Type.NULLABLE;
+        }
         return Type.COMBINED;
       case FIXED:
         return Type.FIXED;
@@ -732,7 +744,7 @@ public class AvroSchema implements ParsedSchema {
       getInlineTagsRecursively(tags, jsonNode);
       return tags;
     } catch (IOException e) {
-      throw new IllegalStateException("Could not parse schema: " + canonicalString());
+      throw new IllegalStateException("Could not parse Avro schema");
     }
   }
 
@@ -921,7 +933,7 @@ public class AvroSchema implements ParsedSchema {
     }
 
     public static Format get(String symbol) {
-      return lookup.inverse().get(symbol);
+      return lookup.inverse().get(symbol.toLowerCase(Locale.ROOT));
     }
 
     public static Set<String> symbols() {

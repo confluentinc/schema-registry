@@ -481,7 +481,8 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   @Override
   public SchemaContext visitPropertySchema(String property,
-      Schema schema) {
+      Schema schema,
+      CompositeSchema context) {
     SchemaContext ctx = schema.accept(this);
     assert ctx != null;
     return new SchemaContext(schema, ObjectSchema.builder().requiresObject(false)

@@ -23,6 +23,7 @@ import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
@@ -43,6 +44,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   private final Cache<KekId, Kek> kekCache;
   private final Cache<DekId, Dek> dekCache;
   private final Ticker ticker;
+
+  public CachedDekRegistryClient(
+      List<String> baseUrls,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
+      List<SchemaProvider> providers,
+      Map<String, String> httpHeaders) {
+    this(new DekRegistryRestService(baseUrls),
+        cacheCapacity, cacheExpirySecs, configs, providers, httpHeaders, Ticker.systemTicker());
+  }
 
   public CachedDekRegistryClient(
       List<String> baseUrls,
@@ -70,7 +82,19 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       Map<String, ?> configs,
       Map<String, String> httpHeaders,
       Ticker ticker) {
-    super(restService, cacheCapacity, Collections.emptyList(), configs, httpHeaders, ticker);
+    this(restService, cacheCapacity, cacheExpirySecs, configs,
+        Collections.emptyList(), httpHeaders, ticker);
+  }
+
+  public CachedDekRegistryClient(
+      DekRegistryRestService restService,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      Map<String, ?> configs,
+      List<SchemaProvider> providers,
+      Map<String, String> httpHeaders,
+      Ticker ticker) {
+    super(restService, cacheCapacity, providers, configs, httpHeaders, ticker);
     this.restService = restService;
     CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
@@ -467,6 +491,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     // Just invalidate all since the version can be represented many ways,
     // such as null for first or -1 for latest
     dekCache.invalidateAll();
+  }
+
+  @Override
+  public void testKek(String name)
+      throws IOException, RestClientException {
+    restService.testKek(DEFAULT_REQUEST_PROPERTIES, name);
   }
 
   @Override

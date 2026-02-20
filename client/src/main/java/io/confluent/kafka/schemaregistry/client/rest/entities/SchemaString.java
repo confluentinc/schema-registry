@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.client.rest.entities;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 
@@ -28,11 +27,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DELETED_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.DESCRIPTION_CONDITION;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.GUID_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.SUBJECT_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.TIMESTAMP_DESC;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Schema.VERSION_DESC;
+
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @io.swagger.v3.oas.annotations.media.Schema(description = "Schema definition")
 public class SchemaString {
 
+  private String subject;
+  private Integer version;
+  private String guid;
   private String schemaType = AvroSchema.TYPE;
   private String schemaString;
   private List<SchemaReference> references = Collections.emptyList();
@@ -40,6 +49,8 @@ public class SchemaString {
   private RuleSet ruleSet = null;
   private List<SchemaTags> schemaTags;
   private Integer maxId;
+  private Long timestamp;
+  private Boolean deleted;
 
   public SchemaString() {
   }
@@ -50,22 +61,94 @@ public class SchemaString {
   }
 
   public SchemaString(Schema schema) {
+    this.subject = schema.getSubject();
+    this.version = schema.getVersion();
+    this.guid = schema.getGuid();
     this.schemaType = schema.getSchemaType();
     this.schemaString = schema.getSchema();
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
     this.schemaTags = schema.getSchemaTags();
+    this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
+  }
+
+  public SchemaString(String subject, Integer version, Schema schema) {
+    this.subject = subject;
+    this.version = version;
+    this.guid = schema.getGuid();
+    this.schemaType = schema.getSchemaType();
+    this.schemaString = schema.getSchema();
+    this.references = schema.getReferences();
+    this.metadata = schema.getMetadata();
+    this.ruleSet = schema.getRuleSet();
+    this.schemaTags = schema.getSchemaTags();
+    this.timestamp = schema.getTimestamp();
+    this.deleted = schema.getDeleted();
+  }
+
+  public SchemaString copy() {
+    SchemaString schema = new SchemaString();
+    schema.setSubject(getSubject());
+    schema.setVersion(getVersion());
+    schema.setGuid(getGuid());
+    schema.setSchemaType(getSchemaType());
+    schema.setSchemaString(getSchemaString());
+    schema.setReferences(getReferences());
+    schema.setMetadata(getMetadata());
+    schema.setRuleSet(getRuleSet());
+    schema.setSchemaTags(getSchemaTags());
+    schema.setMaxId(getMaxId());
+    schema.setTimestamp(getTimestamp());
+    schema.setDeleted(getDeleted());
+    return schema;
   }
 
   public static SchemaString fromJson(String json) throws IOException {
     return JacksonMapper.INSTANCE.readValue(json, SchemaString.class);
   }
 
-  @io.swagger.v3.oas.annotations.media.Schema(description = Schema.TYPE_DESC,
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = SUBJECT_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("subject")
+  public String getSubject() {
+    return subject;
+  }
+
+  @JsonProperty("subject")
+  public void setSubject(String subject) {
+    this.subject = subject;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = VERSION_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("version")
+  public Integer getVersion() {
+    return this.version;
+  }
+
+  @JsonProperty("version")
+  public void setVersion(Integer version) {
+    this.version = version;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = GUID_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("guid")
+  public String getGuid() {
+    return guid;
+  }
+
+  @JsonProperty("guid")
+  public void setGuid(String guid) {
+    this.guid = guid;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = Schema.TYPE_DESC + ". " + DESCRIPTION_CONDITION,
       example = Schema.TYPE_EXAMPLE)
   @JsonProperty("schemaType")
-  @JsonSerialize(converter = SchemaTypeConverter.class)
   public String getSchemaType() {
     return schemaType;
   }
@@ -142,6 +225,30 @@ public class SchemaString {
     this.maxId = maxId;
   }
 
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = TIMESTAMP_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("ts")
+  public Long getTimestamp() {
+    return this.timestamp;
+  }
+
+  @JsonProperty("ts")
+  public void setTimestamp(Long timestamp) {
+    this.timestamp = timestamp;
+  }
+
+  @io.swagger.v3.oas.annotations.media.Schema(
+      description = DELETED_DESC + ". " + DESCRIPTION_CONDITION)
+  @JsonProperty("deleted")
+  public Boolean getDeleted() {
+    return this.deleted;
+  }
+
+  @JsonProperty("deleted")
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
+  }
+
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
@@ -155,7 +262,9 @@ public class SchemaString {
       return false;
     }
     SchemaString that = (SchemaString) o;
-    return Objects.equals(schemaType, that.schemaType)
+    return Objects.equals(subject, that.subject)
+        && Objects.equals(version, that.version)
+        && Objects.equals(guid, that.guid)
         && Objects.equals(schemaString, that.schemaString)
         && Objects.equals(references, that.references)
         && Objects.equals(metadata, that.metadata)
@@ -165,6 +274,7 @@ public class SchemaString {
 
   @Override
   public int hashCode() {
-    return Objects.hash(schemaType, schemaString, references, metadata, ruleSet, maxId);
+    return Objects.hash(
+        subject, version, guid, schemaType, schemaString, references, metadata, ruleSet, maxId);
   }
 }

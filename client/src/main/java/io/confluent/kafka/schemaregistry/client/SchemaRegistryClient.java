@@ -19,11 +19,16 @@ package io.confluent.kafka.schemaregistry.client;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
 import com.google.common.base.Ticker;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import java.io.Closeable;
 import java.io.IOException;
@@ -71,6 +76,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
         schema.getMetadata(),
         schema.getRuleSet()
     );
+  }
+
+  default ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
+    return parseSchema(schema)
+        .orElseThrow(() -> new IOException("Invalid schema of type " + schema.getSchemaType()));
   }
 
   /**
@@ -159,6 +169,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
+
+  default ParsedSchema getSchemaByGuid(String guid, String format)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   public default List<ParsedSchema> getSchemas(
       String subjectPrefix,
@@ -286,7 +301,7 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
-  default SchemaRegistryDeployment getSchemaRegistryDeployment() 
+  default SchemaRegistryDeployment getSchemaRegistryDeployment()
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
@@ -317,6 +332,23 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   int getId(String subject, ParsedSchema schema) throws IOException, RestClientException;
 
   default int getId(String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default String getGuid(String subject, ParsedSchema schema)
+      throws IOException, RestClientException {
+    return getGuid(subject, schema, false);
+  }
+
+  default String getGuid(
+      String subject, ParsedSchema schema, boolean normalize)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default RegisterSchemaResponse getIdWithResponse(
+      String subject, ParsedSchema schema, boolean normalize)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
@@ -376,4 +408,56 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
 
   @Override
   default void close() throws IOException {}
+
+  public default AssociationResponse createAssociation(
+      AssociationCreateOrUpdateRequest request)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default AssociationResponse createOrUpdateAssociation(
+          AssociationCreateOrUpdateRequest request)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default List<Association> getAssociationsBySubject(String subject,
+                                                            String resourceType,
+                                                            List<String> associationTypes,
+                                                            String lifecycle,
+                                                            int offset, int limit)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default List<Association> getAssociationsByResourceId(String resourceId,
+                                                               String resourceType,
+                                                               List<String> associationTypes,
+                                                               String lifecycle,
+                                                               int offset, int limit)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default List<Association> getAssociationsByResourceName(String resourceName,
+      String resourceNamespace,
+      String resourceType,
+      List<String> associationTypes,
+      String lifecycle,
+      int offset, int limit)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default void deleteAssociations(String resourceId, String resourceType,
+                                         List<String> associationTypes, boolean cascadeLifecycle)
+          throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default AssociationBatchResponse mutateAssociations(
+      String context, Boolean dryRun, AssociationBatchRequest request)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 }

@@ -46,7 +46,7 @@ import java.util.Map;
  */
 public final class MockSchemaRegistry {
   private static final String MOCK_URL_PREFIX = "mock://";
-  private static final Map<String, SchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();
+  private static final Map<String, MockSchemaRegistryClient> SCOPED_CLIENTS = new HashMap<>();
 
   // Not instantiable. All access is via static methods.
   private MockSchemaRegistry() {
@@ -86,7 +86,9 @@ public final class MockSchemaRegistry {
   public static SchemaRegistryClient getClientForScope(final String scope,
                                                        List<SchemaProvider> providers) {
     synchronized (SCOPED_CLIENTS) {
-      if (!SCOPED_CLIENTS.containsKey(scope)) {
+      if (SCOPED_CLIENTS.containsKey(scope)) {
+        SCOPED_CLIENTS.get(scope).addProviders(providers);
+      } else {
         SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
       }
     }
@@ -108,7 +110,9 @@ public final class MockSchemaRegistry {
                                                        List<SchemaProvider> providers) {
     synchronized (SCOPED_CLIENTS) {
       for (String scope : scopes) {
-        if (!SCOPED_CLIENTS.containsKey(scope)) {
+        if (SCOPED_CLIENTS.containsKey(scope)) {
+          SCOPED_CLIENTS.get(scope).addProviders(providers);
+        } else {
           SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
         }
       }
