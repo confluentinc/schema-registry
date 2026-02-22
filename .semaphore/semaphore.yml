@@ -38,7 +38,7 @@ blocks:
         - name: Test
           commands:
             - ci-sem-pint -c
-            - ci-tools ci-update-version
+            - ci-tools ci-update-version --direct-pom-edit
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode --no-transfer-progress clean verify install dependency:analyze validate
             - . cache-maven store
       epilogue:
@@ -56,7 +56,7 @@ blocks:
       jobs:
         - name: Release
           commands:
-            - ci-tools ci-update-version
+            - ci-tools ci-update-version --direct-pom-edit
             - ci-tools ci-push-tag
             - mvn -U -Dmaven.wagon.http.retryHandler.count=10 --batch-mode 
               -DaltDeploymentRepository=confluent-codeartifact-internal::default::https://confluent-519856050701.d.codeartifact.us-west-2.amazonaws.com/maven/maven-snapshots/ 
