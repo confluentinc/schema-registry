@@ -259,8 +259,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private boolean schemasEqual(ParsedSchema schema1, ParsedSchema schema2) {
-    return schema1.canonicalString().equals(schema2.canonicalString())
-        || schema1.canLookup(schema2, this);
+    return schema1.equals(schema2) || schema2.canLookup(schema1, this);
   }
 
   private void generateVersion(String subject, ParsedSchema schema) {
