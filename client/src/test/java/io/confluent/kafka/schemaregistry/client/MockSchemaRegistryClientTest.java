@@ -22,6 +22,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -1002,6 +1005,24 @@ public class MockSchemaRegistryClientTest {
         } catch (Exception e) {
             assertNull("getAllVersions should succeed.", e);
         }
+    }
+
+    @Test
+    public void testSchemaWithRuleSetGetsDifferentId() throws IOException, RestClientException {
+        String subject = "test-ruleset-subject";
+        AvroSchema schemaWithoutRuleSet = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        int idWithoutRuleSet = client.register(subject, schemaWithoutRuleSet);
+
+        Rule rule = new Rule("my-rule", null, RuleKind.CONDITION, RuleMode.WRITEREAD,
+                "JSONATA", null, null, "true", null, null, false);
+        RuleSet ruleSet = new RuleSet(null, Collections.singletonList(rule), null, null);
+        AvroSchema schemaWithRuleSet = schemaWithoutRuleSet.copy(null, ruleSet);
+
+        int idWithRuleSet = client.register(subject, schemaWithRuleSet);
+
+        assertNotEquals("Schema with ruleSet should have a different ID than schema without ruleSet",
+                idWithoutRuleSet, idWithRuleSet);
     }
 
     @Test
