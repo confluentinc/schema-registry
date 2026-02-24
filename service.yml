@@ -1,6 +1,6 @@
 name: schema-registry
 lang: java
-lang_version: 17
+lang_version: "17"
 codeowners:
   enable: true
 semaphore:
@@ -16,9 +16,9 @@ semaphore:
     - main
     - /^\d+\.\d+\.x$/
     - /^gh-readonly-queue.*/
-    - /^cc-sr-v0\..+/
+    - /^cc-sr-v0\..+/ # cc-sr-v0.2.414-7.7.2.62-x
     - /^cc-sc-v0\..+/
-  execution_time_limit: {"hours": 2}
+  execution_time_limit: {"hours": 3}
   downstream_projects: ["kafka-rest", "ksql", "confluent-security-plugins", "kafka-connect-replicator", "ce-kafka-rest", "confluent-cloud-plugins", "schema-registry-plugins"]
 sonarqube:
   enable: true
