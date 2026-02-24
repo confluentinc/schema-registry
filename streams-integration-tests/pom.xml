@@ -18,50 +18,15 @@
         </license>
     </licenses>
 
-    <artifactId>kafka-schema-registry-client-encryption-hcvault</artifactId>
+    <artifactId>kafka-streams-integration-tests</artifactId>
     <packaging>jar</packaging>
-    <name>kafka-schema-registry-client-encryption-hcvault</name>
+    <name>kafka-streams-integration-tests</name>
 
     <properties>
         <java.version>11</java.version>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry-client</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry-client-encryption-tink</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry-client-encryption</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.jopenlibs</groupId>
-            <artifactId>vault-java-driver</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.google.crypto.tink</groupId>
-            <artifactId>tink</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>dek-registry</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry</artifactId>
@@ -113,10 +78,20 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-streams</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry-client-encryption</artifactId>
+            <artifactId>kafka-streams-avro-serde</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -127,36 +102,13 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>kafka-json-schema-serializer</artifactId>
+            <artifactId>kafka-schema-serializer</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-types</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava-testlib</artifactId>
-            <version>${guava.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -164,15 +116,31 @@
             <artifactId>junit-jupiter-engine</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.junit.vintage</groupId>
-            <artifactId>junit-vintage-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <skipIfEmpty>true</skipIfEmpty>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
