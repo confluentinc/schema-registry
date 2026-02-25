@@ -155,7 +155,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       MessageIndexes indexes = new MessageIndexes(schemaId.getMessageIndexes());
       String name = schema.toMessageName(indexes);
       schema = schemaWithName(schema, name);
-      if (isKey != null && strategyUsesSchema(isKey)) {
+      if (isKey != null && (subject == null || strategyUsesSchema(isKey))) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
