@@ -462,6 +462,98 @@ public class KafkaJsonSchemaSerializerTest {
 
     // restore configs
     serializer.configure(new HashMap(config), false);
+    deserializer.configure(new HashMap(config), false);
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerWithAssociatedNameStrategyFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to TopicNameStrategy
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    String fallbackTopic = "fallback-test";
+
+    // Pre-register the schema with TopicNameStrategy subject name
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    schemaRegistry.register(fallbackTopic + "-value", schema);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+        // fallback.subject.name.strategy.type defaults to "TOPIC"
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to TopicNameStrategy since no association exists
+    byte[] bytes = serializer.serialize(fallbackTopic, headers, user);
+    assertEquals(user, deserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerWithAssociatedNameStrategyRecordFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to RecordNameStrategy
+    User user = new User("john", "doe", (short) 50, "jack", null);
+
+    // Pre-register the schema with RecordNameStrategy subject name
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    schemaRegistry.register("com.acme.User", schema);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        false,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        "RECORD"
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to RecordNameStrategy since no association exists
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    assertEquals(user, deserializer.deserialize(topic, headers, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaJsonSchemaSerializerWithAssociatedNameStrategyNoFallback()
+      throws IOException, RestClientException {
+    // No association is created and fallback is disabled
+    String noFallbackTopic = "no-fallback-test";
+    User user = new User("john", "doe", (short) 50, "jack", null);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        "NONE"
+    );
+    serializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should throw SerializationException since no association exists and fallback is disabled
+    serializer.serialize(noFallbackTopic, headers, user);
   }
 
   @Test
