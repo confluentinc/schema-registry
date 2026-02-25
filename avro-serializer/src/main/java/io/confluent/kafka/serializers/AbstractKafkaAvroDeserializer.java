@@ -575,8 +575,6 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           readerAvroSchema = writerAvroSchema;
         }
 
-        String s = getSubject();
-
         if (!migrations.isEmpty() || (readerAvroSchema.ruleSet() != null
             && !readerAvroSchema.ruleSet().getDomainRules().isEmpty())) {
           AvroSchemaUtils.setThreadLocalData(
