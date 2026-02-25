@@ -41,6 +41,7 @@ import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.io.IOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage2;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageOptionalProtos;
@@ -876,7 +877,7 @@ public class KafkaProtobufSerializerTest {
         AssociatedNameStrategy.class.getName()
     );
     protobufSerializer.configure(configs, false);
-    protobufDeserializer.configure(configs, false);
+    testMessageDeserializer.configure(configs, false);
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
     assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
@@ -884,6 +885,97 @@ public class KafkaProtobufSerializerTest {
     // restore configs
     protobufSerializer.configure(new HashMap(serializerConfig), false);
     testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerWithAssociatedNameStrategyFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to TopicNameStrategy
+    String fallbackTopic = "fallback-test";
+    ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
+
+    // Pre-register the schema with TopicNameStrategy subject name
+    schemaRegistry.register(fallbackTopic + "-value", schema);
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaProtobufDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaProtobufDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+        // fallback.subject.name.strategy.type defaults to "TOPIC"
+    );
+    protobufSerializer.configure(configs, false);
+    testMessageDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to TopicNameStrategy since no association exists
+    byte[] bytes = protobufSerializer.serialize(fallbackTopic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    protobufSerializer.configure(new HashMap(serializerConfig), false);
+    testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerWithAssociatedNameStrategyRecordFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to RecordNameStrategy
+    String fallbackTopic = "io.confluent.kafka.serializers.protobuf.test.TestMessage";
+    ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
+
+    // Pre-register the schema with RecordNameStrategy subject name
+    schemaRegistry.register(fallbackTopic, schema);
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaProtobufDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaProtobufDeserializerConfig.USE_LATEST_VERSION,
+        false,
+        KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        "RECORD"
+    );
+    protobufSerializer.configure(configs, false);
+    testMessageDeserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to RecordNameStrategy since no association exists
+    byte[] bytes = protobufSerializer.serialize(fallbackTopic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    protobufSerializer.configure(new HashMap(serializerConfig), false);
+    testMessageDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaProtobufSerializerWithAssociatedNameStrategyNoFallback()
+      throws IOException, RestClientException {
+    // No association is created and fallback is disabled
+    String noFallbackTopic = "no-fallback-test";
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaProtobufDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaProtobufDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        "NONE"
+    );
+    protobufSerializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should throw SerializationException since no association exists and fallback is disabled
+    protobufSerializer.serialize(noFallbackTopic, headers, HELLO_WORLD_MESSAGE);
   }
 
   @Test
