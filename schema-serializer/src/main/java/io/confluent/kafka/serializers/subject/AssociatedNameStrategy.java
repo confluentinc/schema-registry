@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,15 +58,15 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   private SchemaRegistryClient client;
   private String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
-  private LoadingCache<CacheKey, String> subjectNameCache;
+  private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
 
   public AssociatedNameStrategy() {
     this.subjectNameCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build(new CacheLoader<CacheKey, String>() {
+        .build(new CacheLoader<>() {
           @Override
-          public String load(CacheKey key) throws Exception {
-            return loadSubjectName(key.topic, key.isKey, key.schema);
+          public Optional<String> load(CacheKey key) throws Exception {
+            return Optional.ofNullable(loadSubjectName(key.topic, key.isKey, key.schema));
           }
         });
   }
@@ -124,7 +125,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
 
     try {
-      return subjectNameCache.get(new CacheKey(topic, isKey, schema));
+      return subjectNameCache.get(new CacheKey(topic, isKey, schema)).orElse(null);
     } catch (Exception e) {
       if (e.getCause() instanceof SerializationException) {
         throw (SerializationException) e.getCause();

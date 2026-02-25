@@ -423,6 +423,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private final byte[] payload;
     private final ByteBuffer buffer;
     private final SchemaId schemaId;
+    private String subject;
 
     DeserializationContext(
         final String topic, final Boolean isKey, Headers headers, final byte[] payload) {
@@ -435,9 +436,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         ByteBuffer buffer = schemaIdDeserializer.deserialize(
             topic, isKey, headers, payload, schemaId);
         this.schemaId = schemaId;
+        AvroSchema schema = schemaFromRegistry();
+        String subjectName = getSubject();
         Object buf = executeRules(
-            getSubject(), topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
-            schemaFromRegistry(), buffer
+            subjectName, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
+            schema, buffer
         );
         this.buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
       } catch (IOException e) {
@@ -450,7 +453,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       try {
         String subjectName = isKey == null || strategyUsesSchema(isKey)
             ? getContext() : getSubject();
-        return (AvroSchema) getSchemaBySchemaId(subjectName, schemaId);
+        AvroSchema schema = (AvroSchema) getSchemaBySchemaId(subjectName, schemaId);
+        if (isKey != null && subjectName == null) {
+          this.subject = subjectName(topic, isKey, schema);
+          schema = (AvroSchema) getSchemaBySchemaId(this.subject, schemaId);
+        }
+        return schema;
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
             + getSchemaType(isKey)
@@ -495,8 +503,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     String getSubject() {
+      if (subject != null) {
+        return subject;
+      }
       boolean usesSchema = strategyUsesSchema(isKey);
-      return subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
+      String subjectName = subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
+      if (subjectName != null) {
+        this.subject = subjectName;
+      }
+      return subjectName;
     }
 
     String getContext() {
