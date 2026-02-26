@@ -186,12 +186,13 @@ public class AbstractKafkaAvroDeserializerTest {
   }
 
   @Test
-  public void testMockUrlsAreRejected() {
+  public void testMockUrlsAreAccepted() {
     final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
     kafkaAvroSerializer.configure(
             singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,mock://qwer"),
             false
     );
+    Assert.assertNotNull(kafkaAvroSerializer.schemaRegistry);
   }
 
   @Test
