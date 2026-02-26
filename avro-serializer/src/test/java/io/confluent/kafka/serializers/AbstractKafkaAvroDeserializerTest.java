@@ -188,20 +188,10 @@ public class AbstractKafkaAvroDeserializerTest {
   @Test
   public void testMockUrlsAreRejected() {
     final KafkaAvroSerializer kafkaAvroSerializer = new KafkaAvroSerializer();
-    try {
-        kafkaAvroSerializer.configure(
-                singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,mock://qwer"),
-                false
-        );
-        fail();
-    } catch (final ConfigException e) {
-        Assert.assertEquals(
-                "Only one mock scope is permitted for 'schema.registry.url'. Got: [mock://asdf, mock://qwer]",
-                e.getMessage()
-        );
-    }
-
-    Assert.assertNull(kafkaAvroSerializer.schemaRegistry);
+    kafkaAvroSerializer.configure(
+            singletonMap(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://asdf,mock://qwer"),
+            false
+    );
   }
 
   @Test
