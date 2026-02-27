@@ -38,21 +38,20 @@ import org.slf4j.LoggerFactory;
  * A {@link SubjectNameStrategy} that will query schema registry for
  * the associated subject name for the topic.  The topic is passed as the resource name
  * to schema registry.  If there is a configuration property named
- * "kafka.cluster.id", then its value will be passed as the resource namespace;
- * otherwise the value "-" will be passed as the resource namespace.
+ * "subject.name.strategy.kafka.cluster.id", then its value will be passed as the resource
+ * namespace; otherwise the value "-" will be passed as the resource namespace.
  * If more than subject is returned from the query, an exception will be thrown.
  * If no subjects are returned from the query, then the behavior will fall back
  * to {@link TopicNameStrategy}, unless the configuration property
- * "fallback.subject.name.strategy.type" is set to "RECORD", "TOPIC_RECORD", or "NONE".
+ * "subject.name.strategy.fallback.type" is set to "RECORD", "TOPIC_RECORD", or "NONE".
  */
 public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
 
-  public static final String KAFKA_CLUSTER_ID = "kafka.cluster.id";
+  public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
-  public static final String FALLBACK_SUBJECT_NAME_STRATEGY_TYPE =
-      "fallback.subject.name.strategy.type";
+  public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
@@ -77,7 +76,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     if (kafkaClusterIdConfig != null) {
       this.kafkaClusterId = kafkaClusterIdConfig.toString();
     }
-    Object fallbackConfig = configs.get(FALLBACK_SUBJECT_NAME_STRATEGY_TYPE);
+    Object fallbackConfig = configs.get(FALLBACK_TYPE);
     if (fallbackConfig != null) {
       switch (fallbackConfig.toString().toUpperCase()) {
         case "TOPIC":
@@ -94,7 +93,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
           break;
         default:
           throw new IllegalArgumentException("Invalid value for "
-              + FALLBACK_SUBJECT_NAME_STRATEGY_TYPE + ": " + fallbackConfig);
+              + FALLBACK_TYPE + ": " + fallbackConfig);
       }
     } else {
       // default is TopicNameStrategy

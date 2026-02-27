@@ -24,13 +24,11 @@ import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.example.uniontest.UnionTestUser;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema.Format;
-import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
@@ -693,7 +691,7 @@ public class KafkaAvroSerializerTest {
         true,
         KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName()
-        // fallback.subject.name.strategy.type defaults to "TOPIC"
+        // subject.name.strategy.fallback.type defaults to "TOPIC"
     );
     avroSerializer.configure(configs, false);
     avroDeserializer.configure(configs, false);
@@ -725,7 +723,7 @@ public class KafkaAvroSerializerTest {
         false,
         KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName(),
-        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        AssociatedNameStrategy.FALLBACK_TYPE,
         "RECORD"
     );
     avroSerializer.configure(configs, false);
@@ -755,7 +753,7 @@ public class KafkaAvroSerializerTest {
         true,
         KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName(),
-        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        AssociatedNameStrategy.FALLBACK_TYPE,
         "NONE"
     );
     avroSerializer.configure(configs, false);
