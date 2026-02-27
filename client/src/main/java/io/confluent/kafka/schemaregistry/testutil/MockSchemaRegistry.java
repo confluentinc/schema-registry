@@ -140,6 +140,7 @@ public final class MockSchemaRegistry {
     }
   }
 
+  @Deprecated
   public static String validateAndMaybeGetMockScope(final List<String> urls) {
     final List<String> mockScopes = new LinkedList<>();
     for (final String url : urls) {
@@ -163,9 +164,18 @@ public final class MockSchemaRegistry {
     }
   }
 
+  @Deprecated
   public static List<String> validateAndMaybeGetMockScope(final String baseUrls) {
-    final List<String> mockScopes = new LinkedList<>();
+    return validateAndMaybeGetMockScopes(baseUrls);
+  }
+
+  public static List<String> validateAndMaybeGetMockScopes(final String baseUrls) {
     List<String> urls = parseBaseUrl(baseUrls);
+    return validateAndMaybeGetMockScopes(urls);
+  }
+
+  public static List<String> validateAndMaybeGetMockScopes(final List<String> urls) {
+    final List<String> mockScopes = new LinkedList<>();
     for (final String url : urls) {
       if (url.startsWith(MOCK_URL_PREFIX)) {
         mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
@@ -176,7 +186,7 @@ public final class MockSchemaRegistry {
       return null;
     } else if (urls.size() > mockScopes.size()) {
       throw new ConfigException(
-              "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
+          "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
       );
     } else {
       return mockScopes;
