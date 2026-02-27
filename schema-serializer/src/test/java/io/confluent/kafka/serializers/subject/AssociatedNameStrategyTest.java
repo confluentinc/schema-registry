@@ -35,7 +35,7 @@ public class AssociatedNameStrategyTest {
     strategy = new AssociatedNameStrategy();
     strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
     Map<String, Object> configs = new HashMap<>();
-    configs.put(AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE, "RECORD");
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "RECORD");
     strategy.configure(configs);
   }
 
