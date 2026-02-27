@@ -906,7 +906,7 @@ public class KafkaProtobufSerializerTest {
         true,
         KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName()
-        // fallback.subject.name.strategy.type defaults to "TOPIC"
+        // subject.name.strategy.fallback.type defaults to "TOPIC"
     );
     protobufSerializer.configure(configs, false);
     testMessageDeserializer.configure(configs, false);
@@ -939,7 +939,7 @@ public class KafkaProtobufSerializerTest {
         false,
         KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName(),
-        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        AssociatedNameStrategy.FALLBACK_TYPE,
         "RECORD"
     );
     protobufSerializer.configure(configs, false);
@@ -969,7 +969,7 @@ public class KafkaProtobufSerializerTest {
         true,
         KafkaProtobufDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName(),
-        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        AssociatedNameStrategy.FALLBACK_TYPE,
         "NONE"
     );
     protobufSerializer.configure(configs, false);

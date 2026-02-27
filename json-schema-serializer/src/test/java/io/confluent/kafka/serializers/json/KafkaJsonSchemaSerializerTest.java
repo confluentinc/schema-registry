@@ -40,7 +40,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
-import io.confluent.kafka.serializers.jackson.Jackson;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
@@ -76,7 +75,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 
 public class KafkaJsonSchemaSerializerTest {
@@ -485,7 +483,7 @@ public class KafkaJsonSchemaSerializerTest {
         true,
         KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName()
-        // fallback.subject.name.strategy.type defaults to "TOPIC"
+        // subject.name.strategy.fallback.type defaults to "TOPIC"
     );
     serializer.configure(configs, false);
     deserializer.configure(configs, false);
@@ -517,7 +515,7 @@ public class KafkaJsonSchemaSerializerTest {
         false,
         KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName(),
-        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        AssociatedNameStrategy.FALLBACK_TYPE,
         "RECORD"
     );
     serializer.configure(configs, false);
@@ -547,7 +545,7 @@ public class KafkaJsonSchemaSerializerTest {
         true,
         KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
         AssociatedNameStrategy.class.getName(),
-        AssociatedNameStrategy.FALLBACK_SUBJECT_NAME_STRATEGY_TYPE,
+        AssociatedNameStrategy.FALLBACK_TYPE,
         "NONE"
     );
     serializer.configure(configs, false);
