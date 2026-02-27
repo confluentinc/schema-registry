@@ -40,9 +40,31 @@ public class DekRegistryClientFactory {
       List<SchemaProvider> providers,
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
-    String mockScope = MockDekRegistryClientFactory.validateAndMaybeGetMockScope(baseUrls);
-    if (mockScope != null) {
-      return MockDekRegistryClientFactory.getClientForScope(mockScope, configs, providers);
+    List<String> mockScopes = MockDekRegistryClientFactory.validateAndMaybeGetMockScopes(baseUrls);
+    if (mockScopes != null) {
+      return MockDekRegistryClientFactory.getClientForScope(mockScopes, configs, providers);
+    } else {
+      return new CachedDekRegistryClient(
+          baseUrls,
+          cacheCapacity,
+          cacheExpirySecs,
+          configs,
+          providers,
+          httpHeaders
+      );
+    }
+  }
+
+  public static DekRegistryClient newClient(
+      String baseUrls,
+      int cacheCapacity,
+      int cacheExpirySecs,
+      List<SchemaProvider> providers,
+      Map<String, ?> configs,
+      Map<String, String> httpHeaders) {
+    List<String> mockScopes = MockDekRegistryClientFactory.validateAndMaybeGetMockScopes(baseUrls);
+    if (mockScopes != null) {
+      return MockDekRegistryClientFactory.getClientForScope(mockScopes, configs, providers);
     } else {
       return new CachedDekRegistryClient(
           baseUrls,
