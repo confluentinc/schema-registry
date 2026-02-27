@@ -319,6 +319,28 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   /**
+   * Returns the {@link BinaryDecoder} to use for deserializing the given byte[].
+   * <p>
+   * The default implementation delegates to 
+   * {@link DecoderFactory#binaryDecoder(byte[], int, int, BinaryDecoder))} with 
+   * {@code null} as the reuse argument, matching the historical behavior of this class.
+   * <p>
+   * Subclasses may override this method to supply a reused BinaryDecoder
+   * instance, for example, via a {@link ThreadLocal}, to eliminate per-record 
+   * decoder allocation on high-throughput unmarshal paths.
+   *
+   * @param bytes  serialized payload after {@link DeserializationContext} processing
+   * @param start  the offset into the bytes
+   * @param length the number of bytes to read
+   * @param reuse  the BinaryDecoder to attempt to reuse
+   * @return a BinaryDecoder positioned at {@code start}
+   */
+  protected BinaryDecoder getBinaryDecoder(
+      byte[] bytes, int start, int length, BinaryDecoder reuse) {
+    return decoderFactory.binaryDecoder(bytes, start, length, reuse);
+  }
+
+  /**
    * Normalizes the reader schema, puts the resolved schema into the cache. 
    * <li>
    * <ul>if the reader schema is provided, use the provided one</ul>
@@ -575,7 +597,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           result = bytes;
         } else {
           int start = buffer.position() + buffer.arrayOffset();
-          BinaryDecoder decoder = decoderFactory.binaryDecoder(buffer.array(), start, length, null);
+          BinaryDecoder decoder = getBinaryDecoder(buffer.array(), start, length, null);
           result = reader.read(null, decoder);
           if (avroFailOnTrailingData && !decoder.isEnd()) {
             throw new SerializationException("Trailing data found after deserializing Avro "
