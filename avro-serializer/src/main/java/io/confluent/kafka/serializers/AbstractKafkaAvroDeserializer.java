@@ -319,20 +319,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   /**
-   * Returns the {@link BinaryDecoder} to use for deserializing the given byte[].
+   * Returns a BinaryDecoder that uses the given {@code bytes} as its source of data.
    * <p>
-   * The default implementation delegates to 
-   * {@link DecoderFactory#binaryDecoder(byte[], int, int, BinaryDecoder))} with 
-   * {@code null} as the reuse argument, matching the historical behavior of this class.
-   * <p>
-   * Subclasses may override this method to supply a reused BinaryDecoder
+   * Subclasses may override this method to supply a {@code reuse} BinaryDecoder
    * instance, for example, via a {@link ThreadLocal}, to eliminate per-record 
    * decoder allocation on high-throughput unmarshal paths.
    *
-   * @param bytes  serialized payload after {@link DeserializationContext} processing
-   * @param start  the offset into the bytes
-   * @param length the number of bytes to read
-   * @param reuse  the BinaryDecoder to attempt to reuse
+   * @param bytes  serialized payload after {@link DeserializationContext} processing.
+   * @param start  the offset into the bytes.
+   * @param length the number of bytes to read.
+   * @param reuse  the BinaryDecoder to attempt to reuse. If null, a new instance is returned.
    * @return a BinaryDecoder positioned at {@code start}
    */
   protected BinaryDecoder getBinaryDecoder(
