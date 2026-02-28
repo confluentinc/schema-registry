@@ -214,7 +214,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   @SuppressWarnings("unchecked")
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
           throws ExecutionException, IOException {
-    BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+    BinaryEncoder encoder = getBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
@@ -228,5 +228,24 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
     return AvroSchemaUtils.getDatumWriter(value, schema, useLogicalTypes, allowNull);
+  }
+
+  /**
+   * Returns the {@link BinaryEncoder} to use for serializing the given ByteArrayOutputStream.
+   * <p>
+   * The default implementation delegates to 
+   * {@link EncoderFactory#directBinaryEncoder(OutputStream, BinaryEncoder))} with 
+   * {@code null} as the reuse argument, matching the historical behavior of this class.
+   * <p>
+   * Subclasses may override this method to supply a reused BinaryEncoder
+   * instance, for example, via a {@link ThreadLocal}, to eliminate per-record 
+   * encoder allocation on high-throughput marshal paths.
+   *
+   * @param out    the OutputStream to initialize to. Cannot be null.
+   * @param reuse  the BinaryEncoder to attempt to reuse. If null, a new instance is returned.
+   * @return a BinaryEncoder that uses {@code out} as its data output.
+   */
+  protected BinaryEncoder getBinaryEncoder(ByteArrayOutputStream out, BinaryEncoder reuse) {
+    return encoderFactory.directBinaryEncoder(out, reuse);
   }
 }
