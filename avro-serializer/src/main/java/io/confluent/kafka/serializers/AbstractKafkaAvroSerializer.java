@@ -231,15 +231,22 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   /**
-   * Returns the {@link BinaryEncoder} to use for serializing the given ByteArrayOutputStream.
+   * Returns a {@link BinaryEncoder} for marshaling output.
    * <p>
-   * The default implementation delegates to 
-   * {@link EncoderFactory#directBinaryEncoder(OutputStream, BinaryEncoder))} with 
-   * {@code null} as the reuse argument, matching the historical behavior of this class.
+   * The default implementation returns a non-buffering encoder via
+   * {@link EncoderFactory#directBinaryEncoder}, preserving existing behavior.  Subclasses 
+   * may override this method to supply a reused BinaryEncoder instance, for example, via 
+   * a {@link ThreadLocal}, to eliminate per-record encoder allocation on high-throughput 
+   * marshal paths.  Furthermore, subclasses may wish to use a buffering BinaryEncoder 
+   * instead and should override entirely to call {@link EncoderFactory#binaryEncoder} 
+   * directly, which is likely the better choice in reuse scenarios.
    * <p>
-   * Subclasses may override this method to supply a reused BinaryEncoder
-   * instance, for example, via a {@link ThreadLocal}, to eliminate per-record 
-   * encoder allocation on high-throughput marshal paths.
+   * Note: if a subclass were to call super.getBinaryEncoder(), the {@code reuse} argument
+   * must be a DirectBinaryEncoder instance for actual reuse to occur; the factory performs 
+   * an exact class equality check and will allocate a new DirectBinaryEncoder if the 
+   * provided instance is of any other type.
+   * <p>
+   * @see EncoderFactory
    *
    * @param out    the OutputStream to initialize to. Cannot be null.
    * @param reuse  the BinaryEncoder to attempt to reuse. If null, a new instance is returned.
