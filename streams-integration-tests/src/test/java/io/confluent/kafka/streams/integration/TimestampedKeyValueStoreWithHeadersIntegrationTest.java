@@ -67,15 +67,13 @@ import org.junit.jupiter.api.Test;
 /**
  * Integration test that verifies Kafka Streams with {@link TimestampedKeyValueStoreWithHeaders}
  * works correctly with {@link GenericAvroSerde} configured to use {@link HeaderSchemaIdSerializer}
- * for header-based schema ID transport.
+ * for header-based schema ID transport. Both keys and values use Avro with header-based schema IDs.
  *
- * <p>This test uses PAPI (Processor API) since DSL aggregations don't yet support the
- * headers-aware store type.
  */
 public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
-    private static final String INPUT_TOPIC = "words-input";
-    private static final String OUTPUT_TOPIC = "words-output";
+    private static final String INPUT_TOPIC = "word-plaintext-input";
+    private static final String OUTPUT_TOPIC = "word-count-output";
     private static final String STORE_NAME = "words-store";
 
     private static final String KEY_SCHEMA_JSON =
@@ -255,7 +253,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             assertEquals(1L, wordCounts.get("hello"), "hello should have count 1");
             assertEquals(4L, wordCounts.get("world"), "world should have count 4");
 
-            // Verify schema ID headers are present on output records
+            // Verify __key_schema_id header is present with V1 magic byte (GUID format, 17 bytes)
             ConsumerRecord<GenericRecord, GenericRecord> lastRecord = results.get(results.size() - 1);
 
             Header keySchemaIdHeader = lastRecord.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
@@ -267,6 +265,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 keyHeaderBytes[0],
                 "Key header should start with V1 magic byte for GUID format");
 
+            // Verify __value_schema_id header is present with V1 magic byte (GUID format, 17 bytes)
             Header valueSchemaIdHeader =
                 lastRecord.headers().lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
             assertNotNull(valueSchemaIdHeader, "Output record should have __value_schema_id header");
@@ -302,7 +301,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
         @Override
         public void process(Record<GenericRecord, GenericRecord> record) {
-            // Store the record with its headers preserved
             ValueTimestampHeaders<GenericRecord> existingRecord = store.get(record.key());
 
             long newCount = (Long) record.value().get("count");
@@ -315,7 +313,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             ValueTimestampHeaders<GenericRecord> valueTimestampHeaders = ValueTimestampHeaders.make(updatedValue, record.timestamp(), record.headers());
             store.put(record.key(), valueTimestampHeaders);
 
-            // Read back from store and forward (to verify headers are preserved)
             ValueTimestampHeaders<GenericRecord> stored = store.get(record.key());
             if (stored != null) {
                 context.forward(
