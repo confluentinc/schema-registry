@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 
-import org.junit.experimental.categories.Category;
-
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -64,6 +62,11 @@ public class UamiIntegrationTest {
 
   @org.junit.Test
   public void testListSubjectsWithUami() throws Exception {
+    // Skip when not running on an Azure VM (i.e. no -Dschema.registry.url passed)
+    org.junit.Assume.assumeTrue(
+        "Skipped: set -Dschema.registry.url to run this test",
+        System.getProperty("schema.registry.url") != null);
+
     String srUrl = prop("schema.registry.url", SCHEMA_REGISTRY_URL);
     String clientId = prop("uami.client.id", UAMI_CLIENT_ID);
     String resource = prop("uami.resource", RESOURCE);
