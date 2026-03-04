@@ -231,7 +231,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 consumer.subscribe(Collections.singletonList(OUTPUT_TOPIC));
 
                 long deadline = System.currentTimeMillis() + 30_000;
-                while (results.size() < 2 && System.currentTimeMillis() < deadline) {
+                while (results.size() < 3 && System.currentTimeMillis() < deadline) {
                     ConsumerRecords<GenericRecord, GenericRecord> records =
                         consumer.poll(Duration.ofMillis(500));
                     for (ConsumerRecord<GenericRecord, GenericRecord> record : records) {
