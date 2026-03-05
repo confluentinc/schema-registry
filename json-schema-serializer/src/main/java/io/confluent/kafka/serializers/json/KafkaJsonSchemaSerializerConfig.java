@@ -70,6 +70,7 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final boolean JSON_INDENT_OUTPUT_DEFAULT = false;
   public static final String JSON_INDENT_OUTPUT_DOC = "Whether JSON output should be indented "
       + "(\"pretty-printed\")";
+  
   private static ConfigDef config;
 
   static {
