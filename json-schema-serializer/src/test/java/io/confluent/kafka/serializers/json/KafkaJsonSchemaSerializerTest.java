@@ -419,6 +419,51 @@ public class KafkaJsonSchemaSerializerTest {
   }
 
   @Test
+  public void serializeRecordEnvelope() throws Exception {
+    String json = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode record = objectMapper.readTree(json);
+    JsonNode schemaNode = objectMapper.readTree(recordWithDefaultsSchemaString);
+    JsonNode envelope = JsonSchemaUtils.envelope(schemaNode, record);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, envelope);
+
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
+    assertEquals(record, deserialized);
+  }
+
+  @Test
+  public void serializeRecordEnvelopeWithoutDetection() throws Exception {
+    Properties noDetectionConfig = createSerializerConfig();
+    noDetectionConfig.put(KafkaJsonSchemaSerializerConfig.JSON_ENVELOPE_DETECTION, false);
+    KafkaJsonSchemaSerializer<Object> noDetectionSerializer =
+        new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(noDetectionConfig));
+
+    String json = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode record = objectMapper.readTree(json);
+    JsonNode schemaNode = objectMapper.readTree(recordWithDefaultsSchemaString);
+    JsonNode envelope = JsonSchemaUtils.envelope(schemaNode, record);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = noDetectionSerializer.serialize(topic, headers, envelope);
+
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
+    assertEquals(envelope, deserialized);
+  }
+
+  @Test
   public void testKafkaJsonSchemaDeserializerWithAssociatedNameStrategy()
       throws IOException, RestClientException {
     User user = new User("john", "doe", (short) 50, "jack", null);
