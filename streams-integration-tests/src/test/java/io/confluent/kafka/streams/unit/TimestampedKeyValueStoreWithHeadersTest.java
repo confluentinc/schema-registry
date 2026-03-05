@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.streams.integration;
+package io.confluent.kafka.streams.unit;
 
+import static io.confluent.kafka.streams.unit.Utils.assertSchemaIdHeadersOnRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
-import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -55,9 +54,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Unit test for {@link TimestampedKeyValueStoreWithHeaders} using {@link TopologyTestDriver}
- * with {@link MockSchemaRegistryClient}. Tests store APIs: put, get, delete, putIfAbsent.
+ * with {@link MockSchemaRegistryClient}. Tests store APIs: put, get, delete, putIfAbsent, putAll.
  */
-public class TimestampedKeyValueStoreWithHeadersUnitTest {
+public class TimestampedKeyValueStoreWithHeadersTest {
 
     private static final String APPLICATION_ID = "word-count-unit-test";
     private static final String INPUT_TOPIC = "word-plaintext-input";
@@ -215,7 +214,7 @@ public class TimestampedKeyValueStoreWithHeadersUnitTest {
         inputTopic.pipeInput(key, deleteValue);
 
         TestRecord<GenericRecord, GenericRecord> deleteRecord = outputTopic.readRecord();
-        assertEquals(5L, deleteRecord.getValue().get("count"), "Should return deleted value");
+        assertEquals(5L, deleteRecord.value().get("count"), "Should return deleted value");
         assertSchemaIdHeadersOnRecord(deleteRecord, "after delete() on existing key");
 
         // delete a non-existing key
@@ -245,7 +244,7 @@ public class TimestampedKeyValueStoreWithHeadersUnitTest {
 
         // Verify old value not overwritten
         TestRecord<GenericRecord, GenericRecord> outputRecord = outputTopic.readRecord();
-        assertEquals(10L, outputRecord.getValue().get("count"), "Should return existing value");
+        assertEquals(10L, outputRecord.value().get("count"), "Should return existing value");
         assertSchemaIdHeadersOnRecord(outputRecord, "after putIfAbsent() on existing key");
 
         // put_if_absent on non-existing key
@@ -258,8 +257,39 @@ public class TimestampedKeyValueStoreWithHeadersUnitTest {
 
         // Verify new value inserted
         TestRecord<GenericRecord, GenericRecord> newOutput = outputTopic.readRecord();
-        assertEquals(30L, newOutput.getValue().get("count"), "Should insert new value");
+        assertEquals(30L, newOutput.value().get("count"), "Should insert new value");
         assertSchemaIdHeadersOnRecord(newOutput, "after putIfAbsent() on new key");
+    }
+
+    @Test
+    void shouldPutAllWithHeaders() {
+        GenericRecord key1 = new GenericData.Record(keySchema);
+        key1.put("word", "word-1");
+        GenericRecord value1 = new GenericData.Record(valueSchema);
+        value1.put("count", 100L);
+        value1.put("operation", "PUT_ALL");
+        inputTopic.pipeInput(key1, value1);
+
+        // Send second entry
+        GenericRecord key2 = new GenericData.Record(keySchema);
+        key2.put("word", "word-2");
+        GenericRecord value2 = new GenericData.Record(valueSchema);
+        value2.put("count", 200L);
+        value2.put("operation", "PUT_ALL");
+        inputTopic.pipeInput(key2, value2);
+
+        // Verify 2 output records
+        assertEquals(2, outputTopic.getQueueSize());
+
+        TestRecord<GenericRecord, GenericRecord> record1 = outputTopic.readRecord();
+        assertEquals("word-1", record1.key().get("word").toString());
+        assertEquals(100L, record1.value().get("count"));
+        assertSchemaIdHeadersOnRecord(record1, "first putAll entry");
+
+        TestRecord<GenericRecord, GenericRecord> record2 = outputTopic.readRecord();
+        assertEquals("word-2", record2.key().get("word").toString());
+        assertEquals(200L, record2.value().get("count"));
+        assertSchemaIdHeadersOnRecord(record2, "second putAll entry");
     }
 
     @Test
@@ -283,34 +313,12 @@ public class TimestampedKeyValueStoreWithHeadersUnitTest {
         // Verify first record value
         TestRecord<GenericRecord, GenericRecord> changelogRecord1 = changelogRecords.get(0);
         assertEquals(5L, changelogRecord1.value().get("count"));
-        // Verify headers on first changelog record
-        assertNotNull(changelogRecord1.headers(), "first changelog record should have headers");
-        Header keyHeader1 = changelogRecord1.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        assertNotNull(keyHeader1, "first changelog record should have __key_schema_id header");
         assertSchemaIdHeadersOnRecord(changelogRecord1, "first changelog record");
-
         // Verify second record value
         TestRecord<GenericRecord, GenericRecord> changelogRecord2 = changelogRecords.get(1);
         assertEquals(12L, changelogRecord2.value().get("count"));
         // Verify headers on second changelog record
-        assertNotNull(changelogRecord2.headers(), "second changelog record should have headers");
         assertSchemaIdHeadersOnRecord(changelogRecord2, "second changelog record");
-    }
-
-    /**
-     * Verify that the stored record has both __key_schema_id and __value_schema_id headers are present,
-     * with V1 magic byte (GUID format, 17 bytes)
-     */
-    private void assertSchemaIdHeadersOnRecord(TestRecord<GenericRecord, GenericRecord> record, String context) {
-        assertNotNull(record.headers(), context + ": headers should not be null");
-
-        Header keyHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        assertNotNull(keyHeader, context + ": should have __key_schema_id header");
-        assertEquals(17, keyHeader.value().length, context + ": key GUID should be 17 bytes");
-
-        Header valueHeader = record.headers().lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
-        assertNotNull(valueHeader, context + ": should have __value_schema_id header");
-        assertEquals(17, valueHeader.value().length, context + ": value GUID should be 17 bytes");
     }
 
     /**
@@ -342,6 +350,9 @@ public class TimestampedKeyValueStoreWithHeadersUnitTest {
                     break;
                 case "PUT_IF_ABSENT":
                     handlePutIfAbsent(record);
+                    break;
+                case "PUT_ALL":
+                    handlePutAll(record);
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown operation: " + operation);
@@ -396,6 +407,20 @@ public class TimestampedKeyValueStoreWithHeadersUnitTest {
                 context.forward(new Record<>(
                     record.key(), insertedRecord.value(), insertedRecord.timestamp(), insertedRecord.headers()));
             }
+        }
+
+        private void handlePutAll(Record<GenericRecord, GenericRecord> record) {
+            ValueTimestampHeaders<GenericRecord> toStore =
+                ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers());
+
+            List<KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>>> entries =
+                List.of(new KeyValue<>(record.key(), toStore));
+
+            store.putAll(entries);
+
+            ValueTimestampHeaders<GenericRecord> storedRecord = store.get(record.key());
+            context.forward(new Record<>(
+                record.key(), storedRecord.value(), storedRecord.timestamp(), storedRecord.headers()));
         }
     }
 }
