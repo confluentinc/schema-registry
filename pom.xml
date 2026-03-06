@@ -92,7 +92,7 @@
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
-        <caffeine.version>2.9.3</caffeine.version>
+        <caffeine.version>3.2.3</caffeine.version>
         <cel-version>0.5.3</cel-version>
         <google.api.client.version>2.4.0</google.api.client.version>
         <google.auth.version>1.24.1</google.auth.version>
