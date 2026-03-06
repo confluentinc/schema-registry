@@ -92,28 +92,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             + "]"
             + "}";
 
-    private static final String SIMPLE_VALUE_SCHEMA_JSON =
-        "{"
-            + "\"type\":\"record\","
-            + "\"name\":\"SimpleWordValue\","
-            + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-            + "\"fields\":["
-            + "  {\"name\":\"count\",\"type\":\"long\"},"
-            + "  {\"name\":\"operation\",\"type\":\"string\",\"default\":\"PUT\"}"
-            + "]"
-            + "}";
-
-    private static final String BATCH_ENTRY_SCHEMA_JSON =
-        "{"
-            + "\"type\":\"record\","
-            + "\"name\":\"BatchEntry\","
-            + "\"namespace\":\"io.confluent.kafka.streams.integration\","
-            + "\"fields\":["
-            + "  {\"name\":\"key\",\"type\":" + KEY_SCHEMA_JSON + "},"
-            + "  {\"name\":\"value\",\"type\":" + SIMPLE_VALUE_SCHEMA_JSON + "}"
-            + "]"
-            + "}";
-
     private static final String VALUE_SCHEMA_JSON =
         "{"
             + "\"type\":\"record\","
@@ -121,16 +99,12 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             + "\"namespace\":\"io.confluent.kafka.streams.integration\","
             + "\"fields\":["
             + "  {\"name\":\"count\",\"type\":\"long\"},"
-            + "  {\"name\":\"operation\",\"type\":\"string\",\"default\":\"PUT\"},"
-            + "  {\"name\":\"batchEntries\",\"type\":{\"type\":\"array\",\"items\":"
-            + BATCH_ENTRY_SCHEMA_JSON + "},\"default\":[]}"
+            + "  {\"name\":\"operation\",\"type\":\"string\",\"default\":\"PUT\"}"
             + "]"
             + "}";
 
     private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
     private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
-    private final Schema batchEntrySchema = new Schema.Parser().parse(BATCH_ENTRY_SCHEMA_JSON);
-    private final Schema simpleValueSchema = new Schema.Parser().parse(SIMPLE_VALUE_SCHEMA_JSON);
 
     public TimestampedKeyValueStoreWithHeadersIntegrationTest() {
         super(1, true);
@@ -175,13 +149,8 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 // Test 4: PUT_IF_ABSENT - new key "world" should be inserted
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("world"), createValue(50L, "PUT_IF_ABSENT"))).get();
 
-                // Test 5: PUT_ALL - batch insert 3 words
-                GenericRecord putAllValue = createPutAllValue(
-                    createBatchEntry("batch1", 25L),
-                    createBatchEntry("batch2", 50L),
-                    createBatchEntry("batch3", 75L)
-                );
-                producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("dummy"), putAllValue)).get();
+                // Test 5: PUT_ALL - batch insert 3 words (hardcoded in processor)
+                producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("batch-word"), createValue(0L, "PUT_ALL"))).get();
 
                 // Test 6: DELETE - delete "hello"
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(0L, "DELETE"))).get();
@@ -279,12 +248,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 producer.send(new ProducerRecord<>(iqInputTopic, createKey("world"), createValue(50L, "PUT_IF_ABSENT"))).get();
 
                 // PUT_ALL: batch insert batch1:25, batch2:50, batch3:75
-                GenericRecord putAllValue = createPutAllValue(
-                    createBatchEntry("batch1", 25L),
-                    createBatchEntry("batch2", 50L),
-                    createBatchEntry("batch3", 75L)
-                );
-                producer.send(new ProducerRecord<>(iqInputTopic, createKey("dummy"), putAllValue)).get();
+                producer.send(new ProducerRecord<>(iqInputTopic, createKey("batch-word"), createValue(0L, "PUT_ALL"))).get();
 
                 // DELETE: delete hello
                 producer.send(new ProducerRecord<>(iqInputTopic, helloKey, createValue(0L, "DELETE"))).get();
@@ -425,20 +389,22 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         }
 
         private void handlePutAll(Record<GenericRecord, GenericRecord> record) {
-            @SuppressWarnings("unchecked")
-            List<GenericRecord> batchEntries = (List<GenericRecord>) record.value().get("batchEntries");
+            Schema keySchema = record.key().getSchema();
+            Schema valueSchema = record.value().getSchema();
 
-            if (batchEntries == null || batchEntries.isEmpty()) {
-                return;
-            }
+            // Hardcoded batch entries: batch1:25, batch2:50, batch3:75
+            String[] words = {"batch1", "batch2", "batch3"};
+            long[] counts = {25L, 50L, 75L};
 
-            // Extract key-value pairs from batch entries and build entries list
             List<KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>>> entries = new ArrayList<>();
 
-            for (GenericRecord batchEntry : batchEntries) {
-                // Extract key and value directly from batch entry
-                GenericRecord entryKey = (GenericRecord) batchEntry.get("key");
-                GenericRecord entryValue = (GenericRecord) batchEntry.get("value");
+            for (int i = 0; i < words.length; i++) {
+                GenericRecord entryKey = new GenericData.Record(keySchema);
+                entryKey.put("word", words[i]);
+
+                GenericRecord entryValue = new GenericData.Record(valueSchema);
+                entryValue.put("count", counts[i]);
+                entryValue.put("operation", "PUT_ALL");
 
                 ValueTimestampHeaders<GenericRecord> toStore =
                     ValueTimestampHeaders.make(entryValue, record.timestamp(), record.headers());
@@ -524,6 +490,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
     private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
+        streams.cleanUp();
         streams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING) {
                 startedLatch.countDown();
@@ -585,29 +552,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         GenericRecord value = new GenericData.Record(valueSchema);
         value.put("count", count);
         value.put("operation", operation);
-        value.put("batchEntries", Collections.emptyList());
-        return value;
-    }
-
-    private GenericRecord createSimpleValue(long count) {
-        GenericRecord value = new GenericData.Record(simpleValueSchema);
-        value.put("count", count);
-        value.put("operation", "PUT_ALL");
-        return value;
-    }
-
-    private GenericRecord createBatchEntry(String word, long count) {
-        GenericRecord entry = new GenericData.Record(batchEntrySchema);
-        entry.put("key", createKey(word));
-        entry.put("value", createSimpleValue(count));
-        return entry;
-    }
-
-    private GenericRecord createPutAllValue(GenericRecord... batchEntries) {
-        GenericRecord value = new GenericData.Record(valueSchema);
-        value.put("count", 0L);
-        value.put("operation", "PUT_ALL");
-        value.put("batchEntries", Arrays.asList(batchEntries));
         return value;
     }
 }
