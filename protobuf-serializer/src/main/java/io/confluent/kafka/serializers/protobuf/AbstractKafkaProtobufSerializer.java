@@ -139,10 +139,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           String formatted = schema.formattedString(schemaFormat);
           schema = schema.copyWithSchema(formatted);
         }
-        schema = (ProtobufSchema)
-            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        // omit the GUID when useSchemaId is set
-        schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, (String) null);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            lookupSchemaEntityBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        schema = (ProtobufSchema) schemaRegistry.parseSchemaOrElseThrow(s);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, s.getGuid());
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
         if (schemaFormat != null) {
