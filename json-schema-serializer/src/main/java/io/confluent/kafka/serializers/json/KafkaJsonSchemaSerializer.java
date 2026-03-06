@@ -96,7 +96,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
       return null;
     }
     JsonSchema schema;
-    if (JsonSchemaUtils.isEnvelope(record)) {
+    if (envelopeDetection && JsonSchemaUtils.isEnvelope(record)) {
       try {
         schema = nodeToSchemaCache.get(
             JsonSchemaUtils.copyEnvelopeWithoutPayload((ObjectNode) record),
@@ -111,15 +111,15 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
         schema = getSchema(record);
       }
     }
-    Object value = JsonSchemaUtils.getValue(record);
+    Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
     return serializeImpl(
         getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
   }
 
   private JsonSchema getSchema(T record) {
     try {
-      return JsonSchemaUtils.getSchema(record, specVersion, scanPackages, oneofForNullables,
-          failUnknownProperties, objectMapper, schemaRegistry);
+      return JsonSchemaUtils.getSchema(record, specVersion, scanPackages, envelopeDetection,
+          oneofForNullables, failUnknownProperties, objectMapper, schemaRegistry);
     } catch (IOException e) {
       throw new SerializationException(e);
     }
