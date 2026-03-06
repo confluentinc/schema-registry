@@ -172,6 +172,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
 
+  default Schema getSchemaEntityBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   default ParsedSchema getSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
