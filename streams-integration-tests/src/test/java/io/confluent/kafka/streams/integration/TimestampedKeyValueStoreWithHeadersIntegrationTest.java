@@ -137,10 +137,10 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
                 GenericRecord helloKey = createKey("hello");
 
-                // Test 1: put word:1
+                // Test 1: PUT - should insert hello:1
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(1L, "PUT"))).get();
 
-                // Test 2: put wor:1, aggregates to word:2
+                // Test 2: PUT - should aggregate to hello:2
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(1L, "PUT"))).get();
 
                 // Test 3: PUT_IF_ABSENT - should not overwrite existing "hello"
