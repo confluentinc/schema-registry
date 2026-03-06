@@ -577,6 +577,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
+  public Schema getSchemaEntityBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    return schemaRegistry.getSchemaEntityBySubjectAndId(subject, id);
+  }
+
   protected ParsedSchema getSchemaBySchemaId(String subject, SchemaId schemaId)
       throws IOException, RestClientException {
     if (schemaId.getId() != null) {
@@ -588,12 +593,25 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
   }
 
+  @Deprecated
   protected ParsedSchema lookupSchemaBySubjectAndId(
       String subject, int id, ParsedSchema schema, boolean idCompatStrict)
       throws IOException, RestClientException {
     ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
       throw new IOException("Incompatible schema of type '" + lookupSchema.schemaType()
+          + "'. Set id.compatibility.strict=false to disable this check");
+    }
+    return lookupSchema;
+  }
+
+  protected Schema lookupSchemaEntityBySubjectAndId(
+      String subject, int id, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    Schema lookupSchema = getSchemaEntityBySubjectAndId(subject, id);
+    ParsedSchema lookupParsedSchema = schemaRegistry.parseSchemaOrElseThrow(lookupSchema);
+    if (idCompatStrict && !lookupParsedSchema.isBackwardCompatible(schema).isEmpty()) {
+      throw new IOException("Incompatible schema of type '" + lookupParsedSchema.schemaType()
           + "'. Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
