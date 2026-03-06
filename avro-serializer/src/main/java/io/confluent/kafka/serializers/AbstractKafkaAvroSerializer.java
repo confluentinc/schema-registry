@@ -141,8 +141,8 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
         schema = (AvroSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
-        // omit the ID when useSchemaGuid is set
-        schemaId = new SchemaId(AvroSchema.TYPE, null, useSchemaGuid);
+        int id = schemaRegistry.getId(subject, schema);
+        schemaId = new SchemaId(AvroSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
