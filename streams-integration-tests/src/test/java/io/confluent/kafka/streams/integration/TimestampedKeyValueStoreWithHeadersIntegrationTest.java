@@ -132,15 +132,15 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         try {
             streams = startStreamsAndAwaitRunning(builder.build(), "kv-store-integration-test");
 
+            GenericRecord helloKey = createKey("hello");
+
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
                      new KafkaProducer<>(createProducerProps())) {
 
-                GenericRecord helloKey = createKey("hello");
-
-                // Test 1: PUT - should insert hello:1
+                // Test 1: put word:1
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(1L, "PUT"))).get();
 
-                // Test 2: PUT - should aggregate to hello:2
+                // Test 2: put wor:1, aggregates to word:2
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(1L, "PUT"))).get();
 
                 // Test 3: PUT_IF_ABSENT - should not overwrite existing "hello"
@@ -205,67 +205,10 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             assertEquals(2L, results.get(7).value().get("count"));
             assertSchemaIdHeaders(results.get(7), "DELETE");
 
-        } finally {
-            closeStreams(streams);
-        }
-    }
-
-    @Test
-    public void shouldQueryStoreViaIQv1WithHeaders() throws Exception {
-        String iqInputTopic = "iq-input";
-        String iqStoreName = "iq-store";
-
-        createTopics(iqInputTopic);
-
-        GenericAvroSerde keySerde = createKeySerde();
-        GenericAvroSerde valueSerde = createValueSerde();
-
-        StreamsBuilder builder = new StreamsBuilder();
-        builder
-            .addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                    Stores.persistentTimestampedKeyValueStoreWithHeaders(iqStoreName),
-                    keySerde,
-                    valueSerde))
-            .stream(iqInputTopic, Consumed.with(keySerde, valueSerde))
-            .process(() -> new WordCountProcessor(iqStoreName), iqStoreName);
-
-        KafkaStreams streams = null;
-        try {
-            streams = startStreamsAndAwaitRunning(builder.build(), "iq-test-app");
-
-            GenericRecord helloKey = createKey("hello");
-
-            try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(createProducerProps())) {
-
-                // PUT: hello:1, then hello:1 again to aggregate to hello:2
-                producer.send(new ProducerRecord<>(iqInputTopic, helloKey, createValue(1L, "PUT"))).get();
-                producer.send(new ProducerRecord<>(iqInputTopic, helloKey, createValue(1L, "PUT"))).get();
-
-                // PUT_IF_ABSENT: try to overwrite hello:100, insert world:50
-                producer.send(new ProducerRecord<>(iqInputTopic, helloKey, createValue(100L, "PUT_IF_ABSENT"))).get();
-                producer.send(new ProducerRecord<>(iqInputTopic, createKey("world"), createValue(50L, "PUT_IF_ABSENT"))).get();
-
-                // PUT_ALL: batch insert batch1:25, batch2:50, batch3:75
-                producer.send(new ProducerRecord<>(iqInputTopic, createKey("batch-word"), createValue(0L, "PUT_ALL"))).get();
-
-                // DELETE: delete hello
-                producer.send(new ProducerRecord<>(iqInputTopic, helloKey, createValue(0L, "DELETE"))).get();
-
-                // DELETE non-existing key
-                producer.send(new ProducerRecord<>(iqInputTopic, createKey("non-existing"), createValue(0L, "DELETE"))).get();
-
-                producer.flush();
-            }
-
-            // Wait for records to be processed and stored
-            Thread.sleep(5000);
-
-            // Query store via IQv1 (Interactive Queries)
+            // Query store via IQv1 to verify final state
             ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
                 streams.store(
-                    StoreQueryParameters.fromNameAndType(iqStoreName, QueryableStoreTypes.keyValueStore()));
+                    StoreQueryParameters.fromNameAndType(STORE_NAME, QueryableStoreTypes.keyValueStore()));
 
             assertNotNull(store, "Store should be accessible via IQv1");
 
