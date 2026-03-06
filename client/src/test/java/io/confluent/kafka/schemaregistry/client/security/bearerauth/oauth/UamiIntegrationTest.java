@@ -79,7 +79,7 @@ public class UamiIntegrationTest {
 
     Map<String, String> config = new HashMap<>();
     config.put(SchemaRegistryClientConfig.BEARER_AUTH_CREDENTIALS_SOURCE, "UAMI");
-    config.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_QUERY, endpointQuery);
+    config.put(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY, endpointQuery);
     config.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, logicalCluster);
     config.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, identityPoolId);
 

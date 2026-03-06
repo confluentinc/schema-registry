@@ -35,7 +35,7 @@ import java.util.Map;
  *
  * <p>Required configuration:
  * <ul>
- *   <li>{@link SchemaRegistryClientConfig#BEARER_AUTH_ISSUER_ENDPOINT_QUERY} - The pre-formatted
+ *   <li>{@link SchemaRegistryClientConfig#BEARER_AUTH_UAMI_ENDPOINT_QUERY} - The pre-formatted
  *       query string appended to the IMDS endpoint URL (e.g.
  *       {@code api-version=2025-04-07&resource=https%3A%2F%2Fconfluent.azure.com&client_id=...}).
  *       </li>
@@ -107,7 +107,7 @@ public class UamiCredentialProvider implements BearerAuthCredentialProvider {
 
   private UamiJwtRetriever buildJwtRetriever(ConfigurationUtils cu) {
     String query = cu.validateString(
-        SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_QUERY);
+        SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY);
     String endpointUrl = SchemaRegistryClientConfig.getUamiEndpointUrl(
         cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_URL, false));
     return new UamiJwtRetriever(

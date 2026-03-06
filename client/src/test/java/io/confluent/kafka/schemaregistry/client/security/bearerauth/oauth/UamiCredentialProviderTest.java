@@ -56,7 +56,7 @@ public class UamiCredentialProviderTest {
     configMap = new HashMap<>();
     configMap.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, LSRC_ID);
     configMap.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, POOL_ID);
-    configMap.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_QUERY, QUERY);
+    configMap.put(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY, QUERY);
   }
 
   @Test
@@ -90,7 +90,7 @@ public class UamiCredentialProviderTest {
   @Test
   public void testTargetFieldsNullWhenNotConfigured() {
     Map<String, Object> minimalConfig = new HashMap<>();
-    minimalConfig.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_QUERY, QUERY);
+    minimalConfig.put(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY, QUERY);
 
     provider.configure(minimalConfig);
 
@@ -101,7 +101,7 @@ public class UamiCredentialProviderTest {
   @Test
   public void testConfigureThrowsOnMissingQuery() {
     Map<String, Object> insufficient = new HashMap<>(configMap);
-    insufficient.remove(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_QUERY);
+    insufficient.remove(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY);
 
     Assert.assertThrows(ConfigException.class, () -> provider.configure(insufficient));
   }

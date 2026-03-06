@@ -78,7 +78,7 @@ public class BearerAuthCredentialProviderFactoryTest {
     Map<String, String> CONFIG_MAP = new HashMap<>();
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, "lsrc-dummy");
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, "my-pool-id");
-    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_QUERY,
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY,
         "api-version=2025-04-07&resource=https%3A%2F%2Fconfluent.azure.com&client_id=uami-id");
 
     assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(

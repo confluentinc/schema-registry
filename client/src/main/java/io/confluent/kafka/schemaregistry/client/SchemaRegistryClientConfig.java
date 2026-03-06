@@ -96,8 +96,8 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_UAMI_ENDPOINT_URL = "bearer.auth.uami.endpoint.url";
   public static final String BEARER_AUTH_UAMI_ENDPOINT_URL_DEFAULT =
       "http://169.254.169.254/metadata/identity/oauth2/token";
-  public static final String BEARER_AUTH_UAMI_ISSUER_ENDPOINT_QUERY =
-      "bearer.auth.uami.issuer.endpoint.query";
+  public static final String BEARER_AUTH_UAMI_ENDPOINT_QUERY =
+      "bearer.auth.uami.endpoint.query";
 
   public static final String SSL_PREFIX = "ssl.";
 
