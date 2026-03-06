@@ -59,6 +59,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
   protected List<String> scanPackages;
+  protected boolean envelopeDetection;
   protected boolean oneofForNullables;
   protected boolean failUnknownProperties;
   protected boolean validate;
@@ -81,6 +82,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.specVersion = SpecificationVersion.get(
         config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.scanPackages = config.getList(KafkaJsonSchemaSerializerConfig.SCHEMA_SCAN_PACKAGES);
+    this.envelopeDetection =
+        config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_ENVELOPE_DETECTION);
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
     String inclusion = config.getString(KafkaJsonSchemaSerializerConfig.DEFAULT_PROPERTY_INCLUSION);
     if (inclusion != null) {
