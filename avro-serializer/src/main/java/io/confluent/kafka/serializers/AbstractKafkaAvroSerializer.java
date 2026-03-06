@@ -134,10 +134,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         schemaId = new SchemaId(AvroSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
-        schema = (AvroSchema)
-            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        // omit the GUID when useSchemaId is set
-        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, (String) null);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            lookupSchemaEntityBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        schema = (AvroSchema) schemaRegistry.parseSchemaOrElseThrow(s);
+        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, s.getGuid());
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
         schema = (AvroSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
