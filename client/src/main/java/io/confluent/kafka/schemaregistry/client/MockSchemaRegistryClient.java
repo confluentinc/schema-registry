@@ -204,7 +204,6 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String schemaString,
       List<SchemaReference> references) {
     return parseSchema(new Schema(null, null, null, schemaType, references, schemaString));
-
   }
 
   @Override
