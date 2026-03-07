@@ -460,7 +460,7 @@ public class ProtobufData {
           if (listValue.isEmpty()) {
             return null;
           }
-          List<Object> newListValue = new ArrayList<>();
+          List<Object> newListValue = new ArrayList<>(listValue.size());
           for (Object o : listValue) {
             newListValue.add(fromConnectData(ctx, schema.valueSchema(), scope, o, protobufSchema));
           }
@@ -468,7 +468,7 @@ public class ProtobufData {
         case MAP:
           final Map<?, ?> mapValue = (Map<?, ?>) value;
           String scopedMapName = ((Descriptor) ctx).getFullName();
-          List<Message> newMapValue = new ArrayList<>();
+          List<Message> newMapValue = new ArrayList<>(mapValue.size());
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
             DynamicMessage.Builder mapBuilder = protobufSchema.newMessageBuilder(scopedMapName);
             if (mapBuilder == null) {
@@ -508,7 +508,10 @@ public class ProtobufData {
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
           if (isUnionSchema(schema)) {
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Object object = ignoreDefaultForNullables
                   ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
@@ -527,7 +530,10 @@ public class ProtobufData {
             if (messageBuilder == null) {
               throw new DataException("Invalid message name: " + scopedStructName);
             }
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name());
               Object fieldCtx = getFieldType(ctx, fieldName);
               Object connectFieldVal = ignoreDefaultForNullables
@@ -1224,7 +1230,10 @@ public class ProtobufData {
           final Struct struct = new Struct(schema.schema());
           final Descriptor descriptor = message.getDescriptorForType();
 
-          for (OneofDescriptor oneOfDescriptor : descriptor.getRealOneofs()) {
+          List<OneofDescriptor> oneOfDescriptors = descriptor.getRealOneofs();
+          int numRealOneOfs = oneOfDescriptors.size();
+          for (int i = 0; i < numRealOneOfs; i++) {
+            OneofDescriptor oneOfDescriptor = oneOfDescriptors.get(i);
             if (message.hasOneof(oneOfDescriptor)) {
               FieldDescriptor fieldDescriptor = message.getOneofFieldDescriptor(oneOfDescriptor);
               Object obj = message.getField(fieldDescriptor);
@@ -1238,7 +1247,10 @@ public class ProtobufData {
             }
           }
 
-          for (FieldDescriptor fieldDescriptor : descriptor.getFields()) {
+          List<FieldDescriptor> fields = descriptor.getFields();
+          int numFields = fields.size();
+          for (int i = 0; i < numFields; i++) {
+            FieldDescriptor fieldDescriptor = fields.get(i);
             OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
             if (oneOfDescriptor != null) {
               // Already added field as oneof
