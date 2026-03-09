@@ -237,6 +237,13 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException {
+    Schema schema = getSchemaEntityBySubjectAndId(subject, id);
+    return parseSchema(schema).get();
+  }
+
+  @Override
+  public synchronized Schema getSchemaEntityBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
     if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
       subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
     }
@@ -254,7 +261,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (s == null) {
       throw Errors.schemaNotFoundException(id);
     }
-    return parseSchema(new Schema(null, null, null, s)).get();
+    return new Schema(s.getSubject(), s.getVersion(), id, s);
   }
 
   @Override
