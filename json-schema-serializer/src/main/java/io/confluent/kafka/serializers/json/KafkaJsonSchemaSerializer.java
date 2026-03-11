@@ -19,9 +19,10 @@ package io.confluent.kafka.serializers.json;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.serializers.SerializerWithSchema;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -31,7 +32,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 
 public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSerializer<T>
-    implements Serializer<T> {
+    implements SerializerWithSchema<T> {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
@@ -114,6 +115,16 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
     return serializeImpl(
         getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record, ParsedSchema schema) {
+    if (record == null) {
+      return null;
+    }
+    Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
+    return serializeImpl(getSubjectName(topic, isKey, value, schema),
+        topic, headers, (T) value, (JsonSchema) schema);
   }
 
   private JsonSchema getSchema(T record) {
