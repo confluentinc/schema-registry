@@ -829,6 +829,28 @@ public class JsonSchemaTest {
   }
 
   @Test
+  // https://confluentinc.atlassian.net/browse/DGS-23701
+  public void testComparatorWithCircularRef() {
+    // Regression test: sorting a CombinedSchema (oneOf) whose subschemas are
+    // ReferenceSchema objects pointing back to the parent used to cause
+    // StackOverflowError in JsonSchemaComparator
+    // Build a oneOf with self-referencing $ref:"#" to simulate the circular
+    // schemas created by JsonSchema.replaceRefs() during tag extraction.
+    org.everit.json.schema.Schema circularSchema = org.everit.json.schema.loader.SchemaLoader
+        .builder()
+        .schemaJson(new org.json.JSONObject("{"
+            + "\"oneOf\": ["
+            + "  {\"$ref\": \"#\"},"
+            + "  {\"$ref\": \"#\"}"
+            + "]"
+            + "}"))
+        .build().load().build();
+    List<org.everit.json.schema.Schema> schemas = Arrays.asList(circularSchema, circularSchema);
+    schemas.sort(new JsonSchemaComparator());
+    assertEquals(0, new JsonSchemaComparator().compare(circularSchema, circularSchema));
+  }
+
+  @Test
   public void testInlineTagsForRefInArray() {
     String schemaString = "{\n"
         + "  \"definitions\": {\n"
