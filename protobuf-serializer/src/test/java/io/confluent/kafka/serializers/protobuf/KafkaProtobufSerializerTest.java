@@ -333,6 +333,30 @@ public class KafkaProtobufSerializerTest {
   }
 
 
+  @Test
+  public void testSerializeWithSchema() {
+    ProtobufSchema schema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE, schema);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
+
+    // verify null returns null
+    headers = new RecordHeaders();
+    byte[] nullBytes = protobufSerializer.serialize(topic, headers, null, schema);
+    assertEquals(null, nullBytes);
+
+    // verify same result as regular serialize
+    headers = new RecordHeaders();
+    byte[] regularBytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    RecordHeaders headers2 = new RecordHeaders();
+    byte[] withSchemaBytes = protobufSerializer.serialize(
+        topic, headers2, HELLO_WORLD_MESSAGE, schema);
+    assertEquals(
+        testMessageDeserializer.deserialize(topic, headers, regularBytes),
+        testMessageDeserializer.deserialize(topic, headers2, withSchemaBytes));
+  }
+
   @Test(expected = InvalidConfigurationException.class)
   public void testKafkaJsonSchemaSerializerWithoutConfigure() {
     KafkaProtobufSerializer unconfiguredSerializer = new KafkaProtobufSerializer();

@@ -389,6 +389,28 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testSerializeWithSchema() {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema schema = new AvroSchema(avroRecord.getSchema());
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord, schema);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+
+    // verify null returns null
+    headers = new RecordHeaders();
+    byte[] nullBytes = avroSerializer.serialize(topic, headers, null, schema);
+    assertEquals(null, nullBytes);
+
+    // verify same result as regular serialize
+    headers = new RecordHeaders();
+    byte[] regularBytes = avroSerializer.serialize(topic, headers, avroRecord);
+    RecordHeaders headers2 = new RecordHeaders();
+    byte[] withSchemaBytes = avroSerializer.serialize(topic, headers2, avroRecord, schema);
+    assertArrayEquals(regularBytes, withSchemaBytes);
+  }
+
+  @Test
   public void testKafkaAvroSerializerPrimitiveArrays() {
     final Map<String, List<?>> arrays = ImmutableMap.of(
         "{\"type\": \"array\", \"items\": \"boolean\"}", ImmutableList.of(true, false),
