@@ -20,14 +20,15 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.SerializerWithSchema;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 
@@ -36,7 +37,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 
 public class KafkaProtobufSerializer<T extends Message>
-    extends AbstractKafkaProtobufSerializer<T> implements Serializer<T> {
+    extends AbstractKafkaProtobufSerializer<T> implements SerializerWithSchema<T> {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
@@ -113,6 +114,20 @@ public class KafkaProtobufSerializer<T extends Message>
     }
     return serializeImpl(getSubjectName(topic, isKey, record, schema),
         topic, isKey, headers, record, schema);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record, ParsedSchema schema) {
+    if (schemaRegistry == null) {
+      throw new InvalidConfigurationException(
+          "SchemaRegistryClient not found. You need to configure the serializer "
+              + "or use serializer constructor with SchemaRegistryClient.");
+    }
+    if (record == null) {
+      return null;
+    }
+    return serializeImpl(getSubjectName(topic, isKey, record, schema),
+        topic, isKey, headers, record, (ProtobufSchema) schema);
   }
 
   @Override
