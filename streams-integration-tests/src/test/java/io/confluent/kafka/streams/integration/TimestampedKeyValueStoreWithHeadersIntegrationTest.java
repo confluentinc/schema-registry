@@ -264,6 +264,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             this.store = context.getStateStore(storeName);
         }
 
+        // TODO: Test on range(), reverseRange(), all(), reverseAll(),  prefixScan() once those are supported by TimestampedKeyValueStoreWithHeaders
         @Override
         public void process(Record<GenericRecord, GenericRecord> record) {
             String operation = record.value().get("operation").toString();
