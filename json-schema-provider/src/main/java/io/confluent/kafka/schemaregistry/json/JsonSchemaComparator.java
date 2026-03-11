@@ -188,6 +188,10 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       case REFERENCE:
         ReferenceSchema ref1 = (ReferenceSchema) schema1;
         ReferenceSchema ref2 = (ReferenceSchema) schema2;
+        // check to avoid infinite recursion when $ref is circular
+        if (ref1.getReferredSchema() == ref2.getReferredSchema()) {
+          return 0;
+        }
         return compare(ref1.getReferredSchema(), ref2.getReferredSchema());
       default:
         return 0;
