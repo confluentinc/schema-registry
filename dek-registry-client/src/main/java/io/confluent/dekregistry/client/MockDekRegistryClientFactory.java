@@ -26,7 +26,7 @@ import org.apache.kafka.common.config.ConfigException;
  * A repository for mocked DEK Registry clients, to aid in testing.
  *
  * <p>Logically independent "instances" of mocked DEK Registry are created or retrieved
- * via named scopes {@link MockDekRegistryClientFactory#getClientForScope(String)}.
+ * via named scopes {@link MockDekRegistryClientFactory#getClientForScope(String, Map)}.
  * Each named scope is an independent registry.
  * Each named-scope registry is statically defined and visible to the entire JVM.
  * Scopes can be cleaned up when no longer needed via
@@ -38,7 +38,7 @@ import org.apache.kafka.common.config.ConfigException;
  * in serde configurations, so that testing code doesn't have to run an actual instance of
  * Schema Registry listening on a local port. For example,
  * {@code schema.registry.url: 'mock://my-scope-name'} corresponds to
- * {@code MockDekRegistryClientFactory.getClientForScope("my-scope-name")}.
+ * {@code MockDekRegistryClientFactory.getClientForScope("my-scope-name", configs)}.
  */
 public final class MockDekRegistryClientFactory {
   private static final String MOCK_URL_PREFIX = "mock://";

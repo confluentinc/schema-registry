@@ -42,7 +42,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * <p>Example for configuring this serde as a Kafka Streams application's default serde for both
  * record keys and record values:</p>
  *
- * <p>
  * <pre>{@code
  * Properties streamsConfiguration = new Properties();
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
@@ -51,12 +50,10 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
- * </p>
  *
  * <p>Example for explicitly overriding the application's default serdes (whatever they were
  * configured to) so that only specific operations such as {@code KStream#to()} use this serde:</p>
  *
- * <p>
  * <pre>{@code
  * Serde<MyJavaClassGeneratedFromAvroSchema> specificAvroSerde = new SpecificAvroSerde<>();
  * boolean isKeySerde = false;
@@ -68,7 +65,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * KStream<String, MyJavaClassGeneratedFromAvroSchema> stream = ...;
  * stream.to(Serdes.String(), specificAvroSerde, "my-output-topic");
  * }</pre>
- * </p>
  */
 @InterfaceStability.Unstable
 public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord>

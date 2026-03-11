@@ -69,13 +69,24 @@ public class DekRegistryRestService extends RestService implements Configurable 
 
   public List<String> listKeks(boolean lookupDeleted)
       throws IOException, RestClientException {
-    return listKeks(DEFAULT_REQUEST_PROPERTIES, lookupDeleted);
+    return listKeks(null, lookupDeleted);
   }
 
-  public List<String> listKeks(Map<String, String> requestProperties, boolean lookupDeleted)
+  public List<String> listKeks(List<String> subjectPrefix, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return listKeks(DEFAULT_REQUEST_PROPERTIES, subjectPrefix, lookupDeleted);
+  }
+
+  public List<String> listKeks(Map<String, String> requestProperties,
+      List<String> subjectPrefix, boolean lookupDeleted)
       throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks")
         .queryParam("deleted", lookupDeleted);
+    if (subjectPrefix != null && !subjectPrefix.isEmpty()) {
+      for (String prefix : subjectPrefix) {
+        builder = builder.queryParam("subjectPrefix", prefix);
+      }
+    }
     String path = builder.build().toString();
 
     return httpRequest(path, "GET", null, requestProperties, STRINGS_TYPE);

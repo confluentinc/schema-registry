@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.junit.After;
@@ -53,6 +54,7 @@ public class KafkaStoreTest extends ClusterTestHarness {
   private static final Logger log = LoggerFactory.getLogger(KafkaStoreTest.class);
 
   private static final int ADMIN_TIMEOUT_SEC = 60;
+  private static final TopicPartition tp = new TopicPartition("_schemas", 0);
 
   @Before
   public void setup() {
@@ -554,7 +556,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
             store, new IncrementalIdGenerator(schemaRegistry));
 
-    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null, null, 0L, 0L);
+    storeMessageHandler.handleUpdate(new DeleteSubjectKey("test"), null, null, tp, 0L, 0L);
+    // checkpoint updated
+    assertEquals(Long.valueOf(1L), storeMessageHandler.checkpoint(1).get(tp));
   }
 
   // Test no NPE happens when handling ClearSubjectKey with null value
@@ -575,7 +579,9 @@ public class KafkaStoreTest extends ClusterTestHarness {
     store.init();
     KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
           store, new IncrementalIdGenerator(schemaRegistry));
+    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, tp, 0L, 0L);
 
-    storeMessageHandler.handleUpdate(new ClearSubjectKey("test"), null, null, null, 0L, 0L);
+    // checkpoint updated
+    assertEquals(Long.valueOf(1L), storeMessageHandler.checkpoint(1).get(tp));
   }
 }

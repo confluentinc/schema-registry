@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException;
@@ -106,7 +107,17 @@ public class ConfigResource {
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
 
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request);
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return updateTopLevelConfig(headers, request);
+    }
+
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(subject, request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating subject level config", e);
+    }
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -134,8 +145,6 @@ public class ConfigResource {
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(subject, new Config(request), headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -175,6 +184,10 @@ public class ConfigResource {
           "Whether to return the global compatibility level "
               + " if subject compatibility level not found")
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      return getTopLevelConfig();
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
@@ -217,8 +230,13 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-
-    schemaRegistry.getCompositeUpdateRequestHandler().handle(request);
+    Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+        headers, schemaRegistry.config().whitelistHeaders());
+    try {
+      schemaRegistry.getCompositeUpdateRequestHandler().handle(request, headerProperties);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException("Error while updating global level config", e);
+    }
 
     CompatibilityLevel compatibilityLevel =
         CompatibilityLevel.forName(request.getCompatibilityLevel());
@@ -240,8 +258,6 @@ public class ConfigResource {
       }
     }
     try {
-      Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-          headers, schemaRegistry.config().whitelistHeaders());
       schemaRegistry.updateConfigOrForward(null, new Config(request), headerProperties);
     } catch (OperationNotPermittedException e) {
       throw Errors.operationNotPermittedException(e.getMessage());
@@ -343,6 +359,11 @@ public class ConfigResource {
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
     log.debug("Deleting compatibility setting for subject {}", subject);
+
+    if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
+      deleteTopLevelConfig(asyncResponse, headers);
+      return;
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

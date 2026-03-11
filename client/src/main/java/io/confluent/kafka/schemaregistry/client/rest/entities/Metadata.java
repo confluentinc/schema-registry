@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -24,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -43,6 +45,8 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Metadata {
 
+  public static final String CONFLUENT_VERSION = "confluent:version";
+
   @JsonPropertyOrder(alphabetic = true)
   private final SortedMap<String, SortedSet<String>> tags;
   @JsonPropertyOrder(alphabetic = true)
@@ -56,12 +60,16 @@ public class Metadata {
       @JsonProperty("sensitive") Set<String> sensitive
   ) {
     SortedMap<String, SortedSet<String>> sortedTags = tags != null
-        ? tags.entrySet().stream()
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            e -> e.getValue().stream().sorted().collect(Collectors.toCollection(TreeSet::new)),
-            (e1, e2) -> e1,
-            TreeMap::new))
+        ? tags.entrySet()
+              .stream()
+              .collect(Collectors.toMap(Entry::getKey,
+                  e -> Collections.unmodifiableSortedSet(
+                          e.getValue()
+                              .stream()
+                              .sorted()
+                              .collect(Collectors.toCollection(TreeSet::new))),
+                  (e1, e2) -> e1,
+                  TreeMap::new))
         : Collections.emptySortedMap();
     SortedMap<String, String> sortedProperties = properties != null
         ? new TreeMap<>(properties)
@@ -132,6 +140,47 @@ public class Metadata {
     if (sensitive != null) {
       sensitive.forEach(s -> md.update(s.getBytes(StandardCharsets.UTF_8)));
     }
+  }
+
+  @JsonIgnore
+  public Integer getConfluentVersionNumber() {
+    String version = getConfluentVersion();
+    if (version == null) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(version);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  @JsonIgnore
+  public String getConfluentVersion() {
+    return getProperties() != null ? getProperties().get(CONFLUENT_VERSION) : null;
+  }
+
+  public static Metadata setConfluentVersion(Metadata metadata, int version) {
+    Map<String, String> newProps = metadata != null && metadata.getProperties() != null
+        ? new HashMap<>(metadata.getProperties())
+        : new HashMap<>();
+    newProps.put(CONFLUENT_VERSION, String.valueOf(version));
+    return new Metadata(
+        metadata != null ? metadata.getTags() : null,
+        newProps,
+        metadata != null ? metadata.getSensitive() : null);
+  }
+
+  public static Metadata removeConfluentVersion(Metadata metadata) {
+    if (metadata == null || metadata.getProperties() == null) {
+      return metadata;
+    }
+    Map<String, String> newProps = new HashMap<>(metadata.getProperties());
+    newProps.remove(CONFLUENT_VERSION);
+    return new Metadata(
+        metadata.getTags(),
+        newProps,
+        metadata.getSensitive());
   }
 
   public static Metadata mergeMetadata(Metadata oldMetadata, Metadata newMetadata) {

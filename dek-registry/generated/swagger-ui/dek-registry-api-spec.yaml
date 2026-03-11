@@ -96,6 +96,13 @@ paths:
       summary: Get a list of kek names.
       operationId: getKekNames
       parameters:
+      - name: subjectPrefix
+        in: query
+        description: Subject name prefix
+        schema:
+          type: array
+          items:
+            type: string
       - name: deleted
         in: query
         description: Whether to include deleted keys
@@ -126,6 +133,12 @@ paths:
     post:
       summary: Create a kek.
       operationId: createKek
+      parameters:
+      - name: testSharing
+        in: query
+        description: Whether to test kek sharing
+        schema:
+          type: boolean
       requestBody:
         description: The create request
         content:
@@ -203,6 +216,11 @@ paths:
         required: true
         schema:
           type: string
+      - name: testSharing
+        in: query
+        description: Whether to test kek sharing
+        schema:
+          type: boolean
       requestBody:
         description: The update request
         content:
@@ -606,6 +624,34 @@ paths:
         "422":
           description: Unprocessable entity. Error code 42271 -- Invalid key. Error
             code 42272 -- References to key exist.
+  /dek-registry/v1/keks/{name}/test:
+    post:
+      summary: Test a kek.
+      operationId: testKek_1
+      parameters:
+      - name: name
+        in: path
+        description: Name of the kek
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The test response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: '#/components/schemas/Kek'
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: '#/components/schemas/Kek'
+            application/json; qs=0.5:
+              schema:
+                $ref: '#/components/schemas/Kek'
+        "422":
+          description: Error code 42271 -- Invalid key
+        "500":
+          description: Error code 50070 -- Dek generation error
 components:
   schemas:
     Dek:
