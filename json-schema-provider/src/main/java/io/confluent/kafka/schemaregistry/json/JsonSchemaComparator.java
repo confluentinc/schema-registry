@@ -84,6 +84,9 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       Comparator.<String>nullsFirst(Comparator.<String>naturalOrder());
 
   public int compare(Schema schema1, Schema schema2) {
+    if (schema1 == schema2) {
+      return 0;
+    }
     if (schema1 == null) {
       if (schema2 != null) {
         return -1;
