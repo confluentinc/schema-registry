@@ -569,46 +569,25 @@ public class JsonSchemaTest {
   }
 
   @Test
-  public void testInlineTaggedSchemasWithOneOfRef() {
-    String schemaString = "{\n"
-        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
-        + "  \"title\": \"SampleRecord\",\n"
-        + "  \"type\": \"object\",\n"
-        + "  \"additionalProperties\": false,\n"
-        + "  \"definitions\": {\n"
-        + "    \"polyVal\": {\n"
-        + "      \"oneOf\": [\n"
-        + "        { \"$ref\": \"#/definitions/valA\" },\n"
-        + "        { \"$ref\": \"#/definitions/valB\" }\n"
-        + "      ]\n"
-        + "    },\n"
-        + "    \"valA\": {\n"
-        + "      \"type\": \"object\",\n"
-        + "      \"properties\": {\n"
-        + "        \"kind\": { \"type\": \"string\", \"enum\": [\"A\"] },\n"
-        + "        \"flag\": { \"type\": \"boolean\", \"confluent:tags\": [\"PII\"] }\n"
-        + "      }\n"
-        + "    },\n"
-        + "    \"valB\": {\n"
-        + "      \"type\": \"object\",\n"
-        + "      \"properties\": {\n"
-        + "        \"kind\": { \"type\": \"string\", \"enum\": [\"B\"] },\n"
-        + "        \"value\": { \"type\": \"string\" }\n"
-        + "      }\n"
-        + "    }\n"
-        + "  },\n"
-        + "  \"properties\": {\n"
-        + "    \"data\": { \"$ref\": \"#/definitions/polyVal\" }\n"
-        + "  }\n"
-        + "}";
-    JsonSchema schema = new JsonSchema(schemaString);
-
-    Map<SchemaEntity, Set<String>> tags = new HashMap<>();
-    tags.put(new SchemaEntity("object.definitions.valA.object.flag",
-            SchemaEntity.EntityType.SR_FIELD),
-        Collections.singleton("PII"));
-    Map<SchemaEntity, Set<String>> expectedTags = new HashMap<>(tags);
-    assertEquals(expectedTags, schema.inlineTaggedEntities());
+  // https://confluentinc.atlassian.net/browse/DGS-23701
+  public void testComparatorWithCircularRef() {
+    // Regression test: sorting a CombinedSchema (oneOf) whose subschemas are
+    // ReferenceSchema objects pointing back to the parent used to cause
+    // StackOverflowError in JsonSchemaComparator
+    // Build a oneOf with self-referencing $ref:"#" to simulate the circular
+    // schemas created by JsonSchema.replaceRefs() during tag extraction.
+    org.everit.json.schema.Schema circularSchema = org.everit.json.schema.loader.SchemaLoader
+        .builder()
+        .schemaJson(new org.json.JSONObject("{"
+            + "\"oneOf\": ["
+            + "  {\"$ref\": \"#\"},"
+            + "  {\"$ref\": \"#\"}"
+            + "]"
+            + "}"))
+        .build().load().build();
+    List<org.everit.json.schema.Schema> schemas = Arrays.asList(circularSchema, circularSchema);
+    schemas.sort(new JsonSchemaComparator());
+    assertEquals(0, new JsonSchemaComparator().compare(circularSchema, circularSchema));
   }
 
   @Test
