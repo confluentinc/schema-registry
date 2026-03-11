@@ -78,6 +78,9 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       Comparator.<String>nullsFirst(Comparator.<String>naturalOrder());
 
   public int compare(Schema schema1, Schema schema2) {
+    if (schema1 == schema2) {
+      return 0;
+    }
     if (schema1 == null) {
       if (schema2 != null) {
         return -1;
@@ -182,10 +185,6 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       case REFERENCE:
         ReferenceSchema ref1 = (ReferenceSchema) schema1;
         ReferenceSchema ref2 = (ReferenceSchema) schema2;
-        // check to avoid infinite recursion when $ref is circular
-        if (ref1.getReferredSchema() == ref2.getReferredSchema()) {
-          return 0;
-        }
         return compare(ref1.getReferredSchema(), ref2.getReferredSchema());
       default:
         return 0;
