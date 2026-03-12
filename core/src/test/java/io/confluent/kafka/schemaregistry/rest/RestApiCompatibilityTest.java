@@ -972,7 +972,7 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
-  public void testRegisterBadDefaultWithValidateNewSchemaConfig() throws Exception {
+  public void testRegisterBadDefaultWithNormalizeConfig() throws Exception {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
