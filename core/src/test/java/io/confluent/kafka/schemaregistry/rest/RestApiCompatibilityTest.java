@@ -983,7 +983,7 @@ public abstract class RestApiCompatibilityTest {
     String schema = AvroUtils.parseSchema(schemaString).canonicalString();
 
     ConfigUpdateRequest config = new ConfigUpdateRequest();
-    config.setValidateNewSchemas(false);
+    config.setValidateFields(false);
     assertEquals(
         config,
         restApp.restClient.updateConfig(config, null),
@@ -994,7 +994,7 @@ public abstract class RestApiCompatibilityTest {
     assertTrue(errors.isEmpty());
 
     config = new ConfigUpdateRequest();
-    config.setValidateNewSchemas(true);
+    config.setValidateFields(true);
     assertEquals(
         config,
         restApp.restClient.updateConfig(config, null),

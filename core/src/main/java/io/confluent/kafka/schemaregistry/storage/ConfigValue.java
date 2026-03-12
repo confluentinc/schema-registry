@@ -35,7 +35,6 @@ public class ConfigValue extends SubjectValue {
   private String aliasForDeks;
   private Boolean normalize;
   private Boolean validateFields;
-  private Boolean validateNewSchemas;
   private Boolean validateRules;
   private CompatibilityLevel compatibilityLevel;
   private CompatibilityPolicy compatibilityPolicy;
@@ -50,7 +49,6 @@ public class ConfigValue extends SubjectValue {
                      @JsonProperty("aliasForDeks") String aliasForDeks,
                      @JsonProperty("normalize") Boolean normalize,
                      @JsonProperty("validateFields") Boolean validateFields,
-                     @JsonProperty("validateNewSchemas") Boolean validateNewSchemas,
                      @JsonProperty("validateRules") Boolean validateRules,
                      @JsonProperty("compatibilityLevel") CompatibilityLevel compatibilityLevel,
                      @JsonProperty("compatibilityPolicy") CompatibilityPolicy compatibilityPolicy,
@@ -64,7 +62,6 @@ public class ConfigValue extends SubjectValue {
     this.aliasForDeks = aliasForDeks;
     this.normalize = normalize;
     this.validateFields = validateFields;
-    this.validateNewSchemas = validateNewSchemas;
     this.validateRules = validateRules;
     this.compatibilityLevel = compatibilityLevel;
     this.compatibilityPolicy = compatibilityPolicy;
@@ -80,8 +77,6 @@ public class ConfigValue extends SubjectValue {
     this.alias = configEntity.getAlias();
     this.aliasForDeks = configEntity.getAliasForDeks();
     this.normalize = configEntity.isNormalize();
-    this.validateFields = configEntity.isValidateFields();
-    this.validateNewSchemas = configEntity.isValidateNewSchemas();
     this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityPolicy = CompatibilityPolicy.forName(configEntity.getCompatibilityPolicy());
@@ -106,7 +101,6 @@ public class ConfigValue extends SubjectValue {
     this.aliasForDeks = configEntity.getAliasForDeks();
     this.normalize = configEntity.isNormalize();
     this.validateFields = configEntity.isValidateFields();
-    this.validateNewSchemas = configEntity.isValidateNewSchemas();
     this.validateRules = configEntity.isValidateRules();
     this.compatibilityLevel = CompatibilityLevel.forName(configEntity.getCompatibilityLevel());
     this.compatibilityPolicy = CompatibilityPolicy.forName(configEntity.getCompatibilityPolicy());
@@ -164,16 +158,6 @@ public class ConfigValue extends SubjectValue {
   @JsonProperty("validateFields")
   public void setValidateFields(Boolean validateFields) {
     this.validateFields = validateFields;
-  }
-
-  @JsonProperty("validateNewSchemas")
-  public Boolean isValidateNewSchemas() {
-    return validateNewSchemas;
-  }
-
-  @JsonProperty("validateNewSchemas")
-  public void setValidateNewSchemas(Boolean validateNewSchemas) {
-    this.validateNewSchemas = validateNewSchemas;
   }
 
   @JsonProperty("validateRules")
@@ -272,7 +256,6 @@ public class ConfigValue extends SubjectValue {
         && Objects.equals(aliasForDeks, that.aliasForDeks)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
-        && Objects.equals(validateNewSchemas, that.validateNewSchemas)
         && Objects.equals(validateRules, that.validateRules)
         && compatibilityLevel == that.compatibilityLevel
         && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
@@ -285,8 +268,7 @@ public class ConfigValue extends SubjectValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), alias, aliasForDeks, normalize,
-            validateFields, validateNewSchemas, validateRules,
+    return Objects.hash(super.hashCode(), alias, normalize, validateFields, validateRules,
             compatibilityLevel, compatibilityPolicy, compatibilityGroup,
             defaultMetadata, overrideMetadata, defaultRuleSet,
             overrideRuleSet);
@@ -299,7 +281,6 @@ public class ConfigValue extends SubjectValue {
         + ", aliasForDeks=" + aliasForDeks
         + ", normalize=" + normalize
         + ", validateFields=" + validateFields
-        + ", validateNewSchemas=" + validateNewSchemas
         + ", validateRules=" + validateRules
         + ", compatibilityLevel=" + compatibilityLevel
         + ", compatibilityPolicy='" + compatibilityPolicy + '\''
@@ -322,7 +303,6 @@ public class ConfigValue extends SubjectValue {
         aliasForDeks,
         normalize,
         validateFields,
-        validateNewSchemas,
         validateRules,
         compatibilityLevel != null ? compatibilityLevel.name : null,
         compatibilityPolicy != null ? compatibilityPolicy.name : null,
@@ -373,8 +353,6 @@ public class ConfigValue extends SubjectValue {
               ? newConfig.isNormalize() : oldConfig.isNormalize(),
           newConfig.isOptionalValidateFields() != null
               ? newConfig.isValidateFields() : oldConfig.isValidateFields(),
-          newConfig.isOptionalValidateNewSchemas() != null
-              ? newConfig.isValidateNewSchemas() : oldConfig.isValidateNewSchemas(),
           newConfig.isOptionalValidateRules() != null
               ? newConfig.isValidateRules() : oldConfig.isValidateRules(),
           newConfig.getOptionalCompatibilityLevel() != null

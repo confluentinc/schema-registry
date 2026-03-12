@@ -118,7 +118,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
   protected final CompatibilityLevel defaultCompatibilityLevel;
   protected final boolean defaultValidateFields;
-  protected final boolean defaultValidateNewSchemas;
   protected final Mode defaultMode;
   protected final int schemaSearchDefaultLimit;
   protected final int schemaSearchMaxLimit;
@@ -172,8 +171,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultValidateFields =
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
-    this.defaultValidateNewSchemas =
-        config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG);
     this.defaultMode = Mode.READWRITE;
     this.schemaSearchDefaultLimit =
         config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
@@ -512,14 +509,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             tenant(), schema.getId(), schema.getSubject(), operation);
   }
 
-  protected boolean isSchemaFieldValidationEnabled(Config config) {
+  private boolean isSchemaFieldValidationEnabled(Config config) {
     return config.isValidateFields() != null ? config.isValidateFields() : defaultValidateFields;
-  }
-
-  protected boolean isSchemaNewSchemaValidationEnabled(Config config) {
-    return config.isValidateNewSchemas() != null
-        ? config.isValidateNewSchemas()
-        : defaultValidateNewSchemas;
   }
 
   private ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
@@ -1266,8 +1257,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
 
       Config config = getConfigInScope(subject);
-      boolean doValidation = isSchemaNewSchemaValidationEnabled(config);
-      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, doValidation, normalize);
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, true, normalize);
       if (parsedSchema == null) {
         log.error("Empty schema");
         throw new InvalidSchemaException("Empty schema");
