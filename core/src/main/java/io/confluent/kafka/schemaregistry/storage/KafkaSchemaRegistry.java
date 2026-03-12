@@ -43,9 +43,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
@@ -950,10 +952,67 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
+  public AssociationBatchResponse batchGetAssociations(
+      AssociationBatchGetRequest request) throws SchemaRegistryException {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationGetRequest query : request.getRequests()) {
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        List<Association> associations;
+        if (query.getResourceId() != null && !query.getResourceId().isEmpty()) {
+          associations = getAssociationsByResourceId(
+              query.getResourceId(), resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              query.getResourceName(), query.getResourceNamespace(),
+              resourceType, associationTypes, query.getLifecycle());
+        }
+        String resourceName = query.getResourceName();
+        String resourceNamespace = query.getResourceNamespace();
+        String resourceId = query.getResourceId();
+        if (!associations.isEmpty()) {
+          Association first = associations.get(0);
+          if (resourceName == null) {
+            resourceName = first.getResourceName();
+          }
+          if (resourceNamespace == null) {
+            resourceNamespace = first.getResourceNamespace();
+          }
+          if (resourceId == null) {
+            resourceId = first.getResourceId();
+          }
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                resourceName, resourceNamespace,
+                resourceId, resourceType,
+                associations, Collections.emptyMap())));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while getting associations: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
   public AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request) {
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        results.add(new AssociationResult(req.getError(), null));
+        continue;
+      }
       kafkaStore.lockFor(context).lock();
       try {
         req.validate(dryRun);

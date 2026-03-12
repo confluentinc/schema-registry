@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ServerClusterId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -1981,12 +1982,26 @@ public class RestService implements Closeable, Configurable {
     return response;
   }
 
+  public AssociationBatchResponse batchGetAssociations(
+      Map<String, String> requestProperties,
+      AssociationBatchGetRequest request
+  ) throws IOException,
+      RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchGet");
+    String path = builder.build().toString();
+
+    AssociationBatchResponse response = httpRequest(path, "POST",
+        request.toJson().getBytes(StandardCharsets.UTF_8),
+        requestProperties, ASSOCIATION_BATCH_RESPONSE_TYPE);
+    return response;
+  }
+
   public AssociationBatchResponse mutateAssociations(
       Map<String, String> requestProperties,
       String context, Boolean dryRun, AssociationBatchRequest request
   ) throws IOException,
       RestClientException {
-    UriBuilder builder = UriBuilder.fromPath("/associations:batch");
+    UriBuilder builder = UriBuilder.fromPath("/associations:batchMutate");
     if (context != null) {
       builder.queryParam("context", context);
     }
