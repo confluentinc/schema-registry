@@ -396,7 +396,7 @@ public class AssociationsResource {
   })
   @PerformanceMetric("associations.batch-get")
   @DocumentedName("batchGetAssociations")
-  public AssociationBatchResponse batchGetAssociations(
+  public Response batchGetAssociations(
       @Parameter(description = "The batch get request", required = true)
       @NotNull AssociationBatchGetRequest request) {
 
@@ -406,7 +406,8 @@ public class AssociationsResource {
 
     String errorMessage = "Error while batch getting associations";
     try {
-      return schemaRegistry.batchGetAssociations(request);
+      AssociationBatchResponse response = schemaRegistry.batchGetAssociations(request);
+      return Response.status(207).entity(response).build();
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -445,7 +446,7 @@ public class AssociationsResource {
       }
       AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
           context, dryRun, request, headerProperties);
-      asyncResponse.resume(response);
+      asyncResponse.resume(Response.status(207).entity(response).build());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
