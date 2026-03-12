@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.List;
@@ -148,6 +149,19 @@ public class AssociationGetRequest {
   public int hashCode() {
     return Objects.hash(
         resourceName, resourceNamespace, resourceId, resourceType, associationTypes, lifecycle);
+  }
+
+  public void validate() {
+    boolean hasResourceId = resourceId != null && !resourceId.isEmpty();
+    boolean hasResourceName = resourceName != null && !resourceName.isEmpty();
+    if (!hasResourceId && !hasResourceName) {
+      throw new IllegalPropertyException(
+          "resourceId", "either resourceId or resourceName must be specified");
+    }
+    if (hasResourceName && (resourceNamespace == null || resourceNamespace.isEmpty())) {
+      throw new IllegalPropertyException(
+          "resourceNamespace", "resourceNamespace is required when resourceName is specified");
+    }
   }
 
   public String toJson() throws IOException {

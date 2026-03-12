@@ -957,6 +957,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationGetRequest query : request.getRequests()) {
       try {
+        query.validate();
         String resourceType = query.getResourceType();
         if (resourceType == null || resourceType.isEmpty()) {
           resourceType = "topic";
@@ -1008,6 +1009,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String context, boolean dryRun, AssociationBatchRequest request) {
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        results.add(new AssociationResult(req.getError(), null));
+        continue;
+      }
       kafkaStore.lockFor(context).lock();
       try {
         req.validate(dryRun);

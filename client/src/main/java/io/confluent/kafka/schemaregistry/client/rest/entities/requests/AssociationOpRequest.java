@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -39,6 +40,7 @@ public class AssociationOpRequest {
   private String resourceId;
   private String resourceType;
   private List<? extends AssociationOp> associations;
+  private ErrorMessage error;
 
   @JsonCreator
   public AssociationOpRequest(
@@ -102,6 +104,16 @@ public class AssociationOpRequest {
   @JsonProperty("associations")
   public void setAssociations(List<? extends AssociationOp> associations) {
     this.associations = associations;
+  }
+
+  @JsonProperty("error")
+  public ErrorMessage getError() {
+    return error;
+  }
+
+  @JsonProperty("error")
+  public void setError(ErrorMessage error) {
+    this.error = error;
   }
 
   @Override
