@@ -320,8 +320,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   /**
    * Returns a BinaryDecoder that uses the given {@code bytes} as its source of data.
-   * <p>
-   * Subclasses may override this method to supply a {@code reuse} BinaryDecoder
+   * 
+   * <p>Subclasses may override this method to supply a {@code reuse} BinaryDecoder
    * instance, for example, via a {@link ThreadLocal}, to eliminate per-record 
    * decoder allocation on high-throughput unmarshal paths.
    *
