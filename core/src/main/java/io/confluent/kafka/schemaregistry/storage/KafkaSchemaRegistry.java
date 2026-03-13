@@ -43,9 +43,12 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
@@ -950,22 +953,93 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
+  public AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws SchemaRegistryException {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationGetRequest query : request.getRequests()) {
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        String resourceName = query.getResourceName();
+        String resourceNamespace = query.getResourceNamespace();
+        String resourceId = query.getResourceId();
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
+        if (!associations.isEmpty()) {
+          Association first = associations.get(0);
+          if (resourceName == null) {
+            resourceName = first.getResourceName();
+          }
+          if (resourceNamespace == null) {
+            resourceNamespace = first.getResourceNamespace();
+          }
+          if (resourceId == null) {
+            resourceId = first.getResourceId();
+          }
+        }
+        Map<String, Schema> schemas = Collections.emptyMap();
+        if (includeSchemas) {
+          schemas = new HashMap<>();
+          for (Association association : associations) {
+            Schema schema = getLatestVersion(association.getSubject());
+            if (schema != null) {
+              schemas.put(association.getAssociationType(), schema);
+            }
+          }
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                resourceName, resourceNamespace,
+                resourceId, resourceType,
+                associations, schemas)));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while getting associations: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
   public AssociationBatchResponse mutateAssociations(
       String context, boolean dryRun, AssociationBatchRequest request) {
     List<AssociationResult> results = new ArrayList<>();
     for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        results.add(new AssociationResult(req.getError(), null));
+        continue;
+      }
       kafkaStore.lockFor(context).lock();
       try {
         req.validate(dryRun);
+        Map<String, Schema> schemas = new HashMap<>();
         for (AssociationOp op : req.getAssociations()) {
           switch (op.getType()) {
             case CREATE:
-              createAssociation(context, dryRun,
+              AssociationResponse createResp = createAssociation(context, dryRun,
                   new AssociationCreateOrUpdateRequest(req, op));
+              collectSchemas(createResp, schemas);
               break;
             case UPSERT:
-              createOrUpdateAssociation(context, dryRun,
+              AssociationResponse upsertResp = createOrUpdateAssociation(context, dryRun,
                   new AssociationCreateOrUpdateRequest(req, op));
+              collectSchemas(upsertResp, schemas);
               break;
             case DELETE:
               deleteAssociations(
@@ -988,7 +1062,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             Association.toAssociationResponse(
                 req.getResourceName(), req.getResourceNamespace(),
                 req.getResourceId(), req.getResourceType(),
-                associations, Collections.emptyMap())));
+                associations, schemas)));
       } catch (IllegalPropertyException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INVALID_ASSOCIATION_ERROR_CODE,
@@ -1067,6 +1141,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       } else {
         throw new UnknownLeaderException("Create associations request failed since leader is "
             + "unknown");
+      }
+    }
+  }
+
+  private void collectSchemas(AssociationResponse response, Map<String, Schema> schemas) {
+    if (response != null && response.getAssociations() != null) {
+      for (AssociationInfo info : response.getAssociations()) {
+        if (info.getSchema() != null) {
+          schemas.put(info.getAssociationType(), info.getSchema());
+        }
       }
     }
   }
