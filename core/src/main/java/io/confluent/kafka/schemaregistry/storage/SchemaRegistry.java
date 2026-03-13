@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -361,6 +362,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default AssociationResponse createAssociationOrForward(String context, boolean dryRun,
       AssociationCreateOrUpdateRequest request,
       Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
     return null;
   }
