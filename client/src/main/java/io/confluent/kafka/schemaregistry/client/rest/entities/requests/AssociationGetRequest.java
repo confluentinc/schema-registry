@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Confluent Inc.
+ * Copyright 2026 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.client.rest.entities.requests;
 
-import static io.confluent.kafka.schemaregistry.client.rest.utils.RestValidation.checkName;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -31,29 +29,46 @@ import java.util.Objects;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class AssociationOpRequest {
-
-  private static final String TOPIC_RESOURCE_TYPE = "topic";
+public class AssociationGetRequest {
 
   private String resourceName;
   private String resourceNamespace;
   private String resourceId;
   private String resourceType;
-  private List<? extends AssociationOp> associations;
-  private ErrorMessage error;
+  private List<String> associationTypes;
+  private LifecyclePolicy lifecycle;
+
+  public AssociationGetRequest(
+      String resourceId,
+      String resourceType,
+      List<String> associationTypes,
+      LifecyclePolicy lifecycle) {
+    this(null, null, resourceId, resourceType, associationTypes, lifecycle);
+  }
+
+  public AssociationGetRequest(
+      String resourceName,
+      String resourceNamespace,
+      String resourceType,
+      List<String> associationTypes,
+      LifecyclePolicy lifecycle) {
+    this(resourceName, resourceNamespace, null, resourceType, associationTypes, lifecycle);
+  }
 
   @JsonCreator
-  public AssociationOpRequest(
+  public AssociationGetRequest(
       @JsonProperty("resourceName") String resourceName,
       @JsonProperty("resourceNamespace") String resourceNamespace,
       @JsonProperty("resourceId") String resourceId,
       @JsonProperty("resourceType") String resourceType,
-      @JsonProperty("associations") List<? extends AssociationOp> associations) {
+      @JsonProperty("associationTypes") List<String> associationTypes,
+      @JsonProperty("lifecycle") LifecyclePolicy lifecycle) {
     this.resourceName = resourceName;
     this.resourceNamespace = resourceNamespace;
     this.resourceId = resourceId;
     this.resourceType = resourceType;
-    this.associations = associations;
+    this.associationTypes = associationTypes;
+    this.lifecycle = lifecycle;
   }
 
   @JsonProperty("resourceName")
@@ -96,24 +111,24 @@ public class AssociationOpRequest {
     this.resourceType = resourceType;
   }
 
-  @JsonProperty("associations")
-  public List<? extends AssociationOp> getAssociations() {
-    return associations;
+  @JsonProperty("associationTypes")
+  public List<String> getAssociationTypes() {
+    return associationTypes;
   }
 
-  @JsonProperty("associations")
-  public void setAssociations(List<? extends AssociationOp> associations) {
-    this.associations = associations;
+  @JsonProperty("associationTypes")
+  public void setAssociationTypes(List<String> associationTypes) {
+    this.associationTypes = associationTypes;
   }
 
-  @JsonProperty("error")
-  public ErrorMessage getError() {
-    return error;
+  @JsonProperty("lifecycle")
+  public LifecyclePolicy getLifecycle() {
+    return lifecycle;
   }
 
-  @JsonProperty("error")
-  public void setError(ErrorMessage error) {
-    this.error = error;
+  @JsonProperty("lifecycle")
+  public void setLifecycle(LifecyclePolicy lifecycle) {
+    this.lifecycle = lifecycle;
   }
 
   @Override
@@ -121,43 +136,35 @@ public class AssociationOpRequest {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    AssociationOpRequest that = (AssociationOpRequest) o;
+    AssociationGetRequest that = (AssociationGetRequest) o;
     return Objects.equals(resourceName, that.resourceName)
         && Objects.equals(resourceNamespace, that.resourceNamespace)
         && Objects.equals(resourceId, that.resourceId)
         && Objects.equals(resourceType, that.resourceType)
-        && Objects.equals(associations, that.associations);
+        && Objects.equals(associationTypes, that.associationTypes)
+        && lifecycle == that.lifecycle;
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        resourceName, resourceNamespace, resourceId, resourceType, associations);
+        resourceName, resourceNamespace, resourceId, resourceType, associationTypes, lifecycle);
+  }
+
+  public void validate() {
+    boolean hasResourceId = resourceId != null && !resourceId.isEmpty();
+    boolean hasResourceName = resourceName != null && !resourceName.isEmpty();
+    if (!hasResourceId && !hasResourceName) {
+      throw new IllegalPropertyException(
+          "resourceId", "either resourceId or resourceName must be specified");
+    }
+    if (hasResourceName && (resourceNamespace == null || resourceNamespace.isEmpty())) {
+      throw new IllegalPropertyException(
+          "resourceNamespace", "resourceNamespace is required when resourceName is specified");
+    }
   }
 
   public String toJson() throws IOException {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
-  }
-
-  public void validate(boolean dryRun) {
-    checkName(getResourceName(), "resourceName");
-    checkName(getResourceNamespace(), "resourceNamespace");
-    if (!dryRun && (getResourceId() == null || getResourceId().isEmpty())) {
-      throw new IllegalPropertyException("resourceId", "cannot be null or empty");
-    }
-    if (getResourceType() != null && !getResourceType().isEmpty()) {
-      if (!getResourceType().equals(TOPIC_RESOURCE_TYPE)) {
-        throw new IllegalPropertyException(
-            "resourceType", "must be '" + TOPIC_RESOURCE_TYPE + "'");
-      }
-    } else {
-      setResourceType(TOPIC_RESOURCE_TYPE);
-    }
-    if (getAssociations() == null || getAssociations().isEmpty()) {
-      throw new IllegalPropertyException("associations", "cannot be null or empty");
-    }
-    for (AssociationOp info : getAssociations()) {
-      info.validate(dryRun);
-    }
   }
 }
