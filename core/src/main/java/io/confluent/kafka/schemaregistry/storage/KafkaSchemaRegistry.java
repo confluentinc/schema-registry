@@ -966,18 +966,18 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         if (associationTypes == null) {
           associationTypes = Collections.emptyList();
         }
-        List<Association> associations;
-        if (query.getResourceId() != null && !query.getResourceId().isEmpty()) {
-          associations = getAssociationsByResourceId(
-              query.getResourceId(), resourceType, associationTypes, query.getLifecycle());
-        } else {
-          associations = getAssociationsByResourceName(
-              query.getResourceName(), query.getResourceNamespace(),
-              resourceType, associationTypes, query.getLifecycle());
-        }
         String resourceName = query.getResourceName();
         String resourceNamespace = query.getResourceNamespace();
         String resourceId = query.getResourceId();
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
         if (!associations.isEmpty()) {
           Association first = associations.get(0);
           if (resourceName == null) {
