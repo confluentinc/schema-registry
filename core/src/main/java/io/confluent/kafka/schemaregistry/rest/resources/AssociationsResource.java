@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -387,13 +388,40 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/associations:batch")
+  @Path("/associations:batchGet")
+  @POST
+  @Operation(summary = "Batch get associations.", responses = {
+      @ApiResponse(responseCode = "207", description = "The batch get response",
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+  })
+  @PerformanceMetric("associations.batch-get")
+  @DocumentedName("batchGetAssociations")
+  public Response batchGetAssociations(
+      @Parameter(description = "The batch get request", required = true)
+      @NotNull AssociationBatchGetRequest request) {
+
+    if (request.getRequests() == null || request.getRequests().isEmpty()) {
+      throw Errors.invalidAssociationException("requests", "cannot be null or empty");
+    }
+
+    String errorMessage = "Error while batch getting associations";
+    try {
+      AssociationBatchResponse response = schemaRegistry.batchGetAssociations(request);
+      return Response.status(207).entity(response).build();
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @Path("/associations:batchMutate")
   @POST
   @Operation(summary = "Mutate associations in batch.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch response",
           content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
   })
-  @PerformanceMetric("associations.mutate")
+  @PerformanceMetric("associations.batch-mutate")
   @DocumentedName("mutateAssociations")
   public void mutateAssociations(
       final @Suspended AsyncResponse asyncResponse,
@@ -418,7 +446,7 @@ public class AssociationsResource {
       }
       AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
           context, dryRun, request, headerProperties);
-      asyncResponse.resume(response);
+      asyncResponse.resume(Response.status(207).entity(response).build());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {
