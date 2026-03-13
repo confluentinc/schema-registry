@@ -462,7 +462,7 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   public default AssociationBatchResponse batchGetAssociations(
-      AssociationBatchGetRequest request)
+      boolean includeSchemas, AssociationBatchGetRequest request)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }

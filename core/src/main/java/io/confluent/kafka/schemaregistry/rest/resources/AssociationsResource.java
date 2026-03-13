@@ -397,6 +397,8 @@ public class AssociationsResource {
   @PerformanceMetric("associations.batch-get")
   @DocumentedName("batchGetAssociations")
   public Response batchGetAssociations(
+      @Parameter(description = "Include schemas in response")
+      @DefaultValue("false") @QueryParam("includeSchemas") boolean includeSchemas,
       @Parameter(description = "The batch get request", required = true)
       @NotNull AssociationBatchGetRequest request) {
 
@@ -406,7 +408,8 @@ public class AssociationsResource {
 
     String errorMessage = "Error while batch getting associations";
     try {
-      AssociationBatchResponse response = schemaRegistry.batchGetAssociations(request);
+      AssociationBatchResponse response =
+          schemaRegistry.batchGetAssociations(includeSchemas, request);
       return Response.status(207).entity(response).build();
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);

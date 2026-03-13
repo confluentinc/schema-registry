@@ -1984,10 +1984,14 @@ public class RestService implements Closeable, Configurable {
 
   public AssociationBatchResponse batchGetAssociations(
       Map<String, String> requestProperties,
+      boolean includeSchemas,
       AssociationBatchGetRequest request
   ) throws IOException,
       RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/associations:batchGet");
+    if (includeSchemas) {
+      builder.queryParam("includeSchemas", true);
+    }
     String path = builder.build().toString();
 
     AssociationBatchResponse response = httpRequest(path, "POST",

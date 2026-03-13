@@ -986,7 +986,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationGetRequest(resourceId2, "topic", null, null)
         ));
     AssociationBatchResponse batchResponse = restApp.restClient.batchGetAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, batchGetRequest);
+        RestService.DEFAULT_REQUEST_PROPERTIES, false, batchGetRequest);
 
     assertEquals(2, batchResponse.getResults().size());
 
@@ -1014,7 +1014,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationGetRequest("unknown-id", "topic", null, null)
         ));
     AssociationBatchResponse unknownResponse = restApp.restClient.batchGetAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, batchGetUnknown);
+        RestService.DEFAULT_REQUEST_PROPERTIES, false, batchGetUnknown);
     assertEquals(1, unknownResponse.getResults().size());
     assertNull(unknownResponse.getResults().get(0).getError());
     assertNotNull(unknownResponse.getResults().get(0).getResult());
@@ -1026,7 +1026,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationGetRequest(resourceId1, "topic", null, LifecyclePolicy.STRONG)
         ));
     AssociationBatchResponse filteredResponse = restApp.restClient.batchGetAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, batchGetFiltered);
+        RestService.DEFAULT_REQUEST_PROPERTIES, false, batchGetFiltered);
     assertEquals(1, filteredResponse.getResults().size());
     assertNull(filteredResponse.getResults().get(0).getError());
     assertNull(filteredResponse.getResults().get(0).getResult().getAssociations());
@@ -1038,7 +1038,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 resourceName1, resourceNamespace, "topic", null, null)
         ));
     AssociationBatchResponse byNameResponse = restApp.restClient.batchGetAssociations(
-        RestService.DEFAULT_REQUEST_PROPERTIES, batchGetByName);
+        RestService.DEFAULT_REQUEST_PROPERTIES, false, batchGetByName);
     assertEquals(1, byNameResponse.getResults().size());
     AssociationResult byNameResult = byNameResponse.getResults().get(0);
     assertNull(byNameResult.getError());
@@ -1047,6 +1047,43 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("value", byNameResult.getResult().getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.WEAK,
         byNameResult.getResult().getAssociations().get(0).getLifecycle());
+
+    // Batch get with includeSchemas=true
+    AssociationBatchGetRequest batchGetWithSchemas = new AssociationBatchGetRequest(
+        ImmutableList.of(
+            new AssociationGetRequest(resourceId1, "topic", null, null),
+            new AssociationGetRequest(resourceId2, "topic", null, null)
+        ));
+    AssociationBatchResponse withSchemasResponse = restApp.restClient.batchGetAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, true, batchGetWithSchemas);
+    assertEquals(2, withSchemasResponse.getResults().size());
+
+    AssociationResult schemaResult1 = withSchemasResponse.getResults().get(0);
+    assertNull(schemaResult1.getError());
+    assertNotNull(schemaResult1.getResult());
+    assertEquals(1, schemaResult1.getResult().getAssociations().size());
+    assertNotNull(schemaResult1.getResult().getAssociations().get(0).getSchema());
+    assertEquals(allSchemas.get(0),
+        schemaResult1.getResult().getAssociations().get(0).getSchema().getSchema());
+
+    AssociationResult schemaResult2 = withSchemasResponse.getResults().get(1);
+    assertNull(schemaResult2.getError());
+    assertNotNull(schemaResult2.getResult());
+    assertEquals(1, schemaResult2.getResult().getAssociations().size());
+    assertNotNull(schemaResult2.getResult().getAssociations().get(0).getSchema());
+    assertEquals(allSchemas.get(1),
+        schemaResult2.getResult().getAssociations().get(0).getSchema().getSchema());
+
+    // Batch get with includeSchemas=false should not return schemas
+    AssociationBatchGetRequest batchGetWithoutSchemas = new AssociationBatchGetRequest(
+        ImmutableList.of(
+            new AssociationGetRequest(resourceId1, "topic", null, null)
+        ));
+    AssociationBatchResponse withoutSchemasResponse = restApp.restClient.batchGetAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, false, batchGetWithoutSchemas);
+    assertEquals(1, withoutSchemasResponse.getResults().size());
+    assertNull(withoutSchemasResponse.getResults().get(0).getResult().getAssociations()
+        .get(0).getSchema());
   }
 
   @Test

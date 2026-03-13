@@ -1189,9 +1189,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   @Override
   public AssociationBatchResponse batchGetAssociations(
-      AssociationBatchGetRequest request)
+      boolean includeSchemas, AssociationBatchGetRequest request)
       throws IOException, RestClientException {
-    return restService.batchGetAssociations(DEFAULT_REQUEST_PROPERTIES, request);
+    return restService.batchGetAssociations(DEFAULT_REQUEST_PROPERTIES, includeSchemas, request);
   }
 
   @Override

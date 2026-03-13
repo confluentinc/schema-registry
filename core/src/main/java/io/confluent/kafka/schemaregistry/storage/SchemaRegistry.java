@@ -367,7 +367,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   default AssociationBatchResponse batchGetAssociations(
-      AssociationBatchGetRequest request) throws SchemaRegistryException {
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws SchemaRegistryException {
     return null;
   }
 
