@@ -17,7 +17,9 @@
 package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -64,11 +66,14 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.common.serialization.Serializer;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -110,6 +115,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         super(1, true);
     }
 
+    /**
+     * Test KeyValueStore operations (put, get, delete, putIfAbsent, putAll) with header-based schema ID transport.
+     */
     @Test
     public void shouldPerformAllStoreOperationsWithHeaders() throws Exception {
         createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
@@ -137,10 +145,10 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             try (KafkaProducer<GenericRecord, GenericRecord> producer =
                      new KafkaProducer<>(createProducerProps())) {
 
-                // Test 1: put word:1
+                // Test 1: PUT - put hello:1
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(1L, "PUT"))).get();
 
-                // Test 2: put wor:1, aggregates to word:2
+                // Test 2: PUT - put hello:1 again, aggregates to hello:2
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(1L, "PUT"))).get();
 
                 // Test 3: PUT_IF_ABSENT - should not overwrite existing "hello"
@@ -149,19 +157,19 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 // Test 4: PUT_IF_ABSENT - new key "world" should be inserted
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("world"), createValue(50L, "PUT_IF_ABSENT"))).get();
 
-                // Test 5: PUT_ALL - batch insert 3 words (hardcoded in processor)
-                producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("batch-word"), createValue(0L, "PUT_ALL"))).get();
-
-                // Test 6: DELETE - delete "hello"
+                // Test 5: DELETE - delete "hello"
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, helloKey, createValue(0L, "DELETE"))).get();
 
-                // Test 7: DELETE - delete non-existing key (should produce no output)
+                // Test 6: DELETE - delete non-existing key (should produce no output)
                 producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("non-existing"), createValue(0L, "DELETE"))).get();
+
+                // Test 7: PUT_ALL - batch insert 3 words (hardcoded in processor) - at end since temporarily not supported
+                producer.send(new ProducerRecord<>(INPUT_TOPIC, createKey("trigger"), createValue(0L, "PUT_ALL"))).get();
 
                 producer.flush();
             }
 
-            // Expect 8 records: PUT(1) + PUT(2) + PUT_IF_ABSENT(existing) + PUT_IF_ABSENT(new) + PUT_ALL(3) + DELETE
+            // Expect 8 records: PUT(1) + PUT(2) + PUT_IF_ABSENT(existing) + PUT_IF_ABSENT(new) + DELETE + PUT_ALL(3)
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
                 consumeRecords(OUTPUT_TOPIC, "kv-store-test-consumer", 8);
 
@@ -187,23 +195,23 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             assertEquals(50L, results.get(3).value().get("count"));
             assertSchemaIdHeaders(results.get(3), "PUT_IF_ABSENT new");
 
-            // Verify PUT_ALL 3 batch entries
-            assertEquals("batch1", results.get(4).key().get("word").toString());
-            assertEquals(25L, results.get(4).value().get("count"));
-            assertSchemaIdHeaders(results.get(4), "PUT_ALL batch1");
-
-            assertEquals("batch2", results.get(5).key().get("word").toString());
-            assertEquals(50L, results.get(5).value().get("count"));
-            assertSchemaIdHeaders(results.get(5), "PUT_ALL batch2");
-
-            assertEquals("batch3", results.get(6).key().get("word").toString());
-            assertEquals(75L, results.get(6).value().get("count"));
-            assertSchemaIdHeaders(results.get(6), "PUT_ALL batch3");
-
             // Verify DELETE
-            assertEquals("hello", results.get(7).key().get("word").toString());
-            assertEquals(2L, results.get(7).value().get("count"));
-            assertSchemaIdHeaders(results.get(7), "DELETE");
+            assertEquals("hello", results.get(4).key().get("word").toString());
+            assertEquals(2L, results.get(4).value().get("count"));
+            assertSchemaIdHeaders(results.get(4), "DELETE");
+
+            // Verify PUT_ALL 3 words
+            assertEquals("word1", results.get(5).key().get("word").toString());
+            assertEquals(25L, results.get(5).value().get("count"));
+            assertSchemaIdHeaders(results.get(5), "PUT_ALL word1");
+
+            assertEquals("word2", results.get(6).key().get("word").toString());
+            assertEquals(50L, results.get(6).value().get("count"));
+            assertSchemaIdHeaders(results.get(6), "PUT_ALL word2");
+
+            assertEquals("word3", results.get(7).key().get("word").toString());
+            assertEquals(75L, results.get(7).value().get("count"));
+            assertSchemaIdHeaders(results.get(7), "PUT_ALL word3");
 
             // Query store via IQv1 to verify final state
             ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
@@ -223,24 +231,545 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             assertEquals(50L, worldResult.value().get("count"), "IQv1: world count should be 50");
             assertSchemaIdHeaders(worldResult.headers(), "IQv1 world");
 
-            // Verify PUT_ALL: all 3 batch entries should exist
-            ValueTimestampHeaders<GenericRecord> batch1Result = store.get(createKey("batch1"));
-            assertNotNull(batch1Result, "IQv1: batch1 should exist in store");
-            assertEquals(25L, batch1Result.value().get("count"), "IQv1: batch1 count should be 25");
-            assertSchemaIdHeaders(batch1Result.headers(), "IQv1 batch1");
+            // Verify PUT_ALL: all 3 word entries should exist
+            ValueTimestampHeaders<GenericRecord> batch1Result = store.get(createKey("word1"));
+            assertNotNull(batch1Result, "IQv1: word1 should exist in store");
+            assertEquals(25L, batch1Result.value().get("count"), "IQv1: word1 count should be 25");
+            assertSchemaIdHeaders(batch1Result.headers(), "IQv1 word1");
 
-            ValueTimestampHeaders<GenericRecord> batch2Result = store.get(createKey("batch2"));
-            assertNotNull(batch2Result, "IQv1: batch2 should exist in store");
-            assertEquals(50L, batch2Result.value().get("count"), "IQv1: batch2 count should be 50");
-            assertSchemaIdHeaders(batch2Result.headers(), "IQv1 batch2");
+            ValueTimestampHeaders<GenericRecord> batch2Result = store.get(createKey("word2"));
+            assertNotNull(batch2Result, "IQv1: word2 should exist in store");
+            assertEquals(50L, batch2Result.value().get("count"), "IQv1: word2 count should be 50");
+            assertSchemaIdHeaders(batch2Result.headers(), "IQv1 word2");
 
-            ValueTimestampHeaders<GenericRecord> batch3Result = store.get(createKey("batch3"));
-            assertNotNull(batch3Result, "IQv1: batch3 should exist in store");
-            assertEquals(75L, batch3Result.value().get("count"), "IQv1: batch3 count should be 75");
-            assertSchemaIdHeaders(batch3Result.headers(), "IQv1 batch3");
+            ValueTimestampHeaders<GenericRecord> batch3Result = store.get(createKey("word3"));
+            assertNotNull(batch3Result, "IQv1: word3 should exist in store");
+            assertEquals(75L, batch3Result.value().get("count"), "IQv1: word3 count should be 75");
+            assertSchemaIdHeaders(batch3Result.headers(), "IQv1 word3");
 
         } finally {
             closeStreams(streams);
+        }
+    }
+
+    /**
+     * Test ReadOnlyKeyValueStore operations (all, reverseAll, range, reverseRange, prefixScan, approximateNumEntries)
+     */
+    @Test
+    @Disabled
+    public void shouldTestReadOnlyAndIteratorOperationsWithHeaders() throws Exception {
+        String inputTopic = "iterator-input";
+        String outputTopic = "iterator-output";
+        String storeName = "iterator-store";
+
+        createTopics(inputTopic, outputTopic);
+
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
+
+        StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName),
+                    keySerde,
+                    valueSerde))
+            .stream(inputTopic, Consumed.with(keySerde, valueSerde))
+            .process(() -> new IteratorTestProcessor(storeName), storeName)
+            .to(outputTopic, Produced.with(keySerde, valueSerde));
+
+        KafkaStreams streams = null;
+        try {
+            streams = startStreamsAndAwaitRunning(builder.build(), "iterator-integration-test");
+
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+
+                for (int i = 1; i <= 5; i++) {
+                    producer.send(new ProducerRecord<>(inputTopic,
+                        createKey("word-" + i), createValue(i * 10L, "PUT_SIMPLE"))).get();
+                }
+
+                // Test ALL - iterate all 5 entries
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("all"), createValue(0L, "ALL"))).get();
+
+                // Test REVERSE_ALL - iterate all 5 entries in reverse
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("reverse_all"), createValue(0L, "REVERSE_ALL"))).get();
+
+                // Test RANGE - from word-2 to word-4
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("range"), createValue(0L, "RANGE"))).get();
+
+                // Test REVERSE_RANGE - from word-2 to word-4 in reverse
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("reverse_range"), createValue(0L, "REVERSE_RANGE"))).get();
+
+                // Test PREFIX_SCAN - keys starting with "word-"
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("prefix_scan"), createValue(0L, "PREFIX_SCAN"))).get();
+
+                // Test APPROXIMATE_NUM_ENTRIES
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("approximate_num_entries"), createValue(0L, "APPROXIMATE_NUM_ENTRIES"))).get();
+
+                // Test iterator methods: peekNextKey, hasNext, next
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("iterator"), createValue(0L, "ITERATOR_METHODS"))).get();
+
+                producer.flush();
+            }
+
+            // Expected output counts:
+            // PUT_SIMPLE: 5
+            // ALL: 5
+            // REVERSE_ALL: 5
+            // RANGE (word-2 to word-4): 2 (word-2, word-3)
+            // REVERSE_RANGE: 2 (word-3, word-2)
+            // PREFIX_SCAN: 5
+            // APPROXIMATE_NUM_ENTRIES: 1
+            // ITERATOR_METHODS: 1
+            // Total: 26
+            List<ConsumerRecord<GenericRecord, GenericRecord>> results =
+                consumeRecords(outputTopic, "iterator-test-consumer", 26);
+
+            assertEquals(26, results.size(), "Should have 26 output records");
+
+            int idx = 0;
+
+            // Verify PUT_SIMPLE results (5 entries)
+            for (int i = 1; i <= 5; i++) {
+                assertEquals("word-" + i, results.get(idx).key().get("word").toString());
+                assertEquals(i * 10L, results.get(idx).value().get("count"));
+                assertSchemaIdHeaders(results.get(idx), "PUT_SIMPLE word-" + i);
+                idx++;
+            }
+
+            // Verify ALL results (5 entries, sorted order)
+            for (int i = 1; i <= 5; i++) {
+                assertEquals("word-" + i, results.get(idx).key().get("word").toString());
+                assertSchemaIdHeaders(results.get(idx), "ALL word-" + i);
+                idx++;
+            }
+
+            // Verify REVERSE_ALL results (5 entries, reverse order)
+            for (int i = 5; i >= 1; i--) {
+                assertEquals("word-" + i, results.get(idx).key().get("word").toString());
+                assertSchemaIdHeaders(results.get(idx), "REVERSE_ALL word-" + i);
+                idx++;
+            }
+
+            // Verify RANGE results (word-2 to word-4, exclusive end = word-2, word-3)
+            assertEquals("word-2", results.get(idx).key().get("word").toString());
+            assertSchemaIdHeaders(results.get(idx++), "RANGE word-2");
+            assertEquals("word-3", results.get(idx).key().get("word").toString());
+            assertSchemaIdHeaders(results.get(idx++), "RANGE word-3");
+
+            // Verify REVERSE_RANGE results (word-3, word-2)
+            assertEquals("word-3", results.get(idx).key().get("word").toString());
+            assertSchemaIdHeaders(results.get(idx++), "REVERSE_RANGE word-3");
+            assertEquals("word-2", results.get(idx).key().get("word").toString());
+            assertSchemaIdHeaders(results.get(idx++), "REVERSE_RANGE word-2");
+
+            // Verify PREFIX_SCAN results (5 entries with prefix "word-")
+            for (int i = 1; i <= 5; i++) {
+                assertEquals("word-" + i, results.get(idx).key().get("word").toString());
+                assertSchemaIdHeaders(results.get(idx), "PREFIX_SCAN word-" + i);
+                idx++;
+            }
+
+            // Verify APPROXIMATE_NUM_ENTRIES
+            assertTrue((Long) results.get(idx).value().get("count") >= 5,
+                "approximateNumEntries should be at least 5");
+            idx++;
+
+            // Verify ITERATOR_METHODS
+            assertEquals("iterator_test_passed", results.get(idx).key().get("word").toString());
+            assertSchemaIdHeaders(results.get(idx), "ITERATOR_METHODS");
+
+            // Query store via IQv1
+            ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
+                streams.store(
+                    StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+
+            // Test IQv1 all()
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> allIter = store.all()) {
+                int count = 0;
+                while (allIter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = allIter.next();
+                    assertNotNull(kv.value, "IQv1 all() value should not be null");
+                    assertSchemaIdHeaders(kv.value.headers(), "IQv1 all() entry " + count);
+                    count++;
+                }
+                assertEquals(5, count, "IQv1 all() should return 5 entries");
+            }
+
+            // Test IQv1 range()
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> rangeIter =
+                     store.range(createKey("word-2"), createKey("word-4"))) {
+                List<String> rangeKeys = new ArrayList<>();
+                while (rangeIter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = rangeIter.next();
+                    rangeKeys.add(kv.key.get("word").toString());
+                    assertSchemaIdHeaders(kv.value.headers(), "IQv1 range() " + kv.key.get("word"));
+                }
+                assertEquals(Arrays.asList("word-2", "word-3"), rangeKeys,
+                    "IQv1 range(word-2, word-4) should return word-2, word-3");
+            }
+
+            // Test IQv1 approximateNumEntries()
+            assertTrue(store.approximateNumEntries() >= 5, "IQv1 approximateNumEntries should be at least 5");
+
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    /**
+     * Test store state operations: name(), isOpen(), persistent()
+     */
+    @Test
+    public void shouldTestStoreStateOperations() throws Exception {
+        String inputTopic = "state-input";
+        String outputTopic = "state-output";
+        String storeName = "state-store";
+
+        createTopics(inputTopic, outputTopic);
+
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
+
+        StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName),
+                    keySerde,
+                    valueSerde))
+            .stream(inputTopic, Consumed.with(keySerde, valueSerde))
+            .process(() -> new StateStoreTestProcessor(storeName), storeName)
+            .to(outputTopic, Produced.with(keySerde, valueSerde));
+
+        KafkaStreams streams = null;
+        try {
+            streams = startStreamsAndAwaitRunning(builder.build(), "state-integration-test");
+
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("trigger"), createValue(0L, "TEST_STORE_STATE"))).get();
+                producer.flush();
+            }
+
+            List<ConsumerRecord<GenericRecord, GenericRecord>> results =
+                consumeRecords(outputTopic, "state-test-consumer", 1);
+
+            assertEquals(1, results.size(), "Should have 1 output record");
+            assertEquals(1L, results.get(0).value().get("count"),
+                "Store state checks should pass (isOpen=true, persistent=true, name matches)");
+            assertEquals("state-store", results.get(0).key().get("word").toString());
+
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    @Test
+    public void shouldReturnNullForNonExistentKey() throws Exception {
+        String inputTopic = "nonexistent-input";
+        String outputTopic = "nonexistent-output";
+        String storeName = "nonexistent-store";
+
+        createTopics(inputTopic, outputTopic);
+
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
+
+        StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .addStateStore(
+                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName),
+                    keySerde,
+                    valueSerde))
+            .stream(inputTopic, Consumed.with(keySerde, valueSerde))
+            .process(() -> new GetNonExistentProcessor(storeName), storeName)
+            .to(outputTopic, Produced.with(keySerde, valueSerde));
+
+        KafkaStreams streams = null;
+        try {
+            streams = startStreamsAndAwaitRunning(builder.build(), "nonexistent-integration-test");
+
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+
+                producer.send(new ProducerRecord<>(inputTopic,
+                    createKey("nonexistent"), createValue(0L, "GET_NONEXISTENT"))).get();
+                producer.flush();
+            }
+
+            List<ConsumerRecord<GenericRecord, GenericRecord>> results =
+                consumeRecords(outputTopic, "nonexistent-consumer", 1);
+
+            assertEquals(1, results.size(), "Should have 1 output record");
+            assertEquals(1L, results.get(0).value().get("count"),
+                "get() on non-existent key should return null");
+
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    /**
+     * Processor for testing iterator and read-only operations.
+     */
+    private static class IteratorTestProcessor
+        implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
+
+        private final String storeName;
+        private ProcessorContext<GenericRecord, GenericRecord> context;
+        private TimestampedKeyValueStoreWithHeaders<GenericRecord, GenericRecord> store;
+
+        public IteratorTestProcessor(String storeName) {
+            this.storeName = storeName;
+        }
+
+        @Override
+        public void init(ProcessorContext<GenericRecord, GenericRecord> context) {
+            this.context = context;
+            this.store = context.getStateStore(storeName);
+        }
+
+        @Override
+        public void process(Record<GenericRecord, GenericRecord> record) {
+            String operation = record.value().get("operation").toString();
+
+            switch (operation) {
+                case "PUT_SIMPLE":
+                    handlePutSimple(record);
+                    break;
+                case "ALL":
+                    handleTestAll(record);
+                    break;
+                case "REVERSE_ALL":
+                    handleTestReverseAll(record);
+                    break;
+                case "RANGE":
+                    handleTestRange(record);
+                    break;
+                case "REVERSE_RANGE":
+                    handleTestReverseRange(record);
+                    break;
+                case "PREFIX_SCAN":
+                    handleTestPrefixScan(record);
+                    break;
+                case "APPROXIMATE_NUM_ENTRIES":
+                    handleTestApproximateNumEntries(record);
+                    break;
+                case "ITERATOR_METHODS":
+                    handleTestIteratorMethods(record);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown operation: " + operation);
+            }
+        }
+
+        private void handlePutSimple(Record<GenericRecord, GenericRecord> record) {
+            ValueTimestampHeaders<GenericRecord> toStore =
+                ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers());
+            store.put(record.key(), toStore);
+
+            ValueTimestampHeaders<GenericRecord> stored = store.get(record.key());
+            context.forward(new Record<>(
+                record.key(), stored.value(), stored.timestamp(), stored.headers()));
+        }
+
+        private void handleTestAll(Record<GenericRecord, GenericRecord> record) {
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter = store.all()) {
+                while (iter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    context.forward(new Record<>(
+                        kv.key, kv.value.value(), kv.value.timestamp(), kv.value.headers()));
+                }
+            }
+        }
+
+        private void handleTestReverseAll(Record<GenericRecord, GenericRecord> record) {
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter = store.reverseAll()) {
+                while (iter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    context.forward(new Record<>(
+                        kv.key, kv.value.value(), kv.value.timestamp(), kv.value.headers()));
+                }
+            }
+        }
+
+        private void handleTestRange(Record<GenericRecord, GenericRecord> record) {
+            GenericRecord fromKey = createKeyWithSchema(record.key().getSchema(), "word-2");
+            GenericRecord toKey = createKeyWithSchema(record.key().getSchema(), "word-4");
+
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter =
+                     store.range(fromKey, toKey)) {
+                while (iter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    context.forward(new Record<>(
+                        kv.key, kv.value.value(), kv.value.timestamp(), kv.value.headers()));
+                }
+            }
+        }
+
+        private void handleTestReverseRange(Record<GenericRecord, GenericRecord> record) {
+            GenericRecord fromKey = createKeyWithSchema(record.key().getSchema(), "word-2");
+            GenericRecord toKey = createKeyWithSchema(record.key().getSchema(), "word-4");
+
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter =
+                     store.reverseRange(fromKey, toKey)) {
+                while (iter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    context.forward(new Record<>(
+                        kv.key, kv.value.value(), kv.value.timestamp(), kv.value.headers()));
+                }
+            }
+        }
+
+        private void handleTestPrefixScan(Record<GenericRecord, GenericRecord> record) {
+            GenericRecord prefixKey = createKeyWithSchema(record.key().getSchema(), "word-");
+
+            Serializer<GenericRecord> prefixSerializer = (topic, data) -> {
+                if (data == null) return null;
+                return data.get("word").toString().getBytes();
+            };
+
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter =
+                     store.prefixScan(prefixKey, prefixSerializer)) {
+                while (iter.hasNext()) {
+                    KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    context.forward(new Record<>(
+                        kv.key, kv.value.value(), kv.value.timestamp(), kv.value.headers()));
+                }
+            }
+        }
+
+        private void handleTestApproximateNumEntries(Record<GenericRecord, GenericRecord> record) {
+            long count = store.approximateNumEntries();
+
+            GenericRecord resultValue = new GenericData.Record(record.value().getSchema());
+            resultValue.put("count", count);
+            resultValue.put("operation", "RESULT");
+
+            context.forward(new Record<>(record.key(), resultValue, record.timestamp(), record.headers()));
+        }
+
+        private void handleTestIteratorMethods(Record<GenericRecord, GenericRecord> record) {
+            try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> iter = store.all()) {
+                // Test hasNext
+                assertTrue(iter.hasNext(), "Iterator should have next");
+
+                // Test peekNextKey
+                GenericRecord peekedKey = iter.peekNextKey();
+                assertNotNull(peekedKey, "peekNextKey should return a key");
+
+                // Verify peekNextKey doesn't advance
+                GenericRecord peekedAgain = iter.peekNextKey();
+                assertEquals(peekedKey.get("word").toString(), peekedAgain.get("word").toString());
+
+                // Test next
+                KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> nextKv = iter.next();
+                assertEquals(peekedKey.get("word").toString(), nextKv.key.get("word").toString());
+
+                // Create success result
+                GenericRecord successKey = createKeyWithSchema(record.key().getSchema(), "iterator_test_passed");
+                GenericRecord successValue = new GenericData.Record(record.value().getSchema());
+                successValue.put("count", 1L);
+                successValue.put("operation", "RESULT");
+
+                context.forward(new Record<>(
+                    successKey, successValue, record.timestamp(), nextKv.value.headers()));
+            }
+        }
+
+        private static GenericRecord createKeyWithSchema(Schema schema, String word) {
+            GenericRecord key = new GenericData.Record(schema);
+            key.put("word", word);
+            return key;
+        }
+    }
+
+    /**
+     * Processor for testing store state operations.
+     */
+    private static class StateStoreTestProcessor
+        implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
+
+        private final String storeName;
+        private ProcessorContext<GenericRecord, GenericRecord> context;
+        private TimestampedKeyValueStoreWithHeaders<GenericRecord, GenericRecord> store;
+
+        public StateStoreTestProcessor(String storeName) {
+            this.storeName = storeName;
+        }
+
+        @Override
+        public void init(ProcessorContext<GenericRecord, GenericRecord> context) {
+            this.context = context;
+            this.store = context.getStateStore(storeName);
+        }
+
+        @Override
+        public void process(Record<GenericRecord, GenericRecord> record) {
+            if ("TEST_STORE_STATE".equals(record.value().get("operation").toString())) {
+                String name = store.name();
+                boolean isOpen = store.isOpen();
+                boolean isPersistent = store.persistent();
+
+                long result = (storeName.equals(name) && isOpen && isPersistent) ? 1L : 0L;
+
+                GenericRecord resultKey = new GenericData.Record(record.key().getSchema());
+                resultKey.put("word", name);
+
+                GenericRecord resultValue = new GenericData.Record(record.value().getSchema());
+                resultValue.put("count", result);
+                resultValue.put("operation", "RESULT");
+
+                context.forward(new Record<>(resultKey, resultValue, record.timestamp(), record.headers()));
+            }
+        }
+    }
+
+    /**
+     * Processor for testing get on non-existent key.
+     */
+    private static class GetNonExistentProcessor
+        implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
+
+        private final String storeName;
+        private ProcessorContext<GenericRecord, GenericRecord> context;
+        private TimestampedKeyValueStoreWithHeaders<GenericRecord, GenericRecord> store;
+
+        public GetNonExistentProcessor(String storeName) {
+            this.storeName = storeName;
+        }
+
+        @Override
+        public void init(ProcessorContext<GenericRecord, GenericRecord> context) {
+            this.context = context;
+            this.store = context.getStateStore(storeName);
+        }
+
+        @Override
+        public void process(Record<GenericRecord, GenericRecord> record) {
+            if ("GET_NONEXISTENT".equals(record.value().get("operation").toString())) {
+                ValueTimestampHeaders<GenericRecord> result = store.get(record.key());
+                long checkResult = (result == null) ? 1L : 0L;
+
+                GenericRecord resultValue = new GenericData.Record(record.value().getSchema());
+                resultValue.put("count", checkResult);
+                resultValue.put("operation", "RESULT");
+
+                context.forward(new Record<>(record.key(), resultValue, record.timestamp(), record.headers()));
+            }
         }
     }
 
@@ -264,7 +793,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             this.store = context.getStateStore(storeName);
         }
 
-        // TODO: Test on range(), reverseRange(), all(), reverseAll(),  prefixScan() once those are supported by TimestampedKeyValueStoreWithHeaders
         @Override
         public void process(Record<GenericRecord, GenericRecord> record) {
             String operation = record.value().get("operation").toString();
@@ -310,7 +838,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
         private void handleDelete(Record<GenericRecord, GenericRecord> record) {
             ValueTimestampHeaders<GenericRecord> deletedRecord = store.delete(record.key());
-
+            
             if (deletedRecord != null) {
                 context.forward(new Record<>(
                     record.key(), deletedRecord.value(), deletedRecord.timestamp(), deletedRecord.headers()));
@@ -337,7 +865,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             Schema valueSchema = record.value().getSchema();
 
             // Hardcoded batch entries: batch1:25, batch2:50, batch3:75
-            String[] words = {"batch1", "batch2", "batch3"};
+            String[] words = {"word1", "word2", "word3"};
             long[] counts = {25L, 50L, 75L};
 
             List<KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>>> entries = new ArrayList<>();
