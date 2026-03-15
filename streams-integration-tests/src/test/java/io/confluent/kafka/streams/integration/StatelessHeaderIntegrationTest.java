@@ -63,7 +63,7 @@ import org.junit.jupiter.api.Test;
  * {@link GenericAvroSerde} configured to use {@link HeaderSchemaIdSerializer} for header-based
  * schema ID transport. Both keys and values use Avro with header-based schema IDs.
  */
-public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarness {
+public class StatelessHeaderIntegrationTest extends ClusterTestHarness {
 
   private static final String INPUT_TOPIC = "sensor-readings-input";
   private static final String OUTPUT_TOPIC = "sensor-readings-output";
@@ -89,7 +89,7 @@ public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarnes
           + "]"
           + "}";
 
-  public KafkaStreamsHeaderSchemaIdIntegrationTest() {
+  public StatelessHeaderIntegrationTest() {
     super(1, true);
   }
 
