@@ -32,6 +32,9 @@ public class JsonNodeComparator implements Comparator<JsonNode> {
 
   @Override
   public int compare(JsonNode o1, JsonNode o2) {
+    if (o1 == o2) {
+      return 0;
+    }
     if (o1 == null) {
       if (o2 != null) {
         return -1;

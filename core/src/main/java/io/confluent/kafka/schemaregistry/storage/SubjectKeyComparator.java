@@ -34,6 +34,9 @@ public class SubjectKeyComparator<K> implements Comparator<K> {
   @Override
   @SuppressWarnings("unchecked")
   public int compare(K o1, K o2) {
+    if (o1 == o2) {
+      return 0;
+    }
     if (o1 instanceof SubjectKey && o2 instanceof SubjectKey) {
       SubjectKey s1 = (SubjectKey) o1;
       SubjectKey s2 = (SubjectKey) o2;
