@@ -2206,4 +2206,33 @@ public class RestApiTest extends ClusterTestHarness {
     // Join base URL and path, collapsing any duplicate forward slash delimiters
     return baseUrl.replaceFirst("/$", "") + "/" + path.replaceFirst("^/", "");
   }
+
+  @Test
+  public void testDeleteSubjectWithSelfReferencingVersions() throws Exception {
+    String subject = "self-ref-subject";
+    restApp.restClient.updateCompatibility(NONE.name, subject);
+
+    // v1: base schema
+    String v1Schema = "{\"type\":\"record\",\"name\":\"Base\",\"namespace\":\"com.example\","
+        + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
+    int v1Id = restApp.restClient.registerSchema(v1Schema, subject);
+    assertEquals(1, v1Id);
+
+    // v2: references v1 of the same subject
+    String v2Schema = "{\"type\":\"record\",\"name\":\"Derived\",\"namespace\":\"com.example\","
+        + "\"fields\":[{\"name\":\"base\",\"type\":\"com.example.Base\"}]}";
+    RegisterSchemaRequest v2Request = new RegisterSchemaRequest();
+    v2Request.setSchema(v2Schema);
+    v2Request.setReferences(Collections.singletonList(
+        new SchemaReference("com.example.Base", subject, 1)));
+    int v2Id = restApp.restClient.registerSchema(v2Request, subject, false).getId();
+    assertEquals(2, v2Id);
+    assertFalse(restApp.restClient.getReferencedBy(subject, 1).isEmpty());
+
+    // deletion should succeed
+    assertEquals(Arrays.asList(1, 2),
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject));
+    assertEquals(Arrays.asList(1, 2),
+        restApp.restClient.deleteSubject(RestService.DEFAULT_REQUEST_PROPERTIES, subject, true));
+  }
 }

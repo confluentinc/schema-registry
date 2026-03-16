@@ -1066,7 +1066,7 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!lookupCache.referencesSchema(key).isEmpty()) {
+        if (hasExternalReferences(key, subject)) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
@@ -1101,6 +1101,30 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       throw new SchemaRegistryStoreException("Error while deleting the subject in the"
                                              + " backend Kafka store", e);
     }
+  }
+
+  /**
+   * Returns true if {@code key} is referenced by any schema whose subject-versions are not
+   * exclusively within {@code subject}. Used during subject-level deletion to allow intra-subject
+   * self-references to be removed together without blocking the operation
+   */
+  private boolean hasExternalReferences(SchemaKey key, String subject)
+      throws StoreException, SchemaRegistryException {
+    Set<Integer> refIds = lookupCache.referencesSchema(key);
+    if (refIds.isEmpty()) {
+      return false;
+    }
+    String ctx = CONTEXT_DELIMITER + QualifiedSubject.contextFor(tenant(), subject)
+        + CONTEXT_DELIMITER;
+    for (Integer refId : refIds) {
+      // lookup all subject-versions for this schema ID to determine
+      // whether the reference comes exclusively from the subject being deleted.
+      List<SubjectVersion> versions = listVersionsForId(refId, ctx, true);
+      if (versions == null || versions.stream().anyMatch(sv -> !subject.equals(sv.getSubject()))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public List<Integer> deleteSubjectOrForward(
