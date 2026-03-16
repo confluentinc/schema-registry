@@ -1879,6 +1879,33 @@ public class JsonSchemaTest {
     parsedSchema.validate(true);
   }
 
+  @Test
+  public void testRecursiveDefinition2() {
+    String schema = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"title\": \"ExampleEvent\",\n"
+        + "    \"properties\": {\n"
+        + "        \"data\": {\"$ref\": \"#/$defs/JsonValue\"}\n"
+        + "    },\n"
+        + "    \"$defs\": {\n"
+        + "        \"JsonValue\": {\n"
+        + "            \"anyOf\": [\n"
+        + "                {\"type\": \"null\"},\n"
+        + "                {\"type\": \"boolean\"},\n"
+        + "                {\"type\": \"integer\"},\n"
+        + "                {\"type\": \"number\"},\n"
+        + "                {\"type\": \"string\"},\n"
+        + "                {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/JsonValue\"}},\n"
+        + "                {\"type\": \"object\", \"additionalProperties\": {\"$ref\": \"#/$defs/JsonValue\"}}\n"
+        + "            ]\n"
+        + "        }\n"
+        + "    }\n"
+        + "}";
+    ParsedSchema parsedSchema = new JsonSchema(schema);
+    parsedSchema.validate(true);
+  }
+
   private static Map<String, String> getJsonSchemaWithReferences(String draft) {
     Map<String, String> schemas = new HashMap<>();
     String reference = "{"

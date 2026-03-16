@@ -186,6 +186,10 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     if (ctx == null) {
       return new SchemaContext(
           schema, CombinedSchemaExt.allOf(Collections.emptyList()).isGenerated(true));
+    } else if (ctx.source() != schema) {
+      // if the accumulated result doesn't have this schema as its source, re-wrap it
+      // this can happen when the schema has a single child, so accumulate/join is not called
+      ctx = new SchemaContext(schema, ctx.schemaBuilder());
     }
     org.everit.json.schema.Schema ctxSchema = ctx.schema();
     if (isGeneratedAll(ctxSchema)) {
