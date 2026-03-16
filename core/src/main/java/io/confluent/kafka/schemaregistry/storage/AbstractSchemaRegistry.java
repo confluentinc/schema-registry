@@ -1437,6 +1437,25 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return undeletedIds;
   }
 
+  /**
+   * Returns the set of subjects that have at least one schema version referencing the given key.
+   * When {@code lookupDeletedSchema} is false, references from soft-deleted schema versions
+   * are excluded.
+   */
+  protected Set<String> getReferencedBySubjects(SchemaKey key, boolean lookupDeletedSchema)
+      throws StoreException, SchemaRegistryException {
+    Set<ContextId> ids = lookupCache.referencesSchema(key);
+    Set<String> subjects = new HashSet<>();
+    for (ContextId id : ids) {
+      String ctx = CONTEXT_DELIMITER + id.getContext() + CONTEXT_DELIMITER;
+      List<SubjectVersion> versions = listVersionsForId(id.getId(), ctx, lookupDeletedSchema);
+      if (versions != null) {
+        versions.stream().map(SubjectVersion::getSubject).forEach(subjects::add);
+      }
+    }
+    return subjects;
+  }
+
   @Override
   public List<ContextId> listIdsForGuid(String guid)
           throws SchemaRegistryException {
