@@ -368,6 +368,28 @@ public class KafkaJsonSchemaSerializerTest {
   }
 
   @Test
+  public void testValidateBeforeDomainRules() throws Exception {
+    Properties validateBeforeConfig = createSerializerConfig();
+    validateBeforeConfig.put(
+        KafkaJsonSchemaSerializerConfig.VALIDATE_BEFORE_DOMAIN_RULES, true);
+    KafkaJsonSchemaSerializer<Object> validateBeforeSerializer =
+        new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(validateBeforeConfig));
+
+    // Valid user should succeed
+    User validUser = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = validateBeforeSerializer.serialize(topic, headers, validUser);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
+    assertEquals(validUser, deserialized);
+
+    // Invalid user (age < 0 violates @Min(0)) should fail validation before domain rules
+    User invalidUser = new User("john", "doe", (short) -1, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers2 = new RecordHeaders();
+    assertThrows(SerializationException.class,
+        () -> validateBeforeSerializer.serialize(topic, headers2, invalidUser));
+  }
+
+  @Test
   public void serializeUserIgnoreNulls() throws Exception {
     User user = new User("john", "doe", (short) 50, "jack", null);
     JsonSchema userSchema = JsonSchemaUtils.getSchema(user, null, false, null);
