@@ -57,6 +57,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected Class<T> type;
   protected String typeProperty;
   protected boolean validate;
+  protected boolean validateBeforeDomainRules;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -73,6 +74,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         failUnknownProperties
     );
     this.validate = config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA);
+    this.validateBeforeDomainRules =
+        config.getBoolean(KafkaJsonSchemaDeserializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
   }
 
@@ -183,6 +186,17 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
+      if (validate && validateBeforeDomainRules) {
+        try {
+          if (jsonNode == null) {
+            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+          }
+          jsonNode = schema.validate(jsonNode);
+        } catch (JsonProcessingException | ValidationException e) {
+          throw new SerializationException("JSON does not match schema of type "
+              + schema.schemaType(), e);
+        }
+      }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
           jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
@@ -192,7 +206,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         );
       }
 
-      if (validate) {
+      if (validate && !validateBeforeDomainRules) {
         try {
           if (jsonNode == null) {
             jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
