@@ -63,6 +63,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected boolean oneofForNullables;
   protected boolean failUnknownProperties;
   protected boolean validate;
+  protected boolean validateBeforeDomainRules;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
@@ -92,6 +93,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.failUnknownProperties =
         config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
+    this.validateBeforeDomainRules =
+        config.getBoolean(KafkaJsonSchemaSerializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
   }
 
   protected KafkaJsonSchemaSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -179,8 +182,11 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(JsonSchema.TYPE, response.getId(), response.getGuid());
       }
+      if (validate && validateBeforeDomainRules) {
+        object = validateJson(object, schema);
+      }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      if (validate) {
+      if (validate && !validateBeforeDomainRules) {
         object = validateJson(object, schema);
       }
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {
