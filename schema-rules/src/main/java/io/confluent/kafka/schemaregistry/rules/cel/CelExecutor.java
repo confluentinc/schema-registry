@@ -43,7 +43,6 @@ import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -197,17 +196,17 @@ public class CelExecutor implements RuleExecutor {
         return obj;
       }
 
-      Map<String, Type> declTypes = toDeclTypes(args);
+      Map<String, Type> types = toDeclTypes(args);
       RuleWithArgs ruleWithArgs = null;
       switch (type) {
         case AVRO:
-          ruleWithArgs = new RuleWithArgs(rule, type, declTypes, ((GenericContainer) msg).getSchema());
+          ruleWithArgs = new RuleWithArgs(rule, type, types, ((GenericContainer) msg).getSchema());
           break;
         case JSON:
-          ruleWithArgs = new RuleWithArgs(rule, type, declTypes, msg.getClass());
+          ruleWithArgs = new RuleWithArgs(rule, type, types, msg.getClass());
           break;
         case PROTOBUF:
-          ruleWithArgs = new RuleWithArgs(rule, type, declTypes,
+          ruleWithArgs = new RuleWithArgs(rule, type, types,
               ((Message) msg).getDescriptorForType());
           break;
         default:
@@ -342,14 +341,16 @@ public class CelExecutor implements RuleExecutor {
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
 
-    public RuleWithArgs(String rule, ScriptType type, Map<String, Type> declTypes, Schema avroSchema) {
+    public RuleWithArgs(
+        String rule, ScriptType type, Map<String, Type> declTypes, Schema avroSchema) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
       this.avroSchema = avroSchema;
     }
 
-    public RuleWithArgs(String rule, ScriptType type, Map<String, Type> declTypes, Class<?> jsonClass) {
+    public RuleWithArgs(
+        String rule, ScriptType type, Map<String, Type> declTypes, Class<?> jsonClass) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
