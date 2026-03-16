@@ -187,15 +187,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         schema = (JsonSchema) readerSchema;
       }
       if (validate && validateBeforeDomainRules) {
-        try {
-          if (jsonNode == null) {
-            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
-          }
-          jsonNode = schema.validate(jsonNode);
-        } catch (JsonProcessingException | ValidationException e) {
-          throw new SerializationException("JSON does not match schema of type "
-              + schema.schemaType(), e);
-        }
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
@@ -207,15 +199,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
 
       if (validate && !validateBeforeDomainRules) {
-        try {
-          if (jsonNode == null) {
-            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
-          }
-          jsonNode = schema.validate(jsonNode);
-        } catch (JsonProcessingException | ValidationException e) {
-          throw new SerializationException("JSON does not match schema of type "
-              + schema.schemaType(), e);
-        }
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
 
       Object value;
@@ -353,5 +337,18 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   ) throws SerializationException {
     return (JsonSchemaAndValue) deserialize(
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
+  }
+
+  protected JsonNode validateJson(JsonNode jsonNode, ByteBuffer buffer, int start, int length,
+      JsonSchema schema) throws IOException {
+    try {
+      if (jsonNode == null) {
+        jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+      }
+      return schema.validate(jsonNode);
+    } catch (JsonProcessingException | ValidationException e) {
+      throw new SerializationException("JSON does not match schema of type "
+          + schema.schemaType(), e);
+    }
   }
 }
