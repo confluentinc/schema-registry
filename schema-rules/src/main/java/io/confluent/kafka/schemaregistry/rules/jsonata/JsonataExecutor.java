@@ -103,7 +103,7 @@ public class JsonataExecutor implements RuleExecutor {
       try {
         return function.apply(config.toString());
       } catch (Exception e) {
-        throw new ConfigException("Cannot parse " + name);
+        throw new ConfigException("Cannot parse " + name, e);
       }
     }
     return null;
@@ -139,7 +139,11 @@ public class JsonataExecutor implements RuleExecutor {
     }
     try {
       JsonNode result = expr.evaluate(jsonObj, timeoutMs, maxDepth);
-      return ctx.rule().getKind() == RuleKind.CONDITION ? result.asBoolean(true) : result;
+      if (ctx.rule().getKind() == RuleKind.CONDITION) {
+        return result != null ? result.asBoolean(true) : true;
+      } else {
+        return result != null ? result : message;
+      }
     } catch (EvaluateException e) {
       throw new RuleException("Could not evaluate expression", e);
     }

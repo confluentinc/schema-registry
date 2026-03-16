@@ -43,7 +43,6 @@ import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -101,7 +100,7 @@ public class CelExecutor implements RuleExecutor {
 
             ScriptBuilder scriptBuilder = scriptHost
                 .buildScript(ruleWithArgs.getRule())
-                .withDeclarations(new ArrayList<>(ruleWithArgs.getDecls().values()));
+                .withDeclarations(toDecls(ruleWithArgs.getDeclTypes()));
             switch (ruleWithArgs.getType()) {
               case AVRO:
                 // Register our Avro type
@@ -197,17 +196,17 @@ public class CelExecutor implements RuleExecutor {
         return obj;
       }
 
-      Map<String, Decl> decls = toDecls(args);
+      Map<String, Type> types = toDeclTypes(args);
       RuleWithArgs ruleWithArgs = null;
       switch (type) {
         case AVRO:
-          ruleWithArgs = new RuleWithArgs(rule, type, decls, ((GenericContainer) msg).getSchema());
+          ruleWithArgs = new RuleWithArgs(rule, type, types, ((GenericContainer) msg).getSchema());
           break;
         case JSON:
-          ruleWithArgs = new RuleWithArgs(rule, type, decls, msg.getClass());
+          ruleWithArgs = new RuleWithArgs(rule, type, types, msg.getClass());
           break;
         case PROTOBUF:
-          ruleWithArgs = new RuleWithArgs(rule, type, decls,
+          ruleWithArgs = new RuleWithArgs(rule, type, types,
               ((Message) msg).getDescriptorForType());
           break;
         default:
@@ -227,10 +226,15 @@ public class CelExecutor implements RuleExecutor {
     }
   }
 
-  private static Map<String, Decl> toDecls(Map<String, Object> args) {
+  private static Map<String, Type> toDeclTypes(Map<String, Object> args) {
     return args.entrySet().stream()
-        .map(e -> Decls.newVar(e.getKey(), findType(e.getValue())))
-        .collect(Collectors.toMap(Decl::getName, e -> e));
+        .collect(Collectors.toMap(e -> e.getKey(), e -> findType(e.getValue())));
+  }
+
+  private static List<Decl> toDecls(Map<String, Type> args) {
+    return args.entrySet().stream()
+        .map(e -> Decls.newVar(e.getKey(), e.getValue()))
+        .collect(Collectors.toList());
   }
 
   private static Type findType(Object arg) {
@@ -332,30 +336,32 @@ public class CelExecutor implements RuleExecutor {
   static class RuleWithArgs {
     private final String rule;
     private final ScriptType type;
-    private final Map<String, Decl> decls;
+    private final Map<String, Type> declTypes;
     private Schema avroSchema;
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
 
-    public RuleWithArgs(String rule, ScriptType type, Map<String, Decl> decls, Schema avroSchema) {
+    public RuleWithArgs(
+        String rule, ScriptType type, Map<String, Type> declTypes, Schema avroSchema) {
       this.rule = rule;
       this.type = type;
-      this.decls = decls;
+      this.declTypes = declTypes;
       this.avroSchema = avroSchema;
     }
 
-    public RuleWithArgs(String rule, ScriptType type, Map<String, Decl> decls, Class<?> jsonClass) {
+    public RuleWithArgs(
+        String rule, ScriptType type, Map<String, Type> declTypes, Class<?> jsonClass) {
       this.rule = rule;
       this.type = type;
-      this.decls = decls;
+      this.declTypes = declTypes;
       this.jsonClass = jsonClass;
     }
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, Decl> decls, Descriptor protobufDesc) {
+        String rule, ScriptType type, Map<String, Type> declTypes, Descriptor protobufDesc) {
       this.rule = rule;
       this.type = type;
-      this.decls = decls;
+      this.declTypes = declTypes;
       this.protobufDesc = protobufDesc;
     }
 
@@ -367,8 +373,8 @@ public class CelExecutor implements RuleExecutor {
       return type;
     }
 
-    public Map<String, Decl> getDecls() {
-      return decls;
+    public Map<String, Type> getDeclTypes() {
+      return declTypes;
     }
 
     public Schema getAvroSchema() {
@@ -394,7 +400,7 @@ public class CelExecutor implements RuleExecutor {
       RuleWithArgs that = (RuleWithArgs) o;
       return Objects.equals(rule, that.rule)
           && type == that.type
-          && Objects.equals(decls, that.decls)
+          && Objects.equals(declTypes, that.declTypes)
           && Objects.equals(avroSchema, that.avroSchema)
           && Objects.equals(jsonClass, that.jsonClass)
           && Objects.equals(protobufDesc, that.protobufDesc);
@@ -402,7 +408,7 @@ public class CelExecutor implements RuleExecutor {
 
     @Override
     public int hashCode() {
-      return Objects.hash(rule, type, decls, avroSchema, jsonClass, protobufDesc);
+      return Objects.hash(rule, type, declTypes, avroSchema, jsonClass, protobufDesc);
     }
   }
 }
