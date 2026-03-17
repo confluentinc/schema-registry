@@ -18,9 +18,8 @@ package io.confluent.kafka.schemaregistry.client;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
+import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
@@ -104,7 +103,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<String, List<Association>>> resourceNameToAssocCache;
   private final Map<String, String> modes;
   private final Map<String, AtomicInteger> ids;
-  private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
+  private final Cache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers = new HashMap<>();
 
   private static final String NO_SUBJECT = "";
@@ -164,27 +163,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
     addProviders(providers);
 
-    final Map<String, SchemaProvider> schemaProviders = this.providers;
     this.parsedSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CAPACITY)
-        .build(new CacheLoader<Schema, ParsedSchema>() {
-          @Override
-          public ParsedSchema load(Schema schema) throws Exception {
-            String schemaType = schema.getSchemaType();
-            if (schemaType == null) {
-              schemaType = AvroSchema.TYPE;
-            }
-            SchemaProvider schemaProvider = schemaProviders.get(schemaType);
-            if (schemaProvider == null) {
-              log.error("Invalid schema type {}", schemaType);
-              throw new IllegalStateException("Invalid schema type " + schemaType);
-            }
-            return schemaProvider.parseSchema(schema, false, false).orElseThrow(
-                () -> new IOException("Invalid schema " + schema.getSchema()
-                    + " with refs " + schema.getReferences()
-                    + " of type " + schema.getSchemaType()));
-          }
-        });
+        .build();
   }
 
   public Map<String, SchemaProvider> getProviders() {
@@ -211,10 +192,42 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Optional<ParsedSchema> parseSchema(Schema schema) {
     try {
-      return Optional.of(parsedSchemaCache.get(schema));
-    } catch (ExecutionException e) {
+      return Optional.of(parseSchemaOrElseThrow(schema));
+    } catch (IOException e) {
       return Optional.empty();
     }
+  }
+
+  @Override
+  public ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
+    Schema cacheKey = contentCacheKey(schema);
+    try {
+      return parsedSchemaCache.get(cacheKey, () -> {
+        String schemaType = schema.getSchemaType();
+        if (schemaType == null) {
+          schemaType = AvroSchema.TYPE;
+        }
+        SchemaProvider schemaProvider = providers.get(schemaType);
+        if (schemaProvider == null) {
+          log.error("Invalid schema type {}", schemaType);
+          throw new IllegalStateException("Invalid schema type " + schemaType);
+        }
+        return schemaProvider.parseSchema(schema, false, false).orElseThrow(
+            () -> new IOException("Invalid schema of type " + schema.getSchemaType()));
+      });
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause != null) {
+        throw new IOException(cause);
+      }
+      throw new IOException(e);
+    }
+  }
+
+  private static Schema contentCacheKey(Schema schema) {
+    return new Schema(
+        null, null, null, schema.getSchemaType(), schema.getReferences(),
+        schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
   }
 
   private int getIdFromRegistry(
@@ -256,7 +269,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       generateVersion(subject, schema);
       Schema schemaEntity = new Schema(subject, schema.version(), schemaId, schema);
       idSchemaMap.put(schemaId, schemaEntity);
-      parsedSchemaCache.put(schemaEntity, schema);
+      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       return schemaId;
     } else {
       throw new RestClientException("Schema Not Found", 404, 40403);
@@ -356,7 +369,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schemaEntity);
-      parsedSchemaCache.put(schemaEntity, schema);
+      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       guidToSchemaCache.put(schemaEntity.getGuid(), schema);
       return schemaResponse;
     }
@@ -718,7 +731,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       final Map<Integer, Schema> idSchemaMap = idToSchemaCache.computeIfAbsent(
           context, k -> new ConcurrentHashMap<>());
       idSchemaMap.put(retrievedId, schemaEntity);
-      parsedSchemaCache.put(schemaEntity, schema);
+      parsedSchemaCache.put(contentCacheKey(schemaEntity), schema);
       return schemaResponse;
     }
   }

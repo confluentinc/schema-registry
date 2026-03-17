@@ -19,8 +19,6 @@ package io.confluent.kafka.schemaregistry.client;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
@@ -92,7 +90,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Cache<SubjectAndInt, Long> missingIdCache;
   private final Cache<String, Long> missingGuidCache;
   private final Cache<SubjectAndInt, Long> missingVersionCache;
-  private final LoadingCache<Schema, ParsedSchema> parsedSchemaCache;
+  private final Cache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers;
   private final Ticker ticker;
 
@@ -297,24 +295,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       provider.configure(schemaProviderConfigs);
     }
 
-    final Map<String, SchemaProvider> schemaProviders = this.providers;
     this.parsedSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
-        .build(new CacheLoader<Schema, ParsedSchema>() {
-          @Override
-          public ParsedSchema load(Schema schema) throws Exception {
-            String schemaType = schema.getSchemaType();
-            if (schemaType == null) {
-              schemaType = AvroSchema.TYPE;
-            }
-            SchemaProvider schemaProvider = schemaProviders.get(schemaType);
-            if (schemaProvider == null) {
-              log.error("Invalid schema type {}", schemaType);
-              throw new IllegalStateException("Invalid schema type " + schemaType);
-            }
-            return schemaProvider.parseSchemaOrElseThrow(schema, false, false);
-          }
-        });
+        .build();
 
     if (httpHeaders != null) {
       restService.setHttpHeaders(httpHeaders);
@@ -371,16 +354,36 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public Optional<ParsedSchema> parseSchema(Schema schema) {
     try {
-      return Optional.of(parsedSchemaCache.get(schema));
-    } catch (ExecutionException e) {
+      return Optional.of(parseSchemaOrElseThrow(schema));
+    } catch (IOException e) {
       return Optional.empty();
     }
   }
 
+  private static Schema contentCacheKey(Schema schema) {
+    return new Schema(
+        null, null, null, schema.getSchemaType(), schema.getReferences(),
+        schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
+  }
+
   @Override
   public ParsedSchema parseSchemaOrElseThrow(Schema schema) throws IOException {
+    // Use a content-based cache key by stripping subject, version, and id,
+    // so the same schema content produces the same cache entry regardless of subject
+    Schema cacheKey = contentCacheKey(schema);
     try {
-      return parsedSchemaCache.get(schema);
+      return parsedSchemaCache.get(cacheKey, () -> {
+        String schemaType = schema.getSchemaType();
+        if (schemaType == null) {
+          schemaType = AvroSchema.TYPE;
+        }
+        SchemaProvider schemaProvider = providers.get(schemaType);
+        if (schemaProvider == null) {
+          log.error("Invalid schema type {}", schemaType);
+          throw new IllegalStateException("Invalid schema type " + schemaType);
+        }
+        return schemaProvider.parseSchemaOrElseThrow(schema, false, false);
+      });
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (cause != null) {

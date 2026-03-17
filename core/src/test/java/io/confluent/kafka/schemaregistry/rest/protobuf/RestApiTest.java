@@ -16,7 +16,9 @@
 package io.confluent.kafka.schemaregistry.rest.protobuf;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.RestApp;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
@@ -40,6 +42,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.serializers.protobuf.test.Root;
@@ -49,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -878,6 +882,39 @@ public abstract class RestApiTest {
   ) throws IOException, RestClientException {
     registerAndVerifySchema(
         restService, schemaString, Collections.emptyList(), expectedId, subject);
+  }
+
+  @Test
+  public void testParsedSchemaCacheAcrossSubjects() throws Exception {
+    String subject1 = "testCacheSubject1";
+    String subject2 = "testCacheSubject2";
+
+    // Register the same schema under two different subjects — same content gets the same ID
+    String schemaString =
+        "syntax = \"proto3\";\npackage io.confluent.kafka.serializers.protobuf.test;\n\n"
+            + "message CacheTestMessage {\n  string name = 1;\n  bool is_active = 2;\n}\n";
+    int id1 = restApp.restClient.registerSchema(
+        schemaString, ProtobufSchema.TYPE, Collections.emptyList(), subject1).getId();
+    int id2 = restApp.restClient.registerSchema(
+        schemaString, ProtobufSchema.TYPE, Collections.emptyList(), subject2).getId();
+    assertEquals(id1, id2, "Same schema content should get the same ID");
+
+    // Create a CachedSchemaRegistryClient to test the cache behavior
+    CachedSchemaRegistryClient client = new CachedSchemaRegistryClient(
+        restApp.restClient, 10,
+        Collections.singletonList(new ProtobufSchemaProvider()), new HashMap<>(), null);
+
+    // Look up the same schema ID under two different subjects
+    ParsedSchema parsedSchema1 = client.getSchemaBySubjectAndId(subject1, id1);
+    ParsedSchema parsedSchema2 = client.getSchemaBySubjectAndId(subject2, id2);
+
+    // The schemas should be equal in content
+    assertEquals(parsedSchema1, parsedSchema2,
+        "Same schema looked up under different subjects should be equal");
+
+    // Same schema content should return the same cached ParsedSchema instance
+    assertSame(parsedSchema1, parsedSchema2,
+        "Same schema looked up under different subjects should return the same cached instance");
   }
 
   public static void registerAndVerifySchema(
