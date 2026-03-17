@@ -833,6 +833,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
       } else {
+        // delete in descending order to account for intra-subject references
         for (int i = deletedVersions.size() - 1; i >= 0; i--) {
           kafkaStore.put(new SchemaKey(subject, deletedVersions.get(i)), null);
         }
