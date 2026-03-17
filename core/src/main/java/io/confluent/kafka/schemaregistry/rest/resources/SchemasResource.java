@@ -276,7 +276,7 @@ public class SchemasResource {
       responses = {
           @ApiResponse(responseCode = "200", description = "Raw schema string.", content = @Content(
              schema = @io.swagger.v3.oas.annotations.media.Schema(example =
-                     Schema.SCHEMA_EXAMPLE))),
+                     Schema.RAW_SCHEMA_EXAMPLE))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. Error code 40403 indicates schema not found.",
             content = @Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation =
