@@ -814,7 +814,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!getReferencedBy(key, permanentDelete).isEmpty()) {
+        Set<String> referencedBySubjects = getReferencedBySubjects(key, permanentDelete);
+        referencedBySubjects.remove(subject);
+        if (!referencedBySubjects.isEmpty()) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
@@ -831,8 +833,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
       } else {
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
+        // delete in descending order to account for intra-subject references
+        for (int i = deletedVersions.size() - 1; i >= 0; i--) {
+          kafkaStore.put(new SchemaKey(subject, deletedVersions.get(i)), null);
         }
         if (getMode(subject) != null) {
           deleteMode(subject);
