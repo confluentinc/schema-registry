@@ -56,6 +56,7 @@ public class Schema implements Comparable<Schema> {
 
   public static final String SCHEMA_DESC = "Schema definition string";
   public static final String SCHEMA_EXAMPLE = "{\"schema\": \"{\"type\": \"string\"}\"}";
+  public static final String RAW_SCHEMA_EXAMPLE = "\"string\"";
 
   private String subject;
   private Integer version;
