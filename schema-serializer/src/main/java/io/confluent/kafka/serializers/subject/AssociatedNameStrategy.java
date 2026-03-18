@@ -55,6 +55,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
+  private Map<String, ?> configs;
   private String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
   private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
@@ -72,32 +73,56 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   @Override
   public void configure(Map<String, ?> configs) {
-    Object kafkaClusterIdConfig = configs.get(KAFKA_CLUSTER_ID);
-    if (kafkaClusterIdConfig != null) {
-      this.kafkaClusterId = kafkaClusterIdConfig.toString();
-    }
-    Object fallbackConfig = configs.get(FALLBACK_TYPE);
+    this.configs = configs;
+    this.kafkaClusterId = getKafkaClusterId();
+    this.fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
+  }
+
+  /**
+   * Returns the configuration properties passed to {@link #configure(Map)}.
+   *
+   * @return the configuration properties, or null if not yet configured
+   */
+  public Map<String, ?> getConfigs() {
+    return configs;
+  }
+
+  /**
+   * Returns the Kafka cluster ID.
+   * Override this method to customize how the cluster ID is determined.
+   *
+   * @return the Kafka cluster ID, or null if not configured
+   */
+  public String getKafkaClusterId() {
+    Object kafkaClusterIdConfig = configs != null ? configs.get(KAFKA_CLUSTER_ID) : null;
+    return kafkaClusterIdConfig != null ? kafkaClusterIdConfig.toString() : null;
+  }
+
+  /**
+   * Returns the fallback subject name strategy.
+   * Override this method to customize the fallback strategy.
+   *
+   * @return the fallback subject name strategy, or null if fallback is disabled
+   */
+  public SubjectNameStrategy getFallbackSubjectNameStrategy() {
+    Object fallbackConfig = configs != null ? configs.get(FALLBACK_TYPE) : null;
     if (fallbackConfig != null) {
       switch (fallbackConfig.toString().toUpperCase()) {
         case "TOPIC":
-          this.fallbackSubjectNameStrategy = new TopicNameStrategy();
-          break;
+          return new TopicNameStrategy();
         case "RECORD":
-          this.fallbackSubjectNameStrategy = new RecordNameStrategy();
-          break;
+          return new RecordNameStrategy();
         case "TOPIC_RECORD":
-          this.fallbackSubjectNameStrategy = new TopicRecordNameStrategy();
-          break;
+          return new TopicRecordNameStrategy();
         case "NONE":
-          this.fallbackSubjectNameStrategy = null;
-          break;
+          return null;
         default:
           throw new IllegalArgumentException("Invalid value for "
               + FALLBACK_TYPE + ": " + fallbackConfig);
       }
     } else {
       // default is TopicNameStrategy
-      this.fallbackSubjectNameStrategy = new TopicNameStrategy();
+      return new TopicNameStrategy();
     }
   }
 
