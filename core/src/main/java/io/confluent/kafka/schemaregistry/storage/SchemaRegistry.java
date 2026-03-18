@@ -422,6 +422,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
     return null;
   }
 
+  default List<Association> getAssociationsByResourceNamespace(
+          String resourceNamespace,
+          String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+          throws SchemaRegistryException {
+    return null;
+  }
+
   default void deleteAssociations(
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle)
