@@ -1546,6 +1546,58 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     return associations;
   }
 
+  public List<Association> getAssociationsByResourceNamespace(
+          String resourceNamespace,
+          String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+          throws SchemaRegistryException {
+    String tenant = tenant();
+    List<Association> associations = new ArrayList<>();
+    if (resourceNamespace == null) {
+      return associations;
+    }
+    String minResourceName = String.valueOf(Character.MIN_VALUE);
+    String maxResourceName = String.valueOf(Character.MAX_VALUE);
+    String minResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+            ? resourceNamespace
+            : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+            ? resourceNamespace
+            : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+            ? resourceType
+            : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+            ? resourceType
+            : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, minResourceName, minResourceNamespace,
+            minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, maxResourceName, maxResourceNamespace,
+            maxResourceType, maxAssociationType, maxSubject);
+    try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+                || associationTypes.contains(value.getAssociationType()))
+                && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)
+                && (resourceNamespace.equals(RESOURCE_WILDCARD)
+                || value.getResourceNamespace().equals(resourceNamespace))) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving schema from the backend Kafka"
+                      + " store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
   public void deleteAssociations(
       String resourceId, String resourceType, List<String> associationTypes,
       boolean cascadeLifecycle, boolean dryRun)
