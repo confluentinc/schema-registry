@@ -972,7 +972,7 @@ public abstract class RestApiCompatibilityTest {
   }
 
   @Test
-  public void testRegisterBadDefaultWithValidateNewSchemaConfig() throws Exception {
+  public void testRegisterBadDefaultWithNormalizeConfig() throws Exception {
     String subject = "testSubject";
 
     String schemaString = "{\"type\":\"record\","
@@ -982,19 +982,13 @@ public abstract class RestApiCompatibilityTest {
         + "\"f" + "\"}]}";
     String schema = AvroUtils.parseSchema(schemaString).canonicalString();
 
-    ConfigUpdateRequest config = new ConfigUpdateRequest();
-    config.setValidateNewSchemas(false);
-    assertEquals(
-        config,
-        restApp.restClient.updateConfig(config, null),
-        "Setting normalize config should succeed"
-    );
-
     List<String> errors = restApp.restClient.testCompatibility(schema, subject, "latest");
     assertTrue(errors.isEmpty());
 
-    config = new ConfigUpdateRequest();
-    config.setValidateNewSchemas(true);
+    ConfigUpdateRequest config = new ConfigUpdateRequest();
+    config.setNormalize(true);
+    config.setValidateFields(false);
+    // set normalize config
     assertEquals(
         config,
         restApp.restClient.updateConfig(config, null),
