@@ -191,8 +191,8 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
 
-  public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
-  public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
+  public static final String SCHEMA_VALIDATE_NAMES_CONFIG = "schema.validate.names";
+  public static final boolean SCHEMA_VALIDATE_NAMES_DEFAULT = true;
 
   public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
   public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
@@ -421,12 +421,12 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
-  protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
-      + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
   protected static final String REJECT_EMPTY_SUBJECT_DOC =
       "If true, reject schema registration requests whose subject name is the empty string. "
       + "Defaults to false to preserve backward compatibility with existing deployments that "
       + "may have schemas registered under an empty subject.";
+  protected static final String VALIDATE_NAMES_DOC = "Determines whether name validation is "
+      + "enabled or not. If enabled, it validates both namespaces and names in Avro.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -662,9 +662,8 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
     )
-    .define(SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG, ConfigDef.Type.BOOLEAN,
-        SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
-        ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
+    .define(SCHEMA_VALIDATE_NAMES_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_NAMES_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_NAMES_DOC
     )
     .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
         SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
