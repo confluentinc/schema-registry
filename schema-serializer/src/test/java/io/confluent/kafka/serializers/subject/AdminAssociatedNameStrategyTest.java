@@ -20,28 +20,37 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DescribeClusterResult;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 public class AdminAssociatedNameStrategyTest {
 
+  private static final AvroSchema SCHEMA = new AvroSchema(
+      "{\"type\":\"record\",\"name\":\"com.example.MyRecord\","
+          + "\"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}");
+
   @Test
-  public void testExplicitClusterIdTakesPrecedence() {
+  public void testExplicitTopicIdTakesPrecedence() {
     AdminAssociatedNameStrategy strategy = new AdminAssociatedNameStrategy();
     strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
     Map<String, Object> configs = new HashMap<>();
-    configs.put(AssociatedNameStrategy.KAFKA_CLUSTER_ID, "explicit-cluster-id");
+    configs.put(AssociatedNameStrategy.TOPIC_ID, "explicit-topic-id");
     strategy.configure(configs);
 
-    assertEquals("explicit-cluster-id", strategy.getKafkaClusterId());
+    assertEquals("explicit-topic-id", strategy.resolveTopicId("any-topic"));
   }
 
   @Test
@@ -49,39 +58,45 @@ public class AdminAssociatedNameStrategyTest {
     AdminAssociatedNameStrategy strategy = new AdminAssociatedNameStrategy();
     strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
     Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "NONE");
+    strategy.configure(configs);
 
-    assertThrows(ConfigException.class, () -> strategy.configure(configs));
+    assertThrows(SerializationException.class,
+        () -> strategy.subjectName("my-topic", false, SCHEMA));
   }
 
   @Test
-  public void testInvalidBootstrapServersThrowsConfigException() {
+  public void testExplicitTopicIdBypassesAdminClient() {
     AdminAssociatedNameStrategy strategy = new AdminAssociatedNameStrategy();
     strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
     Map<String, Object> configs = new HashMap<>();
-    configs.put("bootstrap.servers", "invalid:9999");
-
-    assertThrows(ConfigException.class, () -> strategy.configure(configs));
-  }
-
-  @Test
-  public void testExplicitClusterIdBypassesAdminClient() {
-    AdminAssociatedNameStrategy strategy = new AdminAssociatedNameStrategy();
-    strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
-    Map<String, Object> configs = new HashMap<>();
-    configs.put(AssociatedNameStrategy.KAFKA_CLUSTER_ID, "explicit-cluster-id");
+    configs.put(AssociatedNameStrategy.TOPIC_ID, "explicit-topic-id");
     configs.put("bootstrap.servers", "invalid:9999");
     strategy.configure(configs);
 
-    assertEquals("explicit-cluster-id", strategy.getKafkaClusterId());
+    assertEquals("explicit-topic-id", strategy.resolveTopicId("any-topic"));
   }
 
   @Test
-  public void testAutoDiscoverClusterIdWithMockAdminClient() {
+  public void testAutoDiscoverTopicIdWithMockAdminClient() throws Exception {
+    Uuid topicUuid = Uuid.randomUuid();
     AdminClient mockAdminClient = mock(AdminClient.class);
-    DescribeClusterResult mockResult = mock(DescribeClusterResult.class);
-    when(mockAdminClient.describeCluster()).thenReturn(mockResult);
-    when(mockAdminClient.describeCluster(any())).thenReturn(mockResult);
-    when(mockResult.clusterId()).thenReturn(KafkaFuture.completedFuture("mock-cluster-id"));
+    DescribeTopicsResult mockResult = mock(DescribeTopicsResult.class);
+    TopicDescription topicDesc = new TopicDescription(
+        "my-topic", false, Collections.emptyList(), Collections.emptySet(), topicUuid);
+    when(mockAdminClient.describeTopics(Collections.singletonList("my-topic")))
+        .thenReturn(mockResult);
+    when(mockResult.allTopicNames())
+        .thenReturn(KafkaFuture.completedFuture(
+            Collections.singletonMap("my-topic", topicDesc)));
+
+    MockSchemaRegistryClient mockClient = new MockSchemaRegistryClient();
+    mockClient.register("associated-subject", SCHEMA);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "my-topic", "my-namespace", topicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "associated-subject", "value", null, null, null, null)));
+    mockClient.createAssociation(request);
 
     AdminAssociatedNameStrategy strategy = new AdminAssociatedNameStrategy() {
       @Override
@@ -89,11 +104,12 @@ public class AdminAssociatedNameStrategyTest {
         return mockAdminClient;
       }
     };
-    strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
+    strategy.setSchemaRegistryClient(mockClient);
     Map<String, Object> configs = new HashMap<>();
     configs.put("bootstrap.servers", "localhost:9092");
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "NONE");
     strategy.configure(configs);
 
-    assertEquals("mock-cluster-id", strategy.getKafkaClusterId());
+    assertEquals("associated-subject", strategy.subjectName("my-topic", false, SCHEMA));
   }
 }
