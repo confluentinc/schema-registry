@@ -16,24 +16,31 @@
 
 package io.confluent.kafka.serializers.subject;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A subclass of {@link AssociatedNameStrategy} that automatically discovers the Kafka cluster ID
+ * A subclass of {@link AssociatedNameStrategy} that automatically discovers the topic ID
  * using an {@link AdminClient}, rather than requiring it to be configured explicitly via
- * {@link AssociatedNameStrategy#KAFKA_CLUSTER_ID}.
+ * {@link AssociatedNameStrategy#TOPIC_ID}.
  *
- * <p>If the cluster ID is explicitly configured, that value takes precedence.
- * Otherwise, the strategy creates an AdminClient from the provided configs to discover
- * the cluster ID. The {@code bootstrap.servers} property must be present in the configs
+ * <p>If the topic ID is explicitly configured, that value takes precedence.
+ * Otherwise, the strategy uses an AdminClient to look up the topic ID per topic name,
+ * caching the results. The {@code bootstrap.servers} property must be present in the configs
  * for auto-discovery to work.
  */
 public class AdminAssociatedNameStrategy extends AssociatedNameStrategy {
@@ -42,42 +49,71 @@ public class AdminAssociatedNameStrategy extends AssociatedNameStrategy {
       LoggerFactory.getLogger(AdminAssociatedNameStrategy.class);
 
   private static final long DEFAULT_TIMEOUT_SECS = 30;
+  private static final int DEFAULT_CACHE_CAPACITY = 1000;
+
+  private final LoadingCache<String, String> topicIdCache = CacheBuilder.newBuilder()
+      .maximumSize(DEFAULT_CACHE_CAPACITY)
+      .build(new CacheLoader<>() {
+        @Override
+        public String load(String topic) {
+          return discoverTopicId(topic);
+        }
+      });
 
   @Override
-  public String getKafkaClusterId() {
+  protected String resolveTopicId(String topic) {
     // If explicitly configured, use that
-    String configured = super.getKafkaClusterId();
+    String configured = super.resolveTopicId(topic);
     if (configured != null) {
       return configured;
     }
 
-    // Auto-discover from Kafka
+    try {
+      return topicIdCache.get(topic);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof ConfigException) {
+        throw (ConfigException) e.getCause();
+      }
+      throw new SerializationException("Failed to resolve topic ID for " + topic, e.getCause());
+    }
+  }
+
+  private String discoverTopicId(String topic) {
     Map<String, ?> configs = getConfigs();
     if (configs == null) {
-      throw new ConfigException("Cannot auto-discover Kafka cluster ID: configs not available");
+      throw new ConfigException("Cannot auto-discover topic ID: configs not available");
     }
     Object bootstrapServers = configs.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
     if (bootstrapServers == null) {
       throw new ConfigException(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-          null, "required for auto-discovering Kafka cluster ID");
+          null, "required for auto-discovering topic ID");
     }
 
     try (AdminClient adminClient = createAdminClient(configs)) {
-      String clusterId = adminClient.describeCluster().clusterId()
-          .get(DEFAULT_TIMEOUT_SECS, TimeUnit.SECONDS);
-      log.info("Auto-discovered Kafka cluster ID: {}", clusterId);
-      return clusterId;
+      Collection<TopicDescription> descriptions = adminClient.describeTopics(
+              Collections.singletonList(topic)).allTopicNames()
+          .get(DEFAULT_TIMEOUT_SECS, TimeUnit.SECONDS).values();
+      if (descriptions.isEmpty()) {
+        throw new ConfigException("Topic " + topic
+            + " not found, cannot auto-discover topic ID");
+      }
+      TopicDescription desc = descriptions.iterator().next();
+      String topicId = desc.topicId().toString();
+      log.info("Auto-discovered topic ID for {}: {}", topic, topicId);
+      return topicId;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new ConfigException("Interrupted while auto-discovering Kafka cluster ID");
-    } catch (ExecutionException e) {
-      throw new ConfigException("Failed to auto-discover Kafka cluster ID: "
+      throw new ConfigException("Interrupted while auto-discovering topic ID");
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new ConfigException("Failed to auto-discover topic ID: "
           + e.getCause().getMessage());
     } catch (TimeoutException e) {
-      throw new ConfigException("Timed out auto-discovering Kafka cluster ID after "
+      throw new ConfigException("Timed out auto-discovering topic ID after "
           + DEFAULT_TIMEOUT_SECS + " seconds");
+    } catch (ConfigException e) {
+      throw e;
     } catch (Exception e) {
-      throw new ConfigException("Failed to create AdminClient for cluster ID discovery: "
+      throw new ConfigException("Failed to create AdminClient for topic ID discovery: "
           + e.getMessage());
     }
   }

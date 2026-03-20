@@ -36,11 +36,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A {@link SubjectNameStrategy} that will query schema registry for
- * the associated subject name for the topic.  The topic is passed as the resource name
- * to schema registry.  If there is a configuration property named
+ * the associated subject name for the topic.  If a configuration property named
+ * "subject.name.strategy.topic.id" is set, its value is used as the resource ID and
+ * the query uses {@code getAssociationsByResourceId}.  Otherwise, the topic name is passed
+ * as the resource name to schema registry.  If there is a configuration property named
  * "subject.name.strategy.kafka.cluster.id", then its value will be passed as the resource
  * namespace; otherwise the value "-" will be passed as the resource namespace.
- * If more than subject is returned from the query, an exception will be thrown.
+ * If more than one subject is returned from the query, an exception will be thrown.
  * If no subjects are returned from the query, then the behavior will fall back
  * to {@link TopicNameStrategy}, unless the configuration property
  * "subject.name.strategy.fallback.type" is set to "RECORD", "TOPIC_RECORD", or "NONE".
@@ -49,6 +51,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
 
+  public static final String TOPIC_ID = "subject.name.strategy.topic.id";
   public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
@@ -85,6 +88,19 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
    */
   public Map<String, ?> getConfigs() {
     return configs;
+  }
+
+  /**
+   * Resolves the topic ID for the given topic name.
+   * Override this method to customize how the topic ID is determined.
+   * The base implementation returns the static config value if set, ignoring the topic param.
+   *
+   * @param topic the topic name
+   * @return the topic ID, or null if not available
+   */
+  protected String resolveTopicId(String topic) {
+    Object topicIdConfig = configs != null ? configs.get(TOPIC_ID) : null;
+    return topicIdConfig != null ? topicIdConfig.toString() : null;
   }
 
   /**
@@ -171,6 +187,19 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
           0,
           -1
       );
+      if (associations.size() > 1) {
+        String resolvedTopicId = resolveTopicId(topic);
+        if (resolvedTopicId != null) {
+          associations = client.getAssociationsByResourceId(
+              resolvedTopicId,
+              "topic",
+              Collections.singletonList(isKey ? "key" : "value"),
+              null,
+              0,
+              -1
+          );
+        }
+      }
     } catch (RestClientException e) {
       if (e.getStatus() == 404) {
         log.warn("Associations endpoint not found (404), using fallback strategy");
