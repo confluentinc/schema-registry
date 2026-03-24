@@ -16,10 +16,14 @@
 package io.confluent.dekregistry.web.rest.resources;
 
 import io.confluent.dekregistry.storage.AbstractDekRegistry;
+import io.confluent.dekregistry.storage.KeyEncryptionKey;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -32,10 +36,17 @@ public class DekRegistryResourceExporterHeaderTest {
     AbstractDekRegistry dekRegistry = mock(AbstractDekRegistry.class);
     HttpHeaders headers = mock(HttpHeaders.class);
     AsyncResponse asyncResponse = mock(AsyncResponse.class);
-    DekRegistryResource resource = new DekRegistryResource(schemaRegistry, dekRegistry);
+    KeyEncryptionKey kek = mock(KeyEncryptionKey.class);
 
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+
+    when(schemaRegistry.config()).thenReturn(config);
     when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
-    when(dekRegistry.getKek(anyString(), anyBoolean())).thenReturn(null);
+    when(dekRegistry.getKek(anyString(), anyBoolean())).thenReturn(kek);
+    doNothing().when(dekRegistry).deleteKekOrForward(anyString(), anyBoolean(), anyMap());
+
+    DekRegistryResource resource = new DekRegistryResource(schemaRegistry, dekRegistry);
 
     resource.deleteKek(asyncResponse, headers, "test-kek", false);
 

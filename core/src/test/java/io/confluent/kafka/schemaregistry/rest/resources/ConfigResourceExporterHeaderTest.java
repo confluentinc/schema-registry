@@ -16,10 +16,13 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import jakarta.ws.rs.container.AsyncResponse;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -31,6 +34,11 @@ public class ConfigResourceExporterHeaderTest {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     HttpHeaders headers = mock(HttpHeaders.class);
     AsyncResponse asyncResponse = mock(AsyncResponse.class);
+
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    when(schemaRegistry.config()).thenReturn(config);
+
     ConfigResource resource = new ConfigResource(schemaRegistry);
 
     when(schemaRegistry.getConfig(anyString())).thenReturn(new Config());

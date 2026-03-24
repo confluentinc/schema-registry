@@ -16,9 +16,12 @@
 package io.confluent.kafka.schemaregistry.rest.resources;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.junit.Test;
+
+import java.util.Properties;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -29,6 +32,11 @@ public class ModeResourceExporterHeaderTest {
   public void testExporterHeaderIsChecked() throws Exception {
     SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
     HttpHeaders headers = mock(HttpHeaders.class);
+
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    when(schemaRegistry.config()).thenReturn(config);
+
     ModeResource resource = new ModeResource(schemaRegistry);
 
     when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
