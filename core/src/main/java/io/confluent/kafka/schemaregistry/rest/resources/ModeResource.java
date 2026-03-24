@@ -110,6 +110,11 @@ public class ModeResource {
           "Whether to force update if setting mode to IMPORT and schemas currently exist")
       @QueryParam("force") boolean force
   ) {
+    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, updating mode for subject: {}, force: {}",
+          exporterName, subject, force);
+    }
 
     if (subject != null
         && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
@@ -316,7 +321,13 @@ public class ModeResource {
           "Whether to recursively delete mode for all subjects under the context, "
             + "if the subject is a context")
       @QueryParam("recursive") boolean recursive) {
-    log.info("Deleting mode for subject {}, recursive={}", subject, recursive);
+    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, deleting mode for subject: {}, recursive: {}",
+               exporterName, subject, recursive);
+    } else {
+      log.info("Deleting mode for subject {}, recursive={}", subject, recursive);
+    }
 
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
       subject = null;

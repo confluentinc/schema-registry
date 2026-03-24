@@ -450,9 +450,18 @@ public class SubjectVersionsResource {
       @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
-    log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
-             subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
-            request.getSchema() == null ? 0 : request.getSchema().length());
+    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, registering schema: subject {}, version {}, "
+              + "id {}, type {}, schema size {}",
+          exporterName, subjectName, request.getVersion(), request.getId(),
+          request.getSchemaType(),
+          request.getSchema() == null ? 0 : request.getSchema().length());
+    } else {
+      log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
+          subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
+          request.getSchema() == null ? 0 : request.getSchema().length());
+    }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
@@ -562,7 +571,14 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
-    log.debug("Deleting schema version {} from subject {}", version, subject);
+    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, deleting schema version {} from subject {}, "
+              + "permanent: {}",
+          exporterName, version, subject, permanentDelete);
+    } else {
+      log.debug("Deleting schema version {} from subject {}", version, subject);
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
