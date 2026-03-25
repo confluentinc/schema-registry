@@ -358,7 +358,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "The create request", required = true)
       @NotNull CreateKekRequest request) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, creating kek: {}, kmsType: {}",
           exporterName, request.getName(), request.getKmsType());
@@ -488,7 +488,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "The create request", required = true)
       @NotNull CreateDekRequest request) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, creating dek: kek {}, subject {}",
           exporterName, kekName, subject);
@@ -547,7 +547,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "The update request", required = true)
       @NotNull UpdateKekRequest request) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, updating kek: {}", exporterName, name);
     } else {
@@ -608,7 +608,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, deleting kek: {}, permanent: {}",
           exporterName, name, permanentDelete);
@@ -661,7 +661,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, deleting dek versions: kek {}, subject {}, "
               + "permanent: {}",
@@ -723,7 +723,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info(
           "Request from exporter: {}, deleting dek version: kek {}, subject {}, version {}, "
@@ -783,7 +783,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Name of the kek", required = true)
       @PathParam("name") String name) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, undeleting kek: {}", exporterName, name);
     } else {
@@ -831,7 +831,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Algorithm of the dek")
       @QueryParam("algorithm") DekFormat algorithm) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, undeleting dek versions: kek {}, subject {}",
           exporterName, kekName, subject);
@@ -889,7 +889,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @Parameter(description = "Algorithm of the dek")
       @QueryParam("algorithm") DekFormat algorithm) {
 
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, undeleting dek version: kek {}, subject {}, "
               + "version {}",

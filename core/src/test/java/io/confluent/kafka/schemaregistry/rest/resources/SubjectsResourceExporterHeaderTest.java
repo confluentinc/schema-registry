@@ -41,12 +41,12 @@ public class SubjectsResourceExporterHeaderTest {
 
     SubjectsResource resource = new SubjectsResource(schemaRegistry);
 
-    when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
+    when(headers.getHeaderString("X-Schema-Exporter-Name")).thenReturn("test-exporter");
     when(schemaRegistry.deleteSubjectOrForward(anyMap(), anyString(), anyBoolean()))
         .thenReturn(Collections.emptyList());
 
     resource.deleteSubject(asyncResponse, headers, "test-subject", false);
 
-    verify(headers).getHeaderString("X-Exporter-Name");
+    verify(headers).getHeaderString("X-Schema-Exporter-Name");
   }
 }

@@ -450,7 +450,7 @@ public class SubjectVersionsResource {
       @DefaultValue("") @QueryParam("format") String format,
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, registering schema: subject {}, version {}, "
               + "id {}, type {}, schema size {}",
@@ -571,7 +571,7 @@ public class SubjectVersionsResource {
       @PathParam("version") String version,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, deleting schema version {} from subject {}, "
               + "permanent: {}",

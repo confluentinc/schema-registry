@@ -108,7 +108,7 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, updating subject-level config for subject: {}",
           exporterName, subject);
@@ -236,7 +236,7 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, updating top-level config", exporterName);
     }
@@ -328,7 +328,7 @@ public class ConfigResource {
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers) {
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, deleting global config", exporterName);
     } else {
@@ -378,7 +378,7 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
-    String exporterName = headers.getHeaderString("X-Exporter-Name");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
     if (exporterName != null && !exporterName.isEmpty()) {
       log.info("Request from exporter: {}, deleting config for subject: {}",
           exporterName, subject);

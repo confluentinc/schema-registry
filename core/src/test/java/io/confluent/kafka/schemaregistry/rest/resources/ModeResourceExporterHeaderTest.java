@@ -39,13 +39,13 @@ public class ModeResourceExporterHeaderTest {
 
     ModeResource resource = new ModeResource(schemaRegistry);
 
-    when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
+    when(headers.getHeaderString("X-Schema-Exporter-Name")).thenReturn("test-exporter");
     doNothing().when(schemaRegistry).setModeOrForward(anyString(), any(), anyBoolean(), anyMap());
 
     ModeUpdateRequest request = new ModeUpdateRequest();
     request.setMode("IMPORT");
     resource.updateMode("test-subject", headers, request, false);
 
-    verify(headers).getHeaderString("X-Exporter-Name");
+    verify(headers).getHeaderString("X-Schema-Exporter-Name");
   }
 }

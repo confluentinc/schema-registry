@@ -42,10 +42,10 @@ public class ConfigResourceExporterHeaderTest {
     ConfigResource resource = new ConfigResource(schemaRegistry);
 
     when(schemaRegistry.getConfig(anyString())).thenReturn(new Config());
-    when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
+    when(headers.getHeaderString("X-Schema-Exporter-Name")).thenReturn("test-exporter");
 
     resource.deleteSubjectConfig(asyncResponse, headers, "test-subject");
 
-    verify(headers).getHeaderString("X-Exporter-Name");
+    verify(headers).getHeaderString("X-Schema-Exporter-Name");
   }
 }

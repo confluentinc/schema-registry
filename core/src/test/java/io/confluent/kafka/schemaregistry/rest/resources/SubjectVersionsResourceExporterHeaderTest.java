@@ -43,13 +43,13 @@ public class SubjectVersionsResourceExporterHeaderTest {
 
     SubjectVersionsResource resource = new SubjectVersionsResource(schemaRegistry);
 
-    when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
+    when(headers.getHeaderString("X-Schema-Exporter-Name")).thenReturn("test-exporter");
     when(schemaRegistry.schemaVersionExists(anyString(), any(), anyBoolean())).thenReturn(true);
     when(schemaRegistry.get(anyString(), anyInt(), anyBoolean()))
         .thenReturn(new Schema("test", 1, 1, "avro", Collections.emptyList(), "{}"));
 
     resource.deleteSchemaVersion(asyncResponse, headers, "test-subject", "1", false);
 
-    verify(headers).getHeaderString("X-Exporter-Name");
+    verify(headers).getHeaderString("X-Schema-Exporter-Name");
   }
 }

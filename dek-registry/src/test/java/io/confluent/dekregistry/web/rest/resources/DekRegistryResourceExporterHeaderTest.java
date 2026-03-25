@@ -42,7 +42,7 @@ public class DekRegistryResourceExporterHeaderTest {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     when(schemaRegistry.config()).thenReturn(config);
-    when(headers.getHeaderString("X-Exporter-Name")).thenReturn("test-exporter");
+    when(headers.getHeaderString("X-Schema-Exporter-Name")).thenReturn("test-exporter");
     when(dekRegistry.getKek(anyString(), anyBoolean())).thenReturn(kek);
     doNothing().when(dekRegistry).deleteKekOrForward(anyString(), anyBoolean(), anyMap());
 
@@ -50,6 +50,6 @@ public class DekRegistryResourceExporterHeaderTest {
 
     resource.deleteKek(asyncResponse, headers, "test-kek", false);
 
-    verify(headers).getHeaderString("X-Exporter-Name");
+    verify(headers).getHeaderString("X-Schema-Exporter-Name");
   }
 }
