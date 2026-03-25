@@ -305,7 +305,13 @@ public class SubjectsResource {
       @PathParam("subject") String subject,
       @Parameter(description = "Whether to perform a permanent delete")
       @QueryParam("permanent") boolean permanentDelete) {
-    log.debug("Deleting subject {}", subject);
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, deleting subject: {}, permanent: {}",
+          exporterName, subject, permanentDelete);
+    } else {
+      log.debug("Deleting subject {}", subject);
+    }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 

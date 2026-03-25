@@ -108,6 +108,11 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, updating subject-level config for subject: {}",
+          exporterName, subject);
+    }
 
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
       return updateTopLevelConfig(headers, request);
@@ -231,6 +236,10 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Config Update Request", required = true)
       @NotNull ConfigUpdateRequest request) {
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, updating top-level config", exporterName);
+    }
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, schemaRegistry.config().whitelistHeaders());
     try {
@@ -319,7 +328,12 @@ public class ConfigResource {
   public void deleteTopLevelConfig(
       final @Suspended AsyncResponse asyncResponse,
       @Context HttpHeaders headers) {
-    log.debug("Deleting Global compatibility setting and reverting back to default");
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, deleting global config", exporterName);
+    } else {
+      log.debug("Deleting Global compatibility setting and reverting back to default");
+    }
 
     Config deletedConfig;
     try {
@@ -364,7 +378,13 @@ public class ConfigResource {
       @Context HttpHeaders headers,
       @Parameter(description = "Name of the subject", required = true)
       @PathParam("subject") String subject) {
-    log.debug("Deleting compatibility setting for subject {}", subject);
+    String exporterName = headers.getHeaderString("X-Schema-Exporter-Name");
+    if (exporterName != null && !exporterName.isEmpty()) {
+      log.info("Request from exporter: {}, deleting config for subject: {}",
+          exporterName, subject);
+    } else {
+      log.debug("Deleting compatibility setting for subject {}", subject);
+    }
 
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
       deleteTopLevelConfig(asyncResponse, headers);
