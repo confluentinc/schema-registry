@@ -109,4 +109,39 @@ public class AssociatedNameStrategyTest {
 
     assertEquals("correct-subject", strategy.subjectName("my-topic", false, SCHEMA));
   }
+
+  @Test
+  public void testDiscoveredKafkaClusterIdDisambiguates() throws Exception {
+    Uuid topicUuid = Uuid.randomUuid();
+    Uuid otherTopicUuid = Uuid.randomUuid();
+
+    MockSchemaRegistryClient mockClient = new MockSchemaRegistryClient();
+    mockClient.register("correct-subject", SCHEMA);
+    mockClient.register("other-subject", SCHEMA);
+
+    // Create two associations for the same topic name in different namespaces
+    AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
+        "my-topic", "cluster-1", topicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "correct-subject", "value", null, null, null, null)));
+    mockClient.createAssociation(request1);
+
+    AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
+        "my-topic", "cluster-2", otherTopicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "other-subject", "value", null, null, null, null)));
+    mockClient.createAssociation(request2);
+
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy();
+    strategy.setSchemaRegistryClient(mockClient);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "NONE");
+    strategy.configure(configs);
+
+    // Simulate ClusterResourceListener callback
+    strategy.setKafkaClusterId("cluster-1");
+
+    assertEquals("correct-subject", strategy.subjectName("my-topic", false, SCHEMA));
+  }
+
 }

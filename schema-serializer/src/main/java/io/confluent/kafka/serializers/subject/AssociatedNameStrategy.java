@@ -64,7 +64,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private SchemaRegistryClient client;
   private Map<String, ?> configs;
-  private String kafkaClusterId;
+  private volatile String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
   private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
   private final LoadingCache<String, Optional<String>> topicIdCache = CacheBuilder.newBuilder()
@@ -161,6 +161,11 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       }
       throw new SerializationException(e.getCause());
     }
+  }
+
+  @Override
+  public void setKafkaClusterId(String clusterId) {
+    this.kafkaClusterId = clusterId;
   }
 
   protected String getKafkaClusterId() {
