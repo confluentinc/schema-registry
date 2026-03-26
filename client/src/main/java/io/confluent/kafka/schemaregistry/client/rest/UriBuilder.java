@@ -38,6 +38,7 @@ public class UriBuilder {
   static class UriPercentEncoder {
     static final String CHARS_UNENCODE;
     private static final BitSet UNENCODE;
+    private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
 
     static {
       // 2.2. General delimiters
@@ -58,18 +59,16 @@ public class UriBuilder {
     }
 
     static String encode(String value, Charset charset) {
-      StringBuilder sb = new StringBuilder(value.length() * 2);
-      for (int i = 0; i < value.length(); i++) {
-        char c = value.charAt(i);
-        if (UNENCODE.get(c & 0xFF)) {
-          sb.append(c);
+      byte[] bytes = value.getBytes(charset);
+      StringBuilder sb = new StringBuilder(bytes.length * 2);
+      for (byte b : bytes) {
+        int unsignedByte = b & 0xFF;
+        if (UNENCODE.get(unsignedByte)) {
+          sb.append((char) unsignedByte);
         } else {
-          String hex = Integer.toHexString(c).toUpperCase();
-          if (hex.length() == 1) {
-            sb.append("%0").append(hex);
-          } else {
-            sb.append('%').append(hex);
-          }
+          sb.append('%');
+          sb.append(HEX_DIGITS[unsignedByte >> 4]);
+          sb.append(HEX_DIGITS[unsignedByte & 0x0F]);
         }
       }
       return sb.toString();
