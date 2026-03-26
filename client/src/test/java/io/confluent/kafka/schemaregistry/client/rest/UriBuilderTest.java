@@ -114,6 +114,19 @@ public class UriBuilderTest {
   }
 
   @Test
+  public void encodeMultiByteUnicodeCharacters() throws Exception {
+    // U+200B zero-width space: UTF-8 bytes E2 80 8B
+    assertEquals("%E2%80%8B", UriPercentEncoder.encode("\u200B", UTF8));
+    // U+2026 horizontal ellipsis: UTF-8 bytes E2 80 A6
+    assertEquals("%E2%80%A6", UriPercentEncoder.encode("\u2026", UTF8));
+    // U+2041 caret insertion point: UTF-8 bytes E2 81 81
+    // Low byte 0x41 matches 'A' — must still be encoded, not passed through
+    assertEquals("%E2%81%81", UriPercentEncoder.encode("\u2041", UTF8));
+    // Mixed: ASCII + multi-byte Unicode
+    assertEquals("topic%E2%80%8Bname", UriPercentEncoder.encode("topic\u200Bname", UTF8));
+  }
+
+  @Test
   public void checkEncodingOfSomeStandardSubjectTopicNames() throws Exception {
     UriBuilder builder = UriBuilder.fromPath("/subjects/{subject}");
     assertEquals("/subjects/my1.topic.name", builder.build("my1.topic.name").toString());
