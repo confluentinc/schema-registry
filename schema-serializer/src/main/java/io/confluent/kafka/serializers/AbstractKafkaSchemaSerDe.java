@@ -77,6 +77,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -105,7 +107,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaSchemaSerDe implements Closeable {
+public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListener, Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractKafkaSchemaSerDe.class);
 
@@ -923,6 +925,15 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
       }
     } else {
       return actionName;
+    }
+  }
+
+  @Override
+  public void onUpdate(ClusterResource clusterResource) {
+    if (clusterResource != null && clusterResource.clusterId() != null) {
+      String clusterId = clusterResource.clusterId();
+      keySubjectNameStrategy.setKafkaClusterId(clusterId);
+      valueSubjectNameStrategy.setKafkaClusterId(clusterId);
     }
   }
 
