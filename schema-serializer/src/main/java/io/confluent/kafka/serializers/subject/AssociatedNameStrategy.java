@@ -25,11 +25,19 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,10 +59,10 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
 
-  public static final String TOPIC_ID = "subject.name.strategy.topic.id";
   public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
+  private static final long DEFAULT_TIMEOUT_SECS = 30;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
@@ -62,6 +70,14 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   private String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
   private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private final LoadingCache<String, Optional<String>> topicIdCache = CacheBuilder.newBuilder()
+      .maximumSize(DEFAULT_CACHE_CAPACITY)
+      .build(new CacheLoader<>() {
+        @Override
+        public Optional<String> load(String topic) {
+          return discoverTopicId(topic);
+        }
+      });
 
   public AssociatedNameStrategy() {
     this.subjectNameCache = CacheBuilder.newBuilder()
@@ -77,8 +93,8 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   @Override
   public void configure(Map<String, ?> configs) {
     this.configs = configs;
-    this.kafkaClusterId = getKafkaClusterId();
-    this.fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
+    this.kafkaClusterId = configureKafkaClusterId();
+    this.fallbackSubjectNameStrategy = configureFallbackNameStrategy();
   }
 
   /**
@@ -90,37 +106,12 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     return configs;
   }
 
-  /**
-   * Resolves the topic ID for the given topic name.
-   * Override this method to customize how the topic ID is determined.
-   * The base implementation returns the static config value if set, ignoring the topic param.
-   *
-   * @param topic the topic name
-   * @return the topic ID, or null if not available
-   */
-  protected String resolveTopicId(String topic) {
-    Object topicIdConfig = configs != null ? configs.get(TOPIC_ID) : null;
-    return topicIdConfig != null ? topicIdConfig.toString() : null;
-  }
-
-  /**
-   * Returns the Kafka cluster ID.
-   * Override this method to customize how the cluster ID is determined.
-   *
-   * @return the Kafka cluster ID, or null if not configured
-   */
-  public String getKafkaClusterId() {
+  private String configureKafkaClusterId() {
     Object kafkaClusterIdConfig = configs != null ? configs.get(KAFKA_CLUSTER_ID) : null;
     return kafkaClusterIdConfig != null ? kafkaClusterIdConfig.toString() : null;
   }
 
-  /**
-   * Returns the fallback subject name strategy.
-   * Override this method to customize the fallback strategy.
-   *
-   * @return the fallback subject name strategy, or null if fallback is disabled
-   */
-  public SubjectNameStrategy getFallbackSubjectNameStrategy() {
+  private SubjectNameStrategy configureFallbackNameStrategy() {
     Object fallbackConfig = configs != null ? configs.get(FALLBACK_TYPE) : null;
     if (fallbackConfig != null) {
       switch (fallbackConfig.toString().toUpperCase()) {
@@ -154,6 +145,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
 
     if (client == null) {
+      SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
       if (fallbackSubjectNameStrategy != null) {
         log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
             + " was not called, using fallback strategy");
@@ -174,10 +166,85 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
   }
 
+  protected String getKafkaClusterId() {
+    return kafkaClusterId;
+  }
+
+  protected SubjectNameStrategy getFallbackSubjectNameStrategy() {
+    return fallbackSubjectNameStrategy;
+  }
+
+  protected String getTopicId(String topic, boolean isKey, ParsedSchema schema) {
+    try {
+      return topicIdCache.get(topic).orElse(null);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof ConfigException) {
+        throw (ConfigException) cause;
+      }
+      throw new SerializationException("Failed to resolve topic ID for " + topic, cause);
+    }
+  }
+
+  private Optional<String> discoverTopicId(String topic) {
+    Map<String, ?> configs = getConfigs();
+    if (configs == null) {
+      log.warn("Cannot auto-discover topic ID: configs not available");
+      return Optional.empty();
+    }
+    Object bootstrapServers = configs.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+    if (bootstrapServers == null) {
+      log.warn("Cannot auto-discover topic ID: {} not configured",
+          AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+      return Optional.empty();
+    }
+
+    try (AdminClient adminClient = createAdminClient(configs)) {
+      Collection<TopicDescription> descriptions = adminClient.describeTopics(
+              Collections.singletonList(topic)).allTopicNames()
+          .get(DEFAULT_TIMEOUT_SECS, TimeUnit.SECONDS).values();
+      if (descriptions.isEmpty()) {
+        throw new ConfigException("Topic " + topic
+            + " not found, cannot auto-discover topic ID");
+      }
+      TopicDescription desc = descriptions.iterator().next();
+      String topicId = desc.topicId().toString();
+      log.info("Auto-discovered topic ID for {}: {}", topic, topicId);
+      return Optional.of(topicId);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new ConfigException("Interrupted while auto-discovering topic ID for " + topic);
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new ConfigException("Failed to auto-discover topic ID for " + topic
+          + ": " + e.getCause().getMessage());
+    } catch (TimeoutException e) {
+      throw new ConfigException("Timed out auto-discovering topic ID for " + topic
+          + " after " + DEFAULT_TIMEOUT_SECS + " seconds");
+    } catch (ConfigException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new ConfigException("Failed to create AdminClient for topic ID discovery of "
+          + topic + ": " + e.getMessage());
+    }
+  }
+
+  /**
+   * Creates an {@link AdminClient} from the provided configs.
+   * Override this method to provide a custom or mock AdminClient for testing.
+   *
+   * @param configs the configuration properties
+   * @return an AdminClient instance
+   */
+  @SuppressWarnings("unchecked")
+  protected AdminClient createAdminClient(Map<String, ?> configs) {
+    return AdminClient.create((Map<String, Object>) configs);
+  }
+
   private String loadSubjectName(String topic, boolean isKey, ParsedSchema schema)
       throws IOException, RestClientException {
     List<Association> associations;
     try {
+      String kafkaClusterId = getKafkaClusterId();
       associations = client.getAssociationsByResourceName(
           topic,
           kafkaClusterId != null ? kafkaClusterId : NAMESPACE_WILDCARD,
@@ -188,10 +255,10 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
           -1
       );
       if (associations.size() > 1) {
-        String resolvedTopicId = resolveTopicId(topic);
-        if (resolvedTopicId != null) {
+        String topicId = getTopicId(topic, isKey, schema);
+        if (topicId != null) {
           associations = client.getAssociationsByResourceId(
-              resolvedTopicId,
+              topicId,
               "topic",
               Collections.singletonList(isKey ? "key" : "value"),
               null,
@@ -213,6 +280,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       // empty list will invoke fallback strategy
       associations = Collections.emptyList();
     }
+    SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
     if (associations.size() > 1) {
       throw new SerializationException("Multiple associated subjects found for topic " + topic);
     } else if (associations.size() == 1) {
