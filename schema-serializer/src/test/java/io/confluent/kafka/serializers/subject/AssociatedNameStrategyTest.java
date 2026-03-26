@@ -18,15 +18,29 @@ package io.confluent.kafka.serializers.subject;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Uuid;
 import org.junit.Before;
 import org.junit.Test;
 
 public class AssociatedNameStrategyTest {
+
+  private static final AvroSchema SCHEMA = new AvroSchema(
+      "{\"type\":\"record\",\"name\":\"com.example.MyRecord\","
+          + "\"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}");
 
   private AssociatedNameStrategy strategy;
 
@@ -46,8 +60,53 @@ public class AssociatedNameStrategyTest {
 
   @Test
   public void testNonNullSchemaReturnsFallbackSubjectName() {
-    AvroSchema schema = new AvroSchema(
-        "{\"type\":\"record\",\"name\":\"com.example.MyRecord\",\"fields\":[{\"type\":\"string\",\"name\":\"f1\"}]}");
-    assertEquals("com.example.MyRecord", strategy.subjectName("my-topic", false, schema));
+    assertEquals("com.example.MyRecord", strategy.subjectName("my-topic", false, SCHEMA));
+  }
+
+  @Test
+  public void testAutoDiscoverTopicIdDisambiguates() throws Exception {
+    Uuid topicUuid = Uuid.randomUuid();
+    Uuid otherTopicUuid = Uuid.randomUuid();
+    AdminClient mockAdminClient = mock(AdminClient.class);
+    DescribeTopicsResult mockResult = mock(DescribeTopicsResult.class);
+    TopicDescription topicDesc = new TopicDescription(
+        "my-topic", false, Collections.emptyList(), Collections.emptySet(), topicUuid);
+    when(mockAdminClient.describeTopics(Collections.singletonList("my-topic")))
+        .thenReturn(mockResult);
+    when(mockResult.allTopicNames())
+        .thenReturn(KafkaFuture.completedFuture(
+            Collections.singletonMap("my-topic", topicDesc)));
+
+    MockSchemaRegistryClient mockClient = new MockSchemaRegistryClient();
+    mockClient.register("correct-subject", SCHEMA);
+    mockClient.register("other-subject", SCHEMA);
+
+    // Create two associations for the same topic name in different namespaces
+    // so getAssociationsByResourceName with wildcard returns >1
+    AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
+        "my-topic", "namespace-1", topicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "correct-subject", "value", null, null, null, null)));
+    mockClient.createAssociation(request1);
+
+    AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
+        "my-topic", "namespace-2", otherTopicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "other-subject", "value", null, null, null, null)));
+    mockClient.createAssociation(request2);
+
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy() {
+      @Override
+      protected AdminClient createAdminClient(Map<String, ?> configs) {
+        return mockAdminClient;
+      }
+    };
+    strategy.setSchemaRegistryClient(mockClient);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put("bootstrap.servers", "localhost:9092");
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "NONE");
+    strategy.configure(configs);
+
+    assertEquals("correct-subject", strategy.subjectName("my-topic", false, SCHEMA));
   }
 }
