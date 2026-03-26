@@ -21,6 +21,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -93,7 +94,7 @@ public class UriBuilder {
   public URI build(Object... templatePathValues) {
 
     List<String> templateValues = Arrays.asList(templatePathValues).stream()
-        .map(o -> UriPercentEncoder.encode(String.valueOf(o), Charset.defaultCharset()))
+        .map(o -> UriPercentEncoder.encode(String.valueOf(o), StandardCharsets.UTF_8))
         .collect(Collectors.toList());
     if (templateValues.size() != this.templateNames.size()) {
       throw new IllegalArgumentException("Mismatched number of template variable names: expected "
