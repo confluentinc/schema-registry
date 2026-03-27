@@ -25,19 +25,11 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,22 +51,16 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
-  private static final long DEFAULT_TIMEOUT_SECS = 30;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
   private Map<String, ?> configs;
-  private String kafkaClusterId;
+  private volatile String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
+  private volatile boolean warnedNoClient;
+  private volatile boolean warnedEndpointNotFound;
+  private volatile boolean warnedEndpointNotImplemented;
   private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
-  private final LoadingCache<String, Optional<String>> topicIdCache = CacheBuilder.newBuilder()
-      .maximumSize(DEFAULT_CACHE_CAPACITY)
-      .build(new CacheLoader<>() {
-        @Override
-        public Optional<String> load(String topic) {
-          return discoverTopicId(topic);
-        }
-      });
 
   public AssociatedNameStrategy() {
     this.subjectNameCache = CacheBuilder.newBuilder()
@@ -92,15 +78,6 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     this.configs = configs;
     this.kafkaClusterId = configureKafkaClusterId();
     this.fallbackSubjectNameStrategy = configureFallbackNameStrategy();
-  }
-
-  /**
-   * Returns the configuration properties passed to {@link #configure(Map)}.
-   *
-   * @return the configuration properties, or null if not yet configured
-   */
-  public Map<String, ?> getConfigs() {
-    return configs;
   }
 
   private String configureKafkaClusterId() {
@@ -144,8 +121,11 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     if (client == null) {
       SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
       if (fallbackSubjectNameStrategy != null) {
-        log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
-            + " was not called, using fallback strategy");
+        if (!warnedNoClient) {
+          warnedNoClient = true;
+          log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
+              + " was not called, using fallback strategy");
+        }
         return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
       } else {
         throw new SerializationException("Client is not set in AssociatedNameStrategy, "
@@ -163,78 +143,23 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
   }
 
+  @Override
+  public void setKafkaClusterId(String clusterId) {
+    if (!Objects.equals(this.kafkaClusterId, clusterId)) {
+      if (this.kafkaClusterId != null && clusterId != null) {
+        log.warn("Kafka cluster ID changed from {} to {}", this.kafkaClusterId, clusterId);
+      }
+      this.kafkaClusterId = clusterId;
+      subjectNameCache.invalidateAll();
+    }
+  }
+
   protected String getKafkaClusterId() {
     return kafkaClusterId;
   }
 
   protected SubjectNameStrategy getFallbackSubjectNameStrategy() {
     return fallbackSubjectNameStrategy;
-  }
-
-  protected String getTopicId(String topic, boolean isKey, ParsedSchema schema) {
-    try {
-      return topicIdCache.get(topic).orElse(null);
-    } catch (ExecutionException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof ConfigException) {
-        throw (ConfigException) cause;
-      }
-      throw new SerializationException("Failed to resolve topic ID for " + topic, cause);
-    }
-  }
-
-  private Optional<String> discoverTopicId(String topic) {
-    Map<String, ?> configs = getConfigs();
-    if (configs == null) {
-      log.warn("Cannot auto-discover topic ID: configs not available");
-      return Optional.empty();
-    }
-    Object bootstrapServers = configs.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
-    if (bootstrapServers == null) {
-      log.warn("Cannot auto-discover topic ID: {} not configured",
-          AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
-      return Optional.empty();
-    }
-
-    try (AdminClient adminClient = createAdminClient(configs)) {
-      Collection<TopicDescription> descriptions = adminClient.describeTopics(
-              Collections.singletonList(topic)).allTopicNames()
-          .get(DEFAULT_TIMEOUT_SECS, TimeUnit.SECONDS).values();
-      if (descriptions.isEmpty()) {
-        throw new ConfigException("Topic " + topic
-            + " not found, cannot auto-discover topic ID");
-      }
-      TopicDescription desc = descriptions.iterator().next();
-      String topicId = desc.topicId().toString();
-      log.info("Auto-discovered topic ID for {}: {}", topic, topicId);
-      return Optional.of(topicId);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new ConfigException("Interrupted while auto-discovering topic ID for " + topic);
-    } catch (ExecutionException e) {
-      throw new ConfigException("Failed to auto-discover topic ID for " + topic
-          + ": " + e.getCause().getMessage());
-    } catch (TimeoutException e) {
-      throw new ConfigException("Timed out auto-discovering topic ID for " + topic
-          + " after " + DEFAULT_TIMEOUT_SECS + " seconds");
-    } catch (ConfigException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new ConfigException("Failed to create AdminClient for topic ID discovery of "
-          + topic + ": " + e.getMessage());
-    }
-  }
-
-  /**
-   * Creates an {@link AdminClient} from the provided configs.
-   * Override this method to provide a custom or mock AdminClient for testing.
-   *
-   * @param configs the configuration properties
-   * @return an AdminClient instance
-   */
-  @SuppressWarnings("unchecked")
-  protected AdminClient createAdminClient(Map<String, ?> configs) {
-    return AdminClient.create((Map<String, Object>) configs);
   }
 
   private String loadSubjectName(String topic, boolean isKey, ParsedSchema schema)
@@ -251,29 +176,22 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
           0,
           -1
       );
-      if (associations.size() > 1) {
-        String topicId = getTopicId(topic, isKey, schema);
-        if (topicId != null) {
-          associations = client.getAssociationsByResourceId(
-              topicId,
-              "topic",
-              Collections.singletonList(isKey ? "key" : "value"),
-              null,
-              0,
-              -1
-          );
-        }
-      }
     } catch (RestClientException e) {
       if (e.getStatus() == 404) {
-        log.warn("Associations endpoint not found (404), using fallback strategy");
+        if (!warnedEndpointNotFound) {
+          warnedEndpointNotFound = true;
+          log.warn("Associations endpoint not found (404), using fallback strategy");
+        }
         // empty list will invoke fallback strategy
         associations = Collections.emptyList();
       } else {
         throw e;
       }
     } catch (UnsupportedOperationException e) {
-      log.warn("Associations endpoint not implemented in the client, using fallback strategy");
+      if (!warnedEndpointNotImplemented) {
+        warnedEndpointNotImplemented = true;
+        log.warn("Associations endpoint not implemented in the client, using fallback strategy");
+      }
       // empty list will invoke fallback strategy
       associations = Collections.emptyList();
     }
