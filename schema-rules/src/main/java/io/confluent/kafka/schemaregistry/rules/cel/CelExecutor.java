@@ -144,7 +144,7 @@ public class CelExecutor implements RuleExecutor {
         JsonNode jsonNode = mapper.valueToTree(result);
         result = ctx.target().fromJson(jsonNode);
       } catch (IOException e) {
-        throw new RuleException(e);
+        throw new RuleException(ctx.rule(), e);
       }
     }
     return result;
@@ -164,7 +164,7 @@ public class CelExecutor implements RuleExecutor {
         if (!guard.trim().isEmpty()) {
           Object guardResult = Boolean.FALSE;
           try {
-            guardResult = execute(guard, obj, args);
+            guardResult = execute(ctx, guard, obj, args);
           } catch (RuleException e) {
             // ignore
           }
@@ -176,10 +176,10 @@ public class CelExecutor implements RuleExecutor {
         expr = expr.substring(index + 1);
       }
     }
-    return execute(expr, obj, args);
+    return execute(ctx, expr, obj, args);
   }
 
-  private Object execute(String rule, Object obj, Map<String, Object> args)
+  private Object execute(RuleContext ctx, String rule, Object obj, Map<String, Object> args)
       throws RuleException {
     try {
       Object msg = args.get("message");
@@ -216,12 +216,16 @@ public class CelExecutor implements RuleExecutor {
 
       return script.execute(Object.class, args);
     } catch (ScriptException e) {
-      throw new RuleException("Could not execute CEL script", e);
+      throw new RuleException(ctx.rule(), "Could not execute CEL script", e);
     } catch (ExecutionException e) {
       if (e.getCause() instanceof RuleException) {
-        throw (RuleException) e.getCause();
+        RuleException re = (RuleException) e.getCause();
+        if (re.getRule() == null) {
+          throw new RuleException(ctx.rule(), re.getMessage(), re.getCause());
+        }
+        throw re;
       } else {
-        throw new RuleException("Could not get expression", e.getCause());
+        throw new RuleException(ctx.rule(), "Could not get expression", e.getCause());
       }
     }
   }

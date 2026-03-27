@@ -192,12 +192,12 @@ public class RuleSet {
       for (Rule rule : migrationRules) {
         String name = rule.getName();
         if (names.contains(name)) {
-          throw new RuleException("Found rule with duplicate name '" + name + "'");
+          throw new RuleException(rule, "Found rule with duplicate name '" + name + "'");
         }
         names.add(name);
         rule.validate();
         if (!rule.getMode().isMigrationRule()) {
-          throw new RuleException("Migration rules can only be UPGRADE, DOWNGRADE, UPDOWN");
+          throw new RuleException(rule, "Migration rules can only be UPGRADE, DOWNGRADE, UPDOWN");
         }
       }
     }
@@ -205,12 +205,12 @@ public class RuleSet {
       for (Rule rule : domainRules) {
         String name = rule.getName();
         if (names.contains(name)) {
-          throw new RuleException("Found rule with duplicate name '" + name + "'");
+          throw new RuleException(rule, "Found rule with duplicate name '" + name + "'");
         }
         names.add(name);
         rule.validate();
         if (!rule.getMode().isDomainOrEncodingRule()) {
-          throw new RuleException("Domain rules can only be WRITE, READ, WRITEREAD");
+          throw new RuleException(rule, "Domain rules can only be WRITE, READ, WRITEREAD");
         }
       }
     }
@@ -218,12 +218,12 @@ public class RuleSet {
       for (Rule rule : encodingRules) {
         String name = rule.getName();
         if (names.contains(name)) {
-          throw new RuleException("Found rule with duplicate name '" + name + "'");
+          throw new RuleException(rule, "Found rule with duplicate name '" + name + "'");
         }
         names.add(name);
         rule.validate();
         if (!rule.getMode().isDomainOrEncodingRule()) {
-          throw new RuleException("Encoding rules can only be WRITE, READ, WRITEREAD");
+          throw new RuleException(rule, "Encoding rules can only be WRITE, READ, WRITEREAD");
         }
       }
     }
