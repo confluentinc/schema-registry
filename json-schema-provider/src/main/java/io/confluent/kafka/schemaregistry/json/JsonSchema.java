@@ -533,7 +533,7 @@ public class JsonSchema implements ParsedSchema {
       // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (hashCode == NO_HASHCODE) {
-          hashCode = Objects.hash(jsonNode, references, version, metadata, ruleSet);
+          hashCode = Objects.hash(canonicalString(), references, version, metadata, ruleSet);
         }
       }
     }
