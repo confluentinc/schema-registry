@@ -757,7 +757,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         }
       } else {
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
-            new RuleException("Could not find rule executor of type " + rule.getType()),
+            new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
             ErrorAction.TYPE);
       }
     }
