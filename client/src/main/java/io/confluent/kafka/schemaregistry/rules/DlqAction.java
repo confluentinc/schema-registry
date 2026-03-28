@@ -113,10 +113,10 @@ public class DlqAction implements RuleAction {
 
   private KafkaProducer<byte[], byte[]> producer() {
     if (producer == null) {
+      Map<String, Object> producerConfigs = baseProducerConfigs();
+      producerConfigs.putAll(configs);
       synchronized (this) {
         if (producer == null) {
-          Map<String, Object> producerConfigs = baseProducerConfigs();
-          producerConfigs.putAll(configs);
           producer = new KafkaProducer<>(producerConfigs);
         }
       }
