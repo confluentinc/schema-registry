@@ -164,7 +164,7 @@ public class DlqAction implements RuleAction {
     } else if (message instanceof byte[]) {
       return (byte[]) message;
     } else if (message instanceof ByteBuffer) {
-      ByteBuffer buffer = (ByteBuffer) message;
+      ByteBuffer buffer = ((ByteBuffer) message).duplicate();
       byte[] bytes = new byte[buffer.remaining()];
       buffer.get(bytes);
       return bytes;
@@ -224,6 +224,7 @@ public class DlqAction implements RuleAction {
 
   private static Set<String> getTagsToRedact(List<Rule> redactRules) {
     return redactRules.stream()
+        .filter(rule -> rule.getTags() != null)
         .flatMap(rule -> rule.getTags().stream())
         .collect(Collectors.toSet());
   }
@@ -266,8 +267,10 @@ public class DlqAction implements RuleAction {
 
   @Override
   public void close() {
-    if (producer != null) {
-      producer.close();
+    synchronized (this) {
+      if (producer != null) {
+        producer.close();
+      }
     }
   }
 }
