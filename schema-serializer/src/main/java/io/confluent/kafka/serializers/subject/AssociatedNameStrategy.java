@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.subject;
 
+import com.google.common.base.Ticker;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -25,11 +26,13 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,29 +51,31 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
 
+  public static final String CACHE_EXPIRY_SECS = "subject.name.strategy.cache.expiry.secs";
+  public static final String CACHE_SIZE = "subject.name.strategy.cache.size";
   public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
-  private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
   private Map<String, ?> configs;
+  private int cacheExpirySecs = -1;
+  private int cacheSize = 1000;
   private volatile String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
   private volatile boolean warnedNoClient;
   private volatile boolean warnedEndpointNotFound;
   private volatile boolean warnedEndpointNotImplemented;
-  private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private final Ticker ticker;
 
   public AssociatedNameStrategy() {
-    this.subjectNameCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build(new CacheLoader<>() {
-          @Override
-          public Optional<String> load(CacheKey key) throws Exception {
-            return Optional.ofNullable(loadSubjectName(key.topic, key.isKey, key.schema));
-          }
-        });
+    this(Ticker.systemTicker());
+  }
+
+
+  public AssociatedNameStrategy(Ticker ticker) {
+    this.ticker = ticker;
   }
 
   @Override
@@ -78,6 +83,34 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     this.configs = configs;
     this.kafkaClusterId = configureKafkaClusterId();
     this.fallbackSubjectNameStrategy = configureFallbackNameStrategy();
+    Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
+    if (cacheExpirySecsConfig != null) {
+      try {
+        this.cacheExpirySecs = Integer.parseInt(cacheExpirySecsConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + CACHE_EXPIRY_SECS);
+      }
+    }
+    Object cacheSizeConfig = configs.get(CACHE_SIZE);
+    if (cacheSizeConfig != null) {
+      try {
+        this.cacheSize = Integer.parseInt(cacheSizeConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + CACHE_SIZE);
+      }
+    }
+    CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder()
+        .maximumSize(cacheSize)
+        .ticker(ticker);
+    if (cacheExpirySecs >= 0) {
+      cacheBuilder = cacheBuilder.expireAfterWrite(Duration.ofSeconds(cacheExpirySecs));
+    }
+    this.subjectNameCache = cacheBuilder.build(new CacheLoader<>() {
+      @Override
+      public Optional<String> load(CacheKey key) throws Exception {
+        return Optional.ofNullable(loadSubjectName(key.topic, key.isKey, key.schema));
+      }
+    });
   }
 
   private String configureKafkaClusterId() {

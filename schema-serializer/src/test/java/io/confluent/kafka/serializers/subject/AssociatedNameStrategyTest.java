@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers.subject;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import com.google.common.base.Ticker;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
@@ -26,6 +27,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.common.Uuid;
 import org.junit.Before;
 import org.junit.Test;
@@ -89,6 +92,55 @@ public class AssociatedNameStrategyTest {
     strategy.setKafkaClusterId("cluster-1");
 
     assertEquals("correct-subject", strategy.subjectName("my-topic", false, SCHEMA));
+  }
+
+  @Test
+  public void testCacheTtlExpiry() throws Exception {
+    AtomicLong nanos = new AtomicLong(0);
+    Ticker fakeTicker = new Ticker() {
+      @Override
+      public long read() {
+        return nanos.get();
+      }
+    };
+
+    Uuid topicUuid = Uuid.randomUuid();
+    MockSchemaRegistryClient mockClient = new MockSchemaRegistryClient();
+    mockClient.register("subject-v1", SCHEMA);
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        "my-topic", "-", topicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "subject-v1", "value", null, null, null, null)));
+    mockClient.createAssociation(request);
+
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy(fakeTicker);
+    strategy.setSchemaRegistryClient(mockClient);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.CACHE_EXPIRY_SECS, "10");
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "NONE");
+    strategy.configure(configs);
+
+    // First call should cache "subject-v1"
+    assertEquals("subject-v1", strategy.subjectName("my-topic", false, SCHEMA));
+
+    // Update the association to point to a different subject
+    mockClient.register("subject-v2", SCHEMA);
+    mockClient.deleteAssociations(
+        topicUuid.toString(), "topic", Collections.singletonList("value"), false);
+    AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
+        "my-topic", "-", topicUuid.toString(), "topic",
+        Collections.singletonList(new AssociationCreateOrUpdateInfo(
+            "subject-v2", "value", null, null, null, null)));
+    mockClient.createAssociation(request2);
+
+    // Before TTL expires, should still return cached value
+    nanos.set(TimeUnit.SECONDS.toNanos(9));
+    assertEquals("subject-v1", strategy.subjectName("my-topic", false, SCHEMA));
+
+    // After TTL expires, should reload and return new value
+    nanos.set(TimeUnit.SECONDS.toNanos(11));
+    assertEquals("subject-v2", strategy.subjectName("my-topic", false, SCHEMA));
   }
 
 }
