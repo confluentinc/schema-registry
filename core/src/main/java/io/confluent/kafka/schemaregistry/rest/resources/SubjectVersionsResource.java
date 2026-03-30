@@ -393,8 +393,8 @@ public class SubjectVersionsResource {
       @Parameter(description = "Schema", required = true)
       @NotNull RegisterSchemaRequest request) {
     log.info("Registering new schema: subject {}, version {}, id {}, type {}, schema size {}",
-             subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
-            request.getSchema() == null ? 0 : request.getSchema().length());
+      subjectName, request.getVersion(), request.getId(), request.getSchemaType(),
+      request.getSchema() == null ? 0 : request.getSchema().length());
 
     schemaRegistry.getCompositeUpdateRequestHandler().handle(subjectName, normalize, request);
 
