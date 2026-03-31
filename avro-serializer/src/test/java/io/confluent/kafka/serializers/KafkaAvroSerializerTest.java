@@ -29,7 +29,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import java.math.BigDecimal;
@@ -653,8 +653,7 @@ public class KafkaAvroSerializerTest {
   public void testKafkaAvroDeserializerWithAssociatedNameStrategy()
       throws IOException, RestClientException {
     IndexedRecord avroRecord = createUserRecord();
-    RegisterSchemaRequest valueRequest =
-        new RegisterSchemaRequest(new AvroSchema(avroRecord.getSchema()));
+    schemaRegistry.register("mysubject", new AvroSchema(avroRecord.getSchema()));
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         topic,
         "myresourcens",
@@ -666,7 +665,7 @@ public class KafkaAvroSerializerTest {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
