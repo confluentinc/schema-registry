@@ -151,8 +151,22 @@ public class AssociationCreateOrUpdateInfo {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
-  public void validate(boolean dryRun) {
-    checkSubject(getSubject());
+  public void validate(boolean isCreateOnly, boolean dryRun) {
+    if (getSubject() != null) {
+      checkSubject(getSubject());
+    }
+    if (isCreateOnly && getSchema() != null) {
+      if (getLifecycle() == LifecyclePolicy.WEAK) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided for create");
+      }
+      if (Boolean.FALSE.equals(getFrozen())) {
+        throw new IllegalPropertyException(
+            "frozen", "cannot be false when schema is provided for create");
+      }
+      setLifecycle(LifecyclePolicy.STRONG);
+      setFrozen(true);
+    }
     if (getAssociationType() != null && !getAssociationType().isEmpty()) {
       if (!getAssociationType().equals(KEY_ASSOCIATION_TYPE)
           && !getAssociationType().equals(VALUE_ASSOCIATION_TYPE)) {
@@ -167,10 +181,18 @@ public class AssociationCreateOrUpdateInfo {
       setLifecycle(LifecyclePolicy.WEAK);
     }
     if (getLifecycle() == LifecyclePolicy.WEAK) {
+      if (getSchema() != null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided");
+      }
       if (Boolean.TRUE.equals(getFrozen())) {
         throw new IllegalPropertyException(
             "frozen", "association with lifecycle of WEAK cannot be frozen");
       }
+    }
+    if (isCreateOnly && getSubject() == null && !Boolean.TRUE.equals(getFrozen())) {
+      throw new IllegalPropertyException(
+          "subject", "must be provided for non-frozen associations");
     }
   }
 }

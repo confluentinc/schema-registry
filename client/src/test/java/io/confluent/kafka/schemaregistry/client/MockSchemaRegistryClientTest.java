@@ -385,9 +385,9 @@ public class MockSchemaRegistryClientTest {
       assertNotNull("Error should not be null", e);
     }
 
-    // Create a key association using a new subject with a schema should succeed.
-    createRequest = new AssociationRequestBuilder().defaultResource().keySubject(defaulKeySubject).
-            keySchema(EVOLVED_AVRO_SCHEMA).build();
+    // Create a key association using a new subject with a pre-registered schema should succeed.
+    registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, EVOLVED_AVRO_SCHEMA, true);
+    createRequest = new AssociationRequestBuilder().defaultResource().keySubject(defaulKeySubject).build();
     try {
       associationCreator.create(createRequest);
     } catch (Exception e) {
@@ -468,10 +468,10 @@ public class MockSchemaRegistryClientTest {
         assertNull("Create association with a different property should succeed.", e);
       }
 
-      // Update schema should succeed.
+      // Update schema should succeed (register schema separately since WEAK+schema is not allowed).
       // final state: weak, non-frozen
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueSchema(EVOLVED_AVRO_SCHEMA).build();
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, EVOLVED_AVRO_SCHEMA, true);
+      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject).build();
       try {
         client.createOrUpdateAssociation(createRequest);
       } catch (Exception e) {
@@ -555,8 +555,9 @@ public class MockSchemaRegistryClientTest {
       // Reset
       client.reset();
       registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_AVRO_SCHEMA, true);
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
       createRequest = new AssociationRequestBuilder().defaultResource()
-              .keySubject(defaulKeySubject).valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA).build();
+              .keySubject(defaulKeySubject).valueSubject(defaultValueSubject).build();
       try {
         associationCreator.create(createRequest);
       } catch (Exception e) {
@@ -566,9 +567,11 @@ public class MockSchemaRegistryClientTest {
       // Scenario 3: Both creating new subjects
       // Reset
       client.reset();
+      registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_AVRO_SCHEMA, true);
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
       createRequest = new AssociationRequestBuilder().defaultResource()
-              .keySubject(defaulKeySubject).keySchema(SIMPLE_AVRO_SCHEMA)
-              .valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA).build();
+              .keySubject(defaulKeySubject)
+              .valueSubject(defaultValueSubject).build();
       try {
         associationCreator.create(createRequest);
       } catch (Exception e) {
@@ -713,15 +716,17 @@ public class MockSchemaRegistryClientTest {
     @Test
     public void testGetAssociationsWithFilters() {
       // Setup
-      // Create associations: key=STRONG, value=WEAK
+      // Register schemas separately, then create associations: key=STRONG, value=WEAK
+      registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_AVRO_SCHEMA, true);
+      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
       AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
-              .keySubject(defaulKeySubject).keySchema(SIMPLE_AVRO_SCHEMA).keyLifecycle(LifecyclePolicy.STRONG)
-              .valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA)
+              .keySubject(defaulKeySubject).keyLifecycle(LifecyclePolicy.STRONG)
+              .valueSubject(defaultValueSubject)
               .valueLifecycle(LifecyclePolicy.WEAK).build();
       try {
           client.createOrUpdateAssociation(createRequest);
       } catch (Exception e) {
-          assertNotNull("createOrUpdateAssociation should succeed.", e);
+          assertNull("createOrUpdateAssociation should succeed.", e);
       }
 
       List<Association> associations = null;
@@ -819,15 +824,17 @@ public class MockSchemaRegistryClientTest {
         String resourceName = "test1";
         String resourceNamespace = "lkc1";
 
-        // Create associations
+        // Register schemas separately, then create associations
+        registerTestAvroSchemaInSchemaRegistry(client, keySubject, schema.getSchema(), true);
+        registerTestAvroSchemaInSchemaRegistry(client, valueSubject, schema.getSchema(), true);
         try {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
                             new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
-                                new RegisterSchemaRequest(schema), false),
+                                null, false),
                             new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
-                                new RegisterSchemaRequest(schema), false)
+                                null, false)
                     )));
         } catch (Exception e) {
             assertNull("createOrUpdateAssociation should succeed.", e);
@@ -886,15 +893,17 @@ public class MockSchemaRegistryClientTest {
         String resourceName = "test2";
         String resourceNamespace = "lkc1";
 
-        // Create associations
+        // Register schemas separately, then create associations
+        registerTestAvroSchemaInSchemaRegistry(client, keySubject, schema.getSchema(), true);
+        registerTestAvroSchemaInSchemaRegistry(client, valueSubject, schema.getSchema(), true);
         try {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
                             new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
-                                new RegisterSchemaRequest(schema), false),
+                                null, false),
                             new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
-                                new RegisterSchemaRequest(schema), false)
+                                null, false)
                     )));
         } catch (Exception e) {
             assertNull("createOrUpdateAssociation should succeed.", e);
@@ -959,7 +968,9 @@ public class MockSchemaRegistryClientTest {
         String valueSubject = "test3Value";
         String resourceID = "test3-id";
 
-        // Create associations with frozen=true for key
+        // Register schema for value subject separately, key uses frozen+schema (allowed)
+        registerTestAvroSchemaInSchemaRegistry(client, valueSubject, schema.getSchema(), true);
+        // Create associations with frozen=true for key (STRONG+frozen+schema is allowed)
         try {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     "test3", "lkc1", resourceID, null,
@@ -967,7 +978,7 @@ public class MockSchemaRegistryClientTest {
                             new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, true,
                                 new RegisterSchemaRequest(schema), false),
                             new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
-                                new RegisterSchemaRequest(schema), false)
+                                null, false)
                     )));
         } catch (Exception e) {
             assertNull("createOrUpdateAssociation should succeed.", e);
