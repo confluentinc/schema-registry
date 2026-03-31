@@ -1169,8 +1169,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       boolean isCreateOnly)
       throws SchemaRegistryException {
     // Replace aliases and check for read-only mode
+    String defaultSubject = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
+        + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName();
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String unqualifiedSubject = info.getSubject();
+
       QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       if (isReadOnlyMode(qualifiedSubject)) {
@@ -1215,6 +1218,28 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String qualifiedSubject = qs.toQualifiedSubject();
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
+
+      // Only allow auto-generated subject format for frozen strong associations
+      if (unqualifiedSubject != null && unqualifiedSubject.equals(defaultSubject)) {
+        if (association != null) {
+          // For upsert, check existing association's state
+          if (!(association.getLifecycle() == LifecyclePolicy.STRONG
+                && association.isFrozen())) {
+            throw new IllegalPropertyException(
+                "subject", "subject '" + defaultSubject
+                    + "' is only allowed for frozen strong associations");
+          }
+        } else {
+          // For create, check the request's state
+          if (!(info.getLifecycle() == LifecyclePolicy.STRONG
+                && Boolean.TRUE.equals(info.getFrozen()))) {
+            throw new IllegalPropertyException(
+                "subject", "subject '" + defaultSubject
+                    + "' is only allowed for frozen strong associations");
+          }
+        }
+      }
+
       if (association == null) {
         // If on create, frozen is set to true, ensure that a schema is being
         // passed in, and that no other schemas exist in the subject
