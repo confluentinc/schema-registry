@@ -1206,8 +1206,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return true;
   }
 
-  private void validateAssociationCreateOrUpdateRequest(AssociationCreateOrUpdateRequest request) {
-    request.validate(false);
+  private void validateAssociationRequest(
+      boolean isCreateOnly, AssociationCreateOrUpdateRequest request) {
+    request.validate(isCreateOnly, false);
     // Validate each association
     for (AssociationCreateOrUpdateInfo associationCreateInfo : request.getAssociations()) {
       // Validate resource type and association type
@@ -1223,7 +1224,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public AssociationResponse createOrUpdateAssociation(AssociationCreateOrUpdateRequest request)
           throws IOException, RestClientException {
     try {
-      validateAssociationCreateOrUpdateRequest(request);
+      validateAssociationRequest(false, request);
     } catch (Exception e) {
       throw new RestClientException(
               String.format(
@@ -1238,7 +1239,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public AssociationResponse createAssociation(AssociationCreateOrUpdateRequest request)
           throws IOException, RestClientException {
     try {
-      validateAssociationCreateOrUpdateRequest(request);
+      validateAssociationRequest(true, request);
     } catch (Exception e) {
       throw new RestClientException(
               String.format(
