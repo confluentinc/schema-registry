@@ -572,36 +572,40 @@ public class SubjectVersionsResource {
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
-    Schema schema;
-    String errorMessage =
-            "Error while retrieving schema for subject "
-                    + subject
-                    + " with version "
-                    + version
-                    + " from the schema registry";
-    try {
-      if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
-        if (!permanentDelete
-                && !schemaRegistry.schemaVersionExists(subject,
-                        versionId, false)) {
-          throw Errors.schemaVersionSoftDeletedException(subject, version);
+
+    Schema schema = null;
+    // If leader, perform validation
+    if (schemaRegistry.isLeader()) {
+      String errorMessage =
+              "Error while retrieving schema for subject "
+                      + subject
+                      + " with version "
+                      + version
+                      + " from the schema registry";
+      try {
+        if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
+          if (!permanentDelete
+                  && !schemaRegistry.schemaVersionExists(subject,
+                          versionId, false)) {
+            throw Errors.schemaVersionSoftDeletedException(subject, version);
+          }
         }
-      }
-      schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
-      if (schema == null) {
-        if (!schemaRegistry.hasSubjects(subject, true)) {
-          throw Errors.subjectNotFoundException(subject);
-        } else {
-          throw Errors.versionNotFoundException(versionId.getVersionId());
+        schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
+        if (schema == null) {
+          if (!schemaRegistry.hasSubjects(subject, true)) {
+            throw Errors.subjectNotFoundException(subject);
+          } else {
+            throw Errors.versionNotFoundException(versionId.getVersionId());
+          }
         }
+      } catch (SchemaRegistryStoreException e) {
+        log.debug(errorMessage, e);
+        throw Errors.storeException(errorMessage, e);
+      } catch (InvalidVersionException e) {
+        throw Errors.invalidVersionException(e.getMessage());
+      } catch (SchemaRegistryException e) {
+        throw Errors.schemaRegistryException(errorMessage, e);
       }
-    } catch (SchemaRegistryStoreException e) {
-      log.debug(errorMessage, e);
-      throw Errors.storeException(errorMessage, e);
-    } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(errorMessage, e);
     }
 
     try {
@@ -635,7 +639,7 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
 
-    asyncResponse.resume(schema.getVersion());
+    asyncResponse.resume(schema != null ? schema.getVersion() : versionId.getVersionId());
   }
 
   @POST
