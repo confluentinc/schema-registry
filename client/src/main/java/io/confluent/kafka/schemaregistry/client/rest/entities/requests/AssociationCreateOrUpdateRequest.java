@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.List;
@@ -139,7 +140,7 @@ public class AssociationCreateOrUpdateRequest {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
-  public void validate(boolean dryRun) {
+  public void validate(boolean isCreateOnly, boolean dryRun) {
     checkName(getResourceName(), "resourceName");
     checkName(getResourceNamespace(), "resourceNamespace");
     if (!dryRun && (getResourceId() == null || getResourceId().isEmpty())) {
@@ -156,8 +157,31 @@ public class AssociationCreateOrUpdateRequest {
     if (getAssociations() == null || getAssociations().isEmpty()) {
       throw new IllegalPropertyException("associations", "cannot be null or empty");
     }
+    Boolean frozenState = null;
     for (AssociationCreateOrUpdateInfo info : getAssociations()) {
-      info.validate(dryRun);
+      info.validate(isCreateOnly, dryRun);
+      String defaultSubject = QualifiedSubject.CONTEXT_PREFIX + resourceNamespace
+          + QualifiedSubject.CONTEXT_DELIMITER + resourceName
+          + "-" + info.getAssociationType();
+      if (info.getSubject() == null) {
+        info.setSubject(defaultSubject);
+      }
+      // Frozen associations must use the default subject format
+      if (Boolean.TRUE.equals(info.getFrozen())
+          && !info.getSubject().equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "frozen associations must use subject '" + defaultSubject + "'");
+      }
+      // Check frozen consistency within the request
+      if (info.getFrozen() != null) {
+        if (frozenState == null) {
+          frozenState = info.getFrozen();
+        } else if (!frozenState.equals(info.getFrozen())) {
+          throw new IllegalPropertyException(
+              "frozen", "all associations for a resource must be consistently "
+                  + "frozen or non-frozen");
+        }
+      }
     }
   }
 }
