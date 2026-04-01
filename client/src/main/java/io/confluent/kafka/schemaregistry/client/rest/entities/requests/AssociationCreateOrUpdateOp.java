@@ -143,7 +143,9 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
   }
 
   public void validate(boolean dryRun) {
-    checkSubject(getSubject());
+    if (getSubject() != null) {
+      checkSubject(getSubject());
+    }
     if (getAssociationType() != null && !getAssociationType().isEmpty()) {
       if (!getAssociationType().equals(KEY_ASSOCIATION_TYPE)
           && !getAssociationType().equals(VALUE_ASSOCIATION_TYPE)) {
@@ -158,6 +160,10 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
       setLifecycle(LifecyclePolicy.WEAK);
     }
     if (getLifecycle() == LifecyclePolicy.WEAK) {
+      if (getSchema() != null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided");
+      }
       if (Boolean.TRUE.equals(getFrozen())) {
         throw new IllegalPropertyException(
             "frozen", "association with lifecycle of WEAK cannot be frozen");

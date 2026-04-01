@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -156,8 +157,16 @@ public class AssociationOpRequest {
     if (getAssociations() == null || getAssociations().isEmpty()) {
       throw new IllegalPropertyException("associations", "cannot be null or empty");
     }
-    for (AssociationOp info : getAssociations()) {
-      info.validate(dryRun);
+    for (AssociationOp op : getAssociations()) {
+      op.validate(dryRun);
+      if (op instanceof AssociationCreateOrUpdateOp) {
+        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+        if (createOrUpdateOp.getSubject() == null) {
+          createOrUpdateOp.setSubject(QualifiedSubject.CONTEXT_PREFIX + resourceNamespace
+              + QualifiedSubject.CONTEXT_DELIMITER + resourceName
+              + "-" + createOrUpdateOp.getAssociationType());
+        }
+      }
     }
   }
 }
