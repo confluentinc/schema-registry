@@ -177,7 +177,9 @@ public class SubjectVersionsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
+        String originalGuid = schema.getGuid();
         schema.setSchema(parsedSchema.formattedString(format));
+        schema.setGuid(originalGuid);
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
       boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
