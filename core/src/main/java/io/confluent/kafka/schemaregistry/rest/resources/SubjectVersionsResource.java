@@ -177,9 +177,7 @@ public class SubjectVersionsResource {
       }
       if (format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(schema, false, false);
-        String originalGuid = schema.getGuid();
         schema.setSchema(parsedSchema.formattedString(format));
-        schema.setGuid(originalGuid);
       }
       QualifiedSubject qs = QualifiedSubject.create(schemaRegistry.tenant(), schema.getSubject());
       boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
@@ -223,7 +221,7 @@ public class SubjectVersionsResource {
       responses = {
           @ApiResponse(responseCode = "200", description = "The schema string.", content = @Content(
               schema = @io.swagger.v3.oas.annotations.media.Schema(example =
-                      Schema.RAW_SCHEMA_EXAMPLE))),
+                      Schema.SCHEMA_EXAMPLE))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. "
                     + "Error code 40401 indicates subject not found. "
@@ -487,9 +485,7 @@ public class SubjectVersionsResource {
           schemaRegistry.registerOrForward(subjectName, request, normalize, headerProperties);
       if (result.getSchema() != null && format != null && !format.trim().isEmpty()) {
         ParsedSchema parsedSchema = schemaRegistry.parseSchema(result, false, false);
-        String originalGuid = result.getGuid();
         result.setSchema(parsedSchema.formattedString(format));
-        result.setGuid(originalGuid);
       }
       registerSchemaResponse = new RegisterSchemaResponse(result);
     } catch (IdDoesNotMatchException e) {
@@ -572,7 +568,45 @@ public class SubjectVersionsResource {
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
-    Schema schema;
+
+    // If not the leader, forward directly without validation
+    if (!schemaRegistry.isLeader()) {
+      try {
+        Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
+                headers, schemaRegistry.config().whitelistHeaders());
+        schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
+                null, permanentDelete);
+      } catch (AssociationForSubjectExistsException e) {
+        throw Errors.associationForSubjectExistsException(e.getMessage());
+      } catch (StrongAssociationForSubjectExistsException e) {
+        throw Errors.strongAssociationExistsException(e.getMessage());
+      } catch (SchemaVersionNotSoftDeletedException e) {
+        throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
+                e.getVersion());
+      } catch (OperationNotPermittedException e) {
+        throw Errors.operationNotPermittedException(e.getMessage());
+      } catch (SchemaRegistryTimeoutException e) {
+        throw Errors.operationTimeoutException("Delete Schema Version operation timed out", e);
+      } catch (SchemaRegistryStoreException e) {
+        throw Errors.storeException("Delete Schema Version operation failed while writing"
+                                    + " to the Kafka store", e);
+      } catch (SchemaRegistryRequestForwardingException e) {
+        throw Errors
+            .requestForwardingFailedException("Error while forwarding delete schema version request"
+                                              + " to the leader", e);
+      } catch (ReferenceExistsException e) {
+        throw Errors.referenceExistsException(e.getMessage());
+      } catch (UnknownLeaderException e) {
+        throw Errors.unknownLeaderException("Leader not known.", e);
+      } catch (SchemaRegistryException e) {
+        throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
+      }
+      asyncResponse.resume(versionId.getVersionId());
+      return;
+    }
+
+    // Leader: perform validation and business logic
+    Schema schema = null;
     String errorMessage =
             "Error while retrieving schema for subject "
                     + subject
@@ -635,7 +669,7 @@ public class SubjectVersionsResource {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
 
-    asyncResponse.resume(schema.getVersion());
+    asyncResponse.resume(schema != null ? schema.getVersion() : versionId.getVersionId());
   }
 
   @POST
