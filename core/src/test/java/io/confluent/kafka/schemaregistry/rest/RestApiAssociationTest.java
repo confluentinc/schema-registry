@@ -63,10 +63,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     int schemasCount = 10;
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(schemasCount);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
-    valueRequest.setSchema(allSchemas.get(1));
+    // Register schemas separately since WEAK and non-frozen STRONG associations
+    // cannot have schemas passed directly in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
 
     // Dry run request has null resource ID
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -80,7 +80,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             ),
             new AssociationCreateOrUpdateInfo(
@@ -88,7 +88,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
@@ -109,10 +109,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceId, response.getResourceId());
     assertEquals("key", response.getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.WEAK, response.getAssociations().get(0).getLifecycle());
-    assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
     assertEquals("value", response.getAssociations().get(1).getAssociationType());
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(1).getLifecycle());
-    assertEquals(allSchemas.get(1), response.getAssociations().get(1).getSchema().getSchema());
 
     // Verify createTs and updateTs are set after creation
     List<Association> createdAssociations = restApp.restClient.getAssociationsByResourceId(
@@ -204,7 +202,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.STRONG,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -223,7 +221,6 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceId, response.getResourceId());
     assertEquals("key", response.getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
-    assertEquals(allSchemas.get(0), response.getAssociations().get(0).getSchema().getSchema());
 
     // Verify createTs remains the same but updateTs is updated after update
     List<Association> updatedAssociations = restApp.restClient.getAssociationsByResourceId(
@@ -272,10 +269,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "duplicate-types-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keyRequest1 = new RegisterSchemaRequest();
-    keyRequest1.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest keyRequest2 = new RegisterSchemaRequest();
-    keyRequest2.setSchema(allSchemas.get(1));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create request with duplicate association types
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -289,7 +284,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest1,
+                null,
                 null
             ),
             new AssociationCreateOrUpdateInfo(
@@ -297,7 +292,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",  // Duplicate type
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest2,
+                null,
                 null
             )
         )
@@ -317,8 +312,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "resource-exists-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create initial association
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -332,7 +327,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -342,8 +337,6 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
 
     // Try to create the same association again
-    RegisterSchemaRequest keyRequest2 = new RegisterSchemaRequest();
-    keyRequest2.setSchema(allSchemas.get(1));
     AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
@@ -355,7 +348,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.STRONG,  // Different lifecycle
                 false,
-                keyRequest2,
+                null,
                 null
             )
         )
@@ -382,6 +375,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
     keyRequest.setSchema(allSchemas.get(0));
 
+    String defaultKeySubject = ":." + resourceNamespace + ":" + resourceName + "-key";
+
     // Test creating frozen association without schema fails
     AssociationCreateOrUpdateRequest noSchemaRequest = new AssociationCreateOrUpdateRequest(
         resourceName,
@@ -390,7 +385,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
-                subject2,
+                null,
                 "key",
                 LifecyclePolicy.STRONG,
                 true,  // Frozen
@@ -406,8 +401,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     );
 
     // Test creating frozen association when schemas already exist fails
-    // First register a schema in subject3
-    restApp.restClient.registerSchema(allSchemas.get(1), subject3);
+    // First register a schema in the default subject
+    restApp.restClient.registerSchema(allSchemas.get(1),
+        ":." + resourceNamespace + ":" + resourceName + "-key");
 
     RegisterSchemaRequest anotherSchemaRequest = new RegisterSchemaRequest();
     anotherSchemaRequest.setSchema(allSchemas.get(0));
@@ -419,7 +415,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
-                subject3,
+                null,
                 "key",
                 LifecyclePolicy.STRONG,
                 true,  // Frozen
@@ -442,7 +438,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
-                subject1,
+                null,
                 "key",
                 LifecyclePolicy.STRONG,
                 true,  // Frozen
@@ -463,7 +459,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
-                subject1,
+                defaultKeySubject,
                 "key",
                 LifecyclePolicy.WEAK,  // Try to change lifecycle
                 null,  // Not explicitly unfreezing
@@ -486,7 +482,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
-                subject1,
+                defaultKeySubject,
                 "key",
                 LifecyclePolicy.STRONG,
                 false,  // Try to unfreeze
@@ -513,7 +509,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     // Verify association is deleted
     List<Association> associations = restApp.restClient.getAssociationsBySubject(
-        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "topic",
+        RestService.DEFAULT_REQUEST_PROPERTIES, defaultKeySubject, "topic",
         Collections.singletonList("key"), null, 0, -1);
     assertTrue(associations.isEmpty());
   }
@@ -559,8 +555,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId2 = "resource2-456";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create first WEAK association for subject
     AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
@@ -574,7 +570,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -617,8 +613,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId2 = "resource2-456";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since non-frozen STRONG associations
+    // cannot have schemas passed directly in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create first STRONG association for subject
     AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
@@ -632,7 +629,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.STRONG,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -673,8 +670,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "weak-frozen-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately so we can test WEAK+frozen without schema conflict
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Try to create WEAK association with frozen=true (should fail)
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -688,7 +685,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 true,  // Frozen (not allowed for WEAK)
-                keyRequest,
+                null,
                 null
             )
         )
@@ -708,8 +705,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "incompatible-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create initial association
     AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
@@ -723,7 +720,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -735,8 +732,12 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     // Try to create association with incompatible schema
     // Note: This test assumes backward compatibility is enforced
     // The second schema is randomly generated and likely incompatible
-    RegisterSchemaRequest incompatibleRequest = new RegisterSchemaRequest();
-    incompatibleRequest.setSchema(allSchemas.get(1));
+    // Register the second schema separately and create without schema in request
+    try {
+      restApp.restClient.registerSchema(allSchemas.get(1), subject1);
+    } catch (Exception e) {
+      // Expected if compatibility check fails
+    }
 
     AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
         resourceName + "2",
@@ -749,7 +750,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.WEAK,
                 false,
-                incompatibleRequest,
+                null,
                 null
             )
         )
@@ -774,8 +775,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "subject-change-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create initial association with subject1
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -789,7 +790,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -831,8 +832,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "self-exclude-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since non-frozen STRONG associations
+    // cannot have schemas passed directly in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create initial STRONG association
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -846,7 +848,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.STRONG,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -899,8 +901,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "weak-update-frozen-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create initial WEAK association (not frozen)
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -914,7 +916,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -959,23 +961,23 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     int schemasCount = 10;
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(schemasCount);
 
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
+
     // Create first association
-    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
-    schemaRequest1.setSchema(allSchemas.get(0));
     AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
         resourceName1, resourceNamespace, resourceId1, "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
-            subject1, "value", LifecyclePolicy.WEAK, false, schemaRequest1, null)));
+            subject1, "value", LifecyclePolicy.WEAK, false, null, null)));
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request1);
 
     // Create second association
-    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
-    schemaRequest2.setSchema(allSchemas.get(1));
     AssociationCreateOrUpdateRequest request2 = new AssociationCreateOrUpdateRequest(
         resourceName2, resourceNamespace, resourceId2, "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
-            subject2, "value", LifecyclePolicy.STRONG, false, schemaRequest2, null)));
+            subject2, "value", LifecyclePolicy.STRONG, false, null, null)));
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request2);
 
@@ -1098,12 +1100,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId2 = "batch-resource-2";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(3);
 
-    RegisterSchemaRequest keyRequest1 = new RegisterSchemaRequest();
-    keyRequest1.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueRequest1 = new RegisterSchemaRequest();
-    valueRequest1.setSchema(allSchemas.get(1));
-    RegisterSchemaRequest keyRequest2 = new RegisterSchemaRequest();
-    keyRequest2.setSchema(allSchemas.get(2));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
+    restApp.restClient.registerSchema(allSchemas.get(2), subject3);
 
     // Create batch request with multiple associations
     List<AssociationOpRequest> requests = new ArrayList<>();
@@ -1118,7 +1118,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest1,
+                null,
                 null
             ),
             new AssociationCreateOp(
@@ -1126,7 +1126,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest1,
+                null,
                 null
             )
         )
@@ -1142,7 +1142,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest2,
+                null,
                 null
             )
         )
@@ -1201,10 +1201,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "dry-run-batch-123";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
-    valueRequest.setSchema(allSchemas.get(1));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
 
     // Create batch request
     List<AssociationOpRequest> requests = new ArrayList<>();
@@ -1219,7 +1218,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             ),
             new AssociationCreateOp(
@@ -1227,7 +1226,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
@@ -1268,10 +1267,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId2 = "partial-resource-2";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
-    valueRequest.setSchema(allSchemas.get(1));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
 
     // First create an association that will cause a conflict
     AssociationCreateOrUpdateRequest existingRequest = new AssociationCreateOrUpdateRequest(
@@ -1285,7 +1283,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -1322,7 +1320,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.WEAK,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
@@ -1362,10 +1360,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId2 = "upsert-resource-2";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
-    valueRequest.setSchema(allSchemas.get(1));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
 
     // Create initial association that will be updated
     AssociationCreateOrUpdateRequest initialRequest = new AssociationCreateOrUpdateRequest(
@@ -1379,7 +1376,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -1416,7 +1413,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.WEAK,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
@@ -1471,8 +1468,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "upsert-dry-resource";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
-    keyRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create initial association
     AssociationCreateOrUpdateRequest initialRequest = new AssociationCreateOrUpdateRequest(
@@ -1486,7 +1483,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keyRequest,
+                null,
                 null
             )
         )
@@ -1549,10 +1546,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
     keyRequest.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest();
-    valueRequest.setSchema(allSchemas.get(1));
 
-    // Create initial frozen association
+    // Register schema for subject2 separately since WEAK upsert cannot have schema
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
+
+    String defaultKeySubject1 = ":." + resourceNamespace + ":" + resourceName1 + "-key";
+
+    // Create initial frozen association (STRONG+frozen+schema is allowed)
     AssociationCreateOrUpdateRequest frozenRequest = new AssociationCreateOrUpdateRequest(
         resourceName1,
         resourceNamespace,
@@ -1560,7 +1560,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
-                subject1,
+                null,
                 "key",
                 LifecyclePolicy.STRONG,
                 true,  // Frozen
@@ -1581,7 +1581,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         "topic",
         ImmutableList.of(
             new AssociationUpsertOp(
-                subject1,
+                defaultKeySubject1,
                 "key",
                 LifecyclePolicy.WEAK,  // Try to change frozen - will fail
                 null,
@@ -1601,7 +1601,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.WEAK,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
@@ -1654,10 +1654,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "mutate-single-request-resource";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest keySchemaRequest = new RegisterSchemaRequest();
-    keySchemaRequest.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest valueSchemaRequest = new RegisterSchemaRequest();
-    valueSchemaRequest.setSchema(allSchemas.get(1));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), keySubject);
+    restApp.restClient.registerSchema(allSchemas.get(1), valueSubject);
 
     // First, set up initial associations: create only "key" association
     // This allows us to:
@@ -1675,7 +1674,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                keySchemaRequest,
+                null,
                 null
             )
         )
@@ -1706,13 +1705,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         resourceId,
         "topic",
         ImmutableList.of(
-            // CREATE: Add new "value" association
+            // CREATE: Add new "value" association (schema already registered)
             new AssociationCreateOp(
                 valueSubject,
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueSchemaRequest,
+                null,
                 null
             ),
             // UPSERT: Update existing "key" association
@@ -1776,12 +1775,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId2 = "prefix-resource-2";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(3);
 
-    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
-    schemaRequest1.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
-    schemaRequest2.setSchema(allSchemas.get(1));
-    RegisterSchemaRequest schemaRequest3 = new RegisterSchemaRequest();
-    schemaRequest3.setSchema(allSchemas.get(2));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
+    restApp.restClient.registerSchema(allSchemas.get(2), subject3);
 
     // Create associations for prefixSubject1 and prefixSubject2
     AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
@@ -1795,7 +1792,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest1,
+                null,
                 null
             ),
             new AssociationCreateOrUpdateInfo(
@@ -1803,7 +1800,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                schemaRequest2,
+                null,
                 null
             )
         )
@@ -1824,7 +1821,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest3,
+                null,
                 null
             )
         )
@@ -1884,10 +1881,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "lifecycle-resource-1";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
-    schemaRequest1.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
-    schemaRequest2.setSchema(allSchemas.get(1));
+    // Register schemas separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
 
     // Create associations with different lifecycle policies
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -1901,7 +1897,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest1,
+                null,
                 null
             ),
             new AssociationCreateOrUpdateInfo(
@@ -1909,7 +1905,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                schemaRequest2,
+                null,
                 null
             )
         )
@@ -1994,8 +1990,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "existing-resource-1";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
 
-    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
-    schemaRequest.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
 
     // Create an association
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -2009,7 +2005,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest,
+                null,
                 null
             )
         )
@@ -2045,10 +2041,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "type-filter-resource";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
-    schemaRequest1.setSchema(allSchemas.get(0));
-    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
-    schemaRequest2.setSchema(allSchemas.get(1));
+    // Register schemas separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject2);
 
     // Create associations with different types
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -2062,7 +2057,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest1,
+                null,
                 null
             ),
             new AssociationCreateOrUpdateInfo(
@@ -2070,7 +2065,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "value",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest2,
+                null,
                 null
             )
         )
@@ -2156,8 +2151,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     String resourceId = "latest-only-resource";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
-    schemaRequest1.setSchema(allSchemas.get(0));
+    // Register schema separately since WEAK associations cannot have schemas in create
+    restApp.restClient.registerSchema(allSchemas.get(0), subject);
 
     // Create first version
     AssociationCreateOrUpdateRequest request1 = new AssociationCreateOrUpdateRequest(
@@ -2171,7 +2166,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 "key",
                 LifecyclePolicy.WEAK,
                 false,
-                schemaRequest1,
+                null,
                 null
             )
         )
@@ -2222,6 +2217,424 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     // Should return both versions
     assertEquals(2, allVersionSchemas.size());
+  }
+
+  // Requirement #1: CREATE + schema → STRONG + frozen
+
+  @Test
+  public void testCreateWithSchemaDefaultsToStrongFrozen() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "create-schema-frozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Create with schema, no subject/lifecycle/frozen specified — defaults to frozen STRONG
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, schemaRequest, null)));
+
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(":.default:topic1-value", response.getAssociations().get(0).getSubject());
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
+    assertTrue(response.getAssociations().get(0).isFrozen());
+  }
+
+  @Test
+  public void testCreateWithSchemaAndWeakLifecycleFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "create-schema-weak-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "subject-weak-schema", "value", LifecyclePolicy.WEAK, null, schemaRequest, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  @Test
+  public void testCreateWithSchemaAndFrozenFalseFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "create-schema-unfrozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "subject-unfrozen", "value", null, false, schemaRequest, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  // Requirement #2: UPSERT + schema → only STRONG
+
+  @Test
+  public void testUpsertWithSchemaAndWeakLifecycleFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "upsert-schema-weak-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "subject-upsert-weak", "value", LifecyclePolicy.WEAK, null, schemaRequest, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createOrUpdateAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  // Requirement #3: Default subject + server restriction
+
+  @Test
+  public void testCreateFrozenStrongWithoutSubjectDefaultsSubject() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "default-subject-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Create with schema, no subject — should default to :.namespace:name
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, schemaRequest, null)));
+
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(":.default:topic1-value", response.getAssociations().get(0).getSubject());
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
+    assertTrue(response.getAssociations().get(0).isFrozen());
+  }
+
+  @Test
+  public void testCreateWeakWithoutSubjectFails() throws Exception {
+    String subject = "subject-weak-nosub";
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "weak-nosub-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    // Register schema separately
+    restApp.restClient.registerSchema(allSchemas.get(0), subject);
+
+    // Create WEAK without subject — should fail
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", LifecyclePolicy.WEAK, null, null, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  @Test
+  public void testCreateNonFrozenStrongWithoutSubjectSucceeds() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "strong-nosub-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    // Register schema under the default subject
+    restApp.restClient.registerSchema(allSchemas.get(0), ":.default:topic1-value");
+
+    // Create non-frozen STRONG without subject — should succeed with default subject
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", LifecyclePolicy.STRONG, null, null, null)));
+
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(":.default:topic1-value", response.getAssociations().get(0).getSubject());
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
+  }
+
+  @Test
+  public void testDefaultSubjectNotAllowedForWeak() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "weak-default-sub-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    // Register schema separately under the default subject
+    restApp.restClient.registerSchema(allSchemas.get(0), ":.default:topic1-value");
+
+    // Try to create WEAK with the default subject explicitly — should fail
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            ":.default:topic1-value", "value", LifecyclePolicy.WEAK, false, null, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  @Test
+  public void testBatchCreateWithSchemaDefaultsToStrongFrozen() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "batch-create-schema-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Batch create with schema, no subject/lifecycle/frozen
+    AssociationCreateOp createOp = new AssociationCreateOp(
+        null, "value", null, null, schemaRequest, null);
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        Collections.singletonList(createOp));
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
+        Collections.singletonList(opRequest));
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertNull(response.getResults().get(0).getError());
+    AssociationResponse assocResponse = response.getResults().get(0).getResult();
+    assertEquals(":.default:topic1-value", assocResponse.getAssociations().get(0).getSubject());
+    assertEquals(LifecyclePolicy.STRONG, assocResponse.getAssociations().get(0).getLifecycle());
+    assertTrue(assocResponse.getAssociations().get(0).isFrozen());
+  }
+
+  // Requirement: Frozen STRONG must use default subject
+
+  @Test
+  public void testCreateFrozenWithCustomSubjectFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "frozen-custom-sub-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Frozen with a custom subject — should fail
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "custom-subject", "value", LifecyclePolicy.STRONG, true, schemaRequest, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  @Test
+  public void testBatchCreateFrozenWithCustomSubjectFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "batch-frozen-custom-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    AssociationCreateOp createOp = new AssociationCreateOp(
+        "custom-subject", "value", LifecyclePolicy.STRONG, true, schemaRequest, null);
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        Collections.singletonList(createOp));
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
+        Collections.singletonList(opRequest));
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertNotNull(response.getResults().get(0).getError());
+  }
+
+  // Requirement: Frozen/non-frozen consistency at resource level
+
+  @Test
+  public void testCreateFrozenThenUpsertNonFrozenFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "frozen-consistency-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Create frozen association
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "key", null, null, schemaRequest, null)));
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    // Now try to upsert a non-frozen association for the same resource — should fail
+    restApp.restClient.registerSchema(allSchemas.get(1), "value-subject");
+    AssociationCreateOrUpdateRequest upsertRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "value-subject", "value", LifecyclePolicy.STRONG, false, null, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createOrUpdateAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, upsertRequest));
+  }
+
+  @Test
+  public void testCreateNonFrozenThenUpsertFrozenFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "nonfrozen-then-frozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    // Create non-frozen association
+    restApp.restClient.registerSchema(allSchemas.get(0), "key-subject");
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            "key-subject", "key", LifecyclePolicy.STRONG, false, null, null)));
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    // Now try to upsert a frozen association for the same resource — should fail
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(1));
+    AssociationCreateOrUpdateRequest upsertRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", LifecyclePolicy.STRONG, true, schemaRequest, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createOrUpdateAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, upsertRequest));
+  }
+
+  @Test
+  public void testCreateFrozenThenUpsertAnotherFrozenSucceeds() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "all-frozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
+    schemaRequest1.setSchema(allSchemas.get(0));
+
+    // Create frozen key association
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "key", null, null, schemaRequest1, null)));
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    // Upsert another frozen association for the same resource — should succeed
+    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
+    schemaRequest2.setSchema(allSchemas.get(1));
+    AssociationCreateOrUpdateRequest upsertRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", LifecyclePolicy.STRONG, true, schemaRequest2, null)));
+
+    restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, upsertRequest);
+
+    // Verify both exist
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, associations.size());
+    assertTrue(associations.get(0).isFrozen());
+    assertTrue(associations.get(1).isFrozen());
+  }
+
+  @Test
+  public void testBatchCreateMixedFrozenAndNonFrozenFails() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "batch-mixed-frozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Batch with mixed frozen and non-frozen — should fail
+    AssociationCreateOp frozenOp = new AssociationCreateOp(
+        null, "key", null, null, schemaRequest, null);
+    AssociationCreateOp nonFrozenOp = new AssociationCreateOp(
+        "some-subject", "value", LifecyclePolicy.STRONG, false, null, null);
+
+    // Register schema for the non-frozen subject
+    restApp.restClient.registerSchema(allSchemas.get(1), "some-subject");
+
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(frozenOp, nonFrozenOp));
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
+        Collections.singletonList(opRequest));
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertNotNull(response.getResults().get(0).getError());
+  }
+
+  @Test
+  public void testBatchCreateAllFrozenSucceeds() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "batch-all-frozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    RegisterSchemaRequest schemaRequest1 = new RegisterSchemaRequest();
+    schemaRequest1.setSchema(allSchemas.get(0));
+    RegisterSchemaRequest schemaRequest2 = new RegisterSchemaRequest();
+    schemaRequest2.setSchema(allSchemas.get(1));
+
+    AssociationCreateOp op1 = new AssociationCreateOp(
+        null, "key", null, null, schemaRequest1, null);
+    AssociationCreateOp op2 = new AssociationCreateOp(
+        null, "value", null, null, schemaRequest2, null);
+
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(op1, op2));
+    AssociationBatchRequest batchRequest = new AssociationBatchRequest(
+        Collections.singletonList(opRequest));
+
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, batchRequest);
+    assertNull(response.getResults().get(0).getError());
+
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, associations.size());
+    assertTrue(associations.get(0).isFrozen());
+    assertTrue(associations.get(1).isFrozen());
   }
 }
 
