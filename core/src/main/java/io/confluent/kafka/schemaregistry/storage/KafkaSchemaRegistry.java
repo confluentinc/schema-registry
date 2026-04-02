@@ -1166,9 +1166,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   public AssociationResponse createOrUpdateAssociation(
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
-      boolean isCreateOnly)
+      boolean isCreate)
       throws SchemaRegistryException {
     // Replace aliases and check for read-only mode
+    String defaultSubjectPrefix = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
+        + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName() + "-";
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String unqualifiedSubject = info.getSubject();
       QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
@@ -1205,6 +1207,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         request.getResourceId(), request.getResourceType(),
         new ArrayList<>(infosByType.keySet()), null);
 
+    // Check frozen consistency at the resource level
+    List<Association> allAssociations = getAssociationsByResourceId(
+        request.getResourceId(), request.getResourceType(),
+        Collections.emptyList(), null);
+    Boolean existingFrozenState = allAssociations.isEmpty()
+        ? null : allAssociations.get(0).isFrozen();
+
     // Check whether the resource already has an association
     Map<String, Association> assocsByType = associations.stream()
         .collect(Collectors.toMap(Association::getAssociationType, a -> a));
@@ -1215,6 +1224,47 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       String qualifiedSubject = qs.toQualifiedSubject();
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
+
+      // Only allow auto-generated subject format for strong associations
+      String defaultSubject = defaultSubjectPrefix + associationType;
+      if (unqualifiedSubject != null && unqualifiedSubject.equals(defaultSubject)) {
+        if (association != null) {
+          // For upsert, check existing association's state
+          if (association.getLifecycle() != LifecyclePolicy.STRONG) {
+            throw new IllegalPropertyException(
+                "subject", "subject '" + defaultSubject
+                    + "' is only allowed for strong associations");
+          }
+        } else {
+          // For create, check the request's state
+          if (info.getLifecycle() != LifecyclePolicy.STRONG) {
+            throw new IllegalPropertyException(
+                "subject", "subject '" + defaultSubject
+                    + "' is only allowed for strong associations");
+          }
+        }
+      }
+
+      // Frozen associations must use the default subject format
+      boolean isFrozen = association != null
+          ? association.isFrozen() : Boolean.TRUE.equals(info.getFrozen());
+      if (isFrozen && unqualifiedSubject != null
+          && !unqualifiedSubject.equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "frozen associations must use subject '" + defaultSubject + "'");
+      }
+
+      // Check frozen consistency at the resource level
+      if (existingFrozenState != null && info.getFrozen() != null
+          && !existingFrozenState.equals(info.getFrozen())) {
+        throw new IllegalPropertyException(
+            "frozen", "all associations for a resource must be consistently "
+                + "frozen or non-frozen");
+      }
+      if (association == null && existingFrozenState == null && info.getFrozen() != null) {
+        existingFrozenState = info.getFrozen();
+      }
+
       if (association == null) {
         // If on create, frozen is set to true, ensure that a schema is being
         // passed in, and that no other schemas exist in the subject
@@ -1232,7 +1282,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         continue;
       }
       if (association.isEquivalent(info)) {
-        if (isCreateOnly && info.getSchema() != null) {
+        if (isCreate && info.getSchema() != null) {
           boolean normalize = Boolean.TRUE.equals(info.getNormalize());
           Schema oldSchema = lookUpSchemaUnderSubject(
               qualifiedSubject, new Schema(qualifiedSubject, info.getSchema()), normalize, false);
@@ -1245,13 +1295,21 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         assocTypesToSkip.add(info.getAssociationType());
         continue;
       }
-      if (isCreateOnly) {
+      if (isCreate) {
         throw new AssociationForResourceExistsException(
             association.getAssociationType(), association.getResourceName());
       }
       if (!association.getSubject().equals(unqualifiedSubject)) {
         throw new IllegalPropertyException(
             "subject", "subject of association cannot be changed");
+      }
+      // Don't allow changing strong to weak if subject matches the default format
+      if (association.getLifecycle() == LifecyclePolicy.STRONG
+          && info.getLifecycle() == LifecyclePolicy.WEAK
+          && association.getSubject().equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot change to WEAK when subject matches default format '"
+                + defaultSubject + "'");
       }
       // Don't allow the frozen attribute to be updated
       if (info.getFrozen() != null && association.isFrozen() != info.getFrozen()) {

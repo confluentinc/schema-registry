@@ -142,8 +142,14 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
         super.hashCode(), subject, associationType, lifecycle, frozen, schema, normalize);
   }
 
+  // Base validation for the batch path (shared by CREATE and UPSERT ops).
+  // Validates subject format, defaults associationType and lifecycle,
+  // and enforces WEAK restrictions (no schema, no frozen).
+  // CREATE-specific checks are in AssociationCreateOp.validate().
   public void validate(boolean dryRun) {
-    checkSubject(getSubject());
+    if (getSubject() != null) {
+      checkSubject(getSubject());
+    }
     if (getAssociationType() != null && !getAssociationType().isEmpty()) {
       if (!getAssociationType().equals(KEY_ASSOCIATION_TYPE)
           && !getAssociationType().equals(VALUE_ASSOCIATION_TYPE)) {
@@ -158,6 +164,10 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
       setLifecycle(LifecyclePolicy.WEAK);
     }
     if (getLifecycle() == LifecyclePolicy.WEAK) {
+      if (getSchema() != null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided");
+      }
       if (Boolean.TRUE.equals(getFrozen())) {
         throw new IllegalPropertyException(
             "frozen", "association with lifecycle of WEAK cannot be frozen");
