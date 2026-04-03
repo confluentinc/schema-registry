@@ -999,7 +999,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         if (includeSchemas) {
           schemas = new HashMap<>();
           for (Association association : associations) {
-            Schema schema = getLatestVersion(association.getSubject());
+            String qualifiedSubject = QualifiedSubject.createFromUnqualified(
+                tenant(), association.getSubject()).toQualifiedSubject();
+            Schema schema = getLatestVersion(qualifiedSubject);
             if (schema != null) {
               schemas.put(association.getAssociationType(), schema);
             }
