@@ -23,6 +23,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
@@ -139,6 +141,10 @@ public class AssociationOpRequest {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
+  // Validates resource fields, then for each op: validates the op, defaults
+  // the subject to :.ns:name-type for STRONG associations, enforces that frozen
+  // associations use the default subject, and checks frozen consistency across
+  // all associations for the resource.
   public void validate(boolean dryRun) {
     checkName(getResourceName(), "resourceName");
     checkName(getResourceNamespace(), "resourceNamespace");
@@ -156,8 +162,40 @@ public class AssociationOpRequest {
     if (getAssociations() == null || getAssociations().isEmpty()) {
       throw new IllegalPropertyException("associations", "cannot be null or empty");
     }
-    for (AssociationOp info : getAssociations()) {
-      info.validate(dryRun);
+    Boolean frozenState = null;
+    for (AssociationOp op : getAssociations()) {
+      op.validate(dryRun);
+      if (op instanceof AssociationCreateOrUpdateOp) {
+        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
+        String defaultSubject = QualifiedSubject.CONTEXT_PREFIX + resourceNamespace
+            + QualifiedSubject.CONTEXT_DELIMITER + resourceName
+            + "-" + createOrUpdateOp.getAssociationType();
+        if (createOrUpdateOp.getSubject() == null) {
+          createOrUpdateOp.setSubject(defaultSubject);
+        }
+        // Frozen associations must use the default subject format
+        if (Boolean.TRUE.equals(createOrUpdateOp.getFrozen())
+            && !createOrUpdateOp.getSubject().equals(defaultSubject)) {
+          throw new IllegalPropertyException(
+              "subject", "frozen associations must use subject '" + defaultSubject + "'");
+        }
+        // WEAK associations cannot use the default subject format
+        if (createOrUpdateOp.getLifecycle() == LifecyclePolicy.WEAK
+            && createOrUpdateOp.getSubject().equals(defaultSubject)) {
+          throw new IllegalPropertyException(
+              "subject", "WEAK associations cannot use subject '" + defaultSubject + "'");
+        }
+        // Check frozen consistency within the request
+        if (createOrUpdateOp.getFrozen() != null) {
+          if (frozenState == null) {
+            frozenState = createOrUpdateOp.getFrozen();
+          } else if (!frozenState.equals(createOrUpdateOp.getFrozen())) {
+            throw new IllegalPropertyException(
+                "frozen", "all associations for a resource must be consistently "
+                    + "frozen or non-frozen");
+          }
+        }
+      }
     }
   }
 }

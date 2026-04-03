@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 
 @JsonInclude(Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -44,6 +45,40 @@ public class AssociationCreateOp extends AssociationCreateOrUpdateOp {
         frozen,
         schema,
         normalize);
+  }
+
+  // CREATE-specific validation for the batch path (AssociationOpRequest).
+  // If a schema is provided, the association is automatically frozen STRONG.
+  // Lifecycle defaults to WEAK if unset (only for CREATE, not UPSERT).
+  // WEAK associations must provide an explicit subject (no defaulting).
+  // See AssociationCreateOrUpdateInfo.validate() for the full model description.
+  @Override
+  public void validate(boolean dryRun) {
+    if (getSchema() != null) {
+      if (getLifecycle() == LifecyclePolicy.WEAK) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided for create");
+      }
+      if (Boolean.FALSE.equals(getFrozen())) {
+        throw new IllegalPropertyException(
+            "frozen", "cannot be false when schema is provided for create");
+      }
+      setLifecycle(LifecyclePolicy.STRONG);
+      setFrozen(true);
+    } else if (Boolean.TRUE.equals(getFrozen())) {
+      throw new IllegalPropertyException(
+          "schema", "schema must be provided when creating a frozen association");
+    } else {
+      setFrozen(false);
+    }
+    if (getLifecycle() == null) {
+      setLifecycle(LifecyclePolicy.WEAK);
+    }
+    super.validate(dryRun);
+    if (getSubject() == null && getLifecycle() == LifecyclePolicy.WEAK) {
+      throw new IllegalPropertyException(
+          "subject", "must be provided for WEAK associations");
+    }
   }
 
   @Override
