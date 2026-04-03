@@ -576,39 +576,42 @@ public class SubjectVersionsResource {
     Schema schema = null;
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
             headers, schemaRegistry.config().whitelistHeaders());
+    if (schemaRegistry.isLeader()) {
+      String errorMessage =
+              "Error while retrieving schema for subject "
+                      + subject
+                      + " with version "
+                      + version
+                      + " from the schema registry";
+      try {
+        if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
+          if (!permanentDelete
+                  && !schemaRegistry.schemaVersionExists(subject,
+                          versionId, false)) {
+            throw Errors.schemaVersionSoftDeletedException(subject, version);
+          }
+        }
+        schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
+        if (schema == null) {
+          if (!schemaRegistry.hasSubjects(subject, true)) {
+            throw Errors.subjectNotFoundException(subject);
+          } else {
+            throw Errors.versionNotFoundException(versionId.getVersionId());
+          }
+        }
+      } catch (SchemaRegistryStoreException e) {
+        log.debug(errorMessage, e);
+        throw Errors.storeException(errorMessage, e);
+      } catch (InvalidVersionException e) {
+        throw Errors.invalidVersionException(e.getMessage());
+      } catch (SchemaRegistryException e) {
+        throw Errors.schemaRegistryException(errorMessage, e);
+      }
+    }
+
     try {
       // Leader performs validation and deletion, follower forwards to leader
       if (schemaRegistry.isLeader()) {
-        String errorMessage =
-                "Error while retrieving schema for subject "
-                        + subject
-                        + " with version "
-                        + version
-                        + " from the schema registry";
-        try {
-          if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
-            if (!permanentDelete
-                    && !schemaRegistry.schemaVersionExists(subject,
-                            versionId, false)) {
-              throw Errors.schemaVersionSoftDeletedException(subject, version);
-            }
-          }
-          schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
-          if (schema == null) {
-            if (!schemaRegistry.hasSubjects(subject, true)) {
-              throw Errors.subjectNotFoundException(subject);
-            } else {
-              throw Errors.versionNotFoundException(versionId.getVersionId());
-            }
-          }
-        } catch (SchemaRegistryStoreException e) {
-          log.debug(errorMessage, e);
-          throw Errors.storeException(errorMessage, e);
-        } catch (InvalidVersionException e) {
-          throw Errors.invalidVersionException(e.getMessage());
-        } catch (SchemaRegistryException e) {
-          throw Errors.schemaRegistryException(errorMessage, e);
-        }
         schemaRegistry.deleteSchemaVersion(subject, schema, permanentDelete);
         asyncResponse.resume(schema.getVersion());
       } else {

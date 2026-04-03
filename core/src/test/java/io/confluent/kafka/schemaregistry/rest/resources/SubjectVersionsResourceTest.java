@@ -63,6 +63,8 @@ public class SubjectVersionsResourceTest {
     when(mockHeaders.getRequestHeaders()).thenReturn(new MultivaluedHashMap<>());
     when(mockSchemaRegistry.config()).thenReturn(mock(io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.class));
     when(mockSchemaRegistry.config().whitelistHeaders()).thenReturn(Collections.emptyList());
+    when(mockSchemaRegistry.forwardDeleteSchemaVersion(anyMap(), eq("testSubject"), eq(5), eq(false)))
+        .thenReturn(5);
 
     // When: deleteSchemaVersion is called
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "5", false);
@@ -87,6 +89,8 @@ public class SubjectVersionsResourceTest {
     when(mockHeaders.getRequestHeaders()).thenReturn(new MultivaluedHashMap<>());
     when(mockSchemaRegistry.config()).thenReturn(mock(io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.class));
     when(mockSchemaRegistry.config().whitelistHeaders()).thenReturn(Collections.emptyList());
+    when(mockSchemaRegistry.forwardDeleteSchemaVersion(anyMap(), eq("testSubject"), eq(-1), eq(false)))
+        .thenReturn(-1);
 
     // When: deleteSchemaVersion is called with "latest"
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "latest", false);
@@ -163,6 +167,8 @@ public class SubjectVersionsResourceTest {
     when(mockHeaders.getRequestHeaders()).thenReturn(new MultivaluedHashMap<>());
     when(mockSchemaRegistry.config()).thenReturn(mock(io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.class));
     when(mockSchemaRegistry.config().whitelistHeaders()).thenReturn(Collections.emptyList());
+    when(mockSchemaRegistry.forwardDeleteSchemaVersion(anyMap(), eq("testSubject"), eq(5), eq(true)))
+        .thenReturn(5);
 
     // When: deleteSchemaVersion is called with permanentDelete = true on follower
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "5", true);

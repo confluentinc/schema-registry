@@ -320,7 +320,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default int forwardDeleteSchemaVersion(Map<String, String> headerProperties, String subject,
                                           Integer version, boolean permanentDelete) throws
-          SchemaRegistryException {return 0;}
+          SchemaRegistryException {
+    return 0;
+  }
 
   default Schema modifySchemaTagsOrForward(String subject, Schema schema, TagSchemaRequest request,
                                            Map<String, String> headerProperties) throws
