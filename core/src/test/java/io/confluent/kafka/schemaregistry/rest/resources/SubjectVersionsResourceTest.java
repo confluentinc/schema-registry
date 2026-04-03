@@ -67,8 +67,8 @@ public class SubjectVersionsResourceTest {
     // When: deleteSchemaVersion is called
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "5", false);
 
-    // Then: should forward without validation (schema parameter is null)
-    verify(mockSchemaRegistry).deleteSchemaVersionOrForward(anyMap(), eq("testSubject"), isNull(), eq(false));
+    // Then: should forward without validation
+    verify(mockSchemaRegistry).forwardDeleteSchemaVersion(anyMap(), eq("testSubject"), eq(5), eq(false));
 
     // Then: should NOT call validation methods
     verify(mockSchemaRegistry, never()).schemaVersionExists(anyString(), any(), anyBoolean());
@@ -92,7 +92,7 @@ public class SubjectVersionsResourceTest {
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "latest", false);
 
     // Then: should forward without validation
-    verify(mockSchemaRegistry).deleteSchemaVersionOrForward(anyMap(), eq("testSubject"), isNull(), eq(false));
+    verify(mockSchemaRegistry).forwardDeleteSchemaVersion(anyMap(), eq("testSubject"), eq(-1), eq(false));
 
     // Then: should NOT call validation methods
     verify(mockSchemaRegistry, never()).schemaVersionExists(anyString(), any(), anyBoolean());
@@ -123,9 +123,9 @@ public class SubjectVersionsResourceTest {
     verify(mockSchemaRegistry).schemaVersionExists(eq("testSubject"), any(), eq(true));
     verify(mockSchemaRegistry).get(eq("testSubject"), eq(5), eq(true));
 
-    // Then: should call deleteSchemaVersionOrForward with the schema object
+    // Then: should call deleteSchemaVersion with the schema object
     ArgumentCaptor<Schema> schemaCaptor = ArgumentCaptor.forClass(Schema.class);
-    verify(mockSchemaRegistry).deleteSchemaVersionOrForward(anyMap(), eq("testSubject"), schemaCaptor.capture(), eq(false));
+    verify(mockSchemaRegistry).deleteSchemaVersion(eq("testSubject"), schemaCaptor.capture(), eq(false));
     assertEquals(mockSchema, schemaCaptor.getValue());
 
     // Then: should resume with schema version
@@ -148,8 +148,8 @@ public class SubjectVersionsResourceTest {
     // When: deleteSchemaVersion is called with permanentDelete = true
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "5", true);
 
-    // Then: should call deleteSchemaVersionOrForward with permanentDelete = true
-    verify(mockSchemaRegistry).deleteSchemaVersionOrForward(anyMap(), eq("testSubject"), any(Schema.class), eq(true));
+    // Then: should call deleteSchemaVersion with permanentDelete = true
+    verify(mockSchemaRegistry).deleteSchemaVersion(eq("testSubject"), any(Schema.class), eq(true));
 
     // Then: should resume with schema version
     verify(mockAsyncResponse).resume(5);
@@ -168,7 +168,7 @@ public class SubjectVersionsResourceTest {
     resource.deleteSchemaVersion(mockAsyncResponse, mockHeaders, "testSubject", "5", true);
 
     // Then: should forward without validation with permanentDelete = true
-    verify(mockSchemaRegistry).deleteSchemaVersionOrForward(anyMap(), eq("testSubject"), isNull(), eq(true));
+    verify(mockSchemaRegistry).forwardDeleteSchemaVersion(anyMap(), eq("testSubject"), eq(5), eq(true));
 
     // Then: should NOT call validation methods
     verify(mockSchemaRegistry, never()).schemaVersionExists(anyString(), any(), anyBoolean());
@@ -198,8 +198,8 @@ public class SubjectVersionsResourceTest {
     // Then: should perform validation with -1 (internal representation of "latest")
     verify(mockSchemaRegistry).get(eq("testSubject"), eq(-1), eq(true));
 
-    // Then: should call deleteSchemaVersionOrForward with the schema object
-    verify(mockSchemaRegistry).deleteSchemaVersionOrForward(anyMap(), eq("testSubject"), any(Schema.class), eq(false));
+    // Then: should call deleteSchemaVersion with the schema object
+    verify(mockSchemaRegistry).deleteSchemaVersion(eq("testSubject"), any(Schema.class), eq(false));
 
     // Then: should resume with actual version from schema (42), not -1
     verify(mockAsyncResponse).resume(42);

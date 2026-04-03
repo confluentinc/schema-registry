@@ -765,23 +765,18 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public void deleteSchemaVersionOrForward(
+  @Override
+  public int forwardDeleteSchemaVersion(
       Map<String, String> headerProperties, String subject,
-      Schema schema, boolean permanentDelete) throws SchemaRegistryException {
+      Integer version, boolean permanentDelete) throws SchemaRegistryException {
 
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isLeader()) {
-        deleteSchemaVersion(subject, schema, permanentDelete);
+      if (leaderIdentity != null) {
+        return forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
+                version, permanentDelete);
       } else {
-        // forward registering request to the leader
-        if (leaderIdentity != null) {
-          forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
-                  schema.getVersion(), permanentDelete);
-        } else {
-          throw new UnknownLeaderException("Register schema request failed since leader is "
-                                           + "unknown");
-        }
+        throw new UnknownLeaderException("Delete schema request failed since leader is unknown");
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
@@ -1750,7 +1745,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private void forwardDeleteSchemaVersionRequestToLeader(
+  private int forwardDeleteSchemaVersionRequestToLeader(
       Map<String, String> headerProperties,
       String subject,
       Integer version,
@@ -1760,7 +1755,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     log.debug("Forwarding deleteSchemaVersion schema version request {}-{} to {}", subject,
             version, baseUrl);
     try {
-      leaderRestService.deleteSchemaVersion(headerProperties, subject,
+      return leaderRestService.deleteSchemaVersion(headerProperties, subject,
               String.valueOf(version), permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
