@@ -151,8 +151,64 @@ public class AssociationCreateOrUpdateInfo {
     return JacksonMapper.INSTANCE.writeValueAsString(this);
   }
 
-  public void validate(boolean dryRun) {
-    checkSubject(getSubject());
+  /**
+   * Applies CREATE defaults: schema implies frozen STRONG, frozen requires schema,
+   * non-schema defaults to non-frozen, lifecycle defaults to WEAK.
+   */
+  public void applyCreateDefaults() {
+    if (getSchema() != null) {
+      if (getLifecycle() == LifecyclePolicy.WEAK) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided for create");
+      }
+      if (Boolean.FALSE.equals(getFrozen())) {
+        throw new IllegalPropertyException(
+            "frozen", "cannot be false when schema is provided for create");
+      }
+      setLifecycle(LifecyclePolicy.STRONG);
+      setFrozen(true);
+    } else if (Boolean.TRUE.equals(getFrozen())) {
+      throw new IllegalPropertyException(
+          "schema", "schema must be provided when creating a frozen association");
+    } else {
+      setFrozen(false);
+    }
+    if (getLifecycle() == null) {
+      setLifecycle(LifecyclePolicy.WEAK);
+    }
+  }
+
+  /**
+   * Applies UPSERT defaults when no existing association exists:
+   * schema implies STRONG (not frozen), lifecycle defaults to WEAK.
+   */
+  public void applyUpsertDefaults() {
+    if (getSchema() != null) {
+      if (getLifecycle() == LifecyclePolicy.WEAK) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided");
+      }
+      setLifecycle(LifecyclePolicy.STRONG);
+      if (getFrozen() == null) {
+        setFrozen(false);
+      }
+    } else {
+      if (getFrozen() == null) {
+        setFrozen(false);
+      }
+    }
+    if (getLifecycle() == null) {
+      setLifecycle(LifecyclePolicy.WEAK);
+    }
+  }
+
+  public void validate(boolean isCreate, boolean dryRun) {
+    if (getSubject() != null) {
+      checkSubject(getSubject());
+    }
+    if (isCreate) {
+      applyCreateDefaults();
+    }
     if (getAssociationType() != null && !getAssociationType().isEmpty()) {
       if (!getAssociationType().equals(KEY_ASSOCIATION_TYPE)
           && !getAssociationType().equals(VALUE_ASSOCIATION_TYPE)) {
@@ -163,13 +219,18 @@ public class AssociationCreateOrUpdateInfo {
     } else {
       setAssociationType(VALUE_ASSOCIATION_TYPE);
     }
-    if (getLifecycle() == null) {
-      setLifecycle(LifecyclePolicy.WEAK);
-    }
     if (getLifecycle() == LifecyclePolicy.WEAK) {
+      if (getSchema() != null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot be WEAK when schema is provided");
+      }
       if (Boolean.TRUE.equals(getFrozen())) {
         throw new IllegalPropertyException(
             "frozen", "association with lifecycle of WEAK cannot be frozen");
+      }
+      if (isCreate && getSubject() == null) {
+        throw new IllegalPropertyException(
+            "subject", "must be provided for WEAK associations");
       }
     }
   }

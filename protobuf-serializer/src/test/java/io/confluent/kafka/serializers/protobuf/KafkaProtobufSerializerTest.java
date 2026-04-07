@@ -28,7 +28,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -871,7 +870,7 @@ public class KafkaProtobufSerializerTest {
   public void testKafkaProtobufDeserializerWithAssociatedNameStrategy()
       throws IOException, RestClientException {
     ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    schemaRegistry.register("mysubject", schema);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         topic,
         "myresourcens",
@@ -883,7 +882,7 @@ public class KafkaProtobufSerializerTest {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
