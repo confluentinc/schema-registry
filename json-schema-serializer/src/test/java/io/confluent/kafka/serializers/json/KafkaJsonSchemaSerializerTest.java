@@ -35,7 +35,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
@@ -516,7 +515,7 @@ public class KafkaJsonSchemaSerializerTest {
       throws IOException, RestClientException {
     User user = new User("john", "doe", (short) 50, "jack", null);
     JsonSchema schema = JsonSchemaUtils.getSchema(user);
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    schemaRegistry.register("mysubject", schema);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         topic,
         "myresourcens",
@@ -528,7 +527,7 @@ public class KafkaJsonSchemaSerializerTest {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )
