@@ -3,6 +3,46 @@ info:
   title: Confluent Schema Registry
   version: v1
 paths:
+  /associations:batchGet:
+    post:
+      summary: Batch get associations.
+      operationId: batchGetAssociations_1
+      parameters:
+      - name: includeSchemas
+        in: query
+        description: Include schemas in response
+        schema:
+          type: boolean
+          default: false
+      requestBody:
+        description: The batch get request
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchGetRequest"
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchGetRequest"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchGetRequest"
+          application/octet-stream:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchGetRequest"
+        required: true
+      responses:
+        "207":
+          description: The batch get response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
   /associations:
     post:
       summary: Create an association.
@@ -2250,15 +2290,15 @@ paths:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: string
-                example: "\"string\""
+                example: string
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
-                example: "\"string\""
+                example: string
             application/json; qs=0.5:
               schema:
                 type: string
-                example: "\"string\""
+                example: string
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
@@ -2341,15 +2381,15 @@ paths:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: string
-                example: "\"string\""
+                example: string
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
-                example: "\"string\""
+                example: string
             application/json; qs=0.5:
               schema:
                 type: string
-                example: "\"string\""
+                example: string
         "404":
           description: Not Found. Error code 40403 indicates schema not found.
           content:
@@ -3046,6 +3086,50 @@ paths:
         "500":
           description: |
             Error code 50001 -- Error in the backend data store
+  /associations:batchMutate:
+    post:
+      summary: Mutate associations in batch.
+      operationId: mutateAssociations_2
+      parameters:
+      - name: context
+        in: query
+        description: Context
+        schema:
+          type: string
+      - name: dryRun
+        in: query
+        description: Dry run
+        schema:
+          type: boolean
+      requestBody:
+        description: The create requests
+        content:
+          application/vnd.schemaregistry.v1+json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+          application/vnd.schemaregistry+json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+          application/octet-stream:
+            schema:
+              $ref: "#/components/schemas/AssociationBatchRequest"
+        required: true
+      responses:
+        "207":
+          description: The batch response
+          content:
+            application/vnd.schemaregistry.v1+json:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+            application/vnd.schemaregistry+json; qs=0.9:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
+            application/json; qs=0.5:
+              schema:
+                $ref: "#/components/schemas/AssociationBatchResponse"
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -3586,6 +3670,17 @@ components:
           type: string
           description: Schema definition string
           example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+        ts:
+          type: integer
+          description: "Timestamp when the schema was created. In Confluent Cloud,\
+            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
+          format: int64
+        deleted:
+          type: boolean
+          description: "Whether the schema has been deleted. In Confluent Cloud, this\
+            \ field is returned only if Confluent-Accept-Unknown-Properties header\
+            \ is passed in"
         aliases:
           type: array
           description: Aliases for the given subject
@@ -3604,17 +3699,6 @@ components:
           description: Schema tags
           items:
             $ref: "#/components/schemas/SchemaTags"
-        ts:
-          type: integer
-          description: "Timestamp when the schema was created. In Confluent Cloud,\
-            \ this field is returned only if Confluent-Accept-Unknown-Properties header\
-            \ is passed in"
-          format: int64
-        deleted:
-          type: boolean
-          description: "Whether the schema has been deleted. In Confluent Cloud, this\
-            \ field is returned only if Confluent-Accept-Unknown-Properties header\
-            \ is passed in"
       description: ExtendedSchema
     TagSchemaRequest:
       type: object
@@ -3788,6 +3872,8 @@ components:
         properties:
           associationType:
             type: string
+          cascadeLifecycle:
+            type: boolean
     AssociationOp:
       type: object
       properties:
@@ -3814,6 +3900,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AssociationOp"
+        error:
+          $ref: "#/components/schemas/ErrorMessage"
     AssociationUpsertOp:
       type: object
       allOf:
@@ -3851,3 +3939,30 @@ components:
           type: array
           items:
             type: string
+    AssociationBatchGetRequest:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssociationGetRequest"
+    AssociationGetRequest:
+      type: object
+      properties:
+        resourceName:
+          type: string
+        resourceNamespace:
+          type: string
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        associationTypes:
+          type: array
+          items:
+            type: string
+        lifecycle:
+          type: string
+          enum:
+          - STRONG
+          - WEAK
