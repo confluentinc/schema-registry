@@ -552,16 +552,21 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
       LifecyclePolicy valueLifecycle = LifecyclePolicy.valueOf(r[4]);
       String subjectPrefix = namespace + "-" + resourceName;
 
+      // Pre-register schemas so associations don't need to carry them
+      String keySubject = subjectPrefix + "-key";
+      String valueSubject = subjectPrefix + "-value";
       RegisterSchemaRequest keyReq = new RegisterSchemaRequest();
       keyReq.setSchema(StoreUtils.avroSchemaString(schemaFieldCount++));
       RegisterSchemaRequest valueReq = new RegisterSchemaRequest();
       valueReq.setSchema(StoreUtils.avroSchemaString(schemaFieldCount++));
+      kafkaSchemaRegistry.register(keySubject, new Schema(keySubject, keyReq));
+      kafkaSchemaRegistry.register(valueSubject, new Schema(valueSubject, valueReq));
 
       kafkaSchemaRegistry.createAssociation(null, false, new AssociationCreateOrUpdateRequest(
           resourceName, namespace, resourceId, "topic",
           Arrays.asList(
-              new AssociationCreateOrUpdateInfo(subjectPrefix + "-key", "key", keyLifecycle, false, keyReq, null),
-              new AssociationCreateOrUpdateInfo(subjectPrefix + "-value", "value", valueLifecycle, false, valueReq, null)
+              new AssociationCreateOrUpdateInfo(keySubject, "key", keyLifecycle, false, null, null),
+              new AssociationCreateOrUpdateInfo(valueSubject, "value", valueLifecycle, false, null, null)
           )
       ));
     }

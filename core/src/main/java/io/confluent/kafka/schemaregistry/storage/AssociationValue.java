@@ -62,14 +62,14 @@ public class AssociationValue extends SubjectValue {
       @JsonProperty("frozen") boolean frozen,
       @JsonProperty("createTs") Long createTimestamp) {
     super(subject);
-    this.guid = guid;
-    this.tenant = tenant;
-    this.resourceName = resourceName;
-    this.resourceNamespace = resourceNamespace;
-    this.resourceId = resourceId;
-    this.resourceType = resourceType;
-    this.associationType = associationType;
-    this.lifecycle = lifecycle;
+    this.guid = Objects.requireNonNull(guid, "guid");
+    this.tenant = Objects.requireNonNull(tenant, "tenant");
+    this.resourceName = Objects.requireNonNull(resourceName, "resourceName");
+    this.resourceNamespace = Objects.requireNonNull(resourceNamespace, "resourceNamespace");
+    this.resourceId = Objects.requireNonNull(resourceId, "resourceId");
+    this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
+    this.associationType = Objects.requireNonNull(associationType, "associationType");
+    this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
     this.frozen = frozen;
     this.createTimestamp = createTimestamp;
   }
