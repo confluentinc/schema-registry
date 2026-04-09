@@ -695,10 +695,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   @Override
-  public void deleteSchemaVersion(String subject,
-                                  Schema schema,
+  public int deleteSchemaVersion(String subject,
+                                  int version,
                                   boolean permanentDelete)
       throws SchemaRegistryException {
+    Schema schema = validateDeleteSchemaVersion(subject, version, permanentDelete);
+
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
@@ -763,6 +765,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryStoreException("Error while deleting the schema for subject '"
                                             + subject + "' in the backend Kafka store", e);
     }
+    // in case need to resolve the latest version to reflect the real version
+    return schema.getVersion();
   }
 
   @Override
@@ -777,6 +781,31 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 version, permanentDelete);
       } else {
         throw new UnknownLeaderException("Delete schema request failed since leader is unknown");
+      }
+    } finally {
+      kafkaStore.lockFor(subject).unlock();
+    }
+  }
+
+  @Override
+  public int deleteSchemaVersionOrForward(
+      Map<String, String> requestProperties,
+      String subject,
+      int version,
+      boolean permanentDelete) throws SchemaRegistryException {
+    kafkaStore.lockFor(subject).lock();
+    try {
+      if (isLeader()) {
+        return deleteSchemaVersion(subject, version, permanentDelete);
+      } else {
+        // Follower forwards to leader without validation
+        if (leaderIdentity != null) {
+          return forwardDeleteSchemaVersionRequestToLeader(requestProperties, subject,
+                  version, permanentDelete);
+        } else {
+          throw new UnknownLeaderException("Delete schema version request failed since leader is "
+                  + "unknown");
+        }
       }
     } finally {
       kafkaStore.lockFor(subject).unlock();
