@@ -46,11 +46,11 @@ public class AssociationKey extends SubjectKey {
       @JsonProperty("subject") String subject) {
     super(SchemaRegistryKeyType.ASSOC, subject);
     this.magicByte = MAGIC_BYTE;
-    this.tenant = tenant;
-    this.resourceName = resourceName;
-    this.resourceNamespace = resourceNamespace;
-    this.resourceType = resourceType;
-    this.associationType = associationType;
+    this.tenant = Objects.requireNonNull(tenant, "tenant");
+    this.resourceName = Objects.requireNonNull(resourceName, "resourceName");
+    this.resourceNamespace = Objects.requireNonNull(resourceNamespace, "resourceNamespace");
+    this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
+    this.associationType = Objects.requireNonNull(associationType, "associationType");
   }
 
   @JsonProperty("tenant")

@@ -29,7 +29,7 @@ public abstract class SubjectKey extends SchemaRegistryKey {
   public SubjectKey(@JsonProperty("keytype") SchemaRegistryKeyType keyType,
                     @JsonProperty("subject") String subject) {
     super(keyType);
-    this.subject = subject;
+    this.subject = Objects.requireNonNull(subject, "subject");
   }
 
   @JsonProperty("subject")

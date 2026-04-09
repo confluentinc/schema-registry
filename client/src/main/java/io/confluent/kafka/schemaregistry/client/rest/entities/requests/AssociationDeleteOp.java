@@ -29,12 +29,19 @@ import java.util.Objects;
 public class AssociationDeleteOp extends AssociationOp {
 
   private String associationType;
+  private Boolean cascadeLifecycle;
 
   @JsonCreator
   public AssociationDeleteOp(
-      @JsonProperty("associationType") String associationType) {
+      @JsonProperty("associationType") String associationType,
+      @JsonProperty("cascadeLifecycle") Boolean cascadeLifecycle) {
     super(OpType.DELETE);
     this.associationType = associationType;
+    this.cascadeLifecycle = cascadeLifecycle;
+  }
+
+  public AssociationDeleteOp(String associationType) {
+    this(associationType, null);
   }
 
   @JsonProperty("associationType")
@@ -45,6 +52,16 @@ public class AssociationDeleteOp extends AssociationOp {
   @JsonProperty("associationType")
   public void setAssociationType(String associationType) {
     this.associationType = associationType;
+  }
+
+  @JsonProperty("cascadeLifecycle")
+  public Boolean getCascadeLifecycle() {
+    return cascadeLifecycle;
+  }
+
+  @JsonProperty("cascadeLifecycle")
+  public void setCascadeLifecycle(Boolean cascadeLifecycle) {
+    this.cascadeLifecycle = cascadeLifecycle;
   }
 
   @Override
@@ -59,12 +76,13 @@ public class AssociationDeleteOp extends AssociationOp {
       return false;
     }
     AssociationDeleteOp that = (AssociationDeleteOp) o;
-    return Objects.equals(associationType, that.associationType);
+    return Objects.equals(associationType, that.associationType)
+        && Objects.equals(cascadeLifecycle, that.cascadeLifecycle);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), associationType);
+    return Objects.hash(super.hashCode(), associationType, cascadeLifecycle);
   }
 
   public void validate(boolean dryRun) {
