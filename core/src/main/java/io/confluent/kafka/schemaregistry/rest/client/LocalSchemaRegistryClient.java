@@ -673,7 +673,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     try {
-      schemaRegistry.deleteSchemaVersion(subject, schema, isPermanent);
+      schemaRegistry.deleteSchemaVersion(subject, schema.getVersion(), isPermanent);
     } catch (SchemaVersionNotSoftDeletedException e) {
       throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
           e.getVersion());
@@ -693,7 +693,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
-    return schema.getVersion();
+    return versionId.getVersionId();
   }
 
   @Override

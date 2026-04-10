@@ -263,7 +263,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals(expected2, schema2);
 
     // Soft delete first version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, false);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 1, false);
     assertNull(kafkaSchemaRegistry.get("subject1", 1, false));
     assertEquals(expected1, kafkaSchemaRegistry.get("subject1", 1, true));
 
@@ -272,7 +272,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard delete first version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, true);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 1, true);
     assertNull(kafkaSchemaRegistry.get("subject1", 1, true));
 
     // Mode and config should still exist (since version 2 still exists)
@@ -280,7 +280,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Soft delete second version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, false);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 2, false);
     assertNull(kafkaSchemaRegistry.get("subject1", 2, false));
     assertEquals(expected2, kafkaSchemaRegistry.get("subject1", 2, true));
 
@@ -289,7 +289,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard delete second version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, true);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 2, true);
     assertNull(kafkaSchemaRegistry.get("subject1", 2, true));
 
     // Now, mode and config should be deleted (since all versions are gone)
@@ -408,14 +408,14 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
       assertFalse(itr.hasNext());
 
       // Soft delete second version
-      kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema3, false);
+      kafkaSchemaRegistry.deleteSchemaVersion("subject1", 2, false);
       itr = kafkaSchemaRegistry.getAllVersions("subject1", LookupFilter.DELETED_AS_NEGATIVE);
       assertEquals(1, itr.next().getVersion());
       assertEquals(-2, itr.next().getVersion());
       assertFalse(itr.hasNext());
 
       // Soft delete first version
-      kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, false);
+      kafkaSchemaRegistry.deleteSchemaVersion("subject1", 1, false);
       itr = kafkaSchemaRegistry.getAllVersions("subject1", LookupFilter.DELETED_AS_NEGATIVE);
       assertEquals(-1, itr.next().getVersion());
       assertEquals(-2, itr.next().getVersion());

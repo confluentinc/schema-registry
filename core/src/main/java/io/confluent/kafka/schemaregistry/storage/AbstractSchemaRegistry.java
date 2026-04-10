@@ -45,9 +45,11 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.VersionId;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
@@ -569,6 +571,46 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
               "Error while retrieving schema from the backend Kafka"
                       + " store", e);
     }
+  }
+
+  protected Schema validateDeleteSchemaVersion(String subject,
+                                                int version,
+                                                boolean permanentDelete)
+      throws SchemaRegistryException {
+    Schema schema = null;
+    // Retrieve and validate schema
+    VersionId versionId = new VersionId(version);
+    String errorMessage =
+        "Error while retrieving schema for subject "
+            + subject
+            + " with version "
+            + version
+            + " from the schema registry";
+    try {
+      if (schemaVersionExists(subject, versionId, true)) {
+        if (!permanentDelete
+            && !schemaVersionExists(subject,
+            versionId, false)) {
+          throw Errors.schemaVersionSoftDeletedException(subject, String.valueOf(version));
+        }
+      }
+      schema = get(subject, versionId.getVersionId(), true);
+      if (schema == null) {
+        if (!hasSubjects(subject, true)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    return schema;
   }
 
   private CloseableIterator<SchemaRegistryValue> allVersionsFromAllContexts(
