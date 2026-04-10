@@ -112,8 +112,14 @@ public abstract class MetadataEncoderService implements Closeable {
     Password password = config.getPassword(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
     if (password != null) {
       secret = password.value();
+      log.info("Loaded {} from config",
+          SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
     } else {
       secret = System.getenv("METADATA_ENCODER_SECRET");
+      log.info("Loaded METADATA_ENCODER_SECRET from env");
+    }
+    if (secret == null || secret.isEmpty()) {
+      log.warn("Encoder secret is null or empty");
     }
     return secret;
   }
@@ -123,8 +129,14 @@ public abstract class MetadataEncoderService implements Closeable {
     Password password = config.getPassword(SchemaRegistryConfig.METADATA_ENCODER_OLD_SECRET_CONFIG);
     if (password != null) {
       secret = password.value();
+      log.info("Loaded {} from config",
+          SchemaRegistryConfig.METADATA_ENCODER_OLD_SECRET_CONFIG);
     } else {
       secret = System.getenv("METADATA_ENCODER_OLD_SECRET");
+      log.info("Loaded METADATA_ENCODER_OLD_SECRET from env");
+    }
+    if (secret == null || secret.isEmpty()) {
+      log.warn("Encoder old secret is null or empty");
     }
     return secret;
   }
