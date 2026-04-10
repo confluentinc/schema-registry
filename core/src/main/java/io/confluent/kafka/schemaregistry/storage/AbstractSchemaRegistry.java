@@ -1296,6 +1296,26 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  protected QualifiedSubject replaceAlias(String context, String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context, subject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    Config config = null;
+    try {
+      config = getConfig(qualifiedSubject);
+    } catch (Exception e) {
+      // fall through
+    }
+    if (config == null) {
+      return qs;
+    }
+    String alias = config.getAlias();
+    if (alias != null && !alias.isEmpty()) {
+      return QualifiedSubject.qualifySubjectWithParent(tenant(), qualifiedSubject, alias, true);
+    } else {
+      return qs;
+    }
+  }
+
   @Override
   public Config getConfig(String subject)
           throws SchemaRegistryStoreException {
