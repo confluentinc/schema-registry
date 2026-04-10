@@ -576,43 +576,13 @@ public class SubjectVersionsResource {
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
-    Schema schema;
-    String errorMessage =
-            "Error while retrieving schema for subject "
-                    + subject
-                    + " with version "
-                    + version
-                    + " from the schema registry";
-    try {
-      if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
-        if (!permanentDelete
-                && !schemaRegistry.schemaVersionExists(subject,
-                        versionId, false)) {
-          throw Errors.schemaVersionSoftDeletedException(subject, version);
-        }
-      }
-      schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
-      if (schema == null) {
-        if (!schemaRegistry.hasSubjects(subject, true)) {
-          throw Errors.subjectNotFoundException(subject);
-        } else {
-          throw Errors.versionNotFoundException(versionId.getVersionId());
-        }
-      }
-    } catch (SchemaRegistryStoreException e) {
-      log.debug(errorMessage, e);
-      throw Errors.storeException(errorMessage, e);
-    } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(errorMessage, e);
-    }
 
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-              headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
-              schema, permanentDelete);
+          headers, schemaRegistry.config().whitelistHeaders());
+      int deletedVersion = schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
+              versionId.getVersionId(), permanentDelete);
+      asyncResponse.resume(deletedVersion);
     } catch (AssociationForSubjectExistsException e) {
       throw Errors.associationForSubjectExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
@@ -638,8 +608,6 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
-
-    asyncResponse.resume(schema.getVersion());
   }
 
   @POST

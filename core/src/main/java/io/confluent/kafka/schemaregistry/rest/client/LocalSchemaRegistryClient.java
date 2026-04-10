@@ -673,7 +673,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     }
 
     try {
-      schemaRegistry.deleteSchemaVersion(subject, schema, isPermanent);
+      schemaRegistry.deleteSchemaVersion(subject, schema.getVersion(), isPermanent);
     } catch (SchemaVersionNotSoftDeletedException e) {
       throw Errors.schemaVersionNotSoftDeletedException(e.getSubject(),
           e.getVersion());

@@ -695,10 +695,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   @Override
-  public void deleteSchemaVersion(String subject,
-                                  Schema schema,
+  public int deleteSchemaVersion(String subject,
+                                  int version,
                                   boolean permanentDelete)
       throws SchemaRegistryException {
+    Schema schema = validateDeleteSchemaVersion(subject, version, permanentDelete);
+
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
@@ -763,24 +765,28 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryStoreException("Error while deleting the schema for subject '"
                                             + subject + "' in the backend Kafka store", e);
     }
+    // in case need to resolve the latest version to reflect the real version
+    return schema.getVersion();
   }
 
-  public void deleteSchemaVersionOrForward(
-      Map<String, String> headerProperties, String subject,
-      Schema schema, boolean permanentDelete) throws SchemaRegistryException {
-
+  @Override
+  public int deleteSchemaVersionOrForward(
+      Map<String, String> requestProperties,
+      String subject,
+      int version,
+      boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteSchemaVersion(subject, schema, permanentDelete);
+        return deleteSchemaVersion(subject, version, permanentDelete);
       } else {
-        // forward registering request to the leader
+        // Follower forwards to leader without validation
         if (leaderIdentity != null) {
-          forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
-                  schema.getVersion(), permanentDelete);
+          return forwardDeleteSchemaVersionRequestToLeader(requestProperties, subject,
+                  version, permanentDelete);
         } else {
-          throw new UnknownLeaderException("Register schema request failed since leader is "
-                                           + "unknown");
+          throw new UnknownLeaderException("Delete schema version request failed since leader is "
+                  + "unknown");
         }
       }
     } finally {
@@ -1807,7 +1813,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private void forwardDeleteSchemaVersionRequestToLeader(
+  private int forwardDeleteSchemaVersionRequestToLeader(
       Map<String, String> headerProperties,
       String subject,
       Integer version,
@@ -1817,7 +1823,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     log.debug("Forwarding deleteSchemaVersion schema version request {}-{} to {}", subject,
             version, baseUrl);
     try {
-      leaderRestService.deleteSchemaVersion(headerProperties, subject,
+      return leaderRestService.deleteSchemaVersion(headerProperties, subject,
               String.valueOf(version), permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(
