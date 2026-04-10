@@ -46,9 +46,11 @@
 
     <modules>
         <module>core</module>
+        <module>schema-types</module>
         <module>client</module>
         <module>schema-serializer</module>
         <module>schema-rules</module>
+        <module>avro-types</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
         <module>schema-converter</module>
@@ -60,11 +62,11 @@
         <module>avro-serde</module>
         <module>client-console-scripts</module>
         <module>schema-registry-console-scripts</module>
+        <module>protobuf-types</module>
         <module>protobuf-converter</module>
         <module>protobuf-provider</module>
         <module>protobuf-serializer</module>
         <module>protobuf-serde</module>
-        <module>protobuf-types</module>
         <module>json-schema-converter</module>
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
