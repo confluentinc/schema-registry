@@ -1020,6 +1020,11 @@ public class RestService implements Closeable, Configurable {
     return getConfig(DEFAULT_REQUEST_PROPERTIES, subject, false);
   }
 
+  public Config getConfig(String subject, boolean defaultToGlobal)
+      throws IOException, RestClientException {
+    return getConfig(DEFAULT_REQUEST_PROPERTIES, subject, defaultToGlobal);
+  }
+
   public Config getConfig(Map<String, String> requestProperties,
                           String subject)
       throws IOException, RestClientException {
