@@ -579,7 +579,7 @@ public class SubjectVersionsResource {
 
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-        headers, schemaRegistry.config().whitelistHeaders());
+          headers, schemaRegistry.config().whitelistHeaders());
       int deletedVersion = schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
               versionId.getVersionId(), permanentDelete);
       asyncResponse.resume(deletedVersion);
