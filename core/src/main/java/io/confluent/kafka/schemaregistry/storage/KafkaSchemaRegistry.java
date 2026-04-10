@@ -770,24 +770,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   @Override
-  public int forwardDeleteSchemaVersion(
-      Map<String, String> headerProperties, String subject,
-      Integer version, boolean permanentDelete) throws SchemaRegistryException {
-
-    kafkaStore.lockFor(subject).lock();
-    try {
-      if (leaderIdentity != null) {
-        return forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
-                version, permanentDelete);
-      } else {
-        throw new UnknownLeaderException("Delete schema request failed since leader is unknown");
-      }
-    } finally {
-      kafkaStore.lockFor(subject).unlock();
-    }
-  }
-
-  @Override
   public int deleteSchemaVersionOrForward(
       Map<String, String> requestProperties,
       String subject,

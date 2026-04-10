@@ -693,7 +693,7 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
-    return versionId.getVersionId();
+    return schema.getVersion();
   }
 
   @Override
