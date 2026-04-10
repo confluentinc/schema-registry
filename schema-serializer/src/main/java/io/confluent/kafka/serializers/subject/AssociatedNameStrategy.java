@@ -66,7 +66,7 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
   private volatile boolean warnedNoClient;
   private volatile boolean warnedEndpointNotFound;
   private volatile boolean warnedEndpointNotImplemented;
-  private LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private volatile LoadingCache<CacheKey, Optional<String>> subjectNameCache;
   private final Ticker ticker;
 
   public AssociatedNameStrategy() {
@@ -183,7 +183,9 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
         log.warn("Kafka cluster ID changed from {} to {}", this.kafkaClusterId, clusterId);
       }
       this.kafkaClusterId = clusterId;
-      subjectNameCache.invalidateAll();
+      if (subjectNameCache != null) {
+        subjectNameCache.invalidateAll();
+      }
     }
   }
 
