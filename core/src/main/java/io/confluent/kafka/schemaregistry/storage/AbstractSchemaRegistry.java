@@ -1236,7 +1236,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       return lookupCache.mode(subject, true, defaultMode);
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
+      throw new SchemaRegistryStoreException(
+          "Failed to get mode in scope for " + subject, e);
     }
   }
 
@@ -1245,7 +1246,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       return lookupCache.mode(subject, false, defaultMode);
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
+      throw new SchemaRegistryStoreException("Failed to get mode for " + subject, e);
     }
   }
 
@@ -1292,7 +1293,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
+      throw new SchemaRegistryStoreException(
+          "Failed to get config in scope for " + subject, e);
     }
   }
 
@@ -1302,7 +1304,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       return lookupCache.config(subject, false, new Config(defaultCompatibilityLevel.name));
     } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
+      throw new SchemaRegistryStoreException("Failed to get config for " + subject, e);
     }
   }
 
