@@ -161,8 +161,15 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void close() throws IOException;
 
-  void deleteSchemaVersion(String subject, Schema schema,
+  int deleteSchemaVersion(String subject, int version,
                            boolean permanentDelete) throws SchemaRegistryException;
+
+  default int deleteSchemaVersionOrForward(Map<String, String> requestProperties,
+                                           String subject, int version,
+                                           boolean permanentDelete) throws
+          SchemaRegistryException {
+    return version;
+  }
 
   default String tenant() {
     return DEFAULT_TENANT;
@@ -315,10 +322,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   default void setModeOrForward(String subject, ModeUpdateRequest mode, boolean force,
                                 Map<String, String> headerProperties) throws
-          SchemaRegistryException {}
-
-  default void deleteSchemaVersionOrForward(Map<String, String> headerProperties, String subject,
-                                            Schema schema, boolean permanentDelete) throws
           SchemaRegistryException {}
 
   default Schema modifySchemaTagsOrForward(String subject, Schema schema, TagSchemaRequest request,
