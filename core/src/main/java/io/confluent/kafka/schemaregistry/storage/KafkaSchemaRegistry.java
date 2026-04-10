@@ -1469,26 +1469,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private QualifiedSubject replaceAlias(String context, String subject) {
-    QualifiedSubject qs = QualifiedSubject.create(tenant(), context, subject);
-    String qualifiedSubject = qs.toQualifiedSubject();
-    Config config = null;
-    try {
-      config = getConfig(qualifiedSubject);
-    } catch (Exception e) {
-      // fall through
-    }
-    if (config == null) {
-      return qs;
-    }
-    String alias = config.getAlias();
-    if (alias != null && !alias.isEmpty()) {
-      return QualifiedSubject.qualifySubjectWithParent(tenant(), qualifiedSubject, alias, true);
-    } else {
-      return qs;
-    }
-  }
-
   public AssociationResponse createOrUpdateAssociationOrForward(String context, boolean dryRun,
       AssociationCreateOrUpdateRequest request,
       Map<String, String> headerProperties)
