@@ -68,6 +68,7 @@ public class MetricsContainer {
   public static final String METRIC_NAME_JSON_SCHEMAS_DELETED = "json-schemas-deleted";
   public static final String METRIC_NAME_PB_SCHEMAS_CREATED = "protobuf-schemas-created";
   public static final String METRIC_NAME_PB_SCHEMAS_DELETED = "protobuf-schemas-deleted";
+  public static final String METRIC_NAME_ASSOCIATIONS_CREATED = "associations-created";
   public static final String METRIC_LEADER_INITIALIZATION_LATENCY = "leader-initialization-latency";
   public static final String METRIC_CERTIFICATE_EXPIRATION = "certificate-expiration";
 
@@ -86,6 +87,9 @@ public class MetricsContainer {
   private final SchemaRegistryMetric avroSchemasCreated;
   private final SchemaRegistryMetric jsonSchemasCreated;
   private final SchemaRegistryMetric protobufSchemasCreated;
+
+  private final SchemaRegistryMetric associationsCreated;
+  private final SchemaRegistryMetric associationsDeleted;
 
   private final SchemaRegistryMetric avroSchemasDeleted;
   private final SchemaRegistryMetric jsonSchemasDeleted;
@@ -154,6 +158,9 @@ public class MetricsContainer {
 
     this.protobufSchemasDeleted = createMetric(METRIC_NAME_PB_SCHEMAS_DELETED,
             "Number of deleted Protobuf schemas", new CumulativeCount());
+
+    this.associationsCreated = createMetric(METRIC_NAME_ASSOCIATIONS_CREATED,
+            "Number of Associations created", new CumulativeCount());
 
     this.leaderInitializationLatency = createMetric(METRIC_LEADER_INITIALIZATION_LATENCY,
             "Time spent initializing the leader's kafka store", new Value());
@@ -245,6 +252,14 @@ public class MetricsContainer {
       default:
         return null;
     }
+  }
+
+  public SchemaRegistryMetric getAssociationsCreated() {
+    return associationsCreated;
+  }
+
+  public SchemaRegistryMetric getAssociationsDeleted() {
+    return associationsDeleted;
   }
 
   public SchemaRegistryMetric getLeaderInitializationLatencyMetric() {
