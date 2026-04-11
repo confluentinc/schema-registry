@@ -1259,6 +1259,53 @@ public class AvroDataTest {
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
   }
 
+  @Test
+  public void testFromConnectLogicalVariant() {
+    io.confluent.kafka.schemaregistry.type.VariantBuilder vb =
+        new io.confluent.kafka.schemaregistry.type.VariantBuilder();
+    io.confluent.kafka.schemaregistry.type.VariantObjectBuilder obj = vb.startObject();
+    obj.appendKey("name");
+    obj.appendString("Alice");
+    vb.endObject();
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    Object converted = avroData.fromConnectData(connectSchema, connectValue);
+    assertTrue(converted instanceof GenericRecord);
+    GenericRecord record = (GenericRecord) converted;
+    assertEquals("variant", record.getSchema().getLogicalType().getName());
+    assertNotNull(record.get("metadata"));
+    assertNotNull(record.get("value"));
+  }
+
+  @Test
+  public void testToConnectVariant() {
+    io.confluent.avro.type.VariantConversion variantConversion =
+        new io.confluent.avro.type.VariantConversion();
+    org.apache.avro.Schema avroSchema = variantConversion.getRecommendedSchema();
+
+    io.confluent.kafka.schemaregistry.type.VariantBuilder vb =
+        new io.confluent.kafka.schemaregistry.type.VariantBuilder();
+    vb.appendString("hello");
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    GenericRecord avroRecord = new GenericData.Record(avroSchema);
+    avroRecord.put("metadata", variant.getMetadataBuffer());
+    avroRecord.put("value", variant.getValueBuffer());
+
+    SchemaAndValue result = avroData.toConnectData(avroSchema, avroRecord);
+    assertNotNull(result.schema());
+    assertEquals(io.confluent.connect.schema.ConnectVariant.LOGICAL_NAME, result.schema().name());
+    assertTrue(result.value() instanceof Struct);
+    Struct struct = (Struct) result.value();
+    assertNotNull(struct.get("metadata"));
+    assertNotNull(struct.get("value"));
+  }
+
   // test for new way of logical type handling
   @Test
   public void testFromConnectLogicalDateNew() {
@@ -3385,6 +3432,12 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().setValidateDefaults(true).parse(schemaStr);
     Schema schema = avroData.toConnectSchema(avroSchema);
     assertNotNull(avroData.fromConnectSchema(schema));
+  }
+
+  private static byte[] toBytes(java.nio.ByteBuffer buffer) {
+    byte[] bytes = new byte[buffer.remaining()];
+    buffer.duplicate().get(bytes);
+    return bytes;
   }
 
 }

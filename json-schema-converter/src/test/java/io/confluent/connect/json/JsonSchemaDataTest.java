@@ -51,6 +51,7 @@ import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConstSchema;
+import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -495,6 +496,55 @@ public class JsonSchemaDataTest {
         Timestamp.builder().defaultValue(new Date(0)).build(),
         new Date(1234567890)
     );
+  }
+
+  @Test
+  public void testFromConnectVariant() {
+    io.confluent.kafka.schemaregistry.type.VariantBuilder vb =
+        new io.confluent.kafka.schemaregistry.type.VariantBuilder();
+    io.confluent.kafka.schemaregistry.type.VariantObjectBuilder obj = vb.startObject();
+    obj.appendKey("name");
+    obj.appendString("Alice");
+    obj.appendKey("age");
+    obj.appendInt(30);
+    vb.endObject();
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertNotNull(jsonValue);
+    assertTrue(jsonValue.isObject());
+    assertEquals("Alice", jsonValue.get("name").textValue());
+    assertEquals(30, jsonValue.get("age").intValue());
+  }
+
+  @Test
+  public void testToConnectVariant() {
+    EmptySchema schema = EmptySchema.builder()
+        .unprocessedProperties(ImmutableMap.of("connect.type", "variant"))
+        .build();
+    ObjectNode jsonValue = JsonNodeFactory.instance.objectNode();
+    jsonValue.put("name", "Alice");
+    jsonValue.put("age", 30);
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    assertNotNull(connectSchema);
+    assertEquals(io.confluent.connect.schema.ConnectVariant.LOGICAL_NAME, connectSchema.name());
+
+    Object connectValue = jsonSchemaData.toConnectData(connectSchema, jsonValue);
+    assertTrue(connectValue instanceof Struct);
+    Struct struct = (Struct) connectValue;
+    assertNotNull(struct.get("metadata"));
+    assertNotNull(struct.get("value"));
+
+    // Verify round-trip: the variant struct should decode back to the same JSON
+    JsonNode roundTripped = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertEquals("Alice", roundTripped.get("name").textValue());
+    assertEquals(30, roundTripped.get("age").intValue());
   }
 
   @Test
@@ -2382,5 +2432,11 @@ public class JsonSchemaDataTest {
     Schema arraySchema = SchemaBuilder.array(schemaBuilder).build();
     schemaBuilder.field("foos", arraySchema);
     return schemaBuilder.build();
+  }
+
+  private static byte[] toBytes(java.nio.ByteBuffer buffer) {
+    byte[] bytes = new byte[buffer.remaining()];
+    buffer.duplicate().get(bytes);
+    return bytes;
   }
 }

@@ -39,6 +39,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
+import io.confluent.connect.schema.ConnectVariant;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
@@ -107,6 +108,8 @@ public class ProtobufData {
   public static final String PROTOBUF_SCALE_PROP = "scale";
   public static final String PROTOBUF_DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String PROTOBUF_DECIMAL_TYPE = "confluent.type.Decimal";
+  public static final String PROTOBUF_VARIANT_LOCATION = "confluent/type/variant.proto";
+  public static final String PROTOBUF_VARIANT_TYPE = "confluent.type.Variant";
   public static final String PROTOBUF_DATE_LOCATION = "google/type/date.proto";
   public static final String PROTOBUF_DATE_TYPE = "google.type.Date";
   public static final String PROTOBUF_TIME_LOCATION = "google/type/timeofday.proto";
@@ -880,6 +883,10 @@ public class ProtobufData {
         dep = new ProtobufSchema(
             io.confluent.protobuf.type.Decimal.getDescriptor());
         return dep.toDynamicSchema(PROTOBUF_DECIMAL_LOCATION);
+      case PROTOBUF_VARIANT_TYPE:
+        dep = new ProtobufSchema(
+            io.confluent.protobuf.type.Variant.getDescriptor());
+        return dep.toDynamicSchema(PROTOBUF_VARIANT_LOCATION);
       case PROTOBUF_DATE_TYPE:
         dep = new ProtobufSchema(com.google.type.Date.getDescriptor());
         return dep.toDynamicSchema(PROTOBUF_DATE_LOCATION);
@@ -984,6 +991,8 @@ public class ProtobufData {
       return PROTOBUF_TIME_TYPE;
     } else if (isTimestampSchema(schema)) {
       return PROTOBUF_TIMESTAMP_TYPE;
+    } else if (ConnectVariant.isVariant(schema)) {
+      return PROTOBUF_VARIANT_TYPE;
     }
     String defaultType;
     switch (schema.type()) {
@@ -1537,6 +1546,9 @@ public class ProtobufData {
             break;
           case PROTOBUF_TIMESTAMP_TYPE:
             builder = Timestamp.builder();
+            break;
+          case PROTOBUF_VARIANT_TYPE:
+            builder = ConnectVariant.builder();
             break;
           default:
             builder = toUnwrappedOrStructSchema(ctx, descriptor);
