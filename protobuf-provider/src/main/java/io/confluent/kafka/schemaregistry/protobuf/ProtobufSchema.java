@@ -142,6 +142,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
+import io.confluent.protobuf.type.VariantProto;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -261,6 +262,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String CFLT_META_LOCATION = "confluent/meta.proto";
   public static final String CFLT_DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String CFLT_VARIANT_LOCATION = "confluent/type/variant.proto";
   public static final String CALENDAR_PERIOD_LOCATION = "google/type/calendar_period.proto";
   public static final String COLOR_LOCATION = "google/type/color.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
@@ -293,6 +295,8 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(MetaProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement CFLT_DECIMAL_SCHEMA =
       toProtoFile(DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement CFLT_VARIANT_SCHEMA =
+      toProtoFile(VariantProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement CALENDAR_PERIOD_SCHEMA =
       toProtoFile(CalendarPeriodProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement COLOR_SCHEMA =
@@ -355,10 +359,12 @@ public class ProtobufSchema implements ParsedSchema {
     EXTENSION_REGISTRY = ExtensionRegistry.newInstance();
     DecimalProto.registerAllExtensions(EXTENSION_REGISTRY);
     MetaProto.registerAllExtensions(EXTENSION_REGISTRY);
+    VariantProto.registerAllExtensions(EXTENSION_REGISTRY);
 
     KNOWN_DEPENDENCIES = new HashMap<>();
     KNOWN_DEPENDENCIES.put(CFLT_META_LOCATION, CFLT_META_SCHEMA);
     KNOWN_DEPENDENCIES.put(CFLT_DECIMAL_LOCATION, CFLT_DECIMAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(CFLT_VARIANT_LOCATION, CFLT_VARIANT_SCHEMA);
     KNOWN_DEPENDENCIES.put(CALENDAR_PERIOD_LOCATION, CALENDAR_PERIOD_SCHEMA);
     KNOWN_DEPENDENCIES.put(COLOR_LOCATION, COLOR_SCHEMA);
     KNOWN_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
