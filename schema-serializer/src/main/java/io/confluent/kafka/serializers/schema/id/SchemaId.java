@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.ByteUtils;
 
 /**
  * A {@link SchemaId} is used to identify a schema. It can be either an ID or a GUID.
