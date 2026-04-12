@@ -32,6 +32,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
+import io.confluent.connect.schema.ConnectVariant;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -54,6 +55,7 @@ import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConstSchema;
+import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -103,6 +105,7 @@ public class JsonSchemaData {
   public static final String CONNECT_TYPE_FLOAT64 = "float64";
   public static final String CONNECT_TYPE_BYTES = "bytes";
   public static final String CONNECT_TYPE_MAP = "map";
+  public static final String CONNECT_TYPE_VARIANT = "variant";
 
   public static final String DEFAULT_ID_PREFIX = "#id";
   public static final String JSON_ID_PROP = NAMESPACE + ".Id";
@@ -343,6 +346,14 @@ public class JsonSchemaData {
       }
       return Timestamp.toLogical(schema, value.longValue());
     });
+
+    TO_CONNECT_LOGICAL_CONVERTERS.put(ConnectVariant.LOGICAL_NAME, (schema, value) -> {
+      if (value == null) {
+        throw new DataException("Invalid type for Variant, "
+            + "underlying representation should not be null");
+      }
+      return ConnectVariant.toLogical(schema, value);
+    });
   }
 
   private static final HashMap<String, ConnectToJsonLogicalTypeConverter>
@@ -388,6 +399,14 @@ public class JsonSchemaData {
       }
       return JSON_NODE_FACTORY.numberNode(
           Timestamp.fromLogical(schema, (java.util.Date) value));
+    });
+
+    TO_JSON_LOGICAL_CONVERTERS.put(ConnectVariant.LOGICAL_NAME, (schema, value, config) -> {
+      if (!(value instanceof Struct)) {
+        throw new DataException("Invalid type for Variant, "
+            + "expected Struct but was " + value.getClass());
+      }
+      return ConnectVariant.fromLogical(schema, (Struct) value);
     });
   }
 
@@ -771,7 +790,10 @@ public class JsonSchemaData {
         }
         break;
       case STRUCT:
-        if (isUnionSchema(schema)) {
+        if (ConnectVariant.isVariant(schema)) {
+          builder = EmptySchema.builder();
+          unprocessedProps.put(CONNECT_TYPE_PROP, CONNECT_TYPE_VARIANT);
+        } else if (isUnionSchema(schema)) {
           CombinedSchema.Builder combinedBuilder = CombinedSchema.builder();
           combinedBuilder.criterion(CombinedSchema.ONE_CRITERION);
           if (schema.isOptional()) {
@@ -1093,6 +1115,13 @@ public class JsonSchemaData {
         );
       } else {
         builder = SchemaBuilder.array(toConnectSchema(ctx, itemsSchema));
+      }
+    } else if (jsonSchema instanceof EmptySchema) {
+      String type = (String) jsonSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
+      if (CONNECT_TYPE_VARIANT.equals(type)) {
+        builder = ConnectVariant.builder();
+      } else {
+        throw new DataException("Unsupported empty schema without variant type");
       }
     } else if (jsonSchema instanceof ObjectSchema) {
       ObjectSchema objectSchema = (ObjectSchema) jsonSchema;
