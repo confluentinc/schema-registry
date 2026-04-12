@@ -28,13 +28,13 @@
               files="(.*).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractKafkaAvroSerializer|AbstractKafkaAvroDeserializer|AbstractKafkaJsonSchemaSerializer|AbstractKafkaJsonSchemaDeserializer|AbstractKafkaProtobufSerializer|AbstractKafkaProtobufDeserializer|AbstractKafkaSchemaSerDe|AvroData|AvroSchema|AvroSchemaUtils|ProtobufData|SchemaDiff|NumberSchemaDiff|JsonSchema|JsonSchemaData|KafkaSchemaRegistry|KafkaStoreReaderThread|ProtobufSchema|ProtobufSchemaUtils|JsonSchemaComparator|SchemaMessageFormatter|SchemaMessageReader|SchemaTranslator|SubjectVersionsResource|CachedSchemaRegistryClient|Association|AssociationKey).java"/>
+              files="(.*).java"/>
 
     <suppress checks="MethodLength"
               files="(AvroData|ProtobufSchema|ProtobufSchemaUtils).java"/>
 
     <suppress checks="AbbreviationAsWordInName"
-              files="(.*SchemaRegistryClient|JSON.*).java"/>
+              files="(.*SchemaRegistryClient|JSON.*|Variant.*).java"/>
 
     <suppress checks="MethodLength"
               files="(KafkaSchemaRegistry|SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
@@ -46,6 +46,6 @@
               files="(DynamicSchema|EnumDefinition|FieldDefinition|MessageDefinition|ServiceDefinition).java"/>
 
     <suppress checks="[a-zA-Z0-9]*"
-              files="(BoundedConcurrentHashMap|DecimalOrBuilder|DecimalProto|Decimal|MetaProto).java"/>
+              files="(BoundedConcurrentHashMap|DecimalOrBuilder|DecimalProto|Decimal|MetaProto|VariantOrBuilder|VariantProto|Variant).java"/>
 
 </suppressions>
