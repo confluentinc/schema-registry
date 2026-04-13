@@ -77,7 +77,15 @@ public abstract class MetadataEncoderService implements Closeable {
 
   public MetadataEncoderService(SchemaRegistry schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
-    this.encoderSecret = encoderSecret(schemaRegistry.config());
+    String secret = encoderSecret(schemaRegistry.config());
+    boolean strictValidation = schemaRegistry.config().getBoolean(
+        SchemaRegistryConfig.METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG);
+    if (secret != null && strictValidation && secret.isEmpty()) {
+      log.warn("Encoder secret is empty and strict validation is enabled, "
+          + "treating as missing");
+      secret = null;
+    }
+    this.encoderSecret = secret;
     if (encoderSecret == null) {
       log.warn("No value specified for {}, sensitive metadata will not be encoded",
           SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG);
