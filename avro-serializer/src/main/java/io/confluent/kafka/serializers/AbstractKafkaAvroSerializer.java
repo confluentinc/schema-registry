@@ -97,11 +97,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected byte[] serializeImpl(String subject, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
-    return serializeImpl(subject, null, null, object, schema);
+    return serializeImpl(subject, null, null, null, object, schema);
   }
 
   protected byte[] serializeImpl(
-      String subject, String topic, Headers headers, Object object, AvroSchema schema)
+      String subject, String topic, Boolean key, Headers headers,
+      Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       StringBuilder userFriendlyMsgBuilder = new StringBuilder();
@@ -117,6 +118,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
       SchemaId schemaId;

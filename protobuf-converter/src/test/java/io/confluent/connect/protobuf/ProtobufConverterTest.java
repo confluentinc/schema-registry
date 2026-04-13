@@ -57,6 +57,10 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
 import io.confluent.kafka.serializers.protobuf.test.TestMessageProtos.TestMessage;
 import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
@@ -66,6 +70,8 @@ import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -1455,5 +1461,63 @@ public class ProtobufConverterTest {
     byte[] result = Arrays.copyOf(first, first.length + second.length);
     System.arraycopy(second, 0, result, first.length, second.length);
     return result;
+  }
+
+  @Test
+  public void testHeaderSchemaIdSerializerForKey() {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new ProtobufSchemaProvider()));
+    ProtobufConverter keyConverter = new ProtobufConverter(schemaRegistry);
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "http://fake-url");
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_DESERIALIZER,
+        "io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer");
+    keyConverter.configure(config, true);
+
+    Schema schema = getTestMessageSchema();
+    Struct value = getTestMessageStruct(TEST_MSG_STRING, 123);
+
+    Headers headers = new RecordHeaders();
+    byte[] serialized = keyConverter.fromConnectData(TOPIC, headers, schema, value);
+
+    // Verify schema ID is in the key header, not in the payload prefix
+    assertNotNull(serialized);
+    assertNotNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
+
+    // Verify round-trip
+    SchemaAndValue result = keyConverter.toConnectData(TOPIC, headers, serialized);
+    assertEquals(TEST_MSG_STRING, ((Struct) result.value()).get("test_string"));
+  }
+
+  @Test
+  public void testHeaderSchemaIdSerializerForValue() {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient(
+        ImmutableList.of(new ProtobufSchemaProvider()));
+    ProtobufConverter valueConverter = new ProtobufConverter(schemaRegistry);
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "http://fake-url");
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_DESERIALIZER,
+        "io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer");
+    valueConverter.configure(config, false);
+
+    Schema schema = getTestMessageSchema();
+    Struct value = getTestMessageStruct(TEST_MSG_STRING, 123);
+
+    Headers headers = new RecordHeaders();
+    byte[] serialized = valueConverter.fromConnectData(TOPIC, headers, schema, value);
+
+    // Verify schema ID is in the value header, not in the payload prefix
+    assertNotNull(serialized);
+    assertNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNotNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
+
+    // Verify round-trip
+    SchemaAndValue result = valueConverter.toConnectData(TOPIC, headers, serialized);
+    assertEquals(TEST_MSG_STRING, ((Struct) result.value()).get("test_string"));
   }
 }

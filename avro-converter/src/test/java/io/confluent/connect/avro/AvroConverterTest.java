@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
@@ -50,6 +51,11 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
+
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertArrayEquals;
@@ -536,5 +542,65 @@ public class AvroConverterTest {
     }
 
     converter.toConnectData(TOPIC, valueBytes);
+  }
+
+  @Test
+  public void testHeaderSchemaIdSerializerForKey() {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter keyConverter = new AvroConverter(schemaRegistry);
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "http://fake-url");
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_DESERIALIZER,
+        "io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer");
+    keyConverter.configure(config, true);
+
+    Schema schema = SchemaBuilder.struct()
+        .field("key", Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema).put("key", "testKey");
+
+    Headers headers = new RecordHeaders();
+    byte[] serialized = keyConverter.fromConnectData(TOPIC, headers, schema, value);
+
+    // Verify schema ID is in the key header, not in the payload prefix
+    assertNotNull(serialized);
+    assertNotNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
+
+    // Verify round-trip
+    SchemaAndValue result = keyConverter.toConnectData(TOPIC, headers, serialized);
+    assertEquals("testKey", ((Struct) result.value()).get("key"));
+  }
+
+  @Test
+  public void testHeaderSchemaIdSerializerForValue() {
+    SchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    AvroConverter valueConverter = new AvroConverter(schemaRegistry);
+    Map<String, Object> config = new HashMap<>();
+    config.put("schema.registry.url", "http://fake-url");
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_DESERIALIZER,
+        "io.confluent.kafka.serializers.schema.id.DualSchemaIdDeserializer");
+    valueConverter.configure(config, false);
+
+    Schema schema = SchemaBuilder.struct()
+        .field("value", Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema).put("value", "testValue");
+
+    Headers headers = new RecordHeaders();
+    byte[] serialized = valueConverter.fromConnectData(TOPIC, headers, schema, value);
+
+    // Verify schema ID is in the value header, not in the payload prefix
+    assertNotNull(serialized);
+    assertNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNotNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
+
+    // Verify round-trip
+    SchemaAndValue result = valueConverter.toConnectData(TOPIC, headers, serialized);
+    assertEquals("testValue", ((Struct) result.value()).get("value"));
   }
 }

@@ -94,7 +94,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   @SuppressWarnings("unchecked")
   protected byte[] serializeImpl(
-      String subject, String topic, boolean isKey, Headers headers, T object, ProtobufSchema schema
+      String subject, String topic, Boolean key, Headers headers, T object, ProtobufSchema schema
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -109,6 +109,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
       boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;

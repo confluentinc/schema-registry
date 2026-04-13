@@ -162,13 +162,7 @@ public class AvroMessageReader extends SchemaMessageReader<Object> {
         Object object,
         ParsedSchema schema
     ) {
-      boolean oldIsKey = this.isKey;
-      this.isKey = isKey;
-      try {
-        return super.serializeImpl(subject, topic, headers, object, (AvroSchema) schema);
-      } finally {
-        this.isKey = oldIsKey;
-      }
+      return super.serializeImpl(subject, topic, isKey, headers, object, (AvroSchema) schema);
     }
 
     @Override

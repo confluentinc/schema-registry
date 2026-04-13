@@ -114,13 +114,14 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       T object,
       JsonSchema schema
   ) throws SerializationException, InvalidConfigurationException {
-    return serializeImpl(subject, null, null, object, schema);
+    return serializeImpl(subject, null, null, null, object, schema);
   }
 
   @SuppressWarnings("unchecked")
   protected byte[] serializeImpl(
       String subject,
       String topic,
+      Boolean key,
       Headers headers,
       T object,
       JsonSchema schema
@@ -138,6 +139,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
       SchemaId schemaId;

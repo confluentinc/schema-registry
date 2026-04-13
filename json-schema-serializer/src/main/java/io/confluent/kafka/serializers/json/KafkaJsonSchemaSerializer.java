@@ -114,7 +114,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     }
     Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
     return serializeImpl(
-        getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
+        getSubjectName(topic, isKey, value, schema), topic, isKey, headers, (T) value, schema);
   }
 
   @Override
@@ -124,7 +124,7 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     }
     Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
     return serializeImpl(getSubjectName(topic, isKey, value, schema),
-        topic, headers, (T) value, (JsonSchema) schema);
+        topic, isKey, headers, (T) value, (JsonSchema) schema);
   }
 
   private JsonSchema getSchema(T record) {

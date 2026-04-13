@@ -418,7 +418,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   class DeserializationContext {
     private final String topic;
-    private final Boolean isKey;
+    private final boolean isKey;
     private final Headers headers;
     private final byte[] payload;
     private final ByteBuffer buffer;
@@ -426,9 +426,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private String subject;
 
     DeserializationContext(
-        final String topic, final Boolean isKey, Headers headers, final byte[] payload) {
+        final String topic, final Boolean key, Headers headers, final byte[] payload) {
       this.topic = topic;
-      this.isKey = isKey;
+      this.isKey = key != null ? key : AbstractKafkaAvroDeserializer.this.isKey;
       this.headers = headers;
       this.payload = payload;
       SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
@@ -451,10 +451,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaFromRegistry() {
       try {
-        String subjectName = isKey == null || strategyUsesSchema(isKey)
+        String subjectName = strategyUsesSchema(isKey)
             ? getContext() : getSubject();
         AvroSchema schema = (AvroSchema) getSchemaBySchemaId(subjectName, schemaId);
-        if (isKey != null && subjectName == null) {
+        if (subjectName == null) {
           this.subject = subjectName(topic, isKey, schema);
           schema = (AvroSchema) getSchemaBySchemaId(this.subject, schemaId);
         }
@@ -673,10 +673,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
-  private static String getSchemaType(Boolean isKey) {
-    if (isKey == null) {
-      return "unknown";
-    } else if (isKey) {
+  private static String getSchemaType(boolean isKey) {
+    if (isKey) {
       return "key";
     } else {
       return "value";

@@ -124,7 +124,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload,
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
@@ -138,14 +138,15 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       return null;
     }
 
+    boolean isKey = key != null ? key : this.isKey;
     SchemaId schemaId = new SchemaId(JsonSchema.TYPE);
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
       ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
-      String subject = isKey == null || strategyUsesSchema(isKey)
+      String subject = strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
       JsonSchema schema = (JsonSchema) getSchemaBySchemaId(subject, schemaId);
-      if (isKey != null && (subject == null || strategyUsesSchema(isKey))) {
+      if (subject == null || strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
