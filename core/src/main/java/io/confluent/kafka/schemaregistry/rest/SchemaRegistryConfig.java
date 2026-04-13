@@ -272,6 +272,10 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
 
+  public static final String METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG =
+      "metadata.encoder.secret.strict.validation";
+  public static final boolean METADATA_ENCODER_SECRET_STRICT_VALIDATION_DEFAULT = false;
+
   public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
   public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
 
@@ -448,6 +452,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "old secret and re-encrypted using the new secret.";
   protected static final String METADATA_ENCODER_TOPIC_DOC =
       "The durable single partition topic that acts as the durable log for the encoder keysets.";
+  protected static final String METADATA_ENCODER_SECRET_STRICT_VALIDATION_DOC =
+      "When true, treat an empty encoder secret the same as a missing secret (disable the encoder "
+      + "service). This prevents silent data corruption when the secret file is not yet mounted "
+      + "at startup.";
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
@@ -698,6 +706,10 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(METADATA_ENCODER_TOPIC_CONFIG, ConfigDef.Type.STRING, METADATA_ENCODER_TOPIC_DEFAULT,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_TOPIC_DOC
+    )
+    .define(METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN,
+        METADATA_ENCODER_SECRET_STRICT_VALIDATION_DEFAULT,
+        ConfigDef.Importance.LOW, METADATA_ENCODER_SECRET_STRICT_VALIDATION_DOC
     )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
