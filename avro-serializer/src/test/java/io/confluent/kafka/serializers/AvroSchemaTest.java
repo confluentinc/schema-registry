@@ -894,6 +894,45 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testAddFirstTags() {
+    String schemaString = "{\n" +
+      "  \"name\": \"sampleRecord\",\n" +
+      "  \"namespace\": \"com.example.mynamespace\",\n" +
+      "  \"type\": \"record\",\n" +
+      "  \"fields\": [\n" +
+      "    {\n" +
+      "      \"name\": \"my_field1\",\n" +
+      "      \"type\": \"string\",\n" +
+      "      \"confluent:tags\": [ \"EXISTING\" ]\n" +
+      "    }\n" +
+      "  ]\n" +
+      "}\n";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    SchemaEntity fieldEntity = new SchemaEntity(
+        "com.example.mynamespace.sampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD);
+
+    // Use same tag "OVERLAP" in both add and remove, plus "EXISTING" in remove
+    Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(fieldEntity, ImmutableSet.of("OVERLAP", "EXISTING"));
+
+    // addFirst=true: add then remove, so OVERLAP is removed (remove wins)
+    ParsedSchema resultAddFirst = schema.copy(tagsToAdd, tagsToRemove, true);
+    Map<SchemaEntity, Set<String>> expectedAddFirst = new HashMap<>();
+    expectedAddFirst.put(fieldEntity, ImmutableSet.of("NEW"));
+    assertEquals(expectedAddFirst, resultAddFirst.inlineTaggedEntities());
+
+    // addFirst=false: remove then add, so OVERLAP is added (add wins)
+    ParsedSchema resultRemoveFirst = schema.copy(tagsToAdd, tagsToRemove, false);
+    Map<SchemaEntity, Set<String>> expectedRemoveFirst = new HashMap<>();
+    expectedRemoveFirst.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    assertEquals(expectedRemoveFirst, resultRemoveFirst.inlineTaggedEntities());
+  }
+
+  @Test
   public void testComplexAddAndRemoveTags() {
     String schemaString = "[\n" +
       "  \"null\",\n" +
