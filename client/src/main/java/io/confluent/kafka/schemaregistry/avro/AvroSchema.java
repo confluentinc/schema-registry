@@ -207,6 +207,13 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
+    return copy(tagsToAdd, tagsToRemove, true);
+  }
+
+  @Override
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove,
+                           boolean addBeforeRemove) {
     AvroSchema schemaCopy = this.copy();
     JsonNode original;
     try {
@@ -214,7 +221,7 @@ public class AvroSchema implements ParsedSchema {
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-    modifySchemaTags(original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(original, tagsToAdd, tagsToRemove, addBeforeRemove);
     return new AvroSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
@@ -839,7 +846,8 @@ public class AvroSchema implements ParsedSchema {
 
   private void modifySchemaTags(JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap,
+                                boolean addBeforeRemove) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
@@ -848,13 +856,22 @@ public class AvroSchema implements ParsedSchema {
       Set<String> allTags = getInlineTags(nodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        allTags.addAll(tagsToAdd);
-      }
-
       Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
-      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        allTags.removeAll(tagsToRemove);
+
+      if (addBeforeRemove) {
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+      } else {
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
       }
 
       if (allTags.isEmpty()) {

@@ -801,6 +801,43 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testAddBeforeRemoveTags() {
+    String schemaString = "{\n" +
+      "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+      "  \"title\": \"SampleRecord\",\n" +
+      "  \"type\": \"object\",\n" +
+      "  \"properties\": {\n" +
+      "    \"myfield1\": {\n" +
+      "      \"type\": \"string\",\n" +
+      "      \"confluent:tags\": [ \"EXISTING\" ]\n" +
+      "    }\n" +
+      "  }\n" +
+      "}";
+
+    JsonSchema schema = new JsonSchema(schemaString);
+    SchemaEntity fieldEntity = new SchemaEntity("object.myfield1",
+        SchemaEntity.EntityType.SR_FIELD);
+
+    // Use same tag "OVERLAP" in both add and remove, plus "EXISTING" in remove
+    Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(fieldEntity, ImmutableSet.of("OVERLAP", "EXISTING"));
+
+    // addBeforeRemove=true: add then remove, so OVERLAP is removed (remove wins)
+    ParsedSchema resultAddFirst = schema.copy(tagsToAdd, tagsToRemove, true);
+    Map<SchemaEntity, Set<String>> expectedAddFirst = new HashMap<>();
+    expectedAddFirst.put(fieldEntity, ImmutableSet.of("NEW"));
+    assertEquals(expectedAddFirst, resultAddFirst.inlineTaggedEntities());
+
+    // addBeforeRemove=false: remove then add, so OVERLAP is added (add wins)
+    ParsedSchema resultRemoveFirst = schema.copy(tagsToAdd, tagsToRemove, false);
+    Map<SchemaEntity, Set<String>> expectedRemoveFirst = new HashMap<>();
+    expectedRemoveFirst.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    assertEquals(expectedRemoveFirst, resultRemoveFirst.inlineTaggedEntities());
+  }
+
+  @Test
   // https://confluentinc.atlassian.net/browse/DGS-23701
   public void testComparatorWithCircularRef() {
     // Regression test: sorting a CombinedSchema (oneOf) whose subschemas are
