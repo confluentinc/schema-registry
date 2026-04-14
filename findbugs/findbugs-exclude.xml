@@ -138,6 +138,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.type.VariantFormat"/>
+        <Bug pattern="INT_VACUOUS_BIT_OPERATION"/>
+    </Match>
+
+    <Match>
         <Class name="~io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap.*"/>
     </Match>
 
