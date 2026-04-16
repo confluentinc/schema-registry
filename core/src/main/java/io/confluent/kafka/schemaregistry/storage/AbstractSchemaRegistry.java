@@ -1914,6 +1914,65 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     return NO_OP_LOCK;
   }
 
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceName(
+      String resourceName, String resourceNamespace, String resourceType)
+      throws StoreException {
+    String tenant = tenant();
+    String minResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceNamespace(
+      String resourceNamespace, String resourceType) throws StoreException {
+    String tenant = tenant();
+    String minResourceName = String.valueOf(Character.MIN_VALUE);
+    String maxResourceName = String.valueOf(Character.MAX_VALUE);
+    String minResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, minResourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, maxResourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
   // --------------- Association mutation methods ---------------
 
   public AssociationResponse createAssociation(
@@ -2488,35 +2547,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String resourceName, String resourceNamespace,
       String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
       throws SchemaRegistryException {
-    String tenant = tenant();
     List<Association> associations = new ArrayList<>();
     if (resourceName == null) {
       return associations;
     }
-    String minResourceNamespace = resourceNamespace != null
-        && !resourceNamespace.equals(RESOURCE_WILDCARD)
-        ? resourceNamespace
-        : String.valueOf(Character.MIN_VALUE);
-    String maxResourceNamespace = resourceNamespace != null
-        && !resourceNamespace.equals(RESOURCE_WILDCARD)
-        ? resourceNamespace
-        : String.valueOf(Character.MAX_VALUE);
-    String minResourceType = resourceType != null
-        ? resourceType
-        : String.valueOf(Character.MIN_VALUE);
-    String maxResourceType = resourceType != null
-        ? resourceType
-        : String.valueOf(Character.MAX_VALUE);
-    String minAssociationType = String.valueOf(Character.MIN_VALUE);
-    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
-    String minSubject = String.valueOf(Character.MIN_VALUE);
-    String maxSubject = String.valueOf(Character.MAX_VALUE);
-
-    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
-        minResourceType, minAssociationType, minSubject);
-    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
-        maxResourceType, maxAssociationType, maxSubject);
-    try (CloseableIterator<SchemaRegistryValue> iter = store.getAll(key1, key2)) {
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceName(resourceName, resourceNamespace, resourceType)) {
       while (iter.hasNext()) {
         AssociationValue value = (AssociationValue) iter.next();
         if ((associationTypes == null || associationTypes.isEmpty()
@@ -2537,35 +2573,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           String resourceNamespace,
           String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
           throws SchemaRegistryException {
-    String tenant = tenant();
     List<Association> associations = new ArrayList<>();
     if (resourceNamespace == null) {
       return associations;
     }
-    String minResourceName = String.valueOf(Character.MIN_VALUE);
-    String maxResourceName = String.valueOf(Character.MAX_VALUE);
-    String minResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
-            ? resourceNamespace
-            : String.valueOf(Character.MIN_VALUE);
-    String maxResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
-            ? resourceNamespace
-            : String.valueOf(Character.MAX_VALUE);
-    String minResourceType = resourceType != null
-            ? resourceType
-            : String.valueOf(Character.MIN_VALUE);
-    String maxResourceType = resourceType != null
-            ? resourceType
-            : String.valueOf(Character.MAX_VALUE);
-    String minAssociationType = String.valueOf(Character.MIN_VALUE);
-    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
-    String minSubject = String.valueOf(Character.MIN_VALUE);
-    String maxSubject = String.valueOf(Character.MAX_VALUE);
-
-    AssociationKey key1 = new AssociationKey(tenant, minResourceName, minResourceNamespace,
-            minResourceType, minAssociationType, minSubject);
-    AssociationKey key2 = new AssociationKey(tenant, maxResourceName, maxResourceNamespace,
-            maxResourceType, maxAssociationType, maxSubject);
-    try (CloseableIterator<SchemaRegistryValue> iter = store.getAll(key1, key2)) {
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceNamespace(resourceNamespace, resourceType)) {
       while (iter.hasNext()) {
         AssociationValue value = (AssociationValue) iter.next();
         if ((associationTypes == null || associationTypes.isEmpty()
