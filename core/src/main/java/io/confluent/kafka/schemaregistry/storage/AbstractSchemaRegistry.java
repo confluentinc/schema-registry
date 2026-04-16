@@ -25,9 +25,12 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -36,11 +39,32 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
+import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
@@ -59,6 +83,7 @@ import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
+import io.confluent.rest.exceptions.RestServerErrorException;
 import java.util.Comparator;
 import java.util.HashSet;
 import org.apache.kafka.common.config.ConfigDef;
@@ -75,6 +100,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -84,10 +110,26 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
 import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
@@ -106,6 +148,36 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         SslFactory.SslFactoryCreated {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractSchemaRegistry.class);
+
+  protected static final Lock NO_OP_LOCK = new Lock() {
+
+    @Override
+    public void lock() {
+    }
+
+    @Override
+    public void lockInterruptibly() {
+    }
+
+    @Override
+    public boolean tryLock() {
+      return true;
+    }
+
+    @Override
+    public boolean tryLock(long time, TimeUnit unit) {
+      return true;
+    }
+
+    @Override
+    public void unlock() {
+    }
+
+    @Override
+    public java.util.concurrent.locks.Condition newCondition() {
+      throw new UnsupportedOperationException();
+    }
+  };
 
   protected Store<SchemaRegistryKey, SchemaRegistryValue> store;
 
@@ -1820,6 +1892,709 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public void onTruststoreCreated(KeyStore truststore) {
     metricsContainer.emitCertificateExpirationMetric(
             truststore, metricsContainer.getCertificateExpirationTruststore());
+  }
+
+  // --------------- Association hook methods ---------------
+
+  protected void syncBeforeAssociationWrite(String qualifiedSubject)
+      throws SchemaRegistryStoreException {
+  }
+
+  protected void putAssociation(AssociationValue associationValue)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException("putAssociation not implemented");
+  }
+
+  protected void deleteAssociationEntry(Association oldAssociation)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException("deleteAssociationEntry not implemented");
+  }
+
+  protected Lock lockForAssociation(String context) {
+    return NO_OP_LOCK;
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceName(
+      String resourceName, String resourceNamespace, String resourceType)
+      throws StoreException {
+    String tenant = tenant();
+    String minResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceNamespace(
+      String resourceNamespace, String resourceType) throws StoreException {
+    String tenant = tenant();
+    String minResourceName = String.valueOf(Character.MIN_VALUE);
+    String maxResourceName = String.valueOf(Character.MAX_VALUE);
+    String minResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, minResourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, maxResourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  // --------------- Association mutation methods ---------------
+
+  public AssociationResponse createAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociation(context, dryRun, request, true);
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociation(context, dryRun, request, false);
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
+      boolean isCreate)
+      throws SchemaRegistryException {
+    String defaultSubjectPrefix = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
+        + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName() + "-";
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      if (unqualifiedSubject != null) {
+        QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
+        String qualifiedSubject = qs.toQualifiedSubject();
+        if (isReadOnlyMode(qualifiedSubject)) {
+          throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+              + qs.getContext() + " is in read-only mode");
+        }
+
+        info.setSubject(qs.toUnqualifiedSubject());
+
+        syncBeforeAssociationWrite(qualifiedSubject);
+      }
+    }
+
+    Map<String, AssociationCreateOrUpdateInfo> infosByType = new LinkedHashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      if (infosByType.containsKey(associationType)) {
+        throw new IllegalPropertyException(
+            "associationType", "Duplicate association type: " + associationType);
+      }
+      infosByType.put(associationType, info);
+    }
+
+    List<Association> associations = getAssociationsByResourceId(
+        request.getResourceId(), request.getResourceType(),
+        new ArrayList<>(infosByType.keySet()), null);
+
+    Map<String, Association> assocsByType = associations.stream()
+        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    Set<String> assocTypesToSkip = new HashSet<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+
+      if (association == null && !isCreate) {
+        info.applyDefaults(false);
+      }
+
+      String unqualifiedSubject = info.getSubject();
+      String defaultSubject = defaultSubjectPrefix + associationType;
+      if (unqualifiedSubject == null) {
+        if (association != null) {
+          unqualifiedSubject = association.getSubject();
+        } else if (info.getLifecycle() == LifecyclePolicy.STRONG) {
+          unqualifiedSubject = defaultSubject;
+        } else {
+          throw new IllegalPropertyException(
+              "subject", "must be provided for WEAK associations");
+        }
+        info.setSubject(unqualifiedSubject);
+      }
+
+      String qualifiedSubject = unqualifiedSubject != null
+          ? QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject)
+              .toQualifiedSubject()
+          : null;
+
+      LifecyclePolicy effectiveLifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : (association != null ? association.getLifecycle() : null);
+      if (effectiveLifecycle == null) {
+        throw new IllegalPropertyException("lifecycle", "lifecycle must be set");
+      }
+      if (effectiveLifecycle == LifecyclePolicy.WEAK) {
+        if (info.getSchema() != null) {
+          throw new IllegalPropertyException(
+              "lifecycle", "cannot be WEAK when schema is provided");
+        }
+        if (unqualifiedSubject != null && unqualifiedSubject.equals(defaultSubject)) {
+          throw new IllegalPropertyException(
+              "subject", "WEAK associations cannot use subject '" + defaultSubject + "'");
+        }
+      }
+
+      boolean isFrozen = association != null
+          ? association.isFrozen() : Boolean.TRUE.equals(info.getFrozen());
+      if (isFrozen && unqualifiedSubject != null
+          && !unqualifiedSubject.equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "frozen associations must use subject '" + defaultSubject + "'");
+      }
+
+      if (association == null) {
+        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null) {
+          Schema latestSchema = getLatestVersion(qualifiedSubject);
+          if (latestSchema != null) {
+            boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+            if (info.getSchema() == null
+                || latestSchema.getVersion() != 1
+                || lookUpSchemaUnderSubject(qualifiedSubject,
+                    new Schema(qualifiedSubject, info.getSchema()),
+                    normalize, false) == null) {
+              throw new IllegalPropertyException(
+                  "frozen", "cannot create a frozen association when schemas already exist "
+                      + "in the subject");
+            }
+          }
+        }
+        continue;
+      }
+      if (association.isEquivalent(info)) {
+        if (isCreate && info.getSchema() != null) {
+          boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+          Schema oldSchema = lookUpSchemaUnderSubject(
+              qualifiedSubject, new Schema(qualifiedSubject, info.getSchema()), normalize, false);
+          if (oldSchema == null) {
+            throw new AssociationForResourceExistsException(
+                association.getAssociationType(), association.getResourceName());
+          }
+        }
+        assocTypesToSkip.add(info.getAssociationType());
+        continue;
+      }
+      if (isCreate) {
+        throw new AssociationForResourceExistsException(
+            association.getAssociationType(), association.getResourceName());
+      }
+      if (info.getLifecycle() == null && info.getSchema() == null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "at least lifecycle or schema must be provided for update");
+      }
+      if (unqualifiedSubject != null
+          && !association.getSubject().equals(unqualifiedSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "subject of association cannot be changed from '"
+                + association.getSubject() + "' to '" + unqualifiedSubject + "'");
+      }
+      if (association.getLifecycle() == LifecyclePolicy.STRONG
+          && info.getLifecycle() == LifecyclePolicy.WEAK
+          && association.getSubject().equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot change to WEAK when subject matches default format '"
+                + defaultSubject + "'");
+      }
+      if (info.getFrozen() != null && association.isFrozen() != info.getFrozen()) {
+        throw new IllegalPropertyException(
+            "frozen", "frozen attribute of association cannot be changed");
+      }
+      if (association.isFrozen()) {
+        throw new AssociationFrozenException(
+            association.getAssociationType(), association.getSubject());
+      }
+    }
+
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+      if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
+        throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
+      }
+      List<Association> assocsBySubject = getAssociationsBySubject(
+          qualifiedSubject, null, Collections.emptyList(), null).stream()
+          .filter(a -> association == null
+              || !(a.getResourceId().equals(association.getResourceId())
+                   && a.getResourceType().equals(association.getResourceType())
+                   && a.getAssociationType().equals(association.getAssociationType())))
+          .collect(Collectors.toList());
+      LifecyclePolicy lifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : (association != null ? association.getLifecycle() : null);
+      if (lifecycle == null) {
+        throw new IllegalPropertyException("lifecycle", "lifecycle must be set");
+      }
+      switch (lifecycle) {
+        case STRONG:
+          if (!assocsBySubject.isEmpty()) {
+            throw new AssociationForSubjectExistsException(unqualifiedSubject);
+          }
+          break;
+        case WEAK:
+          if (Boolean.TRUE.equals(info.getFrozen())) {
+            throw new IllegalPropertyException(
+                "frozen", "association with lifecycle of WEAK cannot be frozen");
+          }
+          if (assocsBySubject.stream()
+              .anyMatch(assoc -> assoc.getLifecycle() == LifecyclePolicy.STRONG)) {
+            throw new StrongAssociationForSubjectExistsException(unqualifiedSubject);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      RegisterSchemaRequest schema = info.getSchema();
+      if (schema == null) {
+        continue;
+      }
+      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+
+      List<SchemaKey> previousSchemas = new ArrayList<>();
+      getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
+
+      List<String> errorLogs = isCompatible(qualifiedSubject,
+          new Schema(qualifiedSubject, schema), previousSchemas, normalize);
+      if (!errorLogs.isEmpty()) {
+        throw new IncompatibleSchemaException(errorLogs.toString());
+      }
+    }
+
+    if (dryRun) {
+      return new AssociationResponse(
+          request.getResourceName(),
+          request.getResourceNamespace(),
+          request.getResourceId(),
+          request.getResourceType(),
+          Collections.emptyList()
+      );
+    }
+
+    Map<String, Schema> registeredSchemas = new HashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      RegisterSchemaRequest schema = info.getSchema();
+      if (schema == null) {
+        continue;
+      }
+      Mode subjectMode = getModeInScope(qualifiedSubject);
+      if (subjectMode == Mode.IMPORT) {
+        continue;
+      }
+      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+      Schema registeredSchema = register(qualifiedSubject,
+          new Schema(qualifiedSubject, schema), normalize, false);
+      registeredSchemas.put(associationType, registeredSchema);
+    }
+
+    List<AssociationValue> associationValues =
+        AssociationValue.fromAssociationCreateOrUpdateRequest(
+            tenant(), request, associations, assocTypesToSkip);
+    for (AssociationValue associationValue : associationValues) {
+      putAssociation(associationValue);
+    }
+    return Association.toAssociationResponse(
+        request.getResourceName(), request.getResourceNamespace(),
+        request.getResourceId(), request.getResourceType(),
+        associationValues.stream()
+            .map(AssociationValue::toAssociationEntity)
+            .collect(Collectors.toList()),
+        registeredSchemas);
+  }
+
+  protected void checkDeleteAssociation(
+      Association oldAssociation, boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    String unqualifiedSubject = oldAssociation.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (isReadOnlyMode(qualifiedSubject)) {
+      throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+          + qs.getContext() + " is in read-only mode");
+    }
+
+    if (!cascadeLifecycle && oldAssociation.isFrozen()) {
+      throw new AssociationFrozenException(
+          oldAssociation.getAssociationType(), oldAssociation.getSubject());
+    }
+  }
+
+  public void deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceId(resourceId,
+        resourceType, associationTypes, null);
+    for (Association association : associations) {
+      checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    if (dryRun) {
+      return;
+    }
+    for (Association association : associations) {
+      deleteAssociationEntry(association);
+      String unqualifiedSubject = association.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      Mode subjectMode = getModeInScope(qualifiedSubject);
+      if (subjectMode != Mode.IMPORT
+          && cascadeLifecycle
+          && association.getLifecycle() == LifecyclePolicy.STRONG) {
+        deleteSubject(qualifiedSubject, false);
+        deleteSubject(qualifiedSubject, true);
+      }
+    }
+  }
+
+  private void collectSchemas(AssociationResponse response, Map<String, Schema> schemas) {
+    if (response != null && response.getAssociations() != null) {
+      for (AssociationInfo info : response.getAssociations()) {
+        if (info.getSchema() != null) {
+          schemas.put(info.getAssociationType(), info.getSchema());
+        }
+      }
+    }
+  }
+
+  public AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws SchemaRegistryException {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationGetRequest query : request.getRequests()) {
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        String resourceName = query.getResourceName();
+        String resourceNamespace = query.getResourceNamespace();
+        String resourceId = query.getResourceId();
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
+        if (!associations.isEmpty()) {
+          Association first = associations.get(0);
+          if (resourceName == null) {
+            resourceName = first.getResourceName();
+          }
+          if (resourceNamespace == null) {
+            resourceNamespace = first.getResourceNamespace();
+          }
+          if (resourceId == null) {
+            resourceId = first.getResourceId();
+          }
+        }
+        Map<String, Schema> schemas = Collections.emptyMap();
+        if (includeSchemas) {
+          schemas = new HashMap<>();
+          for (Association association : associations) {
+            String qualifiedSubject = QualifiedSubject.createFromUnqualified(
+                tenant(), association.getSubject()).toQualifiedSubject();
+            Schema schema = getLatestVersion(qualifiedSubject);
+            if (schema != null) {
+              schemas.put(association.getAssociationType(), schema);
+            }
+          }
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                resourceName, resourceNamespace,
+                resourceId, resourceType,
+                associations, schemas)));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while getting associations: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
+  public AssociationBatchResponse mutateAssociations(
+      String context, boolean dryRun, AssociationBatchRequest request) {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        results.add(new AssociationResult(req.getError(), null));
+        continue;
+      }
+      Lock lock = lockForAssociation(context);
+      lock.lock();
+      try {
+        req.validate(dryRun);
+        Map<String, Schema> schemas = new HashMap<>();
+        for (AssociationOp op : req.getAssociations()) {
+          switch (op.getType()) {
+            case CREATE:
+              AssociationResponse createResp = createAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
+              collectSchemas(createResp, schemas);
+              break;
+            case UPSERT:
+              AssociationResponse upsertResp = createOrUpdateAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
+              collectSchemas(upsertResp, schemas);
+              break;
+            case DELETE:
+              AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
+              deleteAssociations(
+                  req.getResourceId(),
+                  req.getResourceType(),
+                  Collections.singletonList(deleteOp.getAssociationType()),
+                  Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
+              );
+              break;
+            default:
+              break;
+          }
+        }
+        List<Association> associations = null;
+        if (!dryRun) {
+          associations = getAssociationsByResourceId(
+              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                req.getResourceName(), req.getResourceNamespace(),
+                req.getResourceId(), req.getResourceType(),
+                associations, schemas)));
+      } catch (IllegalPropertyException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForResourceExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getResource()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationFrozenException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FROZEN_ERROR_CODE,
+            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getSubject()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (NoActiveSubjectVersionExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
+            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
+                e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (StrongAssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (TooManyAssociationsException e) {
+        // TODO maxKeys
+        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+      } catch (InvalidSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (SchemaTooLargeException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            SCHEMA_TOO_LARGE_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (IncompatibleSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INCOMPATIBLE_SCHEMA_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while creating association: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } finally {
+        lock.unlock();
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
+  // --------------- Association query methods ---------------
+
+  public Association getAssociationByGuid(String guid)
+      throws SchemaRegistryException {
+    try {
+      AssociationValue associationValue = lookupCache.associationByGuid(guid);
+      return associationValue != null ? associationValue.toAssociationEntity() : null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting association for guid '"
+          + guid + "' in the backend store", e);
+    }
+  }
+
+  public List<Association> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (subject == null) {
+      return associations;
+    }
+    try (CloseableIterator<AssociationValue> iter = lookupCache.associationsBySubject(subject)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for subject '"
+          + subject + "' in the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceId == null) {
+      return associations;
+    }
+    try (CloseableIterator<AssociationValue> iter =
+        lookupCache.associationsByResourceId(resourceId)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for resource id '"
+          + resourceId + "' in the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceName == null) {
+      return associations;
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceName(resourceName, resourceNamespace, resourceType)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving associations from the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceNamespace(
+          String resourceNamespace,
+          String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+          throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceNamespace == null) {
+      return associations;
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceNamespace(resourceNamespace, resourceType)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+                || associationTypes.contains(value.getAssociationType()))
+                && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)
+                && (resourceNamespace.equals(RESOURCE_WILDCARD)
+                || value.getResourceNamespace().equals(resourceNamespace))) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving associations from the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
   }
 
   /**
