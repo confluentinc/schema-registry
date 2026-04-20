@@ -36,6 +36,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -1948,6 +1949,178 @@ public class JsonSchemaTest {
     protected Map<URI, String> getPrepopulatedMappings() {
       return mappings;
     }
+  }
+
+  /**
+   * Test for lenient policy with allOf + $ref composition (CloudEvents envelope pattern).
+   * This reproduces the customer scenario where adding optional properties to an open
+   * content model within an allOf composition should be compatible under lenient policy.
+   *
+   * Bug: Before the fix, CombinedSchemaDiff would check subschema compatibility using
+   * COMPATIBLE_CHANGES_STRICT even when lenient policy was configured, causing
+   * COMBINED_TYPE_SUBSCHEMAS_CHANGED to be thrown incorrectly.
+   */
+  @Test
+  public void testLenientPolicyWithAllOfAndReferences() {
+    // CloudEvents envelope schema (referenced schema)
+    String envelopeSchema = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema#\",\n"
+        + "  \"$id\": \"https://schemas.example.com/cloudevents/v1/envelope.json\",\n"
+        + "  \"description\": \"CloudEvents Envelope\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"id\": {\"type\": \"string\", \"minLength\": 1},\n"
+        + "    \"source\": {\"type\": \"string\", \"format\": \"uri-reference\", \"minLength\": 1},\n"
+        + "    \"specversion\": {\"type\": \"string\", \"minLength\": 1},\n"
+        + "    \"type\": {\"type\": \"string\", \"minLength\": 1},\n"
+        + "    \"data\": {\"type\": [\"object\", \"string\", \"number\", \"array\", \"boolean\", \"null\"]}\n"
+        + "  },\n"
+        + "  \"required\": [\"id\", \"source\", \"specversion\", \"type\"]\n"
+        + "}";
+
+    // Original checkout schema - allOf composition with open content model on data
+    String originalCheckoutSchema = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"$id\": \"https://schemas.example.com/checkout/v1.json\",\n"
+        + "  \"title\": \"CartCheckout\",\n"
+        + "  \"description\": \"Checkout event.\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"$ref\": \"https://schemas.example.com/cloudevents/v1/envelope.json\"},\n"
+        + "    {\n"
+        + "      \"properties\": {\n"
+        + "        \"data\": {\"$ref\": \"#/$defs/data\"}\n"
+        + "      },\n"
+        + "      \"required\": [\"data\"],\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  ],\n"
+        + "  \"$defs\": {\n"
+        + "    \"data\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"properties\": {\n"
+        + "        \"id\": {\"type\": \"string\", \"format\": \"binary\"},\n"
+        + "        \"payment_instruction_id\": {\"type\": \"string\", \"format\": \"binary\"},\n"
+        + "        \"status\": {\"type\": \"string\"},\n"
+        + "        \"items\": {\"type\": \"string\", \"format\": \"binary\"},\n"
+        + "        \"created_at\": {\"type\": \"string\", \"format\": \"date-time\"},\n"
+        + "        \"updated_at\": {\"type\": \"string\", \"format\": \"date-time\"}\n"
+        + "      },\n"
+        + "      \"required\": [\"id\", \"payment_instruction_id\", \"status\", \"items\", \"created_at\", \"updated_at\"]\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+
+    // Updated checkout schema - adds optional properties to open content model
+    String updatedCheckoutSchema = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"$id\": \"https://schemas.example.com/checkout/v1.json\",\n"
+        + "  \"title\": \"CartCheckout\",\n"
+        + "  \"description\": \"Checkout event.\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"$ref\": \"https://schemas.example.com/cloudevents/v1/envelope.json\"},\n"
+        + "    {\n"
+        + "      \"properties\": {\n"
+        + "        \"data\": {\"$ref\": \"#/$defs/data\"}\n"
+        + "      },\n"
+        + "      \"required\": [\"data\"],\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  ],\n"
+        + "  \"$defs\": {\n"
+        + "    \"data\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"properties\": {\n"
+        + "        \"id\": {\"type\": \"string\", \"format\": \"binary\"},\n"
+        + "        \"payment_instruction_id\": {\"type\": \"string\", \"format\": \"binary\"},\n"
+        + "        \"status\": {\"type\": \"string\"},\n"
+        + "        \"items\": {\"type\": \"string\", \"format\": \"binary\"},\n"
+        + "        \"created_at\": {\"type\": \"string\", \"format\": \"date-time\"},\n"
+        + "        \"updated_at\": {\"type\": \"string\", \"format\": \"date-time\"},\n"
+        + "        \"company_code\": {\"type\": \"string\"},\n"
+        + "        \"branch_code\": {\"type\": \"string\"}\n"
+        + "      },\n"
+        + "      \"required\": [\"id\", \"payment_instruction_id\", \"status\", \"items\", \"created_at\", \"updated_at\"]\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+
+    // Setup references
+    Map<String, String> resolvedReferences = new HashMap<>();
+    resolvedReferences.put("https://schemas.example.com/cloudevents/v1/envelope.json", envelopeSchema);
+
+    List<SchemaReference> references = Collections.singletonList(
+        new SchemaReference("https://schemas.example.com/cloudevents/v1/envelope.json",
+                           "cloudevents.v1.envelope", 1));
+
+    JsonSchema originalSchema = new JsonSchema(
+        originalCheckoutSchema,
+        references,
+        resolvedReferences,
+        null,
+        null,
+        1);
+
+    JsonSchema updatedSchema = new JsonSchema(
+        updatedCheckoutSchema,
+        references,
+        resolvedReferences,
+        null,
+        null,
+        2);
+
+    // Test with STRICT policy - should fail
+    List<String> strictErrors = updatedSchema.isBackwardCompatible(
+        CompatibilityPolicy.STRICT, originalSchema);
+    assertFalse("Strict policy should reject adding properties to open content model in allOf",
+                strictErrors.isEmpty());
+    assertTrue("Should contain PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL or COMBINED_TYPE_SUBSCHEMAS_CHANGED",
+               strictErrors.stream().anyMatch(
+                   e -> e.contains("PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL")
+                     || e.contains("COMBINED_TYPE_SUBSCHEMAS_CHANGED")));
+
+    // Test with LENIENT policy - should succeed (this is the bug fix)
+    List<String> lenientErrors = updatedSchema.isBackwardCompatible(
+        CompatibilityPolicy.LENIENT, originalSchema);
+    assertTrue("Lenient policy should allow adding optional properties to open content model in allOf. Errors: "
+               + lenientErrors,
+               lenientErrors.isEmpty());
+  }
+
+  /**
+   * Additional test: lenient policy with simple allOf (no references)
+   */
+  @Test
+  public void testLenientPolicyWithSimpleAllOf() {
+    String originalSchema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]},\n"
+        + "    {\"properties\": {\"age\": {\"type\": \"number\"}}}\n"
+        + "  ]\n"
+        + "}";
+
+    // Add optional property to open content model in second subschema
+    String updatedSchema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]},\n"
+        + "    {\"properties\": {\"age\": {\"type\": \"number\"}, \"email\": {\"type\": \"string\"}}}\n"
+        + "  ]\n"
+        + "}";
+
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+
+    // Strict should reject
+    List<String> strictErrors = updated.isBackwardCompatible(CompatibilityPolicy.STRICT, original);
+    assertFalse("Strict policy should reject", strictErrors.isEmpty());
+
+    // Lenient should allow
+    List<String> lenientErrors = updated.isBackwardCompatible(CompatibilityPolicy.LENIENT, original);
+    assertTrue("Lenient policy should allow adding optional properties. Errors: " + lenientErrors,
+               lenientErrors.isEmpty());
   }
 
   static class TestObj {
