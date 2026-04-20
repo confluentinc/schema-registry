@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.avro.type.VariantConversion;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -91,6 +92,7 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
+    LogicalTypes.register(VariantLogicalType.NAME, schema -> VariantLogicalType.get());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
@@ -586,11 +588,6 @@ public class AvroSchemaUtils {
           o.append("]");
         } else if (st == Schema.Type.FIXED) {
           o.append(",\"size\":").append(Integer.toString(s.getFixedSize()));
-          lt = s.getLogicalType();
-          // adding the logical property
-          if (lt != null) {
-            setLogicalProps(o, lt);
-          }
         } else { // st == Schema.Type.RECORD
           o.append(",\"fields\":[");
           for (Schema.Field f : s.getFields()) {
@@ -605,6 +602,9 @@ public class AvroSchemaUtils {
             o.append("}");
           }
           o.append("]");
+        }
+        if (lt != null) {
+          setLogicalProps(o, lt);
         }
         setComplexProps(o, s);
         setSimpleProps(o, s.getObjectProps());

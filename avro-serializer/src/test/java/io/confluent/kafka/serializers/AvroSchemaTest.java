@@ -31,6 +31,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -1358,6 +1359,31 @@ public class AvroSchemaTest {
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+  }
+
+
+  @Test
+  public void testVariantLogicalTypeParse() {
+    AvroSchemaUtils.getGenericData(); // ensure static block fires
+    String json = "{\"type\":\"record\",\"name\":\"x\","
+        + "\"fields\":["
+        + "{\"name\":\"metadata\",\"type\":\"bytes\"},"
+        + "{\"name\":\"value\",\"type\":\"bytes\"}],"
+        + "\"logicalType\":\"variant\"}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+    org.apache.avro.LogicalType lt = parsed.getLogicalType();
+    assertNotNull(
+        "Parsing a record schema with \"logicalType\":\"variant\" must "
+            + "reattach a VariantLogicalType instance — without registration, "
+            + "Avro's parser ignores the prop.",
+        lt);
+    assertEquals(VariantLogicalType.NAME, lt.getName());
+
+    AvroSchema schema = new AvroSchema(parsed).normalize();
+    parsed = schema.rawSchema();
+    lt = parsed.getLogicalType();
+    assertNotNull(lt);
+    assertEquals(VariantLogicalType.NAME, lt.getName());
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
