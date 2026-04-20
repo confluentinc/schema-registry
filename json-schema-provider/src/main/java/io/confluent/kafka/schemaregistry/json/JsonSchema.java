@@ -740,8 +740,10 @@ public class JsonSchema implements ParsedSchema {
     Set<Difference.Type> compatibleChanges = policy == CompatibilityPolicy.LENIENT
         ? SchemaDiff.COMPATIBLE_CHANGES_LENIENT
         : SchemaDiff.COMPATIBLE_CHANGES_STRICT;
-    final List<Difference> differences =
-        SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+    final List<Difference> differences = SchemaDiff.compare(
+        compatibleChanges,
+        ((JsonSchema) previousSchema).rawSchema(),
+        rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
         .filter(diff -> !compatibleChanges.contains(diff.getType()))
         .collect(Collectors.toList());
