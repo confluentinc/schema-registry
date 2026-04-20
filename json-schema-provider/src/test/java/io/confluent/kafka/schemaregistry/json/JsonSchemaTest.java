@@ -36,6 +36,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -1948,6 +1949,38 @@ public class JsonSchemaTest {
     protected Map<URI, String> getPrepopulatedMappings() {
       return mappings;
     }
+  }
+
+  @Test
+  public void testLenientPolicyWithSimpleAllOf() {
+    String originalSchema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]},\n"
+        + "    {\"properties\": {\"age\": {\"type\": \"number\"}}}\n"
+        + "  ]\n"
+        + "}";
+
+    // Add optional property to open content model in second subschema
+    String updatedSchema = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"allOf\": [\n"
+        + "    {\"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]},\n"
+        + "    {\"properties\": {\"age\": {\"type\": \"number\"}, \"email\": {\"type\": \"string\"}}}\n"
+        + "  ]\n"
+        + "}";
+
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+
+    // Strict should reject
+    List<String> strictErrors = updated.isBackwardCompatible(CompatibilityPolicy.STRICT, original);
+    assertFalse("Strict policy should reject", strictErrors.isEmpty());
+
+    // Lenient should allow
+    List<String> lenientErrors = updated.isBackwardCompatible(CompatibilityPolicy.LENIENT, original);
+    assertTrue("Lenient policy should allow adding optional properties. Errors: " + lenientErrors,
+               lenientErrors.isEmpty());
   }
 
   static class TestObj {
