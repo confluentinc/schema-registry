@@ -52,6 +52,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected Class<T> type;
   protected String typeProperty;
+  protected List<String> allowedTypePackages = Collections.singletonList("*");
   protected boolean validate;
 
   /**
@@ -70,6 +71,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     );
     this.validate = config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
+    this.allowedTypePackages =
+        config.getList(KafkaJsonSchemaDeserializerConfig.TYPE_ALLOWED_PACKAGES);
   }
 
   protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -266,6 +269,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   private Object deriveType(
       ByteBuffer buffer, int length, int start, String typeName
   ) throws IOException {
+    checkTypeAllowed(typeName);
+    if (!isJsonContainerPayload(buffer.array(), start, length)) {
+      throw new SerializationException("Refusing to resolve javaType " + typeName
+          + " for non-object/array JSON payload");
+    }
     try {
       Class<?> cls = Class.forName(typeName);
       return objectMapper.readValue(buffer.array(), start, length, cls);
@@ -275,12 +283,46 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private Object deriveType(JsonNode jsonNode, String typeName) throws IOException {
+    checkTypeAllowed(typeName);
+    if (!jsonNode.isContainerNode()) {
+      throw new SerializationException("Refusing to resolve javaType " + typeName
+          + " for non-object/array JSON payload");
+    }
     try {
       Class<?> cls = Class.forName(typeName);
       return objectMapper.convertValue(jsonNode, cls);
     } catch (ClassNotFoundException e) {
       throw new SerializationException("Class " + typeName + " could not be found.");
     }
+  }
+
+  private void checkTypeAllowed(String typeName) {
+    if (allowedTypePackages == null || allowedTypePackages.isEmpty()) {
+      throw new SerializationException("javaType resolution is disabled "
+          + "(json.type.allowed.packages is empty); refusing to load class " + typeName);
+    }
+    for (String pkg : allowedTypePackages) {
+      if (pkg.isEmpty()) {
+        continue;
+      }
+      if ("*".equals(pkg) || typeName.startsWith(pkg)) {
+        return;
+      }
+    }
+    throw new SerializationException(
+        "Class " + typeName + " is not in json.type.allowed.packages");
+  }
+
+  private static boolean isJsonContainerPayload(byte[] arr, int start, int length) {
+    int end = start + length;
+    for (int i = start; i < end; i++) {
+      byte b = arr[i];
+      if (b == ' ' || b == '\t' || b == '\n' || b == '\r') {
+        continue;
+      }
+      return b == '{' || b == '[';
+    }
+    return false;
   }
 
   private Integer schemaVersion(
