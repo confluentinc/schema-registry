@@ -121,6 +121,14 @@ public class AvroSchema implements ParsedSchema {
       parser.parse(schema);
     }
     this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
+    if (!isNew) {
+      // For new schemas, strict validation is already applied.
+      // For non-new schemas, validation is skipped.
+      // The NO_VALIDATION parser path skips both name and namespace checks;
+      // we still want strict name validation for non-new schemas, so apply it
+      // here on the main schema only (references are already-registered schemas).
+      AvroSchemaUtils.validateNames(this.schemaObj);
+    }
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = metadata;
