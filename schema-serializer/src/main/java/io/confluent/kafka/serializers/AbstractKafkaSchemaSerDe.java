@@ -777,7 +777,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
               message = result;
               break;
             default:
-              throw new IllegalStateException("Unsupported rule kind " + rule.getKind());
+              throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
           runAction(ctx, ruleMode, rule,
               message != null ? getOnSuccess(rule) : getOnFailure(rule),
@@ -921,7 +921,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
         case DOWNGRADE:
           return parts[1];
         default:
-          throw new IllegalStateException("Unsupported rule mode " + ruleMode);
+          throw new IllegalArgumentException("Unsupported rule mode " + ruleMode);
       }
     } else {
       return actionName;

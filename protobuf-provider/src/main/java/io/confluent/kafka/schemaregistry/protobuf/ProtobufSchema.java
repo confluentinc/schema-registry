@@ -466,7 +466,7 @@ public class ProtobufSchema implements ParsedSchema {
           )));
       this.metadata = metadata;
       this.ruleSet = ruleSet;
-    } catch (IllegalStateException e) {
+    } catch (IllegalArgumentException | IllegalStateException e) {
       log.error("Could not parse Protobuf schema", e);
       throw e;
     }
@@ -669,7 +669,7 @@ public class ProtobufSchema implements ParsedSchema {
         schemaCopy.name()
       );
     } catch (JsonProcessingException e) {
-      throw new IllegalStateException("Cannot deserialize json into ProtoFileElement", e);
+      throw new IllegalArgumentException("Cannot deserialize json into ProtoFileElement", e);
     }
   }
 
@@ -1705,7 +1705,8 @@ public class ProtobufSchema implements ParsedSchema {
       cache.put(name, dynamicSchema);
       return dynamicSchema;
     } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalArgumentException(
+          "Invalid protobuf schema definition: " + e.getMessage(), e);
     }
   }
 
@@ -1925,7 +1926,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static Declaration toDeclaration(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     Declaration.Builder builder = Declaration.newBuilder();
@@ -1954,7 +1955,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static FeatureSet toFeatures(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     FeatureSet.Builder builder = FeatureSet.newBuilder();
@@ -2015,7 +2016,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static FeatureSupport toFeatureSupport(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     FeatureSupport.Builder builder = FeatureSupport.newBuilder();
@@ -2052,7 +2053,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static EditionDefault toEditionDefault(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     EditionDefault.Builder builder = EditionDefault.newBuilder();
