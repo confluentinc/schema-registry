@@ -475,7 +475,7 @@ public class ProtobufData {
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
             DynamicMessage.Builder mapBuilder = protobufSchema.newMessageBuilder(scopedMapName);
             if (mapBuilder == null) {
-              throw new IllegalStateException("Invalid message name: " + scopedMapName);
+              throw new IllegalArgumentException("Invalid message name: " + scopedMapName);
             }
             Descriptor mapDescriptor = mapBuilder.getDescriptorForType();
             final FieldDescriptor keyDescriptor = mapDescriptor.findFieldByName(KEY_FIELD);
@@ -725,7 +725,8 @@ public class ProtobufData {
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(ctx, schema, name, rootElem));
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalArgumentException(
+          "Invalid protobuf schema definition: " + e.getMessage(), e);
     }
   }
 

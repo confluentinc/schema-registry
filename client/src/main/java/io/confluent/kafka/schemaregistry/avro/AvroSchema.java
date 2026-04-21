@@ -751,7 +751,7 @@ public class AvroSchema implements ParsedSchema {
       getInlineTagsRecursively(tags, jsonNode);
       return tags;
     } catch (IOException e) {
-      throw new IllegalStateException("Could not parse Avro schema");
+      throw new IllegalArgumentException("Could not parse Avro schema");
     }
   }
 
