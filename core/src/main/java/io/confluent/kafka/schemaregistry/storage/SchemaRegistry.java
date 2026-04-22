@@ -188,6 +188,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   // Can be used to pass values between extensions
   Map<String, Object> properties();
 
+  /**
+   * Returns the metadata encoder, or {@code null} if SR-level encoding is disabled.
+   */
   MetadataEncoderService getMetadataEncoder();
 
   void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler);
