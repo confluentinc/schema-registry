@@ -2265,6 +2265,223 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformAllOf() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String json = "{ \"pins\": { \"pin\": \"P123456789\", \"npin\": \"NP00012345678\" } }";
+    JsonNode jsonNode = new ObjectMapper().readTree(json);
+    String schemaStr = "{\n"
+        + "  \"properties\": {\n"
+        + "    \"pins\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"allOf\": [\n"
+        + "        {\n"
+        + "          \"properties\": {\n"
+        + "            \"pin\": {\n"
+        + "              \"confluent:tags\": [\n"
+        + "                \"PII\"\n"
+        + "              ],\n"
+        + "              \"type\": [\n"
+        + "                \"string\",\n"
+        + "                \"null\"\n"
+        + "              ]\n"
+        + "            }\n"
+        + "          }\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"properties\": {\n"
+        + "            \"npin\": {\n"
+        + "              \"confluent:tags\": [\n"
+        + "                \"PII\"\n"
+        + "              ],\n"
+        + "              \"type\": [\n"
+        + "                \"string\",\n"
+        + "                \"null\"\n"
+        + "              ]\n"
+        + "            }\n"
+        + "          }\n"
+        + "        }\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"type\": \"object\"\n"
+        + "}\n";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    ObjectNode objectNode = JsonSchemaUtils.envelope(jsonSchema, jsonNode);
+    bytes = jsonSchemaSerializer3.serialize(topic, objectNode);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object does not match",
+        "P123456789-suffix",
+        ((JsonNode)obj).get("pins").get("pin").textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "NP00012345678-suffix",
+        ((JsonNode)obj).get("pins").get("npin").textValue()
+    );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformNestedAnyOf() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String json = "{ \"pins\": { \"pin\": \"P123456789\", \"npin\": \"NP00012345678\" } }";
+    JsonNode jsonNode = new ObjectMapper().readTree(json);
+    String schemaStr = "{\n"
+        + "  \"properties\": {\n"
+        + "    \"pins\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"anyOf\": [\n"
+        + "        {\n"
+        + "          \"properties\": {\n"
+        + "            \"pin\": {\n"
+        + "              \"confluent:tags\": [\n"
+        + "                \"PII\"\n"
+        + "              ],\n"
+        + "              \"type\": [\n"
+        + "                \"string\",\n"
+        + "                \"null\"\n"
+        + "              ]\n"
+        + "            }\n"
+        + "          }\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"properties\": {\n"
+        + "            \"npin\": {\n"
+        + "              \"confluent:tags\": [\n"
+        + "                \"PII\"\n"
+        + "              ],\n"
+        + "              \"type\": [\n"
+        + "                \"string\",\n"
+        + "                \"null\"\n"
+        + "              ]\n"
+        + "            }\n"
+        + "          }\n"
+        + "        }\n"
+        + "      ]\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"type\": \"object\"\n"
+        + "}\n";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    ObjectNode objectNode = JsonSchemaUtils.envelope(jsonSchema, jsonNode);
+    bytes = jsonSchemaSerializer3.serialize(topic, objectNode);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object does not match",
+        "P123456789-suffix",
+        ((JsonNode)obj).get("pins").get("pin").textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "NP00012345678-suffix",
+        ((JsonNode)obj).get("pins").get("npin").textValue()
+    );
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformSiblingAnyOf() throws Exception {
+    byte[] bytes;
+    Object obj;
+
+    String json = "{ \"pins\": { \"pin\": \"P123456789\", \"npin\": \"NP00012345678\" } }";
+    JsonNode jsonNode = new ObjectMapper().readTree(json);
+    String schemaStr = "{\n"
+        + "  \"properties\": {\n"
+        + "    \"pins\": {\n"
+        + "      \"anyOf\": [\n"
+        + "        {\n"
+        + "          \"required\": [\n"
+        + "            \"pin\"\n"
+        + "          ]\n"
+        + "        },\n"
+        + "        {\n"
+        + "          \"required\": [\n"
+        + "            \"npin\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      ],\n"
+        + "      \"properties\": {\n"
+        + "        \"pin\": {\n"
+        + "          \"confluent:tags\": [\n"
+        + "            \"PII\"\n"
+        + "          ],\n"
+        + "          \"type\": [\n"
+        + "            \"string\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        },\n"
+        + "        \"npin\": {\n"
+        + "          \"confluent:tags\": [\n"
+        + "            \"PII\"\n"
+        + "          ],\n"
+        + "          \"type\": [\n"
+        + "            \"string\",\n"
+        + "            \"null\"\n"
+        + "          ]\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"type\": \"object\"\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"type\": \"object\"\n"
+        + "}\n";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "value + \"-suffix\"",
+        null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    ObjectNode objectNode = JsonSchemaUtils.envelope(jsonSchema, jsonNode);
+    bytes = jsonSchemaSerializer3.serialize(topic, objectNode);
+
+    obj = jsonSchemaDeserializer.deserialize(topic, bytes);
+    assertTrue(
+        "Returned object does not match",
+        JsonNode.class.isInstance(obj)
+    );
+    assertEquals(
+        "Returned object does not match",
+        "P123456789-suffix",
+        ((JsonNode)obj).get("pins").get("pin").textValue()
+    );
+    assertEquals(
+        "Returned object does not match",
+        "NP00012345678-suffix",
+        ((JsonNode)obj).get("pins").get("npin").textValue()
+    );
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerFieldTransformWithMissingPropInClass() throws Exception {
     byte[] bytes;
     Object obj;
