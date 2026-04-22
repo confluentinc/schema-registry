@@ -16,12 +16,17 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import java.lang.reflect.Field;
+import java.util.Iterator;
 import org.junit.jupiter.api.Test;
 
 public class AbstractSchemaRegistryNullEncoderTest {
@@ -30,6 +35,8 @@ public class AbstractSchemaRegistryNullEncoderTest {
 
   @Test
   public void toSchemaEntity_skipsDecodeWhenEncoderIsNull() throws SchemaRegistryStoreException {
+    // CALLS_REAL_METHODS with Mockito bypasses the constructor (Objenesis), so fields
+    // — including metadataEncoder — remain at their default null value.
     AbstractSchemaRegistry registry = mock(AbstractSchemaRegistry.class, CALLS_REAL_METHODS);
     SchemaValue schemaValue = new SchemaValue(
         "subject-1", 1, 42, null, null, SCHEMA_STRING, false);
@@ -41,8 +48,52 @@ public class AbstractSchemaRegistryNullEncoderTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  public void allVersions_skipsDecodeWhenEncoderIsNull() throws Exception {
+    AbstractSchemaRegistry registry = mock(AbstractSchemaRegistry.class, CALLS_REAL_METHODS);
+    SchemaValue schemaValue = new SchemaValue(
+        "subject-1", 1, 42, null, null, SCHEMA_STRING, false);
+
+    Store<SchemaRegistryKey, SchemaRegistryValue> store = mock(Store.class);
+    when(store.getAll(any(), any())).thenReturn(singletonIterator(schemaValue));
+    setField(registry, "store", store);
+
+    Iterator<SchemaKey> versions = registry.getAllVersions("subject-1", LookupFilter.DEFAULT);
+
+    assertNotNull(versions);
+    assertEquals(1, versions.next().getVersion());
+  }
+
+  @Test
   public void getMetadataEncoder_returnsNullWhenUnwired() {
     AbstractSchemaRegistry registry = mock(AbstractSchemaRegistry.class, CALLS_REAL_METHODS);
     assertNull(registry.getMetadataEncoder());
+  }
+
+  private static CloseableIterator<SchemaRegistryValue> singletonIterator(SchemaRegistryValue v) {
+    return new CloseableIterator<SchemaRegistryValue>() {
+      private boolean consumed = false;
+
+      @Override
+      public boolean hasNext() {
+        return !consumed;
+      }
+
+      @Override
+      public SchemaRegistryValue next() {
+        consumed = true;
+        return v;
+      }
+
+      @Override
+      public void close() {
+      }
+    };
+  }
+
+  private static void setField(Object target, String name, Object value) throws Exception {
+    Field f = AbstractSchemaRegistry.class.getDeclaredField(name);
+    f.setAccessible(true);
+    f.set(target, value);
   }
 }
