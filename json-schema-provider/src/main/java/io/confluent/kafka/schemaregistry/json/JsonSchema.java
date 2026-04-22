@@ -846,8 +846,17 @@ public class JsonSchema implements ParsedSchema {
       fieldCtx.setType(getType(schema));
     }
     if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      ValidationCriterion criterion = combinedSchema.getCriterion();
+      Collection<Schema> subschemas = combinedSchema.getSubschemas();
+      if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
+        for (Schema subschema : subschemas) {
+          message = toTransformedMessage(ctx, subschema, path, message, transform);
+        }
+        return message;
+      }
       JsonNode jsonNode = objectMapper.convertValue(message, JsonNode.class);
-      for (Schema subschema : ((CombinedSchema) schema).getSubschemas()) {
+      for (Schema subschema : subschemas) {
         boolean valid = false;
         try {
           validate(subschema, jsonNode);
@@ -856,7 +865,10 @@ public class JsonSchema implements ParsedSchema {
           // noop
         }
         if (valid) {
-          return toTransformedMessage(ctx, subschema, path, message, transform);
+          message = toTransformedMessage(ctx, subschema, path, message, transform);
+          if (criterion.equals(CombinedSchema.ONE_CRITERION)) {
+            return message;
+          }
         }
       }
       return message;
