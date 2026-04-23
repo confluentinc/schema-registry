@@ -459,23 +459,97 @@ public class JsonSchema implements ParsedSchema {
     return prepopulatedMetaSchemas;
   }
 
-  private void loadLatestDraft() throws URISyntaxException {
+  private void loadLatestDraft() throws URISyntaxException, IOException {
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
+    URI base = URI.create(DEFAULT_BASE_URI);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      // Bridge top-level `definitions` entries into `$defs` so json-sKema (which
+      // only walks `$defs`) can resolve a `$ref: "#/$defs/X"` regardless of which
+      // bucket the body lives in. The original content is left untouched in
+      // resolvedReferences; only the in-memory copy passed to the loader is augmented.
+      String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
       URI uri = new URI(dep.getKey());
-      mappings.put(uri, dep.getValue());
+      mappings.put(uri, content);
+      // Also register under the base-resolved absolute URI. json-sKema resolves a
+      // cross-document ref like `$ref: "external.json#/$defs/X"` against the document
+      // base (`mem://input`) before looking it up, producing
+      // `mem://input/external.json`. Without this entry, the relative form above
+      // wouldn't be matched and the ref would fail to resolve.
+      mappings.put(base.resolve(dep.getKey()), content);
       if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
         // For backward compatibility
-        mappings.put(new URI("./" + dep.getKey()), dep.getValue());
+        mappings.put(new URI("./" + dep.getKey()), content);
       }
     }
     SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(mappings);
-    JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
+    // Apply the same bridge to the root document so refs like `#/$defs/X` resolve
+    // when the body lives in `definitions`.
+    String rootJson = mergeDefBuckets(
+        objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
+    JsonValue schemaJson = objectMapper.convertValue(
+        objectMapper.readTree(rootJson), JsonObject.class);
     skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
     SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
     assert ctx != null;
     ctx.close();
     schemaObj = ctx.schema();
+  }
+
+  /**
+   * Copies any top-level entries under {@code fromKey} into {@code toKey}.
+   *
+   * <p>Used by both load paths to bridge {@code definitions} entries into {@code $defs} so
+   * that {@code $ref: "#/$defs/X"} resolves regardless of which bucket the body lives in.
+   * The keys are parameterized to keep the helper algorithmically symmetric and easy to test
+   * in isolation; in production both call sites pass {@code ("definitions", "$defs")}.
+   *
+   * <p>Existing {@code toKey} entries take precedence on key collision (the target keyword
+   * wins). Returns the original string when:
+   * <ul>
+   *   <li>{@code json} is null or empty,</li>
+   *   <li>{@code json} parses to a non-object (e.g. a boolean schema),</li>
+   *   <li>{@code fromKey} is absent, its value is not an object, or its value is empty,</li>
+   *   <li>{@code toKey} is present but not an object (preserved rather than overwritten),</li>
+   *   <li>parsing fails (best-effort fallback).</li>
+   * </ul>
+   *
+   * <p>Top-level only — nested {@code definitions}/{@code $defs} inside subschemas are not
+   * bridged.
+   */
+  static String mergeDefBuckets(String json, String fromKey, String toKey) {
+    if (json == null || json.isEmpty()) {
+      return json;
+    }
+    try {
+      JsonNode root = objectMapper.readTree(json);
+      if (!root.isObject()) {
+        return json;
+      }
+      JsonNode source = root.get(fromKey);
+      if (source == null || !source.isObject() || source.size() == 0) {
+        // Nothing to copy — return as-is to avoid creating a stray empty target.
+        return json;
+      }
+      // Preserve a non-object target unchanged rather than overwriting it.
+      JsonNode existingTarget = root.get(toKey);
+      if (existingTarget != null && !existingTarget.isObject()) {
+        return json;
+      }
+      ObjectNode mut = (ObjectNode) root;
+      ObjectNode target = existingTarget != null
+          ? (ObjectNode) existingTarget
+          : mut.putObject(toKey);
+      java.util.Iterator<Map.Entry<String, JsonNode>> it = source.fields();
+      while (it.hasNext()) {
+        Map.Entry<String, JsonNode> entry = it.next();
+        if (!target.has(entry.getKey())) {
+          target.set(entry.getKey(), entry.getValue());
+        }
+      }
+      return objectMapper.writeValueAsString(mut);
+    } catch (IOException e) {
+      return json;
+    }
   }
 
   private void loadPreviousDraft(SpecificationVersion spec)
@@ -507,10 +581,22 @@ public class JsonSchema implements ParsedSchema {
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
         .useDefaults(true).draftV7Support();
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      // Bridge top-level `definitions` into `$defs` so a `$ref: "#/$defs/X"`
+      // resolves via Everit's literal JSON Pointer fallback even when the
+      // schema author placed the body under draft-7's native `definitions`
+      // bucket. The asymmetric direction (definitions → $defs, not the
+      // reverse) makes `$defs` the canonical "forgiving" ref form across both
+      // drafts: a `$ref: "#/$defs/X"` always finds its target, regardless of
+      // which bucket the body actually lives in. The original content in
+      // resolvedReferences is left untouched; only the in-memory copy passed
+      // to the loader is augmented.
+      String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+      builder.registerSchemaByURI(child, new JSONObject(content));
     }
-    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+    String rootJson = mergeDefBuckets(
+        objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
+    JSONObject jsonObject = new JSONObject(rootJson);
     builder.schemaJson(jsonObject);
     SchemaLoader loader = builder.build();
     schemaObj = loader.load().build();
