@@ -39,10 +39,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     implements DekRegistryClient {
 
+  private static final Logger log = LoggerFactory.getLogger(CachedDekRegistryClient.class);
+
+  // Mirrors io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE
   private static final int KEY_NOT_FOUND_ERROR_CODE = 40470;
 
   private final DekRegistryRestService restService;
@@ -173,7 +178,14 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
     KekId key = new KekId(name, lookupDeleted);
+    // Check positive cache first so a concurrent createKek that just populated kekCache
+    // wins over a stale missingKekCache entry left behind by a racing 404 lookup.
+    Kek cached = kekCache.getIfPresent(key);
+    if (cached != null) {
+      return cached;
+    }
     if (missingKekCache.getIfPresent(key) != null) {
+      log.debug("Negative cache hit for kek {} (lookupDeleted={})", name, lookupDeleted);
       throw new RestClientException("Key " + name + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }
@@ -229,7 +241,14 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   public Dek getDek(String kekName, String subject, DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     DekId key = new DekId(kekName, subject, null, algorithm, lookupDeleted);
+    // Check positive cache first so a concurrent createDek that just populated dekCache
+    // wins over a stale missingDekCache entry left behind by a racing 404 lookup.
+    Dek cached = dekCache.getIfPresent(key);
+    if (cached != null) {
+      return cached;
+    }
     if (missingDekCache.getIfPresent(key) != null) {
+      log.debug("Negative cache hit for dek (kek={}, subject={})", kekName, subject);
       throw new RestClientException("Key " + subject + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }
@@ -259,7 +278,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     DekId key = new DekId(kekName, subject, version, algorithm, lookupDeleted);
+    Dek cached = dekCache.getIfPresent(key);
+    if (cached != null) {
+      return cached;
+    }
     if (missingDekCache.getIfPresent(key) != null) {
+      log.debug("Negative cache hit for dek (kek={}, subject={}, version={})",
+          kekName, subject, version);
       throw new RestClientException("Key " + subject + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }
@@ -289,7 +314,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       DekFormat algorithm, boolean lookupDeleted)
       throws IOException, RestClientException {
     DekId key = new DekId(kekName, subject, LATEST_VERSION, algorithm, lookupDeleted);
+    Dek cached = dekCache.getIfPresent(key);
+    if (cached != null) {
+      return cached;
+    }
     if (missingDekCache.getIfPresent(key) != null) {
+      log.debug("Negative cache hit for dek (kek={}, subject={}, latest)", kekName, subject);
       throw new RestClientException("Key " + subject + " not found",
           HttpURLConnection.HTTP_NOT_FOUND, KEY_NOT_FOUND_ERROR_CODE);
     }

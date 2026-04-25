@@ -18,11 +18,14 @@ package io.confluent.dekregistry.client;
 
 import com.google.common.testing.FakeTicker;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
+import io.confluent.dekregistry.client.rest.entities.CreateDekRequest;
 import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -46,6 +49,7 @@ public class CachedDekRegistryClientTest {
   private static final String KEK_NAME = "kek1";
   private static final String SUBJECT = "foo";
   private static final int VERSION = 1;
+  private static final int LATEST_VERSION = -1;
   private static final DekFormat ALGORITHM = DekFormat.AES256_GCM;
   private static final int KEY_NOT_FOUND_ERROR_CODE = 40470;
 
@@ -75,35 +79,37 @@ public class CachedDekRegistryClientTest {
     return new Dek(KEK_NAME, SUBJECT, VERSION, ALGORITHM, "encrypted", null, 0L, false);
   }
 
-  @Test
-  public void testMissingKekCache() throws Exception {
+  private static Map<String, Object> kekTtlConfig() {
     Map<String, Object> configs = new HashMap<>();
     configs.put(DekRegistryClientConfig.MISSING_KEK_CACHE_TTL_CONFIG, 60L);
+    return configs;
+  }
 
+  private static Map<String, Object> dekTtlConfig() {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(DekRegistryClientConfig.MISSING_DEK_CACHE_TTL_CONFIG, 60L);
+    return configs;
+  }
+
+  private static RestClientException notFound() {
+    return new RestClientException("Key not found", 404, KEY_NOT_FOUND_ERROR_CODE);
+  }
+
+  // -- KEK negative cache --
+
+  @Test
+  public void testMissingKekCache() throws Exception {
     FakeTicker fakeTicker = new FakeTicker();
-    CachedDekRegistryClient client = newClient(configs, fakeTicker);
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
 
     when(restService.getKek(KEK_NAME, false))
-        .thenThrow(new RestClientException("Key " + KEK_NAME + " not found",
-            404, KEY_NOT_FOUND_ERROR_CODE))
+        .thenThrow(notFound())
         .thenReturn(kek());
 
-    try {
-      client.getKek(KEK_NAME, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    expect404(() -> client.getKek(KEK_NAME, false));
 
     fakeTicker.advance(59, TimeUnit.SECONDS);
-
-    // Should hit the negative cache (rest service is not consulted)
-    try {
-      client.getKek(KEK_NAME, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    expect404(() -> client.getKek(KEK_NAME, false));
     verify(restService, times(1)).getKek(KEK_NAME, false);
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
@@ -117,84 +123,127 @@ public class CachedDekRegistryClientTest {
     FakeTicker fakeTicker = new FakeTicker();
     CachedDekRegistryClient client = newClient(new HashMap<>(), fakeTicker);
 
-    // Default TTL is 0, so the negative cache is effectively disabled and
-    // each call should hit the rest service.
+    when(restService.getKek(KEK_NAME, false)).thenThrow(notFound());
+
+    for (int i = 0; i < 2; i++) {
+      expect404(() -> client.getKek(KEK_NAME, false));
+    }
+    verify(restService, times(2)).getKek(KEK_NAME, false);
+  }
+
+  @Test
+  public void testCreateKekInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
+
+    // Populate negative cache for (KEK_NAME, lookupDeleted=true). createKek populates the
+    // positive cache only for (KEK_NAME, deleted=false), so a follow-up getKek with
+    // lookupDeleted=true exercises the negative-cache invalidation rather than being
+    // shadowed by a positive-cache hit.
+    when(restService.getKek(KEK_NAME, true))
+        .thenThrow(notFound())
+        .thenReturn(kek());
+    when(restService.createKek(any(), any(CreateKekRequest.class))).thenReturn(kek());
+
+    expect404(() -> client.getKek(KEK_NAME, true));
+
+    client.createKek(KEK_NAME, "aws-kms", "key-id", null, null, false, false);
+
+    assertNotNull(client.getKek(KEK_NAME, true));
+    verify(restService, times(2)).getKek(KEK_NAME, true);
+  }
+
+  @Test
+  public void testUpdateKekInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
+
+    when(restService.getKek(KEK_NAME, true))
+        .thenThrow(notFound())
+        .thenReturn(kek());
+    when(restService.updateKek(any(), eq(KEK_NAME), any(UpdateKekRequest.class)))
+        .thenReturn(kek());
+
+    expect404(() -> client.getKek(KEK_NAME, true));
+
+    client.updateKek(KEK_NAME, null, null, false);
+
+    assertNotNull(client.getKek(KEK_NAME, true));
+    verify(restService, times(2)).getKek(KEK_NAME, true);
+  }
+
+  @Test
+  public void testUndeleteKekInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
+
+    when(restService.getKek(KEK_NAME, true))
+        .thenThrow(notFound())
+        .thenReturn(kek());
+
+    expect404(() -> client.getKek(KEK_NAME, true));
+
+    client.undeleteKek(KEK_NAME);
+
+    assertNotNull(client.getKek(KEK_NAME, true));
+    verify(restService, times(2)).getKek(KEK_NAME, true);
+  }
+
+  @Test
+  public void testKekNon404NotCached() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
+
     when(restService.getKek(KEK_NAME, false))
-        .thenThrow(new RestClientException("Key " + KEK_NAME + " not found",
-            404, KEY_NOT_FOUND_ERROR_CODE));
+        .thenThrow(new RestClientException("server error", 500, 50001));
 
     for (int i = 0; i < 2; i++) {
       try {
         client.getKek(KEK_NAME, false);
         fail();
       } catch (RestClientException rce) {
-        assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+        assertEquals(500, rce.getStatus());
+      }
+    }
+    // Both calls must hit REST — non-404 errors must not populate the negative cache.
+    verify(restService, times(2)).getKek(KEK_NAME, false);
+  }
+
+  @Test
+  public void testKek404WithDifferentErrorCodeNotCached() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
+
+    // 404 status but a non-KEY_NOT_FOUND error code — should not poison the negative cache.
+    when(restService.getKek(KEK_NAME, false))
+        .thenThrow(new RestClientException("other 404", 404, 40499));
+
+    for (int i = 0; i < 2; i++) {
+      try {
+        client.getKek(KEK_NAME, false);
+        fail();
+      } catch (RestClientException rce) {
+        assertEquals(40499, rce.getErrorCode());
       }
     }
     verify(restService, times(2)).getKek(KEK_NAME, false);
   }
 
-  @Test
-  public void testMissingKekCacheInvalidatedOnCreate() throws Exception {
-    Map<String, Object> configs = new HashMap<>();
-    configs.put(DekRegistryClientConfig.MISSING_KEK_CACHE_TTL_CONFIG, 60L);
-
-    FakeTicker fakeTicker = new FakeTicker();
-    CachedDekRegistryClient client = newClient(configs, fakeTicker);
-
-    Kek created = kek();
-    when(restService.getKek(KEK_NAME, false))
-        .thenThrow(new RestClientException("Key " + KEK_NAME + " not found",
-            404, KEY_NOT_FOUND_ERROR_CODE))
-        .thenReturn(created);
-    when(restService.createKek(any(), any(CreateKekRequest.class))).thenReturn(created);
-
-    try {
-      client.getKek(KEK_NAME, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
-
-    // createKek should clear the negative cache so the subsequent positive
-    // lookup actually re-hits the rest service.
-    client.createKek(KEK_NAME, "aws-kms", "key-id", null, null, false, false);
-    // Force the positive kek cache to miss so the rest service is consulted.
-    client.reset();
-
-    assertNotNull(client.getKek(KEK_NAME, false));
-    verify(restService, times(2)).getKek(KEK_NAME, false);
-  }
+  // -- DEK negative cache --
 
   @Test
   public void testMissingDekCache() throws Exception {
-    Map<String, Object> configs = new HashMap<>();
-    configs.put(DekRegistryClientConfig.MISSING_DEK_CACHE_TTL_CONFIG, 60L);
-
     FakeTicker fakeTicker = new FakeTicker();
-    CachedDekRegistryClient client = newClient(configs, fakeTicker);
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
 
     when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), anyBoolean()))
-        .thenThrow(new RestClientException("Key " + SUBJECT + " not found",
-            404, KEY_NOT_FOUND_ERROR_CODE))
+        .thenThrow(notFound())
         .thenReturn(dek());
 
-    try {
-      client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    expect404(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
 
     fakeTicker.advance(59, TimeUnit.SECONDS);
-
-    // Should hit the negative cache
-    try {
-      client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    expect404(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
     verify(restService, times(1)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
@@ -205,33 +254,18 @@ public class CachedDekRegistryClientTest {
 
   @Test
   public void testMissingDekVersionCache() throws Exception {
-    Map<String, Object> configs = new HashMap<>();
-    configs.put(DekRegistryClientConfig.MISSING_DEK_CACHE_TTL_CONFIG, 60L);
-
     FakeTicker fakeTicker = new FakeTicker();
-    CachedDekRegistryClient client = newClient(configs, fakeTicker);
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
 
     when(restService.getDekVersion(eq(KEK_NAME), eq(SUBJECT), eq(VERSION),
         eq(ALGORITHM), anyBoolean()))
-        .thenThrow(new RestClientException("Key " + SUBJECT + " not found",
-            404, KEY_NOT_FOUND_ERROR_CODE))
+        .thenThrow(notFound())
         .thenReturn(dek());
 
-    try {
-      client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    expect404(() -> client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false));
 
     fakeTicker.advance(59, TimeUnit.SECONDS);
-
-    try {
-      client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false);
-      fail();
-    } catch (RestClientException rce) {
-      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
-    }
+    expect404(() -> client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false));
     verify(restService, times(1)).getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false);
 
     fakeTicker.advance(2, TimeUnit.SECONDS);
@@ -241,22 +275,149 @@ public class CachedDekRegistryClientTest {
   }
 
   @Test
+  public void testMissingDekLatestVersionCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    when(restService.getDekVersion(eq(KEK_NAME), eq(SUBJECT), eq(LATEST_VERSION),
+        eq(ALGORITHM), anyBoolean()))
+        .thenThrow(notFound())
+        .thenReturn(dek());
+
+    expect404(() -> client.getDekLatestVersion(KEK_NAME, SUBJECT, ALGORITHM, false));
+
+    fakeTicker.advance(59, TimeUnit.SECONDS);
+    expect404(() -> client.getDekLatestVersion(KEK_NAME, SUBJECT, ALGORITHM, false));
+    verify(restService, times(1))
+        .getDekVersion(KEK_NAME, SUBJECT, LATEST_VERSION, ALGORITHM, false);
+
+    fakeTicker.advance(2, TimeUnit.SECONDS);
+    Thread.sleep(100);
+    assertNotNull(client.getDekLatestVersion(KEK_NAME, SUBJECT, ALGORITHM, false));
+    verify(restService, times(2))
+        .getDekVersion(KEK_NAME, SUBJECT, LATEST_VERSION, ALGORITHM, false);
+  }
+
+  @Test
   public void testMissingDekCacheOffByDefault() throws Exception {
     FakeTicker fakeTicker = new FakeTicker();
     CachedDekRegistryClient client = newClient(new HashMap<>(), fakeTicker);
 
     when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), anyBoolean()))
-        .thenThrow(new RestClientException("Key " + SUBJECT + " not found",
-            404, KEY_NOT_FOUND_ERROR_CODE));
+        .thenThrow(notFound());
+
+    for (int i = 0; i < 2; i++) {
+      expect404(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+    }
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+  }
+
+  @Test
+  public void testCreateDekInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    // Populate negative cache for lookupDeleted=true; createDek puts to positive cache
+    // for (deleted=false) only, so the follow-up getDek with lookupDeleted=true is not
+    // shadowed by a positive hit and exercises negative-cache invalidation.
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), eq(true)))
+        .thenThrow(notFound())
+        .thenReturn(dek());
+    when(restService.createDek(any(), eq(KEK_NAME), anyBoolean(), any(CreateDekRequest.class)))
+        .thenReturn(dek());
+
+    expect404(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, true));
+
+    client.createDek(KEK_NAME, SUBJECT, ALGORITHM, "encrypted");
+
+    assertNotNull(client.getDek(KEK_NAME, SUBJECT, ALGORITHM, true));
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, true);
+  }
+
+  @Test
+  public void testUndeleteDekInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), anyBoolean()))
+        .thenThrow(notFound())
+        .thenReturn(dek());
+
+    expect404(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+
+    client.undeleteDek(KEK_NAME, SUBJECT, ALGORITHM);
+
+    assertNotNull(client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false));
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+  }
+
+  @Test
+  public void testUndeleteDekVersionInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    when(restService.getDekVersion(eq(KEK_NAME), eq(SUBJECT), eq(VERSION),
+        eq(ALGORITHM), anyBoolean()))
+        .thenThrow(notFound())
+        .thenReturn(dek());
+
+    expect404(() -> client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false));
+
+    client.undeleteDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM);
+
+    assertNotNull(client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false));
+    verify(restService, times(2)).getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false);
+  }
+
+  @Test
+  public void testDekNon404NotCached() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), anyBoolean()))
+        .thenThrow(new RestClientException("server error", 500, 50001));
 
     for (int i = 0; i < 2; i++) {
       try {
         client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
         fail();
       } catch (RestClientException rce) {
-        assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+        assertEquals(500, rce.getStatus());
       }
     }
     verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+  }
+
+  @Test
+  public void testDek404WithDifferentErrorCodeNotCached() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), anyBoolean()))
+        .thenThrow(new RestClientException("other 404", 404, 40499));
+
+    for (int i = 0; i < 2; i++) {
+      try {
+        client.getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+        fail();
+      } catch (RestClientException rce) {
+        assertEquals(40499, rce.getErrorCode());
+      }
+    }
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, false);
+  }
+
+  @FunctionalInterface
+  private interface ThrowingRunnable {
+    void run() throws IOException, RestClientException;
+  }
+
+  private static void expect404(ThrowingRunnable r) throws IOException {
+    try {
+      r.run();
+      fail("Expected RestClientException");
+    } catch (RestClientException rce) {
+      assertEquals(KEY_NOT_FOUND_ERROR_CODE, rce.getErrorCode());
+    }
   }
 }
