@@ -395,11 +395,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setDoc(doc);
     request.setShared(shared);
     request.setDeleted(deleted);
-    Kek kek = restService.createKek(requestProperties, request);
-    kekCache.put(new KekId(name, deleted), kek);
-    missingKekCache.invalidate(new KekId(name, false));
-    missingKekCache.invalidate(new KekId(name, true));
-    return kek;
+    try {
+      Kek kek = restService.createKek(requestProperties, request);
+      kekCache.put(new KekId(name, deleted), kek);
+      return kek;
+    } finally {
+      // Invalidate negative cache regardless of outcome: a 409 conflict means the kek
+      // already exists, so any cached 404 is stale. Cost on transient failures is one
+      // extra REST call on the next get.
+      missingKekCache.invalidate(new KekId(name, false));
+      missingKekCache.invalidate(new KekId(name, true));
+    }
   }
 
   @Override
@@ -484,12 +490,15 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     try {
       Dek dek = restService.createDek(requestProperties, kekName, rewrap, request);
       dekCache.put(new DekId(kekName, subject, version, algorithm, deleted), dek);
-      missingDekCache.invalidateAll();
       return dek;
     } finally {
       // Ensure latest dek is invalidated, such as in case of conflict (409)
       dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, false));
       dekCache.invalidate(new DekId(kekName, subject, LATEST_VERSION, algorithm, true));
+      // Invalidate negative cache regardless of outcome: a 409 conflict means the dek
+      // already exists, so any cached 404 is stale. Cost on transient failures is one
+      // extra REST call on the next get.
+      missingDekCache.invalidateAll();
     }
   }
 

@@ -190,6 +190,33 @@ public class CachedDekRegistryClientTest {
   }
 
   @Test
+  public void testCreateKekOn409ConflictInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
+
+    when(restService.getKek(KEK_NAME, true))
+        .thenThrow(notFound())
+        .thenReturn(kek());
+    // Simulate a concurrent creator: server returns 409 because the kek already exists.
+    when(restService.createKek(any(), any(CreateKekRequest.class)))
+        .thenThrow(new RestClientException("Key already exists", 409, 40972));
+
+    expect404(() -> client.getKek(KEK_NAME, true));
+
+    try {
+      client.createKek(KEK_NAME, "aws-kms", "key-id", null, null, false, false);
+      fail("Expected 409 conflict");
+    } catch (RestClientException rce) {
+      assertEquals(409, rce.getStatus());
+    }
+
+    // Even though createKek failed, the 409 implies the kek now exists, so the negative
+    // cache must have been invalidated.
+    assertNotNull(client.getKek(KEK_NAME, true));
+    verify(restService, times(2)).getKek(KEK_NAME, true);
+  }
+
+  @Test
   public void testKekNon404NotCached() throws Exception {
     FakeTicker fakeTicker = new FakeTicker();
     CachedDekRegistryClient client = newClient(kekTtlConfig(), fakeTicker);
@@ -367,6 +394,30 @@ public class CachedDekRegistryClientTest {
 
     assertNotNull(client.getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false));
     verify(restService, times(2)).getDekVersion(KEK_NAME, SUBJECT, VERSION, ALGORITHM, false);
+  }
+
+  @Test
+  public void testCreateDekOn409ConflictInvalidatesMissingCache() throws Exception {
+    FakeTicker fakeTicker = new FakeTicker();
+    CachedDekRegistryClient client = newClient(dekTtlConfig(), fakeTicker);
+
+    when(restService.getDek(eq(KEK_NAME), eq(SUBJECT), eq(ALGORITHM), eq(true)))
+        .thenThrow(notFound())
+        .thenReturn(dek());
+    when(restService.createDek(any(), eq(KEK_NAME), anyBoolean(), any(CreateDekRequest.class)))
+        .thenThrow(new RestClientException("Key already exists", 409, 40972));
+
+    expect404(() -> client.getDek(KEK_NAME, SUBJECT, ALGORITHM, true));
+
+    try {
+      client.createDek(KEK_NAME, SUBJECT, ALGORITHM, "encrypted");
+      fail("Expected 409 conflict");
+    } catch (RestClientException rce) {
+      assertEquals(409, rce.getStatus());
+    }
+
+    assertNotNull(client.getDek(KEK_NAME, SUBJECT, ALGORITHM, true));
+    verify(restService, times(2)).getDek(KEK_NAME, SUBJECT, ALGORITHM, true);
   }
 
   @Test
