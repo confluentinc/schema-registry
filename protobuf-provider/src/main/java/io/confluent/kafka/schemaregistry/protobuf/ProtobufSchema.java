@@ -2393,8 +2393,8 @@ public class ProtobufSchema implements ParsedSchema {
    * key off this predicate so they treat the same shapes as "delegating"
    * consistently.
    */
-  private boolean hasPublicImport() {
-    return resolvePublicImport() != null;
+  private boolean isPublicImportWrapper() {
+    return resolvePublicImportWrapper() != null;
   }
 
   /**
@@ -2407,7 +2407,7 @@ public class ProtobufSchema implements ParsedSchema {
    * <p>Resolution is depth-1 only: the empty wrapper must directly import a
    * non-empty file. Chains of empty wrappers are not supported.
    */
-  private ProtoFileElement resolvePublicImport() {
+  private ProtoFileElement resolvePublicImportWrapper() {
     if (schemaObj == null) {
       return null;
     }
@@ -2433,7 +2433,7 @@ public class ProtobufSchema implements ParsedSchema {
    * {@link #hasTopLevelField}, etc.
    */
   private ProtoFileElement effectiveFile() {
-    ProtoFileElement leaf = resolvePublicImport();
+    ProtoFileElement leaf = resolvePublicImportWrapper();
     return leaf != null ? leaf : schemaObj;
   }
 
@@ -2633,7 +2633,7 @@ public class ProtobufSchema implements ParsedSchema {
     // null here is honest: callers (toSpecificDescriptor, deserializer) already
     // handle null by skipping the Class.forName lookup or surfacing a clear
     // error rather than building a wrong path.
-    if (hasPublicImport()) {
+    if (isPublicImportWrapper()) {
       return null;
     }
     Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
