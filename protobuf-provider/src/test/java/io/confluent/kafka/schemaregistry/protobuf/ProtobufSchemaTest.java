@@ -3334,4 +3334,45 @@ public class ProtobufSchemaTest {
     assertNull(top.fullName("ignored.proto"));
     assertNull(top.toSpecificDescriptor("ignored.proto"));
   }
+
+  /**
+   * A schema with both its own local types AND an {@code import public} is
+   * NOT a public-import wrapper — its local types take precedence. The
+   * delegating methods ({@link ProtobufSchema#name},
+   * {@link ProtobufSchema#toMessageIndexes}, {@link ProtobufSchema#hasTopLevelField})
+   * must read the wrapper's local types, not the imported file's.
+   */
+  @Test
+  public void testLocalTypesWinOverPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Imported {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n"
+        + "message Local {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must return the LOCAL type, not the imported one.
+    assertEquals("com.Local", top.name());
+    // hasTopLevelField must see the local type's fields, not the imported one's.
+    assertTrue(top.hasTopLevelField("n"));
+    assertFalse(top.hasTopLevelField("id"));
+    // toMessageIndexes must encode the local type at index 0.
+    MessageIndexes localIdx = top.toMessageIndexes("com.Local");
+    assertEquals(Collections.singletonList(0), localIdx.indexes());
+    assertEquals("com.Local", top.toMessageName(localIdx));
+  }
 }
