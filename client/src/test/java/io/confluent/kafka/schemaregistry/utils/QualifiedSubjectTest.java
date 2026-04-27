@@ -223,6 +223,10 @@ public class QualifiedSubjectTest {
     assertTrue(QualifiedSubject.isValidSubject("default", "", false, true));
     assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:", false, true));
 
+    // Legacy 3-arg overload must still allow the empty-string subject (locks the contract)
+    assertTrue(QualifiedSubject.isValidSubject("default", "", false));
+    assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:", false));
+
     // allowEmpty=false rejects the empty-string subject in every context
     assertTrue(QualifiedSubject.isValidSubject("default", "foo", false, false));
     assertFalse(QualifiedSubject.isValidSubject("default", "", false, false));

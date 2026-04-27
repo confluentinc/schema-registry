@@ -51,6 +51,7 @@ public abstract class RestApiRejectEmptySubjectTest {
     RestClientException ex = assertThrows(RestClientException.class,
         () -> restApp.restClient.registerSchema(SCHEMA_STRING, EMPTY_SUBJECT_VIA_CONTEXT));
     assertEquals(Errors.INVALID_SUBJECT_ERROR_CODE, ex.getErrorCode());
+    assertEquals(422, ex.getStatus());
   }
 
   @Test
