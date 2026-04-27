@@ -2408,7 +2408,13 @@ public class ProtobufSchema implements ParsedSchema {
     if (schemaObj.getPublicImports().size() != 1) {
       return null;
     }
-    ProtoFileElement leaf = dependencies.get(schemaObj.getPublicImports().get(0));
+    // Use the same dep map descriptor resolution uses (well-known protos like
+    // google/protobuf/timestamp.proto live in KNOWN_DEPENDENCIES, not the
+    // user-provided `dependencies`); otherwise an empty wrapper publicly
+    // importing a well-known type would resolve at descriptor-build time but
+    // not be detected as a wrapper here.
+    ProtoFileElement leaf =
+        dependenciesWithLogicalTypes().get(schemaObj.getPublicImports().get(0));
     if (leaf == null || leaf.getTypes().isEmpty()) {
       return null;
     }

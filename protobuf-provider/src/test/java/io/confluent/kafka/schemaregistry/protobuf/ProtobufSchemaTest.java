@@ -3343,6 +3343,33 @@ public class ProtobufSchemaTest {
   }
 
   /**
+   * Empty public-import wrapper around a well-known proto (e.g.,
+   * {@code google/protobuf/timestamp.proto}) must be detected as a wrapper.
+   * Well-known types live in {@code KNOWN_DEPENDENCIES}, not user-provided
+   * {@code dependencies}, so wrapper resolution must consult the same
+   * dep map that descriptor resolution uses.
+   */
+  @Test
+  public void testPublicImportOfWellKnownType() {
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"google/protobuf/timestamp.proto\";\n";
+
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.emptyList(),
+        Collections.emptyMap(),
+        1,
+        null);
+
+    // name() should resolve through to the well-known Timestamp type.
+    assertEquals("google.protobuf.Timestamp", top.name());
+    // hasTopLevelField sees Timestamp's fields (seconds, nanos).
+    assertTrue(top.hasTopLevelField("seconds"));
+    assertTrue(top.hasTopLevelField("nanos"));
+  }
+
+  /**
    * A schema with both its own local types AND an {@code import public} is
    * NOT a public-import wrapper — its local types take precedence. The
    * delegating methods ({@link ProtobufSchema#name},
