@@ -26,14 +26,8 @@ public class RestApiRejectEmptySubjectClusterTest extends RestApiRejectEmptySubj
   protected ClusterTestHarness harness;
 
   public RestApiRejectEmptySubjectClusterTest() {
-    this.harness = new ClusterTestHarness(1, true) {
-      @Override
-      public Properties getSchemaRegistryProperties() throws Exception {
-        Properties props = super.getSchemaRegistryProperties();
-        props.put(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, true);
-        return props;
-      }
-    };
+    this.harness = new ClusterTestHarness(1, true);
+    this.harness.injectSchemaRegistryProperties(getSchemaRegistryProperties());
   }
 
   @BeforeEach
@@ -45,5 +39,11 @@ public class RestApiRejectEmptySubjectClusterTest extends RestApiRejectEmptySubj
   @AfterEach
   public void tearDown() throws Exception {
     harness.tearDown();
+  }
+
+  public Properties getSchemaRegistryProperties() {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, true);
+    return props;
   }
 }
