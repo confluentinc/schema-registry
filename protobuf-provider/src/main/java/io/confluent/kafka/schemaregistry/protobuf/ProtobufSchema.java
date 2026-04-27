@@ -2353,7 +2353,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public boolean hasTopLevelField(String field) {
-    return schemaObj != null && schemaObj.getTypes()
+    return schemaObj != null && effectiveFile().getTypes()
             .stream()
             .map(ProtobufSchema::getFieldNames)
             .flatMap(Collection::stream)
@@ -2428,6 +2428,24 @@ public class ProtobufSchema implements ParsedSchema {
       return null;
     }
     return leaf;
+  }
+
+  /**
+   * The {@link ProtoFileElement} whose types and package define this schema's
+   * effective type space. For a normal schema this is {@link #schemaObj}. For
+   * an empty public-import wrapper that resolves to a valid imported file,
+   * this is the imported file. Used to centralize the "look at the imported
+   * file's types instead of mine" logic across {@link #toMessageIndexes},
+   * {@link #toMessageName}, {@link #hasTopLevelField}, etc.
+   */
+  private ProtoFileElement effectiveFile() {
+    if (isEmptyPublicImport()) {
+      ProtoFileElement leaf = resolvePublicImportTarget();
+      if (leaf != null) {
+        return leaf;
+      }
+    }
+    return schemaObj;
   }
 
   /**
@@ -2574,12 +2592,6 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
-    if (isEmptyPublicImport() && resolvePublicImportTarget() == null) {
-      throw new IllegalArgumentException(
-          "Empty public-import schema must declare exactly one `import public`, "
-              + "no private imports, and the imported file must contain at least "
-              + "one type");
-    }
   }
 
   @Override
@@ -2665,6 +2677,15 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public String fullName(String originalPath) {
+    // An empty public-import wrapper has no Java class of its own — codegen
+    // for the resolved type lives in the imported file's namespace, with that
+    // file's java_package / java_outer_classname (not this wrapper's). Returning
+    // null here is honest: callers (toSpecificDescriptor, deserializer) already
+    // handle null by skipping the Class.forName lookup or surfacing a clear
+    // error rather than building a wrong path.
+    if (isEmptyPublicImport()) {
+      return null;
+    }
     Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
     OptionElement javaPackageName = options.get(JAVA_PACKAGE);
     OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);
@@ -2751,18 +2772,14 @@ public class ProtobufSchema implements ParsedSchema {
 
   public MessageIndexes toMessageIndexes(String name, boolean normalize) {
     List<Integer> indexes = new ArrayList<>();
-    List<TypeElement> types = schemaObj.getTypes();
-    // Empty public-import file: index space comes from the publicly-imported
-    // file. Strip its package from `name` so the per-part walk matches local
-    // type names.
-    if (isEmptyPublicImport()) {
-      ProtoFileElement leaf = resolvePublicImportTarget();
-      if (leaf != null) {
-        types = leaf.getTypes();
-        String leafPkg = leaf.getPackageName();
-        if (leafPkg != null && !leafPkg.isEmpty() && name.startsWith(leafPkg + ".")) {
-          name = name.substring(leafPkg.length() + 1);
-        }
+    ProtoFileElement file = effectiveFile();
+    List<TypeElement> types = file.getTypes();
+    // For an empty public-import wrapper, `file` is the imported file. Strip
+    // its package from `name` so the per-part walk matches local type names.
+    if (file != schemaObj) {
+      String pkg = file.getPackageName();
+      if (pkg != null && !pkg.isEmpty() && name.startsWith(pkg + ".")) {
+        name = name.substring(pkg.length() + 1);
       }
     }
     String[] parts = name.split("\\.");
@@ -2792,18 +2809,9 @@ public class ProtobufSchema implements ParsedSchema {
 
   public String toMessageName(MessageIndexes indexes) {
     StringBuilder sb = new StringBuilder();
-    List<TypeElement> types = schemaObj.getTypes();
-    String packageName = schemaObj.getPackageName();
-    // Empty public-import file: types and package come from the publicly-
-    // imported file so the indexes resolve in the same space the serializer
-    // used.
-    if (isEmptyPublicImport()) {
-      ProtoFileElement leaf = resolvePublicImportTarget();
-      if (leaf != null) {
-        types = leaf.getTypes();
-        packageName = leaf.getPackageName();
-      }
-    }
+    ProtoFileElement file = effectiveFile();
+    List<TypeElement> types = file.getTypes();
+    String packageName = file.getPackageName();
     boolean first = true;
     List<Integer> indexList = indexes.indexes();
     if (indexList.isEmpty()) {

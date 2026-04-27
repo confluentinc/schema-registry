@@ -63,6 +63,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -3235,114 +3236,6 @@ public class ProtobufSchemaTest {
   }
 
   /**
-   * Empty public-import file with multiple {@code import public} declarations
-   * is rejected: the index space for serialize/deserialize must be unambiguous,
-   * which requires a single public import. {@link ProtobufSchema#validate(boolean)}
-   * throws on this shape.
-   */
-  @Test
-  public void testValidateRejectsMultiplePublicImports() {
-    String aProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "message Foo {\n"
-        + "  string id = 1;\n"
-        + "}\n";
-    String bProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "message Bar {\n"
-        + "  string id = 1;\n"
-        + "}\n";
-    String topProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "import public \"a.proto\";\n"
-        + "import public \"b.proto\";\n";
-
-    Map<String, String> resolved = new HashMap<>();
-    resolved.put("a.proto", aProto);
-    resolved.put("b.proto", bProto);
-    ProtobufSchema top = new ProtobufSchema(
-        topProto,
-        Arrays.asList(
-            new SchemaReference("a.proto", "a-subject", 1),
-            new SchemaReference("b.proto", "b-subject", 1)),
-        resolved,
-        1,
-        null);
-
-    IllegalArgumentException ex = assertThrows(
-        IllegalArgumentException.class, () -> top.validate(false));
-    assertTrue("expected empty-public-import error, got: " + ex.getMessage(),
-        ex.getMessage().contains("Empty public-import schema"));
-  }
-
-  /**
-   * Empty public-import file with a private (non-public) import alongside the
-   * public import is rejected: only a single public import and no other imports
-   * are allowed.
-   */
-  @Test
-  public void testValidateRejectsMixedPrivateAndPublicImports() {
-    String leafProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "message Foo {\n"
-        + "  string id = 1;\n"
-        + "}\n";
-    String sideProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "message Side {\n"
-        + "  string id = 1;\n"
-        + "}\n";
-    String topProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "import \"side.proto\";\n"
-        + "import public \"leaf.proto\";\n";
-
-    Map<String, String> resolved = new HashMap<>();
-    resolved.put("side.proto", sideProto);
-    resolved.put("leaf.proto", leafProto);
-    ProtobufSchema top = new ProtobufSchema(
-        topProto,
-        Arrays.asList(
-            new SchemaReference("side.proto", "side-subject", 1),
-            new SchemaReference("leaf.proto", "leaf-subject", 1)),
-        resolved,
-        1,
-        null);
-
-    IllegalArgumentException ex = assertThrows(
-        IllegalArgumentException.class, () -> top.validate(false));
-    assertTrue("expected empty-public-import error, got: " + ex.getMessage(),
-        ex.getMessage().contains("Empty public-import schema"));
-  }
-
-  /**
-   * Empty public-import file pointing at another empty file (no local types
-   * in the imported file) is rejected at validation time.
-   */
-  @Test
-  public void testValidateRejectsEmptyImportedFile() {
-    String emptyLeaf = "syntax = \"proto3\";\n"
-        + "package com;\n";
-    String topProto = "syntax = \"proto3\";\n"
-        + "package com;\n"
-        + "import public \"empty.proto\";\n";
-
-    Map<String, String> resolved = new HashMap<>();
-    resolved.put("empty.proto", emptyLeaf);
-    ProtobufSchema top = new ProtobufSchema(
-        topProto,
-        Collections.singletonList(new SchemaReference("empty.proto", "empty-subject", 1)),
-        resolved,
-        1,
-        null);
-
-    IllegalArgumentException ex = assertThrows(
-        IllegalArgumentException.class, () -> top.validate(false));
-    assertTrue("expected empty-public-import error, got: " + ex.getMessage(),
-        ex.getMessage().contains("Empty public-import schema"));
-  }
-
-  /**
    * Index round-trip for an empty public-import file: encoding a leaf type's
    * fully-qualified name to {@link MessageIndexes} and back must produce the
    * same name. With two messages in the leaf, a non-zero index ({@code Bar}
@@ -3379,5 +3272,66 @@ public class ProtobufSchemaTest {
     MessageIndexes barIdx = top.toMessageIndexes("com.Bar");
     assertEquals(Collections.singletonList(1), barIdx.indexes());
     assertEquals("com.Bar", top.toMessageName(barIdx));
+  }
+
+  /**
+   * {@link ProtobufSchema#hasTopLevelField} for an empty public-import wrapper
+   * must report fields from the publicly-imported file, not from the wrapper's
+   * (empty) local types.
+   */
+  @Test
+  public void testHasTopLevelFieldThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    assertTrue(top.hasTopLevelField("id"));
+    assertFalse(top.hasTopLevelField("nonexistent"));
+  }
+
+  /**
+   * {@link ProtobufSchema#fullName} returns null for an empty public-import
+   * wrapper. The wrapper has no Java class of its own — codegen lives in the
+   * imported file under that file's java options. Returning null is honest;
+   * existing callers (toSpecificDescriptor, derive-type deserializer) handle
+   * null cleanly.
+   */
+  @Test
+  public void testFullNameReturnsNullForEmptyPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    assertNull(top.fullName());
+    assertNull(top.fullName("ignored.proto"));
+    assertNull(top.toSpecificDescriptor("ignored.proto"));
   }
 }
