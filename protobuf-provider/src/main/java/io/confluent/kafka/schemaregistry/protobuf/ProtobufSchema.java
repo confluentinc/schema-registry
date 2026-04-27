@@ -2386,18 +2386,6 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   /**
-   * True iff this file is a resolvable empty public-import wrapper —
-   * specifically, no local types, no private imports, exactly one
-   * {@code import public}, and a present dependency with at least one local
-   * type. Delegating methods ({@link #effectiveFile}, {@link #fullName}) all
-   * key off this predicate so they treat the same shapes as "delegating"
-   * consistently.
-   */
-  private boolean isPublicImportWrapper() {
-    return resolvePublicImportWrapper() != null;
-  }
-
-  /**
    * For an empty file with exactly one {@code import public} and no private
    * imports, returns the directly-imported {@link ProtoFileElement} provided
    * it has at least one local type. Returns null if the shape is malformed
@@ -2630,15 +2618,6 @@ public class ProtobufSchema implements ParsedSchema {
   }
 
   public String fullName(String originalPath) {
-    // An empty public-import wrapper has no Java class of its own — codegen
-    // for the resolved type lives in the imported file's namespace, with that
-    // file's java_package / java_outer_classname (not this wrapper's). Returning
-    // null here is honest: callers (toSpecificDescriptor, deserializer) already
-    // handle null by skipping the Class.forName lookup or surfacing a clear
-    // error rather than building a wrong path.
-    if (isPublicImportWrapper()) {
-      return null;
-    }
     Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
     OptionElement javaPackageName = options.get(JAVA_PACKAGE);
     OptionElement javaOuterClassname = options.get(JAVA_OUTER_CLASSNAME);

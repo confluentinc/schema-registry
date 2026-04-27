@@ -3304,14 +3304,16 @@ public class ProtobufSchemaTest {
   }
 
   /**
-   * {@link ProtobufSchema#fullName} returns null for an empty public-import
-   * wrapper. The wrapper has no Java class of its own — codegen lives in the
-   * imported file under that file's java options. Returning null is honest;
-   * existing callers (toSpecificDescriptor, derive-type deserializer) handle
-   * null cleanly.
+   * {@link ProtobufSchema#fullName} for an empty public-import wrapper returns
+   * the wrapper file's own generated class name (e.g.,
+   * {@code com.LeafWrapper}), not the imported type's class. This matches
+   * what {@code protoc} generates for an empty {@code import public} file —
+   * a real Java class with a {@code getDescriptor()} returning the
+   * {@link FileDescriptor}. {@code toSpecificDescriptor} can then load that
+   * class and return the file descriptor.
    */
   @Test
-  public void testFullNameReturnsNullForEmptyPublicImport() {
+  public void testFullNameOfEmptyPublicImportWrapper() {
     String leafProto = "syntax = \"proto3\";\n"
         + "package com;\n"
         + "message Foo {\n"
@@ -3330,9 +3332,14 @@ public class ProtobufSchemaTest {
         1,
         null);
 
+    // Without a path or java_outer_classname there's nothing to derive the
+    // class name from, so fullName() with no path returns null (existing
+    // contract for any schema with no java_outer_classname).
     assertNull(top.fullName());
-    assertNull(top.fullName("ignored.proto"));
-    assertNull(top.toSpecificDescriptor("ignored.proto"));
+    // With an originalPath, fullName derives the outer class name from the
+    // file name — for an empty wrapper that's the file-level class protoc
+    // generates (e.g. "Wrapper" → "com.Wrapper").
+    assertEquals("com.Wrapper", top.fullName("Wrapper.proto"));
   }
 
   /**
