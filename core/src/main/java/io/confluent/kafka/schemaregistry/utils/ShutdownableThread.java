@@ -16,7 +16,6 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import org.apache.kafka.common.internals.FatalExitError;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -133,7 +132,7 @@ public abstract class ShutdownableThread extends Thread {
       shutdownInitiated.countDown();
       shutdownComplete.countDown();
       log.info("Stopped");
-      Exit.exit(e.statusCode());
+      System.exit(e.statusCode());
     } catch (Throwable e) {
       if (isRunning()) {
         log.error("Error due to", e);
