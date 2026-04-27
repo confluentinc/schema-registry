@@ -557,8 +557,18 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         for (Schema deleted : deletedVersions) {
           if (deleted.getId().equals(schema.getId())
                   && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
-            // Tombstone previous version with the same ID
             SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
+            // Skip tombstoning if any schema (including soft-deleted) still references this
+            // (subject, version): references resolve by subject+version, not by global ID, so
+            // tombstoning would orphan those references even though the referrer may still be
+            // restored from a soft delete.
+            if (!getReferencedBy(key, true).isEmpty()) {
+              log.warn("Skipping tombstone of soft-deleted same-id version {} during register"
+                  + " of {} v{} (id {}): still referenced by other schemas",
+                  key, schema.getSubject(), schema.getVersion(), schema.getId());
+              continue;
+            }
+            // Tombstone previous version with the same ID
             kafkaStore.put(key, null);
           }
         }
