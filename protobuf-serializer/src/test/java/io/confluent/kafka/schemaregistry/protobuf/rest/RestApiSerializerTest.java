@@ -79,6 +79,7 @@ import static io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerTes
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RestApiSerializerTest extends ClusterTestHarness {
 
@@ -579,6 +580,181 @@ public class RestApiSerializerTest extends ClusterTestHarness {
     );
 
     checkNormalization(schemaRegistry, "EnumReference.proto");
+  }
+
+  /**
+   * A schema that consists of nothing but {@code import public "..."} should:
+   *   1. register successfully against the SR server,
+   *   2. be usable through {@code KafkaProtobufSerializer} /
+   *      {@code KafkaProtobufDeserializer} (the resolved Descriptor flows
+   *      through the publicly-imported file in both directions), and
+   *   3. pass backward-compat checks against an identical public-import file.
+   *
+   * <p>Pattern mirrors {@code testEnumRoot}: pre-register the imported file
+   * and the public-import wrapper, then drive serialize/deserialize through
+   * Kafka serializers with {@code USE_LATEST_VERSION} so the serializer picks
+   * up the pre-registered wrapper schema for the topic's subject.
+   */
+  @Test
+  public void testImportPublic() throws Exception {
+    // 1. Pre-register the imported schema (`com.Foo`) at "leaf-subject".
+    String leafSchemaText = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    int leafId = restApp.restClient.registerSchema(leafSchemaText,
+        ProtobufSchema.TYPE,
+        Collections.emptyList(),
+        "leaf-subject",
+        false).getId();
+    assertNotNull(restApp.restClient.getId(leafId));
+
+    // 2. Pre-register an empty public-import wrapper at "test-value" (the
+    // topic's subject) that pulls in the imported schema via `import public`.
+    // No local types — just package + public import. This is the schema the
+    // serializer will use.
+    String wrapperSchemaText = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+    List<SchemaReference> refs = Collections.singletonList(
+        new SchemaReference("leaf.proto", "leaf-subject", 1));
+    int wrapperId = restApp.restClient.registerSchema(wrapperSchemaText,
+        ProtobufSchema.TYPE,
+        refs,
+        topic + "-value",
+        false).getId();
+    assertNotNull(restApp.restClient.getId(wrapperId));
+
+    // 3. Configure a serializer that USES the pre-registered wrapper
+    // (USE_LATEST_VERSION + AUTO_REGISTER off). Without this, the serializer
+    // would try to auto-register the message's own schema and bypass the
+    // wrapper entirely.
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, false);
+    serializerConfig.put(KafkaProtobufSerializerConfig.USE_LATEST_VERSION, true);
+    // The strict-latest check structurally diffs the message's schema against
+    // the registered latest. For an empty public-import wrapper, that diff
+    // sees a gap (message has Foo, registered file has no types) and refuses.
+    // Disabling the strict check is the supported way to use a public-import
+    // wrapper as the registered latest.
+    serializerConfig.put(KafkaProtobufSerializerConfig.LATEST_COMPATIBILITY_STRICT, false);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig));
+
+    KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
+
+    // 4. Build a `com.Foo` DynamicMessage via the wrapper's resolved
+    // Descriptor (a generated Java class isn't available since `Foo` is
+    // declared inline in the test).
+    ProtobufSchema wrapper =
+        (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(topic + "-value", wrapperId);
+    Descriptor desc = wrapper.toDescriptor();
+    assertEquals("com.Foo", desc.getFullName());
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(desc);
+    builder.setField(desc.findFieldByName("id"), "test-id");
+    DynamicMessage fooMessage = builder.build();
+
+    // 5. Round-trip through the serializer/deserializer. Bytes carry the
+    // wrapper's schema ID; on read, the deserializer fetches the wrapper,
+    // resolves its Descriptor through the public import, and parses bytes
+    // against `com.Foo`.
+    byte[] bytes = protobufSerializer.serialize(topic, fooMessage);
+    DynamicMessage roundTripped =
+        (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals("test-id", getField(roundTripped, "id"));
+
+    // 6. Backward compat: re-registering an identical wrapper must succeed
+    // (no diff at the file level since both sides have empty local types).
+    List<String> compatErrors = restApp.restClient.testCompatibility(
+        wrapperSchemaText,
+        ProtobufSchema.TYPE,
+        refs,
+        topic + "-value",
+        "latest",
+        false);
+    assertTrue(compatErrors.isEmpty(),
+        "re-registering an identical public-import wrapper should be compatible, got: "
+            + compatErrors);
+  }
+
+  /**
+   * Same shape as {@link #testImportPublic}, but the leaf has two messages and
+   * the test serializes the *second* one. Confirms the wrapper's
+   * {@code toDescriptor(name)} can find non-first leaf types and that the
+   * serializer/deserializer index round-trip lands on the right message.
+   */
+  @Test
+  public void testImportPublicNonFirstMessage() throws Exception {
+    String leafSchemaText = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Bar {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+    int leafId = restApp.restClient.registerSchema(leafSchemaText,
+        ProtobufSchema.TYPE,
+        Collections.emptyList(),
+        "leaf-subject",
+        false).getId();
+    assertNotNull(restApp.restClient.getId(leafId));
+
+    String reExportSchemaText = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+    List<SchemaReference> refs = Collections.singletonList(
+        new SchemaReference("leaf.proto", "leaf-subject", 1));
+    int reExportId = restApp.restClient.registerSchema(reExportSchemaText,
+        ProtobufSchema.TYPE,
+        refs,
+        topic + "-value",
+        false).getId();
+    assertNotNull(restApp.restClient.getId(reExportId));
+
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, false);
+    serializerConfig.put(KafkaProtobufSerializerConfig.USE_LATEST_VERSION, true);
+    serializerConfig.put(KafkaProtobufSerializerConfig.LATEST_COMPATIBILITY_STRICT, false);
+    serializerConfig.put(KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    SchemaRegistryClient schemaRegistry = new CachedSchemaRegistryClient(restApp.restClient,
+        10,
+        Collections.singletonList(new ProtobufSchemaProvider()),
+        Collections.emptyMap(),
+        Collections.emptyMap()
+    );
+    KafkaProtobufSerializer protobufSerializer = new KafkaProtobufSerializer(schemaRegistry,
+        new HashMap(serializerConfig));
+    KafkaProtobufDeserializer protobufDeserializer = new KafkaProtobufDeserializer(schemaRegistry);
+
+    // Build a com.Bar (the *second* message in the leaf). toDescriptor(name)
+    // must find Bar through the public import — name() would only return Foo.
+    ProtobufSchema reExport =
+        (ProtobufSchema) schemaRegistry.getSchemaBySubjectAndId(topic + "-value", reExportId);
+    Descriptor barDesc = reExport.toDescriptor("com.Bar");
+    assertNotNull(barDesc,
+        "expected toDescriptor(\"com.Bar\") to resolve via public import");
+    assertEquals("com.Bar", barDesc.getFullName());
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(barDesc);
+    builder.setField(barDesc.findFieldByName("n"), 42);
+    DynamicMessage barMessage = builder.build();
+
+    // Round-trip. The serializer encodes index [1] (Bar's position in the
+    // leaf); the deserializer decodes it back to com.Bar and parses the bytes
+    // against the right descriptor.
+    byte[] bytes = protobufSerializer.serialize(topic, barMessage);
+    DynamicMessage roundTripped =
+        (DynamicMessage) protobufDeserializer.deserialize(topic, bytes);
+    assertEquals("com.Bar", roundTripped.getDescriptorForType().getFullName());
+    assertEquals(42, getField(roundTripped, "n"));
   }
 
   private static void checkNormalization(SchemaRegistryClient schemaRegistry, String fileName)
