@@ -2405,6 +2405,12 @@ public class ProtobufSchema implements ParsedSchema {
     if (!schemaObj.getImports().isEmpty()) {
       return null;
     }
+    if (!schemaObj.getServices().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getExtendDeclarations().isEmpty()) {
+      return null;
+    }
     if (schemaObj.getPublicImports().size() != 1) {
       return null;
     }
