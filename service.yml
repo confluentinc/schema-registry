@@ -26,12 +26,10 @@ sonarqube:
     - "**/*.pb.*"
     - "**/mk-include/**/*"
     - "protobuf-serializer/**"
-  java_classes:
-    - "**/target/classes"
-  scanner_config:
-    sonar.java.libraries: "**/target/dependency/*.jar"
-    sonar.java.test.binaries: "**/target/test-classes"
-    sonar.java.test.libraries: "**/target/dependency/*.jar"
+    - "**/generated/**"
+    - "**/target/**"
+    - "**/jacoco-aggregate-*/**"
+    - "**/*.html"
 git:
   enable: true
 code_artifact:
