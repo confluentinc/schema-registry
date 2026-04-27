@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
@@ -62,6 +63,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -3188,5 +3190,196 @@ public class ProtobufSchemaTest {
     ResourceLoader resourceLoader = new ResourceLoader(
         "/io/confluent/kafka/schemaregistry/protobuf/diff/");
     return resourceLoader.toString(fileName);
+  }
+
+  /**
+   * A re-export-only schema (no local messages or enums, just an
+   * {@code import public}) should expose the publicly-imported type as its
+   * canonical name. Without the fall-through, {@link ProtobufSchema#name()}
+   * throws "Protobuf schema definition contains no type definitions".
+   */
+  @Test
+  public void testNameFallsThroughToPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String reExportProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema reExport = new ProtobufSchema(
+        reExportProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must resolve through the public import to com.Foo.
+    assertEquals("com.Foo", reExport.name());
+
+    // canonicalString() preserves the `import public` form (re-emitted by the
+    // existing publicDependency-aware rendering — verifying it isn't broken).
+    assertTrue("expected `import public` in canonical form, got: "
+            + reExport.canonicalString(),
+        reExport.canonicalString().contains("import public \"leaf.proto\""));
+
+    // toDescriptor() should resolve through the public dep and return the
+    // imported type's Descriptor.
+    Descriptor desc = reExport.toDescriptor();
+    assertNotNull("expected a Descriptor for the publicly-imported type", desc);
+    assertEquals("Foo", desc.getName());
+    assertEquals("com.Foo", desc.getFullName());
+  }
+
+  /**
+   * Index round-trip for an empty public-import file: encoding a leaf type's
+   * fully-qualified name to {@link MessageIndexes} and back must produce the
+   * same name. With two messages in the leaf, a non-zero index ({@code Bar}
+   * at position 1) verifies the wrapper delegates to the leaf's index space
+   * rather than collapsing everything to {@code [0]}.
+   */
+  @Test
+  public void testIndexesRoundTripThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Bar {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    MessageIndexes fooIdx = top.toMessageIndexes("com.Foo");
+    assertEquals(Collections.singletonList(0), fooIdx.indexes());
+    assertEquals("com.Foo", top.toMessageName(fooIdx));
+
+    MessageIndexes barIdx = top.toMessageIndexes("com.Bar");
+    assertEquals(Collections.singletonList(1), barIdx.indexes());
+    assertEquals("com.Bar", top.toMessageName(barIdx));
+  }
+
+  /**
+   * {@link ProtobufSchema#hasTopLevelField} for an empty public-import wrapper
+   * must report fields from the publicly-imported file, not from the wrapper's
+   * (empty) local types.
+   */
+  @Test
+  public void testHasTopLevelFieldThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    assertTrue(top.hasTopLevelField("id"));
+    assertFalse(top.hasTopLevelField("nonexistent"));
+  }
+
+  /**
+   * {@link ProtobufSchema#fullName} for an empty public-import wrapper returns
+   * the wrapper file's own generated class name (e.g.,
+   * {@code com.LeafWrapper}), not the imported type's class. This matches
+   * what {@code protoc} generates for an empty {@code import public} file —
+   * a real Java class with a {@code getDescriptor()} returning the
+   * {@link FileDescriptor}. {@code toSpecificDescriptor} can then load that
+   * class and return the file descriptor.
+   */
+  @Test
+  public void testFullNameOfEmptyPublicImportWrapper() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // Without a path or java_outer_classname there's nothing to derive the
+    // class name from, so fullName() with no path returns null (existing
+    // contract for any schema with no java_outer_classname).
+    assertNull(top.fullName());
+    // With an originalPath, fullName derives the outer class name from the
+    // file name — for an empty wrapper that's the file-level class protoc
+    // generates (e.g. "Wrapper" → "com.Wrapper").
+    assertEquals("com.Wrapper", top.fullName("Wrapper.proto"));
+  }
+
+  /**
+   * A schema with both its own local types AND an {@code import public} is
+   * NOT a public-import wrapper — its local types take precedence. The
+   * delegating methods ({@link ProtobufSchema#name},
+   * {@link ProtobufSchema#toMessageIndexes}, {@link ProtobufSchema#hasTopLevelField})
+   * must read the wrapper's local types, not the imported file's.
+   */
+  @Test
+  public void testLocalTypesWinOverPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Imported {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n"
+        + "message Local {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must return the LOCAL type, not the imported one.
+    assertEquals("com.Local", top.name());
+    // hasTopLevelField must see the local type's fields, not the imported one's.
+    assertTrue(top.hasTopLevelField("n"));
+    assertFalse(top.hasTopLevelField("id"));
+    // toMessageIndexes must encode the local type at index 0.
+    MessageIndexes localIdx = top.toMessageIndexes("com.Local");
+    assertEquals(Collections.singletonList(0), localIdx.indexes());
+    assertEquals("com.Local", top.toMessageName(localIdx));
   }
 }
