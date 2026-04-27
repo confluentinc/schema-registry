@@ -1807,6 +1807,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
+  public boolean allowEmptySubject() {
+    return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
+  }
+
+  @Override
   public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
     return lookupCache;
   }
