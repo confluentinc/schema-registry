@@ -183,6 +183,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default void setTenant(String tenant) {
   }
 
+  /**
+   * Whether the current registration context allows an empty-string subject name
+   */
+  default boolean allowEmptySubject() {
+    return true;
+  }
+
   SchemaRegistryConfig config();
 
   // Can be used to pass values between extensions
