@@ -1509,8 +1509,8 @@ public class ProtobufSchema implements ParsedSchema {
     return toDynamicSchema().getEnumValue(enumTypeName, enumNumber);
   }
 
-  private MessageElement firstMessage() {
-    for (TypeElement typeElement : schemaObj.getTypes()) {
+  private static MessageElement firstMessage(ProtoFileElement file) {
+    for (TypeElement typeElement : file.getTypes()) {
       if (typeElement instanceof MessageElement) {
         return (MessageElement) typeElement;
       }
@@ -1518,8 +1518,8 @@ public class ProtobufSchema implements ParsedSchema {
     return null;
   }
 
-  private EnumElement firstEnum() {
-    for (TypeElement typeElement : schemaObj.getTypes()) {
+  private static EnumElement firstEnum(ProtoFileElement file) {
+    for (TypeElement typeElement : file.getTypes()) {
       if (typeElement instanceof EnumElement) {
         return (EnumElement) typeElement;
       }
@@ -2370,37 +2370,31 @@ public class ProtobufSchema implements ParsedSchema {
     if (name != null) {
       return name;
     }
-    TypeElement typeElement = firstMessage();
+    ProtoFileElement file = effectiveFile();
+    TypeElement typeElement = firstMessage(file);
     if (typeElement == null) {
-      typeElement = firstEnum();
+      typeElement = firstEnum(file);
     }
     if (typeElement != null) {
       String typeName = typeElement.getName();
-      String packageName = schemaObj.getPackageName();
+      String packageName = file.getPackageName();
       return packageName != null && !packageName.isEmpty()
           ? packageName + '.' + typeName
           : typeName;
-    }
-    // Fall through to publicly-imported types: an empty public-import file
-    // (`import public "leaf.proto";` with no local messages or enums) takes
-    // its name from the first publicly-imported type. The package on that
-    // name comes from the *imported* file, not this file.
-    String publicImportedName = firstPublicImportedTypeFullName();
-    if (publicImportedName != null) {
-      return publicImportedName;
     }
     throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
   }
 
   /**
-   * True iff this file has no local types but declares at least one
-   * {@code import public}. The serialized representation of such a file
-   * delegates index-based message lookup to the publicly-imported file.
+   * True iff this file is a resolvable empty public-import wrapper —
+   * specifically, no local types, no private imports, exactly one
+   * {@code import public}, and a present dependency with at least one local
+   * type. Delegating methods ({@link #effectiveFile}, {@link #fullName}) all
+   * key off this predicate so they treat the same shapes as "delegating"
+   * consistently.
    */
-  private boolean isEmptyPublicImport() {
-    return schemaObj != null
-        && schemaObj.getTypes().isEmpty()
-        && !schemaObj.getPublicImports().isEmpty();
+  private boolean hasPublicImport() {
+    return resolvePublicImport() != null;
   }
 
   /**
@@ -2413,7 +2407,7 @@ public class ProtobufSchema implements ParsedSchema {
    * <p>Resolution is depth-1 only: the empty wrapper must directly import a
    * non-empty file. Chains of empty wrappers are not supported.
    */
-  private ProtoFileElement resolvePublicImportTarget() {
+  private ProtoFileElement resolvePublicImport() {
     if (schemaObj == null) {
       return null;
     }
@@ -2433,58 +2427,14 @@ public class ProtobufSchema implements ParsedSchema {
   /**
    * The {@link ProtoFileElement} whose types and package define this schema's
    * effective type space. For a normal schema this is {@link #schemaObj}. For
-   * an empty public-import wrapper that resolves to a valid imported file,
-   * this is the imported file. Used to centralize the "look at the imported
-   * file's types instead of mine" logic across {@link #toMessageIndexes},
-   * {@link #toMessageName}, {@link #hasTopLevelField}, etc.
+   * a resolvable empty public-import wrapper, this is the imported file.
+   * Used to centralize the "look at the imported file's types instead of
+   * mine" logic across {@link #toMessageIndexes}, {@link #toMessageName},
+   * {@link #hasTopLevelField}, etc.
    */
   private ProtoFileElement effectiveFile() {
-    if (isEmptyPublicImport()) {
-      ProtoFileElement leaf = resolvePublicImportTarget();
-      if (leaf != null) {
-        return leaf;
-      }
-    }
-    return schemaObj;
-  }
-
-  /**
-   * Fully-qualified name (using the imported file's package) of the first
-   * message — or, failing that, the first enum — in the publicly-imported
-   * file. Returns null if the public-import shape is malformed.
-   */
-  private String firstPublicImportedTypeFullName() {
-    ProtoFileElement leaf = resolvePublicImportTarget();
-    if (leaf == null) {
-      return null;
-    }
-    TypeElement first = firstTypeIn(leaf);
-    if (first == null) {
-      return null;
-    }
-    String pkg = leaf.getPackageName();
-    return (pkg != null && !pkg.isEmpty())
-        ? pkg + '.' + first.getName()
-        : first.getName();
-  }
-
-  /**
-   * First {@link MessageElement} in {@code file} (lexical order); failing
-   * that, the first {@link EnumElement}. Returns null if the file has
-   * neither.
-   */
-  private static TypeElement firstTypeIn(ProtoFileElement file) {
-    for (TypeElement t : file.getTypes()) {
-      if (t instanceof MessageElement) {
-        return t;
-      }
-    }
-    for (TypeElement t : file.getTypes()) {
-      if (t instanceof EnumElement) {
-        return t;
-      }
-    }
-    return null;
+    ProtoFileElement leaf = resolvePublicImport();
+    return leaf != null ? leaf : schemaObj;
   }
 
   @Override
@@ -2683,7 +2633,7 @@ public class ProtobufSchema implements ParsedSchema {
     // null here is honest: callers (toSpecificDescriptor, deserializer) already
     // handle null by skipping the Class.forName lookup or surfacing a clear
     // error rather than building a wrong path.
-    if (isEmptyPublicImport()) {
+    if (hasPublicImport()) {
       return null;
     }
     Map<String, OptionElement> options = mergeOptions(schemaObj.getOptions());
