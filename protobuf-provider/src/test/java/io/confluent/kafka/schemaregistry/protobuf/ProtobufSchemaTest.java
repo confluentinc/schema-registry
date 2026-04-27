@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils.FormatContext;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
@@ -3188,5 +3189,195 @@ public class ProtobufSchemaTest {
     ResourceLoader resourceLoader = new ResourceLoader(
         "/io/confluent/kafka/schemaregistry/protobuf/diff/");
     return resourceLoader.toString(fileName);
+  }
+
+  /**
+   * A re-export-only schema (no local messages or enums, just an
+   * {@code import public}) should expose the publicly-imported type as its
+   * canonical name. Without the fall-through, {@link ProtobufSchema#name()}
+   * throws "Protobuf schema definition contains no type definitions".
+   */
+  @Test
+  public void testNameFallsThroughToPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String reExportProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema reExport = new ProtobufSchema(
+        reExportProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    // name() must resolve through the public import to com.Foo.
+    assertEquals("com.Foo", reExport.name());
+
+    // canonicalString() preserves the `import public` form (re-emitted by the
+    // existing publicDependency-aware rendering — verifying it isn't broken).
+    assertTrue("expected `import public` in canonical form, got: "
+            + reExport.canonicalString(),
+        reExport.canonicalString().contains("import public \"leaf.proto\""));
+
+    // toDescriptor() should resolve through the public dep and return the
+    // imported type's Descriptor.
+    Descriptor desc = reExport.toDescriptor();
+    assertNotNull("expected a Descriptor for the publicly-imported type", desc);
+    assertEquals("Foo", desc.getName());
+    assertEquals("com.Foo", desc.getFullName());
+  }
+
+  /**
+   * Empty public-import file with multiple {@code import public} declarations
+   * is rejected: the index space for serialize/deserialize must be unambiguous,
+   * which requires a single public import. {@link ProtobufSchema#validate(boolean)}
+   * throws on this shape.
+   */
+  @Test
+  public void testValidateRejectsMultiplePublicImports() {
+    String aProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String bProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Bar {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"a.proto\";\n"
+        + "import public \"b.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("a.proto", aProto);
+    resolved.put("b.proto", bProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Arrays.asList(
+            new SchemaReference("a.proto", "a-subject", 1),
+            new SchemaReference("b.proto", "b-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    IllegalArgumentException ex = assertThrows(
+        IllegalArgumentException.class, () -> top.validate(false));
+    assertTrue("expected empty-public-import error, got: " + ex.getMessage(),
+        ex.getMessage().contains("Empty public-import schema"));
+  }
+
+  /**
+   * Empty public-import file with a private (non-public) import alongside the
+   * public import is rejected: only a single public import and no other imports
+   * are allowed.
+   */
+  @Test
+  public void testValidateRejectsMixedPrivateAndPublicImports() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String sideProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Side {\n"
+        + "  string id = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import \"side.proto\";\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("side.proto", sideProto);
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Arrays.asList(
+            new SchemaReference("side.proto", "side-subject", 1),
+            new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    IllegalArgumentException ex = assertThrows(
+        IllegalArgumentException.class, () -> top.validate(false));
+    assertTrue("expected empty-public-import error, got: " + ex.getMessage(),
+        ex.getMessage().contains("Empty public-import schema"));
+  }
+
+  /**
+   * Empty public-import file pointing at another empty file (no local types
+   * in the imported file) is rejected at validation time.
+   */
+  @Test
+  public void testValidateRejectsEmptyImportedFile() {
+    String emptyLeaf = "syntax = \"proto3\";\n"
+        + "package com;\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"empty.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("empty.proto", emptyLeaf);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("empty.proto", "empty-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    IllegalArgumentException ex = assertThrows(
+        IllegalArgumentException.class, () -> top.validate(false));
+    assertTrue("expected empty-public-import error, got: " + ex.getMessage(),
+        ex.getMessage().contains("Empty public-import schema"));
+  }
+
+  /**
+   * Index round-trip for an empty public-import file: encoding a leaf type's
+   * fully-qualified name to {@link MessageIndexes} and back must produce the
+   * same name. With two messages in the leaf, a non-zero index ({@code Bar}
+   * at position 1) verifies the wrapper delegates to the leaf's index space
+   * rather than collapsing everything to {@code [0]}.
+   */
+  @Test
+  public void testIndexesRoundTripThroughPublicImport() {
+    String leafProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "message Foo {\n"
+        + "  string id = 1;\n"
+        + "}\n"
+        + "message Bar {\n"
+        + "  int32 n = 1;\n"
+        + "}\n";
+    String topProto = "syntax = \"proto3\";\n"
+        + "package com;\n"
+        + "import public \"leaf.proto\";\n";
+
+    Map<String, String> resolved = new HashMap<>();
+    resolved.put("leaf.proto", leafProto);
+    ProtobufSchema top = new ProtobufSchema(
+        topProto,
+        Collections.singletonList(new SchemaReference("leaf.proto", "leaf-subject", 1)),
+        resolved,
+        1,
+        null);
+
+    MessageIndexes fooIdx = top.toMessageIndexes("com.Foo");
+    assertEquals(Collections.singletonList(0), fooIdx.indexes());
+    assertEquals("com.Foo", top.toMessageName(fooIdx));
+
+    MessageIndexes barIdx = top.toMessageIndexes("com.Bar");
+    assertEquals(Collections.singletonList(1), barIdx.indexes());
+    assertEquals("com.Bar", top.toMessageName(barIdx));
   }
 }
