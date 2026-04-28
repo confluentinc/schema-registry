@@ -17,9 +17,11 @@
 package io.confluent.kafka.schemaregistry.client.security;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -336,17 +338,23 @@ public class SslFactoryTest {
 
   @Test
   public void testIsUrl() {
-    assertEquals(true, SslFactory.isUrl("safkeyringjce://userid/keyring"));
-    assertEquals(true, SslFactory.isUrl("https://example.com/truststore.jks"));
-    assertEquals(true, SslFactory.isUrl("file:///tmp/store.jks"));
-    assertEquals(false, SslFactory.isUrl("/etc/ssl/store.jks"));
-    assertEquals(false, SslFactory.isUrl("relative/store.jks"));
-    assertEquals(false, SslFactory.isUrl("store.jks"));
+    assertTrue(SslFactory.isUrl("safkeyringjce://userid/keyring"));
+    assertTrue(SslFactory.isUrl("https://example.com/truststore.jks"));
+    assertTrue(SslFactory.isUrl("file:///tmp/store.jks"));
+    // File.toURI() produces single-slash form; must be accepted.
+    assertTrue(SslFactory.isUrl("file:/tmp/store.jks"));
+    assertFalse(SslFactory.isUrl("/etc/ssl/store.jks"));
+    assertFalse(SslFactory.isUrl("relative/store.jks"));
+    assertFalse(SslFactory.isUrl("store.jks"));
     // Windows paths contain a backslash, which is not a valid URI character — fall through.
-    assertEquals(false, SslFactory.isUrl("C:\\Users\\me\\store.jks"));
+    assertFalse(SslFactory.isUrl("C:\\Users\\me\\store.jks"));
     // Single-letter scheme is rejected to avoid misclassifying drive letters in some forms.
-    assertEquals(false, SslFactory.isUrl("c:foo"));
-    assertEquals(false, SslFactory.isUrl(null));
+    assertFalse(SslFactory.isUrl("c:foo"));
+    // POSIX paths may contain colons; require :// to qualify as a URL.
+    assertFalse(SslFactory.isUrl("certs:prod/truststore.p12"));
+    assertFalse(SslFactory.isUrl("mailto:foo@bar.com"));
+    assertFalse(SslFactory.isUrl("urn:isbn:0451450523"));
+    assertFalse(SslFactory.isUrl(null));
   }
 
   @Test
@@ -375,14 +383,19 @@ public class SslFactoryTest {
 
   @Test
   public void testMalformedUrlFails() {
-    // Valid URI scheme but no registered URLStreamHandler — toURL().openStream() should fail
-    // and surface as a KafkaException, not silently fall back to filesystem.
+    // Valid URI scheme but no registered URLStreamHandler — should surface a clear
+    // "No URL handler registered" message rather than a generic load failure.
     configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "bogusscheme://does/not/exist");
     configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
     configs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, KEY_PASSWORD.value());
     RuntimeException ex = assertThrows(RuntimeException.class, () -> new SslFactory(configs));
-    Throwable cause = ex.getCause();
-    assertNotNull(cause);
+    // Cause chain: KafkaException(load failed) <- IOException(no URL handler) <- MalformedURLException
+    Throwable kafkaEx = ex.getCause();
+    assertNotNull(kafkaEx);
+    Throwable ioEx = kafkaEx.getCause();
+    assertNotNull(ioEx);
+    assertTrue("Expected 'No URL handler' in message, got: " + ioEx.getMessage(),
+        ioEx.getMessage().contains("No URL handler"));
   }
 
   private File pemFile(String pem) throws Exception {

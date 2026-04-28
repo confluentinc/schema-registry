@@ -21,8 +21,10 @@ import static org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PEM_T
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -333,32 +335,48 @@ public class SslFactory {
   }
 
   /**
-   * Returns true if {@code path} is a URL with a scheme like {@code safkeyringjce://...} or
-   * {@code https://...}. Windows paths like {@code C:\foo} are not valid URIs (backslashes are
-   * disallowed) and fall through to filesystem handling. Bare paths and paths starting with
-   * {@code /} have no scheme and also fall through.
+   * Returns true if {@code path} is a hierarchical URL with a scheme like
+   * {@code safkeyringjce://...}, {@code https://...}, or {@code file:/...}. Opaque URIs
+   * whose scheme-specific part does not start with {@code "/"} (e.g. {@code mailto:foo},
+   * {@code urn:isbn:...}, or POSIX paths containing a colon like
+   * {@code certs:prod/store.jks}) fall through to filesystem handling. Windows paths
+   * like {@code C:\foo} are not valid URIs (backslashes are disallowed) and also fall
+   * through.
    */
   static boolean isUrl(String path) {
     if (path == null) {
       return false;
     }
     try {
-      String scheme = new URI(path).getScheme();
-      return scheme != null && scheme.length() > 1;
+      URI uri = new URI(path);
+      String scheme = uri.getScheme();
+      return scheme != null && scheme.length() > 1 && !uri.isOpaque();
     } catch (URISyntaxException e) {
       return false;
     }
   }
 
+  // Conservative defaults: bounded enough to surface a hang at construction, generous enough
+  // for slow networks. Local URL handlers (file://, safkeyringjce://) ignore these.
+  private static final int URL_CONNECT_TIMEOUT_MS = 10_000;
+  private static final int URL_READ_TIMEOUT_MS = 30_000;
+
   private static InputStream openStream(String path) throws IOException {
-    if (isUrl(path)) {
-      try {
-        return new URI(path).toURL().openStream();
-      } catch (URISyntaxException | IllegalArgumentException e) {
-        throw new IOException("Invalid URL for SSL store: " + path, e);
-      }
+    if (!isUrl(path)) {
+      return Files.newInputStream(Paths.get(path));
     }
-    return Files.newInputStream(Paths.get(path));
+    try {
+      URLConnection conn = URI.create(path).toURL().openConnection();
+      conn.setConnectTimeout(URL_CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(URL_READ_TIMEOUT_MS);
+      return conn.getInputStream();
+    } catch (MalformedURLException e) {
+      throw new IOException("No URL handler registered for SSL store location: " + path
+          + " (ensure the JCE provider or library that handles this scheme is on the"
+          + " classpath)", e);
+    } catch (IllegalArgumentException e) {
+      throw new IOException("Invalid URL for SSL store: " + path, e);
+    }
   }
 
   private static String readAllAsString(String path) throws IOException {
