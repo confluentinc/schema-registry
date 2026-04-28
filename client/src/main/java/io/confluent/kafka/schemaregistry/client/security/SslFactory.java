@@ -75,6 +75,10 @@ public class SslFactory {
   }
 
   private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
+
+  private static final int URL_CONNECT_TIMEOUT_MS = 10_000;
+  private static final int URL_READ_TIMEOUT_MS = 30_000;
+
   private final String provider;
   private final String kmfAlgorithm;
   private final String tmfAlgorithm;
@@ -356,26 +360,23 @@ public class SslFactory {
     }
   }
 
-  // Conservative defaults: bounded enough to surface a hang at construction, generous enough
-  // for slow networks. Local URL handlers (file://, safkeyringjce://) ignore these.
-  private static final int URL_CONNECT_TIMEOUT_MS = 10_000;
-  private static final int URL_READ_TIMEOUT_MS = 30_000;
-
   private static InputStream openStream(String path) throws IOException {
     if (!isUrl(path)) {
       return Files.newInputStream(Paths.get(path));
     }
     try {
-      URLConnection conn = URI.create(path).toURL().openConnection();
+      URLConnection conn = new URI(path).toURL().openConnection();
       conn.setConnectTimeout(URL_CONNECT_TIMEOUT_MS);
       conn.setReadTimeout(URL_READ_TIMEOUT_MS);
       return conn.getInputStream();
+    } catch (URISyntaxException e) {
+      // Unreachable: isUrl(path) above already validated parsing.
+      // Required by checked-exception rules.
+      throw new IOException("Invalid URL for SSL store: " + path, e);
     } catch (MalformedURLException e) {
       throw new IOException("No URL handler registered for SSL store location: " + path
           + " (ensure the JCE provider or library that handles this scheme is on the"
           + " classpath)", e);
-    } catch (IllegalArgumentException e) {
-      throw new IOException("Invalid URL for SSL store: " + path, e);
     }
   }
 
