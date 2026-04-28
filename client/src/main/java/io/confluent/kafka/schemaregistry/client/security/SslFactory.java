@@ -339,13 +339,17 @@ public class SslFactory {
   }
 
   /**
-   * Returns true if {@code path} is a hierarchical URL with a scheme like
-   * {@code safkeyringjce://...}, {@code https://...}, or {@code file:/...}. Opaque URIs
-   * whose scheme-specific part does not start with {@code "/"} (e.g. {@code mailto:foo},
-   * {@code urn:isbn:...}, or POSIX paths containing a colon like
-   * {@code certs:prod/store.jks}) fall through to filesystem handling. Windows paths
-   * like {@code C:\foo} are not valid URIs (backslashes are disallowed) and also fall
-   * through.
+   * Returns true if {@code path} is a URL of the canonical form {@code scheme://...} —
+   * e.g. {@code safkeyringjce://userid/keyring}, {@code https://example.com/store.jks},
+   * {@code file:///tmp/store.jks}. Anything else falls through to filesystem handling:
+   * <ul>
+   *   <li>opaque URIs ({@code mailto:foo}, {@code urn:isbn:...})</li>
+   *   <li>hierarchical URIs with a single slash ({@code file:/tmp/foo}, {@code certs:/prod/foo})
+   *       — these may also be POSIX paths containing a colon (e.g. a directory named
+   *       {@code certs:}). Use the canonical {@code file://} form for file URLs.</li>
+   *   <li>POSIX paths containing a colon ({@code certs:prod/store.jks})</li>
+   *   <li>Windows paths ({@code C:\foo}, which are not valid URIs at all)</li>
+   * </ul>
    */
   static boolean isUrl(String path) {
     if (path == null) {
@@ -354,7 +358,10 @@ public class SslFactory {
     try {
       URI uri = new URI(path);
       String scheme = uri.getScheme();
-      return scheme != null && scheme.length() > 1 && !uri.isOpaque();
+      return scheme != null
+          && scheme.length() > 1
+          && !uri.isOpaque()
+          && path.startsWith(scheme + "://");
     } catch (URISyntaxException e) {
       return false;
     }
@@ -418,15 +425,16 @@ public class SslFactory {
     }
 
     /**
-     * Loads this keystore. The location may be a filesystem path or a URL (e.g.
+     * Loads this store. The location may be a filesystem path or a URL (e.g.
      * {@code safkeyringjce://userid/keyring} when the JVM has a registered URL handler).
      *
-     * @return the keystore
-     * @throws KafkaException if the location could not be read or if the keystore could not be
+     * @return the store
+     * @throws KafkaException if the location could not be read or if the store could not be
      *                        loaded using the specified configs (e.g. if the password or
-     *                        keystore type is invalid)
+     *                        store type is invalid)
      */
     protected KeyStore load(boolean isKeyStore) {
+      String storeKind = isKeyStore ? "keystore" : "truststore";
       try (InputStream in = openStream(path)) {
         KeyStore ks = KeyStore.getInstance(type);
         // If a password is not set access to the truststore is
@@ -435,7 +443,8 @@ public class SslFactory {
         ks.load(in, passwordChars);
         return ks;
       } catch (GeneralSecurityException | IOException e) {
-        throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
+        throw new KafkaException(
+            "Failed to load SSL " + storeKind + " " + path + " of type " + type, e);
       }
     }
 
@@ -471,13 +480,15 @@ public class SslFactory {
 
     @Override
     protected KeyStore load(boolean isKeyStore) {
+      String storeKind = isKeyStore ? "keystore" : "truststore";
       try {
         Password storeContents = new Password(readAllAsString(path));
         PemStore pemStore = isKeyStore ? new PemStore(storeContents, storeContents, keyPassword) :
             new PemStore(storeContents);
         return pemStore.keyStore;
       } catch (Exception e) {
-        throw new InvalidConfigurationException("Failed to load PEM SSL keystore " + path, e);
+        throw new InvalidConfigurationException(
+            "Failed to load PEM SSL " + storeKind + " " + path, e);
       }
     }
   }

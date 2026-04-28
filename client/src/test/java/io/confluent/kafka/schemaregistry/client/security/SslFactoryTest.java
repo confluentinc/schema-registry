@@ -341,8 +341,6 @@ public class SslFactoryTest {
     assertTrue(SslFactory.isUrl("safkeyringjce://userid/keyring"));
     assertTrue(SslFactory.isUrl("https://example.com/truststore.jks"));
     assertTrue(SslFactory.isUrl("file:///tmp/store.jks"));
-    // File.toURI() produces single-slash form; must be accepted.
-    assertTrue(SslFactory.isUrl("file:/tmp/store.jks"));
     assertFalse(SslFactory.isUrl("/etc/ssl/store.jks"));
     assertFalse(SslFactory.isUrl("relative/store.jks"));
     assertFalse(SslFactory.isUrl("store.jks"));
@@ -352,6 +350,10 @@ public class SslFactoryTest {
     assertFalse(SslFactory.isUrl("c:foo"));
     // POSIX paths may contain colons; require :// to qualify as a URL.
     assertFalse(SslFactory.isUrl("certs:prod/truststore.p12"));
+    // Hierarchical with single slash could be a POSIX path (e.g. a directory named "certs:");
+    // require :// (canonical form) to disambiguate.
+    assertFalse(SslFactory.isUrl("certs:/prod/truststore.p12"));
+    assertFalse(SslFactory.isUrl("file:/tmp/store.jks"));
     assertFalse(SslFactory.isUrl("mailto:foo@bar.com"));
     assertFalse(SslFactory.isUrl("urn:isbn:0451450523"));
     assertFalse(SslFactory.isUrl(null));
@@ -359,7 +361,8 @@ public class SslFactoryTest {
 
   @Test
   public void testPemTrustStoreFromFileUrl() throws Exception {
-    String fileUrl = pemFile(CA1).toURI().toString();
+    // Canonical RFC 8089 form: file:///path
+    String fileUrl = "file://" + pemFile(CA1).getAbsolutePath();
     configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, fileUrl);
     configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
     SslFactory factory = new SslFactory(configs);
@@ -371,8 +374,9 @@ public class SslFactoryTest {
 
   @Test
   public void testBinaryTrustStoreFromFileUrl() throws Exception {
-    File jks = jksTrustStoreFile(CA1);
-    configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, jks.toURI().toString());
+    File trustStoreFile = pkcs12TrustStoreFile(CA1);
+    configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+        "file://" + trustStoreFile.getAbsolutePath());
     configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
     configs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, KEY_PASSWORD.value());
     SslFactory factory = new SslFactory(configs);
@@ -404,7 +408,7 @@ public class SslFactoryTest {
     return pemFile;
   }
 
-  private File jksTrustStoreFile(String certPem) throws Exception {
+  private File pkcs12TrustStoreFile(String certPem) throws Exception {
     KeyStore ks = KeyStore.getInstance("PKCS12");
     ks.load(null, null);
     Certificate cert = CertificateFactory.getInstance("X.509").generateCertificate(
