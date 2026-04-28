@@ -21,6 +21,9 @@ import static org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PEM_T
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
@@ -55,7 +58,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,6 +122,7 @@ public class SslFactory {
 
       this.truststore = createTruststore(
           truststoreType,
+          provider,
           (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
           passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
           passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
@@ -160,8 +163,8 @@ public class SslFactory {
     return cs == null || cs.length() == 0;
   }
 
-  private static SecurityStore createTruststore(String type, String path, Password password,
-                                                Password trustStoreCerts) {
+  private static SecurityStore createTruststore(String type, String provider, String path,
+                                                Password password, Password trustStoreCerts) {
     if (trustStoreCerts != null) {
       return createPemTrustStore(type, path, password, trustStoreCerts);
     } else if (PEM_TYPE.equals(type) && isNotEmpty(path)) {
@@ -175,7 +178,7 @@ public class SslFactory {
       throw new InvalidConfigurationException(
           "SSL trust store is not specified, but trust store password is specified.");
     } else if (isNotEmpty(path)) {
-      return new FileBasedStore(type, path, password, null, false);
+      return new FileBasedStore(type, provider, path, password, null, false);
     } else {
       return null;
     }
@@ -284,7 +287,7 @@ public class SslFactory {
         throw new InvalidConfigurationException(
             "SSL key store is specified, but key store password is not specified.");
       }
-      return new FileBasedStore(type, path, password, keyPassword, true);
+      return new FileBasedStore(type, provider, path, password, keyPassword, true);
     } else {
       // path is null/empty, clients may use this path with brokers that don't require client auth
       return null;
@@ -330,19 +333,61 @@ public class SslFactory {
     boolean modified();
   }
 
+  /**
+   * Returns true if {@code path} is a URL with a scheme like {@code safkeyringjce://...} or
+   * {@code https://...}. Windows paths like {@code C:\foo} are not valid URIs (backslashes are
+   * disallowed) and fall through to filesystem handling. Bare paths and paths starting with
+   * {@code /} have no scheme and also fall through.
+   */
+  static boolean isUrl(String path) {
+    if (path == null) {
+      return false;
+    }
+    try {
+      String scheme = new URI(path).getScheme();
+      return scheme != null && scheme.length() > 1;
+    } catch (URISyntaxException e) {
+      return false;
+    }
+  }
+
+  private static InputStream openStream(String path) throws IOException {
+    if (isUrl(path)) {
+      try {
+        return new URI(path).toURL().openStream();
+      } catch (URISyntaxException | IllegalArgumentException e) {
+        throw new IOException("Invalid URL for SSL store: " + path, e);
+      }
+    }
+    return Files.newInputStream(Paths.get(path));
+  }
+
+  private static String readAllAsString(String path) throws IOException {
+    try (InputStream in = openStream(path)) {
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
   // package access for testing
   static class FileBasedStore implements SecurityStore {
     protected final String path;
     protected final Password keyPassword;
     private final String type;
+    private final String provider;
     private final Password password;
     private final Long fileLastModifiedMs;
     private final KeyStore keyStore;
 
     FileBasedStore(String type, String path, Password password, Password keyPassword,
                    boolean isKeyStore) {
+      this(type, null, path, password, keyPassword, isKeyStore);
+    }
+
+    FileBasedStore(String type, String provider, String path, Password password,
+                   Password keyPassword, boolean isKeyStore) {
       Objects.requireNonNull(type, "type must not be null");
       this.type = type;
+      this.provider = provider;
       this.path = path;
       this.password = password;
       this.keyPassword = keyPassword;
@@ -362,16 +407,22 @@ public class SslFactory {
     }
 
     /**
-     * Loads this keystore.
+     * Loads this keystore. The location may be a filesystem path or a URL (e.g.
+     * {@code safkeyringjce://userid/keyring} when the JVM has a registered URL handler).
+     * When {@code provider} is set and the location is a URL, {@code KeyStore.getInstance}
+     * is called with the explicit provider so platform-specific stores like JCERACFKS resolve
+     * via the matching JCE provider (e.g. IBMJCE).
      *
      * @return the keystore
-     * @throws KafkaException if the file could not be read or if the keystore could not be loaded
-     *                        using the specified configs (e.g. if the password or keystore
-     *                        type is invalid)
+     * @throws KafkaException if the location could not be read or if the keystore could not be
+     *                        loaded using the specified configs (e.g. if the password or
+     *                        keystore type is invalid)
      */
     protected KeyStore load(boolean isKeyStore) {
-      try (InputStream in = Files.newInputStream(Paths.get(path))) {
-        KeyStore ks = KeyStore.getInstance(type);
+      try (InputStream in = openStream(path)) {
+        KeyStore ks = (provider != null && isUrl(path))
+            ? KeyStore.getInstance(type, provider)
+            : KeyStore.getInstance(type);
         // If a password is not set access to the truststore is
         // still available, but integrity checking is disabled.
         char[] passwordChars = password != null ? password.value().toCharArray() : null;
@@ -383,6 +434,10 @@ public class SslFactory {
     }
 
     private Long lastModifiedMs(String path) {
+      if (isUrl(path)) {
+        // URLs have no stable modification time — disable reload-on-change for them.
+        return null;
+      }
       try {
         return Files.getLastModifiedTime(Paths.get(path)).toMillis();
       } catch (IOException e) {
@@ -405,13 +460,13 @@ public class SslFactory {
 
   static class FileBasedPemStore extends FileBasedStore {
     FileBasedPemStore(String path, Password keyPassword, boolean isKeyStore) {
-      super(PEM_TYPE, path, null, keyPassword, isKeyStore);
+      super(PEM_TYPE, null, path, null, keyPassword, isKeyStore);
     }
 
     @Override
     protected KeyStore load(boolean isKeyStore) {
       try {
-        Password storeContents = new Password(Utils.readFileAsString(path));
+        Password storeContents = new Password(readAllAsString(path));
         PemStore pemStore = isKeyStore ? new PemStore(storeContents, storeContents, keyPassword) :
             new PemStore(storeContents);
         return pemStore.keyStore;
