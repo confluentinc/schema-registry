@@ -76,6 +76,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private static final Logger log = LoggerFactory.getLogger(CachedSchemaRegistryClient.class);
 
   private final RestService restService;
+  private SslFactory sslFactory;
   private final int cacheCapacity;
   private final Cache<String, Cache<SchemaAndNormalize, RegisterSchemaResponse>>
       schemaToResponseCache;
@@ -318,7 +319,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           .collect(Collectors.toMap(
               e -> e.getKey().substring(SchemaRegistryClientConfig.CLIENT_NAMESPACE.length()),
               Map.Entry::getValue));
-      SslFactory sslFactory = new SslFactory(sslConfigs);
+      this.sslFactory = new SslFactory(sslConfigs);
       if (sslFactory.sslContext() != null) {
         restService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
         restService.setHostnameVerifier(getHostnameVerifier(sslConfigs));
@@ -1145,6 +1146,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   public void close() throws IOException {
     if (restService != null) {
       restService.close();
+    }
+    if (sslFactory != null) {
+      sslFactory.close();
     }
   }
 
