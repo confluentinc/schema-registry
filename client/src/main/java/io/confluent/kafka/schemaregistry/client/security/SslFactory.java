@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client.security;
 import static org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PEM_TYPE;
 
 import java.io.ByteArrayInputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -55,11 +56,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SslFactory {
+public class SslFactory implements Closeable {
 
   /**
    * Interface to react when keystore or truststore is created, to emit metrics or log events.
@@ -78,6 +80,7 @@ public class SslFactory {
   private final SecurityStore truststore;
   private final SSLContext sslContext;
   private final SecureRandom secureRandomImplementation;
+  private final SslEngineFactory engineFactory;
   private String protocol;
   private String keystoreType;
   private String truststoreType;
@@ -110,34 +113,139 @@ public class SslFactory {
         configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG));
 
     try {
-      this.keystore = createKeystore(
-          keystoreType,
-          (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-          passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)),
-          passwordOf(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)),
-          passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)),
-          passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)));
-
-      this.truststore = createTruststore(
-          truststoreType,
-          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-          passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
-          passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
-
-      this.sslContext = createSslContext(keystore, truststore);
-
-      // Make sure that the sslContext is created
-      if (callback != null) {
-        if (this.keystore != null) {
-          callback.onKeystoreCreated(this.keystore.get());
+      Object engineFactoryClassConfig = configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+      if (engineFactoryClassConfig != null) {
+        SslEngineFactory ef = instantiateSslEngineFactory(configs);
+        SSLContext context;
+        try {
+          Password keyPassword = passwordOf(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
+          if (keyPassword == null) {
+            keyPassword = passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG));
+          }
+          context = createSslContextFromEngineFactory(ef, keyPassword);
+          if (callback != null) {
+            if (ef.keystore() != null) {
+              callback.onKeystoreCreated(ef.keystore());
+            }
+            if (ef.truststore() != null) {
+              callback.onTruststoreCreated(ef.truststore());
+            }
+          }
+        } catch (RuntimeException e) {
+          Utils.closeQuietly(ef, "ssl engine factory after init failure");
+          throw e;
         }
+        this.engineFactory = ef;
+        this.keystore = null;
+        this.truststore = null;
+        this.sslContext = context;
+      } else {
+        this.engineFactory = null;
+        this.keystore = createKeystore(
+            keystoreType,
+            (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+            passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)),
+            passwordOf(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)),
+            passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)),
+            passwordOf(configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)));
 
-        if (this.truststore != null) {
-          callback.onTruststoreCreated(this.truststore.get());
+        this.truststore = createTruststore(
+            truststoreType,
+            (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+            passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)),
+            passwordOf(configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)));
+
+        this.sslContext = createSslContext(keystore, truststore);
+
+        // Make sure that the sslContext is created
+        if (callback != null) {
+          if (this.keystore != null) {
+            callback.onKeystoreCreated(this.keystore.get());
+          }
+
+          if (this.truststore != null) {
+            callback.onTruststoreCreated(this.truststore.get());
+          }
         }
       }
     } catch (Exception e) {
       throw new RuntimeException("Error initializing the ssl context for RestService", e);
+    }
+  }
+
+  /**
+   * Closes any resources held by a configured SslEngineFactory plugin. No-op when the
+   * built-in file/PEM-based path is in use.
+   */
+  @Override
+  public void close() {
+    if (engineFactory != null) {
+      Utils.closeQuietly(engineFactory, "ssl engine factory");
+    }
+  }
+
+  /**
+   * Returns the configured {@link SslEngineFactory} plugin, or null if the built-in
+   * file/PEM-based path is in use.
+   */
+  public SslEngineFactory sslEngineFactory() {
+    return engineFactory;
+  }
+
+  private SslEngineFactory instantiateSslEngineFactory(Map<String, ?> configs) {
+    Object value = configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+    SslEngineFactory factory;
+    try {
+      if (value instanceof Class) {
+        factory = Utils.newInstance((Class<?>) value, SslEngineFactory.class);
+      } else if (value instanceof String) {
+        factory = Utils.newInstance((String) value, SslEngineFactory.class);
+      } else {
+        throw new KafkaException(
+            "ssl.engine.factory.class must be a Class or String, but was " + value);
+      }
+    } catch (ClassNotFoundException e) {
+      throw new KafkaException("Could not load ssl.engine.factory.class: " + value, e);
+    }
+    log.info("Using SSL engine factory plugin: {}", factory.getClass().getName());
+    try {
+      factory.configure(configs);
+    } catch (RuntimeException e) {
+      Utils.closeQuietly(factory, "ssl engine factory after configure failure");
+      throw e;
+    }
+    return factory;
+  }
+
+  private SSLContext createSslContextFromEngineFactory(SslEngineFactory ef, Password keyPassword) {
+    try {
+      SSLContext context = isNotEmpty(provider)
+          ? SSLContext.getInstance(protocol, provider)
+          : SSLContext.getInstance(protocol);
+
+      KeyManager[] keyManagers = null;
+      KeyStore ks = ef.keystore();
+      if (ks != null || isNotEmpty(kmfAlgorithm)) {
+        String alg = isNotEmpty(kmfAlgorithm)
+            ? kmfAlgorithm : KeyManagerFactory.getDefaultAlgorithm();
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(alg);
+        char[] pwd = keyPassword == null ? null : keyPassword.value().toCharArray();
+        kmf.init(ks, pwd);
+        keyManagers = kmf.getKeyManagers();
+      }
+
+      String tmfAlg = isNotEmpty(tmfAlgorithm)
+          ? tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
+      TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlg);
+      tmf.init(ef.truststore());
+
+      context.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+      log.debug("Created SSL context using engine factory {}, provider {}.",
+          ef.getClass().getName(), context.getProvider().getName());
+      return context;
+    } catch (Exception e) {
+      throw new KafkaException(
+          "Failed to build SSLContext from " + ef.getClass().getName(), e);
     }
   }
 

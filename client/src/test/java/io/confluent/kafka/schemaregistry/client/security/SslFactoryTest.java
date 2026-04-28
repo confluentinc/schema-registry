@@ -21,20 +21,28 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 
 import io.confluent.common.utils.TestUtils;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.junit.Before;
 import org.junit.Test;
@@ -330,6 +338,131 @@ public class SslFactoryTest {
       builder.append("\n");
     }
     return new Password(builder.toString().trim());
+  }
+
+  @Test
+  public void testEngineFactoryPluginViaClassObject() {
+    TestSslEngineFactory.lastConfigs = null;
+    configs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+    SslFactory factory = new SslFactory(configs);
+
+    assertNotNull("SSLContext should be built from the plugin", factory.sslContext());
+    assertNotNull("Plugin should have received configs", TestSslEngineFactory.lastConfigs);
+    assertEquals(TestSslEngineFactory.class,
+        TestSslEngineFactory.lastConfigs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG));
+    // built-in path is bypassed when plugin is configured
+    assertNull(factory.keyStore());
+    assertNull(factory.trustStore());
+    factory.close();
+  }
+
+  @Test
+  public void testEngineFactoryPluginViaClassName() {
+    configs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class.getName());
+    SslFactory factory = new SslFactory(configs);
+
+    assertNotNull(factory.sslContext());
+    assertEquals(TestSslEngineFactory.class, factory.sslEngineFactory().getClass());
+    factory.close();
+  }
+
+  @Test
+  public void testEngineFactoryPluginCallbackFires() {
+    configs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslEngineFactory.class);
+    KeyStore[] tsRef = new KeyStore[1];
+    SslFactory.SslFactoryCreated cb = new SslFactory.SslFactoryCreated() {
+      @Override public void onKeystoreCreated(KeyStore keystore) { /* plugin has none */ }
+      @Override public void onTruststoreCreated(KeyStore truststore) { tsRef[0] = truststore; }
+    };
+    SslFactory factory = new SslFactory(configs, cb);
+    try {
+      assertNotNull("Truststore callback should fire with plugin truststore", tsRef[0]);
+    } finally {
+      factory.close();
+    }
+  }
+
+  @Test
+  public void testEngineFactoryPluginUnknownClassName() {
+    configs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
+        "io.confluent.does.not.exist.FakeFactory");
+    RuntimeException ex = assertThrows(RuntimeException.class, () -> new SslFactory(configs));
+    Throwable cause = ex.getCause();
+    assertNotNull(cause);
+    // KafkaException wrapping ClassNotFoundException
+    assertEquals(KafkaException.class, cause.getClass());
+  }
+
+  /**
+   * Loads {@link #CA1} into a PKCS12 truststore on configure(), exposes it via
+   * {@link #truststore()}. Used to verify that {@link SslFactory} delegates to the plugin.
+   */
+  public static class TestSslEngineFactory implements SslEngineFactory {
+    static volatile Map<String, ?> lastConfigs;
+
+    private KeyStore truststore;
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+      lastConfigs = configs;
+      try {
+        truststore = KeyStore.getInstance("PKCS12");
+        truststore.load(null, null);
+        Certificate cert = CertificateFactory.getInstance("X.509").generateCertificate(
+            new ByteArrayInputStream(CA1.getBytes(StandardCharsets.UTF_8)));
+        truststore.setCertificateEntry("plugin-ca", cert);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override public void close() { }
+
+    @Override
+    public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpoint) {
+      return null;
+    }
+
+    @Override
+    public SSLEngine createServerSslEngine(String peerHost, int peerPort) { return null; }
+
+    @Override public boolean shouldBeRebuilt(Map<String, Object> nextConfigs) { return false; }
+
+    @Override public Set<String> reconfigurableConfigs() { return Collections.emptySet(); }
+
+    @Override public KeyStore keystore() { return null; }
+
+    @Override public KeyStore truststore() { return truststore; }
+  }
+
+  /** Returns a keystore that will fail KeyManagerFactory.init, to exercise cleanup. */
+  public static class FailingPostInitFactory extends TestSslEngineFactory {
+    static volatile boolean closed;
+
+    @Override public void configure(Map<String, ?> configs) {
+      super.configure(configs);
+      closed = false;
+    }
+
+    @Override public void close() { closed = true; }
+
+    @Override public KeyStore keystore() {
+      try {
+        // An uninitialized KeyStore — KeyManagerFactory.init() will throw on it.
+        return KeyStore.getInstance("PKCS12");
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  @Test
+  public void testEngineFactoryPluginClosedOnPostInitFailure() {
+    configs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, FailingPostInitFactory.class);
+    FailingPostInitFactory.closed = false;
+    assertThrows(RuntimeException.class, () -> new SslFactory(configs));
+    assertEquals("Plugin must be closed after partial init failure",
+        true, FailingPostInitFactory.closed);
   }
 
 }
