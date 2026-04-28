@@ -26,6 +26,10 @@ sonarqube:
     - "**/*.pb.*"
     - "**/mk-include/**/*"
     - "protobuf-serializer/**"
+    - "**/generated/**"
+    - "**/target/**"
+    - "**/jacoco-aggregate-*/**"
+    - "**/*.html"
 git:
   enable: true
 code_artifact:
