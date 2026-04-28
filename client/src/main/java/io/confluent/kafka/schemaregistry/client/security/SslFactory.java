@@ -21,6 +21,9 @@ import static org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PEM_T
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
@@ -55,7 +58,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -330,6 +332,41 @@ public class SslFactory {
     boolean modified();
   }
 
+  /**
+   * Returns true if {@code path} is a URL with a scheme like {@code safkeyringjce://...} or
+   * {@code https://...}. Windows paths like {@code C:\foo} are not valid URIs (backslashes are
+   * disallowed) and fall through to filesystem handling. Bare paths and paths starting with
+   * {@code /} have no scheme and also fall through.
+   */
+  static boolean isUrl(String path) {
+    if (path == null) {
+      return false;
+    }
+    try {
+      String scheme = new URI(path).getScheme();
+      return scheme != null && scheme.length() > 1;
+    } catch (URISyntaxException e) {
+      return false;
+    }
+  }
+
+  private static InputStream openStream(String path) throws IOException {
+    if (isUrl(path)) {
+      try {
+        return new URI(path).toURL().openStream();
+      } catch (URISyntaxException | IllegalArgumentException e) {
+        throw new IOException("Invalid URL for SSL store: " + path, e);
+      }
+    }
+    return Files.newInputStream(Paths.get(path));
+  }
+
+  private static String readAllAsString(String path) throws IOException {
+    try (InputStream in = openStream(path)) {
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
   // package access for testing
   static class FileBasedStore implements SecurityStore {
     protected final String path;
@@ -362,15 +399,16 @@ public class SslFactory {
     }
 
     /**
-     * Loads this keystore.
+     * Loads this keystore. The location may be a filesystem path or a URL (e.g.
+     * {@code safkeyringjce://userid/keyring} when the JVM has a registered URL handler).
      *
      * @return the keystore
-     * @throws KafkaException if the file could not be read or if the keystore could not be loaded
-     *                        using the specified configs (e.g. if the password or keystore
-     *                        type is invalid)
+     * @throws KafkaException if the location could not be read or if the keystore could not be
+     *                        loaded using the specified configs (e.g. if the password or
+     *                        keystore type is invalid)
      */
     protected KeyStore load(boolean isKeyStore) {
-      try (InputStream in = Files.newInputStream(Paths.get(path))) {
+      try (InputStream in = openStream(path)) {
         KeyStore ks = KeyStore.getInstance(type);
         // If a password is not set access to the truststore is
         // still available, but integrity checking is disabled.
@@ -383,6 +421,10 @@ public class SslFactory {
     }
 
     private Long lastModifiedMs(String path) {
+      if (isUrl(path)) {
+        // URLs have no stable modification time — disable reload-on-change for them.
+        return null;
+      }
       try {
         return Files.getLastModifiedTime(Paths.get(path)).toMillis();
       } catch (IOException e) {
@@ -411,7 +453,7 @@ public class SslFactory {
     @Override
     protected KeyStore load(boolean isKeyStore) {
       try {
-        Password storeContents = new Password(Utils.readFileAsString(path));
+        Password storeContents = new Password(readAllAsString(path));
         PemStore pemStore = isKeyStore ? new PemStore(storeContents, storeContents, keyPassword) :
             new PemStore(storeContents);
         return pemStore.keyStore;
