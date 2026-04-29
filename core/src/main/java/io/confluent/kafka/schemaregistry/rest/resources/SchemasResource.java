@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -141,8 +142,9 @@ public class SchemasResource {
     List<LifecyclePolicyFilter> lcs = lifecycles == null ? List.of() : lifecycles;
     boolean filterByAssociation =
         !assocTypes.isEmpty() || resourceType != null || !lcs.isEmpty();
-    Set<LifecyclePolicyFilter> requestedLifecycles = lcs.stream()
+    Set<LifecyclePolicy> requestedLifecycles = lcs.stream()
         .filter(l -> l != LifecyclePolicyFilter.NONE)
+        .map(l -> LifecyclePolicy.valueOf(l.name()))
         .collect(Collectors.toSet());
     boolean includeUnassociated = lcs.contains(LifecyclePolicyFilter.NONE);
 
