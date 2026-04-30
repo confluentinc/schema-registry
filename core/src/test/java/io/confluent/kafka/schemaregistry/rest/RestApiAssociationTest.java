@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
@@ -1893,14 +1894,16 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   public void testGetSchemasWithSubjectPrefixAndLifecycleFilter() throws Exception {
     String subject1 = "lifecycleSubject1";
     String subject2 = "lifecycleSubject2";
+    String subject3 = "lifecycleSubject3";
     String resourceName = "lifecycleTopic";
     String resourceNamespace = "default";
     String resourceId = "lifecycle-resource-1";
-    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(3);
 
-    // Register schemas separately
+    // Register schemas separately. subject3 is registered with no association.
     restApp.restClient.registerSchema(allSchemas.get(0), subject1);
     restApp.restClient.registerSchema(allSchemas.get(1), subject2);
+    restApp.restClient.registerSchema(allSchemas.get(2), subject3);
 
     // Create associations with different lifecycle policies
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -1931,7 +1934,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
 
-    // Get schemas with WEAK lifecycle filter
+    // lifecycle=WEAK → only subject1 returned (subject2 is STRONG, subject3 unassociated)
     List<ExtendedSchema> weakSchemas = restApp.restClient.getSchemas(
         RestService.DEFAULT_REQUEST_PROPERTIES,
         "lifecycle",
@@ -1941,31 +1944,17 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         null,
         "topic",
         ImmutableList.of("key", "value"),
-        LifecyclePolicy.WEAK,
+        ImmutableList.of(LifecyclePolicyFilter.WEAK),
         null,
         null);
 
-    // Both subjects are returned (subject prefix matches), but only WEAK associations included
-    assertEquals(2, weakSchemas.size());
+    assertEquals(1, weakSchemas.size());
+    assertEquals(subject1, weakSchemas.get(0).getSubject());
+    assertNotNull(weakSchemas.get(0).getAssociations());
+    assertEquals(1, weakSchemas.get(0).getAssociations().size());
+    assertEquals(LifecyclePolicy.WEAK, weakSchemas.get(0).getAssociations().get(0).getLifecycle());
 
-    ExtendedSchema weakSchema1 = weakSchemas.stream()
-        .filter(s -> subject1.equals(s.getSubject()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(weakSchema1);
-    assertNotNull(weakSchema1.getAssociations());
-    assertEquals(1, weakSchema1.getAssociations().size());
-    assertEquals(LifecyclePolicy.WEAK, weakSchema1.getAssociations().get(0).getLifecycle());
-
-    ExtendedSchema weakSchema2 = weakSchemas.stream()
-        .filter(s -> subject2.equals(s.getSubject()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(weakSchema2);
-    // subject2 has STRONG lifecycle, so with WEAK filter its associations should be empty
-    assertTrue(weakSchema2.getAssociations() == null || weakSchema2.getAssociations().isEmpty());
-
-    // Get schemas with STRONG lifecycle filter
+    // lifecycle=STRONG → only subject2 returned
     List<ExtendedSchema> strongSchemas = restApp.restClient.getSchemas(
         RestService.DEFAULT_REQUEST_PROPERTIES,
         "lifecycle",
@@ -1975,28 +1964,86 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         null,
         "topic",
         ImmutableList.of("key", "value"),
-        LifecyclePolicy.STRONG,
+        ImmutableList.of(LifecyclePolicyFilter.STRONG),
         null,
         null);
 
-    assertEquals(2, strongSchemas.size());
+    assertEquals(1, strongSchemas.size());
+    assertEquals(subject2, strongSchemas.get(0).getSubject());
+    assertNotNull(strongSchemas.get(0).getAssociations());
+    assertEquals(1, strongSchemas.get(0).getAssociations().size());
+    assertEquals(LifecyclePolicy.STRONG,
+        strongSchemas.get(0).getAssociations().get(0).getLifecycle());
 
-    ExtendedSchema strongSchema1 = strongSchemas.stream()
+    // lifecycle=NONE → only subject3 returned (no associations attached)
+    List<ExtendedSchema> noneSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "lifecycle",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        ImmutableList.of(LifecyclePolicyFilter.NONE),
+        null,
+        null);
+
+    assertEquals(1, noneSchemas.size());
+    assertEquals(subject3, noneSchemas.get(0).getSubject());
+    assertTrue(noneSchemas.get(0).getAssociations() == null
+        || noneSchemas.get(0).getAssociations().isEmpty());
+
+    // lifecycle=WEAK,NONE → subject1 (WEAK) + subject3 (unassociated); subject2 (STRONG) excluded
+    List<ExtendedSchema> weakOrNoneSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "lifecycle",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        ImmutableList.of(LifecyclePolicyFilter.WEAK, LifecyclePolicyFilter.NONE),
+        null,
+        null);
+
+    assertEquals(2, weakOrNoneSchemas.size());
+
+    ExtendedSchema weakOrNone1 = weakOrNoneSchemas.stream()
         .filter(s -> subject1.equals(s.getSubject()))
         .findFirst()
         .orElse(null);
-    assertNotNull(strongSchema1);
-    // subject1 has WEAK lifecycle, so with STRONG filter its associations should be empty
-    assertTrue(strongSchema1.getAssociations() == null || strongSchema1.getAssociations().isEmpty());
+    assertNotNull(weakOrNone1);
+    assertNotNull(weakOrNone1.getAssociations());
+    assertEquals(1, weakOrNone1.getAssociations().size());
+    assertEquals(LifecyclePolicy.WEAK, weakOrNone1.getAssociations().get(0).getLifecycle());
 
-    ExtendedSchema strongSchema2 = strongSchemas.stream()
-        .filter(s -> subject2.equals(s.getSubject()))
+    ExtendedSchema weakOrNone3 = weakOrNoneSchemas.stream()
+        .filter(s -> subject3.equals(s.getSubject()))
         .findFirst()
         .orElse(null);
-    assertNotNull(strongSchema2);
-    assertNotNull(strongSchema2.getAssociations());
-    assertEquals(1, strongSchema2.getAssociations().size());
-    assertEquals(LifecyclePolicy.STRONG, strongSchema2.getAssociations().get(0).getLifecycle());
+    assertNotNull(weakOrNone3);
+    assertTrue(weakOrNone3.getAssociations() == null
+        || weakOrNone3.getAssociations().isEmpty());
+
+    // lifecycle=STRONG,WEAK → subject1 + subject2; subject3 excluded
+    List<ExtendedSchema> strongOrWeakSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "lifecycle",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        ImmutableList.of(LifecyclePolicyFilter.STRONG, LifecyclePolicyFilter.WEAK),
+        null,
+        null);
+
+    assertEquals(2, strongOrWeakSchemas.size());
+    assertTrue(strongOrWeakSchemas.stream().anyMatch(s -> subject1.equals(s.getSubject())));
+    assertTrue(strongOrWeakSchemas.stream().anyMatch(s -> subject2.equals(s.getSubject())));
   }
 
   @Test
@@ -2053,14 +2100,16 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   public void testGetSchemasWithSubjectPrefixAndAssociationTypeFilter() throws Exception {
     String subject1 = "typeFilterSubject1";
     String subject2 = "typeFilterSubject2";
+    String subject3 = "typeFilterSubject3";
     String resourceName = "typeFilterTopic";
     String resourceNamespace = "default";
     String resourceId = "type-filter-resource";
-    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(3);
 
-    // Register schemas separately since WEAK associations cannot have schemas in create
+    // Register schemas separately. subject3 is registered with no association.
     restApp.restClient.registerSchema(allSchemas.get(0), subject1);
     restApp.restClient.registerSchema(allSchemas.get(1), subject2);
+    restApp.restClient.registerSchema(allSchemas.get(2), subject3);
 
     // Create associations with different types
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
@@ -2091,7 +2140,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
 
-    // Get schemas filtering by "key" association type only
+    // associationType=key → only subject1 returned
     List<ExtendedSchema> keySchemas = restApp.restClient.getSchemas(
         RestService.DEFAULT_REQUEST_PROPERTIES,
         "typeFilter",
@@ -2105,27 +2154,13 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         null,
         null);
 
-    assertEquals(2, keySchemas.size());
+    assertEquals(1, keySchemas.size());
+    assertEquals(subject1, keySchemas.get(0).getSubject());
+    assertNotNull(keySchemas.get(0).getAssociations());
+    assertEquals(1, keySchemas.get(0).getAssociations().size());
+    assertEquals("key", keySchemas.get(0).getAssociations().get(0).getAssociationType());
 
-    // subject1 has "key" type, should have associations
-    ExtendedSchema keySchema1 = keySchemas.stream()
-        .filter(s -> subject1.equals(s.getSubject()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(keySchema1);
-    assertNotNull(keySchema1.getAssociations());
-    assertEquals(1, keySchema1.getAssociations().size());
-    assertEquals("key", keySchema1.getAssociations().get(0).getAssociationType());
-
-    // subject2 has "value" type, should not have associations when filtering by "key"
-    ExtendedSchema keySchema2 = keySchemas.stream()
-        .filter(s -> subject2.equals(s.getSubject()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(keySchema2);
-    assertTrue(keySchema2.getAssociations() == null || keySchema2.getAssociations().isEmpty());
-
-    // Get schemas filtering by "value" association type only
+    // associationType=value → only subject2 returned
     List<ExtendedSchema> valueSchemas = restApp.restClient.getSchemas(
         RestService.DEFAULT_REQUEST_PROPERTIES,
         "typeFilter",
@@ -2139,25 +2174,48 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         null,
         null);
 
-    assertEquals(2, valueSchemas.size());
+    assertEquals(1, valueSchemas.size());
+    assertEquals(subject2, valueSchemas.get(0).getSubject());
+    assertNotNull(valueSchemas.get(0).getAssociations());
+    assertEquals(1, valueSchemas.get(0).getAssociations().size());
+    assertEquals("value", valueSchemas.get(0).getAssociations().get(0).getAssociationType());
 
-    // subject1 has "key" type, should not have associations when filtering by "value"
-    ExtendedSchema valueSchema1 = valueSchemas.stream()
-        .filter(s -> subject1.equals(s.getSubject()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(valueSchema1);
-    assertTrue(valueSchema1.getAssociations() == null || valueSchema1.getAssociations().isEmpty());
+    // associationType=key,value → subject1 + subject2; subject3 (unassociated) excluded
+    List<ExtendedSchema> keyOrValueSchemas = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "typeFilter",
+        false,
+        false,
+        false,
+        null,
+        "topic",
+        ImmutableList.of("key", "value"),
+        null,
+        null,
+        null);
 
-    // subject2 has "value" type, should have associations
-    ExtendedSchema valueSchema2 = valueSchemas.stream()
-        .filter(s -> subject2.equals(s.getSubject()))
-        .findFirst()
-        .orElse(null);
-    assertNotNull(valueSchema2);
-    assertNotNull(valueSchema2.getAssociations());
-    assertEquals(1, valueSchema2.getAssociations().size());
-    assertEquals("value", valueSchema2.getAssociations().get(0).getAssociationType());
+    assertEquals(2, keyOrValueSchemas.size());
+    assertTrue(keyOrValueSchemas.stream().anyMatch(s -> subject1.equals(s.getSubject())));
+    assertTrue(keyOrValueSchemas.stream().anyMatch(s -> subject2.equals(s.getSubject())));
+
+    // No association params → all matching subjects returned, no association filter applied
+    List<ExtendedSchema> allSchemasResult = restApp.restClient.getSchemas(
+        RestService.DEFAULT_REQUEST_PROPERTIES,
+        "typeFilter",
+        false,
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+
+    assertEquals(3, allSchemasResult.size());
+    assertTrue(allSchemasResult.stream().anyMatch(s -> subject1.equals(s.getSubject())));
+    assertTrue(allSchemasResult.stream().anyMatch(s -> subject2.equals(s.getSubject())));
+    assertTrue(allSchemasResult.stream().anyMatch(s -> subject3.equals(s.getSubject())));
   }
 
   @Test
