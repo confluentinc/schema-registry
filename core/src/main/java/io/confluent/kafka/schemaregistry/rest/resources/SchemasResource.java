@@ -22,7 +22,7 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
@@ -48,6 +48,7 @@ import java.util.LinkedHashSet;
 import java.util.function.Predicate;
 
 import jakarta.inject.Inject;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,7 +115,7 @@ public class SchemasResource {
       @Parameter(description = "Association type")
       @QueryParam("associationType") List<String> associationTypes,
       @Parameter(description = "Lifecycle")
-      @QueryParam("lifecycle") LifecyclePolicy lifecycle,
+      @QueryParam("lifecycle") List<LifecyclePolicyFilter> lifecycles,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -135,25 +136,47 @@ public class SchemasResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
     }
+
+    List<String> assocTypes = associationTypes == null ? List.of() : associationTypes;
+    List<LifecyclePolicyFilter> lcs = lifecycles == null ? List.of() : lifecycles;
+    boolean filterByAssociation =
+        !assocTypes.isEmpty() || resourceType != null || !lcs.isEmpty();
+    Set<LifecyclePolicyFilter> requestedLifecycles = lcs.stream()
+        .filter(l -> l != LifecyclePolicyFilter.NONE)
+        .collect(Collectors.toSet());
+    boolean includeUnassociated = lcs.contains(LifecyclePolicyFilter.NONE);
+
     limit = schemaRegistry.normalizeSchemaLimit(limit);
     return Streams.stream(schemas)
-      .skip(offset)
-      .limit(limit)
-      .map(s -> {
-        try {
-          if (associationTypes != null && !associationTypes.isEmpty()) {
-            List<Association> associations = schemaRegistry.getAssociationsBySubject(s.getSubject(),
-                resourceType, associationTypes, lifecycle);
-            return s.copy(associations);
-          } else {
-            return s;
+        .flatMap(s -> {
+          try {
+            if (!filterByAssociation) {
+              return Stream.of(s);
+            }
+            // Pass lifecycle=null to storage so we can apply multi-value
+            // semantics (including the NONE sentinel) in-memory.
+            List<Association> assocs = schemaRegistry.getAssociationsBySubject(
+                s.getSubject(), resourceType, assocTypes, null);
+            if (assocs.isEmpty()) {
+              return includeUnassociated ? Stream.of(s) : Stream.empty();
+            }
+            if (requestedLifecycles.isEmpty()) {
+              // No lifecycle filter at all → include with all matching assocs.
+              // Only NONE was requested → subject has assocs, so exclude.
+              return lcs.isEmpty() ? Stream.of(s.copy(assocs)) : Stream.empty();
+            }
+            List<Association> matching = assocs.stream()
+                .filter(a -> requestedLifecycles.contains(a.getLifecycle()))
+                .collect(Collectors.toList());
+            return matching.isEmpty() ? Stream.empty() : Stream.of(s.copy(matching));
+          } catch (SchemaRegistryException e) {
+            throw Errors.schemaRegistryException(
+                "Error while retrieving associations for subject " + s.getSubject(), e);
           }
-        } catch (SchemaRegistryException e) {
-          throw Errors.schemaRegistryException(
-              "Error while retrieving associations for subject " + s.getSubject(), e);
-        }
-      })
-      .collect(Collectors.toList());
+        })
+        .skip(offset)
+        .limit(limit)
+        .collect(Collectors.toList());
   }
 
   @GET

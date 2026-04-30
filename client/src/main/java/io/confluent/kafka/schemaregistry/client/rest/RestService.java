@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicyFilter;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
@@ -1229,7 +1230,7 @@ public class RestService implements Closeable, Configurable {
       String ruleType,
       String resourceType,
       List<String> associationTypes,
-      LifecyclePolicy lifecycle,
+      List<LifecyclePolicyFilter> lifecycles,
       Integer offset,
       Integer limit)
       throws IOException, RestClientException {
@@ -1251,8 +1252,10 @@ public class RestService implements Closeable, Configurable {
         builder.queryParam("associationType", associationType);
       }
     }
-    if (lifecycle != null) {
-      builder.queryParam("lifecycle", lifecycle.name());
+    if (lifecycles != null) {
+      for (LifecyclePolicyFilter lifecycle : lifecycles) {
+        builder.queryParam("lifecycle", lifecycle.name());
+      }
     }
     if (offset != null) {
       builder.queryParam("offset", offset);
