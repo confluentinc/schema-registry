@@ -2086,7 +2086,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
 
       if (association == null) {
-        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null) {
+        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null
+            && getModeInScope(qualifiedSubject) != Mode.IMPORT) {
+          if (isCreate && info.getSchema() == null) {
+            throw new IllegalPropertyException(
+                "schema", "schema must be provided when creating a frozen association");
+          }
           Schema latestSchema = getLatestVersion(qualifiedSubject);
           if (latestSchema != null) {
             boolean normalize = Boolean.TRUE.equals(info.getNormalize());
