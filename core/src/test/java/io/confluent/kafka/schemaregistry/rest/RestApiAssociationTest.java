@@ -2911,5 +2911,93 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(1, associations.size());
     assertEquals(subject, associations.get(0).getSubject());
   }
+
+  // IMPORT-mode: associations sent without schemas
+
+  @Test
+  public void testImportFrozenAssociationWithoutSchemaSucceeds() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "import-frozen-123";
+    String defaultKeySubject = ":." + resourceNamespace + ":" + resourceName + "-key";
+    String schemaString = TestUtils.getRandomCanonicalAvroString(1).get(0);
+
+    restApp.restClient.setMode("IMPORT", defaultKeySubject, true);
+    // Replicate source schema preserving its version (not 1) and id
+    restApp.restClient.registerSchema(schemaString, defaultKeySubject, 7, 42);
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            defaultKeySubject, "key", LifecyclePolicy.STRONG, true, null, null)));
+
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
+    assertTrue(response.getAssociations().get(0).isFrozen());
+    assertEquals(defaultKeySubject, response.getAssociations().get(0).getSubject());
+  }
+
+  @Test
+  public void testImportFrozenAssociationWithoutSchemaViaPutSucceeds() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "import-frozen-put-123";
+    String defaultKeySubject = ":." + resourceNamespace + ":" + resourceName + "-key";
+    String schemaString = TestUtils.getRandomCanonicalAvroString(1).get(0);
+
+    restApp.restClient.setMode("IMPORT", defaultKeySubject, true);
+    restApp.restClient.registerSchema(schemaString, defaultKeySubject, 3, 100);
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            defaultKeySubject, "key", LifecyclePolicy.STRONG, true, null, null)));
+
+    AssociationResponse response = restApp.restClient.createOrUpdateAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(0).getLifecycle());
+    assertTrue(response.getAssociations().get(0).isFrozen());
+  }
+
+  @Test
+  public void testImportFrozenAssociationWithNoSchemaInSubjectFails() throws Exception {
+    String resourceName = "topic4";
+    String resourceNamespace = "default";
+    String resourceId = "import-frozen-empty-123";
+    String defaultKeySubject = ":." + resourceNamespace + ":" + resourceName + "-key";
+
+    restApp.restClient.setMode("IMPORT", defaultKeySubject, true);
+    // Note: no schema registered for defaultKeySubject
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            defaultKeySubject, "key", LifecyclePolicy.STRONG, true, null, null)));
+
+    // NoActiveSubjectVersionExistsException — validity guard intact in IMPORT
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  @Test
+  public void testNonImportFrozenAssociationWithoutSchemaStillFails() throws Exception {
+    String resourceName = "topic5";
+    String resourceNamespace = "default";
+    String resourceId = "nonimport-frozen-123";
+
+    // No setMode call — default READWRITE
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "key", LifecyclePolicy.STRONG, true, null, null)));
+
+    // Legacy guard: in non-IMPORT, frozen requires schema
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
 }
 
