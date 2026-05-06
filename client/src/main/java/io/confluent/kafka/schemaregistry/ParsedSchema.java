@@ -28,6 +28,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,6 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -350,6 +353,15 @@ public interface ParsedSchema {
   default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Validate {@code message} against the validation rules attached to the schema,
+   * returning every failure observed during the walk.
+   */
+  default List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return Collections.emptyList();
   }
 
   default Set<String> getReservedFields() {

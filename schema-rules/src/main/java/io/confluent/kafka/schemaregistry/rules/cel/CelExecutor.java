@@ -16,48 +16,31 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
-import static io.confluent.kafka.schemaregistry.rules.cel.avro.AvroTypeDescription.NULL_AVRO_SCHEMA;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Type;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ImmutableMap;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
-import com.google.protobuf.Duration;
-import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
-import com.google.protobuf.Timestamp;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
-import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroRegistry;
-import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import java.io.IOException;
-import java.time.Instant;
-import java.time.ZonedDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
-import org.projectnessie.cel.checker.Decls;
-import org.projectnessie.cel.common.types.pb.Checked;
-import org.projectnessie.cel.extension.StringsLib;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptException;
-import org.projectnessie.cel.tools.ScriptHost;
-import org.projectnessie.cel.tools.ScriptHost.ScriptBuilder;
-import org.projectnessie.cel.types.jackson.JacksonRegistry;
 
 public class CelExecutor implements RuleExecutor {
 
@@ -72,7 +55,7 @@ public class CelExecutor implements RuleExecutor {
     mapper.registerModule(new ProtobufModule());
   }
 
-  private static final int DEFAULT_CACHE_SIZE = 100;
+  private static final int DEFAULT_CACHE_SIZE = 1000;
 
   private final LoadingCache<RuleWithArgs, Script> cache;
 
@@ -82,44 +65,22 @@ public class CelExecutor implements RuleExecutor {
         .build(new CacheLoader<RuleWithArgs, Script>() {
           @Override
           public Script load(RuleWithArgs ruleWithArgs) throws Exception {
-            // Build the script factory
-            ScriptHost.Builder scriptHostBuilder = ScriptHost.newBuilder();
+            Object schemaHint;
             switch (ruleWithArgs.getType()) {
               case AVRO:
-                scriptHostBuilder = scriptHostBuilder.registry(AvroRegistry.newRegistry());
+                schemaHint = ruleWithArgs.getAvroSchema();
                 break;
               case JSON:
-                scriptHostBuilder = scriptHostBuilder.registry(JacksonRegistry.newRegistry());
+                schemaHint = ruleWithArgs.getJsonClass();
                 break;
               case PROTOBUF:
+                schemaHint = ruleWithArgs.getProtobufDesc();
                 break;
               default:
                 throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
-            ScriptHost scriptHost = scriptHostBuilder.build();
-
-            ScriptBuilder scriptBuilder = scriptHost
-                .buildScript(ruleWithArgs.getRule())
-                .withDeclarations(toDecls(ruleWithArgs.getDeclTypes()));
-            switch (ruleWithArgs.getType()) {
-              case AVRO:
-                // Register our Avro type
-                scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getAvroSchema());
-                break;
-              case JSON:
-                // Register our Jackson object message type
-                scriptBuilder = scriptBuilder.withTypes(ruleWithArgs.getJsonClass());
-                break;
-              case PROTOBUF:
-                // Use buildPartial to ignore missing required fields
-                scriptBuilder = scriptBuilder.withTypes(
-                    DynamicMessage.newBuilder(ruleWithArgs.getProtobufDesc()).buildPartial());
-                break;
-              default:
-                throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
-            }
-            scriptBuilder = scriptBuilder.withLibraries(new StringsLib(), new BuiltinLibrary());
-            return scriptBuilder.build();
+            return CelUtils.buildScript(ruleWithArgs.getType(), ruleWithArgs.getRule(),
+                schemaHint, CelUtils.toDecls(ruleWithArgs.getDeclTypes()));
           }
         });
   }
@@ -137,7 +98,7 @@ public class CelExecutor implements RuleExecutor {
     } else {
       input = message;
     }
-    Object result = execute(ctx, input, ImmutableMap.of("message", input));
+    Object result = execute(ctx, input, Collections.singletonMap("message", input));
     if (result instanceof Map) {
       // Convert maps to the target object type
       try {
@@ -196,8 +157,8 @@ public class CelExecutor implements RuleExecutor {
         return obj;
       }
 
-      Map<String, Type> types = toDeclTypes(args);
-      RuleWithArgs ruleWithArgs = null;
+      Map<String, Type> types = CelUtils.toDeclTypes(args);
+      RuleWithArgs ruleWithArgs;
       switch (type) {
         case AVRO:
           ruleWithArgs = new RuleWithArgs(rule, type, types, ((GenericContainer) msg).getSchema());
@@ -228,113 +189,6 @@ public class CelExecutor implements RuleExecutor {
         throw new RuleException(ctx.rule(), "Could not get expression", e.getCause());
       }
     }
-  }
-
-  private static Map<String, Type> toDeclTypes(Map<String, Object> args) {
-    return args.entrySet().stream()
-        .collect(Collectors.toMap(e -> e.getKey(), e -> findType(e.getValue())));
-  }
-
-  private static List<Decl> toDecls(Map<String, Type> args) {
-    return args.entrySet().stream()
-        .map(e -> Decls.newVar(e.getKey(), e.getValue()))
-        .collect(Collectors.toList());
-  }
-
-  private static Type findType(Object arg) {
-    if (arg == null) {
-      return Checked.checkedNull;
-    } else if (arg instanceof GenericContainer) {
-      return findTypeForAvroType(((GenericContainer) arg).getSchema());
-    } else if (arg instanceof Message) {
-      return Decls.newObjectType(((Message) arg).getDescriptorForType().getFullName());
-    } else {
-      return findTypeForClass(arg.getClass());
-    }
-  }
-
-  private static Type findTypeForAvroType(Schema schema) {
-    Schema.Type type = schema.getType();
-    switch (type) {
-      case BOOLEAN:
-        return Checked.checkedBool;
-      case INT:
-      case LONG:
-        return Checked.checkedInt;
-      case BYTES:
-      case FIXED:
-        return Checked.checkedBytes;
-      case FLOAT:
-      case DOUBLE:
-        return Checked.checkedDouble;
-      case STRING:
-        return Checked.checkedString;
-      // TODO duration, timestamp
-      case ARRAY:
-        return Checked.checkedListDyn;
-      case MAP:
-        return Checked.checkedMapStringDyn;
-      case ENUM:
-        return Decls.newObjectType(schema.getFullName());
-      case NULL:
-        return Checked.checkedNull;
-      case RECORD:
-        return Decls.newObjectType(schema.getFullName());
-      case UNION:
-        if (schema.getTypes().size() == 2 && schema.getTypes().contains(NULL_AVRO_SCHEMA)) {
-          for (Schema memberSchema : schema.getTypes()) {
-            if (!memberSchema.equals(NULL_AVRO_SCHEMA)) {
-              return findTypeForAvroType(memberSchema);
-            }
-          }
-        }
-        throw new IllegalArgumentException("Unsupported union type");
-      default:
-        throw new IllegalArgumentException("Unsupported type " + type);
-    }
-  }
-
-  private static Type findTypeForClass(Class<?> type) {
-    Class<?> rawClass = type;
-    if (rawClass == boolean.class || rawClass == Boolean.class) {
-      return Checked.checkedBool;
-    } else if (rawClass == long.class
-        || rawClass == Long.class
-        || rawClass == int.class
-        || rawClass == Integer.class
-        || rawClass == short.class
-        || rawClass == Short.class
-        || rawClass == byte.class
-        || rawClass == Byte.class) {
-      return Checked.checkedInt;
-    } else if (rawClass == byte[].class || rawClass == ByteString.class) {
-      return Checked.checkedBytes;
-    } else if (rawClass == double.class
-        || rawClass == Double.class
-        || rawClass == float.class
-        || rawClass == Float.class) {
-      return Checked.checkedDouble;
-    } else if (rawClass == String.class) {
-      return Checked.checkedString;
-    } else if (rawClass == Duration.class || rawClass == java.time.Duration.class) {
-      return Checked.checkedDuration;
-    } else if (rawClass == Timestamp.class
-        || Instant.class.isAssignableFrom(rawClass)
-        || ZonedDateTime.class.isAssignableFrom(rawClass)) {
-      return Checked.checkedTimestamp;
-    } else if (Map.class.isAssignableFrom(rawClass)) {
-      return Checked.checkedMapStringDyn;
-    } else if (List.class.isAssignableFrom(rawClass)) {
-      return Checked.checkedListDyn;
-    } else {
-      return Decls.newObjectType(rawClass.getName());
-    }
-  }
-
-  enum ScriptType {
-    AVRO,
-    JSON,
-    PROTOBUF
   }
 
   static class RuleWithArgs {
