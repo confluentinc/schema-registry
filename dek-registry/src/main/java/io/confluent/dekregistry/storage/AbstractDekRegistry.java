@@ -217,7 +217,6 @@ public abstract class AbstractDekRegistry implements Closeable {
    * @return the keys cache
    * @deprecated callers should use {@link #getKey(EncryptionKeyId)} or
    *     {@link #rangeKeys(EncryptionKeyId, boolean, EncryptionKeyId, boolean)} instead.
-   *     Non-kafka implementations have no kcache to expose.
    */
   @Deprecated
   public Cache<EncryptionKeyId, EncryptionKey> keys() {
