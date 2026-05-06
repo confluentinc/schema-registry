@@ -89,7 +89,6 @@ public class AbstractDekRegistryDefaultMethodsTest {
    * If a subclass doesn't have a real {@code keys()}, the default {@code getKey}
    * delegation surfaces the same {@code UnsupportedOperationException} — caller
    * sees a single, consistent failure mode regardless of which method they hit.
-   * This is the canary for "remember to override getKey on RP-mode subclasses."
    */
   @Test
   public void getKey_defaultPropagatesUnsupportedOperationFromKeys() {

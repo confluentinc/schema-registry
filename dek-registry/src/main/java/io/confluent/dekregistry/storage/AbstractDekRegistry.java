@@ -228,8 +228,7 @@ public abstract class AbstractDekRegistry implements Closeable {
    * Returns the encryption key for the given id, or {@code null} if not found.
    *
    * <p>The default implementation delegates to {@link #keys()} for kafka-based
-   * subclasses. Non-kafka subclasses (e.g. RM/informer-backed) override this to
-   * read from their own backing store and never need a real {@code keys()}.
+   * subclasses.
    */
   public EncryptionKey getKey(EncryptionKeyId id) {
     return keys().get(id);
@@ -240,8 +239,7 @@ public abstract class AbstractDekRegistry implements Closeable {
    * Caller is responsible for closing the returned iterator.
    *
    * <p>The default implementation delegates to {@link #keys()} for kafka-based
-   * subclasses. Non-kafka subclasses (e.g. RM/informer-backed) override this to
-   * scan their own backing store and never need a real {@code keys()}.
+   * subclasses.
    */
   public KeyValueIterator<EncryptionKeyId, EncryptionKey> rangeKeys(
       EncryptionKeyId start, boolean startInclusive,
