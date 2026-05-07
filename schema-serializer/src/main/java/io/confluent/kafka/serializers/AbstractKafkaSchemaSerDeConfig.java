@@ -44,6 +44,12 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
  */
 public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
+  public enum ValidationRulesExecution {
+    DISABLED,
+    BEFORE_DOMAIN_RULES,
+    AFTER_DOMAIN_RULES
+  }
+
   /**
    * Configurations beginning with this prefix can be used to specify headers to include in requests
    * made to Schema Registry. For example, to include an {@code Authorization} header with a value
@@ -181,6 +187,15 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
   public static final String RULE_SERVICE_LOADER_ENABLE = "rule.service.loader.enable";
   public static final String RULE_SERVICE_LOADER_ENABLE_DOCS =
       "Whether to enable the ServiceLoader for rule executors, defaults to true.";
+
+  public static final String VALIDATION_RULES_EXECUTOR_CLASS =
+      "validation.rules.executor.class";
+  public static final String VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT =
+      "io.confluent.kafka.schemaregistry.rules.cel.CelValidator";
+  public static final String VALIDATION_RULES_EXECUTOR_CLASS_DOCS =
+      "Fully-qualified class name of the ValidationRuleExecutor used to evaluate inline "
+          + "validation rules. Loaded reflectively when validation.rules.execution is not "
+          + "DISABLED. The default expects kafka-schema-rules to be on the classpath.";
 
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
@@ -381,6 +396,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
                 Importance.LOW, RULE_ACTIONS_DOCS)
         .define(RULE_SERVICE_LOADER_ENABLE, Type.BOOLEAN, true,
             Importance.LOW, RULE_SERVICE_LOADER_ENABLE_DOCS)
+        .define(VALIDATION_RULES_EXECUTOR_CLASS, Type.STRING,
+            VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT,
+            Importance.LOW, VALIDATION_RULES_EXECUTOR_CLASS_DOCS)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
