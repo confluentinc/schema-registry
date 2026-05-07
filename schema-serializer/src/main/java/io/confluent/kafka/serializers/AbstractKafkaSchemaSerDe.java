@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers;
 
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -856,27 +857,22 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
 
   private ValidationRuleExecutor loadValidationRuleExecutor() {
     String className = config != null
-        ? config.getString(AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS)
+        ? config.getString(VALIDATION_RULES_EXECUTOR_CLASS)
         : AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT;
     try {
-      Class<?> cls = Class.forName(className, true, Thread.currentThread().getContextClassLoader());
-      Object instance = cls.getDeclaredConstructor().newInstance();
-      if (!(instance instanceof ValidationRuleExecutor)) {
-        throw new ConfigException(
-            "Validation rule executor class '" + className
-                + "' does not implement ValidationRuleExecutor.");
-      }
-      return (ValidationRuleExecutor) instance;
+      return Utils.newInstance(className, ValidationRuleExecutor.class);
     } catch (ClassNotFoundException e) {
       throw new ConfigException(
           "Validation rule executor class '" + className + "' could not be loaded — "
               + "ensure kafka-schema-rules is on the classpath, or set "
-              + AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS
-              + " to a different implementation.");
-    } catch (ReflectiveOperationException e) {
+              + VALIDATION_RULES_EXECUTOR_CLASS + " to a different implementation.");
+    } catch (KafkaException e) {
+      // Utils.newInstance wraps the real failure (NoSuchMethodException,
+      // InvocationTargetException, etc.) as the KafkaException cause; surface it.
+      Throwable cause = e.getCause() != null ? e.getCause() : e;
       throw new ConfigException(
           "Validation rule executor class '" + className + "' could not be instantiated: "
-              + e.getMessage());
+              + cause.getMessage());
     }
   }
 
