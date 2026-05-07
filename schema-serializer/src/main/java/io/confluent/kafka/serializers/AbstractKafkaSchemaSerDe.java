@@ -18,6 +18,7 @@ package io.confluent.kafka.serializers;
 
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
+import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -36,7 +37,9 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
@@ -134,6 +137,8 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
   protected Map<String, Map<String, RuleBase>> ruleExecutors;
   protected Map<String, Map<String, RuleBase>> ruleActions;
   protected boolean isKey;
+
+  private volatile ValidationRuleExecutor validationRuleExecutor;
 
   private Map<Rule, String> onSuccessActions;
   private Map<Rule, String> onFailureActions;
@@ -793,6 +798,82 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       }
     }
     return message;
+  }
+
+  protected Object executeValidationRules(
+      String subject, String topic, Headers headers,
+      ParsedSchema schema, Object message) {
+    if (message == null || schema == null) {
+      return message;
+    }
+    List<ValidationRuleError> violations =
+        schema.validateMessage(validationRuleExecutor(), message);
+    if (violations != null && !violations.isEmpty()) {
+      throw new SerializationException(buildMessage(violations));
+    }
+    return message;
+  }
+
+  private static String buildMessage(List<ValidationRuleError> violations) {
+    if (violations == null || violations.isEmpty()) {
+      return "Validation rule failed (no detail)";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Validation rule failed (")
+        .append(violations.size())
+        .append(violations.size() == 1 ? " violation):" : " violations):");
+    for (ValidationRuleError v : violations) {
+      sb.append("\n  - ").append(v);
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Lazy per-serializer {@link ValidationRuleExecutor} — instantiated reflectively on
+   * first validation call from the class named by
+   * {@link AbstractKafkaSchemaSerDeConfig#VALIDATION_RULES_EXECUTOR_CLASS}.
+   * Deserializer-only flows (which never call {@link #executeValidationRules}) pay nothing.
+   */
+  private ValidationRuleExecutor validationRuleExecutor() {
+    ValidationRuleExecutor v = validationRuleExecutor;
+    if (v == null) {
+      v = loadValidationRuleExecutor();
+      validationRuleExecutor = v;
+    }
+    return v;
+  }
+
+  /**
+   * Eagerly load and cache the validation rule executor — call from a format-specific
+   * {@code configure()} when {@code validation.rules.execution} is not DISABLED so that
+   * a missing dependency surfaces at serializer construction time rather than at the
+   * first record. Idempotent.
+   */
+  protected void initValidationRuleExecutor() {
+    if (validationRuleExecutor == null) {
+      validationRuleExecutor = loadValidationRuleExecutor();
+    }
+  }
+
+  private ValidationRuleExecutor loadValidationRuleExecutor() {
+    String className = config != null
+        ? config.getString(VALIDATION_RULES_EXECUTOR_CLASS)
+        : AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT;
+    try {
+      return Utils.newInstance(className, ValidationRuleExecutor.class);
+    } catch (ClassNotFoundException e) {
+      throw new ConfigException(
+          "Validation rule executor class '" + className + "' could not be loaded — "
+              + "ensure kafka-schema-rules is on the classpath, or set "
+              + VALIDATION_RULES_EXECUTOR_CLASS + " to a different implementation.");
+    } catch (KafkaException e) {
+      // Utils.newInstance wraps the real failure (NoSuchMethodException,
+      // InvocationTargetException, etc.) as the KafkaException cause; surface it.
+      Throwable cause = e.getCause() != null ? e.getCause() : e;
+      throw new ConfigException(
+          "Validation rule executor class '" + className + "' could not be instantiated: "
+              + cause.getMessage());
+    }
   }
 
   private String getOnSuccess(Rule rule) {
