@@ -12,7 +12,6 @@ message Meta {
   repeated string tags = 3;
   repeated Rule rules = 4;
 }
-
 message Rule {
   string name = 1;
   string doc = 2;

@@ -187,6 +187,10 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
   public static final String TAGS_FIELD = "tags";
+  public static final String RULES_FIELD = "rules";
+  public static final String NAME_FIELD = "name";
+  public static final String EXPR_FIELD = "expr";
+  public static final String SQL_FIELD = "sql";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
 
@@ -1107,6 +1111,23 @@ public class ProtobufSchema implements ParsedSchema {
     List<String> tags = meta.getTagsList();
     if (!tags.isEmpty()) {
       map.put(TAGS_FIELD, tags);
+    }
+    List<MetaProto.Rule> rules = meta.getRulesList();
+    if (!rules.isEmpty()) {
+      List<Map<String, String>> ruleEntries = new ArrayList<>(rules.size());
+      for (MetaProto.Rule rule : rules) {
+        Map<String, String> entry = new LinkedHashMap<>();
+        if (!rule.getName().isEmpty()) {
+          entry.put(NAME_FIELD, rule.getName());
+        }
+        if (!rule.getDoc().isEmpty()) {
+          entry.put(DOC_FIELD, rule.getDoc());
+        }
+        entry.put(EXPR_FIELD, rule.getExpr());
+        entry.put(SQL_FIELD, rule.getSql());
+        ruleEntries.add(entry);
+      }
+      map.put(RULES_FIELD, ruleEntries);
     }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
@@ -2219,7 +2240,8 @@ public class ProtobufSchema implements ParsedSchema {
     if (!meta.isPresent()) {
       return null;
     }
-    return new ProtobufMeta(findDoc(meta), findParams(meta), findTags(meta));
+    return new ProtobufMeta(
+        findDoc(meta), findParams(meta), findTags(meta), findRules(meta));
   }
 
   public static String findDoc(Optional<OptionElement> meta) {
@@ -2258,6 +2280,20 @@ public class ProtobufSchema implements ParsedSchema {
       return (List<String>) result;
     } else {
       return result != null ? Collections.singletonList(result.toString()) : null;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static List<Map<String, String>> findRules(Optional<OptionElement> meta) {
+    Object result = findMetaField(meta, RULES_FIELD);
+    if (result == null) {
+      return null;
+    } else if (result instanceof Map) {
+      return Collections.singletonList((Map<String, String>) result);
+    } else if (result instanceof List) {
+      return (List<Map<String, String>>) result;
+    } else {
+      throw new IllegalStateException("Unrecognized rules type " + result.getClass().getName());
     }
   }
 
@@ -3482,11 +3518,21 @@ public class ProtobufSchema implements ParsedSchema {
     private final String doc;
     private final Map<String, String> params;
     private final List<String> tags;
+    private final List<Map<String, String>> rules;
 
     public ProtobufMeta(String doc, Map<String, String> params, List<String> tags) {
+      this(doc, params, tags, null);
+    }
+
+    public ProtobufMeta(
+        String doc,
+        Map<String, String> params,
+        List<String> tags,
+        List<Map<String, String>> rules) {
       this.doc = doc;
       this.params = params;
       this.tags = tags;
+      this.rules = rules;
     }
 
     public String getDoc() {
@@ -3501,10 +3547,15 @@ public class ProtobufSchema implements ParsedSchema {
       return tags;
     }
 
+    public List<Map<String, String>> getRules() {
+      return rules;
+    }
+
     public boolean isEmpty() {
       return doc == null
           && (params == null || params.isEmpty())
-          && (tags == null || tags.isEmpty());
+          && (tags == null || tags.isEmpty())
+          && (rules == null || rules.isEmpty());
     }
 
     @Override
@@ -3518,12 +3569,13 @@ public class ProtobufSchema implements ParsedSchema {
       ProtobufMeta metadata = (ProtobufMeta) o;
       return Objects.equals(doc, metadata.doc)
           && Objects.equals(params, metadata.params)
-          && Objects.equals(tags, metadata.tags);
+          && Objects.equals(tags, metadata.tags)
+          && Objects.equals(rules, metadata.rules);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(doc, params, tags);
+      return Objects.hash(doc, params, tags, rules);
     }
   }
 }
