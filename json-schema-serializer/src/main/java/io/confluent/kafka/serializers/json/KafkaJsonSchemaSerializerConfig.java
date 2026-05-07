@@ -75,7 +75,15 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final boolean JSON_INDENT_OUTPUT_DEFAULT = false;
   public static final String JSON_INDENT_OUTPUT_DOC = "Whether JSON output should be indented "
       + "(\"pretty-printed\")";
-  
+
+  public static final String VALIDATION_RULES_EXECUTION = "validation.rules.execution";
+  public static final String VALIDATION_RULES_EXECUTION_DEFAULT =
+      ValidationRulesExecution.AFTER_DOMAIN_RULES.name();
+  public static final String VALIDATION_RULES_EXECUTION_DOC = "When to execute inline validation "
+      + "(CHECK constraint) rules attached to the schema. One of 'DISABLED', "
+      + "'BEFORE_DOMAIN_RULES' (run on the original message before domain rule transformations), "
+      + "or 'AFTER_DOMAIN_RULES' (run on the transformed message after domain rules).";
+
   private static ConfigDef config;
 
   static {
@@ -131,6 +139,12 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         JSON_INDENT_OUTPUT_DEFAULT,
         ConfigDef.Importance.LOW,
         JSON_INDENT_OUTPUT_DOC
+    ).define(VALIDATION_RULES_EXECUTION,
+        ConfigDef.Type.STRING,
+        VALIDATION_RULES_EXECUTION_DEFAULT,
+        EnumRecommender.in(ValidationRulesExecution.values()),
+        ConfigDef.Importance.MEDIUM,
+        VALIDATION_RULES_EXECUTION_DOC
     );
   }
 

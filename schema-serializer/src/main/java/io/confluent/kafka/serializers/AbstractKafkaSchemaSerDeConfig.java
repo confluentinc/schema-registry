@@ -44,6 +44,12 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
  */
 public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
+  public enum ValidationRulesExecution {
+    DISABLED,
+    BEFORE_DOMAIN_RULES,
+    AFTER_DOMAIN_RULES
+  }
+
   /**
    * Configurations beginning with this prefix can be used to specify headers to include in requests
    * made to Schema Registry. For example, to include an {@code Authorization} header with a value
