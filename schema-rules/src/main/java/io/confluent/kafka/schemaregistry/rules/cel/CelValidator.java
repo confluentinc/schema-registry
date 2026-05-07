@@ -67,6 +67,16 @@ public final class CelValidator implements ValidationRuleExecutor {
 
   @Override
   public Object execute(ValidationRule rule, Object schema, Object value) throws RuleException {
+    if (value == null) {
+      // Walkers are expected to enforce skip-on-null before invoking the executor; a null
+      // here means a non-compliant caller. Surface the contract violation explicitly
+      // rather than NPE on value.getClass() or trip a confusing CEL evaluation error.
+      throw new RuleException(
+          "Validation rule '"
+              + (rule.getName() == null ? "unnamed" : rule.getName())
+              + "' received a null value; walkers must enforce skip-on-null before "
+              + "invoking the executor.");
+    }
     ScriptType scriptType;
     Type thisType;
     if (schema instanceof Descriptor) {

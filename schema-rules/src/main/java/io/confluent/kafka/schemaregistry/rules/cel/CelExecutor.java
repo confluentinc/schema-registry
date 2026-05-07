@@ -55,7 +55,7 @@ public class CelExecutor implements RuleExecutor {
     mapper.registerModule(new ProtobufModule());
   }
 
-  private static final int DEFAULT_CACHE_SIZE = 1000;
+  private static final int DEFAULT_CACHE_SIZE = 100;
 
   private final LoadingCache<RuleWithArgs, Script> cache;
 

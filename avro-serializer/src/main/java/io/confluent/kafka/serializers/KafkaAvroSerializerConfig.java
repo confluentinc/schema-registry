@@ -40,7 +40,7 @@ public class KafkaAvroSerializerConfig extends AbstractKafkaSchemaSerDeConfig {
 
   public static final String VALIDATION_RULES_EXECUTION = "validation.rules.execution";
   public static final String VALIDATION_RULES_EXECUTION_DEFAULT =
-      ValidationRulesExecution.AFTER_DOMAIN_RULES.name();
+      ValidationRulesExecution.DISABLED.name();
   public static final String VALIDATION_RULES_EXECUTION_DOC = "When to execute inline validation "
       + "(CHECK constraint) rules attached to the schema. One of 'DISABLED', "
       + "'BEFORE_DOMAIN_RULES' (run on the original message before domain rule transformations), "
