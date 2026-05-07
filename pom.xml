@@ -50,7 +50,6 @@
         <module>client</module>
         <module>schema-serializer</module>
         <module>schema-rules</module>
-        <module>schema-rules-integration</module>
         <module>avro-types</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>

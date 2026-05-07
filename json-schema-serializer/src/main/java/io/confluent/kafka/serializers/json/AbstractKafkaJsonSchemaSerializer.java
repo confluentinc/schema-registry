@@ -101,6 +101,12 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
         config.getString(KafkaJsonSchemaSerializerConfig.VALIDATION_RULES_EXECUTION)
             .toUpperCase(Locale.ROOT));
+    if (validationRulesExecution
+        != AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.DISABLED) {
+      // Eagerly load the validator class so a missing schema-rules dep fails at
+      // serializer construction rather than at the first record.
+      initValidationRuleExecutor();
+    }
   }
 
   protected KafkaJsonSchemaSerializerConfig serializerConfig(Map<String, ?> props) {

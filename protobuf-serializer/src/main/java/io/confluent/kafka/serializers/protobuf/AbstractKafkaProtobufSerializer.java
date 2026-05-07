@@ -82,6 +82,12 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
         config.getString(KafkaProtobufSerializerConfig.VALIDATION_RULES_EXECUTION)
             .toUpperCase(Locale.ROOT));
+    if (validationRulesExecution
+        != AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.DISABLED) {
+      // Eagerly load the validator class so a missing schema-rules dep fails at
+      // serializer construction rather than at the first record.
+      initValidationRuleExecutor();
+    }
   }
 
   protected KafkaProtobufSerializerConfig serializerConfig(Map<String, ?> props) {
