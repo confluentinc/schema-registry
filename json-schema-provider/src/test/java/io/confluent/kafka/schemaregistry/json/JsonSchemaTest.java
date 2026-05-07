@@ -1983,6 +1983,137 @@ public class JsonSchemaTest {
                lenientErrors.isEmpty());
   }
 
+  // The following tests cover the {add,remove} x {optional,required} x {closed,open} matrix
+  // for backward compatibility under STRICT vs LENIENT policies.
+
+  @Test
+  public void testStrictVsLenientAddOptionalToClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddOptionalToOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveOptionalFromClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveOptionalFromOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddRequiredToClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":false}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertIncompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientAddRequiredToOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":true}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertIncompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveRequiredFromClosedModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":false}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":false}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
+  public void testStrictVsLenientRemoveRequiredFromOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    assertCompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  private static void assertCompatible(
+      String originalSchema, String updatedSchema, CompatibilityPolicy policy) {
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+    List<String> errors = updated.isBackwardCompatible(policy, original);
+    assertTrue(policy + " policy should accept change. Errors: " + errors, errors.isEmpty());
+  }
+
+  private static void assertIncompatible(
+      String originalSchema, String updatedSchema, CompatibilityPolicy policy) {
+    JsonSchema original = new JsonSchema(originalSchema);
+    JsonSchema updated = new JsonSchema(updatedSchema);
+    List<String> errors = updated.isBackwardCompatible(policy, original);
+    assertFalse(policy + " policy should reject change", errors.isEmpty());
+  }
+
   static class TestObj {
     private String prop;
 
