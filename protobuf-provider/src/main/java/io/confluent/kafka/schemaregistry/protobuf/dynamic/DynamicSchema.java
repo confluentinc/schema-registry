@@ -359,6 +359,29 @@ public class DynamicSchema {
     if (tags != null && !tags.isEmpty()) {
       metaBuilder.addAllTags(tags);
     }
+    List<Map<String, String>> rules = meta.getRules();
+    if (rules != null && !rules.isEmpty()) {
+      for (Map<String, String> rule : rules) {
+        MetaProto.Rule.Builder ruleBuilder = MetaProto.Rule.newBuilder();
+        String name = rule.get(ProtobufSchema.NAME_FIELD);
+        if (name != null) {
+          ruleBuilder.setName(name);
+        }
+        String ruleDoc = rule.get(ProtobufSchema.DOC_FIELD);
+        if (ruleDoc != null) {
+          ruleBuilder.setDoc(ruleDoc);
+        }
+        String expr = rule.get(ProtobufSchema.EXPR_FIELD);
+        if (expr != null) {
+          ruleBuilder.setExpr(expr);
+        }
+        String sql = rule.get(ProtobufSchema.SQL_FIELD);
+        if (sql != null) {
+          ruleBuilder.setSql(sql);
+        }
+        metaBuilder.addRules(ruleBuilder.build());
+      }
+    }
     return metaBuilder.build();
   }
 
