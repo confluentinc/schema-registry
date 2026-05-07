@@ -26,6 +26,7 @@ import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -44,6 +45,7 @@ import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
@@ -62,6 +64,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
   protected String schemaFormat;
   protected boolean skipKnownTypes;
   protected ReferenceSubjectNameStrategy referenceSubjectNameStrategy;
+  protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
 
   protected void configure(KafkaProtobufSerializerConfig config) {
     configureClientProperties(config, new ProtobufSchemaProvider());
@@ -76,6 +79,9 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     this.schemaFormat = config.getSchemaFormat();
     this.skipKnownTypes = config.skipKnownTypes();
     this.referenceSubjectNameStrategy = config.referenceSubjectNameStrategyInstance();
+    this.validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
+        config.getString(KafkaProtobufSerializerConfig.VALIDATION_RULES_EXECUTION)
+            .toUpperCase(Locale.ROOT));
   }
 
   protected KafkaProtobufSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -171,7 +177,15 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(ProtobufSchema.TYPE, response.getId(), response.getGuid());
       }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.BEFORE_DOMAIN_RULES) {
+        object = (T) executeValidationRules(subject, topic, headers, schema, object);
+      }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.AFTER_DOMAIN_RULES) {
+        object = (T) executeValidationRules(subject, topic, headers, schema, object);
+      }
 
       MessageIndexes indexes = schema.toMessageIndexes(
           object.getDescriptorForType().getFullName(), normalizeSchema);

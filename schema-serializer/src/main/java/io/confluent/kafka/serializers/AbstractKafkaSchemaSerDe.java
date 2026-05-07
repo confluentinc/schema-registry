@@ -36,7 +36,10 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.cel.CelValidator;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.rules.DlqAction;
@@ -134,6 +137,8 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
   protected Map<String, Map<String, RuleBase>> ruleExecutors;
   protected Map<String, Map<String, RuleBase>> ruleActions;
   protected boolean isKey;
+
+  private volatile ValidationRuleExecutor validationRuleExecutor;
 
   private Map<Rule, String> onSuccessActions;
   private Map<Rule, String> onFailureActions;
@@ -793,6 +798,47 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       }
     }
     return message;
+  }
+
+  protected Object executeValidationRules(
+      String subject, String topic, Headers headers,
+      ParsedSchema schema, Object message) {
+    if (message == null || schema == null) {
+      return message;
+    }
+    List<ValidationRuleError> violations =
+        schema.validateMessage(validationRuleExecutor(), message);
+    if (violations != null && !violations.isEmpty()) {
+      throw new SerializationException(buildMessage(violations));
+    }
+    return message;
+  }
+
+  private static String buildMessage(List<ValidationRuleError> violations) {
+    if (violations == null || violations.isEmpty()) {
+      return "Validation rule failed (no detail)";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Validation rule failed (")
+        .append(violations.size())
+        .append(violations.size() == 1 ? " violation):" : " violations):");
+    for (ValidationRuleError v : violations) {
+      sb.append("\n  - ").append(v);
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Lazy per-serializer {@link CelValidator} — instantiated on first validation call.
+   * Deserializer-only flows (which never call {@link #executeValidationRules}) pay nothing.
+   */
+  private ValidationRuleExecutor validationRuleExecutor() {
+    ValidationRuleExecutor v = validationRuleExecutor;
+    if (v == null) {
+      v = new CelValidator();
+      validationRuleExecutor = v;
+    }
+    return v;
   }
 
   private String getOnSuccess(Rule rule) {
