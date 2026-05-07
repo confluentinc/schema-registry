@@ -1118,7 +1118,15 @@ public class JsonSchema implements ParsedSchema {
         }
         return;
       }
-      JsonNode jsonNode = objectMapper.convertValue(message, JsonNode.class);
+      JsonNode jsonNode;
+      try {
+        jsonNode = objectMapper.convertValue(message, JsonNode.class);
+      } catch (IllegalArgumentException e) {
+        // Can't introspect this message — skip oneOf/anyOf branch selection at this
+        // node. Structural JSON validation (if enabled) will have already surfaced
+        // the underlying serialization issue with a clearer error.
+        return;
+      }
       for (Schema subschema : subschemas) {
         boolean valid = false;
         try {

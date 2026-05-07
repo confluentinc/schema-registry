@@ -93,12 +93,11 @@ public final class ValidationRuleError {
     ValidationRuleError that = (ValidationRuleError) o;
     return Objects.equals(rule, that.rule)
         && Objects.equals(fieldPath, that.fieldPath)
-        && Objects.equals(message, that.message)
-        && Objects.equals(cause, that.cause);
+        && Objects.equals(message, that.message);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(rule, fieldPath, message, cause);
+    return Objects.hash(rule, fieldPath, message);
   }
 }

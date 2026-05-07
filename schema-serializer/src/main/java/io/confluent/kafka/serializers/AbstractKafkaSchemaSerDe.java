@@ -860,7 +860,10 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
         ? config.getString(VALIDATION_RULES_EXECUTOR_CLASS)
         : AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT;
     try {
-      return Utils.newInstance(className, ValidationRuleExecutor.class);
+      ValidationRuleExecutor instance =
+          Utils.newInstance(className, ValidationRuleExecutor.class);
+      log.info("Loaded validation rule executor: {}", className);
+      return instance;
     } catch (ClassNotFoundException e) {
       throw new ConfigException(
           "Validation rule executor class '" + className + "' could not be loaded — "
