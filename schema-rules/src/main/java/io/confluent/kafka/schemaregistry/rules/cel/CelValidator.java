@@ -77,6 +77,14 @@ public final class CelValidator implements ValidationRuleExecutor {
               + "' received a null value; walkers must enforce skip-on-null before "
               + "invoking the executor.");
     }
+    if (rule.getExpr() == null || rule.getExpr().isEmpty()) {
+      // Validation rules require a CEL expression; surface this clearly rather than
+      // letting CEL throw "no expression" or similar at compile time.
+      throw new RuleException(
+          "Validation rule '"
+              + (rule.getName() == null ? "unnamed" : rule.getName())
+              + "' has no expression");
+    }
     ScriptType scriptType;
     Type thisType;
     if (schema instanceof Descriptor) {
