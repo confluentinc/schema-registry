@@ -348,7 +348,7 @@ public class DynamicSchema {
     }
     Meta.Builder metaBuilder = Meta.newBuilder();
     String doc = meta.getDoc();
-    if (doc != null) {
+    if (doc != null && !doc.isEmpty()) {
       metaBuilder.setDoc(doc);
     }
     Map<String, String> params = meta.getParams();
@@ -364,22 +364,29 @@ public class DynamicSchema {
       for (Map<String, String> rule : rules) {
         MetaProto.Rule.Builder ruleBuilder = MetaProto.Rule.newBuilder();
         String name = rule.get(ProtobufSchema.NAME_FIELD);
-        if (name != null) {
+        boolean hasAnyField = false;
+        if (name != null && !name.isEmpty()) {
           ruleBuilder.setName(name);
+          hasAnyField = true;
         }
         String ruleDoc = rule.get(ProtobufSchema.DOC_FIELD);
-        if (ruleDoc != null) {
+        if (ruleDoc != null && !ruleDoc.isEmpty()) {
           ruleBuilder.setDoc(ruleDoc);
+          hasAnyField = true;
         }
         String expr = rule.get(ProtobufSchema.EXPR_FIELD);
-        if (expr != null) {
+        if (expr != null && !expr.isEmpty()) {
           ruleBuilder.setExpr(expr);
+          hasAnyField = true;
         }
         String sql = rule.get(ProtobufSchema.SQL_FIELD);
-        if (sql != null) {
+        if (sql != null && !sql.isEmpty()) {
           ruleBuilder.setSql(sql);
+          hasAnyField = true;
         }
-        metaBuilder.addRules(ruleBuilder.build());
+        if (hasAnyField) {
+          metaBuilder.addRules(ruleBuilder.build());
+        }
       }
     }
     return metaBuilder.build();

@@ -1129,9 +1129,13 @@ public class ProtobufSchema implements ParsedSchema {
         if (!rule.getSql().isEmpty()) {
           entry.put(SQL_FIELD, rule.getSql());
         }
-        ruleEntries.add(entry);
+        if (!entry.isEmpty()) {
+          ruleEntries.add(entry);
+        }
       }
-      map.put(RULES_FIELD, ruleEntries);
+      if (!ruleEntries.isEmpty()) {
+        map.put(RULES_FIELD, ruleEntries);
+      }
     }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
