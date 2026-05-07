@@ -78,8 +78,6 @@ public final class CelValidator implements ValidationRuleExecutor {
               + "invoking the executor.");
     }
     if (rule.getExpr() == null || rule.getExpr().isEmpty()) {
-      // Validation rules require a CEL expression; surface this clearly rather than
-      // letting CEL throw "no expression" or similar at compile time.
       throw new RuleException(
           "Validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName())
