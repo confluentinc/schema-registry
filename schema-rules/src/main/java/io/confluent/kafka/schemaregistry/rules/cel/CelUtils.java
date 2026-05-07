@@ -46,9 +46,9 @@ import org.projectnessie.cel.types.jackson.JacksonRegistry;
 
 /**
  * Shared CEL helpers used by both the transform-path executor ({@link CelExecutor}) and
- * the validation-path executor ({@code CelValidator} in schema-serializer). All methods
- * are stateless. Lives in schema-rules so it can reference {@link AvroRegistry} and
- * {@link BuiltinLibrary} without forcing those into a new module.
+ * the validation-path executor ({@link CelValidator}). All methods are stateless.
+ * Co-located with {@link AvroRegistry} and {@link BuiltinLibrary} so {@link #buildScript}
+ * can reference them directly.
  */
 public final class CelUtils {
 

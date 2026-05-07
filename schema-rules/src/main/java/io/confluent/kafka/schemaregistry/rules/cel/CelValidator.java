@@ -131,9 +131,9 @@ public final class CelValidator implements ValidationRuleExecutor {
       throw new RuleException(
           "Could not execute validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName())
+              + "'"
               + (rule.getDoc() == null || rule.getDoc().isEmpty()
-                  ? "" : "' (" + rule.getDoc() + ")")
-              + "'", e);
+                  ? "" : " (" + rule.getDoc() + ")"), e);
     } catch (ExecutionException e) {
       Throwable cause = e.getCause() != null ? e.getCause() : e;
       throw new RuleException(
