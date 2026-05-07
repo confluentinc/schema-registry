@@ -33,11 +33,6 @@
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>antlr4-runtime</artifactId>
         </dependency>
@@ -65,105 +60,18 @@
             <groupId>com.hubspot.jackson</groupId>
             <artifactId>jackson-datatype-protobuf</artifactId>
         </dependency>
-
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-registry</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka_${kafka.scala.version}</artifactId>
-            <classifier>test</classifier>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka-server-common</artifactId>
-            <version>${kafka.version}</version>
-            <classifier>test</classifier>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.kafka</groupId>
-            <artifactId>kafka-clients</artifactId>
-            <classifier>test</classifier>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-avro-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-json-schema-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-types</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-serializer</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.vintage</groupId>
-            <artifactId>junit-vintage-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- This module has no tests of its own (they live in schema-rules-integration).
+                 Skip surefire so it doesn't fail looking for inherited test infra. -->
             <plugin>
-                <groupId>org.apache.avro</groupId>
-                <artifactId>avro-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>schema</goal>
-                        </goals>
-                        <configuration>
-                            <testSourceDirectory>${project.basedir}/src/test/avro</testSourceDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>io.github.ascopes</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skipTests>true</skipTests>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
@@ -171,17 +79,6 @@
                 <version>${spotless.maven.plugin.version}</version>
                 <configuration>
                     <java>
-                        <excludes>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/ExpiringSpecificWidgetProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewerSpecificWidgetProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewSpecificWidgetProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/SpecificWidgetProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto2.java</exclude>
-                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java</exclude>
-                        </excludes>
                         <licenseHeader>
                             <file>${maven.multiModuleProjectDirectory}/config/license-headers/apache-header.txt</file>
                         </licenseHeader>
