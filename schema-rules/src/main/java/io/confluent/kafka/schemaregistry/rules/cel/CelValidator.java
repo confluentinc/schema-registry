@@ -22,6 +22,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import org.apache.avro.generic.GenericContainer;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
@@ -74,12 +75,29 @@ public final class CelValidator implements ValidationRuleExecutor {
       // the containing-type descriptor for primitive field values, so derive "this" type
       // from the value: a Message → its fully-qualified name; otherwise → the primitive's
       // Java class.
-      thisType = (value instanceof Message)
-          ? Decls.newObjectType(((Message) value).getDescriptorForType().getFullName())
-          : CelUtils.findTypeForClass(value.getClass());
+      if (value instanceof Message) {
+        // The schema-side descriptor (parsed from the schema text) and the runtime
+        // descriptor (from a generated class) are separate instances even when they
+        // describe the same type — CEL's protobuf integration won't unify them. Use the
+        // runtime descriptor for type registration so field access on `this` resolves.
+        Descriptor valueDesc = ((Message) value).getDescriptorForType();
+        thisType = Decls.newObjectType(valueDesc.getFullName());
+        schema = valueDesc;
+      } else {
+        thisType = CelUtils.findTypeForClass(value.getClass());
+      }
     } else if (schema instanceof Schema) {
       scriptType = ScriptType.AVRO;
-      thisType = CelUtils.findTypeForAvroType((Schema) schema);
+      // Mirror the protobuf path: use the value's own schema for type registration so
+      // CEL doesn't see distinct schema instances of the same logical type. Falls back
+      // to the walker's hint for primitive field values (which aren't GenericContainers).
+      if (value instanceof GenericContainer) {
+        Schema valueSchema = ((GenericContainer) value).getSchema();
+        thisType = CelUtils.findTypeForAvroType(valueSchema);
+        schema = valueSchema;
+      } else {
+        thisType = CelUtils.findTypeForAvroType((Schema) schema);
+      }
     } else if (schema instanceof Class<?>) {
       scriptType = ScriptType.JSON;
       thisType = CelUtils.findTypeForClass((Class<?>) schema);
