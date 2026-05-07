@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.exceptions.RestException;
 import io.kcache.Cache;
 import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
 import jakarta.ws.rs.core.UriBuilder;
 import java.io.Closeable;
 import java.io.IOException;
@@ -214,11 +215,36 @@ public abstract class AbstractDekRegistry implements Closeable {
    * Get the underlying keys kcache (only kafka-based implementations override this).
    * Provides backward compatibility for external components relying on direct cache access.
    * @return the keys cache
+   * @deprecated callers should use {@link #getKey(EncryptionKeyId)} or
+   *     {@link #rangeKeys(EncryptionKeyId, boolean, EncryptionKeyId, boolean)} instead.
    */
   @Deprecated
   public Cache<EncryptionKeyId, EncryptionKey> keys() {
     throw new UnsupportedOperationException(
         "Direct access to the keys cache is not supported in AbstractDekRegistry");
+  }
+
+  /**
+   * Returns the encryption key for the given id, or {@code null} if not found.
+   *
+   * <p>The default implementation delegates to {@link #keys()} for kafka-based
+   * subclasses.
+   */
+  public EncryptionKey getKey(EncryptionKeyId id) {
+    return keys().get(id);
+  }
+
+  /**
+   * Returns an iterator over the encryption keys whose ids fall in the given range.
+   * Caller is responsible for closing the returned iterator.
+   *
+   * <p>The default implementation delegates to {@link #keys()} for kafka-based
+   * subclasses.
+   */
+  public KeyValueIterator<EncryptionKeyId, EncryptionKey> rangeKeys(
+      EncryptionKeyId start, boolean startInclusive,
+      EncryptionKeyId end, boolean endInclusive) {
+    return keys().range(start, startInclusive, end, endInclusive);
   }
 
   // ==================== Cryptor Management ====================
