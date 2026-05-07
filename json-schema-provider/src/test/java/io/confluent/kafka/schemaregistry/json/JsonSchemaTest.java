@@ -2071,6 +2071,21 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testStrictVsLenientAddRequiredWithDefaultToOpenModel() {
+    String original = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"}},"
+        + "\"required\":[\"name\"],"
+        + "\"additionalProperties\":true}";
+    String updated = "{\"type\":\"object\","
+        + "\"properties\":{\"name\":{\"type\":\"string\"},"
+        + "\"email\":{\"type\":\"string\",\"default\":\"unknown\"}},"
+        + "\"required\":[\"name\",\"email\"],"
+        + "\"additionalProperties\":true}";
+    assertIncompatible(original, updated, CompatibilityPolicy.STRICT);
+    assertCompatible(original, updated, CompatibilityPolicy.LENIENT);
+  }
+
+  @Test
   public void testStrictVsLenientRemoveRequiredFromClosedModel() {
     String original = "{\"type\":\"object\","
         + "\"properties\":{\"name\":{\"type\":\"string\"},\"email\":{\"type\":\"string\"}},"
