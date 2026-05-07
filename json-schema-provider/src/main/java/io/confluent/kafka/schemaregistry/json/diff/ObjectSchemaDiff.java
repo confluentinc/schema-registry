@@ -266,7 +266,7 @@ public class ObjectSchemaDiff {
                 ctx.addDifference(PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
               } else if (update.getRequiredProperties().contains(propertyKey)) {
                 if (updateSchema.hasDefaultValue()) {
-                  // compatible
+                  // compatible only under LENIENT
                   ctx.addDifference(REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL);
                 } else {
                   // incompatible
