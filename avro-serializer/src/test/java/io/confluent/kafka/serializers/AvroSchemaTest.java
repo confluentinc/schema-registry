@@ -265,6 +265,18 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testNonAsciiUtf8NamesAccepted() {
+    String schema = "{\"type\":\"record\",\"name\":\"Café\",\"namespace\":\"a.b\","
+        + "\"fields\":[{\"name\":\"naïve\",\"type\":\"string\"},"
+        + "{\"name\":\"e\",\"type\":{\"type\":\"enum\",\"name\":\"Σ\","
+        + "\"symbols\":[\"Α\",\"Β\"]}}]}";
+    AvroSchema parsed = new AvroSchema(schema, Collections.emptyList(),
+        Collections.emptyMap(), null, false);
+    assertEquals("a.b.Café", parsed.rawSchema().getFullName());
+    assertNotNull(parsed.rawSchema().getField("naïve"));
+  }
+
+  @Test
   public void testGetReservedFields() {
     Metadata reservedFieldMetadata = new Metadata(Collections.emptyMap(),
         Collections.singletonMap(ParsedSchema.RESERVED, "null, boolean"),
