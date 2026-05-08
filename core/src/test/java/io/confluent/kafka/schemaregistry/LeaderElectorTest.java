@@ -217,12 +217,6 @@ public class LeaderElectorTest extends ClusterTestHarness {
     assertEquals(updateConfigStatusCodeFromRestApp1, updateConfigStatusCodeFromRestApp2,
         "Error code from the leader and the non-leader should be the same");
 
-    // test registering an existing schema to the non-leader when the leader is not available
-    assertEquals(
-        secondSchemaExpectedId,
-        restApp2.restClient.registerSchema(secondSchema, subject),
-        "Registering an existing schema to the non-leader should return its id"
-    );
 
     // set the correct leader identity back
     restApp1.setLeader(restApp1.myIdentity());

@@ -653,4 +653,70 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     // will include the X-Forward header, which is critical for proper request forwarding
     assertTrue(leaderRestService.isForward(), "isForward should be true for leaderRestService");
   }
+
+  @Test
+  public void testRegisterOrForwardFollowerForwardsDirectly() throws Exception {
+    // This test verifies that when the node is a follower, it forwards the request
+    // directly to the leader without performing any local cache lookups
+    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    kafkaSchemaRegistry.init();
+
+    // Set up as follower by setting a different leader
+    SchemaRegistryIdentity leaderIdentity = new SchemaRegistryIdentity(
+        "leader-host", 8082, true, "http");
+    kafkaSchemaRegistry.setLeader(leaderIdentity);
+
+    // Verify that this node is not the leader
+    assertFalse(kafkaSchemaRegistry.isLeader(), "Node should not be leader");
+
+    String subject = "test-subject";
+    String schemaString = "{\"type\":\"string\"}";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType("AVRO");
+    Map<String, String> headerProperties = new HashMap<>();
+
+    try {
+      // This will fail because we haven't set up a real leader REST service,
+      // but that's expected - we just want to verify it attempts to forward
+      kafkaSchemaRegistry.registerOrForward(subject, request, true, headerProperties);
+      fail("Expected exception due to forwarding failure");
+    } catch (Exception e) {
+      // We expect this to fail at the forwarding stage, not at cache lookup
+      // The key point is that it should attempt to forward, not do local lookups
+      assertTrue(e.getMessage().contains("forward") || e instanceof io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException,
+          "Should fail during forwarding: " + e.getMessage());
+    }
+  }
+
+  @Test
+  public void testRegisterOrForwardFollowerNoLeaderIdentity() throws Exception {
+    // This test verifies that when the node is not the leader and has no leader identity,
+    // it throws UnknownLeaderException immediately. This can happen during leader election
+    // or when the leader dies and a new one hasn't been elected yet.
+    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    kafkaSchemaRegistry.init();
+
+    // Simulate scenario where leader is unknown (e.g., during leader election or after leader dies)
+    kafkaSchemaRegistry.setLeader(null);
+
+    // Verify that this node is not the leader and has no leader identity
+    assertFalse(kafkaSchemaRegistry.isLeader(), "Node should not be leader");
+    assertNull(kafkaSchemaRegistry.leaderIdentity(), "Leader identity should be null");
+
+    String subject = "test-subject";
+    String schemaString = "{\"type\":\"string\"}";
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaString);
+    request.setSchemaType("AVRO");
+    Map<String, String> headerProperties = new HashMap<>();
+
+    try {
+      kafkaSchemaRegistry.registerOrForward(subject, request, true, headerProperties);
+      fail("Expected UnknownLeaderException");
+    } catch (io.confluent.kafka.schemaregistry.exceptions.UnknownLeaderException e) {
+      assertTrue(e.getMessage().contains("leader is unknown"),
+          "Should throw UnknownLeaderException with appropriate message");
+    }
+  }
 }
