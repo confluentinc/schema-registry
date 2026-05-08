@@ -22,16 +22,22 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import com.google.protobuf.Timestamp;
 import org.apache.avro.generic.GenericContainer;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
-import java.util.Collections;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+
 import org.apache.avro.Schema;
 import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptException;
 
@@ -59,8 +65,12 @@ public final class CelValidator implements ValidationRuleExecutor {
         .build(new CacheLoader<ValidationKey, Script>() {
           @Override
           public Script load(ValidationKey key) throws Exception {
+            // Always declare `now` so any rule may reference it. The value is supplied
+            // per-call from execute() and is a freshly-captured Timestamp.
             return CelUtils.buildScript(key.type, key.expr, key.schemaHint,
-                Collections.singletonList(Decls.newVar("this", key.thisType)));
+                Arrays.asList(
+                    Decls.newVar("this", key.thisType),
+                    Decls.newVar("now", Checked.checkedTimestamp)));
           }
         });
   }
@@ -126,7 +136,10 @@ public final class CelValidator implements ValidationRuleExecutor {
     ValidationKey key = new ValidationKey(rule.getExpr(), scriptType, thisType, schema);
     try {
       Script script = cache.get(key);
-      return script.execute(Object.class, Collections.singletonMap("this", value));
+      Map<String, Object> args = new LinkedHashMap<>(2);
+      args.put("this", value);
+      args.put("now", currentTimestamp());
+      return script.execute(Object.class, args);
     } catch (ScriptException e) {
       throw new RuleException(
           "Could not execute validation rule '"
@@ -140,6 +153,14 @@ public final class CelValidator implements ValidationRuleExecutor {
           "Could not compile validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", cause);
     }
+  }
+
+  private static Timestamp currentTimestamp() {
+    Instant now = Instant.now();
+    return Timestamp.newBuilder()
+        .setSeconds(now.getEpochSecond())
+        .setNanos(now.getNano())
+        .build();
   }
 
   /**
