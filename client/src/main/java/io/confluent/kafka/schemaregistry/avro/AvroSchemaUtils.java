@@ -46,6 +46,8 @@ import org.apache.avro.Conversions;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
+import org.apache.avro.NameValidator;
+import org.apache.avro.NameValidator.Result;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 import org.apache.avro.data.TimeConversions;
@@ -146,20 +148,20 @@ public class AvroSchemaUtils {
     }
     switch (schema.getType()) {
       case RECORD:
-        validateName(schema.getName(), "Name");
+        validateName(schema.getName());
         for (Schema.Field field : schema.getFields()) {
-          validateName(field.name(), "Name");
+          validateName(field.name());
           validateNames(field.schema(), seen);
         }
         break;
       case ENUM:
-        validateName(schema.getName(), "Name");
+        validateName(schema.getName());
         for (String symbol : schema.getEnumSymbols()) {
-          validateName(symbol, "Name");
+          validateName(symbol);
         }
         break;
       case FIXED:
-        validateName(schema.getName(), "Name");
+        validateName(schema.getName());
         break;
       case ARRAY:
         validateNames(schema.getElementType(), seen);
@@ -177,34 +179,11 @@ public class AvroSchemaUtils {
     }
   }
 
-  private static void validateName(String name, String typeOfName) {
-    if (name == null) {
-      throw new SchemaParseException(typeOfName + " is null");
+  private static void validateName(String name) {
+    Result result = NameValidator.UTF_VALIDATOR.validate(name);
+    if (!result.isOK()) {
+      throw new SchemaParseException(result.getErrors());
     }
-    int length = name.length();
-    if (length == 0) {
-      throw new SchemaParseException(typeOfName + " is empty");
-    }
-    char first = name.charAt(0);
-    if (!isStrictLetter(first) && first != '_') {
-      throw new SchemaParseException(
-          typeOfName + " \"" + name + "\" is invalid: Illegal initial character: " + name);
-    }
-    for (int i = 1; i < length; i++) {
-      char c = name.charAt(i);
-      if (!isStrictLetter(c) && !isStrictDigit(c) && c != '_') {
-        throw new SchemaParseException(
-            typeOfName + " \"" + name + "\" is invalid: Illegal character in: " + name);
-      }
-    }
-  }
-
-  private static boolean isStrictLetter(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-  }
-
-  private static boolean isStrictDigit(char c) {
-    return c >= '0' && c <= '9';
   }
 
   public static GenericData getGenericData(boolean useLogicalTypes) {
