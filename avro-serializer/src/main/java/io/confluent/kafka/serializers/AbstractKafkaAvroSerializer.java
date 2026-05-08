@@ -32,6 +32,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -59,6 +60,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
+  protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
   private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
@@ -85,6 +87,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
+        config.getString(KafkaAvroSerializerConfig.VALIDATION_RULES_EXECUTION)
+            .toUpperCase(Locale.ROOT));
+    if (validationRulesExecution
+        != AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.DISABLED) {
+      // Eagerly load the validator class so a missing schema-rules dep fails at
+      // serializer construction rather than at the first record.
+      initValidationRuleExecutor();
+    }
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -163,11 +174,31 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(AvroSchema.TYPE, response.getId(), response.getGuid());
       }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.BEFORE_DOMAIN_RULES) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeValidationRules(subject, topic, headers, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
+      }
       if (schema.ruleSet() != null && !schema.ruleSet().getDomainRules().isEmpty()) {
         AvroSchemaUtils.setThreadLocalData(
             schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
         try {
           object = executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
+      }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.AFTER_DOMAIN_RULES) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeValidationRules(subject, topic, headers, schema, object);
         } finally {
           AvroSchemaUtils.clearThreadLocalData();
         }
