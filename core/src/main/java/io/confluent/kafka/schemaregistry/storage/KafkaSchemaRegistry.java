@@ -598,6 +598,17 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                                   boolean normalize,
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
+    // If not leader, forward directly to leader without cache lookup
+    if (!isLeader()) {
+      if (leaderIdentity != null) {
+        return forwardRegisterRequestToLeader(subject, request, normalize, headerProperties);
+      } else {
+        throw new UnknownLeaderException("Register schema request failed since leader is "
+                                         + "unknown");
+      }
+    }
+
+    // Leader path: check cache first to avoid unnecessary registration
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
     boolean isLatestVersion = schema.getVersion() == -1;
@@ -632,17 +643,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     kafkaStore.lockFor(subject).lock();
     try {
-      if (isLeader()) {
-        return register(subject, request, normalize);
-      } else {
-        // forward registering request to the leader
-        if (leaderIdentity != null) {
-          return forwardRegisterRequestToLeader(subject, request, normalize, headerProperties);
-        } else {
-          throw new UnknownLeaderException("Register schema request failed since leader is "
-                                           + "unknown");
-        }
-      }
+      return register(subject, request, normalize);
     } finally {
       kafkaStore.lockFor(subject).unlock();
     }
