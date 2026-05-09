@@ -69,12 +69,23 @@ public final class Variant {
     }
   }
 
+  /**
+   * Returns a fresh view of the value buffer. Each call returns an independent
+   * {@link ByteBuffer} (via {@link ByteBuffer#duplicate()}) so multiple consumers
+   * — e.g. successive {@code com.google.protobuf.ByteString.copyFrom(buf)} calls,
+   * which advance the source position — don't interfere with each other. Internal
+   * {@code VariantFormat} reads use the package-private {@code value} field
+   * directly with positional gets and don't pay the duplicate cost.
+   */
   public ByteBuffer getValueBuffer() {
-    return value;
+    return value.duplicate();
   }
 
+  /**
+   * See {@link #getValueBuffer()} for the multi-consumer rationale.
+   */
   public ByteBuffer getMetadataBuffer() {
-    return metadata;
+    return metadata.duplicate();
   }
 
   /**

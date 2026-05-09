@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.rules.cel.avro;
 
 import static org.projectnessie.cel.common.types.Err.newErr;
 
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelTypes;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.OpaqueVal;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.avro.Schema;
@@ -144,6 +146,26 @@ public final class AvroRegistry implements TypeRegistry {
         return newErr("unknown enum name '%s'", fq);
       }
       return v.stringValue();
+    }
+
+    // Avro logical-type extended values (decimal, variant) — wrap as opaque CEL
+    // values so the to_decimal / to_variant accessors and the decimal_* /
+    // variant_* operators can operate on them. Without this, an Avro field of
+    // `decimal` logical-type arriving as BigDecimal would fail the
+    // GenericContainer cast below.
+    //
+    // Avro `local-timestamp-*` (which arrives as java.time.LocalDateTime) is
+    // intentionally NOT handled here — that logical type carries no timezone,
+    // and silently mapping it to a UTC google.protobuf.Timestamp would produce
+    // wrong results for non-UTC producers. Users with genuinely-local data
+    // should either use the regular `timestamp-*` logical type (UTC by spec)
+    // or carry an explicit TZ-offset field. See design doc, "Avro logical-type
+    // scope" section.
+    if (value instanceof java.math.BigDecimal) {
+      return OpaqueVal.of(CelTypes.DECIMAL, value);
+    }
+    if (value instanceof io.confluent.kafka.schemaregistry.type.Variant) {
+      return OpaqueVal.of(CelTypes.VARIANT, value);
     }
 
     try {
