@@ -97,7 +97,7 @@ public final class CelUtils {
     // cases the type provider can't represent (complex unions, etc.) without
     // forcing every rule to use dyn.
     if (type == ScriptType.AVRO && schemaHint instanceof Schema
-        && hasStructTypedThis(varDecls)) {
+        && hasAnyStructTypedVar(varDecls)) {
       try {
         return doBuildProgram(type, expr, schemaHint, varDecls);
       } catch (CelValidationException firstAttempt) {
@@ -137,7 +137,7 @@ public final class CelUtils {
       compilerBuilder.addMessageTypes(desc);
       runtimeBuilder.addMessageTypes(desc);
     } else if (type == ScriptType.AVRO && schemaHint instanceof Schema
-        && hasStructTypedThis(varDecls)) {
+        && hasAnyStructTypedVar(varDecls)) {
       // Register Avro records as CEL StructTypes so `this.field` type-checks
       // against actual Avro field types instead of dyn. Runtime values flow
       // through as plain Maps (toCelValue converts GenericRecord → Map);
@@ -157,7 +157,7 @@ public final class CelUtils {
     return runtime.createProgram(ast);
   }
 
-  private static boolean hasStructTypedThis(List<CelVarDecl> varDecls) {
+  private static boolean hasAnyStructTypedVar(List<CelVarDecl> varDecls) {
     for (CelVarDecl decl : varDecls) {
       if (decl.type() instanceof StructTypeReference) {
         return true;

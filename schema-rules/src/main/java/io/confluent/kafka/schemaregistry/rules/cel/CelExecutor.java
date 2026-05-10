@@ -295,7 +295,8 @@ public class CelExecutor implements RuleExecutor {
           } catch (RuleException e) {
             // ignore — exception in guard is treated as false (skip the body).
           }
-          if (Boolean.FALSE.equals(guardResult)) {
+          // Skip the body unless the guard explicitly returned Boolean.TRUE.
+          if (!Boolean.TRUE.equals(guardResult)) {
             return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : b.obj();
           }
         }

@@ -510,16 +510,27 @@ public final class AvroResultWriter {
    * primitive shape Avro expects for the encoded form.
    */
   private static boolean isLogicalTypeJavaRep(Object value, Schema schema) {
-    if (value instanceof java.math.BigDecimal
-        || value instanceof java.util.UUID
-        || value instanceof java.time.temporal.Temporal) {
-      return true;
+    Type t = schema.getType();
+    // BigDecimal: decimal logical type — backed by BYTES or FIXED.
+    if (value instanceof java.math.BigDecimal) {
+      return t == Type.BYTES || t == Type.FIXED;
     }
+    // UUID: uuid logical type — backed by STRING.
+    if (value instanceof java.util.UUID) {
+      return t == Type.STRING;
+    }
+    // Temporal: date / time-* / timestamp-* / local-timestamp-* — backed by
+    // INT (date / time-millis) or LONG (everything else).
+    if (value instanceof java.time.temporal.Temporal) {
+      return t == Type.INT || t == Type.LONG;
+    }
+    // Map: LogicalMap — backed by array<KV>.
     if (value instanceof java.util.Map) {
-      return schema.getType() == Type.ARRAY;
+      return t == Type.ARRAY;
     }
+    // Variant: variant logical type — backed by record.
     if (value instanceof io.confluent.kafka.schemaregistry.type.Variant) {
-      return schema.getType() == Type.RECORD;
+      return t == Type.RECORD;
     }
     return false;
   }
