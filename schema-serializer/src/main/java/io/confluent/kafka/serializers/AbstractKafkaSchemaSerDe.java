@@ -139,7 +139,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
   protected boolean isKey;
 
   private volatile ValidationRuleExecutor validationRuleExecutor;
-  protected volatile boolean validationRulesFailFast;
+  private volatile boolean validationRulesFailFast;
 
   private Map<Rule, String> onSuccessActions;
   private Map<Rule, String> onFailureActions;
