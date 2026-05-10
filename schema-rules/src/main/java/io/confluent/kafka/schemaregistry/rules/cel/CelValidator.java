@@ -16,35 +16,39 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel;
 
-import com.google.api.expr.v1alpha1.Type;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
-import com.google.protobuf.Timestamp;
-import org.apache.avro.generic.GenericContainer;
+import com.google.common.util.concurrent.UncheckedExecutionException;
+import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
+import dev.cel.common.CelVarDecl;
+import dev.cel.common.types.CelKind;
+import dev.cel.common.types.CelType;
+import dev.cel.common.types.SimpleType;
+import dev.cel.common.types.StructTypeReference;
+import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelVariableResolver;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.RegexEngine;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
-import java.time.Instant;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-
 import org.apache.avro.Schema;
-import org.projectnessie.cel.checker.Decls;
-import org.projectnessie.cel.common.types.pb.Checked;
-import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptException;
+import org.apache.avro.generic.GenericContainer;
 
 /**
- * Validation-rule executor backed by CEL. Each instance owns its own script cache; the
+ * Validation-rule executor backed by CEL. Each instance owns its own program cache; the
  * cache key is {@code (expr, scriptType, thisType, schemaHint)} — narrow enough that the
- * same compiled {@link Script} is reused across records that share the same field shape.
+ * same compiled {@link CelRuntime.Program} is reused across records that share the same
+ * field shape.
  *
  * <p>Instantiated per serializer (lazily, the first time a validation rule fires) so that
  * deserializer-only flows pay nothing.
@@ -53,7 +57,11 @@ public final class CelValidator implements ValidationRuleExecutor {
 
   private static final int DEFAULT_CACHE_SIZE = 1000;
 
-  private final LoadingCache<ValidationKey, Script> cache;
+  /** Used for POJO/JsonNode → Map conversion on the JSON validation path. */
+  private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
+      .registerModule(new ProtobufModule());
+
+  private final LoadingCache<ValidationKey, CelRuntime.Program> cache;
 
   public CelValidator() {
     this(DEFAULT_CACHE_SIZE);
@@ -62,15 +70,22 @@ public final class CelValidator implements ValidationRuleExecutor {
   public CelValidator(int cacheSize) {
     cache = CacheBuilder.newBuilder()
         .maximumSize(cacheSize)
-        .build(new CacheLoader<ValidationKey, Script>() {
+        .build(new CacheLoader<ValidationKey, CelRuntime.Program>() {
           @Override
-          public Script load(ValidationKey key) throws Exception {
-            // Always declare `now` so any rule may reference it. The value is supplied
-            // per-call from execute() and is a freshly-captured Timestamp.
-            return CelUtils.buildScript(key.type, key.expr, key.schemaHint,
+          public CelRuntime.Program load(ValidationKey key) throws Exception {
+            CelUtils.CompiledRule compiled = CelUtils.buildCompiledRule(
+                key.type, key.expr, key.schemaHint,
                 Arrays.asList(
-                    Decls.newVar("this", key.thisType),
-                    Decls.newVar("now", Checked.checkedTimestamp)));
+                    CelVarDecl.newVarDeclaration("this", key.thisType),
+                    CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP)),
+                RegexEngine.RE2);
+            CelKind kind = compiled.resultKind;
+            if (kind != CelKind.BOOL && kind != CelKind.STRING) {
+              throw new IllegalArgumentException(
+                  "Validation rule '" + key.expr + "' must return bool or string; "
+                      + "got " + kind);
+            }
+            return compiled.program;
           }
         });
   }
@@ -94,7 +109,7 @@ public final class CelValidator implements ValidationRuleExecutor {
               + "' has no expression");
     }
     ScriptType scriptType;
-    Type thisType;
+    CelType thisType;
     if (schema instanceof Descriptor) {
       scriptType = ScriptType.PROTOBUF;
       // Walker passes the field's message-type descriptor for nested-message values and
@@ -107,10 +122,10 @@ public final class CelValidator implements ValidationRuleExecutor {
         // describe the same type — CEL's protobuf integration won't unify them. Use the
         // runtime descriptor for type registration so field access on `this` resolves.
         Descriptor valueDesc = ((Message) value).getDescriptorForType();
-        thisType = Decls.newObjectType(valueDesc.getFullName());
+        thisType = StructTypeReference.create(valueDesc.getFullName());
         schema = valueDesc;
       } else {
-        thisType = CelUtils.findTypeForClass(value.getClass());
+        thisType = CelUtils.findCelTypeForClass(value.getClass());
       }
     } else if (schema instanceof Schema) {
       scriptType = ScriptType.AVRO;
@@ -119,14 +134,14 @@ public final class CelValidator implements ValidationRuleExecutor {
       // to the walker's hint for primitive field values (which aren't GenericContainers).
       if (value instanceof GenericContainer) {
         Schema valueSchema = ((GenericContainer) value).getSchema();
-        thisType = CelUtils.findTypeForAvroType(valueSchema);
+        thisType = CelUtils.findCelTypeForAvroSchema(valueSchema);
         schema = valueSchema;
       } else {
-        thisType = CelUtils.findTypeForAvroType((Schema) schema);
+        thisType = CelUtils.findCelTypeForAvroSchema((Schema) schema);
       }
     } else if (schema instanceof Class<?>) {
       scriptType = ScriptType.JSON;
-      thisType = CelUtils.findTypeForClass((Class<?>) schema);
+      thisType = CelUtils.findCelTypeForClass((Class<?>) schema);
     } else {
       throw new RuleException(
           "Unsupported schema type hint for validation rule '"
@@ -134,13 +149,22 @@ public final class CelValidator implements ValidationRuleExecutor {
               + (schema == null ? "null" : schema.getClass()));
     }
     ValidationKey key = new ValidationKey(rule.getExpr(), scriptType, thisType, schema);
+    Object celValue;
     try {
-      Script script = cache.get(key);
-      Map<String, Object> args = new LinkedHashMap<>(2);
-      args.put("this", value);
-      args.put("now", currentTimestamp());
-      return script.execute(Object.class, args);
-    } catch (ScriptException e) {
+      celValue = scriptType == ScriptType.JSON
+          ? CelUtils.toCelValueForJson(value, JSON_MAPPER)
+          : CelUtils.toCelValue(value);
+    } catch (IllegalArgumentException e) {
+      throw new RuleException(
+          "Could not convert value for validation rule '"
+              + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", e);
+    }
+    try {
+      CelRuntime.Program program = cache.get(key);
+      CelVariableResolver resolver = CelVariableResolver.hierarchicalVariableResolver(
+          new NowVariable(), new NamedVariable("this", celValue));
+      return program.eval(resolver);
+    } catch (CelEvaluationException e) {
       throw new RuleException(
           "Could not execute validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName())
@@ -148,19 +172,19 @@ public final class CelValidator implements ValidationRuleExecutor {
               + (rule.getDoc() == null || rule.getDoc().isEmpty()
                   ? "" : " (" + rule.getDoc() + ")"), e);
     } catch (ExecutionException e) {
+      // Guava cache wraps anything from load() — including CelValidationException
+      // from the compiler — as ExecutionException. Unwrap and re-throw.
       Throwable cause = e.getCause() != null ? e.getCause() : e;
       throw new RuleException(
           "Could not compile validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", cause);
+    } catch (UncheckedExecutionException | IllegalArgumentException e) {
+      Throwable cause = e instanceof UncheckedExecutionException && e.getCause() != null
+          ? e.getCause() : e;
+      throw new RuleException(
+          "Could not compile validation rule '"
+              + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", cause);
     }
-  }
-
-  private static Timestamp currentTimestamp() {
-    Instant now = Instant.now();
-    return Timestamp.newBuilder()
-        .setSeconds(now.getEpochSecond())
-        .setNanos(now.getNano())
-        .build();
   }
 
   /**
@@ -170,10 +194,10 @@ public final class CelValidator implements ValidationRuleExecutor {
   private static final class ValidationKey {
     private final String expr;
     private final ScriptType type;
-    private final Type thisType;
+    private final CelType thisType;
     private final Object schemaHint;
 
-    ValidationKey(String expr, ScriptType type, Type thisType, Object schemaHint) {
+    ValidationKey(String expr, ScriptType type, CelType thisType, Object schemaHint) {
       this.expr = expr;
       this.type = type;
       this.thisType = thisType;
