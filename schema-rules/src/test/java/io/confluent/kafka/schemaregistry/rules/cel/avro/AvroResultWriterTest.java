@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.rules.cel.avro;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -288,6 +289,114 @@ public class AvroResultWriterTest {
     out.get();
     out.get();
     assertEquals(0, in.position());
+  }
+
+  @Test
+  public void fixedField_acceptsGenericFixedWithMatchingSchema() {
+    // Pass-through case: caller already constructed a Fixed with the matching
+    // schema (e.g., a CEL rule reads message.fixedField and writes it back).
+    Schema schema = SchemaBuilder.fixed("Hash").size(3);
+    GenericData.Fixed in = new GenericData.Fixed(schema, new byte[]{1, 2, 3});
+    Object out = AvroResultWriter.convert(in, schema);
+    assertSame("same-schema GenericFixed should pass through unchanged", in, out);
+  }
+
+  @Test
+  public void fixedField_acceptsGenericFixedFromAnotherSchema() {
+    // GenericFixed with a different schema name: not pass-through, but
+    // unwrapBytes still extracts the bytes and a new Fixed is built.
+    Schema otherSchema = SchemaBuilder.fixed("OtherHash").size(3);
+    Schema schema = SchemaBuilder.fixed("Hash").size(3);
+    GenericData.Fixed in = new GenericData.Fixed(otherSchema, new byte[]{4, 5, 6});
+    Object out = AvroResultWriter.convert(in, schema);
+    assertTrue(out instanceof GenericData.Fixed);
+    assertEquals("Hash", ((GenericData.Fixed) out).getSchema().getName());
+    assertArrayEquals(new byte[]{4, 5, 6}, ((GenericData.Fixed) out).bytes());
+  }
+
+  @Test
+  public void bytesField_acceptsGenericFixed() {
+    // A Fixed value bound for a BYTES field — unwrapBytes covers it.
+    Schema fixedSchema = SchemaBuilder.fixed("Hash").size(2);
+    Schema bytesSchema = SchemaBuilder.builder().bytesType();
+    GenericData.Fixed in = new GenericData.Fixed(fixedSchema, new byte[]{9, 10});
+    ByteBuffer out = (ByteBuffer) AvroResultWriter.convert(in, bytesSchema);
+    assertArrayEquals(new byte[]{9, 10}, bytes(out));
+  }
+
+  // ---- record / enum schema evolution ------------------------------------
+
+  @Test
+  public void recordEvolution_targetAddsField_filledFromDeclaredDefault() {
+    // Source schema has {name, age}; target adds {email} with a default. The
+    // source IndexedRecord doesn't pass through (different schema); walker
+    // rebuilds against the target, picking up the email default.
+    Schema sourceSchema = SchemaBuilder.record("Person").fields()
+        .name("name").type().stringType().noDefault()
+        .name("age").type().intType().noDefault()
+        .endRecord();
+    Schema targetSchema = SchemaBuilder.record("Person").fields()
+        .name("name").type().stringType().noDefault()
+        .name("age").type().intType().noDefault()
+        .name("email").type().stringType().stringDefault("none@example.com")
+        .endRecord();
+    GenericRecord source = new GenericData.Record(sourceSchema);
+    source.put("name", "alice");
+    source.put("age", 30);
+    GenericRecord out = (GenericRecord) AvroResultWriter.convert(source, targetSchema);
+    assertEquals("alice", out.get("name").toString());
+    assertEquals(30, out.get("age"));
+    assertEquals("none@example.com", out.get("email").toString());
+  }
+
+  @Test
+  public void recordEvolution_targetDropsField_extraSourceFieldIgnored() {
+    // Source has {name, age, email}; target dropped email. Walker rebuilds
+    // against the target's two fields and silently ignores the source's
+    // extra email.
+    Schema sourceSchema = SchemaBuilder.record("Person").fields()
+        .name("name").type().stringType().noDefault()
+        .name("age").type().intType().noDefault()
+        .name("email").type().stringType().noDefault()
+        .endRecord();
+    Schema targetSchema = SchemaBuilder.record("Person").fields()
+        .name("name").type().stringType().noDefault()
+        .name("age").type().intType().noDefault()
+        .endRecord();
+    GenericRecord source = new GenericData.Record(sourceSchema);
+    source.put("name", "alice");
+    source.put("age", 30);
+    source.put("email", "alice@example.com");
+    GenericRecord out = (GenericRecord) AvroResultWriter.convert(source, targetSchema);
+    assertEquals("alice", out.get("name").toString());
+    assertEquals(30, out.get("age"));
+    assertEquals(targetSchema, out.getSchema());
+  }
+
+  @Test
+  public void enumEvolution_symbolMissingInTargetThrows() {
+    // Source enum has {ONE, TWO, THREE}; target dropped THREE. Passing an
+    // EnumSymbol("THREE") with the source schema should throw, not pass
+    // through silently.
+    Schema sourceSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO", "THREE");
+    Schema targetSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO");
+    GenericData.EnumSymbol three = new GenericData.EnumSymbol(sourceSchema, "THREE");
+    assertThrows(AvroTypeException.class,
+        () -> AvroResultWriter.convert(three, targetSchema));
+  }
+
+  @Test
+  public void enumEvolution_symbolValidInTargetIsRebuiltWithTargetSchema() {
+    // EnumSymbol carries the source schema; symbol "TWO" exists in the target.
+    // Walker should rebuild the EnumSymbol bound to the target schema rather
+    // than pass through the source-bound one.
+    Schema sourceSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO", "THREE");
+    Schema targetSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO");
+    GenericData.EnumSymbol two = new GenericData.EnumSymbol(sourceSchema, "TWO");
+    GenericData.EnumSymbol out = (GenericData.EnumSymbol) AvroResultWriter.convert(
+        two, targetSchema);
+    assertEquals("TWO", out.toString());
+    assertEquals(targetSchema, out.getSchema());
   }
 
   // ---- helpers -----------------------------------------------------------

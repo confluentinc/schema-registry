@@ -27,6 +27,7 @@ import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.UnresolvedUnionException;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -83,7 +84,10 @@ public final class AvroResultWriter {
         }
         return null;
       case BOOLEAN:
-        return requireType(celValue, Boolean.class, schema);
+        if (celValue instanceof Boolean) {
+          return celValue;
+        }
+        throw typeMismatch(celValue, schema);
       case INT:
         return narrowToInt(celValue, schema);
       case LONG:
@@ -122,12 +126,27 @@ public final class AvroResultWriter {
     if (celValue == null) {
       throw typeMismatch(null, schema);
     }
-    // Pass-through if a caller already built a record with the matching schema.
     if (celValue instanceof IndexedRecord) {
       IndexedRecord rec = (IndexedRecord) celValue;
-      if (rec.getSchema().getFullName().equals(schema.getFullName())) {
+      Schema sourceSchema = rec.getSchema();
+      // Same schema → pass through. Schema.equals is structural but Schema
+      // caches its hashCode, so identical instances bail at the hash check.
+      if (sourceSchema.equals(schema)) {
         return rec;
       }
+      // Different schema with the same fullName (or unrelated schema): rebuild
+      // against the target. Field-name lookup against the source so schema
+      // evolution (added/removed/reordered fields) Just Works — fields present
+      // in the target but missing in the source fall back to the target's
+      // declared defaults via GenericRecordBuilder.
+      GenericRecordBuilder builder = new GenericRecordBuilder(schema);
+      for (Field f : schema.getFields()) {
+        Field srcField = sourceSchema.getField(f.name());
+        if (srcField != null) {
+          builder.set(f, convert(rec.get(srcField.pos()), f.schema()));
+        }
+      }
+      return builder.build();
     }
     if (!(celValue instanceof Map)) {
       throw typeMismatch(celValue, schema);
@@ -188,6 +207,12 @@ public final class AvroResultWriter {
   }
 
   private static GenericData.Fixed toFixed(Object celValue, Schema schema) {
+    // Pass-through if the caller already constructed a Fixed with the matching
+    // schema (mirrors convertRecord's IndexedRecord pass-through).
+    if (celValue instanceof GenericData.Fixed
+        && ((GenericData.Fixed) celValue).getSchema().getFullName().equals(schema.getFullName())) {
+      return (GenericData.Fixed) celValue;
+    }
     byte[] bytes = unwrapBytes(celValue, schema);
     if (bytes.length != schema.getFixedSize()) {
       throw new AvroTypeException(
@@ -210,24 +235,31 @@ public final class AvroResultWriter {
       buf.get(out);
       return out;
     }
+    if (celValue instanceof GenericFixed) {
+      // Defensive path for Fixed values that didn't go through toCelValue (which
+      // would have already wrapped them as CelByteString). Schema-name match is
+      // not required here — toFixed handles same-schema pass-through above.
+      return ((GenericFixed) celValue).bytes();
+    }
     throw typeMismatch(celValue, schema);
   }
 
   private static GenericData.EnumSymbol toEnumSymbol(Object celValue, Schema schema) {
-    if (celValue instanceof GenericData.EnumSymbol
-        && ((GenericData.EnumSymbol) celValue).getSchema().getFullName()
-            .equals(schema.getFullName())) {
-      return (GenericData.EnumSymbol) celValue;
+    // No pass-through: even an EnumSymbol with a matching fullName might carry
+    // a symbol the target schema has since removed (schema evolution). Extract
+    // the symbol string and validate it against the target before constructing
+    // a fresh EnumSymbol bound to the target schema.
+    String symbol;
+    if (celValue instanceof GenericData.EnumSymbol || celValue instanceof CharSequence) {
+      symbol = celValue.toString();
+    } else {
+      throw typeMismatch(celValue, schema);
     }
-    if (celValue instanceof CharSequence) {
-      String symbol = celValue.toString();
-      if (!schema.hasEnumSymbol(symbol)) {
-        throw new AvroTypeException(
-            "Enum " + schema.getFullName() + " has no symbol '" + symbol + "'");
-      }
-      return new GenericData.EnumSymbol(schema, symbol);
+    if (!schema.hasEnumSymbol(symbol)) {
+      throw new AvroTypeException(
+          "Enum " + schema.getFullName() + " has no symbol '" + symbol + "'");
     }
-    throw typeMismatch(celValue, schema);
+    return new GenericData.EnumSymbol(schema, symbol);
   }
 
   // --- numeric narrowing --------------------------------------------------
@@ -397,13 +429,6 @@ public final class AvroResultWriter {
   }
 
   // --- error helpers ------------------------------------------------------
-
-  private static <T> T requireType(Object value, Class<T> type, Schema schema) {
-    if (type.isInstance(value)) {
-      return type.cast(value);
-    }
-    throw typeMismatch(value, schema);
-  }
 
   private static AvroTypeException typeMismatch(Object value, Schema schema) {
     return new AvroTypeException(

@@ -45,6 +45,7 @@ import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeFactory;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroCelTypeProvider;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericEnumSymbol;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 
@@ -296,7 +298,9 @@ public final class CelUtils {
         || type == byte.class
         || type == Byte.class) {
       return SimpleType.INT;
-    } else if (type == byte[].class || type == ByteString.class) {
+    } else if (type == byte[].class
+        || type == ByteString.class
+        || ByteBuffer.class.isAssignableFrom(type)) {
       return SimpleType.BYTES;
     } else if (type == double.class
         || type == Double.class
@@ -368,14 +372,25 @@ public final class CelUtils {
     }
     // CEL's bytes literal `b"..."` is parsed as CelByteString, and CelByteString
     // equality only matches other CelByteStrings — comparing against a raw
-    // byte[] returns false. Wrap incoming Java byte[] (the type
-    // ProtobufSchema#fieldTransform converts ByteString to before invoking the
-    // field-rule executor) so equality dispatches correctly.
+    // byte[] / ByteBuffer / GenericFixed returns false. Wrap every Avro/proto
+    // bytes carrier so equality dispatches correctly and the AvroResultWriter
+    // sees a uniform shape on output.
     if (value instanceof byte[]) {
       return CelByteString.of((byte[]) value);
     }
     if (value instanceof ByteString) {
       return CelByteString.of(((ByteString) value).toByteArray());
+    }
+    if (value instanceof ByteBuffer) {
+      // Defensive duplicate so position-mutating reads here don't leak back to
+      // whatever Avro reader handed us this buffer.
+      ByteBuffer buf = ((ByteBuffer) value).duplicate();
+      byte[] bytes = new byte[buf.remaining()];
+      buf.get(bytes);
+      return CelByteString.of(bytes);
+    }
+    if (value instanceof GenericFixed) {
+      return CelByteString.of(((GenericFixed) value).bytes());
     }
     if (value instanceof List) {
       List<?> in = (List<?>) value;
@@ -437,14 +452,16 @@ public final class CelUtils {
       return value;
     }
     // Pass-through cases that are already CEL-friendly or are handled by
-    // toCelValue. byte[]/ByteString get wrapped as CelByteString there (CEL
-    // bytes literals don't compare equal to raw byte[]). Utf8 isn't listed
-    // separately because it extends CharSequence.
+    // toCelValue. byte[]/ByteString/ByteBuffer get wrapped as CelByteString
+    // there (CEL bytes literals don't compare equal to raw byte[]).
+    // GenericFixed routes via GenericContainer. Utf8 isn't listed separately
+    // because it extends CharSequence.
     if (value instanceof CharSequence
         || value instanceof Number
         || value instanceof Boolean
         || value instanceof byte[]
         || value instanceof ByteString
+        || value instanceof ByteBuffer
         || value instanceof Map
         || value instanceof List
         || value instanceof Message
