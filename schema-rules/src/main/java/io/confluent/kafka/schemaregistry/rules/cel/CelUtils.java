@@ -342,7 +342,12 @@ public final class CelUtils {
       return SimpleType.DURATION;
     } else if (type == Timestamp.class
         || Instant.class.isAssignableFrom(type)
-        || ZonedDateTime.class.isAssignableFrom(type)) {
+        || ZonedDateTime.class.isAssignableFrom(type)
+        || java.time.OffsetDateTime.class.isAssignableFrom(type)
+        || java.time.LocalDateTime.class.isAssignableFrom(type)) {
+      // Single-instant types map to TIMESTAMP. LocalDate / LocalTime are
+      // partial temporals (no time-zone or no date) — they fall through to
+      // DYN below since CEL's TIMESTAMP type implies a full instant.
       return SimpleType.TIMESTAMP;
     } else if (Map.class.isAssignableFrom(type)) {
       return MapType.create(SimpleType.STRING, SimpleType.DYN);
@@ -381,6 +386,14 @@ public final class CelUtils {
     if (value == null) {
       return null;
     }
+    // CelFieldExecutor binds null primitive field values as
+    // com.google.protobuf.NullValue.NULL_VALUE. Google cel-java's runtime
+    // doesn't recognize the proto NullValue as CEL null — `value == null`
+    // would fail and references would surface as CelUnknownSet. Convert to
+    // CEL's own NullValue so null comparisons dispatch correctly.
+    if (value instanceof NullValue) {
+      return dev.cel.common.values.NullValue.NULL_VALUE;
+    }
     // IndexedRecord covers both GenericRecord and SpecificRecord (Avro-
     // generated POJOs). GenericRecord alone misses SpecificRecord — they're
     // parallel subtypes of IndexedRecord, not parent/child. Other Avro
@@ -391,10 +404,14 @@ public final class CelUtils {
     if (value instanceof IndexedRecord) {
       return avroRecordToMap((IndexedRecord) value);
     }
-    if (value instanceof Utf8) {
+    if (value instanceof GenericEnumSymbol) {
       return value.toString();
     }
-    if (value instanceof GenericEnumSymbol) {
+    // Normalize all CharSequence subclasses (Utf8, StringBuilder, StringBuffer,
+    // CharBuffer, etc.) to String. findCelTypeForClass declares any
+    // CharSequence as STRING; without this, CEL string ops would dispatch
+    // against a raw Utf8/StringBuilder and may not recognize it.
+    if (value instanceof CharSequence) {
       return value.toString();
     }
     if (value instanceof Integer) {
@@ -479,14 +496,19 @@ public final class CelUtils {
       }
       return toCelValue(mapper.convertValue(node, Object.class));
     }
-    // Pass CEL's own internal value types through unchanged. NullValue (both
-    // proto and dev.cel flavors) and CelByteString may appear when a previous
-    // CEL evaluation's result is rebound (e.g., chained transforms). Letting
-    // them fall through to Jackson would either turn NullValue into Java null
-    // (which the CEL runtime treats as unknown — references become
-    // CelUnknownSet) or serialize CelByteString as a struct.
-    if (value instanceof NullValue
-        || value instanceof dev.cel.common.values.NullValue
+    // Normalize proto NullValue → dev.cel NullValue (matches toCelValue's
+    // handling). dev.cel NullValue is what CEL's own `null` literal evaluates
+    // to, so equality dispatch (`value == null`) works correctly. Letting the
+    // proto NullValue or Java null reach CEL's runtime turns the variable
+    // reference into CelUnknownSet.
+    if (value instanceof NullValue) {
+      return dev.cel.common.values.NullValue.NULL_VALUE;
+    }
+    // dev.cel NullValue and CelByteString are CEL's own internal value types
+    // — may appear when a previous evaluation's result is rebound (chained
+    // transforms). Pass through unchanged; Jackson would otherwise serialize
+    // CelByteString as a struct.
+    if (value instanceof dev.cel.common.values.NullValue
         || value instanceof CelByteString) {
       return value;
     }

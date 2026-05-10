@@ -486,11 +486,12 @@ public final class AvroResultWriter {
    * accept on the write side:
    * <ul>
    *   <li>{@link java.math.BigDecimal} — decimal (on bytes or fixed)</li>
-   *   <li>{@link java.util.UUID} — uuid (on string)</li>
    *   <li>{@link java.time.temporal.Temporal} — date / time-millis /
    *       time-micros / timestamp-millis / timestamp-micros / local-timestamp-*
    *       (on int / long; covers Instant, LocalDate, LocalTime, LocalDateTime,
    *       OffsetDateTime, ZonedDateTime)</li>
+   *   <li>{@link java.util.Map} — logical map</li>
+   *   <li>{@link java.util.UUID} — uuid (on string)</li>
    *   <li>{@link io.confluent.kafka.schemaregistry.type.Variant} — variant
    *       (Confluent's variant logical type, on a 2-field record)</li>
    * </ul>
@@ -499,9 +500,12 @@ public final class AvroResultWriter {
    * primitive shape Avro expects for the encoded form.
    */
   private static boolean isLogicalTypeJavaRep(Object value) {
-    return value instanceof java.math.BigDecimal
+    if (value instanceof java.math.BigDecimal
         || value instanceof java.util.UUID
-        || value instanceof java.time.temporal.Temporal
+        || value instanceof java.time.temporal.Temporal) {
+      return true;
+    }
+    return value instanceof java.util.Map
         || value instanceof io.confluent.kafka.schemaregistry.type.Variant;
   }
 

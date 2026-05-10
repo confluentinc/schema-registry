@@ -97,7 +97,22 @@ public class CelExecutor implements RuleExecutor {
   public Object transform(RuleContext ctx, Object message) throws RuleException {
     Object input;
     if (message instanceof JsonNode) {
-      input = JSON_MAPPER.convertValue(message, new TypeReference<Map<String, Object>>(){});
+      // ObjectNode → Map; ArrayNode and scalar nodes can't satisfy a
+      // Map<String, Object> target — let bind() see them as their natural
+      // shape (List or scalar) so its dispatch can pass them through or
+      // route to the right ScriptType.
+      JsonNode node = (JsonNode) message;
+      try {
+        if (node.isObject()) {
+          input = JSON_MAPPER.convertValue(node, new TypeReference<Map<String, Object>>(){});
+        } else if (node.isArray()) {
+          input = JSON_MAPPER.convertValue(node, new TypeReference<List<Object>>(){});
+        } else {
+          input = JSON_MAPPER.convertValue(node, Object.class);
+        }
+      } catch (IllegalArgumentException e) {
+        throw new RuleException(ctx.rule(), e);
+      }
     } else {
       input = message;
     }
@@ -111,11 +126,14 @@ public class CelExecutor implements RuleExecutor {
       return input;        // list-shaped input is not supported; pass through.
     }
     Object result = evaluateWithGuard(ctx, b);
-    // Identity short-circuit: if the rule returns the same value we bound
-    // (e.g., expression is just `message`), return the original `message`
-    // reference so the caller sees byte-for-byte what they passed in. Applies
-    // to both Map (record) and scalar (primitive top-level schema) cases.
-    if (result == b.boundMessage()) {
+    // Identity short-circuit: return the original `message` reference if
+    // either (a) the rule returned the same value we bound (e.g., expression
+    // is just `message`) or (b) evaluateWithGuard returned `b.obj()` because
+    // a guard skipped the body. Both mean "no transformation happened" — the
+    // caller should see byte-for-byte what they passed in. Without (b),
+    // JsonNode inputs with guard-skipped TRANSFORM rules would get a
+    // Jackson-converted Map back instead of their JsonNode.
+    if (result == b.boundMessage() || result == b.obj()) {
       return message;
     }
     // CONDITION rules return Boolean as a framework signal (pass/fail), not
