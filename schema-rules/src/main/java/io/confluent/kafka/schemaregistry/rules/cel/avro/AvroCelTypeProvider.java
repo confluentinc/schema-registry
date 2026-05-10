@@ -139,7 +139,7 @@ public final class AvroCelTypeProvider implements CelTypeProvider {
       if (f == null) {
         return Optional.empty();
       }
-      return Optional.of(StructType.Field.of(name, fieldCelType(f.schema())).type());
+      return Optional.of(fieldCelType(f.schema()));
     };
     return StructType.create(fullName, fieldNames, resolver);
   }

@@ -64,9 +64,16 @@ public final class AvroResultWriter {
       celValue = null;
     }
 
-    // Logical types: bypass primitive narrowing/coercion. The serializer's
-    // logical-type Conversion handles round-tripping. Unions are handled
-    // separately so a logical-type union still gets branch-resolved.
+    // Logical types: bypass primitive narrowing/coercion ONLY when the value
+    // is already the logical-type Java rep (BigDecimal / Temporal / UUID /
+    // Variant). The serializer's logical-type Conversion encodes those to the
+    // underlying primitive shape. Other values (CelByteString from b"..."
+    // literals, raw byte[] / ByteBuffer copied from elsewhere, narrow
+    // numerics) fall through to the type-specific case below so Avro receives
+    // a recognizable shape (ByteBuffer for BYTES, GenericFixed for FIXED,
+    // narrowed primitives for INT/LONG, etc.) — Avro will treat those as the
+    // already-encoded form. Unions are handled separately so a logical-typed
+    // branch still gets branch-resolved first.
     if (schema.getLogicalType() != null && schema.getType() != Type.UNION) {
       // Null isn't valid for a non-nullable logical-type field — surface the
       // mismatch here rather than letting GenericRecordBuilder.build() fail
@@ -74,7 +81,10 @@ public final class AvroResultWriter {
       if (celValue == null) {
         throw typeMismatch(null, schema);
       }
-      return celValue;
+      if (isLogicalTypeJavaRep(celValue)) {
+        return celValue;
+      }
+      // Otherwise fall through to type-specific conversion below.
     }
 
     switch (schema.getType()) {
@@ -439,6 +449,12 @@ public final class AvroResultWriter {
           return ((IndexedRecord) value).getSchema().getFullName()
               .equals(branch.getFullName());
         }
+        // variant logical-type record: accept Variant so the Conversion can
+        // encode it into the {metadata, value} 2-bytes-fields record shape.
+        if (hasLogicalType
+            && value instanceof io.confluent.kafka.schemaregistry.type.Variant) {
+          return true;
+        }
         // CEL outputs records as Maps. Without explicit tagging we accept any
         // Map for any record branch; first record branch in declaration order
         // wins (per the agreed convention). Authors who need disambiguation
@@ -463,6 +479,30 @@ public final class AvroResultWriter {
   private static boolean isCelNull(Object value) {
     return value instanceof dev.cel.common.values.NullValue
         || value instanceof com.google.protobuf.NullValue;
+  }
+
+  /**
+   * Recognize the Java types Avro's standard logical-type {@code Conversion}s
+   * accept on the write side:
+   * <ul>
+   *   <li>{@link java.math.BigDecimal} — decimal (on bytes or fixed)</li>
+   *   <li>{@link java.util.UUID} — uuid (on string)</li>
+   *   <li>{@link java.time.temporal.Temporal} — date / time-millis /
+   *       time-micros / timestamp-millis / timestamp-micros / local-timestamp-*
+   *       (on int / long; covers Instant, LocalDate, LocalTime, LocalDateTime,
+   *       OffsetDateTime, ZonedDateTime)</li>
+   *   <li>{@link io.confluent.kafka.schemaregistry.type.Variant} — variant
+   *       (Confluent's variant logical type, on a 2-field record)</li>
+   * </ul>
+   * Other shapes (CelByteString, raw byte[], narrow numerics, etc.) fall
+   * through to the type-specific case which converts them to the underlying
+   * primitive shape Avro expects for the encoded form.
+   */
+  private static boolean isLogicalTypeJavaRep(Object value) {
+    return value instanceof java.math.BigDecimal
+        || value instanceof java.util.UUID
+        || value instanceof java.time.temporal.Temporal
+        || value instanceof io.confluent.kafka.schemaregistry.type.Variant;
   }
 
   // --- error helpers ------------------------------------------------------
