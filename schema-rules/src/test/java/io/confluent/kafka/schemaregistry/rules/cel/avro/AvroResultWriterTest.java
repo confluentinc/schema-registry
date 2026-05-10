@@ -302,6 +302,19 @@ public class AvroResultWriterTest {
   }
 
   @Test
+  public void fixedField_sameNameDifferentSize_rebuildsAndValidates() {
+    // Two Fixed schemas share the fullName "Hash" but declare different sizes
+    // (schema evolution / accident). Pass-through must NOT happen — the source
+    // Fixed has 4 bytes, the target wants 3, so the size validation in toFixed
+    // throws.
+    Schema sourceSchema = SchemaBuilder.fixed("Hash").size(4);
+    Schema targetSchema = SchemaBuilder.fixed("Hash").size(3);
+    GenericData.Fixed in = new GenericData.Fixed(sourceSchema, new byte[]{1, 2, 3, 4});
+    assertThrows(AvroTypeException.class,
+        () -> AvroResultWriter.convert(in, targetSchema));
+  }
+
+  @Test
   public void fixedField_acceptsGenericFixedFromAnotherSchema() {
     // GenericFixed with a different schema name: not pass-through, but
     // unwrapBytes still extracts the bytes and a new Fixed is built.

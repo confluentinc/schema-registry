@@ -219,9 +219,24 @@ public final class CelUtils {
   }
 
   /**
-   * Map an Avro {@link Schema} to a {@link CelType}. Records and maps both map to
-   * {@code map<string, dyn>} because we pre-convert {@link GenericRecord} values to
-   * JDK maps before binding.
+   * Map an Avro {@link Schema} to a {@link CelType}.
+   *
+   * <ul>
+   *   <li>Primitives map to their natural CEL counterpart (BOOLEAN→BOOL,
+   *       INT/LONG→INT, FLOAT/DOUBLE→DOUBLE, STRING/ENUM→STRING,
+   *       BYTES/FIXED→BYTES, NULL→NULL_TYPE).</li>
+   *   <li>{@code RECORD} → {@link StructTypeReference} so the
+   *       {@link AvroCelTypeProvider} registered by
+   *       {@link #buildProgram} resolves field types at type-check time.
+   *       Runtime values still flow through as JDK maps (via
+   *       {@link #toCelValue}); the struct declaration is purely for compile-side
+   *       field validation. If the provider can't represent the record cleanly,
+   *       {@link #buildProgram} retries with {@code this} downgraded to
+   *       {@code map<string, dyn>}.</li>
+   *   <li>{@code ARRAY} → {@code list<dyn>}; {@code MAP} → {@code map<string, dyn>}.</li>
+   *   <li>{@code UNION}: nullable {@code [null, X]} unwraps to X; multi-branch
+   *       unions (and any unrecognized type) fall back to {@code dyn}.</li>
+   * </ul>
    */
   public static CelType findCelTypeForAvroSchema(Schema schema) {
     Schema.Type type = schema.getType();

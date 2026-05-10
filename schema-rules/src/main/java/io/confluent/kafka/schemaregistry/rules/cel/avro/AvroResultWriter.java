@@ -209,9 +209,15 @@ public final class AvroResultWriter {
   private static GenericData.Fixed toFixed(Object celValue, Schema schema) {
     // Pass-through if the caller already constructed a Fixed with the matching
     // schema (mirrors convertRecord's IndexedRecord pass-through).
-    if (celValue instanceof GenericData.Fixed
-        && ((GenericData.Fixed) celValue).getSchema().getFullName().equals(schema.getFullName())) {
-      return (GenericData.Fixed) celValue;
+    // Schema.equals covers name + namespace + size + aliases; the length
+    // check defends against malformed Fixed instances whose bytes don't
+    // match their declared size. Mismatches fall through to the rebuild
+    // path below (unwrapBytes handles GenericFixed).
+    if (celValue instanceof GenericData.Fixed) {
+      GenericData.Fixed fixed = (GenericData.Fixed) celValue;
+      if (fixed.getSchema().equals(schema) && fixed.bytes().length == schema.getFixedSize()) {
+        return fixed;
+      }
     }
     byte[] bytes = unwrapBytes(celValue, schema);
     if (bytes.length != schema.getFixedSize()) {
