@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
+import dev.cel.common.values.CelByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -66,8 +67,23 @@ public class CelFieldExecutor extends FieldRuleExecutor {
             }
           }
       );
-      if (result instanceof ByteString) {
+      if (result instanceof com.google.protobuf.NullValue
+          || result instanceof dev.cel.common.values.NullValue) {
+        // CEL `null` literal evaluates to dev.cel.common.values.NullValue;
+        // proto NullValue is the convention at line 61 for null field inputs
+        // (and so the result of a rule that echoes a null value). Field
+        // setters expect Java null — normalize both flavors here so a
+        // nullable target sees null and a non-nullable target surfaces the
+        // contract violation directly instead of choking on a sentinel.
+        result = null;
+      } else if (result instanceof ByteString) {
         result = ((ByteString) result).toByteArray();
+      } else if (result instanceof CelByteString) {
+        // CelByteString is what CEL bytes literals (b"...") evaluate to.
+        // Hand back a raw byte[] so the per-format field setters
+        // (ProtobufSchema, AvroSchema, JsonSchema) can take their normal byte[]
+        // → ByteString / ByteBuffer path.
+        result = ((CelByteString) result).toByteArray();
       } else if (result instanceof Number) {
         Number num = (Number) result;
         switch (fieldCtx.getType()) {
