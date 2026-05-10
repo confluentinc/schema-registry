@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
+import dev.cel.common.values.CelByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -68,6 +69,12 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       );
       if (result instanceof ByteString) {
         result = ((ByteString) result).toByteArray();
+      } else if (result instanceof CelByteString) {
+        // CelByteString is what CEL bytes literals (b"...") evaluate to.
+        // Hand back a raw byte[] so the per-format field setters
+        // (ProtobufSchema, AvroSchema, JsonSchema) can take their normal byte[]
+        // → ByteString / ByteBuffer path.
+        result = ((CelByteString) result).toByteArray();
       } else if (result instanceof Number) {
         Number num = (Number) result;
         switch (fieldCtx.getType()) {
