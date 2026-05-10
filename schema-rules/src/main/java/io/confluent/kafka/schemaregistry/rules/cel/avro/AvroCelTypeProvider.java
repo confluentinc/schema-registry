@@ -155,6 +155,16 @@ public final class AvroCelTypeProvider implements CelTypeProvider {
     if (effective == null) {
       return SimpleType.DYN;
     }
+    // Logical-typed fields (timestamp-millis on long, decimal on bytes/fixed,
+    // date on int, uuid on string, etc.) carry runtime values whose Java type
+    // diverges from the underlying Avro primitive — Instant / BigDecimal /
+    // LocalDate / UUID. Declaring the underlying CEL type creates a
+    // compile/runtime mismatch. Use DYN so the runtime can dispatch against
+    // whatever the value actually is, mirroring AvroResultWriter's logical-
+    // type bypass and CelUtils.findCelTypeForAvroSchema.
+    if (effective.getLogicalType() != null) {
+      return SimpleType.DYN;
+    }
     switch (effective.getType()) {
       case BOOLEAN:
         return SimpleType.BOOL;

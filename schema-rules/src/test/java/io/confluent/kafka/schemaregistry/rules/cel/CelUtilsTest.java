@@ -97,4 +97,50 @@ public class CelUtilsTest {
     Schema schema = SchemaBuilder.builder().stringType();
     assertEquals(SimpleType.STRING, CelUtils.findCelTypeForAvroSchema(schema));
   }
+
+  // ---- findCelTypeForClass: non-Map values map to DYN, not MapType -------
+
+  @Test
+  public void bigDecimalClass_mapsToDyn() {
+    // BigDecimal is the runtime Java rep for decimal logical types. It isn't
+    // a Map — declaring MapType would block comparison/arithmetic ops at
+    // compile time.
+    assertEquals(SimpleType.DYN,
+        CelUtils.findCelTypeForClass(java.math.BigDecimal.class));
+  }
+
+  @Test
+  public void uuidClass_mapsToDyn() {
+    // UUID is the runtime Java rep for uuid-on-string logical type.
+    assertEquals(SimpleType.DYN, CelUtils.findCelTypeForClass(java.util.UUID.class));
+  }
+
+  @Test
+  public void localDateClass_mapsToDyn() {
+    // LocalDate is the runtime Java rep for date logical type.
+    assertEquals(SimpleType.DYN, CelUtils.findCelTypeForClass(java.time.LocalDate.class));
+  }
+
+  @Test
+  public void localTimeClass_mapsToDyn() {
+    // LocalTime is the runtime Java rep for time-millis/time-micros.
+    assertEquals(SimpleType.DYN, CelUtils.findCelTypeForClass(java.time.LocalTime.class));
+  }
+
+  @Test
+  public void unknownPojoClass_mapsToDyn() {
+    // Arbitrary POJO bean — DYN keeps .field access working at runtime via
+    // the Jackson-converted Map and avoids over-constraining ops at compile.
+    class MyPojo {
+      @SuppressWarnings("unused") private String name;
+    }
+    assertEquals(SimpleType.DYN, CelUtils.findCelTypeForClass(MyPojo.class));
+  }
+
+  @Test
+  public void mapClass_stillMapsToMapType() {
+    // Sanity: Map subclasses keep their MapType<STRING, DYN> declaration.
+    assertEquals(dev.cel.common.types.MapType.create(SimpleType.STRING, SimpleType.DYN),
+        CelUtils.findCelTypeForClass(java.util.HashMap.class));
+  }
 }

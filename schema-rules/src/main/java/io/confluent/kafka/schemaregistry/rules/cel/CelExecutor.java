@@ -111,24 +111,35 @@ public class CelExecutor implements RuleExecutor {
       return input;        // list-shaped input is not supported; pass through.
     }
     Object result = evaluateWithGuard(ctx, b);
+    // Identity short-circuit: if the rule returns the same value we bound
+    // (e.g., expression is just `message`), return the original `message`
+    // reference so the caller sees byte-for-byte what they passed in. Applies
+    // to both Map (record) and scalar (primitive top-level schema) cases.
+    if (result == b.boundMessage()) {
+      return message;
+    }
+    // CONDITION rules return Boolean as a framework signal (pass/fail), not
+    // data to coerce against the target schema. Pass through unchanged — the
+    // framework's Boolean.TRUE.equals check treats anything-not-TRUE as fail,
+    // so sentinel types (NullValue, CelByteString) just surface as failures.
+    if (ctx.rule().getKind() == RuleKind.CONDITION) {
+      return result;
+    }
+    if (ctx.target() instanceof AvroSchema) {
+      // Avro target: walker handles every Schema.Type — records, primitives,
+      // enums, bytes/fixed, logical types, unions. Sidesteps the JSON
+      // intermediate that loses bytes (Jackson's base64 default), enum
+      // symbols, and fixed types. Scalars get the same coercion/validation
+      // (e.g., CEL's widened Long narrowed to int, CelByteString unwrapped to
+      // ByteBuffer, String wrapped as EnumSymbol) as nested record fields.
+      try {
+        Schema avroSchema = ((AvroSchema) ctx.target()).rawSchema();
+        return AvroResultWriter.convert(result, avroSchema);
+      } catch (RuntimeException e) {
+        throw new RuleException(ctx.rule(), e);
+      }
+    }
     if (result instanceof Map) {
-      // Identity short-circuit: if the rule expression is just `message`, CEL
-      // returns the same Map we bound. Return the original input — keeps the
-      // record byte-identical and avoids any conversion work.
-      if (result == b.boundMessage()) {
-        return message;
-      }
-      // Avro path: walk the Map and the schema in lockstep with
-      // AvroResultWriter. Sidesteps the JSON intermediate that loses bytes
-      // (Jackson's base64 default) and forces explicit union tagging.
-      if (ctx.target() instanceof AvroSchema) {
-        try {
-          Schema avroSchema = ((AvroSchema) ctx.target()).rawSchema();
-          return AvroResultWriter.convert(result, avroSchema);
-        } catch (RuntimeException e) {
-          throw new RuleException(ctx.rule(), e);
-        }
-      }
       // JSON Schema / Protobuf: Jackson roundtrip. Unwrap CEL-flavored values
       // first (NullValue → null, CelByteString → byte[]) so ProtobufModule
       // doesn't emit "zeroValue" and downstream parsers accept the JsonNode.
@@ -140,8 +151,9 @@ public class CelExecutor implements RuleExecutor {
         throw new RuleException(ctx.rule(), e);
       }
     }
-    // Scalar fall-through: normalize CEL sentinels so downstream serializers
-    // see Java null and byte[] rather than NullValue / CelByteString.
+    // Scalar fall-through for JSON Schema / Protobuf: normalize CEL sentinels
+    // so downstream serializers see Java null and byte[] rather than NullValue
+    // / CelByteString.
     return unwrapCelValuesForJson(result);
   }
 

@@ -58,6 +58,7 @@ import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericEnumSymbol;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 
 /**
@@ -348,20 +349,23 @@ public final class CelUtils {
     } else if (List.class.isAssignableFrom(type)) {
       return ListType.create(SimpleType.DYN);
     } else {
-      // Unknown POJO bean class: bind as a generic map. JSON values flow
-      // through toCelValueForJson which Jackson-converts beans to Map<String,
-      // Object>, so map-typed access is the right declaration. (Returning a
-      // StructTypeReference would fail at compile because the CEL compiler
-      // has no type provider for arbitrary POJO classes.)
-      return MapType.create(SimpleType.STRING, SimpleType.DYN);
+      // Unknown class — covers logical-type Java reps (BigDecimal, UUID,
+      // LocalDate, LocalTime) and arbitrary POJO beans alike. Declare DYN so
+      // CEL's runtime dispatches against whatever the value actually is. POJO
+      // beans get Jackson-converted to Map at runtime; CEL's DYN allows
+      // .field access on the resulting Map. Declaring MapType<STRING, DYN>
+      // would be wrong for non-Map values (BigDecimal etc.) — comparison and
+      // arithmetic ops wouldn't type-check against a Map type.
+      return SimpleType.DYN;
     }
   }
 
   /**
    * Convert a native value to a CEL-compatible shape:
    * <ul>
-   *   <li>{@link GenericRecord} → JDK {@link Map} (Google cel-java's runtime
-   *       selects fields on Maps natively)</li>
+   *   <li>{@link IndexedRecord} (covers both {@link GenericRecord} and
+   *       {@code SpecificRecord}) → JDK {@link Map} (Google cel-java's
+   *       runtime selects fields on Maps natively)</li>
    *   <li>{@link Utf8} / {@link GenericEnumSymbol} → {@link String}</li>
    *   <li>Narrow numeric types ({@link Integer}, {@link Short}, {@link Byte},
    *       {@link Float}) widened to CEL's natural widths
@@ -377,8 +381,15 @@ public final class CelUtils {
     if (value == null) {
       return null;
     }
-    if (value instanceof GenericRecord) {
-      return avroRecordToMap((GenericRecord) value);
+    // IndexedRecord covers both GenericRecord and SpecificRecord (Avro-
+    // generated POJOs). GenericRecord alone misses SpecificRecord — they're
+    // parallel subtypes of IndexedRecord, not parent/child. Other Avro
+    // GenericContainer types (GenericFixed, GenericEnumSymbol, GenericArray)
+    // are intentionally NOT caught here — each has its own dedicated case
+    // below; treating them as records would call getFields() on a non-record
+    // schema and throw.
+    if (value instanceof IndexedRecord) {
+      return avroRecordToMap((IndexedRecord) value);
     }
     if (value instanceof Utf8) {
       return value.toString();
@@ -504,7 +515,7 @@ public final class CelUtils {
     return toCelValue(mapper.convertValue(value, new TypeReference<Map<String, Object>>() {}));
   }
 
-  private static Map<String, Object> avroRecordToMap(GenericRecord record) {
+  private static Map<String, Object> avroRecordToMap(IndexedRecord record) {
     Map<String, Object> out = new HashMap<>();
     for (Schema.Field f : record.getSchema().getFields()) {
       out.put(f.name(), toCelValue(record.get(f.pos())));

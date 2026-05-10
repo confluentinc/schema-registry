@@ -394,13 +394,21 @@ public final class AvroResultWriter {
         // decimal: accept BigDecimal for the bytes-backed logical type.
         return hasLogicalType && value instanceof java.math.BigDecimal;
       case FIXED:
-        if (value instanceof GenericData.Fixed
-            && ((GenericData.Fixed) value).getSchema().getFullName()
-                .equals(branch.getFullName())) {
-          return true;
+        if (value instanceof GenericData.Fixed) {
+          GenericData.Fixed fixed = (GenericData.Fixed) value;
+          // Schema.equals + length check mirrors toFixed's pass-through
+          // criterion. Without the length check a same-fullName-different-
+          // size schema would falsely resolve here and then fail in toFixed,
+          // potentially preempting a BYTES (or other) branch that would have
+          // worked.
+          if (fixed.getSchema().equals(branch)
+              && fixed.bytes().length == branch.getFixedSize()) {
+            return true;
+          }
         }
-        // Any other GenericFixed (different schema name) — accept by length so
-        // toFixed can rebuild against the target schema.
+        // Any other GenericFixed (different schema, or wrong-size Fixed that
+        // didn't pass strict equality above) — accept by length so toFixed
+        // can rebuild against the target schema.
         if (value instanceof GenericFixed) {
           return ((GenericFixed) value).bytes().length == branch.getFixedSize();
         }
@@ -413,7 +421,10 @@ public final class AvroResultWriter {
         if (value instanceof CelByteString) {
           return ((CelByteString) value).size() == branch.getFixedSize();
         }
-        return false;
+        // decimal-on-fixed: accept BigDecimal so the logical-type Conversion
+        // can encode it. Length isn't checkable here without the scale info,
+        // so we trust the Conversion to validate downstream.
+        return hasLogicalType && value instanceof java.math.BigDecimal;
       case ARRAY:
         return value instanceof List;
       case MAP:

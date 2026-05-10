@@ -368,6 +368,40 @@ public class AvroResultWriterTest {
   }
 
   @Test
+  public void fixedInUnion_sameNameDifferentSize_routesToBytesBranch() {
+    // [null, fixed3, bytes] union with a 4-byte Fixed value whose fullName
+    // collides with fixed3's. branchAccepts must NOT match the FIXED branch
+    // (size mismatch); resolution should fall through to the BYTES branch
+    // where the value can be encoded successfully.
+    Schema fixed3 = SchemaBuilder.fixed("Hash").size(3);
+    Schema fixed4 = SchemaBuilder.fixed("Hash").size(4);
+    Schema bytesSchema = SchemaBuilder.builder().bytesType();
+    Schema union = Schema.createUnion(Arrays.asList(
+        Schema.create(Schema.Type.NULL), fixed3, bytesSchema));
+    GenericData.Fixed in = new GenericData.Fixed(fixed4, new byte[]{1, 2, 3, 4});
+    Object out = AvroResultWriter.convert(in, union);
+    // BYTES branch picked → ByteBuffer with all 4 bytes.
+    assertTrue("should resolve to BYTES branch, got: " + out.getClass(),
+        out instanceof ByteBuffer);
+    assertArrayEquals(new byte[]{1, 2, 3, 4}, bytes((ByteBuffer) out));
+  }
+
+  @Test
+  public void decimalOnFixedInUnion_acceptsBigDecimal() {
+    // Decimal logical type can be encoded as either bytes or fixed. branchAccepts
+    // already handled BigDecimal for BYTES; this verifies it also handles
+    // BigDecimal for FIXED so a [null, decimal-on-fixed] union resolves.
+    Schema fixedSchema = org.apache.avro.LogicalTypes.decimal(10, 2).addToSchema(
+        SchemaBuilder.fixed("Money").size(8));
+    Schema union = Schema.createUnion(
+        Arrays.asList(Schema.create(Schema.Type.NULL), fixedSchema));
+    java.math.BigDecimal in = new java.math.BigDecimal("123.45");
+    Object out = AvroResultWriter.convert(in, union);
+    // Logical-type bypass returns the BigDecimal unchanged on the chosen branch.
+    assertEquals(in, out);
+  }
+
+  @Test
   public void enumInUnion_unresolvedWhenSymbolMissingInTarget() {
     // EnumSymbol's symbol is absent from the target enum AND no other branch
     // accepts the value → UnresolvedUnionException.
