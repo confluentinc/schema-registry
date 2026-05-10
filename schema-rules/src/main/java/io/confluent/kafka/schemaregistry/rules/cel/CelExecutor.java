@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
@@ -205,7 +206,7 @@ public class CelExecutor implements RuleExecutor {
       try {
         JsonNode jsonNode = JSON_MAPPER.valueToTree(converted);
         return ctx.target().fromJson(jsonNode);
-      } catch (IOException e) {
+      } catch (IOException | IllegalArgumentException e) {
         throw new RuleException(ctx.rule(), e);
       }
     }
@@ -305,11 +306,15 @@ public class CelExecutor implements RuleExecutor {
     // Proto Messages pass through unchanged — Google cel-java's first-class
     // proto support handles them natively.
     Map<String, Object> celArgs = new HashMap<>(args.size());
-    for (Map.Entry<String, Object> e : args.entrySet()) {
-      Object converted = type == ScriptType.JSON
-          ? CelUtils.toCelValueForJson(e.getValue(), JSON_MAPPER)
-          : CelUtils.toCelValue(e.getValue());
-      celArgs.put(e.getKey(), converted);
+    try {
+      for (Map.Entry<String, Object> e : args.entrySet()) {
+        Object converted = type == ScriptType.JSON
+            ? CelUtils.toCelValueForJson(e.getValue(), JSON_MAPPER)
+            : CelUtils.toCelValue(e.getValue());
+        celArgs.put(e.getKey(), converted);
+      }
+    } catch (IllegalArgumentException e) {
+      throw new RuleException(ctx.rule(), e);
     }
     return new Bindings(type, schemaHint, declTypes, celArgs, obj, resolveRegexEngine(ctx));
   }
@@ -367,6 +372,10 @@ public class CelExecutor implements RuleExecutor {
       } else {
         throw new RuleException(ctx.rule(), "Could not get expression", e.getCause());
       }
+    } catch (UncheckedExecutionException | IllegalArgumentException e) {
+      Throwable cause = e instanceof UncheckedExecutionException && e.getCause() != null
+          ? e.getCause() : e;
+      throw new RuleException(ctx.rule(), cause);
     }
   }
 

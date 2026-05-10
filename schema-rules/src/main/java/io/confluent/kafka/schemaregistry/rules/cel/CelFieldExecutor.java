@@ -83,8 +83,8 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       if (result instanceof com.google.protobuf.NullValue
           || result instanceof dev.cel.common.values.NullValue) {
         // CEL `null` literal evaluates to dev.cel.common.values.NullValue;
-        // proto NullValue is the convention at line 61 for null field inputs
-        // (and so the result of a rule that echoes a null value). Field
+        // the `value` binding uses proto NULL_VALUE for null field inputs
+        // (and so for the result of a rule that echoes a null value). Field
         // setters expect Java null — normalize both flavors here so a
         // nullable target sees null and a non-nullable target surfaces the
         // contract violation directly instead of choking on a sentinel.

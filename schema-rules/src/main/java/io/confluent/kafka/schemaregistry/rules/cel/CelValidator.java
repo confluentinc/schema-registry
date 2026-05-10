@@ -22,6 +22,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import dev.cel.common.CelVarDecl;
 import dev.cel.common.types.CelKind;
@@ -169,6 +170,12 @@ public final class CelValidator implements ValidationRuleExecutor {
       // Guava cache wraps anything from load() — including CelValidationException
       // from the compiler — as ExecutionException. Unwrap and re-throw.
       Throwable cause = e.getCause() != null ? e.getCause() : e;
+      throw new RuleException(
+          "Could not compile validation rule '"
+              + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", cause);
+    } catch (UncheckedExecutionException | IllegalArgumentException e) {
+      Throwable cause = e instanceof UncheckedExecutionException && e.getCause() != null
+          ? e.getCause() : e;
       throw new RuleException(
           "Could not compile validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", cause);
