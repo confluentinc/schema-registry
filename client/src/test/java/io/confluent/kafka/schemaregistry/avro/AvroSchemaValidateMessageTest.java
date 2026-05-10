@@ -98,6 +98,34 @@ public class AvroSchemaValidateMessageTest {
   }
 
   @Test
+  public void failFast_stopsAfterFirstViolation() throws Exception {
+    // Same array-of-records shape as above (which without fail-fast produces
+    // two violations, one per element). With failFast=true the walker should
+    // short-circuit after the first.
+    String schemaStr = "{"
+        + "\"type\":\"record\",\"name\":\"Outer\","
+        + "\"fields\":[{\"name\":\"items\",\"type\":{"
+        + "  \"type\":\"array\",\"items\":{"
+        + "    \"type\":\"record\",\"name\":\"Item\","
+        + "    \"fields\":[{\"name\":\"x\",\"type\":\"int\","
+        + "      \"confluent:rules\":[{\"name\":\"r\",\"expr\":\"true\"}]}]"
+        + "  }}}]"
+        + "}";
+    AvroSchema schema = new AvroSchema(schemaStr);
+    Schema avro = schema.rawSchema();
+    Schema itemSchema = avro.getField("items").schema().getElementType();
+    GenericRecord i0 = new GenericData.Record(itemSchema);
+    i0.put("x", 1);
+    GenericRecord i1 = new GenericData.Record(itemSchema);
+    i1.put("x", 2);
+    GenericRecord outer = new GenericData.Record(avro);
+    outer.put("items", java.util.Arrays.asList(i0, i1));
+
+    List<ValidationRuleError> errors = schema.validateMessage(ALWAYS_FAIL, outer, true);
+    assertEquals(java.util.Collections.singletonList("r@items[0].x"), firedRules(errors));
+  }
+
+  @Test
   public void mapOfRecords_firesRulePerEntryWithKeyedPath() throws Exception {
     String schemaStr = "{"
         + "\"type\":\"record\",\"name\":\"Outer\","
