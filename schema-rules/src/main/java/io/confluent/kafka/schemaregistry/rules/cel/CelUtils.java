@@ -239,6 +239,16 @@ public final class CelUtils {
    * </ul>
    */
   public static CelType findCelTypeForAvroSchema(Schema schema) {
+    // Logical-typed fields (timestamp-millis on long, decimal on bytes/fixed,
+    // date on int, uuid on string, etc.) carry runtime values whose Java type
+    // diverges from the underlying Avro primitive — Instant / BigDecimal /
+    // LocalDate / UUID. Declaring the underlying CEL type (INT / BYTES /
+    // STRING) creates a compile/runtime mismatch. Use DYN so the runtime can
+    // dispatch against whatever the value actually is, mirroring how
+    // AvroResultWriter bypasses primitive narrowing for logical types.
+    if (schema.getLogicalType() != null) {
+      return SimpleType.DYN;
+    }
     Schema.Type type = schema.getType();
     switch (type) {
       case BOOLEAN:
@@ -322,7 +332,10 @@ public final class CelUtils {
         || type == float.class
         || type == Float.class) {
       return SimpleType.DOUBLE;
-    } else if (type == String.class) {
+    } else if (type == String.class || CharSequence.class.isAssignableFrom(type)) {
+      // Covers Utf8 (Avro's string representation in some configurations) and
+      // any other CharSequence implementation. toCelValue normalizes Utf8 to
+      // String at runtime, so the declaration matches the bound value.
       return SimpleType.STRING;
     } else if (type == Duration.class || type == java.time.Duration.class) {
       return SimpleType.DURATION;

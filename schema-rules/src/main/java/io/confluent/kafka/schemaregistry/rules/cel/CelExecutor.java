@@ -140,7 +140,9 @@ public class CelExecutor implements RuleExecutor {
         throw new RuleException(ctx.rule(), e);
       }
     }
-    return result;
+    // Scalar fall-through: normalize CEL sentinels so downstream serializers
+    // see Java null and byte[] rather than NullValue / CelByteString.
+    return unwrapCelValuesForJson(result);
   }
 
   /**
