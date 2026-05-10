@@ -1072,11 +1072,17 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public List<ValidationRuleError> validateMessage(
       ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
     List<ValidationRuleError> violations = new ArrayList<>();
     if (executor == null || message == null) {
       return violations;
     }
-    toValidatedMessage(rawSchema(), "$", message, executor, violations);
+    toValidatedMessage(rawSchema(), "$", message, executor, failFast, violations);
     return violations;
   }
 
@@ -1103,7 +1109,7 @@ public class JsonSchema implements ParsedSchema {
    */
   private void toValidatedMessage(
       Schema schema, String path, Object message,
-      ValidationRuleExecutor executor, List<ValidationRuleError> out) {
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
     if (schema == null) {
       return;
     }
@@ -1114,7 +1120,10 @@ public class JsonSchema implements ParsedSchema {
       Collection<Schema> subschemas = combinedSchema.getSubschemas();
       if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
         for (Schema subschema : subschemas) {
-          toValidatedMessage(subschema, path, message, executor, out);
+          toValidatedMessage(subschema, path, message, executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
         }
         return;
       }
@@ -1136,8 +1145,11 @@ public class JsonSchema implements ParsedSchema {
           // noop
         }
         if (valid) {
-          toValidatedMessage(subschema, path, message, executor, out);
+          toValidatedMessage(subschema, path, message, executor, failFast, out);
           if (criterion.equals(CombinedSchema.ONE_CRITERION)) {
+            return;
+          }
+          if (failFast && !out.isEmpty()) {
             return;
           }
         }
@@ -1150,7 +1162,10 @@ public class JsonSchema implements ParsedSchema {
       Schema subschema = ((ArraySchema) schema).getAllItemSchema();
       int i = 0;
       for (Object element : (Iterable<?>) message) {
-        toValidatedMessage(subschema, path + "[" + i + "]", element, executor, out);
+        toValidatedMessage(subschema, path + "[" + i + "]", element, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
         i++;
       }
       return;
@@ -1161,6 +1176,9 @@ public class JsonSchema implements ParsedSchema {
       // Object-level rules: this = the object value, hint = its class.
       for (ValidationRule rule : readRulesProp(schema)) {
         evaluateOne(rule, message.getClass(), message, path, executor, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
       }
       Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
       for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
@@ -1182,9 +1200,15 @@ public class JsonSchema implements ParsedSchema {
           for (ValidationRule rule : readRulesProp(propertySchema)) {
             evaluateOne(rule, propertyValue.getClass(), propertyValue,
                 fullName, executor, out);
+            if (failFast && !out.isEmpty()) {
+              return;
+            }
           }
         }
-        toValidatedMessage(propertySchema, fullName, propertyValue, executor, out);
+        toValidatedMessage(propertySchema, fullName, propertyValue, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
       }
       return;
     } else if (schema instanceof ReferenceSchema) {
@@ -1192,7 +1216,7 @@ public class JsonSchema implements ParsedSchema {
         return;
       }
       toValidatedMessage(((ReferenceSchema) schema).getReferredSchema(),
-          path, message, executor, out);
+          path, message, executor, failFast, out);
       return;
     } else if (schema instanceof ConditionalSchema
         || schema instanceof EmptySchema
