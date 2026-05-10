@@ -42,6 +42,12 @@ public class CelFieldExecutor extends FieldRuleExecutor {
 
   private CelExecutor celExecutor = new CelExecutor();
 
+  @Override
+  public void configure(Map<String, ?> configs) {
+    super.configure(configs);
+    celExecutor.configure(configs);
+  }
+
   public String type() {
     return TYPE;
   }
