@@ -57,7 +57,6 @@ import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
