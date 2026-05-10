@@ -16,59 +16,35 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
-import com.google.api.expr.v1alpha1.Decl;
-import java.util.ArrayList;
-import java.util.Collections;
+import com.google.common.collect.ImmutableList;
+import dev.cel.common.CelFunctionDecl;
+import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.types.SimpleType;
 import java.util.List;
-import org.projectnessie.cel.checker.Decls;
 
 final class BuiltinDeclarations {
 
-  static List<Decl> create() {
-    List<Decl> decls = new ArrayList<>();
+  private BuiltinDeclarations() {
+  }
 
-    decls.add(
-        Decls.newFunction(
-            "isEmail",
-            Decls.newInstanceOverload(
-                "is_email", Collections.singletonList(Decls.String), Decls.Bool)));
+  static List<CelFunctionDecl> create() {
+    return ImmutableList.of(
+        member("isEmail", "is_email"),
+        member("isHostname", "is_hostname"),
+        member("isIpv4", "is_ipv4"),
+        member("isIpv6", "is_ipv6"),
+        member("isUriRef", "is_uri_ref"),
+        member("isUri", "is_uri"),
+        member("isUuid", "is_uuid"));
+  }
 
-    decls.add(
-        Decls.newFunction(
-            "isHostname",
-            Decls.newInstanceOverload(
-                "is_hostname", Collections.singletonList(Decls.String), Decls.Bool)));
-
-    decls.add(
-        Decls.newFunction(
-            "isIpv4",
-            Decls.newInstanceOverload(
-                "is_ipv4", Collections.singletonList(Decls.String), Decls.Bool)));
-
-    decls.add(
-        Decls.newFunction(
-            "isIpv6",
-            Decls.newInstanceOverload(
-                "is_ipv6", Collections.singletonList(Decls.String), Decls.Bool)));
-
-    decls.add(
-        Decls.newFunction(
-            "isUriRef",
-            Decls.newInstanceOverload(
-                "is_uri_ref", Collections.singletonList(Decls.String), Decls.Bool)));
-
-    decls.add(
-        Decls.newFunction(
-            "isUri",
-            Decls.newInstanceOverload(
-                "is_uri", Collections.singletonList(Decls.String), Decls.Bool)));
-
-    decls.add(
-        Decls.newFunction(
-            "isUuid",
-            Decls.newInstanceOverload(
-                "is_uuid", Collections.singletonList(Decls.String), Decls.Bool)));
-
-    return Collections.unmodifiableList(decls);
+  /**
+   * Build a member-style function declaration: {@code STRING.isFoo() -> bool}.
+   */
+  private static CelFunctionDecl member(String functionName, String overloadId) {
+    return CelFunctionDecl.newFunctionDeclaration(
+        functionName,
+        CelOverloadDecl.newMemberOverload(
+            overloadId, SimpleType.BOOL, SimpleType.STRING));
   }
 }
