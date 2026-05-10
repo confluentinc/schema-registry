@@ -89,15 +89,25 @@ public final class CelUtils {
   /**
    * Regex engine used by the CEL {@code matches} / {@code matches_string}
    * overloads. Selectable per-rule (via {@code params.cel.regex.engine}) or
-   * globally (via the executor config).
+   * globally (via the executor config). The unconfigured default is
+   * {@link #DEFAULT}.
    */
   public enum RegexEngine {
     PCRE,
     RE2;
 
+    /**
+     * The default engine when none is configured. Change this single value to
+     * flip the default for {@link CelExecutor} and the no-engine
+     * {@link CelUtils#buildProgram} overload. Does <em>not</em> affect
+     * {@link CelValidator}, which always uses {@link #RE2} for ReDoS safety
+     * on the hot serialize path.
+     */
+    public static final RegexEngine DEFAULT = PCRE;
+
     public static RegexEngine fromString(String s) {
       if (s == null || s.isEmpty()) {
-        return PCRE;
+        return DEFAULT;
       }
       try {
         return RegexEngine.valueOf(s.trim().toUpperCase(Locale.ROOT));
@@ -152,7 +162,7 @@ public final class CelUtils {
   public static CelRuntime.Program buildProgram(
       ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls)
       throws CelValidationException, CelEvaluationException {
-    return buildProgram(type, expr, schemaHint, varDecls, RegexEngine.PCRE);
+    return buildProgram(type, expr, schemaHint, varDecls, RegexEngine.DEFAULT);
   }
 
   public static CelRuntime.Program buildProgram(

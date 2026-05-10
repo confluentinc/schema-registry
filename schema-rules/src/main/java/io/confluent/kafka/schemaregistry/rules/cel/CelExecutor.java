@@ -59,11 +59,12 @@ public class CelExecutor implements RuleExecutor {
 
   /**
    * Selects the regex engine used by the CEL {@code matches} /
-   * {@code matches_string} overloads. Values: {@code "pcre"} (default,
-   * {@link java.util.regex.Pattern}, supports lookahead and other PCRE
-   * features) or {@code "re2"} (cel-java's stdlib default, linear-time
+   * {@code matches_string} overloads. Values: {@code "pcre"}
+   * ({@link java.util.regex.Pattern}, supports lookahead and other PCRE
+   * features) or {@code "re2"} (cel-java's stdlib choice, linear-time
    * matching, no lookahead). Resolvable per-rule via
-   * {@code params.cel.regex.engine} or globally via the executor config.
+   * {@code params.cel.regex.engine} or globally via the executor config;
+   * unconfigured falls back to {@link RegexEngine#DEFAULT}.
    */
   public static final String CEL_REGEX_ENGINE = "cel.regex.engine";
 
@@ -73,7 +74,7 @@ public class CelExecutor implements RuleExecutor {
   private static final int DEFAULT_CACHE_SIZE = 1000;
 
   private final LoadingCache<RuleWithArgs, CelRuntime.Program> cache;
-  private volatile RegexEngine defaultRegexEngine = RegexEngine.PCRE;
+  private volatile RegexEngine defaultRegexEngine = RegexEngine.DEFAULT;
 
   public CelExecutor() {
     cache = CacheBuilder.newBuilder()
