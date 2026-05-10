@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.RegexEngine;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroResultWriter;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -56,12 +57,23 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String CEL_IGNORE_GUARD_SEPARATOR = "cel.ignore.guard.separator";
 
+  /**
+   * Selects the regex engine used by the CEL {@code matches} /
+   * {@code matches_string} overloads. Values: {@code "pcre"} (default,
+   * {@link java.util.regex.Pattern}, supports lookahead and other PCRE
+   * features) or {@code "re2"} (cel-java's stdlib default, linear-time
+   * matching, no lookahead). Resolvable per-rule via
+   * {@code params.cel.regex.engine} or globally via the executor config.
+   */
+  public static final String CEL_REGEX_ENGINE = "cel.regex.engine";
+
   private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new ProtobufModule());
 
   private static final int DEFAULT_CACHE_SIZE = 1000;
 
   private final LoadingCache<RuleWithArgs, CelRuntime.Program> cache;
+  private volatile RegexEngine defaultRegexEngine = RegexEngine.PCRE;
 
   public CelExecutor() {
     cache = CacheBuilder.newBuilder()
@@ -84,14 +96,36 @@ public class CelExecutor implements RuleExecutor {
                 throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
             return CelUtils.buildProgram(ruleWithArgs.getType(), ruleWithArgs.getRule(),
-                schemaHint, CelUtils.toVarDecls(ruleWithArgs.getDeclTypes()));
+                schemaHint, CelUtils.toVarDecls(ruleWithArgs.getDeclTypes()),
+                ruleWithArgs.getRegexEngine());
           }
         });
   }
 
   @Override
+  public void configure(Map<String, ?> configs) {
+    Object engine = configs == null ? null : configs.get(CEL_REGEX_ENGINE);
+    if (engine != null) {
+      this.defaultRegexEngine = RegexEngine.fromString(engine.toString());
+    }
+  }
+
+  @Override
   public String type() {
     return TYPE;
+  }
+
+  /**
+   * Resolve the regex engine for {@code ctx}: per-rule param wins over the
+   * executor's configured default. Used by {@link #bind} to seed
+   * {@link Bindings#regexEngine}.
+   */
+  private RegexEngine resolveRegexEngine(RuleContext ctx) {
+    String perRule = ctx.getParameter(CEL_REGEX_ENGINE);
+    if (perRule != null && !perRule.isEmpty()) {
+      return RegexEngine.fromString(perRule);
+    }
+    return defaultRegexEngine;
   }
 
   @Override
@@ -272,7 +306,7 @@ public class CelExecutor implements RuleExecutor {
           : CelUtils.toCelValue(e.getValue());
       celArgs.put(e.getKey(), converted);
     }
-    return new Bindings(type, schemaHint, declTypes, celArgs, obj);
+    return new Bindings(type, schemaHint, declTypes, celArgs, obj, resolveRegexEngine(ctx));
   }
 
   /**
@@ -344,14 +378,16 @@ public class CelExecutor implements RuleExecutor {
     private final Map<String, CelType> declTypes;
     private final Map<String, Object> celArgs;
     private final Object obj;
+    private final RegexEngine regexEngine;
 
     Bindings(ScriptType type, Object schemaHint, Map<String, CelType> declTypes,
-             Map<String, Object> celArgs, Object obj) {
+             Map<String, Object> celArgs, Object obj, RegexEngine regexEngine) {
       this.type = type;
       this.schemaHint = schemaHint;
       this.declTypes = declTypes;
       this.celArgs = celArgs;
       this.obj = obj;
+      this.regexEngine = regexEngine;
     }
 
     public ScriptType type() {
@@ -385,11 +421,11 @@ public class CelExecutor implements RuleExecutor {
     RuleWithArgs cacheKey(String rule) {
       switch (type) {
         case AVRO:
-          return new RuleWithArgs(rule, type, declTypes, (Schema) schemaHint);
+          return new RuleWithArgs(rule, type, declTypes, (Schema) schemaHint, regexEngine);
         case JSON:
-          return new RuleWithArgs(rule, type, declTypes, (Class<?>) schemaHint);
+          return new RuleWithArgs(rule, type, declTypes, (Class<?>) schemaHint, regexEngine);
         case PROTOBUF:
-          return new RuleWithArgs(rule, type, declTypes, (Descriptor) schemaHint);
+          return new RuleWithArgs(rule, type, declTypes, (Descriptor) schemaHint, regexEngine);
         default:
           throw new IllegalArgumentException("Unsupported type " + type);
       }
@@ -403,29 +439,36 @@ public class CelExecutor implements RuleExecutor {
     private Schema avroSchema;
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
+    private final RegexEngine regexEngine;
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, CelType> declTypes, Schema avroSchema) {
+        String rule, ScriptType type, Map<String, CelType> declTypes, Schema avroSchema,
+        RegexEngine regexEngine) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
       this.avroSchema = avroSchema;
+      this.regexEngine = regexEngine;
     }
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, CelType> declTypes, Class<?> jsonClass) {
+        String rule, ScriptType type, Map<String, CelType> declTypes, Class<?> jsonClass,
+        RegexEngine regexEngine) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
       this.jsonClass = jsonClass;
+      this.regexEngine = regexEngine;
     }
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, CelType> declTypes, Descriptor protobufDesc) {
+        String rule, ScriptType type, Map<String, CelType> declTypes, Descriptor protobufDesc,
+        RegexEngine regexEngine) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
       this.protobufDesc = protobufDesc;
+      this.regexEngine = regexEngine;
     }
 
     public String getRule() {
@@ -452,6 +495,10 @@ public class CelExecutor implements RuleExecutor {
       return protobufDesc;
     }
 
+    public RegexEngine getRegexEngine() {
+      return regexEngine;
+    }
+
     @Override
     public boolean equals(Object o) {
       if (this == o) {
@@ -466,12 +513,13 @@ public class CelExecutor implements RuleExecutor {
           && Objects.equals(declTypes, that.declTypes)
           && Objects.equals(avroSchema, that.avroSchema)
           && Objects.equals(jsonClass, that.jsonClass)
-          && Objects.equals(protobufDesc, that.protobufDesc);
+          && Objects.equals(protobufDesc, that.protobufDesc)
+          && regexEngine == that.regexEngine;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(rule, type, declTypes, avroSchema, jsonClass, protobufDesc);
+      return Objects.hash(rule, type, declTypes, avroSchema, jsonClass, protobufDesc, regexEngine);
     }
   }
 }

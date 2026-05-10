@@ -33,6 +33,7 @@ import dev.cel.runtime.CelRuntime;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.RegexEngine;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.time.Instant;
@@ -78,7 +79,8 @@ public final class CelValidator implements ValidationRuleExecutor {
             return CelUtils.buildProgram(key.type, key.expr, key.schemaHint,
                 Arrays.asList(
                     CelVarDecl.newVarDeclaration("this", key.thisType),
-                    CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP)));
+                    CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP)),
+                RegexEngine.RE2);
           }
         });
   }

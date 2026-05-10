@@ -19,6 +19,9 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Duration;
@@ -40,9 +43,12 @@ import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.extensions.CelExtensions;
 import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeFactory;
+import dev.cel.runtime.CelStandardFunctions;
+import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroCelTypeProvider;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinLibrary;
 import java.nio.ByteBuffer;
@@ -51,7 +57,11 @@ import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
@@ -77,6 +87,57 @@ public final class CelUtils {
   }
 
   /**
+   * Regex engine used by the CEL {@code matches} / {@code matches_string}
+   * overloads. Selectable per-rule (via {@code params.cel.regex.engine}) or
+   * globally (via the executor config).
+   */
+  public enum RegexEngine {
+    PCRE,
+    RE2;
+
+    public static RegexEngine fromString(String s) {
+      if (s == null || s.isEmpty()) {
+        return PCRE;
+      }
+      try {
+        return RegexEngine.valueOf(s.trim().toUpperCase(Locale.ROOT));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException(
+            "Unknown cel.regex.engine value: " + s + " (expected 'pcre' or 're2')");
+      }
+    }
+  }
+
+  private static final int PCRE_CACHE_SIZE = 1000;
+  private static final LoadingCache<String, Pattern> PCRE_CACHE = CacheBuilder.newBuilder()
+      .maximumSize(PCRE_CACHE_SIZE)
+      .build(new CacheLoader<String, Pattern>() {
+        @Override
+        public Pattern load(String regex) {
+          return Pattern.compile(regex);
+        }
+      });
+
+  /**
+   * PCRE-mode replacement for the stdlib {@code matches}/{@code matches_string}
+   * overloads. Uses {@link java.util.regex.Pattern#matches()} (full-string
+   * match) to mirror cel-java's RE2 default behavior.
+   */
+  private static boolean pcreMatches(String value, String regex) throws CelEvaluationException {
+    Pattern pattern;
+    try {
+      pattern = PCRE_CACHE.get(regex);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      throw new CelEvaluationException(
+          "failed to compile regex: " + (cause != null ? cause.getMessage() : e.getMessage()));
+    } catch (PatternSyntaxException e) {
+      throw new CelEvaluationException("failed to compile regex: " + e.getMessage());
+    }
+    return pattern.matcher(value).matches();
+  }
+
+  /**
    * Build a CEL {@link CelRuntime.Program} for {@code (type, expr, schemaHint, varDecls)}.
    * The compiler is configured with the standard library, our {@link BuiltinLibrary},
    * and any format-specific type registration; the runtime mirrors the compile-side
@@ -91,6 +152,13 @@ public final class CelUtils {
   public static CelRuntime.Program buildProgram(
       ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls)
       throws CelValidationException, CelEvaluationException {
+    return buildProgram(type, expr, schemaHint, varDecls, RegexEngine.PCRE);
+  }
+
+  public static CelRuntime.Program buildProgram(
+      ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls,
+      RegexEngine regexEngine)
+      throws CelValidationException, CelEvaluationException {
     // For AVRO records, first try declaring `this` as a struct (so field
     // accesses type-check against actual Avro field types). On compile
     // failure, fall back to declaring `this` as a dynamic map — handles edge
@@ -99,24 +167,25 @@ public final class CelUtils {
     if (type == ScriptType.AVRO && schemaHint instanceof Schema
         && hasAnyStructTypedVar(varDecls)) {
       try {
-        return doBuildProgram(type, expr, schemaHint, varDecls);
+        return doBuildProgram(type, expr, schemaHint, varDecls, regexEngine);
       } catch (CelValidationException firstAttempt) {
         // Retry with `this` (and any other StructTypeReference vars) downgraded
         // to MapType<STRING, DYN>.
         List<CelVarDecl> fallbackVarDecls = downgradeStructsToMap(varDecls);
         try {
-          return doBuildProgram(type, expr, schemaHint, fallbackVarDecls);
+          return doBuildProgram(type, expr, schemaHint, fallbackVarDecls, regexEngine);
         } catch (CelValidationException secondAttempt) {
           // Fallback also failed — surface the original error (more informative).
           throw firstAttempt;
         }
       }
     }
-    return doBuildProgram(type, expr, schemaHint, varDecls);
+    return doBuildProgram(type, expr, schemaHint, varDecls, regexEngine);
   }
 
   private static CelRuntime.Program doBuildProgram(
-      ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls)
+      ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls,
+      RegexEngine regexEngine)
       throws CelValidationException, CelEvaluationException {
     // CelExtensions.strings() supplies charAt/indexOf/lastIndexOf/lowerAscii/
     // upperAscii/replace/split/substring/trim/join. The class implements both
@@ -131,6 +200,29 @@ public final class CelUtils {
         .addVarDeclarations(varDecls);
     CelRuntimeBuilder runtimeBuilder = CelRuntimeFactory.standardCelRuntimeBuilder()
         .addLibraries(new BuiltinLibrary(), CelExtensions.strings());
+
+    if (regexEngine == RegexEngine.PCRE) {
+      // Replace stdlib RE2-backed matches with java.util.regex. Despite what
+      // CelRuntimeBuilder.addFunctionBindings's javadoc says about replacing
+      // duplicate overload IDs, it actually throws on duplicates unless both
+      // sides are DynamicDispatchOverload (see DefaultDispatcher.Builder).
+      // Stdlib matches isn't dynamic-dispatch, so we subset the standard
+      // functions to drop MATCHES, then add our own bindings under the same
+      // overload IDs the compiler resolves to.
+      // setStandardEnvironmentEnabled(false) is required by cel-java when
+      // overriding standard function bindings (else build() throws).
+      runtimeBuilder
+          .setStandardEnvironmentEnabled(false)
+          .setStandardFunctions(
+              CelStandardFunctions.newBuilder()
+                  .excludeFunctions(StandardFunction.MATCHES)
+                  .build())
+          .addFunctionBindings(
+              CelFunctionBinding.from("matches", String.class, String.class,
+                  CelUtils::pcreMatches),
+              CelFunctionBinding.from("matches_string", String.class, String.class,
+                  CelUtils::pcreMatches));
+    }
 
     if (type == ScriptType.PROTOBUF) {
       Descriptor desc = (Descriptor) schemaHint;
