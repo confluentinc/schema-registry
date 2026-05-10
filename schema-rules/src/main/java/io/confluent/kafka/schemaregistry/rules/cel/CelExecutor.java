@@ -121,10 +121,14 @@ public class CelExecutor implements RuleExecutor {
    * executor's configured default. Used by {@link #bind} to seed
    * {@link Bindings#regexEngine}.
    */
-  private RegexEngine resolveRegexEngine(RuleContext ctx) {
+  private RegexEngine resolveRegexEngine(RuleContext ctx) throws RuleException {
     String perRule = ctx.getParameter(CEL_REGEX_ENGINE);
     if (perRule != null && !perRule.isEmpty()) {
-      return RegexEngine.fromString(perRule);
+      try {
+        return RegexEngine.fromString(perRule);
+      } catch (IllegalArgumentException e) {
+        throw new RuleException(ctx.rule(), e);
+      }
     }
     return defaultRegexEngine;
   }
