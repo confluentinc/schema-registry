@@ -19,7 +19,6 @@ package io.confluent.kafka.serializers;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_ACTIONS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS;
 import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_EXECUTOR_CLASS;
-import static io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig.VALIDATION_RULES_FAIL_FAST;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;

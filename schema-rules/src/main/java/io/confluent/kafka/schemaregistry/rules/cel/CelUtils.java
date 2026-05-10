@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Duration;
@@ -63,7 +64,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
@@ -139,12 +139,16 @@ public final class CelUtils {
     Pattern pattern;
     try {
       pattern = PCRE_CACHE.get(regex);
-    } catch (ExecutionException e) {
+    } catch (ExecutionException | UncheckedExecutionException e) {
+      // Guava's LoadingCache wraps loader exceptions: checked → ExecutionException,
+      // RuntimeException → UncheckedExecutionException. Pattern.compile()'s
+      // PatternSyntaxException is a RuntimeException, so it always arrives here as
+      // UncheckedExecutionException; ExecutionException is just defensive (the
+      // loader doesn't currently throw any checked exceptions). Either way, unwrap
+      // to keep the user-facing message focused on the regex problem itself.
       Throwable cause = e.getCause();
       throw new CelEvaluationException(
           "failed to compile regex: " + (cause != null ? cause.getMessage() : e.getMessage()));
-    } catch (PatternSyntaxException e) {
-      throw new CelEvaluationException("failed to compile regex: " + e.getMessage());
     }
     return pattern.matcher(value).matches();
   }
