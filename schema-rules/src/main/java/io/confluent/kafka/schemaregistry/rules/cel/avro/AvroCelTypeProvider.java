@@ -46,7 +46,7 @@ import org.apache.avro.Schema.Type;
  * {@code Map}s as natively selectable, so no {@link dev.cel.common.values.CelValueProvider}
  * counterpart is needed.
  *
- * <p>Approach: walk the supplied schema graph, register each reachable record
+ * <p>Walks the supplied schema graph, registering each reachable record
  * schema as a {@link StructType}. Field types map to CEL types per the standard
  * Avro→CEL mapping; nested records become {@link dev.cel.common.types.StructTypeReference}s
  * (resolved at type-check time against this same provider).
@@ -55,7 +55,7 @@ import org.apache.avro.Schema.Type;
  * mixing record + scalar) yield {@code dyn} for the field; the surrounding
  * record type is still registered. If the surrounding record itself is
  * unrepresentable, callers fall back to declaring {@code this} as
- * {@code MapType(STRING, DYN)} (Approach B).
+ * {@code MapType(STRING, DYN)}.
  */
 public final class AvroCelTypeProvider implements CelTypeProvider {
 

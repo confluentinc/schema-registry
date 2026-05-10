@@ -88,17 +88,18 @@ public final class CelUtils {
   public static CelRuntime.Program buildProgram(
       ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls)
       throws CelValidationException, CelEvaluationException {
-    // For AVRO records, try Approach A first (CelTypeProvider with proper field
-    // types). On compile failure, fall back to Approach B (declare `this` as
-    // dynamic map). The fallback handles edge cases the type provider can't
-    // represent (complex unions, etc.) without forcing every rule to use dyn.
+    // For AVRO records, first try declaring `this` as a struct (so field
+    // accesses type-check against actual Avro field types). On compile
+    // failure, fall back to declaring `this` as a dynamic map — handles edge
+    // cases the type provider can't represent (complex unions, etc.) without
+    // forcing every rule to use dyn.
     if (type == ScriptType.AVRO && schemaHint instanceof Schema
         && hasStructTypedThis(varDecls)) {
       try {
         return doBuildProgram(type, expr, schemaHint, varDecls);
       } catch (CelValidationException firstAttempt) {
         // Retry with `this` (and any other StructTypeReference vars) downgraded
-        // to MapType<STRING, DYN> — Approach B.
+        // to MapType<STRING, DYN>.
         List<CelVarDecl> fallbackVarDecls = downgradeStructsToMap(varDecls);
         try {
           return doBuildProgram(type, expr, schemaHint, fallbackVarDecls);
@@ -246,10 +247,10 @@ public final class CelUtils {
       case NULL:
         return SimpleType.NULL_TYPE;
       case RECORD:
-        // Approach A: declare as a struct reference so the AvroCelTypeProvider
+        // Declare as a struct reference so the AvroCelTypeProvider
         // (registered in buildProgram) resolves field types. If the type
         // provider can't represent this record cleanly, the type-checker will
-        // fail and the caller falls back to MapType+toCelValue (Approach B).
+        // fail and the caller falls back to MapType<STRING, DYN>.
         return StructTypeReference.create(schema.getFullName());
       case UNION:
         if (schema.getTypes().size() == 2 && containsNull(schema.getTypes())) {

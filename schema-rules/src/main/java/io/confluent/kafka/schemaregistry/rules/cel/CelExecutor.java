@@ -55,12 +55,8 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String CEL_IGNORE_GUARD_SEPARATOR = "cel.ignore.guard.separator";
 
-  private static final ObjectMapper mapper = new ObjectMapper();
-
-  static {
-    // Register ProtobufModule to convert CEL objects (such as NullValue) to JSON
-    mapper.registerModule(new ProtobufModule());
-  }
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+      .registerModule(new ProtobufModule());
 
   private static final int DEFAULT_CACHE_SIZE = 1000;
 
@@ -101,7 +97,7 @@ public class CelExecutor implements RuleExecutor {
   public Object transform(RuleContext ctx, Object message) throws RuleException {
     Object input;
     if (message instanceof JsonNode) {
-      input = mapper.convertValue(message, new TypeReference<Map<String, Object>>(){});
+      input = JSON_MAPPER.convertValue(message, new TypeReference<Map<String, Object>>(){});
     } else {
       input = message;
     }
@@ -138,7 +134,7 @@ public class CelExecutor implements RuleExecutor {
       // doesn't emit "zeroValue" and downstream parsers accept the JsonNode.
       Object converted = unwrapCelValuesForJson(result);
       try {
-        JsonNode jsonNode = mapper.valueToTree(converted);
+        JsonNode jsonNode = JSON_MAPPER.valueToTree(converted);
         return ctx.target().fromJson(jsonNode);
       } catch (IOException e) {
         throw new RuleException(ctx.rule(), e);
@@ -213,6 +209,9 @@ public class CelExecutor implements RuleExecutor {
     if (msg == null) {
       msg = obj;
     }
+    if (msg == null) {
+      return null;
+    }
     ScriptType type;
     Object schemaHint;
     if (msg instanceof GenericContainer) {
@@ -236,7 +235,7 @@ public class CelExecutor implements RuleExecutor {
     Map<String, Object> celArgs = new HashMap<>(args.size());
     for (Map.Entry<String, Object> e : args.entrySet()) {
       Object converted = type == ScriptType.JSON
-          ? CelUtils.toCelValueForJson(e.getValue(), mapper)
+          ? CelUtils.toCelValueForJson(e.getValue(), JSON_MAPPER)
           : CelUtils.toCelValue(e.getValue());
       celArgs.put(e.getKey(), converted);
     }
