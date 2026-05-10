@@ -123,7 +123,7 @@ public class CelExecutor implements RuleExecutor {
     // differs).
     Bindings b = bind(ctx, input, Collections.singletonMap("message", input));
     if (b == null) {
-      return input;        // list-shaped input is not supported; pass through.
+      return message;
     }
     Object result = evaluateWithGuard(ctx, b);
     // Identity short-circuit: return the original `message` reference if

@@ -22,10 +22,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
+import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import dev.cel.common.values.CelByteString;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,7 +36,8 @@ public class CelFieldExecutor extends FieldRuleExecutor {
 
   public static final String TYPE = "CEL_FIELD";
 
-  private static final ObjectMapper mapper = new ObjectMapper();
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+      .registerModule(new ProtobufModule());
 
   private CelExecutor celExecutor = new CelExecutor();
 
@@ -52,7 +55,16 @@ public class CelFieldExecutor extends FieldRuleExecutor {
       Object message = fieldCtx.getContainingMessage();
       Object inputMessage;
       if (message instanceof JsonNode) {
-        inputMessage = mapper.convertValue(message, new TypeReference<Map<String, Object>>(){});
+        // Defensive: containingMessage is normally an ObjectNode for JSON
+        // Schema records, but wrap the conversion to surface a typed
+        // RuleException rather than a raw Jackson IllegalArgumentException
+        // if it ever isn't.
+        try {
+          inputMessage = JSON_MAPPER.convertValue(
+              message, new TypeReference<Map<String, Object>>(){});
+        } catch (IllegalArgumentException e) {
+          throw new RuleException(ctx.rule(), e);
+        }
       } else {
         inputMessage = message;
       }

@@ -17,8 +17,13 @@
 package io.confluent.kafka.schemaregistry.rules.cel;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
+import dev.cel.common.CelValidationException;
+import dev.cel.common.CelVarDecl;
 import dev.cel.common.types.SimpleType;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
+import java.util.Collections;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -96,6 +101,67 @@ public class CelUtilsTest {
   public void plainStringSchema_stillMapsToString() {
     Schema schema = SchemaBuilder.builder().stringType();
     assertEquals(SimpleType.STRING, CelUtils.findCelTypeForAvroSchema(schema));
+  }
+
+  // ---- findCelType for null arg: returns DYN, not NULL_TYPE --------------
+
+  @Test
+  public void findCelType_javaNull_returnsDyn() {
+    // Java null arg is declared as DYN so user rules like
+    // `value != null ? value + 1 : 0` keep their non-null branch alive at
+    // compile time. NULL_TYPE would restrict the var to null-only ops.
+    assertEquals(SimpleType.DYN, CelUtils.findCelType(null));
+  }
+
+  @Test
+  public void findCelType_protoNullValue_returnsDyn() {
+    // CelFieldExecutor's NULL_VALUE substitution for null fields would
+    // otherwise route through findCelTypeForClass(NullValue.class) → DYN
+    // anyway, but make the contract explicit and consistent across all
+    // null flavors.
+    assertEquals(SimpleType.DYN,
+        CelUtils.findCelType(com.google.protobuf.NullValue.NULL_VALUE));
+  }
+
+  @Test
+  public void findCelType_celNullValue_returnsDyn() {
+    // CEL's own null literal value should be treated the same as Java null.
+    assertEquals(SimpleType.DYN,
+        CelUtils.findCelType(dev.cel.common.values.NullValue.NULL_VALUE));
+  }
+
+  @Test
+  public void buildProgram_nullTypedVar_failsToCompileForArithmetic() {
+    // Demonstrates WHY findCelType returns DYN for null instead of NULL_TYPE:
+    // declaring a var as NULL_TYPE makes any non-null-comparison op fail to
+    // compile. A reasonable user rule like `value == null ? 0 : value + 1`
+    // can't be expressed if the var is NULL_TYPE.
+    String userRule = "value == null ? 0 : value + 1";
+    assertThrows(
+        "NULL_TYPE-declared var can't participate in arithmetic — `value + 1` "
+            + "has no overload.",
+        CelValidationException.class,
+        () -> CelUtils.buildProgram(
+            ScriptType.JSON,
+            userRule,
+            String.class,
+            Collections.singletonList(
+                CelVarDecl.newVarDeclaration("value", SimpleType.NULL_TYPE))));
+  }
+
+  @Test
+  public void buildProgram_dynTypedVar_compilesNullHandlingRule() throws Exception {
+    // Same rule with DYN-typed var compiles successfully — DYN allows any
+    // operation; the runtime dispatches against the actual bound value.
+    // This is what users get now that findCelType(null) returns DYN.
+    String userRule = "value == null ? 0 : value + 1";
+    CelUtils.buildProgram(
+        ScriptType.JSON,
+        userRule,
+        String.class,
+        Collections.singletonList(
+            CelVarDecl.newVarDeclaration("value", SimpleType.DYN)));
+    // No exception → DYN-typed var compiles successfully.
   }
 
   // ---- findCelTypeForClass: non-Map values map to DYN, not MapType -------

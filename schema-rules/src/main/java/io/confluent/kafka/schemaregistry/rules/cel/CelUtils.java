@@ -207,8 +207,17 @@ public final class CelUtils {
    * other variables) in the compiler so the type-checker can validate field access.
    */
   public static CelType findCelType(Object arg) {
-    if (arg == null) {
-      return SimpleType.NULL_TYPE;
+    // Treat all null flavors (Java null, proto NullValue, dev.cel NullValue)
+    // uniformly as DYN. NULL_TYPE would restrict the var to null-only
+    // operations at compile time — `value != null ? value + 1 : 0` would
+    // fail to compile because `+` has no NULL_TYPE overload, defeating the
+    // user's null-handling intent. DYN lets the rule compile and dispatches
+    // by actual value at runtime. Also collapses three cache entries (J →
+    // NULL_TYPE, P → DYN, C → DYN) into a single DYN entry.
+    if (arg == null
+        || arg instanceof NullValue
+        || arg instanceof dev.cel.common.values.NullValue) {
+      return SimpleType.DYN;
     } else if (arg instanceof GenericContainer) {
       return findCelTypeForAvroSchema(((GenericContainer) arg).getSchema());
     } else if (arg instanceof Message) {
@@ -383,15 +392,13 @@ public final class CelUtils {
    * pass through unchanged.
    */
   public static Object toCelValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-    // CelFieldExecutor binds null primitive field values as
-    // com.google.protobuf.NullValue.NULL_VALUE. Google cel-java's runtime
-    // doesn't recognize the proto NullValue as CEL null — `value == null`
-    // would fail and references would surface as CelUnknownSet. Convert to
-    // CEL's own NullValue so null comparisons dispatch correctly.
-    if (value instanceof NullValue) {
+    // Normalize all null flavors (Java null, proto NullValue) to CEL's own
+    // NullValue. Google cel-java's runtime treats Java null as "unknown
+    // attribute" (references surface as CelUnknownSet) and doesn't
+    // recognize proto NullValue as CEL null either. Converting to dev.cel
+    // NullValue makes `value == null` dispatch correctly regardless of
+    // which null flavor the caller bound.
+    if (value == null || value instanceof NullValue) {
       return dev.cel.common.values.NullValue.NULL_VALUE;
     }
     // IndexedRecord covers both GenericRecord and SpecificRecord (Avro-
@@ -478,8 +485,11 @@ public final class CelUtils {
    * and {@link Utf8} delegate to {@link #toCelValue(Object)}.
    */
   public static Object toCelValueForJson(Object value, ObjectMapper mapper) {
-    if (value == null) {
-      return null;
+    // Same null normalization as toCelValue — convert J/P to dev.cel
+    // NullValue so `value == null` dispatches correctly. Without this, a
+    // direct Java-null binding becomes "unknown attribute" at the runtime.
+    if (value == null || value instanceof NullValue) {
+      return dev.cel.common.values.NullValue.NULL_VALUE;
     }
     if (value instanceof JsonNode) {
       // For object/array nodes, Jackson produces Map/List of Java natives via
@@ -495,14 +505,6 @@ public final class CelUtils {
             mapper.convertValue(node, new TypeReference<java.util.List<Object>>() {}));
       }
       return toCelValue(mapper.convertValue(node, Object.class));
-    }
-    // Normalize proto NullValue → dev.cel NullValue (matches toCelValue's
-    // handling). dev.cel NullValue is what CEL's own `null` literal evaluates
-    // to, so equality dispatch (`value == null`) works correctly. Letting the
-    // proto NullValue or Java null reach CEL's runtime turns the variable
-    // reference into CelUnknownSet.
-    if (value instanceof NullValue) {
-      return dev.cel.common.values.NullValue.NULL_VALUE;
     }
     // dev.cel NullValue and CelByteString are CEL's own internal value types
     // — may appear when a previous evaluation's result is rebound (chained
