@@ -219,6 +219,18 @@ public class AvroResultWriterTest {
   // ---- enum, array, map, fixed ------------------------------------------
 
   @Test
+  public void stringField_acceptsEnumSymbol() {
+    // Chained-transform scenario: a previous transform's Map carries an
+    // EnumSymbol value for a STRING-schema field. The walker must accept it
+    // (toString gives the symbol name, which is the expected Avro string-
+    // field shape) instead of throwing typeMismatch.
+    Schema enumSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO");
+    Schema stringSchema = SchemaBuilder.builder().stringType();
+    GenericData.EnumSymbol enumValue = new GenericData.EnumSymbol(enumSchema, "ONE");
+    assertEquals("ONE", AvroResultWriter.convert(enumValue, stringSchema));
+  }
+
+  @Test
   public void enumField_acceptsString() {
     Schema schema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO");
     Object out = AvroResultWriter.convert("TWO", schema);

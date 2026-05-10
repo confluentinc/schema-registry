@@ -97,7 +97,12 @@ public final class AvroResultWriter {
       case DOUBLE:
         return narrowToDouble(celValue, schema);
       case STRING:
-        if (celValue instanceof CharSequence) {
+        // CharSequence covers String / Utf8 / StringBuilder. EnumSymbol covers
+        // chained-transform Maps that route an EnumSymbol value at a STRING-
+        // schema field — toString() yields the symbol name, which is the
+        // expected Avro string-field representation.
+        if (celValue instanceof CharSequence
+            || celValue instanceof GenericData.EnumSymbol) {
           return celValue.toString();
         }
         throw typeMismatch(celValue, schema);

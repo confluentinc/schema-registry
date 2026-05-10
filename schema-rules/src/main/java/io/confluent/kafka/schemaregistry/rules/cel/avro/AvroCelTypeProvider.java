@@ -88,7 +88,7 @@ public final class AvroCelTypeProvider implements CelTypeProvider {
   @Override
   public Optional<CelType> findType(String typeName) {
     StructType found = typesByName.get(typeName);
-    return found != null ? Optional.of(found) : Optional.empty();
+    return Optional.ofNullable(found);
   }
 
   // ---- internals ----
