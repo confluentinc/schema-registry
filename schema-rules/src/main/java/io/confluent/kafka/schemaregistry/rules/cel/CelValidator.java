@@ -22,24 +22,22 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
-import com.google.protobuf.Timestamp;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import dev.cel.common.CelVarDecl;
+import dev.cel.common.types.CelKind;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelVariableResolver;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.RegexEngine;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
-import java.time.Instant;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
@@ -74,13 +72,19 @@ public final class CelValidator implements ValidationRuleExecutor {
         .build(new CacheLoader<ValidationKey, CelRuntime.Program>() {
           @Override
           public CelRuntime.Program load(ValidationKey key) throws Exception {
-            // Always declare `now` so any rule may reference it. The value is supplied
-            // per-call from execute() and is a freshly-captured Timestamp.
-            return CelUtils.buildProgram(key.type, key.expr, key.schemaHint,
+            CelUtils.CompiledRule compiled = CelUtils.buildCompiledRule(
+                key.type, key.expr, key.schemaHint,
                 Arrays.asList(
                     CelVarDecl.newVarDeclaration("this", key.thisType),
                     CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP)),
                 RegexEngine.RE2);
+            CelKind kind = compiled.resultKind;
+            if (kind != CelKind.BOOL && kind != CelKind.STRING) {
+              throw new IllegalArgumentException(
+                  "Validation rule '" + key.expr + "' must return bool or string; "
+                      + "got " + kind);
+            }
+            return compiled.program;
           }
         });
   }
@@ -145,16 +149,15 @@ public final class CelValidator implements ValidationRuleExecutor {
     }
     ValidationKey key = new ValidationKey(rule.getExpr(), scriptType, thisType, schema);
     try {
-      Map<String, Object> args = new LinkedHashMap<>(2);
       // JSON path needs Jackson POJO/JsonNode → Map conversion; Avro/Proto paths
       // are handled by the simpler toCelValue helper.
       Object celValue = scriptType == ScriptType.JSON
           ? CelUtils.toCelValueForJson(value, JSON_MAPPER)
           : CelUtils.toCelValue(value);
-      args.put("this", celValue);
       CelRuntime.Program program = cache.get(key);
-      args.put("now", currentTimestamp());
-      return program.eval(args);
+      CelVariableResolver resolver = CelVariableResolver.hierarchicalVariableResolver(
+          new NowVariable(), new NamedVariable("this", celValue));
+      return program.eval(resolver);
     } catch (CelEvaluationException e) {
       throw new RuleException(
           "Could not execute validation rule '"
@@ -170,14 +173,6 @@ public final class CelValidator implements ValidationRuleExecutor {
           "Could not compile validation rule '"
               + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", cause);
     }
-  }
-
-  private static Timestamp currentTimestamp() {
-    Instant now = Instant.now();
-    return Timestamp.newBuilder()
-        .setSeconds(now.getEpochSecond())
-        .setNanos(now.getNano())
-        .build();
   }
 
   /**

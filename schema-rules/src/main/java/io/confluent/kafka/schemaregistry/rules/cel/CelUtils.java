@@ -29,8 +29,10 @@ import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Timestamp;
 import dev.cel.common.CelAbstractSyntaxTree;
+import dev.cel.common.CelOptions;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelVarDecl;
+import dev.cel.common.types.CelKind;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
@@ -169,6 +171,19 @@ public final class CelUtils {
       ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls,
       RegexEngine regexEngine)
       throws CelValidationException, CelEvaluationException {
+    return buildCompiledRule(type, expr, schemaHint, varDecls, regexEngine).program;
+  }
+
+  /**
+   * Like {@link #buildProgram} but exposes the compiled AST's result-type
+   * {@link CelKind} alongside the runnable program. Lets callers (notably
+   * {@link CelValidator}) reject rules whose result type doesn't fit their
+   * contract, at compile time rather than first eval.
+   */
+  public static CompiledRule buildCompiledRule(
+      ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls,
+      RegexEngine regexEngine)
+      throws CelValidationException, CelEvaluationException {
     // For AVRO records, first try declaring `this` as a struct (so field
     // accesses type-check against actual Avro field types). On compile
     // failure, fall back to declaring `this` as a dynamic map — handles edge
@@ -193,7 +208,23 @@ public final class CelUtils {
     return doBuildProgram(type, expr, schemaHint, varDecls, regexEngine);
   }
 
-  private static CelRuntime.Program doBuildProgram(
+  /**
+   * Compiled rule output: the runnable {@link CelRuntime.Program} plus the
+   * compile-time result-type {@link CelKind}. Callers that need to validate
+   * the result type (e.g., a validator that requires bool/string) get both
+   * from one compile pass.
+   */
+  public static final class CompiledRule {
+    public final CelRuntime.Program program;
+    public final CelKind resultKind;
+
+    CompiledRule(CelRuntime.Program program, CelKind resultKind) {
+      this.program = program;
+      this.resultKind = resultKind;
+    }
+  }
+
+  private static CompiledRule doBuildProgram(
       ScriptType type, String expr, Object schemaHint, List<CelVarDecl> varDecls,
       RegexEngine regexEngine)
       throws CelValidationException, CelEvaluationException {
@@ -205,10 +236,12 @@ public final class CelUtils {
     // exists_one/map/filter); they have to be wired in explicitly. Without
     // them, expressions like `tags.exists_one(x, x == 'PII')` fail to compile.
     CelCompilerBuilder compilerBuilder = CelCompilerFactory.standardCelCompilerBuilder()
+        .setOptions(CelOptions.DEFAULT)
         .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
         .addLibraries(new BuiltinLibrary(), CelExtensions.strings())
         .addVarDeclarations(varDecls);
     CelRuntimeBuilder runtimeBuilder = CelRuntimeFactory.standardCelRuntimeBuilder()
+        .setOptions(CelOptions.DEFAULT)
         .addLibraries(new BuiltinLibrary(), CelExtensions.strings());
 
     if (regexEngine == RegexEngine.PCRE) {
@@ -256,7 +289,7 @@ public final class CelUtils {
     CelCompiler compiler = compilerBuilder.build();
     CelRuntime runtime = runtimeBuilder.build();
     CelAbstractSyntaxTree ast = compiler.compile(expr).getAst();
-    return runtime.createProgram(ast);
+    return new CompiledRule(runtime.createProgram(ast), ast.getResultType().kind());
   }
 
   private static boolean hasAnyStructTypedVar(List<CelVarDecl> varDecls) {
