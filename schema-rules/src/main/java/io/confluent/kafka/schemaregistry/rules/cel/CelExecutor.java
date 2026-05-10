@@ -19,28 +19,35 @@ package io.confluent.kafka.schemaregistry.rules.cel;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.api.expr.v1alpha1.Type;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Message;
+import com.google.protobuf.NullValue;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
+import dev.cel.common.types.CelType;
+import dev.cel.common.values.CelByteString;
+import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelRuntime;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
+import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroResultWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
-import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptException;
 
 public class CelExecutor implements RuleExecutor {
 
@@ -48,23 +55,19 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String CEL_IGNORE_GUARD_SEPARATOR = "cel.ignore.guard.separator";
 
-  private static final ObjectMapper mapper = new ObjectMapper();
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+      .registerModule(new ProtobufModule());
 
-  static {
-    // Register ProtobufModule to convert CEL objects (such as NullValue) to JSON
-    mapper.registerModule(new ProtobufModule());
-  }
+  private static final int DEFAULT_CACHE_SIZE = 1000;
 
-  private static final int DEFAULT_CACHE_SIZE = 100;
-
-  private final LoadingCache<RuleWithArgs, Script> cache;
+  private final LoadingCache<RuleWithArgs, CelRuntime.Program> cache;
 
   public CelExecutor() {
     cache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_SIZE)
-        .build(new CacheLoader<RuleWithArgs, Script>() {
+        .build(new CacheLoader<RuleWithArgs, CelRuntime.Program>() {
           @Override
-          public Script load(RuleWithArgs ruleWithArgs) throws Exception {
+          public CelRuntime.Program load(RuleWithArgs ruleWithArgs) throws Exception {
             Object schemaHint;
             switch (ruleWithArgs.getType()) {
               case AVRO:
@@ -79,8 +82,8 @@ public class CelExecutor implements RuleExecutor {
               default:
                 throw new IllegalArgumentException("Unsupported type " + ruleWithArgs.getType());
             }
-            return CelUtils.buildScript(ruleWithArgs.getType(), ruleWithArgs.getRule(),
-                schemaHint, CelUtils.toDecls(ruleWithArgs.getDeclTypes()));
+            return CelUtils.buildProgram(ruleWithArgs.getType(), ruleWithArgs.getRule(),
+                schemaHint, CelUtils.toVarDecls(ruleWithArgs.getDeclTypes()));
           }
         });
   }
@@ -94,91 +97,196 @@ public class CelExecutor implements RuleExecutor {
   public Object transform(RuleContext ctx, Object message) throws RuleException {
     Object input;
     if (message instanceof JsonNode) {
-      input = mapper.convertValue(message, new TypeReference<Map<String, Object>>(){});
+      input = JSON_MAPPER.convertValue(message, new TypeReference<Map<String, Object>>(){});
     } else {
       input = message;
     }
-    Object result = execute(ctx, input, Collections.singletonMap("message", input));
+    // Bind once so we have the converted message in scope for the identity
+    // short-circuit below. evaluateWithGuard then handles guard parsing and
+    // runs the body against the same bindings (no rebinding between guard and
+    // body — they share type, decl-types and celArgs, only the cache key
+    // differs).
+    Bindings b = bind(ctx, input, Collections.singletonMap("message", input));
+    if (b == null) {
+      return input;        // list-shaped input is not supported; pass through.
+    }
+    Object result = evaluateWithGuard(ctx, b);
     if (result instanceof Map) {
-      // Convert maps to the target object type
+      // Identity short-circuit: if the rule expression is just `message`, CEL
+      // returns the same Map we bound. Return the original input — keeps the
+      // record byte-identical and avoids any conversion work.
+      if (result == b.boundMessage()) {
+        return message;
+      }
+      // Avro path: walk the Map and the schema in lockstep with
+      // AvroResultWriter. Sidesteps the JSON intermediate that loses bytes
+      // (Jackson's base64 default) and forces explicit union tagging.
+      if (ctx.target() instanceof AvroSchema) {
+        try {
+          Schema avroSchema = ((AvroSchema) ctx.target()).rawSchema();
+          return AvroResultWriter.convert(result, avroSchema);
+        } catch (RuntimeException e) {
+          throw new RuleException(ctx.rule(), e);
+        }
+      }
+      // JSON Schema / Protobuf: Jackson roundtrip. Unwrap CEL-flavored values
+      // first (NullValue → null, CelByteString → byte[]) so ProtobufModule
+      // doesn't emit "zeroValue" and downstream parsers accept the JsonNode.
+      Object converted = unwrapCelValuesForJson(result);
       try {
-        JsonNode jsonNode = mapper.valueToTree(result);
-        result = ctx.target().fromJson(jsonNode);
+        JsonNode jsonNode = JSON_MAPPER.valueToTree(converted);
+        return ctx.target().fromJson(jsonNode);
       } catch (IOException e) {
         throw new RuleException(ctx.rule(), e);
       }
     }
-    return result;
+    // Scalar fall-through: normalize CEL sentinels so downstream serializers
+    // see Java null and byte[] rather than NullValue / CelByteString.
+    return unwrapCelValuesForJson(result);
   }
 
+  /**
+   * Recursively normalize a CEL eval result so Jackson can serialize it back
+   * into JSON that downstream Avro / JSON-Schema parsers will accept:
+   * <ul>
+   *   <li>{@link com.google.protobuf.NullValue} → Java {@code null} (otherwise
+   *       Jackson's ProtobufModule emits {@code "zeroValue"})</li>
+   *   <li>{@link dev.cel.common.values.CelByteString} → {@code byte[]}</li>
+   * </ul>
+   * Maps and lists are walked recursively; other values pass through.
+   */
+  private static Object unwrapCelValuesForJson(Object value) {
+    if (value == null
+        || value instanceof NullValue
+        || value instanceof dev.cel.common.values.NullValue) {
+      return null;
+    }
+    if (value instanceof CelByteString) {
+      return ((CelByteString) value).toByteArray();
+    }
+    if (value instanceof Map) {
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<String, Object> out = new LinkedHashMap<>(in.size());
+      for (Map.Entry<?, ?> e : in.entrySet()) {
+        out.put(String.valueOf(e.getKey()), unwrapCelValuesForJson(e.getValue()));
+      }
+      return out;
+    }
+    if (value instanceof List) {
+      List<?> in = (List<?>) value;
+      List<Object> out = new ArrayList<>(in.size());
+      for (Object e : in) {
+        out.add(unwrapCelValuesForJson(e));
+      }
+      return out;
+    }
+    return value;
+  }
+
+  /**
+   * Entry point used by {@link CelFieldExecutor} and any subclass that wants
+   * the full guard-then-body flow. Equivalent to
+   * {@code bind} → {@code evaluateWithGuard}.
+   */
   protected Object execute(
       RuleContext ctx, Object obj, Map<String, Object> args)
       throws RuleException {
+    Bindings b = bind(ctx, obj, args);
+    if (b == null) {
+      return obj;          // list-shaped message — not supported, pass through.
+    }
+    return evaluateWithGuard(ctx, b);
+  }
+
+  /**
+   * Inspect the bound {@code message} to decide ScriptType, then convert every
+   * arg to its CEL-friendly shape. The returned {@link Bindings} is reusable
+   * across multiple {@code evaluate} calls (e.g., guard then body) — only the
+   * rule expression changes between them. Returns {@code null} if the message
+   * is a List (not a supported CEL binding shape).
+   */
+  protected Bindings bind(RuleContext ctx, Object obj, Map<String, Object> args)
+      throws RuleException {
+    Object msg = args.get("message");
+    if (msg == null) {
+      msg = obj;
+    }
+    if (msg == null) {
+      return null;
+    }
+    ScriptType type;
+    Object schemaHint;
+    if (msg instanceof GenericContainer) {
+      type = ScriptType.AVRO;
+      schemaHint = ((GenericContainer) msg).getSchema();
+    } else if (msg instanceof Message) {
+      type = ScriptType.PROTOBUF;
+      schemaHint = ((Message) msg).getDescriptorForType();
+    } else if (msg instanceof List<?>) {
+      return null;
+    } else {
+      type = ScriptType.JSON;
+      schemaHint = msg.getClass();
+    }
+
+    Map<String, CelType> declTypes = CelUtils.toDeclTypes(args);
+    // Convert each variable value to a CEL-compatible shape (Avro records →
+    // maps, narrow numerics widened, JSON POJOs → maps via Jackson, etc.).
+    // Proto Messages pass through unchanged — Google cel-java's first-class
+    // proto support handles them natively.
+    Map<String, Object> celArgs = new HashMap<>(args.size());
+    for (Map.Entry<String, Object> e : args.entrySet()) {
+      Object converted = type == ScriptType.JSON
+          ? CelUtils.toCelValueForJson(e.getValue(), JSON_MAPPER)
+          : CelUtils.toCelValue(e.getValue());
+      celArgs.put(e.getKey(), converted);
+    }
+    return new Bindings(type, schemaHint, declTypes, celArgs, obj);
+  }
+
+  /**
+   * Apply the optional guard (everything before the first {@code ;} in the
+   * rule expression) and then evaluate the body. Reuses {@code b} for both —
+   * only the rule expression (and therefore the cache key) differs.
+   */
+  protected Object evaluateWithGuard(RuleContext ctx, Bindings b) throws RuleException {
     String expr = ctx.rule().getExpr();
     String ignoreGuardStr = ctx.getParameter(CEL_IGNORE_GUARD_SEPARATOR);
     boolean ignoreGuard = Boolean.parseBoolean(ignoreGuardStr);
     if (!ignoreGuard) {
-      // An optional guard (followed by semicolon) can precede the expr
       int index = expr.indexOf(';');
       if (index >= 0) {
         String guard = expr.substring(0, index);
         if (!guard.trim().isEmpty()) {
           Object guardResult = Boolean.FALSE;
           try {
-            guardResult = execute(ctx, guard, obj, args);
+            guardResult = evaluate(ctx, guard, b);
           } catch (RuleException e) {
-            // ignore
+            // ignore — exception in guard is treated as false (skip the body).
           }
           if (Boolean.FALSE.equals(guardResult)) {
-            // Skip the expr
-            return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : obj;
+            return ctx.rule().getKind() == RuleKind.CONDITION ? Boolean.TRUE : b.obj();
           }
         }
         expr = expr.substring(index + 1);
       }
     }
-    return execute(ctx, expr, obj, args);
+    return evaluate(ctx, expr, b);
   }
 
-  private Object execute(RuleContext ctx, String rule, Object obj, Map<String, Object> args)
-      throws RuleException {
+  /**
+   * Look up (or compile) the program for {@code rule} and run it against the
+   * pre-converted args in {@code b}.
+   */
+  protected Object evaluate(RuleContext ctx, String rule, Bindings b) throws RuleException {
     try {
-      Object msg = args.get("message");
-      if (msg == null) {
-        msg = obj;
-      }
-      ScriptType type = ScriptType.JSON;
-      if (msg instanceof GenericContainer) {
-        type = ScriptType.AVRO;
-      } else if (msg instanceof Message) {
-        type = ScriptType.PROTOBUF;
-      } else if (msg instanceof List<?>) {
-        // list not supported
-        return obj;
-      }
-
-      Map<String, Type> types = CelUtils.toDeclTypes(args);
-      RuleWithArgs ruleWithArgs;
-      switch (type) {
-        case AVRO:
-          ruleWithArgs = new RuleWithArgs(rule, type, types, ((GenericContainer) msg).getSchema());
-          break;
-        case JSON:
-          ruleWithArgs = new RuleWithArgs(rule, type, types, msg.getClass());
-          break;
-        case PROTOBUF:
-          ruleWithArgs = new RuleWithArgs(rule, type, types,
-              ((Message) msg).getDescriptorForType());
-          break;
-        default:
-          throw new IllegalArgumentException("Unsupported type " + type);
-      }
-      Script script = cache.get(ruleWithArgs);
-
-      return script.execute(Object.class, args);
-    } catch (ScriptException e) {
+      CelRuntime.Program program = cache.get(b.cacheKey(rule));
+      return program.eval(b.celArgs());
+    } catch (CelEvaluationException e) {
       throw new RuleException(ctx.rule(), "Could not execute CEL script", e);
     } catch (ExecutionException e) {
+      // Guava cache wraps anything thrown by load() — including CelValidationException
+      // from the compiler — as ExecutionException. Unwrap and re-throw.
       if (e.getCause() instanceof RuleException) {
         RuleException re = (RuleException) e.getCause();
         if (re.getRule() == null) {
@@ -191,16 +299,81 @@ public class CelExecutor implements RuleExecutor {
     }
   }
 
+  /**
+   * Pre-converted CEL invocation context. Holds the {@link ScriptType}, a
+   * format-specific schema hint, the {@code declTypes} declarations, and the
+   * already-CEL-shaped {@code celArgs}. Reused across multiple {@code evaluate}
+   * calls within a single {@code transform}/{@code execute} so guard and body
+   * share the same conversions.
+   */
+  protected static final class Bindings {
+    private final ScriptType type;
+    private final Object schemaHint;
+    private final Map<String, CelType> declTypes;
+    private final Map<String, Object> celArgs;
+    private final Object obj;
+
+    Bindings(ScriptType type, Object schemaHint, Map<String, CelType> declTypes,
+             Map<String, Object> celArgs, Object obj) {
+      this.type = type;
+      this.schemaHint = schemaHint;
+      this.declTypes = declTypes;
+      this.celArgs = celArgs;
+      this.obj = obj;
+    }
+
+    public ScriptType type() {
+      return type;
+    }
+
+    /**
+     * Read-only view of the converted CEL args. Wrapped to prevent subclasses
+     * from mutating between {@code bind} and {@code evaluate} (which would
+     * break the cache key invariants and the identity short-circuit). The
+     * wrapper preserves reference semantics on values, so
+     * {@link #boundMessage()} still compares equal to the result of an
+     * identity-rule evaluation.
+     */
+    public Map<String, Object> celArgs() {
+      return Collections.unmodifiableMap(celArgs);
+    }
+
+    public Object obj() {
+      return obj;
+    }
+
+    /**
+     * The value bound for the {@code message} variable, used by the identity
+     * short-circuit in {@link CelExecutor#transform}.
+     */
+    public Object boundMessage() {
+      return celArgs.get("message");
+    }
+
+    RuleWithArgs cacheKey(String rule) {
+      switch (type) {
+        case AVRO:
+          return new RuleWithArgs(rule, type, declTypes, (Schema) schemaHint);
+        case JSON:
+          return new RuleWithArgs(rule, type, declTypes, (Class<?>) schemaHint);
+        case PROTOBUF:
+          return new RuleWithArgs(rule, type, declTypes, (Descriptor) schemaHint);
+        default:
+          throw new IllegalArgumentException("Unsupported type " + type);
+      }
+    }
+  }
+
   static class RuleWithArgs {
     private final String rule;
     private final ScriptType type;
-    private final Map<String, Type> declTypes;
+    private final Map<String, CelType> declTypes;
     private Schema avroSchema;
     private Class<?> jsonClass;
     private Descriptor protobufDesc;
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, Type> declTypes, Schema avroSchema) {
+        String rule, ScriptType type, Map<String, CelType> declTypes, Schema avroSchema) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
@@ -208,7 +381,7 @@ public class CelExecutor implements RuleExecutor {
     }
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, Type> declTypes, Class<?> jsonClass) {
+        String rule, ScriptType type, Map<String, CelType> declTypes, Class<?> jsonClass) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
@@ -216,7 +389,7 @@ public class CelExecutor implements RuleExecutor {
     }
 
     public RuleWithArgs(
-        String rule, ScriptType type, Map<String, Type> declTypes, Descriptor protobufDesc) {
+        String rule, ScriptType type, Map<String, CelType> declTypes, Descriptor protobufDesc) {
       this.rule = rule;
       this.type = type;
       this.declTypes = declTypes;
@@ -231,7 +404,7 @@ public class CelExecutor implements RuleExecutor {
       return type;
     }
 
-    public Map<String, Type> getDeclTypes() {
+    public Map<String, CelType> getDeclTypes() {
       return declTypes;
     }
 
