@@ -81,7 +81,7 @@ public final class AvroResultWriter {
       if (celValue == null) {
         throw typeMismatch(null, schema);
       }
-      if (isLogicalTypeJavaRep(celValue)) {
+      if (isLogicalTypeJavaRep(celValue, schema)) {
         return celValue;
       }
       // Otherwise fall through to type-specific conversion below.
@@ -441,7 +441,12 @@ public final class AvroResultWriter {
         // so we trust the Conversion to validate downstream.
         return hasLogicalType && value instanceof java.math.BigDecimal;
       case ARRAY:
-        return value instanceof List;
+        if (value instanceof List) {
+          return true;
+        }
+        // LogicalMap: array<KV> with Map as Java rep — the Conversion encodes
+        // the Map into a list of {key, value} records.
+        return hasLogicalType && value instanceof Map;
       case MAP:
         return value instanceof Map;
       case RECORD:
@@ -483,30 +488,40 @@ public final class AvroResultWriter {
 
   /**
    * Recognize the Java types Avro's standard logical-type {@code Conversion}s
-   * accept on the write side:
+   * accept on the write side, gated by the schema's underlying Avro type so a
+   * Map for a variant-logical RECORD doesn't bypass record construction, and
+   * a Variant for a non-record schema doesn't slip through. Specifically:
    * <ul>
-   *   <li>{@link java.math.BigDecimal} — decimal (on bytes or fixed)</li>
-   *   <li>{@link java.time.temporal.Temporal} — date / time-millis /
-   *       time-micros / timestamp-millis / timestamp-micros / local-timestamp-*
-   *       (on int / long; covers Instant, LocalDate, LocalTime, LocalDateTime,
-   *       OffsetDateTime, ZonedDateTime)</li>
-   *   <li>{@link java.util.Map} — logical map</li>
-   *   <li>{@link java.util.UUID} — uuid (on string)</li>
-   *   <li>{@link io.confluent.kafka.schemaregistry.type.Variant} — variant
-   *       (Confluent's variant logical type, on a 2-field record)</li>
+   *   <li>{@link java.math.BigDecimal} — decimal (on bytes or fixed); always
+   *       a logical-type rep regardless of underlying Avro type.</li>
+   *   <li>{@link java.util.UUID} — uuid (on string); always.</li>
+   *   <li>{@link java.time.temporal.Temporal} — date / time-* / timestamp-* /
+   *       local-timestamp-* (on int / long); always.</li>
+   *   <li>{@link java.util.Map} — Confluent's {@code LogicalMap} logical
+   *       type; underlying Avro type is {@code array<KV>}, so gated by
+   *       {@code schema.getType() == ARRAY} to avoid bypassing
+   *       record/variant conversion.</li>
+   *   <li>{@link io.confluent.kafka.schemaregistry.type.Variant} —
+   *       Confluent's variant logical type; underlying Avro type is RECORD,
+   *       so gated by {@code schema.getType() == RECORD}.</li>
    * </ul>
    * Other shapes (CelByteString, raw byte[], narrow numerics, etc.) fall
    * through to the type-specific case which converts them to the underlying
    * primitive shape Avro expects for the encoded form.
    */
-  private static boolean isLogicalTypeJavaRep(Object value) {
+  private static boolean isLogicalTypeJavaRep(Object value, Schema schema) {
     if (value instanceof java.math.BigDecimal
         || value instanceof java.util.UUID
         || value instanceof java.time.temporal.Temporal) {
       return true;
     }
-    return value instanceof java.util.Map
-        || value instanceof io.confluent.kafka.schemaregistry.type.Variant;
+    if (value instanceof java.util.Map) {
+      return schema.getType() == Type.ARRAY;
+    }
+    if (value instanceof io.confluent.kafka.schemaregistry.type.Variant) {
+      return schema.getType() == Type.RECORD;
+    }
+    return false;
   }
 
   // --- error helpers ------------------------------------------------------

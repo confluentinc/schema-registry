@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,7 +37,7 @@ public class CelFieldExecutor extends FieldRuleExecutor {
 
   public static final String TYPE = "CEL_FIELD";
 
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+  private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new ProtobufModule());
 
   private CelExecutor celExecutor = new CelExecutor();

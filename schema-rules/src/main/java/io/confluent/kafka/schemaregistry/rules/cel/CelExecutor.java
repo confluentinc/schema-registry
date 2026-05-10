@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import io.confluent.kafka.schemaregistry.rules.cel.avro.AvroResultWriter;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,7 +56,7 @@ public class CelExecutor implements RuleExecutor {
 
   public static final String CEL_IGNORE_GUARD_SEPARATOR = "cel.ignore.guard.separator";
 
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+  private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new ProtobufModule());
 
   private static final int DEFAULT_CACHE_SIZE = 1000;

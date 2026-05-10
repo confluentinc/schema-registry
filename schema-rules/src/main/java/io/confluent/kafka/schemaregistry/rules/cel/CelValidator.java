@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -57,7 +58,7 @@ public final class CelValidator implements ValidationRuleExecutor {
   private static final int DEFAULT_CACHE_SIZE = 1000;
 
   /** Used for POJO/JsonNode → Map conversion on the JSON validation path. */
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+  private static final ObjectMapper JSON_MAPPER = JacksonMapper.newObjectMapper()
       .registerModule(new ProtobufModule());
 
   private final LoadingCache<ValidationKey, CelRuntime.Program> cache;
