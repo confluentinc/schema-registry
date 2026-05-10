@@ -753,11 +753,17 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public List<ValidationRuleError> validateMessage(
       ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
     List<ValidationRuleError> violations = new ArrayList<>();
     if (executor == null || message == null) {
       return violations;
     }
-    toValidatedMessage(rawSchema(), message, "", executor, violations);
+    toValidatedMessage(rawSchema(), message, "", executor, failFast, violations);
     return violations;
   }
 
@@ -782,7 +788,7 @@ public class AvroSchema implements ParsedSchema {
    */
   private static void toValidatedMessage(
       Schema schema, Object value, String path,
-      ValidationRuleExecutor executor, List<ValidationRuleError> out) {
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
     if (schema == null) {
       return;
     }
@@ -797,7 +803,7 @@ public class AvroSchema implements ParsedSchema {
         if (member.getType() == Schema.Type.NULL) {
           return;
         }
-        toValidatedMessage(member, value, path, executor, out);
+        toValidatedMessage(member, value, path, executor, failFast, out);
         return;
       case ARRAY:
         if (!(value instanceof Iterable)) {
@@ -806,7 +812,10 @@ public class AvroSchema implements ParsedSchema {
         int i = 0;
         for (Object element : (Iterable<?>) value) {
           toValidatedMessage(schema.getElementType(), element,
-              path + "[" + i + "]", executor, out);
+              path + "[" + i + "]", executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
           i++;
         }
         return;
@@ -816,7 +825,10 @@ public class AvroSchema implements ParsedSchema {
         }
         for (Map.Entry<?, ?> e : ((Map<?, ?>) value).entrySet()) {
           toValidatedMessage(schema.getValueType(), e.getValue(),
-              path + "[\"" + e.getKey() + "\"]", executor, out);
+              path + "[\"" + e.getKey() + "\"]", executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
         }
         return;
       case RECORD:
@@ -826,6 +838,9 @@ public class AvroSchema implements ParsedSchema {
         // Record-level rules: this = the record value.
         for (ValidationRule rule : readRulesProp(schema)) {
           evaluateOne(rule, schema, value, path, executor, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
         }
         // Iterate fields — same pattern as toTransformedMessage's RECORD
         // case: use the runtime schema for field iteration (handles
@@ -854,9 +869,15 @@ public class AvroSchema implements ParsedSchema {
           if (fieldValue != null || !isNullable(fieldSchema)) {
             for (ValidationRule rule : readRulesProp(originalField)) {
               evaluateOne(rule, fieldSchema, fieldValue, childPath, executor, out);
+              if (failFast && !out.isEmpty()) {
+                return;
+              }
             }
           }
-          toValidatedMessage(fieldSchema, fieldValue, childPath, executor, out);
+          toValidatedMessage(fieldSchema, fieldValue, childPath, executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
         }
         return;
       default:
