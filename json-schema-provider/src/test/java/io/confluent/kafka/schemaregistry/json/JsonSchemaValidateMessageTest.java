@@ -90,6 +90,28 @@ public class JsonSchemaValidateMessageTest {
   }
 
   @Test
+  public void failFast_stopsAfterFirstViolation() throws Exception {
+    // Same array-of-objects shape that without fail-fast produces two violations.
+    // With failFast=true, the walker should stop after the first.
+    String schemaStr = "{"
+        + "\"type\":\"object\","
+        + "\"properties\":{"
+        + "  \"items\":{\"type\":\"array\",\"items\":{"
+        + "    \"type\":\"object\",\"properties\":{"
+        + "      \"x\":{\"type\":\"integer\","
+        + "        \"confluent:rules\":[{\"name\":\"r\",\"expr\":\"true\"}]}}}}"
+        + "}}";
+    JsonSchema schema = new JsonSchema(schemaStr);
+    ArrayNode items = MAPPER.createArrayNode();
+    items.add(MAPPER.createObjectNode().put("x", 1));
+    items.add(MAPPER.createObjectNode().put("x", 2));
+    ObjectNode outer = MAPPER.createObjectNode().set("items", items);
+
+    List<ValidationRuleError> errors = schema.validateMessage(ALWAYS_FAIL, outer, true);
+    assertEquals(Collections.singletonList("r@$.items[0].x"), firedRules(errors));
+  }
+
+  @Test
   public void oneOf_firesRuleOnlyOnMatchingSubschema() throws Exception {
     // Two oneOf branches with different rules. The walker should only descend into the
     // branch whose schema validates the value.

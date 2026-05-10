@@ -99,6 +99,36 @@ public class ProtobufSchemaValidateMessageTest {
   }
 
   @Test
+  public void failFast_stopsAfterFirstViolation() {
+    // Same repeated-message shape that without fail-fast produces two violations
+    // (one per element). With failFast=true, the walker should stop after the
+    // first.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message Outer { repeated test.Item items = 1; }\n"
+        + "message Item {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"r\", expr: \"true\"}]\n"
+        + "  };\n"
+        + "  int32 v = 1;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor outerDesc = schema.toDescriptor("test.Outer");
+    Descriptor itemDesc = schema.toDescriptor("test.Item");
+    DynamicMessage i0 = DynamicMessage.newBuilder(itemDesc)
+        .setField(itemDesc.findFieldByName("v"), 1).build();
+    DynamicMessage i1 = DynamicMessage.newBuilder(itemDesc)
+        .setField(itemDesc.findFieldByName("v"), 2).build();
+    DynamicMessage outer = DynamicMessage.newBuilder(outerDesc)
+        .addRepeatedField(outerDesc.findFieldByName("items"), i0)
+        .addRepeatedField(outerDesc.findFieldByName("items"), i1).build();
+
+    assertEquals(java.util.Collections.singletonList("r@items[0]"),
+        firedRules(schema.validateMessage(ALWAYS_FAIL, outer, true)));
+  }
+
+  @Test
   public void optionalField_skipsRuleWhenUnset() {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
