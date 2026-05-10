@@ -155,6 +155,21 @@ public class AvroSchema implements ParsedSchema {
     this.version = version;
   }
 
+  public AvroSchema(
+      Schema schemaObj,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Integer version
+  ) {
+    this.isNew = false;
+    this.schemaObj = schemaObj;
+    this.references = Collections.unmodifiableList(references);
+    this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+    this.metadata = null;
+    this.ruleSet = null;
+    this.version = version;
+  }
+
   private AvroSchema(
       Schema schemaObj,
       String canonicalString,
