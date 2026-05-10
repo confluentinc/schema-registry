@@ -368,20 +368,35 @@ public final class AvroResultWriter {
         // uuid: accept java.util.UUID for the string-backed logical type.
         return hasLogicalType && value instanceof java.util.UUID;
       case ENUM:
-        return value instanceof CharSequence
-            && branch.hasEnumSymbol(value.toString());
+        // CharSequence covers String inputs; EnumSymbol covers values flowing
+        // through unchanged from a source record. toEnumSymbol re-validates
+        // and rebinds against the target schema regardless of which schema the
+        // EnumSymbol originally carried — only the symbol-validity check
+        // matters here.
+        if (value instanceof CharSequence
+            || value instanceof GenericData.EnumSymbol) {
+          return branch.hasEnumSymbol(value.toString());
+        }
+        return false;
       case BYTES:
         if (value instanceof byte[]
             || value instanceof ByteBuffer
-            || value instanceof CelByteString) {
+            || value instanceof CelByteString
+            || value instanceof GenericFixed) {
           return true;
         }
         // decimal: accept BigDecimal for the bytes-backed logical type.
         return hasLogicalType && value instanceof java.math.BigDecimal;
       case FIXED:
-        if (value instanceof GenericData.Fixed) {
-          return ((GenericData.Fixed) value).getSchema().getFullName()
-              .equals(branch.getFullName());
+        if (value instanceof GenericData.Fixed
+            && ((GenericData.Fixed) value).getSchema().getFullName()
+                .equals(branch.getFullName())) {
+          return true;
+        }
+        // Any other GenericFixed (different schema name) — accept by length so
+        // toFixed can rebuild against the target schema.
+        if (value instanceof GenericFixed) {
+          return ((GenericFixed) value).bytes().length == branch.getFixedSize();
         }
         if (value instanceof byte[]) {
           return ((byte[]) value).length == branch.getFixedSize();

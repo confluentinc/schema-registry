@@ -324,6 +324,49 @@ public class AvroResultWriterTest {
     assertArrayEquals(new byte[]{9, 10}, bytes(out));
   }
 
+  // ---- union resolution for richer Avro shapes ---------------------------
+
+  @Test
+  public void bytesInUnion_acceptsGenericFixed() {
+    // A Fixed value bound for a [null, bytes] union should resolve to the
+    // BYTES branch — branchAccepts now recognizes GenericFixed as bytes-shaped.
+    Schema fixedSchema = SchemaBuilder.fixed("Hash").size(2);
+    Schema bytesSchema = SchemaBuilder.builder().bytesType();
+    Schema union = Schema.createUnion(
+        Arrays.asList(Schema.create(Schema.Type.NULL), bytesSchema));
+    GenericData.Fixed in = new GenericData.Fixed(fixedSchema, new byte[]{1, 2});
+    ByteBuffer out = (ByteBuffer) AvroResultWriter.convert(in, union);
+    assertArrayEquals(new byte[]{1, 2}, bytes(out));
+  }
+
+  @Test
+  public void enumInUnion_acceptsEnumSymbolWithDifferentSchema() {
+    // EnumSymbol carries a different (more permissive) source schema; symbol
+    // is valid in the target. Should resolve to the ENUM branch and the output
+    // EnumSymbol should be rebuilt against the target schema.
+    Schema sourceSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO", "THREE");
+    Schema targetEnum = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO");
+    Schema union = Schema.createUnion(
+        Arrays.asList(Schema.create(Schema.Type.NULL), targetEnum));
+    GenericData.EnumSymbol two = new GenericData.EnumSymbol(sourceSchema, "TWO");
+    GenericData.EnumSymbol out = (GenericData.EnumSymbol) AvroResultWriter.convert(two, union);
+    assertEquals("TWO", out.toString());
+    assertEquals(targetEnum, out.getSchema());
+  }
+
+  @Test
+  public void enumInUnion_unresolvedWhenSymbolMissingInTarget() {
+    // EnumSymbol's symbol is absent from the target enum AND no other branch
+    // accepts the value → UnresolvedUnionException.
+    Schema sourceSchema = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO", "THREE");
+    Schema targetEnum = SchemaBuilder.enumeration("Kind").symbols("ONE", "TWO");
+    Schema union = Schema.createUnion(
+        Arrays.asList(Schema.create(Schema.Type.NULL), targetEnum));
+    GenericData.EnumSymbol three = new GenericData.EnumSymbol(sourceSchema, "THREE");
+    assertThrows(UnresolvedUnionException.class,
+        () -> AvroResultWriter.convert(three, union));
+  }
+
   // ---- record / enum schema evolution ------------------------------------
 
   @Test
