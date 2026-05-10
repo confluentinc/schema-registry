@@ -369,16 +369,14 @@ public final class AvroResultWriter {
           long l = (Long) value;
           return l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE;
         }
-        // date / time-millis: pass through Temporal so the logical-type
-        // Conversion handles LocalDate/LocalTime ↔ int.
-        return hasLogicalType && value instanceof java.time.temporal.Temporal;
+        // date / time-millis
+        return hasLogicalType && isExpectedTemporalForLogicalType(value, branch);
       case LONG:
         if (value instanceof Long || value instanceof Integer) {
           return true;
         }
-        // timestamp-millis / timestamp-micros / time-micros / local-timestamp:
-        // accept java.time.* types so they match this branch.
-        return hasLogicalType && value instanceof java.time.temporal.Temporal;
+        // timestamp-millis / timestamp-micros / time-micros / local-timestamp
+        return hasLogicalType && isExpectedTemporalForLogicalType(value, branch);
       case FLOAT:
       case DOUBLE:
         return value instanceof Number;
@@ -519,10 +517,10 @@ public final class AvroResultWriter {
     if (value instanceof java.util.UUID) {
       return t == Type.STRING;
     }
-    // Temporal: date / time-* / timestamp-* / local-timestamp-* — backed by
-    // INT (date / time-millis) or LONG (everything else).
+    // Temporal: date / time-* / timestamp-* / local-timestamp-*
     if (value instanceof java.time.temporal.Temporal) {
-      return t == Type.INT || t == Type.LONG;
+      return (t == Type.INT || t == Type.LONG)
+          && isExpectedTemporalForLogicalType(value, schema);
     }
     // Map: LogicalMap — backed by array<KV>.
     if (value instanceof java.util.Map) {
@@ -533,6 +531,28 @@ public final class AvroResultWriter {
       return t == Type.RECORD;
     }
     return false;
+  }
+
+  private static boolean isExpectedTemporalForLogicalType(Object value, Schema schema) {
+    org.apache.avro.LogicalType lt = schema.getLogicalType();
+    if (lt == null) {
+      return false;
+    }
+    switch (lt.getName()) {
+      case "date":
+        return value instanceof java.time.LocalDate;
+      case "time-millis":
+      case "time-micros":
+        return value instanceof java.time.LocalTime;
+      case "timestamp-millis":
+      case "timestamp-micros":
+        return value instanceof java.time.Instant;
+      case "local-timestamp-millis":
+      case "local-timestamp-micros":
+        return value instanceof java.time.LocalDateTime;
+      default:
+        return false;
+    }
   }
 
   // --- error helpers ------------------------------------------------------

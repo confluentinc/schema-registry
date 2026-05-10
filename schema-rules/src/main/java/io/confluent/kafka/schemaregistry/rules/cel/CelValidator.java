@@ -149,12 +149,17 @@ public final class CelValidator implements ValidationRuleExecutor {
               + (schema == null ? "null" : schema.getClass()));
     }
     ValidationKey key = new ValidationKey(rule.getExpr(), scriptType, thisType, schema);
+    Object celValue;
     try {
-      // JSON path needs Jackson POJO/JsonNode → Map conversion; Avro/Proto paths
-      // are handled by the simpler toCelValue helper.
-      Object celValue = scriptType == ScriptType.JSON
+      celValue = scriptType == ScriptType.JSON
           ? CelUtils.toCelValueForJson(value, JSON_MAPPER)
           : CelUtils.toCelValue(value);
+    } catch (IllegalArgumentException e) {
+      throw new RuleException(
+          "Could not convert value for validation rule '"
+              + (rule.getName() == null ? "unnamed" : rule.getName()) + "'", e);
+    }
+    try {
       CelRuntime.Program program = cache.get(key);
       CelVariableResolver resolver = CelVariableResolver.hierarchicalVariableResolver(
           new NowVariable(), new NamedVariable("this", celValue));

@@ -47,22 +47,37 @@ public class LogicalMap extends LogicalType {
     }
   }
 
+  /**
+   * The element schema of a {@code map} logical-typed array must be a record
+   * whose first field is named {@code key} and whose second field is named
+   * {@code value}. The conversion ({@link LogicalMapConversion}) reads/writes
+   * those fields positionally, so the names+positions are part of the on-the-
+   * wire contract — relaxing the check here would let mis-shaped schemas pass
+   * validation and silently swap key↔value (or write key data into a
+   * differently-typed field) at conversion time.
+   */
   static boolean isKeyValueSchema(Schema schema) {
-    return schema.getType() == RECORD && schema.getFields().size() == 2;
+    if (schema.getType() != RECORD || schema.getFields().size() != 2) {
+      return false;
+    }
+    return "key".equals(schema.getFields().get(0).name())
+        && "value".equals(schema.getFields().get(1).name());
   }
 
   /**
    * Build an Avro array-of-key-value-record schema with the {@code map}
-   * logical type attached. Nullable key/value fields are given a
-   * {@code default: null}.
+   * logical type attached. Fields whose schema is a {@code [null, X]} union
+   * (null-first) are given a {@code default: null}; {@code [X, null]} unions
+   * are left undefaulted because the Avro spec requires a union default to
+   * match the *first* branch.
    */
   public static Schema createMap(String keyValueName, Schema keySchema, Schema valueSchema) {
     Schema.Field keyField = new Schema.Field(
         "key", keySchema, null,
-        isOptionSchema(keySchema) ? JsonProperties.NULL_VALUE : null);
+        isNullFirstUnion(keySchema) ? JsonProperties.NULL_VALUE : null);
     Schema.Field valueField = new Schema.Field(
         "value", valueSchema, null,
-        isOptionSchema(valueSchema) ? JsonProperties.NULL_VALUE : null);
+        isNullFirstUnion(valueSchema) ? JsonProperties.NULL_VALUE : null);
     return LogicalMap.get()
         .addToSchema(
             Schema.createArray(
@@ -70,14 +85,9 @@ public class LogicalMap extends LogicalType {
                     keyValueName, null, null, false, List.of(keyField, valueField))));
   }
 
-  static boolean isOptionSchema(Schema schema) {
-    if (schema.getType() == UNION && schema.getTypes().size() == 2) {
-      if (schema.getTypes().get(0).getType() == Schema.Type.NULL) {
-        return true;
-      } else if (schema.getTypes().get(1).getType() == Schema.Type.NULL) {
-        return true;
-      }
-    }
-    return false;
+  static boolean isNullFirstUnion(Schema schema) {
+    return schema.getType() == UNION
+        && schema.getTypes().size() == 2
+        && schema.getTypes().get(0).getType() == Schema.Type.NULL;
   }
 }

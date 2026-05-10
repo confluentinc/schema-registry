@@ -604,7 +604,7 @@ public final class CelUtils {
     }
     if (value instanceof Map) {
       Map<?, ?> in = (Map<?, ?>) value;
-      Map<String, Object> out = new HashMap<>(in.size());
+      Map<String, Object> out = new LinkedHashMap<>(in.size());
       for (Map.Entry<?, ?> e : in.entrySet()) {
         out.put(String.valueOf(e.getKey()), toCelValue(e.getValue()));
       }
@@ -679,7 +679,7 @@ public final class CelUtils {
   }
 
   private static Map<String, Object> avroRecordToMap(IndexedRecord record) {
-    Map<String, Object> out = new HashMap<>();
+    Map<String, Object> out = new LinkedHashMap<>();
     for (Schema.Field f : record.getSchema().getFields()) {
       out.put(f.name(), toCelValue(record.get(f.pos())));
     }
