@@ -171,13 +171,26 @@ public class JsonSchemaUtils {
       boolean failUnknownProperties,
       ObjectMapper objectMapper,
       SchemaRegistryClient client) throws IOException {
+    return getSchema(object, specVersion, scanPackages, true, useOneofForNullables,
+        failUnknownProperties, objectMapper, client);
+  }
+
+  public static JsonSchema getSchema(
+      Object object,
+      SpecificationVersion specVersion,
+      List<String> scanPackages,
+      boolean envelopeDetection,
+      boolean useOneofForNullables,
+      boolean failUnknownProperties,
+      ObjectMapper objectMapper,
+      SchemaRegistryClient client) throws IOException {
     if (object == null) {
       return null;
     }
     if (specVersion == null) {
       specVersion = SpecificationVersion.DRAFT_7;
     }
-    if (isEnvelope(object)) {
+    if (envelopeDetection && isEnvelope(object)) {
       return getSchemaFromEnvelope((JsonNode) object);
     }
     Class<?> cls = object.getClass();
@@ -256,10 +269,14 @@ public class JsonSchemaUtils {
   }
 
   public static Object getValue(Object object) {
+    return getValue(true, object);
+  }
+
+  public static Object getValue(boolean envelopeDetection, Object object) {
     if (object == null) {
       return null;
     }
-    if (isEnvelope(object)) {
+    if (envelopeDetection && isEnvelope(object)) {
       JsonNode jsonValue = (JsonNode) object;
       return jsonValue.get(ENVELOPE_PAYLOAD_FIELD_NAME);
     }
