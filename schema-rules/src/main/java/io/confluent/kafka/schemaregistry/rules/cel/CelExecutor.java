@@ -117,6 +117,23 @@ public class CelExecutor implements RuleExecutor {
     return TYPE;
   }
 
+  /**
+   * Resolve the regex engine for {@code ctx}: per-rule param wins over the
+   * executor's configured default. Used by {@link #bind} to seed
+   * {@link Bindings#regexEngine}.
+   */
+  private RegexEngine resolveRegexEngine(RuleContext ctx) throws RuleException {
+    String perRule = ctx.getParameter(CEL_REGEX_ENGINE);
+    if (perRule != null && !perRule.isEmpty()) {
+      try {
+        return RegexEngine.fromString(perRule);
+      } catch (IllegalArgumentException e) {
+        throw new RuleException(ctx.rule(), e);
+      }
+    }
+    return defaultRegexEngine;
+  }
+
   @Override
   public Object transform(RuleContext ctx, Object message) throws RuleException {
     Object input;
@@ -299,7 +316,7 @@ public class CelExecutor implements RuleExecutor {
     } catch (IllegalArgumentException e) {
       throw new RuleException(ctx.rule(), e);
     }
-    return new Bindings(type, schemaHint, declTypes, celArgs, obj, defaultRegexEngine);
+    return new Bindings(type, schemaHint, declTypes, celArgs, obj, resolveRegexEngine(ctx));
   }
 
   /**
