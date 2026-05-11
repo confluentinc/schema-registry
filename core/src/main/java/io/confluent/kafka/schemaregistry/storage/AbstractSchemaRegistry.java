@@ -2030,6 +2030,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         request.getResourceId(), request.getResourceType(),
         new ArrayList<>(infosByType.keySet()), null);
 
+    if (associations.isEmpty() && dryRun && request.getResourceId() == null) {
+      // At validate-phase the caller may not yet have a resourceId.
+      // Fall back to (name, namespace, type) so the equivalence check below can recognize an
+      // idempotent retry.
+      associations = getAssociationsByResourceName(
+          request.getResourceName(), request.getResourceNamespace(),
+          request.getResourceType(), new ArrayList<>(infosByType.keySet()), null);
+    }
+
     Map<String, Association> assocsByType = associations.stream()
         .collect(Collectors.toMap(Association::getAssociationType, a -> a));
     Set<String> assocTypesToSkip = new HashSet<>();
