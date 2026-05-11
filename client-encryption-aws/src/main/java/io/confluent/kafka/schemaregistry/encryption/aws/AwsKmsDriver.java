@@ -59,10 +59,13 @@ public class AwsKmsDriver implements KmsDriver {
   private AwsCredentialsProvider getCredentials(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     try {
+      // Only an explicitly-configured role.arn triggers AssumeRole chaining.
+      // AWS_ROLE_ARN injected by the EKS IRSA admission webhook is consumed
+      // by the SDK's own webIdentity bootstrap; treating it as a chain
+      // directive would either double-assume the same role or break the
+      // documented cross-account pattern (IRSA pod role -> AssumeRole in a
+      // different account) depending on how it was discovered.
       String roleArn = (String) configs.get(ROLE_ARN);
-      if (roleArn == null) {
-        roleArn = System.getenv(AWS_ROLE_ARN);
-      }
       String roleSessionName = (String) configs.get(ROLE_SESSION_NAME);
       if (roleSessionName == null) {
         roleSessionName = System.getenv(AWS_ROLE_SESSION_NAME);
@@ -71,7 +74,6 @@ public class AwsKmsDriver implements KmsDriver {
       if (roleExternalId == null) {
         roleExternalId = System.getenv(AWS_ROLE_EXTERNAL_ID);
       }
-      String roleWebIdentityTokenFile = System.getenv(AWS_WEB_IDENTITY_TOKEN_FILE);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
       String profile = (String) configs.get(PROFILE);
@@ -84,14 +86,12 @@ public class AwsKmsDriver implements KmsDriver {
       } else {
         provider = DefaultCredentialsProvider.create();
       }
-      // If roleWebIdentityTokenFile is set, use the DefaultCredentialsProvider
-      if (roleArn != null && roleWebIdentityTokenFile == null) {
+      if (roleArn != null) {
         Region region = getRegionFromKeyId(
             AwsKmsClient.removePrefix(AwsKmsClient.PREFIX, kekUrl.get()));
         return buildRoleProvider(provider, region, roleArn, roleSessionName, roleExternalId);
-      } else {
-        return provider;
       }
+      return provider;
     } catch (Exception e) {
       throw new GeneralSecurityException("cannot load credentials", e);
     }
