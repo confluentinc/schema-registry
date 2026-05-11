@@ -681,6 +681,88 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testIdempotentValidateAndCreateRetry() throws Exception {
+    // Simulates the CreateTopics retry pattern: callers cannot supply a resourceId
+    // at validate-phase because Kafka assigns the topic UUID at create time, strictly
+    // after validate. The validate-phase call on retry must be idempotent when the
+    // requested association is content-equivalent to the existing one.
+    String subject1 = "subject1";
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "resource-uuid-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+
+    AssociationCreateOrUpdateRequest validateRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        null,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                null,
+                null
+            )
+        )
+    );
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                null,
+                null
+            )
+        )
+    );
+
+    // 1. Initial validate (dryRun=true, resourceId=null)
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, true, validateRequest);
+    assertNull(response.getResourceId());
+    assertNull(response.getAssociations());
+
+    // 2. Initial commit (dryRun=false, resourceId=UUID) — creates association
+    response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+    assertEquals(resourceId, response.getResourceId());
+    assertEquals(1, response.getAssociations().size());
+
+    // 3. Retry validate (dryRun=true, resourceId=null) — must be idempotent.
+    // Before the fix this threw 40904: by-resourceId lookup returned empty, the
+    // equivalence check was skipped, and the strong-uniqueness check fired against
+    // the association created in step 2.
+    response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, true, validateRequest);
+    assertNull(response.getResourceId());
+    assertNull(response.getAssociations());
+
+    // 4. Retry commit (dryRun=false, resourceId=UUID) — idempotent via existing
+    // by-resourceId equivalence path; confirms the fallback didn't break it.
+    // The response carries no associations because the existing one is equivalent
+    // and gets added to assocTypesToSkip; verify state via a follow-up query.
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+    List<Association> existing = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("value"), null, 0, -1);
+    assertEquals(1, existing.size());
+    assertEquals("value", existing.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.STRONG, existing.get(0).getLifecycle());
+  }
+
+  @Test
   public void testWeakAssociationCannotBeFrozen() throws Exception {
     String subject1 = "subject1";
     String resourceName = "topic1";
