@@ -60,7 +60,13 @@ public class AwsKmsDriver implements KmsDriver {
       throws GeneralSecurityException {
     try {
       String roleArn = (String) configs.get(ROLE_ARN);
-      if (roleArn == null) {
+      // Only fall back to AWS_ROLE_ARN env var when not in an IRSA-style context.
+      // IRSA (EKS service accounts, ECS task IAM, etc.) auto-sets both AWS_ROLE_ARN
+      // and AWS_WEB_IDENTITY_TOKEN_FILE; in that case DefaultCredentialsProvider's
+      // chain handles role assumption via AssumeRoleWithWebIdentity. Wrapping with
+      // StsAssumeRoleCredentialsProvider would incorrectly call AssumeRole on the
+      // IRSA role itself, which the IRSA role's trust policy does not permit.
+      if (roleArn == null && System.getenv(AWS_WEB_IDENTITY_TOKEN_FILE) == null) {
         roleArn = System.getenv(AWS_ROLE_ARN);
       }
       String roleSessionName = (String) configs.get(ROLE_SESSION_NAME);
@@ -71,7 +77,6 @@ public class AwsKmsDriver implements KmsDriver {
       if (roleExternalId == null) {
         roleExternalId = System.getenv(AWS_ROLE_EXTERNAL_ID);
       }
-      String roleWebIdentityTokenFile = System.getenv(AWS_WEB_IDENTITY_TOKEN_FILE);
       String accessKey = (String) configs.get(ACCESS_KEY_ID);
       String secretKey = (String) configs.get(SECRET_ACCESS_KEY);
       String profile = (String) configs.get(PROFILE);
@@ -84,8 +89,7 @@ public class AwsKmsDriver implements KmsDriver {
       } else {
         provider = DefaultCredentialsProvider.create();
       }
-      // If roleWebIdentityTokenFile is set, use the DefaultCredentialsProvider
-      if (roleArn != null && roleWebIdentityTokenFile == null) {
+      if (roleArn != null) {
         Region region = getRegionFromKeyId(
             AwsKmsClient.removePrefix(AwsKmsClient.PREFIX, kekUrl.get()));
         return buildRoleProvider(provider, region, roleArn, roleSessionName, roleExternalId);
