@@ -415,6 +415,32 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroNonsharedKekPassthrough() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), null, null, false);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    Map<String, Object> passthroughProps = fieldEncryptionProps.getClientProperties("mock://");
+    passthroughProps.put(EncryptionExecutor.ENCRYPT_NONSHARED_KEK_PASSTHROUGH, "true");
+    KafkaAvroDeserializer passthroughDeserializer =
+        new KafkaAvroDeserializer(schemaRegistry, passthroughProps);
+
+    GenericRecord record = (GenericRecord) passthroughDeserializer.deserialize(
+        topic, headers, bytes);
+    assertNotEquals("testUser", record.get("name").toString());
+  }
+
+  @Test
   public void testKafkaAvroSerializerF1() throws Exception {
     IndexedRecord avroRecord = createF1Record();
     AvroSchema avroSchema = new AvroSchema(createF1Schema());
