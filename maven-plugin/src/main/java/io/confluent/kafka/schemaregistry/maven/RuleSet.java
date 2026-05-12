@@ -36,7 +36,7 @@ public class RuleSet {
   protected List<Rule> encodingRules = new ArrayList<>();
 
   @Parameter(required = false)
-  protected ExecutionEnvironment enableAt;
+  protected ExecutionEnvironment enableOnlyAt;
 
   @Override
   public String toString() {
@@ -44,7 +44,7 @@ public class RuleSet {
         + "migrationRules=" + migrationRules
         + ", domainRules=" + domainRules
         + ", encodingRules=" + encodingRules
-        + ", enableAt=" + enableAt
+        + ", enableOnlyAt=" + enableOnlyAt
         + '}';
   }
 
@@ -65,7 +65,7 @@ public class RuleSet {
             .map(Rule::toRuleEntity)
             .collect(Collectors.toList())
             : null,
-        enableAt
+        enableOnlyAt
     );
   }
 }
