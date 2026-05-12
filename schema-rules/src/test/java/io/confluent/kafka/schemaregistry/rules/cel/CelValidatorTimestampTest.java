@@ -22,10 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Timestamp;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import java.time.Instant;
 import java.util.List;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -123,5 +126,99 @@ public class CelValidatorTimestampTest {
         .build();
     List<ValidationRuleError> errors = schema.validateMessage(new CelValidator(), msg);
     assertEquals(1, errors.size());
+  }
+
+  // ---- Avro timestamp logical type ----
+
+  private static final String AVRO_TIMESTAMP_MILLIS_SCHEMA = ""
+      + "{"
+      + "  \"type\":\"record\","
+      + "  \"name\":\"Event\","
+      + "  \"namespace\":\"test\","
+      + "  \"fields\":["
+      + "    {"
+      + "      \"name\":\"created_at\","
+      + "      \"type\":{"
+      + "        \"type\":\"long\","
+      + "        \"logicalType\":\"timestamp-millis\""
+      + "      },"
+      + "      \"confluent:rules\":["
+      + "        {\"name\":\"notFuture\","
+      + "         \"expr\":\"timestamp.of(this) < now\"}]"
+      + "    }"
+      + "  ]"
+      + "}";
+
+  @Test
+  void avroTimestampMillis_convertersOn_instantArrives_pastPasses() {
+    // With useLogicalTypeConverters=true, the timestamp-millis field arrives
+    // as an Instant. timestamp.of(dyn) routes it via TimestampUtils.fromInstant.
+    AvroSchema schema = new AvroSchema(AVRO_TIMESTAMP_MILLIS_SCHEMA);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("created_at", Instant.now().minusSeconds(60));
+    assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
+  }
+
+  @Test
+  void avroTimestampMillis_convertersOn_futureFails() {
+    AvroSchema schema = new AvroSchema(AVRO_TIMESTAMP_MILLIS_SCHEMA);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("created_at", Instant.now().plusSeconds(3600));
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), r);
+    assertEquals(1, errs.size());
+    assertEquals("notFuture", errs.get(0).getRule().getName());
+  }
+
+  @Test
+  void avroTimestampMillis_convertersOff_rawLongRequiresUnitArg() {
+    // With useLogicalTypeConverters=false, the value is a raw Long; the one-
+    // arg timestamp.of(dyn) throws (no unit). Use the two-arg overload.
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Event\","
+        + "  \"namespace\":\"test\","
+        + "  \"fields\":["
+        + "    {"
+        + "      \"name\":\"ts_ms\","
+        + "      \"type\":\"long\","
+        + "      \"confluent:rules\":["
+        + "        {\"name\":\"r\","
+        + "         \"expr\":\"timestamp.of(this, \\\"millis\\\") < now\"}]"
+        + "    }"
+        + "  ]"
+        + "}";
+    AvroSchema schema = new AvroSchema(s);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("ts_ms", Instant.now().minusSeconds(60).toEpochMilli());
+    assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
+  }
+
+  @Test
+  void avroTimestampMicros_convertersOn_instantArrives() {
+    // Same as millis but with the micros logical type. With converters on,
+    // Instant arrives regardless of underlying precision.
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Event\","
+        + "  \"namespace\":\"test\","
+        + "  \"fields\":["
+        + "    {"
+        + "      \"name\":\"created_at\","
+        + "      \"type\":{"
+        + "        \"type\":\"long\","
+        + "        \"logicalType\":\"timestamp-micros\""
+        + "      },"
+        + "      \"confluent:rules\":["
+        + "        {\"name\":\"r\","
+        + "         \"expr\":\"timestamp.of(this) < now\"}]"
+        + "    }"
+        + "  ]"
+        + "}";
+    AvroSchema schema = new AvroSchema(s);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("created_at", Instant.now().minusSeconds(60));
+    assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
   }
 }

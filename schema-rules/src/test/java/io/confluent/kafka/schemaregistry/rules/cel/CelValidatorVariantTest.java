@@ -23,12 +23,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.type.Variant;
 import io.confluent.kafka.schemaregistry.type.VariantUtils;
 import java.nio.ByteBuffer;
 import java.util.List;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -271,5 +274,112 @@ public class CelValidatorVariantTest {
         .setField(desc.findFieldByName("anchor"), 1)
         .build();
     assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  // ---- Avro variant logical type ----
+
+  /**
+   * Schema with a variant logical-type field. The variant logical type is a
+   * record with {@code metadata: bytes} and {@code value: bytes} fields,
+   * tagged with {@code "logicalType": "variant"}. CelValidator's walker hands
+   * the inner record value to {@code variant(this)}, where
+   * {@code VariantUtils.toVariant(IndexedRecord)} routes through
+   * {@code VariantConversion.fromRecord}.
+   */
+  private static final String AVRO_VARIANT_SCHEMA = ""
+      + "{"
+      + "  \"type\":\"record\","
+      + "  \"name\":\"Doc\","
+      + "  \"namespace\":\"test\","
+      + "  \"fields\":["
+      + "    {"
+      + "      \"name\":\"payload\","
+      + "      \"type\":{"
+      + "        \"type\":\"record\","
+      + "        \"name\":\"VariantRecord\","
+      + "        \"logicalType\":\"variant\","
+      + "        \"fields\":["
+      + "          {\"name\":\"metadata\",\"type\":\"bytes\"},"
+      + "          {\"name\":\"value\",\"type\":\"bytes\"}"
+      + "        ]"
+      + "      },"
+      + "      \"confluent:rules\":["
+      + "        {\"name\":\"nameIsAlice\","
+      + "         \"expr\":\"variants.getString(variants.getField(variant(this), \\\"name\\\")) == \\\"alice\\\"\"}]"
+      + "    }"
+      + "  ]"
+      + "}";
+
+  /** Build a Doc Avro record whose payload is the variant-encoded form of {@code json}. */
+  private static GenericRecord avroDocWithVariantJson(String json) throws Exception {
+    AvroSchema avro = new AvroSchema(AVRO_VARIANT_SCHEMA);
+    org.apache.avro.Schema docSchema = avro.rawSchema();
+    org.apache.avro.Schema variantSchema = docSchema.getField("payload").schema();
+
+    Variant v = VariantUtils.fromJsonNode(MAPPER.readTree(json));
+    GenericRecord variantRec = new GenericData.Record(variantSchema);
+    variantRec.put("metadata", getMetadataBuffer(v));
+    variantRec.put("value", getValueBuffer(v));
+
+    GenericRecord doc = new GenericData.Record(docSchema);
+    doc.put("payload", variantRec);
+    return doc;
+  }
+
+  @Test
+  void avroVariant_indexedRecordRoutesThroughConversion_passes() throws Exception {
+    AvroSchema schema = new AvroSchema(AVRO_VARIANT_SCHEMA);
+    GenericRecord doc = avroDocWithVariantJson("{\"name\":\"alice\"}");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  @Test
+  void avroVariant_mismatchFails() throws Exception {
+    AvroSchema schema = new AvroSchema(AVRO_VARIANT_SCHEMA);
+    GenericRecord doc = avroDocWithVariantJson("{\"name\":\"bob\"}");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertEquals(1, errs.size());
+    assertEquals("nameIsAlice", errs.get(0).getRule().getName());
+  }
+
+  @Test
+  void avroVariant_isNull_onMissingField() throws Exception {
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Doc\","
+        + "  \"namespace\":\"test\","
+        + "  \"fields\":["
+        + "    {"
+        + "      \"name\":\"payload\","
+        + "      \"type\":{"
+        + "        \"type\":\"record\","
+        + "        \"name\":\"VariantRecord\","
+        + "        \"logicalType\":\"variant\","
+        + "        \"fields\":["
+        + "          {\"name\":\"metadata\",\"type\":\"bytes\"},"
+        + "          {\"name\":\"value\",\"type\":\"bytes\"}"
+        + "        ]"
+        + "      },"
+        + "      \"confluent:rules\":["
+        + "        {\"name\":\"r\","
+        + "         \"expr\":\"variants.isNull(variants.getField(variant(this), \\\"missing\\\"))\"}]"
+        + "    }"
+        + "  ]"
+        + "}";
+    AvroSchema schema = new AvroSchema(s);
+    org.apache.avro.Schema docSchema = schema.rawSchema();
+    org.apache.avro.Schema variantSchema = docSchema.getField("payload").schema();
+
+    Variant v = VariantUtils.fromJsonNode(MAPPER.readTree("{\"name\":\"alice\"}"));
+    GenericRecord variantRec = new GenericData.Record(variantSchema);
+    variantRec.put("metadata", getMetadataBuffer(v));
+    variantRec.put("value", getValueBuffer(v));
+    GenericRecord doc = new GenericData.Record(docSchema);
+    doc.put("payload", variantRec);
+
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 }

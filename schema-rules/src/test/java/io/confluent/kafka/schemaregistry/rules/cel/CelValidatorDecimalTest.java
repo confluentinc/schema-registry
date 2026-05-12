@@ -23,11 +23,18 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.protobuf.type.Decimal;
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.List;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -245,5 +252,89 @@ public class CelValidatorDecimalTest {
             ByteString.copyFrom(bd.unscaledValue().toByteArray()))
         .setField(decimalDesc.findFieldByName("scale"), bd.scale())
         .build();
+  }
+
+  // ---- Avro decimal logical type ----
+
+  /**
+   * Walker passes the field value through to CelValidator as-is. With Avro
+   * converters on, decimal-logical-typed fields arrive as {@link BigDecimal};
+   * with converters off they arrive as {@link ByteBuffer}. For in-memory
+   * validation we put the value type we want to test directly into the
+   * {@link GenericRecord}.
+   */
+  private static final String AVRO_DECIMAL_SCHEMA = ""
+      + "{"
+      + "  \"type\":\"record\","
+      + "  \"name\":\"Money\","
+      + "  \"namespace\":\"test\","
+      + "  \"fields\":["
+      + "    {"
+      + "      \"name\":\"amount\","
+      + "      \"type\":{"
+      + "        \"type\":\"bytes\","
+      + "        \"logicalType\":\"decimal\","
+      + "        \"precision\":10,"
+      + "        \"scale\":2"
+      + "      },"
+      + "      \"confluent:rules\":["
+      + "        {\"name\":\"nonNeg\","
+      + "         \"expr\":\"decimals.ge(decimal(this), decimal(\\\"0\\\"))\"}]"
+      + "    }"
+      + "  ]"
+      + "}";
+
+  @Test
+  void avroDecimal_convertersOn_bigDecimalArrives_passes() {
+    AvroSchema schema = new AvroSchema(AVRO_DECIMAL_SCHEMA);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("amount", new BigDecimal("100.50"));
+    assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
+  }
+
+  @Test
+  void avroDecimal_convertersOn_negativeFails() {
+    AvroSchema schema = new AvroSchema(AVRO_DECIMAL_SCHEMA);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    r.put("amount", new BigDecimal("-0.01"));
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), r);
+    assertEquals(1, errs.size());
+    assertEquals("nonNeg", errs.get(0).getRule().getName());
+  }
+
+  @Test
+  void avroDecimal_convertersOff_rawBytesRequireTwoArgOverload() {
+    // With useLogicalTypeConverters=false, the field value arrives as a
+    // ByteBuffer of the two's-complement unscaled bytes. The one-arg
+    // decimal(dyn) overload throws (raw bytes have no scale) — the record-
+    // level rule uses decimal(bytes, scale) referencing both fields.
+    String s = ""
+        + "{"
+        + "  \"type\":\"record\","
+        + "  \"name\":\"Money\","
+        + "  \"namespace\":\"test\","
+        + "  \"confluent:rules\":["
+        + "    {\"name\":\"r\","
+        + "     \"expr\":\"decimals.eq(decimal(this.value, this.scale), decimal(\\\"123.45\\\"))\"}],"
+        + "  \"fields\":["
+        + "    {\"name\":\"value\",\"type\":\"bytes\"},"
+        + "    {\"name\":\"scale\",\"type\":\"int\"}"
+        + "  ]"
+        + "}";
+    AvroSchema schema = new AvroSchema(s);
+    GenericRecord r = new GenericData.Record(schema.rawSchema());
+    BigDecimal bd = new BigDecimal("123.45");
+    r.put("value", ByteBuffer.wrap(bd.unscaledValue().toByteArray()));
+    r.put("scale", bd.scale());
+    assertTrue(schema.validateMessage(new CelValidator(), r).isEmpty());
+  }
+
+  @Test
+  void avroDecimal_logicalTypeSchemaResolves_atFieldLevel() {
+    // Sanity: the decimal logical type from the schema doesn't confuse the
+    // walker. The field-level rule sees a BigDecimal as `this`.
+    Schema schema = new AvroSchema(AVRO_DECIMAL_SCHEMA).rawSchema();
+    Schema amountSchema = schema.getField("amount").schema();
+    assertEquals("decimal", LogicalTypes.fromSchemaIgnoreInvalid(amountSchema).getName());
   }
 }

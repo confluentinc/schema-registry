@@ -102,6 +102,18 @@ final class VariantUtils {
     if (o instanceof IndexedRecord) {
       return fromAvroRecord((IndexedRecord) o);
     }
+    if (o instanceof java.util.Map) {
+      // CelUtils.toCelValue converts Avro IndexedRecord → Map before binding,
+      // so a variant-logical-typed Avro field reaches the validator as a Map
+      // with {"metadata": ByteBuffer, "value": ByteBuffer} entries. Reconstruct
+      // the Variant from those bytes.
+      java.util.Map<?, ?> map = (java.util.Map<?, ?>) o;
+      Object md = map.get("metadata");
+      Object val = map.get("value");
+      if (md != null && val != null) {
+        return new Variant(toBytes(val), toBytes(md));
+      }
+    }
     if (o instanceof String) {
       return fromJson((String) o);
     }
@@ -147,6 +159,12 @@ final class VariantUtils {
     }
     if (o instanceof ByteString) {
       return ((ByteString) o).toByteArray();
+    }
+    if (o instanceof dev.cel.common.values.CelByteString) {
+      // cel-java's CelOptions.DEFAULT converts proto/Avro bytes values to
+      // CelByteString at field-access time; CelUtils.toCelValue does the same
+      // for nested map values inside an Avro IndexedRecord → Map conversion.
+      return ((dev.cel.common.values.CelByteString) o).toByteArray();
     }
     throw new IllegalArgumentException(
         "Cannot coerce " + (o == null ? "null" : o.getClass().getName()) + " to bytes");
