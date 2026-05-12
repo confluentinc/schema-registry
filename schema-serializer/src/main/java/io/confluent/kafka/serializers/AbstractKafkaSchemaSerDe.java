@@ -688,19 +688,19 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     List<Rule> rules = Collections.emptyList();
     if (ruleMode == RuleMode.UPGRADE) {
       if (target.ruleSet() != null) {
-        enabledEnv = target.ruleSet().getEnableAt();
+        enabledEnv = target.ruleSet().getEnableOnlyAt();
         rules = target.ruleSet().getMigrationRules();
       }
     } else if (ruleMode == RuleMode.DOWNGRADE) {
       if (source.ruleSet() != null) {
-        enabledEnv = source.ruleSet().getEnableAt();
+        enabledEnv = source.ruleSet().getEnableOnlyAt();
         rules = new ArrayList<>(source.ruleSet().getMigrationRules());
         // Execute downgrade rules in reverse order for symmetry
         Collections.reverse(rules);
       }
     } else {
       if (target.ruleSet() != null) {
-        enabledEnv = target.ruleSet().getEnableAt();
+        enabledEnv = target.ruleSet().getEnableOnlyAt();
         rules = rulePhase == RulePhase.ENCODING
             ? target.ruleSet().getEncodingRules()
             : target.ruleSet().getDomainRules();
