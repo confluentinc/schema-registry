@@ -2595,6 +2595,9 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
+    if (strict) {
+      toDynamicSchema();
+    }
   }
 
   @Override
