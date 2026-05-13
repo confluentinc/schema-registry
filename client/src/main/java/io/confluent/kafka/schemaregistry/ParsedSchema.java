@@ -360,6 +360,17 @@ public interface ParsedSchema {
    */
   default List<ValidationRuleError> validateMessage(
       ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  /**
+   * Validate {@code message} against the validation rules attached to the schema.
+   * When {@code failFast} is true the walker stops at the first violation and
+   * returns just that one; when false (default), every node is visited and all
+   * violations are returned.
+   */
+  default List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
     return Collections.emptyList();
   }
 
