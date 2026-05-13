@@ -197,6 +197,13 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
           + "validation rules. Loaded reflectively when validation.rules.execution is not "
           + "DISABLED. The default expects kafka-schema-rules to be on the classpath.";
 
+  public static final String VALIDATION_RULES_FAIL_FAST = "validation.rules.fail.fast";
+  public static final boolean VALIDATION_RULES_FAIL_FAST_DEFAULT = false;
+  public static final String VALIDATION_RULES_FAIL_FAST_DOCS =
+      "When true, validation stops at the first failed rule and reports only that "
+          + "violation. When false (default), the walker visits every node and reports "
+          + "the full set of violations.";
+
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE = SchemaRegistryClientConfig
       .BASIC_AUTH_CREDENTIALS_SOURCE;
   public static final String BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT = "URL";
@@ -399,6 +406,9 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
         .define(VALIDATION_RULES_EXECUTOR_CLASS, Type.STRING,
                 VALIDATION_RULES_EXECUTOR_CLASS_DEFAULT,
                 Importance.LOW, VALIDATION_RULES_EXECUTOR_CLASS_DOCS)
+        .define(VALIDATION_RULES_FAIL_FAST, Type.BOOLEAN,
+                VALIDATION_RULES_FAIL_FAST_DEFAULT,
+                Importance.LOW, VALIDATION_RULES_FAIL_FAST_DOCS)
         .define(BASIC_AUTH_CREDENTIALS_SOURCE, Type.STRING, BASIC_AUTH_CREDENTIALS_SOURCE_DEFAULT,
                 Importance.MEDIUM, BASIC_AUTH_CREDENTIALS_SOURCE_DOC)
         .define(BEARER_AUTH_CREDENTIALS_SOURCE, Type.STRING, BEARER_AUTH_CREDENTIALS_SOURCE_DEFAULT,
@@ -529,6 +539,10 @@ public class AbstractKafkaSchemaSerDeConfig extends AbstractConfig {
 
   public String getLatestWithMetadataSpec() {
     return this.getString(USE_LATEST_WITH_METADATA);
+  }
+
+  public boolean getValidationRulesFailFast() {
+    return this.getBoolean(VALIDATION_RULES_FAIL_FAST);
   }
 
   public String getSchemaFormat() {
