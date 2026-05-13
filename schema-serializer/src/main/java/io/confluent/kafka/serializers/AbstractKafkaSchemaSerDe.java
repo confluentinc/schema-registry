@@ -139,6 +139,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
   protected boolean isKey;
 
   private volatile ValidationRuleExecutor validationRuleExecutor;
+  private volatile boolean validationRulesFailFast;
 
   private Map<Rule, String> onSuccessActions;
   private Map<Rule, String> onFailureActions;
@@ -203,6 +204,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
     valueSchemaIdDeserializer = config.valueSchemaIdDeserializer();
     useSchemaReflection = config.useSchemaReflection();
     useLatestVersion = config.useLatestVersion();
+    validationRulesFailFast = config.getValidationRulesFailFast();
     int latestCacheSize = config.getLatestCacheSize();
     int latestCacheTtl = config.getLatestCacheTtl();
     CacheBuilder<Object, Object> latestVersionsBuilder = CacheBuilder.newBuilder()
@@ -807,7 +809,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       return message;
     }
     List<ValidationRuleError> violations =
-        schema.validateMessage(validationRuleExecutor(), message);
+        schema.validateMessage(validationRuleExecutor(), message, validationRulesFailFast);
     if (violations != null && !violations.isEmpty()) {
       throw new SerializationException(buildMessage(violations));
     }

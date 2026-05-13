@@ -3014,6 +3014,12 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public List<ValidationRuleError> validateMessage(
       ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
     List<ValidationRuleError> violations = new ArrayList<>();
     if (executor == null || !(message instanceof Message)) {
       return violations;
@@ -3025,7 +3031,7 @@ public class ProtobufSchema implements ParsedSchema {
     if (desc == null) {
       return violations;
     }
-    toValidatedMessage(desc, msg, "", executor, violations);
+    toValidatedMessage(desc, msg, "", executor, failFast, violations);
     return violations;
   }
 
@@ -3050,14 +3056,17 @@ public class ProtobufSchema implements ParsedSchema {
    */
   private static void toValidatedMessage(
       Descriptor desc, Object value, String path,
-      ValidationRuleExecutor executor, List<ValidationRuleError> out) {
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
     if (desc == null) {
       return;
     }
     if (value instanceof List) {
       int i = 0;
       for (Object element : (List<?>) value) {
-        toValidatedMessage(desc, element, path + "[" + i + "]", executor, out);
+        toValidatedMessage(desc, element, path + "[" + i + "]", executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
         i++;
       }
     } else if (value instanceof Map) {
@@ -3071,6 +3080,9 @@ public class ProtobufSchema implements ParsedSchema {
         Meta meta = desc.getOptions().getExtension(MetaProto.messageMeta);
         for (MetaProto.Rule rule : meta.getRulesList()) {
           evaluateOne(rule, desc, msg, path, executor, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
         }
       }
       // Iterate fields — same shape as toTransformedMessage's field loop.
@@ -3101,6 +3113,9 @@ public class ProtobufSchema implements ParsedSchema {
               : schemaFd.getContainingType();
           for (MetaProto.Rule rule : meta.getRulesList()) {
             evaluateOne(rule, hint, fieldValue, childPath, executor, out);
+            if (failFast && !out.isEmpty()) {
+              return;
+            }
           }
         }
         // Recurse — the value-type dispatch handles repeated (List),
@@ -3110,7 +3125,10 @@ public class ProtobufSchema implements ParsedSchema {
         Descriptor childDesc = (schemaFd.getType() == Type.MESSAGE)
             ? schemaFd.getMessageType()
             : desc;
-        toValidatedMessage(childDesc, fieldValue, childPath, executor, out);
+        toValidatedMessage(childDesc, fieldValue, childPath, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
       }
     }
     // else: primitive leaf — no rules at this level.
