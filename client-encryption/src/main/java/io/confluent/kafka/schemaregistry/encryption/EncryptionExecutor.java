@@ -74,6 +74,8 @@ public class EncryptionExecutor implements RuleExecutor {
   public static final String ENCRYPT_DEK_ALGORITHM = "encrypt.dek.algorithm";
   public static final String ENCRYPT_DEK_EXPIRY_DAYS = "encrypt.dek.expiry.days";
   public static final String ENCRYPT_ALTERNATE_KMS_KEY_IDS = "encrypt.alternate.kms.key.ids";
+  public static final String ENCRYPT_NONSHARED_KEK_PASSTHROUGH =
+      "encrypt.nonshared.kek.passthrough";
 
   public static final String KMS_TYPE_SUFFIX = "://";
   public static final byte[] EMPTY_AAD = new byte[0];
@@ -90,6 +92,7 @@ public class EncryptionExecutor implements RuleExecutor {
   private Map<String, ?> configs;
   private int cacheExpirySecs = -1;
   private int cacheSize = 10000;
+  private boolean nonsharedKekPassthrough = false;
   private Clock clock = Clock.systemUTC();
   private DekRegistryClient client;
 
@@ -130,6 +133,10 @@ public class EncryptionExecutor implements RuleExecutor {
     Object clock = configs.get(CLOCK);
     if (clock instanceof Clock) {
       this.clock = (Clock) clock;
+    }
+    Object passthroughConfig = configs.get(ENCRYPT_NONSHARED_KEK_PASSTHROUGH);
+    if (passthroughConfig != null) {
+      this.nonsharedKekPassthrough = Boolean.parseBoolean(passthroughConfig.toString());
     }
     Object url = configs.get(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG);
     if (url == null) {
@@ -262,12 +269,16 @@ public class EncryptionExecutor implements RuleExecutor {
     private String kekName;
     private Kek kek;
     private int dekExpiryDays;
+    private boolean passthroughOnRead;
 
     public void init(RuleContext ctx) throws RuleException {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
       kek = getOrCreateKek(ctx);
       dekExpiryDays = getDekExpiryDays(ctx);
+      passthroughOnRead = nonsharedKekPassthrough
+          && !kek.isShared()
+          && ctx.ruleMode() == RuleMode.READ;
     }
 
     public boolean isDekRotated() {
@@ -520,6 +531,9 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         if (value == null) {
           return null;
+        }
+        if (passthroughOnRead) {
+          return value;
         }
         Dek dek;
         byte[] plaintext;
