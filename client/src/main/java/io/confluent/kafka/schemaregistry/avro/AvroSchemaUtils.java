@@ -26,6 +26,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.avro.type.LogicalMap;
+import io.confluent.avro.type.LogicalMapConversion;
 import io.confluent.avro.type.VariantConversion;
 import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -96,6 +98,7 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
+    LogicalTypes.register(LogicalMap.NAME, schema -> LogicalMap.get());
     LogicalTypes.register(VariantLogicalType.NAME, schema -> VariantLogicalType.get());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
@@ -233,6 +236,7 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new LogicalMapConversion());
     avroData.addLogicalTypeConversion(new VariantConversion());
     avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
