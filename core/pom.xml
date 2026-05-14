@@ -181,6 +181,19 @@
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-server-common</artifactId>
+            <version>${kafka.version}</version>
+            <classifier>test-fixtures</classifier>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.confluent.networking</groupId>
+                    <artifactId>cc-custom-dns-resolver-java18</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
