@@ -92,23 +92,23 @@ final class BuiltinOverload {
         (String input) -> !input.isEmpty() && predicate.test(input));
   }
 
-  protected static boolean validateEmail(String input) {
+  static boolean validateEmail(String input) {
     return EmailValidator.getInstance(false, true).isValid(input);
   }
 
-  protected static boolean validateHostname(String input) {
+  static boolean validateHostname(String input) {
     return DomainValidator.getInstance(true).isValid(input) && !input.contains("_");
   }
 
-  protected static boolean validateIpv4(String input) {
+  static boolean validateIpv4(String input) {
     return InetAddressValidator.getInstance().isValidInet4Address(input);
   }
 
-  protected static boolean validateIpv6(String input) {
+  static boolean validateIpv6(String input) {
     return InetAddressValidator.getInstance().isValidInet6Address(input);
   }
 
-  protected static boolean validateUri(String input) {
+  static boolean validateUri(String input) {
     try {
       URI uri = new URI(input);
       return uri.isAbsolute();
@@ -117,7 +117,7 @@ final class BuiltinOverload {
     }
   }
 
-  protected static boolean validateUriRef(String input) {
+  static boolean validateUriRef(String input) {
     try {
       new URI(input);
       return true;
@@ -126,7 +126,7 @@ final class BuiltinOverload {
     }
   }
 
-  protected static boolean validateUuid(String input) {
+  static boolean validateUuid(String input) {
     try {
       UUID.fromString(input);
       return true;
@@ -185,7 +185,7 @@ final class BuiltinOverload {
     // string(Decimal) — extension overload on stdlib `string(...)`.
     out.add(CelFunctionBinding.from(
         "decimal_to_string", BigDecimal.class,
-        (BigDecimal d) -> d.toPlainString()));
+        BigDecimal::toPlainString));
 
     // Rounding family — Flink-aligned. Negative scale rounds left of the decimal.
     out.add(decimalsUnary(
@@ -227,8 +227,7 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "timestamp_of_dyn", Object.class, TimestampUtils::toTimestamp));
     out.add(CelFunctionBinding.from(
-        "timestamp_of_int_string", Long.class, String.class,
-        (Long value, String unit) -> TimestampUtils.fromEpoch(value, unit)));
+        "timestamp_of_int_string", Long.class, String.class, TimestampUtils::fromEpoch));
   }
 
   // ---- Variant ----
@@ -268,7 +267,7 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "variants_elem_variant_int", Variant.class, Long.class,
         (Variant v, Long idx) -> v.getType() == Variant.Type.ARRAY
-            && idx >= Integer.MIN_VALUE
+            && idx >= 0
             && idx <= Integer.MAX_VALUE
             ? nullToVariantNull(v.getElementAtIndex(idx.intValue()))
             : NULL_VARIANT));

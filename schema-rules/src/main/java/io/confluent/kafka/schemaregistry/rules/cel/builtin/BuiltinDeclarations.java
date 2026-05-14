@@ -218,7 +218,7 @@ final class BuiltinDeclarations {
             SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
 
     // string(Variant) — extension overload on stdlib `string(...)` returning
-    // the Variant's JSON serialization. Replaces the prior variants.toJson.
+    // the Variant's JSON serialization.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "string",
         CelOverloadDecl.newGlobalOverload(
