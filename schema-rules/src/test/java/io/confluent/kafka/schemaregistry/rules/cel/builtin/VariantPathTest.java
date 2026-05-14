@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Parser tests for {@link VariantPath#parse} — the JSONPath subset used by
- * {@code variants.at(v, path)}.
+ * {@code variants.path(v, path)}.
  */
 public class VariantPathTest {
 

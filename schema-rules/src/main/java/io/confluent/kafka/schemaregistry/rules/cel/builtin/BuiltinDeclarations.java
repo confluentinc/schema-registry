@@ -187,9 +187,9 @@ final class BuiltinDeclarations {
     // field/index, JSONPath miss, or wrong-type receiver). Rules detect it via
     // `variants.type(result) == "null"`.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
-        "variants.at",
+        "variants.path",
         CelOverloadDecl.newGlobalOverload(
-            "variants_at_variant_string",
+            "variants_path_variant_string",
             "JSONPath subset navigation; missing path → variant-null;"
                 + " malformed path throws.",
             VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));

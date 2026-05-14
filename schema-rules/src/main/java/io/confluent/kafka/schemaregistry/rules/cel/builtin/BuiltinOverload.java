@@ -50,7 +50,7 @@ final class BuiltinOverload {
 
   /**
    * Pre-built Variant whose top-level type is NULL. Returned by navigation
-   * functions ({@code variants.at}, {@code variants.field}, {@code variants.elem})
+   * functions ({@code variants.path}, {@code variants.field}, {@code variants.elem})
    * on miss. Rules detect it via {@code variants.type(v) == "null"}.
    *
    * <p>The metadata is a minimal header (version=1, 0 dictionary entries); the
@@ -257,10 +257,10 @@ final class BuiltinOverload {
     // Variant.getFieldByKey / getElementAtIndex throw IllegalArgumentException
     // for type mismatch by design, but the rule-level contract is "navigate
     // returns variant-null on any miss" — type mismatch is one kind of miss.
-    // Malformed JSONPath in variants.at still throws (constraint-registration
+    // Malformed JSONPath in variants.path still throws (constraint-registration
     // failure, not a silent runtime no-op).
     out.add(CelFunctionBinding.from(
-        "variants_at_variant_string", Variant.class, String.class,
+        "variants_path_variant_string", Variant.class, String.class,
         (Variant v, String path) -> nullToVariantNull(VariantPath.walk(v, path))));
     out.add(CelFunctionBinding.from(
         "variants_field_variant_string", Variant.class, String.class,
@@ -363,7 +363,7 @@ final class BuiltinOverload {
         }
         throw new IllegalArgumentException(
             "variants.as: type '" + typeStr + "' is not supported for extraction"
-                + " (use variants.type/variants.at/variants.field/variants.elem instead)");
+                + " (use variants.type/variants.path/variants.field/variants.elem instead)");
       default:
         if (tryMode) {
           return NullValue.NULL_VALUE;

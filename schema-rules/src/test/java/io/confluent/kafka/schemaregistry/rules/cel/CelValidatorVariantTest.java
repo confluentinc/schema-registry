@@ -119,10 +119,10 @@ public class CelValidatorVariantTest {
     assertEquals(1, errs.size());
   }
 
-  // ---- variants.at JSONPath navigation ----
+  // ---- variants.path JSONPath navigation ----
 
   @Test
-  void variantsAt_jsonPathNavigation() throws Exception {
+  void variantsPath_jsonPathNavigation() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -131,7 +131,7 @@ public class CelValidatorVariantTest {
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
         + "             expr: \"variants.as("
-        + "                       variants.at(variant(this), \\\"$.user.name\\\"), \\\"string\\\")"
+        + "                       variants.path(variant(this), \\\"$.user.name\\\"), \\\"string\\\")"
         + "                    == \\\"alice\\\"\"}]\n"
         + "  }];\n"
         + "}\n";

@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * JSONPath subset used by {@code variants.at(v, path)}. Supports:
+ * JSONPath subset used by {@code variants.path(v, path)}. Supports:
  *
  * <ul>
  *   <li>{@code $} — root</li>
