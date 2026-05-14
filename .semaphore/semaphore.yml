@@ -91,6 +91,17 @@ blocks:
               else \
                   echo "PR is targeted to ${SEMAPHORE_GIT_BRANCH} branch which is not CP nightly or master branch. Skipping cp-jar-build task."; \
               fi;
+  # Claude Code based code review in PRs.
+  - name: R2 Code Review
+    dependencies: []
+    run:
+      when: "pull_request =~ '.+'"
+    task:
+      jobs:
+        - name: R2 Code Review
+          commands:
+            # || true: code review failures are unrelated to the codebase and should not block CI. Please report issues to Slack channel #r2.
+            - r2 code-review --verbose --timeout=900s || true
 
 after_pipeline:
   task:
