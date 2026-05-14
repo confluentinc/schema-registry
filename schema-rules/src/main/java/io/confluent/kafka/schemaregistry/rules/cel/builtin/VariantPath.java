@@ -48,6 +48,19 @@ import java.util.List;
  * subset at parse time rather than silently resolve to variant-null, because
  * accepting the syntax with degenerate semantics is a trap for users importing
  * expectations from those dialects.
+ *
+ * <p><b>Quoted-key escape behavior:</b> inside a quoted key, a backslash
+ * followed by any character X decodes to the literal character X. The useful
+ * cases are a doubled backslash (embed a literal backslash) and backslash +
+ * quote (embed the same quote character used to enclose the key). This is
+ * intentionally narrower than RFC 9535 — escape sequences denoting newline,
+ * tab, carriage return, or Unicode codepoints (the RFC 9535 escape table) are
+ * NOT interpreted; backslash + n decodes to the literal letter n, backslash +
+ * t to literal t, and so on. Variant object keys in practice are simple
+ * identifiers, so this minimal model covers realistic needs without an
+ * RFC 9535 escape table. A trailing backslash at end-of-input (e.g.,
+ * {@code $["foo} followed by a stray backslash) reaches end-of-input with the
+ * key still open and throws as an unterminated quoted key.
  */
 final class VariantPath {
 

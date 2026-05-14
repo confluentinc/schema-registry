@@ -153,11 +153,11 @@ final class BuiltinOverload {
             DecimalUtils.toBigDecimal(bytes.toByteArray(), scale.intValue())));
 
     // Comparison
-    out.add(decimalsBoolBinary("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));
-    out.add(decimalsBoolBinary("decimals_lt_decimal_decimal", (a, b) -> a.compareTo(b) < 0));
-    out.add(decimalsBoolBinary("decimals_le_decimal_decimal", (a, b) -> a.compareTo(b) <= 0));
-    out.add(decimalsBoolBinary("decimals_gt_decimal_decimal", (a, b) -> a.compareTo(b) > 0));
-    out.add(decimalsBoolBinary("decimals_ge_decimal_decimal", (a, b) -> a.compareTo(b) >= 0));
+    out.add(decimalsBinary("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));
+    out.add(decimalsBinary("decimals_lt_decimal_decimal", (a, b) -> a.compareTo(b) < 0));
+    out.add(decimalsBinary("decimals_le_decimal_decimal", (a, b) -> a.compareTo(b) <= 0));
+    out.add(decimalsBinary("decimals_gt_decimal_decimal", (a, b) -> a.compareTo(b) > 0));
+    out.add(decimalsBinary("decimals_ge_decimal_decimal", (a, b) -> a.compareTo(b) >= 0));
 
     // Arithmetic
     out.add(decimalsBinary("decimals_add_decimal_decimal", BigDecimal::add));
@@ -210,14 +210,8 @@ final class BuiltinOverload {
         "decimals_ceil_decimal", d -> d.setScale(0, RoundingMode.CEILING)));
   }
 
-  private static CelFunctionBinding decimalsBinary(
-      String overloadId, BiFunction<BigDecimal, BigDecimal, BigDecimal> fn) {
-    return CelFunctionBinding.from(
-        overloadId, BigDecimal.class, BigDecimal.class, fn::apply);
-  }
-
-  private static CelFunctionBinding decimalsBoolBinary(
-      String overloadId, BiFunction<BigDecimal, BigDecimal, Boolean> fn) {
+  private static <R> CelFunctionBinding decimalsBinary(
+      String overloadId, BiFunction<BigDecimal, BigDecimal, R> fn) {
     return CelFunctionBinding.from(
         overloadId, BigDecimal.class, BigDecimal.class, fn::apply);
   }

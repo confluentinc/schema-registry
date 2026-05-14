@@ -170,4 +170,30 @@ public class VariantPathTest {
     assertEquals(1, segs.size());
     assertEquals("123abc", ((FieldSegment) segs.get(0)).key);
   }
+
+  @Test
+  void quotedKey_escapedQuote_decodesLiteralQuote() {
+    // $["a\"b"]  -> single segment, key = a"b. Locks in that \" in the quoted
+    // form decodes to a literal double-quote (the realistic escape need).
+    List<Segment> segs = VariantPath.parse("$[\"a\\\"b\"]");
+    assertEquals(1, segs.size());
+    assertEquals("a\"b", ((FieldSegment) segs.get(0)).key);
+  }
+
+  @Test
+  void quotedKey_escapedBackslash_decodesLiteralBackslash() {
+    // $["a\\b"]  -> single segment, key = a\b. The other realistic escape:
+    // \\ decodes to a single literal backslash.
+    List<Segment> segs = VariantPath.parse("$[\"a\\\\b\"]");
+    assertEquals(1, segs.size());
+    assertEquals("a\\b", ((FieldSegment) segs.get(0)).key);
+  }
+
+  @Test
+  void quotedKey_trailingBackslashAtEnd_throws() {
+    // $["foo\   — the trailing '\' consumes EOF as its escape target, then the
+    // loop exits with the key still open and throws as unterminated.
+    assertThrows(IllegalArgumentException.class,
+        () -> VariantPath.parse("$[\"foo\\"));
+  }
 }

@@ -225,7 +225,6 @@ final class BuiltinDeclarations {
             "variant_to_string",
             "Serialize a Variant to its JSON string form",
             SimpleType.STRING, ImmutableList.of(VARIANT))));
-
   }
 
   private static CelFunctionDecl unaryVariant(String name, CelType result) {
