@@ -104,6 +104,12 @@ final class DecimalUtils {
         || o instanceof Short || o instanceof Byte) {
       return BigDecimal.valueOf(((Number) o).longValue());
     }
+    if (o instanceof BigInteger) {
+      // Jackson hands out BigInteger for JSON integers exceeding Long range;
+      // some Avro converter configurations also produce it. Exact, lossless
+      // widening — scale = 0 matches the narrower integer arm above.
+      return new BigDecimal((BigInteger) o);
+    }
     if (o instanceof Double || o instanceof Float) {
       return BigDecimal.valueOf(((Number) o).doubleValue());
     }

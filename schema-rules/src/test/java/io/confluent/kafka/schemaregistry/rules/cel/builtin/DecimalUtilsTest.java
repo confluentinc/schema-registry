@@ -108,4 +108,15 @@ public class DecimalUtilsTest {
     assertEquals(new BigDecimal("-123.45"),
         DecimalUtils.toBigDecimal(unscaled, 2));
   }
+
+  @Test
+  void fromBigInteger_widensExactlyWithZeroScale() {
+    // Jackson hands out BigInteger for JSON integers exceeding Long range.
+    // Lock in that DecimalUtils widens such values exactly (no precision loss,
+    // scale=0) rather than rejecting with "Cannot convert".
+    BigInteger huge = BigInteger.valueOf(Long.MAX_VALUE).multiply(BigInteger.valueOf(1000));
+    BigDecimal result = DecimalUtils.toBigDecimal((Object) huge);
+    assertEquals(0, result.compareTo(new BigDecimal(huge)));
+    assertEquals(0, result.scale());
+  }
 }

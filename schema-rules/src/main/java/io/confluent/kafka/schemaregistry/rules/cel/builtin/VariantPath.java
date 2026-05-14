@@ -59,8 +59,10 @@ import java.util.List;
  * t to literal t, and so on. Variant object keys in practice are simple
  * identifiers, so this minimal model covers realistic needs without an
  * RFC 9535 escape table. A trailing backslash at end-of-input (e.g.,
- * {@code $["foo} followed by a stray backslash) reaches end-of-input with the
- * key still open and throws as an unterminated quoted key.
+ * {@code $["foo} followed by a stray backslash) is not consumed as an escape
+ * because there is no following character; it is treated as a literal
+ * backslash, the key remains open, and parsing throws as an unterminated
+ * quoted key.
  */
 final class VariantPath {
 
