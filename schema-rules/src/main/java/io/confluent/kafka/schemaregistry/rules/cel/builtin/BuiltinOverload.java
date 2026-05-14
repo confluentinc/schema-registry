@@ -173,7 +173,7 @@ final class BuiltinOverload {
         "decimals_scale_decimal", BigDecimal.class,
         (BigDecimal d) -> (long) d.scale()));
     out.add(CelFunctionBinding.from(
-        "decimals_precision_decimal", BigDecimal.class,
+        "decimals_prec_decimal", BigDecimal.class,
         (BigDecimal d) -> (long) d.precision()));
     // string(Decimal) — extension overload on stdlib `string(...)`.
     out.add(CelFunctionBinding.from(
@@ -272,9 +272,9 @@ final class BuiltinOverload {
         "variants_gettimestamp_variant", Variant.class,
         BuiltinOverload::variantGetTimestamp));
     out.add(CelFunctionBinding.from(
-        "variants_getbinary_variant", Variant.class,
+        "variants_getbytes_variant", Variant.class,
         (Variant v) ->
-            dev.cel.common.values.CelByteString.of(variantGetBinary(v))));
+            dev.cel.common.values.CelByteString.of(variantGetBytes(v))));
     out.add(CelFunctionBinding.from(
         "variants_tojson_variant", Variant.class, VariantUtils::toJsonString));
 
@@ -295,7 +295,7 @@ final class BuiltinOverload {
         t -> t == Variant.Type.TIMESTAMP_TZ || t == Variant.Type.TIMESTAMP_NTZ
             || t == Variant.Type.TIMESTAMP_NANOS_TZ
             || t == Variant.Type.TIMESTAMP_NANOS_NTZ));
-    out.add(tryTypeFilter("variants_trygetbinary_variant",
+    out.add(tryTypeFilter("variants_trygetbytes_variant",
         t -> t == Variant.Type.BINARY));
 
     // Try path / field / element — null-safe wrappers. tryGet suppresses parse
@@ -371,7 +371,7 @@ final class BuiltinOverload {
     }
   }
 
-  private static byte[] variantGetBinary(Variant v) {
+  private static byte[] variantGetBytes(Variant v) {
     // Variant.getBinary() throws unexpectedType on non-BINARY variants; we
     // don't pre-check the type or null-check the return value because
     // neither path is reachable.
@@ -408,7 +408,7 @@ final class BuiltinOverload {
       case TIMESTAMP_NANOS_NTZ:
         return "timestamp";
       case STRING: return "string";
-      case BINARY: return "binary";
+      case BINARY: return "bytes";
       case UUID:   return "uuid";
       default:
         throw new IllegalStateException("Unknown Variant.Type: " + t);

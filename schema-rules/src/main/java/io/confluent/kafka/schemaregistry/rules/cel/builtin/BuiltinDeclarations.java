@@ -94,7 +94,7 @@ final class BuiltinDeclarations {
     decls.add(unaryDecimal("decimals.abs", DECIMAL));
     decls.add(unaryDecimal("decimals.sign", SimpleType.INT));
     decls.add(unaryDecimal("decimals.scale", SimpleType.INT));
-    decls.add(unaryDecimal("decimals.precision", SimpleType.INT));
+    decls.add(unaryDecimal("decimals.prec", SimpleType.INT));
 
     // String coercion via CEL built-in: extend stdlib `string(...)` with a
     // (Decimal) -> string overload. No overlap with any existing
@@ -203,7 +203,7 @@ final class BuiltinDeclarations {
     decls.add(unaryVariant("variants.getBool", SimpleType.BOOL));
     decls.add(unaryVariant("variants.getDecimal", DECIMAL));
     decls.add(unaryVariant("variants.getTimestamp", SimpleType.TIMESTAMP));
-    decls.add(unaryVariant("variants.getBinary", SimpleType.BYTES));
+    decls.add(unaryVariant("variants.getBytes", SimpleType.BYTES));
     decls.add(unaryVariant("variants.toJson", SimpleType.STRING));
 
     // Try-typed extraction (returns input Variant on type match, else NULL Variant)
@@ -213,7 +213,7 @@ final class BuiltinDeclarations {
     decls.add(unaryVariant("variants.tryGetBool", VARIANT));
     decls.add(unaryVariant("variants.tryGetDecimal", VARIANT));
     decls.add(unaryVariant("variants.tryGetTimestamp", VARIANT));
-    decls.add(unaryVariant("variants.tryGetBinary", VARIANT));
+    decls.add(unaryVariant("variants.tryGetBytes", VARIANT));
 
     // Try path / field / element (aliases — the non-try forms are already null-safe
     // for missing fields/indices; tryGet additionally suppresses path parse errors).
