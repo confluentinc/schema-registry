@@ -47,10 +47,12 @@ final class BuiltinOverload {
   private static final MathContext DIV_MC = new MathContext(38, RoundingMode.HALF_UP);
 
   /**
-   * Pre-built Variant whose top-level type is NULL. Backs missing-field returns from
-   * the {@code variants.*} accessors so rules can guard with {@code variants.isNull}.
-   * The metadata is a minimal header (version=1, 0 dictionary entries); the value is
-   * a single primitive-header byte for the NULL type.
+   * Pre-built Variant whose top-level type is NULL. Returned by navigation
+   * functions ({@code variants.at}, {@code variants.field}, {@code variants.elem})
+   * on miss. Rules detect it via {@code variants.type(v) == "null"}.
+   *
+   * <p>The metadata is a minimal header (version=1, 0 dictionary entries); the
+   * value is a single primitive-header byte for the NULL type.
    */
   private static final Variant NULL_VARIANT = new Variant(
       new byte[] {0},
@@ -242,118 +244,126 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "variants_type_variant", Variant.class,
         (Variant v) -> variantTypeName(v.getType())));
-    out.add(CelFunctionBinding.from(
-        "variants_isnull_variant", Variant.class,
-        (Variant v) -> v.getType() == Variant.Type.NULL));
 
-    // Path / field / element navigation. Missing field/index → variant-null.
+    // Navigation. Missing field/index → variant-null sentinel. Malformed
+    // JSONPath in variants.at throws (constraint-registration failure, not a
+    // silent runtime no-op).
     out.add(CelFunctionBinding.from(
-        "variants_get_variant_string", Variant.class, String.class,
+        "variants_at_variant_string", Variant.class, String.class,
         (Variant v, String path) -> nullToVariantNull(VariantPath.walk(v, path))));
     out.add(CelFunctionBinding.from(
-        "variants_getfield_variant_string", Variant.class, String.class,
+        "variants_field_variant_string", Variant.class, String.class,
         (Variant v, String key) -> nullToVariantNull(v.getFieldByKey(key))));
     out.add(CelFunctionBinding.from(
-        "variants_getelement_variant_int", Variant.class, Long.class,
+        "variants_elem_variant_int", Variant.class, Long.class,
         (Variant v, Long idx) -> nullToVariantNull(v.getElementAtIndex(idx.intValue()))));
 
-    // Typed extraction
+    // Parameterized typed extraction. variants.as throws on mismatch;
+    // variants.tryAs returns CEL null. The second-arg type string selects
+    // the target type (see variantAs for the accepted vocabulary).
     out.add(CelFunctionBinding.from(
-        "variants_getstring_variant", Variant.class, Variant::getString));
+        "variants_as_variant_string", Variant.class, String.class,
+        (Variant v, String typeStr) -> variantAs(v, typeStr, /*tryMode=*/ false)));
     out.add(CelFunctionBinding.from(
-        "variants_getint_variant", Variant.class, BuiltinOverload::variantGetInt));
-    out.add(CelFunctionBinding.from(
-        "variants_getdouble_variant", Variant.class, BuiltinOverload::variantGetDouble));
-    out.add(CelFunctionBinding.from(
-        "variants_getbool_variant", Variant.class, Variant::getBoolean));
-    out.add(CelFunctionBinding.from(
-        "variants_getdecimal_variant", Variant.class, Variant::getDecimal));
-    out.add(CelFunctionBinding.from(
-        "variants_gettimestamp_variant", Variant.class,
-        BuiltinOverload::variantGetTimestamp));
-    out.add(CelFunctionBinding.from(
-        "variants_getbytes_variant", Variant.class,
-        (Variant v) ->
-            dev.cel.common.values.CelByteString.of(variantGetBytes(v))));
-    out.add(CelFunctionBinding.from(
-        "variants_tojson_variant", Variant.class, VariantUtils::toJsonString));
+        "variants_tryas_variant_string", Variant.class, String.class,
+        (Variant v, String typeStr) -> variantAs(v, typeStr, /*tryMode=*/ true)));
 
-    // try-typed extraction: input variant if type matches, else NULL variant.
-    out.add(tryTypeFilter("variants_trygetstring_variant",
-        t -> t == Variant.Type.STRING));
-    out.add(tryTypeFilter("variants_trygetint_variant",
-        t -> t == Variant.Type.BYTE || t == Variant.Type.SHORT
-            || t == Variant.Type.INT || t == Variant.Type.LONG));
-    out.add(tryTypeFilter("variants_trygetdouble_variant",
-        t -> t == Variant.Type.FLOAT || t == Variant.Type.DOUBLE));
-    out.add(tryTypeFilter("variants_trygetbool_variant",
-        t -> t == Variant.Type.BOOLEAN));
-    out.add(tryTypeFilter("variants_trygetdecimal_variant",
-        t -> t == Variant.Type.DECIMAL4 || t == Variant.Type.DECIMAL8
-            || t == Variant.Type.DECIMAL16));
-    out.add(tryTypeFilter("variants_trygettimestamp_variant",
-        t -> t == Variant.Type.TIMESTAMP_TZ || t == Variant.Type.TIMESTAMP_NTZ
-            || t == Variant.Type.TIMESTAMP_NANOS_TZ
-            || t == Variant.Type.TIMESTAMP_NANOS_NTZ));
-    out.add(tryTypeFilter("variants_trygetbytes_variant",
-        t -> t == Variant.Type.BINARY));
+    // string(Variant) — JSON serialization extension on stdlib string(...).
+    out.add(CelFunctionBinding.from(
+        "variant_to_string", Variant.class, VariantUtils::toJsonString));
 
-    // Try path / field / element — null-safe wrappers. tryGet suppresses parse
-    // errors too (the non-try variants.get throws on malformed paths).
-    out.add(CelFunctionBinding.from(
-        "variants_try_get_variant_string", Variant.class, String.class,
-        (Variant v, String path) -> {
-          try {
-            return nullToVariantNull(VariantPath.walk(v, path));
-          } catch (RuntimeException e) {
-            return NULL_VARIANT;
-          }
-        }));
-    out.add(CelFunctionBinding.from(
-        "variants_trygetfield_variant_string", Variant.class, String.class,
-        (Variant v, String key) -> nullToVariantNull(v.getFieldByKey(key))));
-    out.add(CelFunctionBinding.from(
-        "variants_trygetelement_variant_int", Variant.class, Long.class,
-        (Variant v, Long idx) -> nullToVariantNull(v.getElementAtIndex(idx.intValue()))));
-  }
-
-  private static CelFunctionBinding tryTypeFilter(
-      String overloadId, Predicate<Variant.Type> pred) {
-    return CelFunctionBinding.from(
-        overloadId, Variant.class,
-        (Variant v) -> pred.test(v.getType()) ? v : NULL_VARIANT);
   }
 
   private static Variant nullToVariantNull(Variant v) {
     return v == null ? NULL_VARIANT : v;
   }
 
-  private static long variantGetInt(Variant v) {
-    switch (v.getType()) {
-      case BYTE:
-      case SHORT:
-      case INT:
-      case LONG:
-        return v.getLong();
-      default:
+  /**
+   * Runtime dispatch for {@code variants.as(v, typeStr)} / {@code variants.tryAs}.
+   *
+   * <p>Accepted type strings match the {@code variants.type(v)} output for
+   * extractable scalar types: {@code "string"}, {@code "int"}, {@code "double"},
+   * {@code "boolean"}, {@code "decimal"}, {@code "timestamp"}, {@code "bytes"}.
+   * The container/sentinel/v1-out-of-scope labels — {@code "object"}, {@code
+   * "array"}, {@code "null"}, {@code "date"}, {@code "time"}, {@code "uuid"} —
+   * are rejected (no concrete typed extractor exists for them).
+   *
+   * <p>In {@code tryMode}, all rejections return {@link
+   * dev.cel.common.values.NullValue#NULL_VALUE}. Outside {@code tryMode},
+   * mismatches throw {@link IllegalArgumentException}.
+   */
+  private static Object variantAs(Variant v, String typeStr, boolean tryMode) {
+    Variant.Type t = v.getType();
+    switch (typeStr) {
+      case "string":
+        if (t == Variant.Type.STRING) {
+          return v.getString();
+        }
+        break;
+      case "int":
+        if (t == Variant.Type.BYTE || t == Variant.Type.SHORT
+            || t == Variant.Type.INT || t == Variant.Type.LONG) {
+          return v.getLong();
+        }
+        break;
+      case "double":
+        if (t == Variant.Type.FLOAT) {
+          // Widen FLOAT to double so users see a uniform double extraction.
+          return (double) v.getFloat();
+        }
+        if (t == Variant.Type.DOUBLE) {
+          return v.getDouble();
+        }
+        break;
+      case "boolean":
+        if (t == Variant.Type.BOOLEAN) {
+          return v.getBoolean();
+        }
+        break;
+      case "decimal":
+        if (t == Variant.Type.DECIMAL4 || t == Variant.Type.DECIMAL8
+            || t == Variant.Type.DECIMAL16) {
+          return v.getDecimal();
+        }
+        break;
+      case "timestamp":
+        if (t == Variant.Type.TIMESTAMP_TZ || t == Variant.Type.TIMESTAMP_NTZ
+            || t == Variant.Type.TIMESTAMP_NANOS_TZ
+            || t == Variant.Type.TIMESTAMP_NANOS_NTZ) {
+          return variantGetTimestamp(v);
+        }
+        break;
+      case "bytes":
+        if (t == Variant.Type.BINARY) {
+          return dev.cel.common.values.CelByteString.of(variantGetBytes(v));
+        }
+        break;
+      case "object":
+      case "array":
+      case "null":
+      case "date":
+      case "time":
+      case "uuid":
+        if (tryMode) {
+          return dev.cel.common.values.NullValue.NULL_VALUE;
+        }
         throw new IllegalArgumentException(
-            "variants.getInt: variant is not integer-typed (type=" + v.getType() + ")");
-    }
-  }
-
-  private static double variantGetDouble(Variant v) {
-    switch (v.getType()) {
-      case FLOAT:
-        // Variant.getDouble() rejects FLOAT-typed variants — call getFloat()
-        // and widen so users see a uniform `variants.getDouble` surface.
-        return v.getFloat();
-      case DOUBLE:
-        return v.getDouble();
+            "variants.as: type '" + typeStr + "' is not supported for extraction"
+                + " (use variants.type/variants.at/variants.field/variants.elem instead)");
       default:
+        if (tryMode) {
+          return dev.cel.common.values.NullValue.NULL_VALUE;
+        }
         throw new IllegalArgumentException(
-            "variants.getDouble: variant is not floating-point typed (type="
-                + v.getType() + ")");
+            "variants.as: unknown type '" + typeStr + "'"
+                + " (expected one of: string, int, double, boolean, decimal, timestamp, bytes)");
     }
+    // Recognized typeStr but actual variant type doesn't match.
+    if (tryMode) {
+      return dev.cel.common.values.NullValue.NULL_VALUE;
+    }
+    throw new IllegalArgumentException(
+        "variants.as: variant is not " + typeStr + "-typed (type=" + t + ")");
   }
 
   private static Timestamp variantGetTimestamp(Variant v) {
@@ -365,8 +375,9 @@ final class BuiltinOverload {
       case TIMESTAMP_NANOS_NTZ:
         return TimestampUtils.fromEpochNanos(v.getLong());
       default:
-        throw new IllegalArgumentException(
-            "variants.getTimestamp: variant is not timestamp-typed (type="
+        // Unreachable: callers (variantAs) verify the type before invoking.
+        throw new IllegalStateException(
+            "variantGetTimestamp called on non-timestamp variant (type="
                 + v.getType() + ")");
     }
   }

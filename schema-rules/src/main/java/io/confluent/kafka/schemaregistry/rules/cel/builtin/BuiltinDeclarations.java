@@ -184,47 +184,49 @@ final class BuiltinDeclarations {
 
     // Type inspection
     decls.add(unaryVariant("variants.type", SimpleType.STRING));
-    decls.add(unaryVariant("variants.isNull", SimpleType.BOOL));
 
-    // Path / field / element navigation
+    // Navigation. All three return a variant-null sentinel on miss (use
+    // `result == null` to detect, via the cross-type equality overloads below).
     decls.add(CelFunctionDecl.newFunctionDeclaration(
-        "variants.get",
+        "variants.at",
         CelOverloadDecl.newGlobalOverload(
-            "variants_get_variant_string",
-            "JSONPath subset navigation; missing path → variant-null",
+            "variants_at_variant_string",
+            "JSONPath subset navigation; missing path → variant-null;"
+                + " malformed path throws.",
             VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
-    decls.add(binaryVariant("variants.getField", SimpleType.STRING, VARIANT));
-    decls.add(binaryVariant("variants.getElement", SimpleType.INT, VARIANT));
+    decls.add(binaryVariant("variants.field", SimpleType.STRING, VARIANT));
+    decls.add(binaryVariant("variants.elem", SimpleType.INT, VARIANT));
 
-    // Typed extraction
-    decls.add(unaryVariant("variants.getString", SimpleType.STRING));
-    decls.add(unaryVariant("variants.getInt", SimpleType.INT));
-    decls.add(unaryVariant("variants.getDouble", SimpleType.DOUBLE));
-    decls.add(unaryVariant("variants.getBool", SimpleType.BOOL));
-    decls.add(unaryVariant("variants.getDecimal", DECIMAL));
-    decls.add(unaryVariant("variants.getTimestamp", SimpleType.TIMESTAMP));
-    decls.add(unaryVariant("variants.getBytes", SimpleType.BYTES));
-    decls.add(unaryVariant("variants.toJson", SimpleType.STRING));
-
-    // Try-typed extraction (returns input Variant on type match, else NULL Variant)
-    decls.add(unaryVariant("variants.tryGetString", VARIANT));
-    decls.add(unaryVariant("variants.tryGetInt", VARIANT));
-    decls.add(unaryVariant("variants.tryGetDouble", VARIANT));
-    decls.add(unaryVariant("variants.tryGetBool", VARIANT));
-    decls.add(unaryVariant("variants.tryGetDecimal", VARIANT));
-    decls.add(unaryVariant("variants.tryGetTimestamp", VARIANT));
-    decls.add(unaryVariant("variants.tryGetBytes", VARIANT));
-
-    // Try path / field / element (aliases — the non-try forms are already null-safe
-    // for missing fields/indices; tryGet additionally suppresses path parse errors).
+    // Typed extraction — parameterized form. The second string arg selects the
+    // target type ("string", "int", "double", "boolean", "decimal", "timestamp",
+    // "bytes"). Return type is `dyn` because the concrete return varies by the
+    // type-string value; strict type-check is lost on the result, accepted
+    // tradeoff for the smaller surface area.
+    //
+    // `variants.as` throws on type mismatch.
+    // `variants.tryAs` returns CEL null on type mismatch (instead of throwing).
     decls.add(CelFunctionDecl.newFunctionDeclaration(
-        "variants.tryGet",
+        "variants.as",
         CelOverloadDecl.newGlobalOverload(
-            "variants_try_get_variant_string",
-            "JSONPath; variant-null on miss or parse error",
-            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
-    decls.add(binaryVariant("variants.tryGetField", SimpleType.STRING, VARIANT));
-    decls.add(binaryVariant("variants.tryGetElement", SimpleType.INT, VARIANT));
+            "variants_as_variant_string",
+            "Extract a typed value from a Variant; throws on type mismatch.",
+            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.tryAs",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_tryas_variant_string",
+            "Extract a typed value from a Variant; CEL null on type mismatch.",
+            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+
+    // string(Variant) — extension overload on stdlib `string(...)` returning
+    // the Variant's JSON serialization. Replaces the prior variants.toJson.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "string",
+        CelOverloadDecl.newGlobalOverload(
+            "variant_to_string",
+            "Serialize a Variant to its JSON string form",
+            SimpleType.STRING, ImmutableList.of(VARIANT))));
+
   }
 
   private static CelFunctionDecl unaryVariant(String name, dev.cel.common.types.CelType result) {

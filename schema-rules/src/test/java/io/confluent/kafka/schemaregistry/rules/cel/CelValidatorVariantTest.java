@@ -92,10 +92,10 @@ public class CelValidatorVariantTest {
     }
   }
 
-  // ---- variants.type, variants.getString via variants.getField ----
+  // ---- variants.type, variants.as("string") via variants.field ----
 
   @Test
-  void variantGetField_getString_passes() throws Exception {
+  void variantField_asString_passes() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -103,8 +103,8 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"nameIsAlice\","
-        + "             expr: \"variants.getString("
-        + "                       variants.getField(variant(this), \\\"name\\\"))"
+        + "             expr: \"variants.as("
+        + "                       variants.field(variant(this), \\\"name\\\"), \\\"string\\\")"
         + "                    == \\\"alice\\\"\"}]\n"
         + "  }];\n"
         + "}\n";
@@ -127,7 +127,7 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void variantGetField_getString_failsOnMismatch() throws Exception {
+  void variantField_asString_failsOnMismatch() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -135,8 +135,8 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.getString("
-        + "                       variants.getField(variant(this), \\\"name\\\"))"
+        + "             expr: \"variants.as("
+        + "                       variants.field(variant(this), \\\"name\\\"), \\\"string\\\")"
         + "                    == \\\"alice\\\"\"}]\n"
         + "  }];\n"
         + "}\n";
@@ -146,10 +146,10 @@ public class CelValidatorVariantTest {
     assertEquals(1, errs.size());
   }
 
-  // ---- variants.get JSONPath navigation ----
+  // ---- variants.at JSONPath navigation ----
 
   @Test
-  void variantsGet_jsonPathNavigation() throws Exception {
+  void variantsAt_jsonPathNavigation() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -157,8 +157,8 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.getString("
-        + "                       variants.get(variant(this), \\\"$.user.name\\\"))"
+        + "             expr: \"variants.as("
+        + "                       variants.at(variant(this), \\\"$.user.name\\\"), \\\"string\\\")"
         + "                    == \\\"alice\\\"\"}]\n"
         + "  }];\n"
         + "}\n";
@@ -168,10 +168,10 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
-  // ---- variants.isNull on a missing path ----
+  // ---- variants.type on a missing path returns "null" (the variant-null sentinel) ----
 
   @Test
-  void variantsIsNull_missingFieldReturnsVariantNull() throws Exception {
+  void variantsType_missingFieldReturnsVariantNull() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -179,8 +179,9 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.isNull("
-        + "                       variants.getField(variant(this), \\\"missing\\\"))\"}]\n"
+        + "             expr: \"variants.type("
+        + "                       variants.field(variant(this), \\\"missing\\\"))"
+        + "                    == \\\"null\\\"\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -207,12 +208,12 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
-  // ---- variants.getInt: cross-type — variant integer flows into CEL int arithmetic ----
+  // ---- variants.as("int"): cross-type — variant integer flows into CEL int arithmetic ----
 
   @Test
-  void variantGetInt_thenArithmetic() throws Exception {
-    // Jackson parses JSON `42` as Int → Variant.Type.INT. variants.getInt extracts
-    // it as a CEL int (long). The rule then compares against an int literal.
+  void variantAsInt_thenArithmetic() throws Exception {
+    // Jackson parses JSON `42` as Int → Variant.Type.INT. variants.as(_, "int")
+    // extracts it as a CEL int (long). The rule then compares against an int literal.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -220,8 +221,8 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.getInt("
-        + "                       variants.getField(variant(this), \\\"count\\\")) >= 0\"}]\n"
+        + "             expr: \"variants.as("
+        + "                       variants.field(variant(this), \\\"count\\\"), \\\"int\\\") >= 0\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -230,10 +231,10 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
-  // ---- variants.tryGet* — type-mismatch returns NULL Variant ----
+  // ---- variants.tryAs — type-mismatch returns CEL null ----
 
   @Test
-  void variantTryGetString_onIntVariantReturnsNull() throws Exception {
+  void variantTryAsString_onIntVariantReturnsNull() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -241,9 +242,8 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.isNull("
-        + "                       variants.tryGetString("
-        + "                         variants.getField(variant(this), \\\"count\\\")))\"}]\n"
+        + "             expr: \"variants.tryAs("
+        + "                       variants.field(variant(this), \\\"count\\\"), \\\"string\\\") == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -261,10 +261,10 @@ public class CelValidatorVariantTest {
         + "message X {\n"
         + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.getString("
-        + "                       variants.getField("
+        + "             expr: \"variants.as("
+        + "                       variants.field("
         + "                         variant(\\\"{\\\\\\\"name\\\\\\\":\\\\\\\"alice\\\\\\\"}\\\"),"
-        + "                         \\\"name\\\"))"
+        + "                         \\\"name\\\"), \\\"string\\\")"
         + "                    == \\\"alice\\\"\"}]\n"
         + "  }];\n"
         + "}\n";
@@ -305,7 +305,7 @@ public class CelValidatorVariantTest {
       + "      },"
       + "      \"confluent:rules\":["
       + "        {\"name\":\"nameIsAlice\","
-      + "         \"expr\":\"variants.getString(variants.getField(variant(this), \\\"name\\\")) == \\\"alice\\\"\"}]"
+      + "         \"expr\":\"variants.as(variants.field(variant(this), \\\"name\\\"), \\\"string\\\") == \\\"alice\\\"\"}]"
       + "    }"
       + "  ]"
       + "}";
@@ -344,7 +344,7 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void avroVariant_isNull_onMissingField() throws Exception {
+  void avroVariant_typeNull_onMissingField() throws Exception {
     String s = ""
         + "{"
         + "  \"type\":\"record\","
@@ -364,7 +364,7 @@ public class CelValidatorVariantTest {
         + "      },"
         + "      \"confluent:rules\":["
         + "        {\"name\":\"r\","
-        + "         \"expr\":\"variants.isNull(variants.getField(variant(this), \\\"missing\\\"))\"}]"
+        + "         \"expr\":\"variants.type(variants.field(variant(this), \\\"missing\\\")) == \\\"null\\\"\"}]"
         + "    }"
         + "  ]"
         + "}";
