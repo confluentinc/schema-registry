@@ -27,7 +27,7 @@ import java.util.List;
  *   <li>{@code $} — root</li>
  *   <li>{@code $.field} — object field by identifier name</li>
  *   <li>{@code $.field.subfield} — nested fields</li>
- *   <li>{@code $[i]} — array element by index</li>
+ *   <li>{@code $[i]} — array element by non-negative integer index</li>
  *   <li>{@code $.field[i].sub} — mixed</li>
  *   <li>{@code $["foo bar"]} — quoted key for non-identifier names</li>
  * </ul>
@@ -38,6 +38,12 @@ import java.util.List;
  *
  * <p>Identifier names follow {@code [A-Za-z_][A-Za-z0-9_]*}. Use the quoted form
  * for any key with characters outside that set.
+ *
+ * <p><b>Negative indices are not supported.</b> RFC 9535 / Python / JS treat
+ * {@code [-i]} as last-relative ({@code len + i}); we deliberately reject this
+ * subset at parse time rather than silently resolve to variant-null, because
+ * accepting the syntax with degenerate semantics is a trap for users importing
+ * expectations from those dialects.
  */
 final class VariantPath {
 
@@ -139,10 +145,13 @@ final class VariantPath {
   }
 
   private static int readIndex(Cursor c, String path) {
-    int start = c.pos;
+    // Reject negative indices up front. See the class-level Javadoc for why
+    // we don't implement RFC 9535-style `len + i` last-relative semantics.
     if (c.hasMore() && c.peek() == '-') {
-      c.next();
+      throw new IllegalArgumentException(
+          "negative indices are not supported in variant path: " + path);
     }
+    int start = c.pos;
     while (c.hasMore() && Character.isDigit(c.peek())) {
       c.next();
     }

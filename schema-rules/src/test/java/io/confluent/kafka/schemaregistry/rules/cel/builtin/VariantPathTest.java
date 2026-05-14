@@ -63,9 +63,14 @@ public class VariantPathTest {
   }
 
   @Test
-  void negativeIndex() {
-    List<Segment> segs = VariantPath.parse("$[-1]");
-    assertEquals(-1, ((IndexSegment) segs.get(0)).index);
+  void negativeIndex_throws() {
+    // RFC 9535 / Python / JS treat $[-1] as last-relative; we reject it at
+    // parse time rather than silently resolve to variant-null. See VariantPath
+    // class-level Javadoc.
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> VariantPath.parse("$[-1]"));
+    assertTrue(e.getMessage().contains("negative"),
+        "error message should mention 'negative'; was: " + e.getMessage());
   }
 
   @Test
