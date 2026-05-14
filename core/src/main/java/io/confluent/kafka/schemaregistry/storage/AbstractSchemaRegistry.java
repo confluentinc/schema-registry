@@ -597,10 +597,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         : defaultValidateNewSchemas;
   }
 
-  private ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
-                                                       Schema schema,
-                                                       Config config,
-                                                       boolean normalize)
+  protected ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
+                                                         Schema schema,
+                                                         Config config,
+                                                         boolean normalize)
           throws InvalidSchemaException {
     try {
       if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
