@@ -139,4 +139,19 @@ public class VariantPathTest {
   void unexpectedCharacter_throws() {
     assertThrows(IllegalArgumentException.class, () -> VariantPath.parse("$+foo"));
   }
+
+  @Test
+  void digitLeadingIdent_throws() {
+    // `$.123` is not a valid identifier — the documented grammar is
+    // [A-Za-z_][A-Za-z0-9_]*. Use the quoted form `$["123"]` for keys that
+    // start with a digit.
+    assertThrows(IllegalArgumentException.class, () -> VariantPath.parse("$.123abc"));
+  }
+
+  @Test
+  void digitLeadingKey_quotedForm_works() {
+    List<Segment> segs = VariantPath.parse("$[\"123abc\"]");
+    assertEquals(1, segs.size());
+    assertEquals("123abc", ((FieldSegment) segs.get(0)).key);
+  }
 }

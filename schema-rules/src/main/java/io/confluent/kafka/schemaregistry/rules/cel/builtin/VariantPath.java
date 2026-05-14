@@ -99,7 +99,17 @@ final class VariantPath {
   }
 
   private static String readIdent(Cursor c, String path) {
+    // First character must be letter or underscore, per the documented
+    // `[A-Za-z_][A-Za-z0-9_]*` grammar. Digit-leading idents are rejected —
+    // the quoted form `$["123"]` is required for keys that start with a digit
+    // (or any other non-identifier character).
+    if (!c.hasMore() || !(Character.isLetter(c.peek()) || c.peek() == '_')) {
+      throw new IllegalArgumentException(
+          "expected identifier (starting with a letter or '_') after '.' "
+              + "in variant path: " + path);
+    }
     int start = c.pos;
+    c.next();
     while (c.hasMore()) {
       char ch = c.peek();
       if (Character.isLetterOrDigit(ch) || ch == '_') {
@@ -107,10 +117,6 @@ final class VariantPath {
       } else {
         break;
       }
-    }
-    if (c.pos == start) {
-      throw new IllegalArgumentException(
-          "expected identifier after '.' in variant path: " + path);
     }
     return c.src.substring(start, c.pos);
   }

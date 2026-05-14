@@ -68,6 +68,14 @@ final class VariantUtils {
   static Variant fromProtoMessage(Message msg) {
     FieldDescriptor valueField = msg.getDescriptorForType().findFieldByName("value");
     FieldDescriptor metadataField = msg.getDescriptorForType().findFieldByName("metadata");
+    // Defensive: a DynamicMessage whose type name is confluent.type.Variant
+    // but whose field set has been mangled would otherwise NPE on the cast
+    // below.
+    if (valueField == null || metadataField == null) {
+      throw new IllegalArgumentException(
+          "confluent.type.Variant message missing required field: "
+              + (valueField == null ? "'value'" : "'metadata'"));
+    }
     ByteString value = (ByteString) msg.getField(valueField);
     ByteString metadata = (ByteString) msg.getField(metadataField);
     return new Variant(value.asReadOnlyByteBuffer(), metadata.asReadOnlyByteBuffer());
@@ -112,6 +120,14 @@ final class VariantUtils {
       Object val = map.get("value");
       if (md != null && val != null) {
         return new Variant(toBytes(val), toBytes(md));
+      }
+      if (md != null || val != null) {
+        // Map has the shape of a Variant record but is missing one of the
+        // two required keys — surface the precise failure instead of falling
+        // through to a generic "Cannot convert Map" error.
+        throw new IllegalArgumentException(
+            "Cannot convert Map to Variant: missing "
+                + (val == null ? "'value'" : "'metadata'") + " entry");
       }
     }
     if (o instanceof String) {

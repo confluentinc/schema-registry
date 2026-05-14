@@ -51,6 +51,14 @@ final class DecimalUtils {
   static BigDecimal toBigDecimal(Message msg) {
     FieldDescriptor valueField = msg.getDescriptorForType().findFieldByName("value");
     FieldDescriptor scaleField = msg.getDescriptorForType().findFieldByName("scale");
+    // Defensive: a DynamicMessage whose type name is confluent.type.Decimal
+    // but whose field set has been mangled (e.g., field renamed in a
+    // hand-edited descriptor) would otherwise NPE on the cast below.
+    if (valueField == null || scaleField == null) {
+      throw new IllegalArgumentException(
+          "confluent.type.Decimal message missing required field: "
+              + (valueField == null ? "'value'" : "'scale'"));
+    }
     ByteString unscaled = (ByteString) msg.getField(valueField);
     int scale = ((Number) msg.getField(scaleField)).intValue();
     BigInteger bi = unscaled.isEmpty()

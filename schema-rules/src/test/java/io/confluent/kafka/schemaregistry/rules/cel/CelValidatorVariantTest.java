@@ -189,6 +189,54 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
+  // ---- B1: variants.field / variants.elem on wrong-type receiver → variant-null ----
+  //
+  // Variant.getFieldByKey throws IllegalArgumentException for non-OBJECT receivers
+  // (and getElementAtIndex for non-ARRAY) — the bindings type-check defensively so
+  // the rule-level contract "navigate returns variant-null on any miss" holds.
+
+  @Test
+  void variantField_onNonObjectReceiver_returnsVariantNull() throws Exception {
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type("
+        + "                       variants.field(variant(this), \\\"x\\\"))"
+        + "                    == \\\"null\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    // Top-level variant is an INT (Variant.Type.INT), not OBJECT.
+    DynamicMessage doc = docWithVariantJson(schema, "42");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  @Test
+  void variantElem_onNonArrayReceiver_returnsVariantNull() throws Exception {
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type("
+        + "                       variants.elem(variant(this), 0))"
+        + "                    == \\\"null\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    // Top-level variant is a STRING, not ARRAY.
+    DynamicMessage doc = docWithVariantJson(schema, "\"hello\"");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
   // ---- variants.type returns correct strings ----
 
   @Test

@@ -245,18 +245,26 @@ final class BuiltinOverload {
         "variants_type_variant", Variant.class,
         (Variant v) -> variantTypeName(v.getType())));
 
-    // Navigation. Missing field/index → variant-null sentinel. Malformed
-    // JSONPath in variants.at throws (constraint-registration failure, not a
-    // silent runtime no-op).
+    // Navigation. Missing field/index → variant-null sentinel. Wrong-type
+    // receiver (e.g., variants.field on an INT) also returns variant-null:
+    // Variant.getFieldByKey / getElementAtIndex throw IllegalArgumentException
+    // for type mismatch by design, but the rule-level contract is "navigate
+    // returns variant-null on any miss" — type mismatch is one kind of miss.
+    // Malformed JSONPath in variants.at still throws (constraint-registration
+    // failure, not a silent runtime no-op).
     out.add(CelFunctionBinding.from(
         "variants_at_variant_string", Variant.class, String.class,
         (Variant v, String path) -> nullToVariantNull(VariantPath.walk(v, path))));
     out.add(CelFunctionBinding.from(
         "variants_field_variant_string", Variant.class, String.class,
-        (Variant v, String key) -> nullToVariantNull(v.getFieldByKey(key))));
+        (Variant v, String key) -> v.getType() == Variant.Type.OBJECT
+            ? nullToVariantNull(v.getFieldByKey(key))
+            : NULL_VARIANT));
     out.add(CelFunctionBinding.from(
         "variants_elem_variant_int", Variant.class, Long.class,
-        (Variant v, Long idx) -> nullToVariantNull(v.getElementAtIndex(idx.intValue()))));
+        (Variant v, Long idx) -> v.getType() == Variant.Type.ARRAY
+            ? nullToVariantNull(v.getElementAtIndex(idx.intValue()))
+            : NULL_VARIANT));
 
     // Parameterized typed extraction. variants.as throws on mismatch;
     // variants.tryAs returns CEL null. The second-arg type string selects

@@ -185,8 +185,9 @@ final class BuiltinDeclarations {
     // Type inspection
     decls.add(unaryVariant("variants.type", SimpleType.STRING));
 
-    // Navigation. All three return a variant-null sentinel on miss (use
-    // `result == null` to detect, via the cross-type equality overloads below).
+    // Navigation. All three return a variant-null sentinel on miss (missing
+    // field/index, JSONPath miss, or wrong-type receiver). Rules detect it via
+    // `variants.type(result) == "null"`.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.at",
         CelOverloadDecl.newGlobalOverload(
