@@ -168,7 +168,11 @@ final class BuiltinOverload {
       try {
         return a.divide(b, DIV_MC);
       } catch (ArithmeticException e) {
-        throw new IllegalArgumentException("decimals.div: division by zero", e);
+        if (b.signum() == 0) {
+          throw new IllegalArgumentException("decimals.div: division by zero", e);
+        }
+        throw new IllegalArgumentException(
+            e.getMessage() != null ? e.getMessage() : "decimals.div: arithmetic error", e);
       }
     }));
 
@@ -270,6 +274,8 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "variants_elem_variant_int", Variant.class, Long.class,
         (Variant v, Long idx) -> v.getType() == Variant.Type.ARRAY
+            && idx >= Integer.MIN_VALUE
+            && idx <= Integer.MAX_VALUE
             ? nullToVariantNull(v.getElementAtIndex(idx.intValue()))
             : NULL_VARIANT));
 

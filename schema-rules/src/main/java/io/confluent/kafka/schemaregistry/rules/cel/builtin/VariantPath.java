@@ -16,6 +16,10 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.confluent.kafka.schemaregistry.type.Variant;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +51,25 @@ import java.util.List;
  */
 final class VariantPath {
 
+  /**
+   * Bounded cache of parsed paths. CEL rules typically pass a literal path
+   * string (e.g., {@code "$.user.name"}) that re-occurs on every record
+   * evaluation, so caching saves a per-record tokenization. Bounded to
+   * protect against pathological cases where rules construct dynamic paths
+   * via string interpolation. Failed loads are not cached (Guava semantics),
+   * so malformed paths surface their {@link IllegalArgumentException} every
+   * time as expected.
+   */
+  private static final LoadingCache<String, List<Segment>> PARSE_CACHE =
+      CacheBuilder.newBuilder()
+          .maximumSize(1000)
+          .build(new CacheLoader<String, List<Segment>>() {
+            @Override
+            public List<Segment> load(String path) {
+              return parseInternal(path);
+            }
+          });
+
   private VariantPath() {
   }
 
@@ -67,9 +90,35 @@ final class VariantPath {
   }
 
   /**
-   * Parse {@code path} into a list of segments. Visible for testing.
+   * Parse {@code path} into a list of segments. Visible for testing. Cached
+   * so repeated calls with the same literal path don't re-tokenize.
    */
   static List<Segment> parse(String path) {
+    // Pre-check null: Guava LoadingCache.getUnchecked(null) throws NPE,
+    // but our contract is to surface a clear IllegalArgumentException so
+    // callers see the same exception type as for empty / malformed input.
+    if (path == null) {
+      throw new IllegalArgumentException("variant path must start with '$'");
+    }
+    try {
+      return PARSE_CACHE.getUnchecked(path);
+    } catch (UncheckedExecutionException e) {
+      // Guava wraps any RuntimeException from CacheLoader.load() in
+      // UncheckedExecutionException. Unwrap and rethrow the original
+      // IllegalArgumentException so callers (and tests) see the documented
+      // exception type unchanged.
+      Throwable cause = e.getCause();
+      if (cause instanceof IllegalArgumentException) {
+        throw (IllegalArgumentException) cause;
+      }
+      if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      }
+      throw e;
+    }
+  }
+
+  private static List<Segment> parseInternal(String path) {
     if (path == null || path.isEmpty()) {
       throw new IllegalArgumentException("variant path must start with '$'");
     }

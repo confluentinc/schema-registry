@@ -57,7 +57,7 @@ final class TimestampUtils {
   }
 
   static Timestamp fromEpochSeconds(long s) {
-    return Timestamp.newBuilder().setSeconds(s).build();
+    return Timestamp.newBuilder().setSeconds(s).setNanos(0).build();
   }
 
   static Timestamp fromInstant(Instant i) {

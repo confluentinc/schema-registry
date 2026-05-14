@@ -61,7 +61,9 @@ public class CelMathExtensionsTest {
         + "import \"confluent/meta.proto\";\n"
         + "message X {\n"
         + "  option (confluent.message_meta) = {\n"
-        + "    rules: [{name: \"r\", expr: \"" + expr.replace("\"", "\\\"") + "\"}]\n"
+        + "    rules: [{name: \"r\", expr: \""
+        + expr.replace("\\", "\\\\").replace("\"", "\\\"")
+        + "\"}]\n"
         + "  };\n"
         + "  int64 a = 1;\n"
         + "  int64 b = 2;\n"

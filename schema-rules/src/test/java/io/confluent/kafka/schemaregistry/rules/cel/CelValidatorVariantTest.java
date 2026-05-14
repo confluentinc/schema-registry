@@ -211,6 +211,32 @@ public class CelValidatorVariantTest {
   }
 
   @Test
+  void variantElem_indexOverflowsInt_returnsVariantNull() throws Exception {
+    // CEL ints are i64. Without a range check, a Long like 4_294_967_296 would
+    // intValue() to 0 (lower 32 bits) and silently match the first element.
+    // The binding must treat any out-of-int-range index as out-of-bounds
+    // navigation → variant-null.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type("
+        + "                       variants.elem(variant(this), 4294967296))"
+        + "                    == \\\"null\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    // 3-element array; index 4_294_967_296 (= 2^32) overflows int and would
+    // silently wrap to 0 without the range check.
+    DynamicMessage doc = docWithVariantJson(schema, "[1, 2, 3]");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  @Test
   void variantElem_outOfBoundsIndex_returnsVariantNull() throws Exception {
     // Variant.getElementAtIndex returns null (not throws) for indices outside
     // [0, arraySize) — our binding maps that null to the variant-null sentinel.
