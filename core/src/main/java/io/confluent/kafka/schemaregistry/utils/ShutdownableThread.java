@@ -16,7 +16,7 @@
 package io.confluent.kafka.schemaregistry.utils;
 
 import org.apache.kafka.common.internals.FatalExitError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.concurrent.CountDownLatch;
