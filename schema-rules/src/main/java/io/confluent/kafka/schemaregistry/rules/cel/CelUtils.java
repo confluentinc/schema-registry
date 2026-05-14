@@ -241,11 +241,17 @@ public final class CelUtils {
     CelCompilerBuilder compilerBuilder = CelCompilerFactory.standardCelCompilerBuilder()
         .setOptions(CelOptions.DEFAULT)
         .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
-        .addLibraries(new BuiltinLibrary(), CelExtensions.strings())
+        .addLibraries(
+            new BuiltinLibrary(),
+            CelExtensions.strings(),
+            CelExtensions.math(CelOptions.DEFAULT))
         .addVarDeclarations(varDecls);
     CelRuntimeBuilder runtimeBuilder = CelRuntimeFactory.standardCelRuntimeBuilder()
         .setOptions(CelOptions.DEFAULT)
-        .addLibraries(new BuiltinLibrary(), CelExtensions.strings());
+        .addLibraries(
+            new BuiltinLibrary(),
+            CelExtensions.strings(),
+            CelExtensions.math(CelOptions.DEFAULT));
 
     if (regexEngine == RegexEngine.PCRE) {
       // Replace stdlib RE2-backed matches with java.util.regex. Despite what
