@@ -131,6 +131,17 @@ public class VariantPathTest {
   }
 
   @Test
+  void emptyAfterBracket_throws() {
+    // Regression: prior to the hasMore() guard, peek() after consuming `[`
+    // walked off the string and threw StringIndexOutOfBoundsException
+    // instead of the documented IllegalArgumentException.
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> VariantPath.parse("$["));
+    assertTrue(e.getMessage().contains("unexpected end of input"),
+        "error message should mention end of input; was: " + e.getMessage());
+  }
+
+  @Test
   void unterminatedQuotedKey_throws() {
     assertThrows(IllegalArgumentException.class, () -> VariantPath.parse("$[\"foo"));
   }

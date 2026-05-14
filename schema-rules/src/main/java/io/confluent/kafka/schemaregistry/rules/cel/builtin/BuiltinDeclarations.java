@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 import com.google.common.collect.ImmutableList;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.types.CelType;
 import dev.cel.common.types.OpaqueType;
 import dev.cel.common.types.SimpleType;
 import java.util.ArrayList;
@@ -89,7 +90,7 @@ final class BuiltinDeclarations {
     decls.add(binaryDecimal("decimals.mul", DECIMAL));
     decls.add(binaryDecimal("decimals.div", DECIMAL));
 
-    // Unary numeric: decimals.neg/abs/sign/scale/precision
+    // Unary numeric: decimals.neg/abs/sign/scale/pres c
     decls.add(unaryDecimal("decimals.neg", DECIMAL));
     decls.add(unaryDecimal("decimals.abs", DECIMAL));
     decls.add(unaryDecimal("decimals.sign", SimpleType.INT));
@@ -132,7 +133,7 @@ final class BuiltinDeclarations {
     decls.add(unaryDecimal("decimals.ceil", DECIMAL));
   }
 
-  private static CelFunctionDecl binaryDecimal(String name, dev.cel.common.types.CelType result) {
+  private static CelFunctionDecl binaryDecimal(String name, CelType result) {
     return CelFunctionDecl.newFunctionDeclaration(
         name,
         CelOverloadDecl.newGlobalOverload(
@@ -140,7 +141,7 @@ final class BuiltinDeclarations {
             result, ImmutableList.of(DECIMAL, DECIMAL)));
   }
 
-  private static CelFunctionDecl unaryDecimal(String name, dev.cel.common.types.CelType result) {
+  private static CelFunctionDecl unaryDecimal(String name, CelType result) {
     return CelFunctionDecl.newFunctionDeclaration(
         name,
         CelOverloadDecl.newGlobalOverload(
@@ -230,7 +231,7 @@ final class BuiltinDeclarations {
 
   }
 
-  private static CelFunctionDecl unaryVariant(String name, dev.cel.common.types.CelType result) {
+  private static CelFunctionDecl unaryVariant(String name, CelType result) {
     return CelFunctionDecl.newFunctionDeclaration(
         name,
         CelOverloadDecl.newGlobalOverload(
@@ -239,8 +240,7 @@ final class BuiltinDeclarations {
   }
 
   private static CelFunctionDecl binaryVariant(
-      String name, dev.cel.common.types.CelType arg2,
-      dev.cel.common.types.CelType result) {
+      String name, CelType arg2, CelType result) {
     return CelFunctionDecl.newFunctionDeclaration(
         name,
         CelOverloadDecl.newGlobalOverload(
@@ -257,7 +257,7 @@ final class BuiltinDeclarations {
         .toLowerCase(java.util.Locale.ROOT);
   }
 
-  private static String typeSuffix(dev.cel.common.types.CelType t) {
+  private static String typeSuffix(CelType t) {
     return t.name().toLowerCase(java.util.Locale.ROOT)
         .replace("!error!", "err");
   }

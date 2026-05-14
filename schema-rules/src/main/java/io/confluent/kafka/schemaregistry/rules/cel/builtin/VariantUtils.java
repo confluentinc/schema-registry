@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
+import dev.cel.common.values.CelByteString;
 import io.confluent.avro.type.VariantConversion;
 import io.confluent.kafka.schemaregistry.type.Variant;
 import java.io.IOException;
@@ -178,11 +179,11 @@ final class VariantUtils {
     if (o instanceof ByteString) {
       return ((ByteString) o).toByteArray();
     }
-    if (o instanceof dev.cel.common.values.CelByteString) {
+    if (o instanceof CelByteString) {
       // cel-java's CelOptions.DEFAULT converts proto/Avro bytes values to
       // CelByteString at field-access time; CelUtils.toCelValue does the same
       // for nested map values inside an Avro IndexedRecord → Map conversion.
-      return ((dev.cel.common.values.CelByteString) o).toByteArray();
+      return ((CelByteString) o).toByteArray();
     }
     throw new IllegalArgumentException(
         "Cannot coerce " + (o == null ? "null" : o.getClass().getName()) + " to bytes");

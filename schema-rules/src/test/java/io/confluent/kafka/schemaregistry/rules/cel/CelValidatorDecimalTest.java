@@ -193,6 +193,48 @@ public class CelValidatorDecimalTest {
   }
 
   @Test
+  void decimalDiv_byZero_throwsCanonicalMessage() {
+    // BigDecimal.divide throws a bare ArithmeticException on b=0; our binding
+    // re-emits the canonical "decimals.div: division by zero" message so the
+    // user-visible cause matches cel-python / cel-es. Locks in the message
+    // so the next refactor doesn't quietly revert to the JDK default.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.eq(decimals.div(decimal(this),"
+        + "                                              decimal(\\\"0\\\")),"
+        + "                                decimal(\\\"0\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "1.0"))
+        .build();
+    List<ValidationRuleError> errors = schema.validateMessage(new CelValidator(), msg);
+    assertEquals(1, errors.size());
+    // Walk the cause chain looking for the canonical message — cel-java wraps
+    // our IllegalArgumentException in a CelEvaluationException, which the
+    // CelExecutor wraps again in a RuleException.
+    String chain = causeChainMessages(errors.get(0).getCause());
+    assertTrue(chain.contains("decimals.div: division by zero"),
+        "expected canonical 'decimals.div: division by zero' in cause chain; got: " + chain);
+  }
+
+  private static String causeChainMessages(Throwable t) {
+    StringBuilder sb = new StringBuilder();
+    while (t != null) {
+      sb.append(t.getClass().getSimpleName()).append(": ").append(t.getMessage()).append(" | ");
+      t = t.getCause();
+    }
+    return sb.toString();
+  }
+
+  @Test
   void stringDecimal_extendsStdlib() {
     // CEL stdlib string(...) is extended with a (Decimal) -> string overload.
     // Verifies the extension registers cleanly and uses BigDecimal.toPlainString.

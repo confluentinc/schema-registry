@@ -87,6 +87,13 @@ final class VariantPath {
         out.add(new FieldSegment(readIdent(c, path)));
       } else if (ch == '[') {
         c.next();
+        // Guard the post-`[` peek: otherwise an input like "$[" walks off the
+        // end of the string and surfaces as StringIndexOutOfBoundsException
+        // instead of the documented IllegalArgumentException.
+        if (!c.hasMore()) {
+          throw new IllegalArgumentException(
+              "unexpected end of input after '[' in variant path: " + path);
+        }
         if (c.peek() == '"' || c.peek() == '\'') {
           out.add(new FieldSegment(readQuotedKey(c, path)));
         } else {

@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.Timestamp;
+import dev.cel.common.values.CelByteString;
+import dev.cel.common.values.NullValue;
 import dev.cel.runtime.CelFunctionBinding;
 import io.confluent.kafka.schemaregistry.type.Variant;
 import java.math.BigDecimal;
@@ -146,8 +148,8 @@ final class BuiltinOverload {
     // bytes-field reads into CelByteString).
     out.add(CelFunctionBinding.from(
         "bytes_int_to_decimal",
-        dev.cel.common.values.CelByteString.class, Long.class,
-        (dev.cel.common.values.CelByteString bytes, Long scale) ->
+        CelByteString.class, Long.class,
+        (CelByteString bytes, Long scale) ->
             DecimalUtils.toBigDecimal(bytes.toByteArray(), scale.intValue())));
 
     // Comparison
@@ -163,7 +165,13 @@ final class BuiltinOverload {
     out.add(decimalsBinary("decimals_sub_decimal_decimal", BigDecimal::subtract));
     out.add(decimalsBinary("decimals_mul_decimal_decimal", BigDecimal::multiply));
     // Division uses MathContext(38, HALF_UP) — see DIV_MC.
-    out.add(decimalsBinary("decimals_div_decimal_decimal", (a, b) -> a.divide(b, DIV_MC)));
+    out.add(decimalsBinary("decimals_div_decimal_decimal", (a, b) -> {
+      try {
+        return a.divide(b, DIV_MC);
+      } catch (ArithmeticException e) {
+        throw new IllegalArgumentException("decimals.div: division by zero", e);
+      }
+    }));
 
     // Unary
     out.add(decimalsUnary("decimals_neg_decimal", BigDecimal::negate));
@@ -234,10 +242,10 @@ final class BuiltinOverload {
         "dyn_to_variant", Object.class, VariantUtils::toVariant));
     out.add(CelFunctionBinding.from(
         "bytes_bytes_to_variant",
-        dev.cel.common.values.CelByteString.class,
-        dev.cel.common.values.CelByteString.class,
-        (dev.cel.common.values.CelByteString value,
-         dev.cel.common.values.CelByteString metadata) ->
+        CelByteString.class,
+        CelByteString.class,
+        (CelByteString value,
+         CelByteString metadata) ->
             VariantUtils.fromBytes(value.toByteArray(), metadata.toByteArray())));
 
     // Type inspection
@@ -342,7 +350,7 @@ final class BuiltinOverload {
         break;
       case "bytes":
         if (t == Variant.Type.BINARY) {
-          return dev.cel.common.values.CelByteString.of(variantGetBytes(v));
+          return CelByteString.of(variantGetBytes(v));
         }
         break;
       case "object":
@@ -352,14 +360,14 @@ final class BuiltinOverload {
       case "time":
       case "uuid":
         if (tryMode) {
-          return dev.cel.common.values.NullValue.NULL_VALUE;
+          return NullValue.NULL_VALUE;
         }
         throw new IllegalArgumentException(
             "variants.as: type '" + typeStr + "' is not supported for extraction"
                 + " (use variants.type/variants.at/variants.field/variants.elem instead)");
       default:
         if (tryMode) {
-          return dev.cel.common.values.NullValue.NULL_VALUE;
+          return NullValue.NULL_VALUE;
         }
         throw new IllegalArgumentException(
             "variants.as: unknown type '" + typeStr + "'"
@@ -367,7 +375,7 @@ final class BuiltinOverload {
     }
     // Recognized typeStr but actual variant type doesn't match.
     if (tryMode) {
-      return dev.cel.common.values.NullValue.NULL_VALUE;
+      return NullValue.NULL_VALUE;
     }
     throw new IllegalArgumentException(
         "variants.as: variant is not " + typeStr + "-typed (type=" + t + ")");
