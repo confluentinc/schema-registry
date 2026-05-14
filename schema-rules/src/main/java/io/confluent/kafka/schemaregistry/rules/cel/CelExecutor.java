@@ -364,7 +364,7 @@ public class CelExecutor implements RuleExecutor {
       Map<String, Object> argsMap = b.celArgs();
       CelVariableResolver argsResolver = name -> Optional.ofNullable(argsMap.get(name));
       CelVariableResolver resolver = CelVariableResolver.hierarchicalVariableResolver(
-          new NowVariable(), argsResolver);
+          b.nowVariable(), argsResolver);
       return program.eval(resolver);
     } catch (CelEvaluationException e) {
       throw new RuleException(ctx.rule(), "Could not execute CEL script", e);
@@ -401,6 +401,7 @@ public class CelExecutor implements RuleExecutor {
     private final Map<String, Object> celArgs;
     private final Object obj;
     private final RegexEngine regexEngine;
+    private final NowVariable nowVariable = new NowVariable();
 
     Bindings(ScriptType type, Object schemaHint, Map<String, CelType> declTypes,
              Map<String, Object> celArgs, Object obj, RegexEngine regexEngine) {
@@ -410,6 +411,10 @@ public class CelExecutor implements RuleExecutor {
       this.celArgs = celArgs;
       this.obj = obj;
       this.regexEngine = regexEngine;
+    }
+
+    NowVariable nowVariable() {
+      return nowVariable;
     }
 
     public ScriptType type() {

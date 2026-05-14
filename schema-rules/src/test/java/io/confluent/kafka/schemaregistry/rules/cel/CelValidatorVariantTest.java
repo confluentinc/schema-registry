@@ -65,18 +65,12 @@ public class CelValidatorVariantTest {
     return ByteString.copyFrom(out);
   }
 
-  /** Variant.value is package-private; round-trip through toJsonString → Variant to extract. */
+  /** Variant.value is package-private; reflect to read it directly. */
   private static ByteBuffer getValueBuffer(Variant v) {
-    // We rebuild via the public byte[] constructor from JSON serialization. A bit
-    // roundabout but avoids touching package-private internals.
-    String j = VariantUtils.toJsonString(v);
     try {
-      Variant rebuilt = VariantUtils.fromJsonNode(MAPPER.readTree(j));
-      // VariantValue/Metadata exposed via reflection on the package-private fields
-      // would be cleaner, but the json roundtrip suffices for testing.
       java.lang.reflect.Field valueField = Variant.class.getDeclaredField("value");
       valueField.setAccessible(true);
-      return (ByteBuffer) valueField.get(rebuilt);
+      return (ByteBuffer) valueField.get(v);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -233,6 +227,30 @@ public class CelValidatorVariantTest {
     ProtobufSchema schema = new ProtobufSchema(s);
     // Top-level variant is a STRING, not ARRAY.
     DynamicMessage doc = docWithVariantJson(schema, "\"hello\"");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  @Test
+  void variantElem_outOfBoundsIndex_returnsVariantNull() throws Exception {
+    // Variant.getElementAtIndex returns null (not throws) for indices outside
+    // [0, arraySize) — our binding maps that null to the variant-null sentinel.
+    // Locks in the documented contract: any miss on navigation → variant-null.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.type("
+        + "                       variants.elem(variant(this), 99))"
+        + "                    == \\\"null\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    // 3-element array; index 99 is well past the end.
+    DynamicMessage doc = docWithVariantJson(schema, "[1, 2, 3]");
     List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }

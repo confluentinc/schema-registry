@@ -279,7 +279,6 @@ final class BuiltinOverload {
     // string(Variant) — JSON serialization extension on stdlib string(...).
     out.add(CelFunctionBinding.from(
         "variant_to_string", Variant.class, VariantUtils::toJsonString));
-
   }
 
   private static Variant nullToVariantNull(Variant v) {

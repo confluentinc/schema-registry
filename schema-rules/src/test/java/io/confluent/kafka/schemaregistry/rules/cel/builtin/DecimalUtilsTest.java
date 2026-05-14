@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.protobuf.ByteString;
 import io.confluent.protobuf.type.Decimal;
@@ -67,7 +68,7 @@ public class DecimalUtilsTest {
   void dispatchRawBytes_throwsWithHint() {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
         () -> DecimalUtils.toBigDecimal(new byte[] {1, 2, 3}));
-    assertEquals(true, e.getMessage().contains("decimal(bytes, scale)"));
+    assertTrue(e.getMessage().contains("decimal(bytes, scale)"));
   }
 
   @Test

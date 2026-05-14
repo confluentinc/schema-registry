@@ -43,6 +43,8 @@ final class VariantUtils {
    */
   private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
+  private static final VariantConversion VARIANT_CONVERSION = new VariantConversion();
+
   private VariantUtils() {
   }
 
@@ -85,7 +87,7 @@ final class VariantUtils {
    * Decode an Avro {@code variant} logical-type record (raw form).
    */
   static Variant fromAvroRecord(IndexedRecord record) {
-    return new VariantConversion().fromRecord(record, record.getSchema(), null);
+    return VARIANT_CONVERSION.fromRecord(record, record.getSchema(), null);
   }
 
   /**
