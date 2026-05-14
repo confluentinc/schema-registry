@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.ResourceLoader;
@@ -958,6 +959,156 @@ public abstract class RestApiTest {
         restService.getId(expectedId).getSchemaString().trim(),
         "Registered schema should be found"
     );
+  }
+
+  @Test
+  public void testValidateFieldsRejectsBrokenReference() throws Exception {
+    // Schema that defines FeatureDataFloatArray
+    String floatArraySchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "message FeatureDataFloatArray {\n"
+        + "  repeated float values = 1;\n"
+        + "}\n";
+
+    // Schema that uses FeatureDataFloatArray but does NOT import it
+    String brokenSchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "message FeatureData {\n"
+        + "  map<string, FeatureDataFloatArray> float_array_features = 1;\n"
+        + "}\n";
+
+    // Register the dependency schema
+    String depSubject = "float_array.proto";
+    registerAndVerifySchema(restApp.restClient, floatArraySchema, expectedSchemaId(1), depSubject);
+
+    // Enable validateFields
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setValidateFields(true);
+    restApp.restClient.updateConfig(configUpdateRequest, null);
+
+    // Register the broken schema with SR-level reference but missing proto import
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(brokenSchema);
+    request.setSchemaType(ProtobufSchema.TYPE);
+    SchemaReference ref = new SchemaReference("float_array.proto", depSubject, 1);
+    request.setReferences(Collections.singletonList(ref));
+
+    try {
+      restApp.restClient.registerSchema(request, "broken_referrer", false);
+      fail("Registration should fail with INVALID_SCHEMA_ERROR_CODE");
+    } catch (RestClientException rce) {
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
+  public void testValidateFieldsAcceptsValidReference() throws Exception {
+    // Schema that defines FeatureDataFloatArray
+    String floatArraySchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "message FeatureDataFloatArray {\n"
+        + "  repeated float values = 1;\n"
+        + "}\n";
+
+    // Schema that uses FeatureDataFloatArray AND properly imports it
+    String validSchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "import \"float_array.proto\";\n"
+        + "\n"
+        + "message FeatureData {\n"
+        + "  map<string, FeatureDataFloatArray> float_array_features = 1;\n"
+        + "}\n";
+
+    // Register the dependency schema
+    String depSubject = "float_array.proto";
+    registerAndVerifySchema(restApp.restClient, floatArraySchema, expectedSchemaId(1), depSubject);
+
+    // Enable validateFields
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setValidateFields(true);
+    restApp.restClient.updateConfig(configUpdateRequest, null);
+
+    // Register the valid schema — should succeed
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(validSchema);
+    request.setSchemaType(ProtobufSchema.TYPE);
+    SchemaReference ref = new SchemaReference("float_array.proto", depSubject, 1);
+    request.setReferences(Collections.singletonList(ref));
+
+    int registeredId = restApp.restClient.registerSchema(request, "valid_referrer", false).getId();
+    assertEquals(expectedSchemaId(2), registeredId, "Valid schema with references should register");
+  }
+
+  @Test
+  public void testValidateFieldsAcceptsWellKnownImports() throws Exception {
+    // Schema that imports well-known types — no SR references needed
+    String schemaWithWellKnown = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "import \"google/protobuf/timestamp.proto\";\n"
+        + "import \"google/protobuf/duration.proto\";\n"
+        + "\n"
+        + "message Event {\n"
+        + "  string name = 1;\n"
+        + "  google.protobuf.Timestamp created_at = 2;\n"
+        + "  google.protobuf.Duration ttl = 3;\n"
+        + "}\n";
+
+    // Enable validateFields
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setValidateFields(true);
+    restApp.restClient.updateConfig(configUpdateRequest, null);
+
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(schemaWithWellKnown);
+    request.setSchemaType(ProtobufSchema.TYPE);
+
+    int registeredId = restApp.restClient.registerSchema(request, "wellknown_subject", false).getId();
+    assertEquals(expectedSchemaId(1), registeredId,
+        "Schema with well-known imports should register");
+  }
+
+  @Test
+  public void testValidateFieldsDisabledAcceptsBrokenReference() throws Exception {
+    // Schema that defines FeatureDataFloatArray
+    String floatArraySchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "message FeatureDataFloatArray {\n"
+        + "  repeated float values = 1;\n"
+        + "}\n";
+
+    // Schema that uses FeatureDataFloatArray but does NOT import it
+    String brokenSchema = "syntax = \"proto3\";\n"
+        + "package com.example;\n"
+        + "\n"
+        + "message FeatureData {\n"
+        + "  map<string, FeatureDataFloatArray> float_array_features = 1;\n"
+        + "}\n";
+
+    // Register the dependency schema
+    String depSubject = "float_array.proto";
+    registerAndVerifySchema(restApp.restClient, floatArraySchema, expectedSchemaId(1), depSubject);
+
+    // Explicitly disable validateFields (CP default)
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setValidateFields(false);
+    restApp.restClient.updateConfig(configUpdateRequest, null);
+
+    // Register the broken schema — should succeed when validation is disabled
+    RegisterSchemaRequest request = new RegisterSchemaRequest();
+    request.setSchema(brokenSchema);
+    request.setSchemaType(ProtobufSchema.TYPE);
+    SchemaReference ref = new SchemaReference("float_array.proto", depSubject, 1);
+    request.setReferences(Collections.singletonList(ref));
+
+    int registeredId = restApp.restClient.registerSchema(request, "broken_referrer", false).getId();
+    assertEquals(expectedSchemaId(2), registeredId,
+        "Broken schema should register when validateFields is disabled");
   }
 
   public static List<String> getRandomProtobufSchemas(int num) {
