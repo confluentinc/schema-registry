@@ -154,7 +154,6 @@ final class BuiltinOverload {
 
     // Comparison
     out.add(decimalsBoolBinary("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));
-    out.add(decimalsBoolBinary("decimals_ne_decimal_decimal", (a, b) -> a.compareTo(b) != 0));
     out.add(decimalsBoolBinary("decimals_lt_decimal_decimal", (a, b) -> a.compareTo(b) < 0));
     out.add(decimalsBoolBinary("decimals_le_decimal_decimal", (a, b) -> a.compareTo(b) <= 0));
     out.add(decimalsBoolBinary("decimals_gt_decimal_decimal", (a, b) -> a.compareTo(b) > 0));
@@ -179,12 +178,6 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "decimals_sign_decimal", BigDecimal.class,
         (BigDecimal d) -> (long) d.signum()));
-    out.add(CelFunctionBinding.from(
-        "decimals_scale_decimal", BigDecimal.class,
-        (BigDecimal d) -> (long) d.scale()));
-    out.add(CelFunctionBinding.from(
-        "decimals_prec_decimal", BigDecimal.class,
-        (BigDecimal d) -> (long) d.precision()));
     // string(Decimal) — extension overload on stdlib `string(...)`.
     out.add(CelFunctionBinding.from(
         "decimal_to_string", BigDecimal.class,
@@ -196,11 +189,17 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "decimals_round_scale", BigDecimal.class, Long.class,
         (BigDecimal d, Long scale) -> d.setScale(scale.intValue(), RoundingMode.HALF_UP)));
+    // Flink's TRUNCATE early-returns when the target scale is at-or-finer than
+    // the current scale — it's a no-op there, so the result keeps the input's
+    // representation. Without this guard, setScale(n>=cur, DOWN) would zero-pad
+    // and string(trunc(x, n>=cur)) would diverge from Flink.
     out.add(decimalsUnary(
-        "decimals_trunc_unary", d -> d.setScale(0, RoundingMode.DOWN)));
+        "decimals_trunc_unary",
+        d -> d.scale() <= 0 ? d : d.setScale(0, RoundingMode.DOWN)));
     out.add(CelFunctionBinding.from(
         "decimals_trunc_scale", BigDecimal.class, Long.class,
-        (BigDecimal d, Long scale) -> d.setScale(scale.intValue(), RoundingMode.DOWN)));
+        (BigDecimal d, Long scale) ->
+            scale.intValue() >= d.scale() ? d : d.setScale(scale.intValue(), RoundingMode.DOWN)));
     out.add(decimalsUnary(
         "decimals_floor_decimal", d -> d.setScale(0, RoundingMode.FLOOR)));
     out.add(decimalsUnary(

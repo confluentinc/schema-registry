@@ -76,9 +76,8 @@ final class BuiltinDeclarations {
             "Construct from unscaled two's-complement bytes + scale",
             DECIMAL, ImmutableList.of(SimpleType.BYTES, SimpleType.INT))));
 
-    // Comparison: decimals.eq/ne/lt/le/gt/ge
+    // Comparison: decimals.eq/lt/le/gt/ge.
     decls.add(binaryDecimal("decimals.eq", SimpleType.BOOL));
-    decls.add(binaryDecimal("decimals.ne", SimpleType.BOOL));
     decls.add(binaryDecimal("decimals.lt", SimpleType.BOOL));
     decls.add(binaryDecimal("decimals.le", SimpleType.BOOL));
     decls.add(binaryDecimal("decimals.gt", SimpleType.BOOL));
@@ -90,12 +89,10 @@ final class BuiltinDeclarations {
     decls.add(binaryDecimal("decimals.mul", DECIMAL));
     decls.add(binaryDecimal("decimals.div", DECIMAL));
 
-    // Unary numeric: decimals.neg/abs/sign/scale/pres c
+    // Unary numeric: decimals.neg/abs/sign.
     decls.add(unaryDecimal("decimals.neg", DECIMAL));
     decls.add(unaryDecimal("decimals.abs", DECIMAL));
     decls.add(unaryDecimal("decimals.sign", SimpleType.INT));
-    decls.add(unaryDecimal("decimals.scale", SimpleType.INT));
-    decls.add(unaryDecimal("decimals.prec", SimpleType.INT));
 
     // String coercion via CEL built-in: extend stdlib `string(...)` with a
     // (Decimal) -> string overload. No overlap with any existing

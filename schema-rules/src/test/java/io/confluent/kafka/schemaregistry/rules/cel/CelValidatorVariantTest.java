@@ -50,8 +50,8 @@ public class CelValidatorVariantTest {
     Descriptor variantDesc = docDesc.findFieldByName("payload").getMessageType();
 
     DynamicMessage variantMsg = DynamicMessage.newBuilder(variantDesc)
-        .setField(variantDesc.findFieldByName("value"), toByteString(getValueBuffer(v)))
-        .setField(variantDesc.findFieldByName("metadata"), toByteString(getMetadataBuffer(v)))
+        .setField(variantDesc.findFieldByName("value"), toByteString(v.getValueBuffer()))
+        .setField(variantDesc.findFieldByName("metadata"), toByteString(v.getMetadataBuffer()))
         .build();
     return DynamicMessage.newBuilder(docDesc)
         .setField(docDesc.findFieldByName("payload"), variantMsg)
@@ -63,27 +63,6 @@ public class CelValidatorVariantTest {
     byte[] out = new byte[dup.remaining()];
     dup.get(out);
     return ByteString.copyFrom(out);
-  }
-
-  /** Variant.value is package-private; reflect to read it directly. */
-  private static ByteBuffer getValueBuffer(Variant v) {
-    try {
-      java.lang.reflect.Field valueField = Variant.class.getDeclaredField("value");
-      valueField.setAccessible(true);
-      return (ByteBuffer) valueField.get(v);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private static ByteBuffer getMetadataBuffer(Variant v) {
-    try {
-      java.lang.reflect.Field metaField = Variant.class.getDeclaredField("metadata");
-      metaField.setAccessible(true);
-      return (ByteBuffer) metaField.get(v);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   // ---- variants.type, variants.as("string") via variants.field ----
@@ -384,8 +363,8 @@ public class CelValidatorVariantTest {
 
     Variant v = VariantUtils.fromJsonNode(MAPPER.readTree(json));
     GenericRecord variantRec = new GenericData.Record(variantSchema);
-    variantRec.put("metadata", getMetadataBuffer(v));
-    variantRec.put("value", getValueBuffer(v));
+    variantRec.put("metadata", v.getMetadataBuffer());
+    variantRec.put("value", v.getValueBuffer());
 
     GenericRecord doc = new GenericData.Record(docSchema);
     doc.put("payload", variantRec);
@@ -440,8 +419,8 @@ public class CelValidatorVariantTest {
 
     Variant v = VariantUtils.fromJsonNode(MAPPER.readTree("{\"name\":\"alice\"}"));
     GenericRecord variantRec = new GenericData.Record(variantSchema);
-    variantRec.put("metadata", getMetadataBuffer(v));
-    variantRec.put("value", getValueBuffer(v));
+    variantRec.put("metadata", v.getMetadataBuffer());
+    variantRec.put("value", v.getValueBuffer());
     GenericRecord doc = new GenericData.Record(docSchema);
     doc.put("payload", variantRec);
 
