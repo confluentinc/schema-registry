@@ -35,27 +35,13 @@ import org.junit.jupiter.api.Test;
  */
 public class CelMathExtensionsTest {
 
-  private static final String SCHEMA = "syntax = \"proto3\";\n"
-      + "package test;\n"
-      + "import \"confluent/meta.proto\";\n"
-      + "message X {\n"
-      + "  int64 a = 1;\n"
-      + "  int64 b = 2;\n"
-      + "  int64 c = 3;\n"
-      + "}\n";
-
-  private static DynamicMessage msg(long a, long b, long c) {
-    ProtobufSchema schema = new ProtobufSchema(SCHEMA);
-    Descriptor desc = schema.toDescriptor("test.X");
-    return DynamicMessage.newBuilder(desc)
-        .setField(desc.findFieldByName("a"), a)
-        .setField(desc.findFieldByName("b"), b)
-        .setField(desc.findFieldByName("c"), c)
-        .build();
-  }
-
-  /** Adds a message_meta rule with the given expression and validates. */
-  private static List<ValidationRuleError> validate(String expr, DynamicMessage m) {
+  /**
+   * Builds a {@code test.X} schema carrying the given CEL expression as a
+   * {@code message_meta} rule, fills fields a/b/c with the given longs, and
+   * runs validation. One helper avoids the cross-descriptor field copy that
+   * separate {@code msg(...)} + {@code validate(...)} helpers force.
+   */
+  private static List<ValidationRuleError> validate(String expr, long a, long b, long c) {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -71,47 +57,45 @@ public class CelMathExtensionsTest {
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
     Descriptor desc = schema.toDescriptor("test.X");
-    DynamicMessage rebound = DynamicMessage.newBuilder(desc)
-        .setField(desc.findFieldByName("a"), m.getField(m.getDescriptorForType().findFieldByName("a")))
-        .setField(desc.findFieldByName("b"), m.getField(m.getDescriptorForType().findFieldByName("b")))
-        .setField(desc.findFieldByName("c"), m.getField(m.getDescriptorForType().findFieldByName("c")))
+    DynamicMessage m = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("a"), a)
+        .setField(desc.findFieldByName("b"), b)
+        .setField(desc.findFieldByName("c"), c)
         .build();
-    return schema.validateMessage(new CelValidator(), rebound);
+    return schema.validateMessage(new CelValidator(), m);
   }
 
   @Test
   void mathAbs_negativeMakesPositive() {
     // math.abs(-5) == 5
-    assertTrue(validate("math.abs(this.a) == 5", msg(-5L, 0L, 0L)).isEmpty());
+    assertTrue(validate("math.abs(this.a) == 5", -5L, 0L, 0L).isEmpty());
   }
 
   @Test
   void mathBitAnd_masksCorrectly() {
     // 0b1100 & 0b1010 == 0b1000
-    assertTrue(validate("math.bitAnd(this.a, this.b) == 8", msg(12L, 10L, 0L)).isEmpty());
+    assertTrue(validate("math.bitAnd(this.a, this.b) == 8", 12L, 10L, 0L).isEmpty());
   }
 
   @Test
   void mathGreatest_variadicMacro() {
     // math.greatest(a, b, c) — exercises the macro/parser path.
-    assertTrue(validate("math.greatest(this.a, this.b, this.c) == 7",
-        msg(3L, 7L, 5L)).isEmpty());
+    assertTrue(validate("math.greatest(this.a, this.b, this.c) == 7", 3L, 7L, 5L).isEmpty());
   }
 
   @Test
   void mathLeast_variadicMacro() {
-    assertTrue(validate("math.least(this.a, this.b, this.c) == 3",
-        msg(3L, 7L, 5L)).isEmpty());
+    assertTrue(validate("math.least(this.a, this.b, this.c) == 3", 3L, 7L, 5L).isEmpty());
   }
 
   @Test
   void mathSign_returnsExpected() {
-    assertTrue(validate("math.sign(this.a) == -1", msg(-42L, 0L, 0L)).isEmpty());
+    assertTrue(validate("math.sign(this.a) == -1", -42L, 0L, 0L).isEmpty());
   }
 
   @Test
   void mathAbs_failingRuleReportsError() {
-    List<ValidationRuleError> errs = validate("math.abs(this.a) == 999", msg(-5L, 0L, 0L));
+    List<ValidationRuleError> errs = validate("math.abs(this.a) == 999", -5L, 0L, 0L);
     assertEquals(1, errs.size());
   }
 }

@@ -73,8 +73,9 @@ public class DecimalUtilsTest {
 
   @Test
   void dispatchByteBuffer_throwsWithHint() {
-    assertThrows(IllegalArgumentException.class,
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
         () -> DecimalUtils.toBigDecimal(ByteBuffer.wrap(new byte[] {1, 2, 3})));
+    assertTrue(e.getMessage().contains("decimal(bytes, scale)"));
   }
 
   @Test

@@ -364,9 +364,6 @@ final class BuiltinOverload {
       case "date":
       case "time":
       case "uuid":
-        if (tryMode) {
-          return NullValue.NULL_VALUE;
-        }
         throw new IllegalArgumentException(
             "variants.as: type '" + typeStr + "' is not supported for extraction"
                 + " (use variants.type/variants.path/variants.field/variants.elem instead)");

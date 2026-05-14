@@ -35,13 +35,21 @@ final class DecimalUtils {
   }
 
   /**
+   * Decode unscaled big-endian two's-complement bytes into a {@link BigInteger}.
+   * Empty bytes map to {@link BigInteger#ZERO}; the raw {@code new BigInteger(byte[])}
+   * constructor would otherwise throw {@link NumberFormatException} on a zero-length
+   * array. Centralized so every overload that builds a {@link BigDecimal} from
+   * bytes shares one contract.
+   */
+  private static BigInteger fromUnscaledBytes(byte[] bytes) {
+    return bytes.length == 0 ? BigInteger.ZERO : new BigInteger(bytes);
+  }
+
+  /**
    * Decode a {@link Decimal} proto message into a {@link BigDecimal}.
    */
   static BigDecimal toBigDecimal(Decimal d) {
-    BigInteger unscaled = d.getValue().isEmpty()
-        ? BigInteger.ZERO
-        : new BigInteger(d.getValue().toByteArray());
-    return new BigDecimal(unscaled, d.getScale());
+    return new BigDecimal(fromUnscaledBytes(d.getValue().toByteArray()), d.getScale());
   }
 
   /**
@@ -61,20 +69,14 @@ final class DecimalUtils {
     }
     ByteString unscaled = (ByteString) msg.getField(valueField);
     int scale = ((Number) msg.getField(scaleField)).intValue();
-    BigInteger bi = unscaled.isEmpty()
-        ? BigInteger.ZERO
-        : new BigInteger(unscaled.toByteArray());
-    return new BigDecimal(bi, scale);
+    return new BigDecimal(fromUnscaledBytes(unscaled.toByteArray()), scale);
   }
 
   /**
    * Build a {@link BigDecimal} from raw two's-complement big-endian bytes plus scale.
    */
   static BigDecimal toBigDecimal(byte[] bytes, int scale) {
-    BigInteger unscaled = bytes.length == 0
-        ? BigInteger.ZERO
-        : new BigInteger(bytes);
-    return new BigDecimal(unscaled, scale);
+    return new BigDecimal(fromUnscaledBytes(bytes), scale);
   }
 
   /**
