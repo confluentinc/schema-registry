@@ -248,6 +248,9 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "variants_type_variant", Variant.class,
         (Variant v) -> variantTypeName(v.getType())));
+    out.add(CelFunctionBinding.from(
+        "variants_isnull_variant", Variant.class,
+        (Variant v) -> v.getType() == Variant.Type.NULL));
 
     // Navigation. Missing field/index → variant-null sentinel. Wrong-type
     // receiver (e.g., variants.field on an INT) also returns variant-null:

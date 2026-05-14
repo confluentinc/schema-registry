@@ -162,6 +162,62 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
+  // ---- variants.isNull: shorthand for `variants.type(v) == "null"` ----
+
+  @Test
+  void variantsIsNull_onVariantNull_returnsTrue() throws Exception {
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.isNull("
+        + "                       variants.field(variant(this), \\\"missing\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsIsNull_onNonNullVariant_returnsFalse() throws Exception {
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"!variants.isNull(variant(this))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsIsNull_onExplicitJsonNull_returnsTrue() throws Exception {
+    // Distinct from a navigation miss: the variant payload itself encodes
+    // JSON null. variants.isNull should report true for both forms.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.isNull(variant(this))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "null");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
   // ---- B1: variants.field / variants.elem on wrong-type receiver → variant-null ----
   //
   // Variant.getFieldByKey throws IllegalArgumentException for non-OBJECT receivers

@@ -182,10 +182,13 @@ final class BuiltinDeclarations {
 
     // Type inspection
     decls.add(unaryVariant("variants.type", SimpleType.STRING));
+    // Shorthand for `variants.type(v) == "null"` — the canonical way to detect
+    // navigation misses (variants.path/field/elem return variant-null on miss).
+    decls.add(unaryVariant("variants.isNull", SimpleType.BOOL));
 
     // Navigation. All three return a variant-null sentinel on miss (missing
     // field/index, JSONPath miss, or wrong-type receiver). Rules detect it via
-    // `variants.type(result) == "null"`.
+    // `variants.isNull(result)` (or equivalently `variants.type(result) == "null"`).
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.path",
         CelOverloadDecl.newGlobalOverload(
