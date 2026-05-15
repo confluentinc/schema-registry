@@ -259,12 +259,14 @@ final class BuiltinOverload {
         BuiltinOverload::variantTryParseJson));
 
     // variants.type propagates CEL null. variants.isNull is strict
-    // Spark-equivalent: true iff input is a Variant with type=NULL.
+    // Spark-equivalent: true iff input is a Variant with type=NULL (false for
+    // non-Variant inputs — matches Spark is_variant_null on SQL NULL etc.).
     out.add(CelFunctionBinding.from(
         "variants_type_dyn", Object.class,
-        (Object o) -> isCelNull(o)
-            ? NullValue.NULL_VALUE
-            : variantTypeName(((Variant) o).getType())));
+        (Object o) -> {
+          Variant v = requireVariantOrNull(o, "variants.type");
+          return v == null ? NullValue.NULL_VALUE : variantTypeName(v.getType());
+        }));
     out.add(CelFunctionBinding.from(
         "variants_isnull_dyn", Object.class,
         (Object o) -> (o instanceof Variant)
@@ -278,20 +280,18 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "variants_path_dyn_string", Object.class, String.class,
         (Object o, String path) -> {
-          if (isCelNull(o)) {
+          Variant v = requireVariantOrNull(o, "variants.path");
+          if (v == null) {
             return NullValue.NULL_VALUE;
           }
-          Variant result = VariantPath.walk((Variant) o, path);
+          Variant result = VariantPath.walk(v, path);
           return result == null ? NullValue.NULL_VALUE : result;
         }));
     out.add(CelFunctionBinding.from(
         "variants_field_dyn_string", Object.class, String.class,
         (Object o, String key) -> {
-          if (isCelNull(o)) {
-            return NullValue.NULL_VALUE;
-          }
-          Variant v = (Variant) o;
-          if (v.getType() != Variant.Type.OBJECT) {
+          Variant v = requireVariantOrNull(o, "variants.field");
+          if (v == null || v.getType() != Variant.Type.OBJECT) {
             return NullValue.NULL_VALUE;
           }
           Variant result = v.getFieldByKey(key);
@@ -300,11 +300,8 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "variants_elem_dyn_int", Object.class, Long.class,
         (Object o, Long idx) -> {
-          if (isCelNull(o)) {
-            return NullValue.NULL_VALUE;
-          }
-          Variant v = (Variant) o;
-          if (v.getType() != Variant.Type.ARRAY
+          Variant v = requireVariantOrNull(o, "variants.elem");
+          if (v == null || v.getType() != Variant.Type.ARRAY
               || idx < 0 || idx > Integer.MAX_VALUE) {
             return NullValue.NULL_VALUE;
           }
@@ -318,14 +315,18 @@ final class BuiltinOverload {
     // Both propagate CEL-null input.
     out.add(CelFunctionBinding.from(
         "variants_as_dyn_string", Object.class, String.class,
-        (Object o, String typeStr) -> isCelNull(o)
-            ? NullValue.NULL_VALUE
-            : variantAs((Variant) o, typeStr, /*nullOnError=*/ false)));
+        (Object o, String typeStr) -> {
+          Variant v = requireVariantOrNull(o, "variants.as");
+          return v == null ? NullValue.NULL_VALUE
+              : variantAs(v, typeStr, /*nullOnError=*/ false);
+        }));
     out.add(CelFunctionBinding.from(
         "variants_tryas_dyn_string", Object.class, String.class,
-        (Object o, String typeStr) -> isCelNull(o)
-            ? NullValue.NULL_VALUE
-            : variantAs((Variant) o, typeStr, /*nullOnError=*/ true)));
+        (Object o, String typeStr) -> {
+          Variant v = requireVariantOrNull(o, "variants.tryAs");
+          return v == null ? NullValue.NULL_VALUE
+              : variantAs(v, typeStr, /*nullOnError=*/ true);
+        }));
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     out.add(CelFunctionBinding.from(
@@ -336,6 +337,25 @@ final class BuiltinOverload {
    *  cel-java's {@link NullValue#NULL_VALUE} sentinel. */
   private static boolean isCelNull(Object o) {
     return o == null || o instanceof NullValue;
+  }
+
+  /** Common short-circuit for variants.* bindings whose first arg is declared
+   *  as DYN. Returns null if the input is CEL null (signaling the binding
+   *  should produce {@link NullValue#NULL_VALUE}). Returns the cast Variant
+   *  otherwise. Throws {@link IllegalArgumentException} with a clear
+   *  "expected Variant, got X" message if the input is neither CEL null nor
+   *  a Variant — the DYN signature lets such inputs reach the binding (e.g.,
+   *  a rule that accidentally passes a string instead of a Variant), and a
+   *  helpful error beats a raw {@link ClassCastException}. */
+  private static Variant requireVariantOrNull(Object o, String functionName) {
+    if (isCelNull(o)) {
+      return null;
+    }
+    if (!(o instanceof Variant)) {
+      throw new IllegalArgumentException(
+          functionName + ": expected Variant, got " + o.getClass().getName());
+    }
+    return (Variant) o;
   }
 
   /** {@code variant(dyn)} binding body. Propagates CEL null; rejects strings

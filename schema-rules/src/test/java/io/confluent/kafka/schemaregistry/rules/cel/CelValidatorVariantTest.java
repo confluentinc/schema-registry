@@ -392,6 +392,36 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
+  // ---- variants.* on non-Variant input: clear IAE, not ClassCastException ----
+
+  @Test
+  void variantsField_onNonVariantInput_throwsHelpfulIae() throws Exception {
+    // The DYN-typed receiver lets the compiler accept any value. A rule
+    // author who passes a literal string by mistake should see a clear
+    // "expected Variant, got java.lang.String" message rather than a raw
+    // ClassCastException with no rule-author guidance.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.field(\\\"hello\\\", \\\"x\\\") == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
+    assertEquals(1, errs.size(),
+        "expected non-Variant input to throw; got: " + errs);
+    String causes = dumpCauses(errs);
+    assertTrue(causes.contains("variants.field: expected Variant"),
+        "expected helpful message; got causes: " + causes);
+  }
+
   // ---- variants.tryAs — type-mismatch returns CEL null ----
 
   @Test
