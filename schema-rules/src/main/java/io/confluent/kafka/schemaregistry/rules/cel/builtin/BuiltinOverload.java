@@ -48,18 +48,6 @@ final class BuiltinOverload {
    */
   private static final MathContext DIV_MC = new MathContext(38, RoundingMode.HALF_UP);
 
-  /**
-   * Pre-built Variant whose top-level type is NULL. Returned by navigation
-   * functions ({@code variants.path}, {@code variants.field}, {@code variants.elem})
-   * on miss. Rules detect it via {@code variants.type(v) == "null"}.
-   *
-   * <p>The metadata is a minimal header (version=1, 0 dictionary entries); the
-   * value is a single primitive-header byte for the NULL type.
-   */
-  private static final Variant NULL_VARIANT = new Variant(
-      new byte[] {0},
-      new byte[] {0x01, 0x00, 0x00});
-
   private BuiltinOverload() {
   }
 
@@ -231,11 +219,40 @@ final class BuiltinOverload {
   }
 
   // ---- Variant ----
+  //
+  // Null model (per Spark Variant semantics):
+  //   - CEL null      = "path missed" / "no value at this location" (analog of
+  //                     Spark's SQL NULL from variant_get).
+  //   - variant-null  = "the value at this location is a Variant whose top
+  //                     type is NULL" (analog of Spark's Variant(NULL)).
+  //
+  // Detection idioms:
+  //   - `result == null`            -> missing path
+  //   - `variants.isNull(result)`   -> explicit JSON null (Spark is_variant_null)
+  //   - `result == null || variants.isNull(result)` -> absent in either sense
+  //
+  // All Variant-receiving bindings accept Object first arg so navigation chains
+  // compose past a CEL-null intermediate result without runtime "no matching
+  // overload" errors. Null propagates: f(null, ...) -> null.
 
   private static void addVariant(List<CelFunctionBinding> out) {
-    // Constructors
+    // Constructors. variant(null) propagates to CEL null (Spark parse_json(NULL)
+    // returns SQL NULL).
     out.add(CelFunctionBinding.from(
-        "dyn_to_variant", Object.class, VariantUtils::toVariant));
+        "dyn_to_variant", Object.class,
+        (Object o) -> isCelNull(o) ? NullValue.NULL_VALUE : VariantUtils.toVariant(o)));
+    out.add(CelFunctionBinding.from(
+        "string_bool_to_variant", String.class, Boolean.class,
+        (String s, Boolean nullOnError) -> {
+          try {
+            return VariantUtils.toVariant(s);
+          } catch (RuntimeException e) {
+            if (Boolean.TRUE.equals(nullOnError)) {
+              return NullValue.NULL_VALUE;
+            }
+            throw e;
+          }
+        }));
     out.add(CelFunctionBinding.from(
         "bytes_bytes_to_variant",
         CelByteString.class,
@@ -244,58 +261,182 @@ final class BuiltinOverload {
          CelByteString metadata) ->
             VariantUtils.fromBytes(value.toByteArray(), metadata.toByteArray())));
 
-    // Type inspection
+    // Type inspection. variants.type propagates CEL null. variants.isNull is
+    // strict Spark-equivalent: true iff the input is a Variant whose top type
+    // is NULL (returns false for CEL null and for non-Variant inputs).
     out.add(CelFunctionBinding.from(
-        "variants_type_variant", Variant.class,
-        (Variant v) -> variantTypeName(v.getType())));
+        "variants_type_dyn", Object.class,
+        (Object o) -> isCelNull(o)
+            ? NullValue.NULL_VALUE
+            : variantTypeName(((Variant) o).getType())));
     out.add(CelFunctionBinding.from(
-        "variants_isnull_variant", Variant.class,
-        (Variant v) -> v.getType() == Variant.Type.NULL));
+        "variants_isnull_dyn", Object.class,
+        (Object o) -> (o instanceof Variant)
+            && ((Variant) o).getType() == Variant.Type.NULL));
 
-    // Navigation. Missing field/index → variant-null sentinel. Wrong-type
-    // receiver (e.g., variants.field on an INT) also returns variant-null:
-    // Variant.getFieldByKey / getElementAtIndex throw IllegalArgumentException
-    // for type mismatch by design, but the rule-level contract is "navigate
-    // returns variant-null on any miss" — type mismatch is one kind of miss.
+    // Navigation. Three overload families per function (path/field/elem):
+    //   2-arg: sub-Variant or CEL null on miss
+    //   3-arg: sub-Variant + typed extraction (strict, throws on cast failure)
+    //   4-arg: 3-arg + nullOnError flag (true = return null on cast failure)
+    //
+    // Per binding, two distinct null outcomes:
+    //   - Accessor returns Java null (missing field, OOB index, walk stopped
+    //     early): we return CEL null.
+    //   - Accessor returns a Variant whose top type happens to be NULL (the
+    //     value at that location is explicit JSON null): we return that Variant
+    //     unchanged — caller can detect via variants.isNull(...).
+    // Wrong-type receivers also produce a miss (CEL null) rather than a throw,
+    // preserving the existing "navigate returns null on any miss" contract.
     // Malformed JSONPath in variants.path still throws (constraint-registration
     // failure, not a silent runtime no-op).
     out.add(CelFunctionBinding.from(
-        "variants_path_variant_string", Variant.class, String.class,
-        (Variant v, String path) -> nullToVariantNull(VariantPath.walk(v, path))));
+        "variants_path_dyn_string", Object.class, String.class,
+        (Object o, String path) -> {
+          if (isCelNull(o)) {
+            return NullValue.NULL_VALUE;
+          }
+          Variant result = VariantPath.walk((Variant) o, path);
+          return result == null ? NullValue.NULL_VALUE : result;
+        }));
     out.add(CelFunctionBinding.from(
-        "variants_field_variant_string", Variant.class, String.class,
-        (Variant v, String key) -> v.getType() == Variant.Type.OBJECT
-            ? nullToVariantNull(v.getFieldByKey(key))
-            : NULL_VARIANT));
+        "variants_path_dyn_string_string",
+        ImmutableList.of(Object.class, String.class, String.class),
+        args -> navigateThenAs(walkPath(args[0], (String) args[1]),
+            (String) args[2], /*nullOnError=*/ false)));
     out.add(CelFunctionBinding.from(
-        "variants_elem_variant_int", Variant.class, Long.class,
-        (Variant v, Long idx) -> v.getType() == Variant.Type.ARRAY
-            && idx >= 0
-            && idx <= Integer.MAX_VALUE
-            ? nullToVariantNull(v.getElementAtIndex(idx.intValue()))
-            : NULL_VARIANT));
+        "variants_path_dyn_string_string_bool",
+        ImmutableList.of(Object.class, String.class, String.class, Boolean.class),
+        args -> navigateThenAs(walkPath(args[0], (String) args[1]),
+            (String) args[2], Boolean.TRUE.equals(args[3]))));
+    out.add(CelFunctionBinding.from(
+        "variants_field_dyn_string", Object.class, String.class,
+        (Object o, String key) -> {
+          if (isCelNull(o)) {
+            return NullValue.NULL_VALUE;
+          }
+          Variant v = (Variant) o;
+          if (v.getType() != Variant.Type.OBJECT) {
+            return NullValue.NULL_VALUE;
+          }
+          Variant result = v.getFieldByKey(key);
+          return result == null ? NullValue.NULL_VALUE : result;
+        }));
+    out.add(CelFunctionBinding.from(
+        "variants_field_dyn_string_string",
+        ImmutableList.of(Object.class, String.class, String.class),
+        args -> navigateThenAs(walkField(args[0], (String) args[1]),
+            (String) args[2], /*nullOnError=*/ false)));
+    out.add(CelFunctionBinding.from(
+        "variants_field_dyn_string_string_bool",
+        ImmutableList.of(Object.class, String.class, String.class, Boolean.class),
+        args -> navigateThenAs(walkField(args[0], (String) args[1]),
+            (String) args[2], Boolean.TRUE.equals(args[3]))));
+    out.add(CelFunctionBinding.from(
+        "variants_elem_dyn_int", Object.class, Long.class,
+        (Object o, Long idx) -> {
+          if (isCelNull(o)) {
+            return NullValue.NULL_VALUE;
+          }
+          Variant v = (Variant) o;
+          if (v.getType() != Variant.Type.ARRAY
+              || idx < 0 || idx > Integer.MAX_VALUE) {
+            return NullValue.NULL_VALUE;
+          }
+          Variant result = v.getElementAtIndex(idx.intValue());
+          return result == null ? NullValue.NULL_VALUE : result;
+        }));
+    out.add(CelFunctionBinding.from(
+        "variants_elem_dyn_int_string",
+        ImmutableList.of(Object.class, Long.class, String.class),
+        args -> navigateThenAs(walkElem(args[0], (Long) args[1]),
+            (String) args[2], /*nullOnError=*/ false)));
+    out.add(CelFunctionBinding.from(
+        "variants_elem_dyn_int_string_bool",
+        ImmutableList.of(Object.class, Long.class, String.class, Boolean.class),
+        args -> navigateThenAs(walkElem(args[0], (Long) args[1]),
+            (String) args[2], Boolean.TRUE.equals(args[3]))));
 
-    // Parameterized typed extraction. variants.as throws on mismatch;
-    // variants.tryAs returns CEL null. The second-arg type string selects
-    // the target type (see variantAs for the accepted vocabulary).
+    // Standalone parameterized typed extraction.
+    //   variants.as(v, t)              — strict, throws on type mismatch
+    //   variants.as(v, t, nullOnError) — soft if true (Spark try_variant_get)
+    // Both propagate CEL-null input (matches Spark variant_get(NULL, ...) -> NULL).
     out.add(CelFunctionBinding.from(
-        "variants_as_variant_string", Variant.class, String.class,
-        (Variant v, String typeStr) -> variantAs(v, typeStr, /*tryMode=*/ false)));
+        "variants_as_dyn_string", Object.class, String.class,
+        (Object o, String typeStr) -> isCelNull(o)
+            ? NullValue.NULL_VALUE
+            : variantAs((Variant) o, typeStr, /*nullOnError=*/ false)));
     out.add(CelFunctionBinding.from(
-        "variants_tryas_variant_string", Variant.class, String.class,
-        (Variant v, String typeStr) -> variantAs(v, typeStr, /*tryMode=*/ true)));
+        "variants_as_dyn_string_bool",
+        ImmutableList.of(Object.class, String.class, Boolean.class),
+        args -> isCelNull(args[0])
+            ? NullValue.NULL_VALUE
+            : variantAs((Variant) args[0], (String) args[1],
+                Boolean.TRUE.equals(args[2]))));
 
-    // string(Variant) — JSON serialization extension on stdlib string(...).
+    // variants.toJson(Variant) — serialize a Variant to its JSON string form.
+    // Replaces the prior string(Variant) extension overload; namespaced for
+    // discoverability. For nullable navigation results, guard via
+    // `... == null` upstream (this binding requires a non-null Variant).
     out.add(CelFunctionBinding.from(
-        "variant_to_string", Variant.class, VariantUtils::toJsonString));
+        "variants_tojson_variant", Variant.class, VariantUtils::toJsonString));
   }
 
-  private static Variant nullToVariantNull(Variant v) {
-    return v == null ? NULL_VARIANT : v;
+  /** Walk a JSONPath from {@code o} (which may be CEL null). Returns the
+   *  navigated Variant, or Java null on miss / CEL-null input. */
+  private static Variant walkPath(Object o, String path) {
+    if (isCelNull(o)) {
+      return null;
+    }
+    return VariantPath.walk((Variant) o, path);
+  }
+
+  /** Look up a field on {@code o}. Returns the value Variant, or Java null on
+   *  miss / wrong-type-receiver / CEL-null input. */
+  private static Variant walkField(Object o, String key) {
+    if (isCelNull(o)) {
+      return null;
+    }
+    Variant v = (Variant) o;
+    if (v.getType() != Variant.Type.OBJECT) {
+      return null;
+    }
+    return v.getFieldByKey(key);
+  }
+
+  /** Look up an array element. Returns the element Variant, or Java null on
+   *  miss / wrong-type-receiver / OOB index / int-overflow / CEL-null input. */
+  private static Variant walkElem(Object o, Long idx) {
+    if (isCelNull(o)) {
+      return null;
+    }
+    Variant v = (Variant) o;
+    if (v.getType() != Variant.Type.ARRAY
+        || idx < 0 || idx > Integer.MAX_VALUE) {
+      return null;
+    }
+    return v.getElementAtIndex(idx.intValue());
+  }
+
+  /** Shared post-navigation step for the 3/4-arg variants.path/field/elem
+   *  overloads: if the navigation missed, return CEL null; otherwise extract
+   *  the requested type via {@link #variantAs}. */
+  private static Object navigateThenAs(Variant navigated, String typeStr,
+                                       boolean nullOnError) {
+    if (navigated == null) {
+      return NullValue.NULL_VALUE;
+    }
+    return variantAs(navigated, typeStr, nullOnError);
+  }
+
+  /** True iff {@code o} represents "null" in the CEL sense — Java null or
+   *  cel-java's {@link NullValue#NULL_VALUE} sentinel. */
+  private static boolean isCelNull(Object o) {
+    return o == null || o instanceof NullValue;
   }
 
   /**
-   * Runtime dispatch for {@code variants.as(v, typeStr)} / {@code variants.tryAs}.
+   * Runtime dispatch for {@code variants.as(v, typeStr[, nullOnError])} and the
+   * 3-arg / 4-arg navigation+extraction overloads ({@code variants.path/field/elem}).
    *
    * <p>Accepted type strings match the {@code variants.type(v)} output for
    * extractable scalar types: {@code "string"}, {@code "int"}, {@code "double"},
@@ -304,11 +445,13 @@ final class BuiltinOverload {
    * "array"}, {@code "null"}, {@code "date"}, {@code "time"}, {@code "uuid"} —
    * are rejected (no concrete typed extractor exists for them).
    *
-   * <p>In {@code tryMode}, all rejections return {@link
-   * dev.cel.common.values.NullValue#NULL_VALUE}. Outside {@code tryMode},
-   * mismatches throw {@link IllegalArgumentException}.
+   * <p>When {@code nullOnError} is true, all rejections (recognized-but-mismatched
+   * types, unknown type strings) return {@link
+   * dev.cel.common.values.NullValue#NULL_VALUE}. When false, mismatches throw
+   * {@link IllegalArgumentException}. Path/navigation misses are handled by the
+   * caller before reaching this helper.
    */
-  private static Object variantAs(Variant v, String typeStr, boolean tryMode) {
+  private static Object variantAs(Variant v, String typeStr, boolean nullOnError) {
     Variant.Type t = v.getType();
     switch (typeStr) {
       case "string":
@@ -364,7 +507,7 @@ final class BuiltinOverload {
             "variants.as: type '" + typeStr + "' is not supported for extraction"
                 + " (use variants.type/variants.path/variants.field/variants.elem instead)");
       default:
-        if (tryMode) {
+        if (nullOnError) {
           return NullValue.NULL_VALUE;
         }
         throw new IllegalArgumentException(
@@ -372,7 +515,7 @@ final class BuiltinOverload {
                 + " (expected one of: string, int, double, boolean, decimal, timestamp, bytes)");
     }
     // Recognized typeStr but actual variant type doesn't match.
-    if (tryMode) {
+    if (nullOnError) {
       return NullValue.NULL_VALUE;
     }
     throw new IllegalArgumentException(

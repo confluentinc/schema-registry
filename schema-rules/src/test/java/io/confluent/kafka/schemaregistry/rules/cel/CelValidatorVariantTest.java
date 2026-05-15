@@ -141,10 +141,18 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
-  // ---- variants.type on a missing path returns "null" (the variant-null sentinel) ----
+  // ---- Null-model orthogonality: CEL null (miss) vs variant-null (explicit JSON null) ----
+  //
+  // Three distinct predicates under 1b:
+  //   result == null              -> path missed (Spark IS NULL equivalent)
+  //   variants.isNull(result)     -> path resolved to explicit JSON null
+  //                                  (Spark is_variant_null equivalent)
+  //   variants.type(result)       -> CEL null for miss, "null" for variant-null,
+  //                                  otherwise the type label
 
   @Test
-  void variantsType_missingFieldReturnsVariantNull() throws Exception {
+  void variantsField_missingField_returnsCelNull() throws Exception {
+    // Missing field -> CEL null. Detect via `... == null`.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -152,9 +160,8 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.type("
-        + "                       variants.field(variant(this), \\\"missing\\\"))"
-        + "                    == \\\"null\\\"\"}]\n"
+        + "             expr: \"variants.field(variant(this), \\\"missing\\\")"
+        + "                    == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -162,10 +169,10 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
-  // ---- variants.isNull: shorthand for `variants.type(v) == "null"` ----
-
   @Test
-  void variantsIsNull_onVariantNull_returnsTrue() throws Exception {
+  void variantsIsNull_onMissingField_returnsFalse() throws Exception {
+    // 1b strict-Spark: missing field produces CEL null, NOT variant-null.
+    // variants.isNull(cel_null) is false (input isn't a Variant).
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -173,7 +180,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.isNull("
+        + "             expr: \"!variants.isNull("
         + "                       variants.field(variant(this), \\\"missing\\\"))\"}]\n"
         + "  }];\n"
         + "}\n";
@@ -201,8 +208,8 @@ public class CelValidatorVariantTest {
 
   @Test
   void variantsIsNull_onExplicitJsonNull_returnsTrue() throws Exception {
-    // Distinct from a navigation miss: the variant payload itself encodes
-    // JSON null. variants.isNull should report true for both forms.
+    // The variant payload itself encodes JSON null — top-level variant has
+    // type=NULL. variants.isNull reports true (matches Spark is_variant_null).
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -218,14 +225,15 @@ public class CelValidatorVariantTest {
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
-  // ---- B1: variants.field / variants.elem on wrong-type receiver → variant-null ----
-  //
-  // Variant.getFieldByKey throws IllegalArgumentException for non-OBJECT receivers
-  // (and getElementAtIndex for non-ARRAY) — the bindings type-check defensively so
-  // the rule-level contract "navigate returns variant-null on any miss" holds.
-
   @Test
-  void variantField_onNonObjectReceiver_returnsVariantNull() throws Exception {
+  void variantsNullModel_orthogonality_threePredicatesDistinguishCases() throws Exception {
+    // Locks in 1b's three orthogonal predicates:
+    //   - `result == null`         => path missed (CEL null)
+    //   - `variants.isNull(result)` => path resolved to explicit JSON null
+    //   - both false              => path resolved to a real (non-null) value
+    // Each scenario in the payload has a unique signature across the three
+    // predicates. Constructs one combined rule to assert all 9 outcomes
+    // at once.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -233,9 +241,42 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.type("
-        + "                       variants.field(variant(this), \\\"x\\\"))"
-        + "                    == \\\"null\\\"\"}]\n"
+        + "             expr: \""
+        // Missing field: == null TRUE, isNull FALSE
+        + "      variants.field(variant(this), \\\"missing\\\") == null"
+        + "      && !variants.isNull(variants.field(variant(this), \\\"missing\\\"))"
+        // Explicit JSON null: == null FALSE, isNull TRUE
+        + "      && !(variants.field(variant(this), \\\"explicit\\\") == null)"
+        + "      && variants.isNull(variants.field(variant(this), \\\"explicit\\\"))"
+        // Real value: == null FALSE, isNull FALSE
+        + "      && !(variants.field(variant(this), \\\"real\\\") == null)"
+        + "      && !variants.isNull(variants.field(variant(this), \\\"real\\\"))"
+        + "\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema,
+        "{\"explicit\": null, \"real\": \"hello\"}");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  // ---- B1: navigation on wrong-type receiver → CEL null (miss) ----
+  //
+  // Variant.getFieldByKey throws IllegalArgumentException for non-OBJECT receivers
+  // (and getElementAtIndex for non-ARRAY) — the bindings type-check defensively
+  // so wrong-type-receiver counts as a "miss" and produces CEL null.
+
+  @Test
+  void variantField_onNonObjectReceiver_returnsCelNull() throws Exception {
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.field(variant(this), \\\"x\\\") == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -246,7 +287,7 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void variantElem_onNonArrayReceiver_returnsVariantNull() throws Exception {
+  void variantElem_onNonArrayReceiver_returnsCelNull() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -254,9 +295,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.type("
-        + "                       variants.elem(variant(this), 0))"
-        + "                    == \\\"null\\\"\"}]\n"
+        + "             expr: \"variants.elem(variant(this), 0) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -267,11 +306,11 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void variantElem_indexOverflowsInt_returnsVariantNull() throws Exception {
+  void variantElem_indexOverflowsInt_returnsCelNull() throws Exception {
     // CEL ints are i64. Without a range check, a Long like 4_294_967_296 would
     // intValue() to 0 (lower 32 bits) and silently match the first element.
     // The binding must treat any out-of-int-range index as out-of-bounds
-    // navigation → variant-null.
+    // navigation → CEL null.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -279,9 +318,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.type("
-        + "                       variants.elem(variant(this), 4294967296))"
-        + "                    == \\\"null\\\"\"}]\n"
+        + "             expr: \"variants.elem(variant(this), 4294967296) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -293,10 +330,9 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void variantElem_outOfBoundsIndex_returnsVariantNull() throws Exception {
+  void variantElem_outOfBoundsIndex_returnsCelNull() throws Exception {
     // Variant.getElementAtIndex returns null (not throws) for indices outside
-    // [0, arraySize) — our binding maps that null to the variant-null sentinel.
-    // Locks in the documented contract: any miss on navigation → variant-null.
+    // [0, arraySize) — our binding maps that null to CEL null.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -304,9 +340,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.type("
-        + "                       variants.elem(variant(this), 99))"
-        + "                    == \\\"null\\\"\"}]\n"
+        + "             expr: \"variants.elem(variant(this), 99) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -358,10 +392,10 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
-  // ---- variants.tryAs — type-mismatch returns CEL null ----
+  // ---- variants.as with nullOnError=true — type-mismatch returns CEL null ----
 
   @Test
-  void variantTryAsString_onIntVariantReturnsNull() throws Exception {
+  void variantAsString_softMode_onIntVariantReturnsNull() throws Exception {
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -369,12 +403,139 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.tryAs("
-        + "                       variants.field(variant(this), \\\"count\\\"), \\\"string\\\") == null\"}]\n"
+        + "             expr: \"variants.as("
+        + "                       variants.field(variant(this), \\\"count\\\"), \\\"string\\\", true) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
     DynamicMessage doc = docWithVariantJson(schema, "{\"count\":42}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  // ---- variant(string, bool): soft JSON parse via nullOnError flag ----
+
+  @Test
+  void variantParseJson_softMode_onInvalidReturnsCelNull() throws Exception {
+    // variant(invalidJsonString, true) should return CEL null instead of throwing.
+    // Matches Spark try_parse_json(s) semantics.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variant(\\\"this is not json\\\", true) == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
+  void variantParseJson_softMode_onValidStillParses() throws Exception {
+    // variant(validJson, true) should parse normally; the flag only affects
+    // the error path.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.as(variant(\\\"42\\\", true), \\\"int\\\") == 42\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  // ---- 3-arg navigation+extraction: variants.field(v, k, t) ----
+
+  @Test
+  void variantsField_typedExtraction_returnsTypedValue() throws Exception {
+    // Spark variant_get(v, '$.k', 'string') equivalent.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.field(variant(this), \\\"name\\\", \\\"string\\\")"
+        + "                    == \\\"alice\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsField_typedExtraction_onMissingFieldReturnsCelNull() throws Exception {
+    // Missing path → CEL null regardless of strict/soft mode.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.field(variant(this), \\\"missing\\\", \\\"string\\\")"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  // ---- 4-arg navigation+extraction with nullOnError flag ----
+
+  @Test
+  void variantsField_typedExtraction_softMode_onTypeMismatchReturnsCelNull()
+      throws Exception {
+    // Spark try_variant_get(v, '$.k', 'string') equivalent: count is an int,
+    // ask for string with nullOnError=true → CEL null instead of throwing.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.field(variant(this), \\\"count\\\", \\\"string\\\", true)"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"count\":42}");
+    assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  // ---- variants.toJson(v): JSON serialization ----
+
+  @Test
+  void variantsToJson_serializesPayload() throws Exception {
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.toJson(variant(this))"
+        + "                    == \\\"{\\\\\\\"name\\\\\\\":\\\\\\\"alice\\\\\\\"}\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
   }
 
@@ -471,7 +632,7 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void avroVariant_typeNull_onMissingField() throws Exception {
+  void avroVariant_missingField_returnsCelNull() throws Exception {
     String s = ""
         + "{"
         + "  \"type\":\"record\","
@@ -491,7 +652,7 @@ public class CelValidatorVariantTest {
         + "      },"
         + "      \"confluent:rules\":["
         + "        {\"name\":\"r\","
-        + "         \"expr\":\"variants.type(variants.field(variant(this), \\\"missing\\\")) == \\\"null\\\"\"}]"
+        + "         \"expr\":\"variants.field(variant(this), \\\"missing\\\") == null\"}]"
         + "    }"
         + "  ]"
         + "}";
