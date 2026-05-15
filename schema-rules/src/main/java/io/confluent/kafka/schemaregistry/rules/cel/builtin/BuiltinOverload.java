@@ -43,8 +43,14 @@ final class BuiltinOverload {
    * Decimal division uses 38-digit precision with HALF_UP rounding — matches
    * Flink SQL's MC_DIVIDE and PostgreSQL's NUMERIC division. Add/sub/mul use
    * BigDecimal's exact defaults (scale = scale_a + scale_b for mul, max for
-   * add/sub) — no MathContext needed since those operations are always
-   * representable.
+   * add/sub); we deliberately do <i>not</i> cap the result scale at 38, so a
+   * deeply chained operation on very-high-scale inputs can produce a result
+   * with a longer fractional than Flink SQL would store (Flink derives the
+   * same scale but caps precision at 38 by rounding the scale down). For real
+   * decimal data (currency, percentages, basis points) this divergence does
+   * not occur in practice — Flink's cap only kicks in once precision exceeds
+   * 38. Users wanting bounded scale can apply {@code decimals.round(x, n)}
+   * explicitly.
    */
   private static final MathContext DIV_MC = new MathContext(38, RoundingMode.HALF_UP);
 
@@ -247,7 +253,7 @@ final class BuiltinOverload {
     // variants.parseJson strict / variants.tryParseJson soft (Spark
     // parse_json / try_parse_json analogs).
     out.add(CelFunctionBinding.from(
-        "variants_parsejson_string", String.class, VariantUtils::toVariant));
+        "variants_parsejson_string", String.class, VariantUtils::fromJson));
     out.add(CelFunctionBinding.from(
         "variants_tryparsejson_string", String.class,
         BuiltinOverload::variantTryParseJson));
@@ -349,12 +355,12 @@ final class BuiltinOverload {
     return VariantUtils.toVariant(o);
   }
 
-  /** {@code variants.tryParseJson(s)} binding body — returns CEL null on
+  /* {@code variants.tryParseJson(s)} binding body — returns CEL null on
    *  parse failure (Spark try_parse_json analog). */
   private static Object variantTryParseJson(String s) {
     try {
-      return VariantUtils.toVariant(s);
-    } catch (RuntimeException e) {
+      return VariantUtils.fromJson(s);
+    } catch (IllegalArgumentException e) {
       return NullValue.NULL_VALUE;
     }
   }
