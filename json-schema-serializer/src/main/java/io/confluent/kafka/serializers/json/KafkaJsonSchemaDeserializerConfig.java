@@ -53,6 +53,12 @@ public class KafkaJsonSchemaDeserializerConfig extends AbstractKafkaSchemaSerDeC
   public static final String TYPE_PROPERTY_DOC = "Property on the JSON Schema that contains the "
       + "fully-qualified classname";
 
+  public static final String TYPE_ALLOWED_PACKAGES = "json.type.allowed.packages";
+  public static final String TYPE_ALLOWED_PACKAGES_DEFAULT = "*";
+  public static final String TYPE_ALLOWED_PACKAGES_DOC = "Comma-separated package prefixes whose "
+      + "classes may be resolved from the schema's javaType property. Use \"*\" (the default) to "
+      + "allow any class. An empty value disables javaType resolution entirely.";
+
   private static ConfigDef config;
 
   static {
@@ -86,6 +92,11 @@ public class KafkaJsonSchemaDeserializerConfig extends AbstractKafkaSchemaSerDeC
         TYPE_PROPERTY_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         TYPE_PROPERTY_DOC
+    ).define(TYPE_ALLOWED_PACKAGES,
+        ConfigDef.Type.LIST,
+        TYPE_ALLOWED_PACKAGES_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        TYPE_ALLOWED_PACKAGES_DOC
     );
   }
 
