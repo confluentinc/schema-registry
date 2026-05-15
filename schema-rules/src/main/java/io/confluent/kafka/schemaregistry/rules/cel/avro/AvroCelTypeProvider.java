@@ -26,6 +26,7 @@ import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructType;
+import dev.cel.common.types.StructTypeReference;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -187,7 +188,7 @@ public final class AvroCelTypeProvider implements CelTypeProvider {
       case NULL:
         return SimpleType.NULL_TYPE;
       case RECORD:
-        return dev.cel.common.types.StructTypeReference.create(effective.getFullName());
+        return StructTypeReference.create(effective.getFullName());
       case UNION:
       default:
         // Multi-branch unions and unknown types: fall back to dyn for the field.
