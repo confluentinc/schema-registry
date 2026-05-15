@@ -47,6 +47,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class KafkaJsonSchemaSerializerTest {
@@ -170,25 +171,23 @@ public class KafkaJsonSchemaSerializerTest {
   @Test
   public void javaTypeAllowlistAcceptsClassInPackage() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = serializer.serialize(topic, headers, user);
+    byte[] bytes = serializer.serialize(topic, user);
 
     Object deserialized = getDeserializerWithAllowedPackages(
         null, "io.confluent.kafka.serializers.json.")
-        .deserialize(topic, headers, bytes);
+        .deserialize(topic, bytes);
     assertEquals(user, deserialized);
   }
 
   @Test
   public void javaTypeAllowlistRejectsClassOutsidePackage() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = serializer.serialize(topic, headers, user);
+    byte[] bytes = serializer.serialize(topic, user);
 
     KafkaJsonSchemaDeserializer<Object> deser =
         getDeserializerWithAllowedPackages(null, "com.mycorp.");
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, headers, bytes));
+        () -> deser.deserialize(topic, bytes));
     assertTrue(ex.getMessage(),
         ex.getMessage().contains("not in json.type.allowed.packages")
             || (ex.getCause() != null
@@ -198,13 +197,12 @@ public class KafkaJsonSchemaSerializerTest {
   @Test
   public void javaTypeAllowlistEmptyDisablesResolution() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = serializer.serialize(topic, headers, user);
+    byte[] bytes = serializer.serialize(topic, user);
 
     KafkaJsonSchemaDeserializer<Object> deser =
         getDeserializerWithAllowedPackages(null, "");
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, headers, bytes));
+        () -> deser.deserialize(topic, bytes));
     String msg = ex.getMessage() + (ex.getCause() != null ? " | " + ex.getCause().getMessage() : "");
     assertTrue(msg, msg.contains("javaType resolution is disabled"));
   }
@@ -212,14 +210,13 @@ public class KafkaJsonSchemaSerializerTest {
   @Test
   public void javaTypeAllowlistTreatsEmptyStringEntryAsNoop() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = serializer.serialize(topic, headers, user);
+    byte[] bytes = serializer.serialize(topic, user);
 
     // A list entry of "" must not act as a wildcard (every string startsWith("")).
     KafkaJsonSchemaDeserializer<Object> deser =
         getDeserializerWithAllowedPackages(null, ",");
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, headers, bytes));
+        () -> deser.deserialize(topic, bytes));
     String msg = ex.getMessage() + (ex.getCause() != null ? " | " + ex.getCause().getMessage() : "");
     assertTrue(msg, msg.contains("not in json.type.allowed.packages"));
   }
@@ -231,12 +228,11 @@ public class KafkaJsonSchemaSerializerTest {
     JsonSchema schema = new JsonSchema(schemaStr);
     schemaRegistry.register(topic + "-value", schema);
 
-    RecordHeaders headers = new RecordHeaders();
-    byte[] bytes = latestSerializer.serialize(topic, headers, "hello");
+    byte[] bytes = latestSerializer.serialize(topic, "hello");
 
     KafkaJsonSchemaDeserializer<Object> deser = getDeserializer(null);
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, headers, bytes));
+        () -> deser.deserialize(topic, bytes));
     String msg = ex.getMessage() + (ex.getCause() != null ? " | " + ex.getCause().getMessage() : "");
     assertTrue(msg, msg.contains("non-object/array JSON payload"));
   }
