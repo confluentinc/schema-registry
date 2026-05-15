@@ -21,9 +21,11 @@ import static org.junit.Assert.assertThrows;
 
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelVarDecl;
+import dev.cel.common.types.MapType;
 import dev.cel.common.types.SimpleType;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils.ScriptType;
 import java.util.Collections;
+import java.util.HashMap;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -206,7 +208,7 @@ public class CelUtilsTest {
   @Test
   public void mapClass_stillMapsToMapType() {
     // Sanity: Map subclasses keep their MapType<STRING, DYN> declaration.
-    assertEquals(dev.cel.common.types.MapType.create(SimpleType.STRING, SimpleType.DYN),
-        CelUtils.findCelTypeForClass(java.util.HashMap.class));
+    assertEquals(MapType.create(SimpleType.STRING, SimpleType.DYN),
+        CelUtils.findCelTypeForClass(HashMap.class));
   }
 }
