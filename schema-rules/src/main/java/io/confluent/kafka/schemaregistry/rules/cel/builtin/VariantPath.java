@@ -58,11 +58,24 @@ import java.util.List;
  * NOT interpreted; backslash + n decodes to the literal letter n, backslash +
  * t to literal t, and so on. Variant object keys in practice are simple
  * identifiers, so this minimal model covers realistic needs without an
- * RFC 9535 escape table. A trailing backslash at end-of-input (e.g.,
- * {@code $["foo} followed by a stray backslash) is not consumed as an escape
- * because there is no following character; it is treated as a literal
- * backslash, the key remains open, and parsing throws as an unterminated
- * quoted key.
+ * RFC 9535 escape table.
+ *
+ * <p><b>Silent-mistranslation hazard for Unicode escapes.</b> A would-be
+ * Unicode escape like a backslash followed by {@code u00e9} decodes as 5
+ * literal characters: the backslash consumes the {@code u}, and {@code 00e9}
+ * are appended literally one by one. So {@code $["café"]} resolves to
+ * the 8-character key {@code cafu00e9}, NOT the 4-character key {@code café}.
+ * Users coming from JSON or RFC 9535 JSONPath should be aware that this path
+ * grammar cannot express non-ASCII keys via escape sequences. For keys that
+ * actually contain non-ASCII characters, use {@link
+ * io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinOverload
+ * variants.field(v, "café")} directly — the key argument is a regular CEL
+ * string and handles Unicode through CEL's own escape semantics.
+ *
+ * <p>A trailing backslash at end-of-input (e.g., {@code $["foo} followed by a
+ * stray backslash) is not consumed as an escape because there is no following
+ * character; it is treated as a literal backslash, the key remains open, and
+ * parsing throws as an unterminated quoted key.
  */
 final class VariantPath {
 
@@ -204,6 +217,11 @@ final class VariantPath {
     while (c.hasMore()) {
       char ch = c.next();
       if (ch == '\\' && c.hasMore()) {
+        // Minimal-escape: backslash consumes exactly one following character
+        // and emits it literally. Intentionally not RFC 9535: a backslash-u
+        // sequence decodes to a literal 'u' (and the following hex digits
+        // continue as literals). See the class-level Javadoc for the Unicode
+        // silent-mistranslation hazard and the recommended workaround.
         sb.append(c.next());
       } else if (ch == quote) {
         return sb.toString();

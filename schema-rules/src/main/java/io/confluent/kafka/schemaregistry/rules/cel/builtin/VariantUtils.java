@@ -134,7 +134,10 @@ final class VariantUtils {
       }
     }
     if (o instanceof String) {
-      return fromJson((String) o);
+      throw new IllegalArgumentException(
+          "Cannot convert String to Variant via toVariant; use"
+              + " VariantUtils.fromJson(s) directly, or the CEL function"
+              + " variants.parseJson(s).");
     }
     throw new IllegalArgumentException(
         "Cannot convert " + o.getClass().getName() + " to Variant");
