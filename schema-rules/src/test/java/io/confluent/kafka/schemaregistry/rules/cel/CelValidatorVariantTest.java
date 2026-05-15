@@ -261,6 +261,49 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
+  @Test
+  void variantsChain_celNullPropagatesThroughEveryVariantsFunction() throws Exception {
+    // Lock in the load-bearing chain-composition guarantee: a CEL-null
+    // intermediate (produced by a navigation miss) propagates correctly
+    // through every variants.* function that accepts a Variant first arg.
+    // Each conjunct exercises one of the five functions whose CEL-null-input
+    // handling wasn't otherwise covered by existing tests:
+    //
+    //   variants.field   — chained navigation (3-deep)
+    //   variants.path    — JSONPath on null
+    //   variants.elem    — array indexing on null
+    //   variants.type    — type label, propagates to CEL null
+    //   variants.tryAs   — soft extraction, propagates to CEL null
+    //
+    // If any function throws or returns a non-null value when its first arg
+    // is CEL null, the rule fails and the assertion catches the regression.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \""
+        + "      variants.field(variants.field(variant(this), \\\"missing\\\"),"
+        + "                     \\\"x\\\") == null"
+        + "      && variants.path(variants.field(variant(this), \\\"missing\\\"),"
+        + "                       \\\"$.x\\\") == null"
+        + "      && variants.elem(variants.field(variant(this), \\\"missing\\\"),"
+        + "                       0) == null"
+        + "      && variants.type(variants.field(variant(this), \\\"missing\\\"))"
+        + "         == null"
+        + "      && variants.tryAs(variants.field(variant(this), \\\"missing\\\"),"
+        + "                        \\\"string\\\") == null"
+        + "\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
   // ---- B1: navigation on wrong-type receiver → CEL null (miss) ----
   //
   // Variant.getFieldByKey throws IllegalArgumentException for non-OBJECT receivers
@@ -630,6 +673,55 @@ public class CelValidatorVariantTest {
     ProtobufSchema schema = new ProtobufSchema(s);
     DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
     assertTrue(schema.validateMessage(new CelValidator(), doc).isEmpty());
+  }
+
+  @Test
+  void variantsToJson_onCelNull_returnsCelNull() throws Exception {
+    // variants.toJson(cel_null) should propagate to CEL null, matching the
+    // rest of the variants.* surface (which all accept null inputs via
+    // isCelNull short-circuit) and Spark to_json(NULL) → SQL NULL.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.toJson("
+        + "                       variants.field(variant(this), \\\"missing\\\"))"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    DynamicMessage doc = docWithVariantJson(schema, "{\"name\":\"alice\"}");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
+  @Test
+  void variant_onCelNullInput_returnsCelNull() throws Exception {
+    // variant(cel_null) propagates to CEL null. The variantConstructor
+    // helper explicitly short-circuits on isCelNull(o), but no test
+    // exercised that branch — a future refactor could silently break the
+    // propagation. We feed CEL null in via variants.tryParseJson on an
+    // invalid string (returns CEL null at runtime, statically typed Variant).
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variant(variants.tryParseJson(\\\"not json\\\"))"
+        + "                    == null\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
   // ---- JSON-literal: variants.parseJson("...") ----

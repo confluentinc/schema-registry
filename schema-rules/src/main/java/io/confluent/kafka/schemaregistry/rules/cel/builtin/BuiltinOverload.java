@@ -334,7 +334,11 @@ final class BuiltinOverload {
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     out.add(CelFunctionBinding.from(
-        "variants_tojson_variant", Variant.class, VariantUtils::toJsonString));
+        "variants_tojson_variant", Object.class,
+        (Object o) -> {
+          Variant v = requireVariantOrNull(o, "variants.toJson");
+          return v == null ? NullValue.NULL_VALUE : VariantUtils.toJsonString(v);
+        }));
   }
 
   /** True iff {@code o} represents "null" in the CEL sense — Java null or
