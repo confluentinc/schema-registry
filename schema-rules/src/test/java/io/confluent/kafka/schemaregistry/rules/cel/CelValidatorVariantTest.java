@@ -423,11 +423,13 @@ public class CelValidatorVariantTest {
   // ---- variants.* on non-Variant input: clear IAE, not ClassCastException ----
 
   @Test
-  void variantsField_onNonVariantInput_throwsHelpfulIae() throws Exception {
-    // The DYN-typed receiver lets the compiler accept any value. A rule
-    // author who passes a literal string by mistake should see a clear
-    // "expected Variant, got java.lang.String" message rather than a raw
-    // ClassCastException with no rule-author guidance.
+  void variantsField_onNonVariantInput_rejectedAtCompileTime() throws Exception {
+    // The Variant-typed receiver lets the type checker reject obviously-wrong
+    // calls at rule compilation time. A rule author who passes a literal
+    // string by mistake gets a "no matching overload" / type-mismatch error
+    // before the rule ever runs, rather than only finding out at evaluation
+    // time. The error surfaces as a RuleException at validateMessage time
+    // because compilation is lazy (deferred until first evaluation).
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -444,10 +446,14 @@ public class CelValidatorVariantTest {
         .build();
     List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
     assertEquals(1, errs.size(),
-        "expected non-Variant input to throw; got: " + errs);
+        "expected non-Variant input to be rejected; got: " + errs);
+    // cel-java's type checker reports either "no matching overload" or
+    // "found no matching overload" depending on version. Match either form.
     String causes = dumpCauses(errs);
-    assertTrue(causes.contains("variants.field: expected Variant"),
-        "expected helpful message; got causes: " + causes);
+    assertTrue(
+        causes.contains("no matching overload")
+            || causes.contains("found no matching overload"),
+        "expected compile-time overload-mismatch error; got causes: " + causes);
   }
 
   // ---- variants.tryAs — type-mismatch returns CEL null ----

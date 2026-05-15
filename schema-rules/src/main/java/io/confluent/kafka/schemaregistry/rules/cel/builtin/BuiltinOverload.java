@@ -145,7 +145,7 @@ final class BuiltinOverload {
         CelByteString.class, Long.class,
         (CelByteString bytes, Long scale) ->
             DecimalUtils.toBigDecimal(bytes.toByteArray(),
-                requireIntScale(scale, "decimal"))));
+                requireIntScale(scale, "decimal(bytes, scale)"))));
 
     // Comparison
     out.add(decimalsBinary("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));

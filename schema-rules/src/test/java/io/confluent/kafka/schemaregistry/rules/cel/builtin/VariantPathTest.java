@@ -196,4 +196,17 @@ public class VariantPathTest {
     assertThrows(IllegalArgumentException.class,
         () -> VariantPath.parse("$[\"foo\\"));
   }
+
+  @Test
+  void indexOutOfIntRange_throwsWithSpecificMessage() {
+    // $[2147483648] is one beyond Integer.MAX_VALUE. The digit-loop consumes
+    // the whole numeric literal, then Integer.parseInt throws NFE on overflow.
+    // We surface that as "index out of int range" — mirrors the runtime-side
+    // overflow check in variants.elem and the decimals.round/trunc/
+    // decimal(bytes, scale) scale-overflow checks.
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> VariantPath.parse("$[2147483648]"));
+    assertTrue(e.getMessage().contains("index out of int range"),
+        "expected 'index out of int range' message; got: " + e.getMessage());
+  }
 }

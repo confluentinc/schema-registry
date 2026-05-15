@@ -176,8 +176,8 @@ final class BuiltinDeclarations {
         CelOverloadDecl.newGlobalOverload(
             "dyn_to_variant",
             "Convert a non-string value to a Variant (runtime dispatch);"
-                + " null propagates; for JSON strings use variants.parseJson.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN)),
+                + " for JSON strings use variants.parseJson.",
+            VARIANT, ImmutableList.of(SimpleType.DYN)),
         CelOverloadDecl.newGlobalOverload(
             "bytes_bytes_to_variant",
             "Construct from value + metadata byte arrays",
@@ -197,23 +197,22 @@ final class BuiltinDeclarations {
         CelOverloadDecl.newGlobalOverload(
             "variants_tryparsejson_string",
             "Parse JSON string; returns CEL null on parse failure.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.STRING))));
+            VARIANT, ImmutableList.of(SimpleType.STRING))));
 
-    // Type inspection. variants.type propagates CEL null; variants.isNull is
-    // strict Spark-equivalent (true iff arg is a Variant with type=NULL; false
-    // for CEL null, which represents "path missed").
+    // Type inspection. variants.type returns the type label (or CEL null when
+    // input is CEL null — null is assignable to string in CEL's type system).
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.type",
         CelOverloadDecl.newGlobalOverload(
             "variants_type_dyn",
             "Variant type label (string), or null if input is null",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN))));
+            SimpleType.STRING, ImmutableList.of(VARIANT))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.isNull",
         CelOverloadDecl.newGlobalOverload(
             "variants_isnull_dyn",
             "True iff input is a Variant whose top type is NULL; false for CEL null",
-            SimpleType.BOOL, ImmutableList.of(SimpleType.DYN))));
+            SimpleType.BOOL, ImmutableList.of(VARIANT))));
 
     // Navigation. Each returns sub-Variant or CEL null on miss. For typed
     // extraction, compose with variants.as / variants.tryAs:
@@ -225,21 +224,21 @@ final class BuiltinDeclarations {
             "variants_path_dyn_string",
             "JSONPath subset navigation; missing path → CEL null;"
                 + " explicit JSON null → variant-null; malformed path throws.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
+            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.field",
         CelOverloadDecl.newGlobalOverload(
             "variants_field_dyn_string",
             "Object field by name; missing → CEL null; explicit JSON null →"
                 + " variant-null.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
+            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.elem",
         CelOverloadDecl.newGlobalOverload(
             "variants_elem_dyn_int",
             "Array element by index; out-of-bounds → CEL null; explicit JSON"
                 + " null at index → variant-null.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.INT))));
+            VARIANT, ImmutableList.of(VARIANT, SimpleType.INT))));
 
     // Standalone typed extraction. variants.as throws on type mismatch
     // (Spark variant_get root-path analog). variants.tryAs returns CEL null on
@@ -251,13 +250,13 @@ final class BuiltinDeclarations {
             "variants_as_dyn_string",
             "Extract a typed value from a Variant; throws on type mismatch;"
                 + " null in → null out.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
+            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.tryAs",
         CelOverloadDecl.newGlobalOverload(
             "variants_tryas_dyn_string",
             "Extract a typed value from a Variant; CEL null on type mismatch.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
+            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     // Replaces the prior string(Variant) extension overload; namespaced for

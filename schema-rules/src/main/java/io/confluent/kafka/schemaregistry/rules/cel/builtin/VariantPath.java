@@ -252,7 +252,7 @@ final class VariantPath {
       return Integer.parseInt(c.src.substring(start, c.pos));
     } catch (NumberFormatException e) {
       throw new IllegalArgumentException(
-          "invalid integer index in variant path: " + path, e);
+          "index out of int range in variant path: " + path, e);
     }
   }
 
