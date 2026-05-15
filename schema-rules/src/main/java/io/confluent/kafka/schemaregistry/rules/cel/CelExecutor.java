@@ -28,9 +28,11 @@ import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import dev.cel.common.types.CelType;
+import dev.cel.common.types.SimpleType;
 import dev.cel.common.values.CelByteString;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelVariableResolver;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
@@ -48,6 +50,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
@@ -301,6 +304,7 @@ public class CelExecutor implements RuleExecutor {
     }
 
     Map<String, CelType> declTypes = CelUtils.toDeclTypes(args);
+    declTypes.put(NowVariable.NOW_NAME, SimpleType.TIMESTAMP);
     // Convert each variable value to a CEL-compatible shape (Avro records →
     // maps, narrow numerics widened, JSON POJOs → maps via Jackson, etc.).
     // Proto Messages pass through unchanged — Google cel-java's first-class
@@ -357,7 +361,11 @@ public class CelExecutor implements RuleExecutor {
   protected Object evaluate(RuleContext ctx, String rule, Bindings b) throws RuleException {
     try {
       CelRuntime.Program program = cache.get(b.cacheKey(rule));
-      return program.eval(b.celArgs());
+      Map<String, Object> argsMap = b.celArgs();
+      CelVariableResolver argsResolver = name -> Optional.ofNullable(argsMap.get(name));
+      CelVariableResolver resolver = CelVariableResolver.hierarchicalVariableResolver(
+          b.nowVariable(), argsResolver);
+      return program.eval(resolver);
     } catch (CelEvaluationException e) {
       throw new RuleException(ctx.rule(), "Could not execute CEL script", e);
     } catch (ExecutionException e) {
@@ -393,6 +401,7 @@ public class CelExecutor implements RuleExecutor {
     private final Map<String, Object> celArgs;
     private final Object obj;
     private final RegexEngine regexEngine;
+    private final NowVariable nowVariable = new NowVariable();
 
     Bindings(ScriptType type, Object schemaHint, Map<String, CelType> declTypes,
              Map<String, Object> celArgs, Object obj, RegexEngine regexEngine) {
@@ -402,6 +411,10 @@ public class CelExecutor implements RuleExecutor {
       this.celArgs = celArgs;
       this.obj = obj;
       this.regexEngine = regexEngine;
+    }
+
+    NowVariable nowVariable() {
+      return nowVariable;
     }
 
     public ScriptType type() {
