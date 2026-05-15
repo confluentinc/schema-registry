@@ -266,11 +266,8 @@ final class BuiltinOverload {
     // Spark-equivalent: true iff input is a Variant with type=NULL (false for
     // non-Variant inputs — matches Spark is_variant_null on SQL NULL etc.).
     out.add(CelFunctionBinding.from(
-        "variants_type_dyn", Object.class,
-        (Object o) -> {
-          Variant v = requireVariantOrNull(o, "variants.type");
-          return v == null ? NullValue.NULL_VALUE : variantTypeName(v.getType());
-        }));
+        "variants_type_variant", Variant.class,
+        (Variant v) -> variantTypeName(v.getType())));
     out.add(CelFunctionBinding.from(
         "variants_isnull_dyn", Object.class,
         (Object o) -> (o instanceof Variant)
@@ -334,11 +331,7 @@ final class BuiltinOverload {
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     out.add(CelFunctionBinding.from(
-        "variants_tojson_variant", Object.class,
-        (Object o) -> {
-          Variant v = requireVariantOrNull(o, "variants.toJson");
-          return v == null ? NullValue.NULL_VALUE : VariantUtils.toJsonString(v);
-        }));
+        "variants_tojson_variant", Variant.class, VariantUtils::toJsonString));
   }
 
   /** True iff {@code o} represents "null" in the CEL sense — Java null or

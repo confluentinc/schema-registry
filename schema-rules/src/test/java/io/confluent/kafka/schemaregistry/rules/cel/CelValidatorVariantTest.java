@@ -265,15 +265,19 @@ public class CelValidatorVariantTest {
   void variantsChain_celNullPropagatesThroughEveryVariantsFunction() throws Exception {
     // Lock in the load-bearing chain-composition guarantee: a CEL-null
     // intermediate (produced by a navigation miss) propagates correctly
-    // through every variants.* function that accepts a Variant first arg.
-    // Each conjunct exercises one of the five functions whose CEL-null-input
-    // handling wasn't otherwise covered by existing tests:
+    // through the Variant-returning variants.* functions. Each conjunct
+    // exercises one of the four functions whose CEL-null-input handling
+    // wasn't otherwise covered by existing tests:
     //
     //   variants.field   — chained navigation (3-deep)
     //   variants.path    — JSONPath on null
     //   variants.elem    — array indexing on null
-    //   variants.type    — type label, propagates to CEL null
     //   variants.tryAs   — soft extraction, propagates to CEL null
+    //
+    // variants.type and variants.toJson are NOT included — they return
+    // STRING and there's no `string == null` overload in cel-java. The
+    // contract for those is "real Variant in, string out; check the source
+    // with `v == null` upstream, don't call them on a possibly-null value."
     //
     // If any function throws or returns a non-null value when its first arg
     // is CEL null, the rule fails and the assertion catches the regression.
@@ -291,8 +295,6 @@ public class CelValidatorVariantTest {
         + "                       \\\"$.x\\\") == null"
         + "      && variants.elem(variants.field(variant(this), \\\"missing\\\"),"
         + "                       0) == null"
-        + "      && variants.type(variants.field(variant(this), \\\"missing\\\"))"
-        + "         == null"
         + "      && variants.tryAs(variants.field(variant(this), \\\"missing\\\"),"
         + "                        \\\"string\\\") == null"
         + "\"}]\n"
@@ -676,10 +678,14 @@ public class CelValidatorVariantTest {
   }
 
   @Test
-  void variantsToJson_onCelNull_returnsCelNull() throws Exception {
-    // variants.toJson(cel_null) should propagate to CEL null, matching the
-    // rest of the variants.* surface (which all accept null inputs via
-    // isCelNull short-circuit) and Spark to_json(NULL) → SQL NULL.
+  void variantsToJson_callerGuardsForCelNullUpstream() throws Exception {
+    // variants.toJson(Variant) -> string contract: serialization always
+    // produces a string for a real Variant. CEL null has no JSON
+    // representation; the natural pattern is to check the source variable
+    // upstream with `v == null` rather than relying on a workaround on the
+    // toJson return type. This test exercises that idiomatic pattern: when
+    // the navigated value is missing (CEL null), the ternary's first branch
+    // skips toJson and returns the default; when present, toJson serializes.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -687,9 +693,18 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.toJson("
-        + "                       variants.field(variant(this), \\\"missing\\\"))"
-        + "                    == null\"}]\n"
+        + "             expr: \""
+        // Missing path: ternary picks "absent" without calling toJson.
+        + "      (variants.field(variant(this), \\\"missing\\\") == null"
+        + "         ? \\\"absent\\\""
+        + "         : variants.toJson(variants.field(variant(this), \\\"missing\\\")))"
+        + "      == \\\"absent\\\""
+        // Present path: ternary picks the toJson branch.
+        + "      && (variants.field(variant(this), \\\"name\\\") == null"
+        + "            ? \\\"absent\\\""
+        + "            : variants.toJson(variants.field(variant(this), \\\"name\\\")))"
+        + "         == \\\"\\\\\\\"alice\\\\\\\"\\\""
+        + "\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);

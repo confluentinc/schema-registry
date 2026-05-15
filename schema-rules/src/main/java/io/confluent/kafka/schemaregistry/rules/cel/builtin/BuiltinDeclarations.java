@@ -199,14 +199,13 @@ final class BuiltinDeclarations {
             "Parse JSON string; returns CEL null on parse failure.",
             VARIANT, ImmutableList.of(SimpleType.STRING))));
 
-    // Type inspection. variants.type returns the type label (or CEL null when
-    // input is CEL null — null is assignable to string in CEL's type system).
+    // Type inspection. variants.type returns the type label as a string.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.type",
         CelOverloadDecl.newGlobalOverload(
-            "variants_type_dyn",
-            "Variant type label (string), or CEL null if input is CEL null",
-            SimpleType.DYN, ImmutableList.of(VARIANT))));
+            "variants_type_variant",
+            "Variant type label as a string",
+            SimpleType.STRING, ImmutableList.of(VARIANT))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.isNull",
         CelOverloadDecl.newGlobalOverload(
@@ -259,15 +258,12 @@ final class BuiltinDeclarations {
             SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
-    // Replaces the prior string(Variant) extension overload; namespaced for
-    // discoverability and to avoid extending stdlib string(...).
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.toJson",
         CelOverloadDecl.newGlobalOverload(
             "variants_tojson_variant",
-            "Serialize a Variant to its JSON string form;"
-                + " CEL null propagates to CEL null",
-            SimpleType.DYN, ImmutableList.of(VARIANT))));
+            "Serialize a Variant to its JSON string form",
+            SimpleType.STRING, ImmutableList.of(VARIANT))));
   }
 
   private static String overloadId(String functionName, String suffix) {
