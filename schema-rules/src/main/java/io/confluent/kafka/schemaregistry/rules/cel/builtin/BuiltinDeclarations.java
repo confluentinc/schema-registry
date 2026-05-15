@@ -168,33 +168,40 @@ final class BuiltinDeclarations {
   // ---- Variant ----
 
   private static void addVariant(List<CelFunctionDecl> decls) {
-    // variant(dyn) — runtime dispatch; null propagates (Spark parse_json(NULL)
-    // returning SQL NULL). variant(string, bool) — JSON parse with explicit
-    // nullOnError flag (Spark try_parse_json analog). variant(bytes, bytes) —
-    // construct from binary. Arity-aware overlap check lets arity-1 and arity-2
-    // coexist; variant(string) on its own goes through variant(dyn).
+    // variant(dyn) — runtime dispatch for proto-Variant decoding and primitive
+    // wrapping; rejects strings (use variants.parseJson). variant(bytes, bytes)
+    // — construct from binary value/metadata pair.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variant",
         CelOverloadDecl.newGlobalOverload(
             "dyn_to_variant",
-            "Convert a value to a Variant (runtime dispatches on actual type);"
-                + " null propagates",
+            "Convert a non-string value to a Variant (runtime dispatch);"
+                + " null propagates; for JSON strings use variants.parseJson.",
             SimpleType.DYN, ImmutableList.of(SimpleType.DYN)),
-        CelOverloadDecl.newGlobalOverload(
-            "string_bool_to_variant",
-            "Parse JSON string; nullOnError=true returns CEL null on parse"
-                + " failure (Spark try_parse_json analog); false throws.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.STRING, SimpleType.BOOL)),
         CelOverloadDecl.newGlobalOverload(
             "bytes_bytes_to_variant",
             "Construct from value + metadata byte arrays",
             VARIANT, ImmutableList.of(SimpleType.BYTES, SimpleType.BYTES))));
 
-    // Type inspection. Both accept DYN first arg so they can be invoked on the
-    // tail of a navigation chain (which may produce either a Variant or CEL
-    // null). variants.type propagates CEL null; variants.isNull is strict
-    // Spark-equivalent (true iff the argument is a Variant whose type tag is
-    // NULL — false for CEL null, which represents "path missed").
+    // variants.parseJson — strict JSON-string parser (Spark parse_json / Flink
+    // PARSE_JSON). variants.tryParseJson — soft form (Spark try_parse_json):
+    // returns CEL null on parse failure instead of throwing.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.parseJson",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_parsejson_string",
+            "Parse JSON string; throws on parse failure.",
+            VARIANT, ImmutableList.of(SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.tryParseJson",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_tryparsejson_string",
+            "Parse JSON string; returns CEL null on parse failure.",
+            SimpleType.DYN, ImmutableList.of(SimpleType.STRING))));
+
+    // Type inspection. variants.type propagates CEL null; variants.isNull is
+    // strict Spark-equivalent (true iff arg is a Variant with type=NULL; false
+    // for CEL null, which represents "path missed").
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.type",
         CelOverloadDecl.newGlobalOverload(
@@ -208,88 +215,49 @@ final class BuiltinDeclarations {
             "True iff input is a Variant whose top type is NULL; false for CEL null",
             SimpleType.BOOL, ImmutableList.of(SimpleType.DYN))));
 
-    // Navigation. Three overload arities per function (path/field/elem):
-    //   2-arg: returns sub-Variant or CEL null on miss
-    //   3-arg: navigate + typed extraction, strict (Spark variant_get(v, p, t))
-    //   4-arg: 3-arg + nullOnError flag (true → Spark try_variant_get)
-    // Miss always → CEL null (regardless of nullOnError). Detect via `... == null`.
-    // Explicit JSON null at path → variant with type=NULL; detect via variants.isNull.
+    // Navigation. Each returns sub-Variant or CEL null on miss. For typed
+    // extraction, compose with variants.as / variants.tryAs:
+    //   variants.as(variants.path(v, "$.x"), "string")   — strict
+    //   variants.tryAs(variants.field(v, "k"), "int")    — soft
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.path",
         CelOverloadDecl.newGlobalOverload(
             "variants_path_dyn_string",
             "JSONPath subset navigation; missing path → CEL null;"
                 + " explicit JSON null → variant-null; malformed path throws.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING)),
-        CelOverloadDecl.newGlobalOverload(
-            "variants_path_dyn_string_string",
-            "Navigate + extract typed value (strict, throws on cast failure).",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.STRING, SimpleType.STRING)),
-        CelOverloadDecl.newGlobalOverload(
-            "variants_path_dyn_string_string_bool",
-            "Navigate + extract typed value; nullOnError=true returns CEL null"
-                + " on cast failure (Spark try_variant_get analog).",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.STRING,
-                SimpleType.STRING, SimpleType.BOOL))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.field",
         CelOverloadDecl.newGlobalOverload(
             "variants_field_dyn_string",
             "Object field by name; missing → CEL null; explicit JSON null →"
                 + " variant-null.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING)),
-        CelOverloadDecl.newGlobalOverload(
-            "variants_field_dyn_string_string",
-            "Field + extract typed value (strict, throws on cast failure).",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.STRING, SimpleType.STRING)),
-        CelOverloadDecl.newGlobalOverload(
-            "variants_field_dyn_string_string_bool",
-            "Field + extract typed value; nullOnError=true returns CEL null"
-                + " on cast failure.",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.STRING,
-                SimpleType.STRING, SimpleType.BOOL))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.elem",
         CelOverloadDecl.newGlobalOverload(
             "variants_elem_dyn_int",
             "Array element by index; out-of-bounds → CEL null; explicit JSON"
                 + " null at index → variant-null.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.INT)),
-        CelOverloadDecl.newGlobalOverload(
-            "variants_elem_dyn_int_string",
-            "Element + extract typed value (strict, throws on cast failure).",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.INT, SimpleType.STRING)),
-        CelOverloadDecl.newGlobalOverload(
-            "variants_elem_dyn_int_string_bool",
-            "Element + extract typed value; nullOnError=true returns CEL null"
-                + " on cast failure.",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.INT,
-                SimpleType.STRING, SimpleType.BOOL))));
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.INT))));
 
-    // Standalone typed extraction (when you already have a Variant value).
-    //   variants.as(v, t)         — strict, throws on cast failure
-    //   variants.as(v, t, nullOnError) — soft if true (Spark try_variant_get
-    //                                    on root path)
-    // CEL-null input propagates to CEL null in both forms.
+    // Standalone typed extraction. variants.as throws on type mismatch
+    // (Spark variant_get root-path analog). variants.tryAs returns CEL null on
+    // type mismatch (Spark try_variant_get root-path analog). Both propagate
+    // CEL-null input to CEL null.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "variants.as",
         CelOverloadDecl.newGlobalOverload(
             "variants_as_dyn_string",
             "Extract a typed value from a Variant; throws on type mismatch;"
                 + " null in → null out.",
-            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING)),
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.tryAs",
         CelOverloadDecl.newGlobalOverload(
-            "variants_as_dyn_string_bool",
-            "Extract a typed value; nullOnError=true returns CEL null on type"
-                + " mismatch (Spark try_variant_get).",
-            SimpleType.DYN,
-            ImmutableList.of(SimpleType.DYN, SimpleType.STRING, SimpleType.BOOL))));
+            "variants_tryas_dyn_string",
+            "Extract a typed value from a Variant; CEL null on type mismatch.",
+            SimpleType.DYN, ImmutableList.of(SimpleType.DYN, SimpleType.STRING))));
 
     // variants.toJson(Variant) — serialize a Variant to its JSON string form.
     // Replaces the prior string(Variant) extension overload; namespaced for
