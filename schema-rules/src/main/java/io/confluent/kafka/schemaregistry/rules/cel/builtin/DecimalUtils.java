@@ -110,8 +110,18 @@ final class DecimalUtils {
       // widening — scale = 0 matches the narrower integer arm above.
       return new BigDecimal((BigInteger) o);
     }
-    if (o instanceof Double || o instanceof Float) {
-      return BigDecimal.valueOf(((Number) o).doubleValue());
+    if (o instanceof Double) {
+      // BigDecimal.valueOf(double) uses Double.toString — shortest decimal
+      // that round-trips to the same double. For Double 0.1 → "0.1".
+      return BigDecimal.valueOf((Double) o);
+    }
+    if (o instanceof Float) {
+      // Float must not be widened to double before stringifying: a Float 0.1f
+      // widens to the double 0.10000000149011612 (32-bit precision exposed at
+      // 64-bit resolution), and Double.toString of that produces a long
+      // decimal. Float.toString produces "0.1" — the shortest decimal that
+      // round-trips at float precision, which is what the user typed.
+      return new BigDecimal(o.toString());
     }
     if (o instanceof String) {
       return new BigDecimal((String) o);

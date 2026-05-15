@@ -149,7 +149,7 @@ final class VariantUtils {
     try {
       JsonNode node = JSON_MAPPER.readTree(json);
       return io.confluent.kafka.schemaregistry.type.VariantUtils.fromJsonNode(node);
-    } catch (IOException e) {
+    } catch (IOException | IllegalStateException e) {
       throw new IllegalArgumentException(
           "Cannot parse JSON for variant: " + e.getMessage(), e);
     }

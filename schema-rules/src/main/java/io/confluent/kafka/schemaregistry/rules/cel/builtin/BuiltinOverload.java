@@ -355,7 +355,7 @@ final class BuiltinOverload {
     return VariantUtils.toVariant(o);
   }
 
-  /* {@code variants.tryParseJson(s)} binding body — returns CEL null on
+  /** {@code variants.tryParseJson(s)} binding body — returns CEL null on
    *  parse failure (Spark try_parse_json analog). */
   private static Object variantTryParseJson(String s) {
     try {

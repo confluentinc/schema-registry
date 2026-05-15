@@ -119,4 +119,25 @@ public class DecimalUtilsTest {
     assertEquals(0, result.compareTo(new BigDecimal(huge)));
     assertEquals(0, result.scale());
   }
+
+  @Test
+  void fromFloat_usesFloatToStringNotDoubleToString() {
+    // Float 0.1f widened through double exposes 32-bit precision artifacts at
+    // 64-bit resolution: (double) 0.1f == 0.10000000149011612. We must route
+    // Float through Float.toString (shortest round-trip at float precision) so
+    // the user-typed value 0.1f becomes BigDecimal("0.1"), not the spurious
+    // BigDecimal("0.10000000149011612").
+    BigDecimal result = DecimalUtils.toBigDecimal((Object) 0.1f);
+    assertEquals(new BigDecimal("0.1"), result);
+    assertEquals(1, result.scale());
+  }
+
+  @Test
+  void fromDouble_usesDoubleToStringExactly() {
+    // Symmetric check for Double — BigDecimal.valueOf(double) already uses
+    // Double.toString, so 0.1d → "0.1" → BigDecimal("0.1"). No widening trap.
+    BigDecimal result = DecimalUtils.toBigDecimal((Object) 0.1d);
+    assertEquals(new BigDecimal("0.1"), result);
+    assertEquals(1, result.scale());
+  }
 }
