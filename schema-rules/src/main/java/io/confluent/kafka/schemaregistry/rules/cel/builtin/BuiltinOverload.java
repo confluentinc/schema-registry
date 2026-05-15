@@ -339,7 +339,7 @@ final class BuiltinOverload {
           }
           Variant v = (Variant) o;
           if (v.getType() != Variant.Type.ARRAY
-              || idx < 0 || idx > Integer.MAX_VALUE) {
+              || idx < Integer.MIN_VALUE || idx > Integer.MAX_VALUE) {
             return NullValue.NULL_VALUE;
           }
           Variant result = v.getElementAtIndex(idx.intValue());
