@@ -144,7 +144,8 @@ final class BuiltinOverload {
         "bytes_int_to_decimal",
         CelByteString.class, Long.class,
         (CelByteString bytes, Long scale) ->
-            DecimalUtils.toBigDecimal(bytes.toByteArray(), scale.intValue())));
+            DecimalUtils.toBigDecimal(bytes.toByteArray(),
+                requireIntScale(scale, "decimal"))));
 
     // Comparison
     out.add(decimalsBinary("decimals_eq_decimal_decimal", (a, b) -> a.compareTo(b) == 0));
@@ -186,7 +187,8 @@ final class BuiltinOverload {
         "decimals_round_unary", d -> d.setScale(0, RoundingMode.HALF_UP)));
     out.add(CelFunctionBinding.from(
         "decimals_round_scale", BigDecimal.class, Long.class,
-        (BigDecimal d, Long scale) -> d.setScale(scale.intValue(), RoundingMode.HALF_UP)));
+        (BigDecimal d, Long scale) ->
+            d.setScale(requireIntScale(scale, "decimals.round"), RoundingMode.HALF_UP)));
     // Flink's TRUNCATE early-returns when the target scale is at-or-finer than
     // the current scale — it's a no-op there, so the result keeps the input's
     // representation. Without this guard, setScale(n>=cur, DOWN) would zero-pad
@@ -196,8 +198,10 @@ final class BuiltinOverload {
         d -> d.scale() <= 0 ? d : d.setScale(0, RoundingMode.DOWN)));
     out.add(CelFunctionBinding.from(
         "decimals_trunc_scale", BigDecimal.class, Long.class,
-        (BigDecimal d, Long scale) ->
-            scale.intValue() >= d.scale() ? d : d.setScale(scale.intValue(), RoundingMode.DOWN)));
+        (BigDecimal d, Long scale) -> {
+          int intScale = requireIntScale(scale, "decimals.trunc");
+          return intScale >= d.scale() ? d : d.setScale(intScale, RoundingMode.DOWN);
+        }));
     out.add(decimalsUnary(
         "decimals_floor_decimal", d -> d.setScale(0, RoundingMode.FLOOR)));
     out.add(decimalsUnary(
@@ -337,6 +341,21 @@ final class BuiltinOverload {
    *  cel-java's {@link NullValue#NULL_VALUE} sentinel. */
   private static boolean isCelNull(Object o) {
     return o == null || o instanceof NullValue;
+  }
+
+  /** Narrow a CEL int (Java {@code long}) into a Java {@code int} for use as
+   *  a BigDecimal scale, throwing a clear IAE on out-of-range values. CEL int
+   *  is i64; BigDecimal scale is i32. Using {@code Long.intValue()} directly
+   *  would silently take the lower 32 bits (e.g., {@code 2^32 → 0}), yielding
+   *  a wildly wrong Decimal. Mirrors the range-check pattern in
+   *  {@code variants.elem}. */
+  private static int requireIntScale(long scale, String functionName) {
+    try {
+      return Math.toIntExact(scale);
+    } catch (ArithmeticException e) {
+      throw new IllegalArgumentException(
+          functionName + ": scale out of int range: " + scale, e);
+    }
   }
 
   /** Common short-circuit for variants.* bindings whose first arg is declared

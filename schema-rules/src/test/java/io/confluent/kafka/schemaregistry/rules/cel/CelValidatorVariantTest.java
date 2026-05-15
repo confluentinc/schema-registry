@@ -392,6 +392,34 @@ public class CelValidatorVariantTest {
     assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
   }
 
+  // ---- variants.path("$"): identity selector returns input unchanged ----
+
+  @Test
+  void variantsPath_dollarOnScalarRoot_returnsSameVariant() throws Exception {
+    // $ is the JSONPath identity selector — should return the root variant
+    // unchanged, regardless of whether the root is OBJECT, ARRAY, or a scalar
+    // type. Matches Spark variant_get(v, '$') semantics. Confirm by composing
+    // with variants.as on a top-level INT variant: extraction succeeds.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"variants.as("
+        + "                       variants.path(variant(this), \\\"$\\\"),"
+        + "                       \\\"int\\\")"
+        + "                    == 42\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    // Top-level variant is an INT (Variant.Type.INT), not OBJECT or ARRAY.
+    DynamicMessage doc = docWithVariantJson(schema, "42");
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), doc);
+    assertTrue(errs.isEmpty(), "got: " + errs + " causes: " + dumpCauses(errs));
+  }
+
   // ---- variants.* on non-Variant input: clear IAE, not ClassCastException ----
 
   @Test

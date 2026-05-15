@@ -285,6 +285,94 @@ public class CelValidatorDecimalTest {
     assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
   }
 
+  @Test
+  void decimalFromBytesAndScale_overflowScaleThrowsCanonicalMessage() {
+    // CEL int is i64; BigDecimal scale is int32. A scale value outside int
+    // range must throw with a clear message rather than silently truncating
+    // via Long.intValue() (which would take the lower 32 bits and produce a
+    // completely wrong scale). Mirrors variants.elem's int-overflow check.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  option (confluent.message_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        // 4_294_967_296 = 2^32, far outside int range. Without the check,
+        // intValue() would silently wrap to 0 and the rule would pass with
+        // an unscaled BigDecimal.
+        + "             expr: \"decimals.eq(decimal(this.value, 4294967296),"
+        + "                                 decimal(\\\"123.45\\\"))\"}]\n"
+        + "  };\n"
+        + "  bytes value = 1;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("value"),
+            ByteString.copyFrom(new BigInteger("12345").toByteArray()))
+        .build();
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
+    assertEquals(1, errs.size(),
+        "expected out-of-range scale to throw; got: " + errs);
+    String causes = causeChainMessages(errs.get(0).getCause());
+    assertTrue(causes.contains("scale out of int range"),
+        "expected canonical 'scale out of int range' message; got causes: " + causes);
+  }
+
+  @Test
+  void decimalsRound_overflowScaleThrowsCanonicalMessage() {
+    // Same int-truncation hazard as decimal(bytes, scale): a CEL Long scale
+    // outside int range must throw with a clear "decimals.round: scale out of
+    // int range" message, not silently wrap via Long.intValue().
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.round(decimal(\\\"1.23\\\"), 4294967296)"
+        + "                    == decimal(\\\"1.23\\\")\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
+    assertEquals(1, errs.size(),
+        "expected out-of-range scale to throw; got: " + errs);
+    String causes = causeChainMessages(errs.get(0).getCause());
+    assertTrue(causes.contains("decimals.round: scale out of int range"),
+        "expected canonical 'decimals.round: scale out of int range'; got causes: " + causes);
+  }
+
+  @Test
+  void decimalsTrunc_overflowScaleThrowsCanonicalMessage() {
+    // Same int-truncation hazard for decimals.trunc(d, scale).
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "message X {\n"
+        + "  int32 anchor = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.trunc(decimal(\\\"1.23\\\"), 4294967296)"
+        + "                    == decimal(\\\"1.23\\\")\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor desc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(desc)
+        .setField(desc.findFieldByName("anchor"), 1)
+        .build();
+    List<ValidationRuleError> errs = schema.validateMessage(new CelValidator(), msg);
+    assertEquals(1, errs.size(),
+        "expected out-of-range scale to throw; got: " + errs);
+    String causes = causeChainMessages(errs.get(0).getCause());
+    assertTrue(causes.contains("decimals.trunc: scale out of int range"),
+        "expected canonical 'decimals.trunc: scale out of int range'; got causes: " + causes);
+  }
+
   /** Build a confluent.type.Decimal DynamicMessage as a value for the given field. */
   private static DynamicMessage decimal(Descriptor parentDesc, String fieldName, String amount) {
     Descriptor decimalDesc = parentDesc.findFieldByName(fieldName).getMessageType();
