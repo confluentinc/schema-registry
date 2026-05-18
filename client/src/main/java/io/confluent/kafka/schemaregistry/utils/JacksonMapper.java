@@ -36,23 +36,6 @@ public class JacksonMapper {
 
     return configure(mapper);
   }
-  public static ObjectMapper newObjectMapper(int maxStringLength) {
-    // Configure StreamReadConstraints to prevent Jackson from loading
-    // excessively large strings/arrays/objects into memory
-    StreamReadConstraints streamReadConstraints = StreamReadConstraints.builder()
-        .maxStringLength(maxStringLength)
-        .build();
-
-    JsonFactory jsonFactory = JsonFactory.builder()
-        .streamReadConstraints(streamReadConstraints)
-        .build();
-
-    final ObjectMapper mapper = JsonMapper.builder(jsonFactory)
-        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
-        .build();
-
-    return configure(mapper);
-  }
 
   private static ObjectMapper configure(ObjectMapper mapper) {
     // For Optional support
