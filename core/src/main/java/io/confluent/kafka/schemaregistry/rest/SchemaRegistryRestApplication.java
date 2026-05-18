@@ -108,22 +108,10 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config) {
     super(config);
-    configureJacksonMapper(config);
   }
 
   public SchemaRegistryRestApplication(SchemaRegistryConfig config, X509Source x509Source) {
     super(config, x509Source);
-    configureJacksonMapper(config);
-  }
-
-  private void configureJacksonMapper(SchemaRegistryConfig config) {
-    try {
-      int maxSize = config.getInt(SchemaRegistryConfig.MAX_REQUEST_BODY_SIZE_CONFIG);
-      JacksonMapper.configure(maxSize);
-    } catch (IllegalStateException e) {
-      // Already configured, ignore
-      log.debug("JacksonMapper already configured", e);
-    }
   }
 
   protected SchemaRegistry initSchemaRegistry(SchemaRegistryConfig config) {
