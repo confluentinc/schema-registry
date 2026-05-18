@@ -41,8 +41,6 @@ public class JacksonMapper {
     // excessively large strings/arrays/objects into memory
     StreamReadConstraints streamReadConstraints = StreamReadConstraints.builder()
         .maxStringLength(maxStringLength)
-        .maxNumberLength(1000)
-        .maxNestingDepth(1000)
         .build();
 
     JsonFactory jsonFactory = JsonFactory.builder()
