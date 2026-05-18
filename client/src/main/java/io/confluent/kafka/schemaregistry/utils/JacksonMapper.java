@@ -29,13 +29,13 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 public class JacksonMapper {
   public static final ObjectMapper INSTANCE = newObjectMapper();
 
-  // Default max string length (1MB) - matches default MAX_REQUEST_BODY_SIZE_CONFIG
-  private static final int DEFAULT_MAX_STRING_LENGTH = 1048576;
-
   public static ObjectMapper newObjectMapper() {
-    return newObjectMapper(DEFAULT_MAX_STRING_LENGTH);
-  }
+    final ObjectMapper mapper = JsonMapper.builder()
+      .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+      .build();
 
+    return configure(mapper);
+  }
   public static ObjectMapper newObjectMapper(int maxStringLength) {
     // Configure StreamReadConstraints to prevent Jackson from loading
     // excessively large strings/arrays/objects into memory
