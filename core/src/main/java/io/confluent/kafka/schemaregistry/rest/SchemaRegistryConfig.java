@@ -218,7 +218,7 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>max.body.size</code>
    */
-  public static final String MAX_REQ_BODY_SIZE_CONFIG = "max.req.body.size";
+  public static final String MAX_REQ_BODY_SIZE_CONFIG = "max.request.body.size";
   public static final int MAX_REQ_BODY_SIZE_DEFAULT = 1048576; // 1MB
 
 
@@ -445,8 +445,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
       "The expiration in seconds for entries accessed in the cache.";
   protected static final String SIZE_LIMIT_HANDLER_ENABLED_DOC =
-      "Enable the size limit handler to enforce request and response body size limits. "
-      + "When enabled, requests/responses exceeding the configured size will be rejected.";
+      "Enable the size limit handler to enforce request body size limits. "
+      + "When enabled, requests exceeding the configured size will be rejected.";
   protected static final String MAX_REQ_BODY_SIZE_DOC =
       "Maximum size in bytes for HTTP request and response bodies. "
       + "Requests exceeding this limit will be rejected with HTTP 413.";
