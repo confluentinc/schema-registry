@@ -150,6 +150,7 @@ public abstract class AbstractKafkaSchemaSerDe
 
   private volatile PluginMetrics pluginMetrics;
   private volatile RuleMetrics ruleMetrics;
+  private volatile boolean ruleMetricsEnabled = true;
 
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
@@ -235,6 +236,7 @@ public abstract class AbstractKafkaSchemaSerDe
     }
     executionEnv = config.getExecutionEnvironment();
     enableRuleServiceLoader = config.enableRuleServiceLoader();
+    ruleMetricsEnabled = config.enableRuleMetrics();
     ruleExecutors = initRuleObjects(
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
     ruleActions = initRuleObjects(
@@ -249,8 +251,13 @@ public abstract class AbstractKafkaSchemaSerDe
 
   @Override
   public void withPluginMetrics(PluginMetrics metrics) {
+    if (this.pluginMetrics != null) {
+      return;
+    }
     this.pluginMetrics = metrics;
-    this.ruleMetrics = new RuleMetrics(metrics);
+    if (ruleMetricsEnabled) {
+      this.ruleMetrics = new RuleMetrics(metrics);
+    }
     // If configure already ran, executors/actions are already built;
     // hand them the metrics handle now. If configure hasn't run yet,
     // configureClientProperties will call propagate at the end.
@@ -825,9 +832,6 @@ public abstract class AbstractKafkaSchemaSerDe
       }
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
-        if (rm != null) {
-          rm.recordExecution(rule, ruleMode, subject);
-        }
         try {
           Object result = ruleExecutor.transform(ctx, message);
           switch (rule.getKind()) {
@@ -843,28 +847,18 @@ public abstract class AbstractKafkaSchemaSerDe
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
           boolean transformSucceeded = message != null;
-          if (rm != null) {
-            if (transformSucceeded) {
-              rm.recordSuccess(rule, ruleMode, subject);
-            } else {
-              rm.recordFailure(rule, ruleMode, subject);
-            }
-          }
           runAction(ctx, ruleMode, rule,
               transformSucceeded ? getOnSuccess(rule) : getOnFailure(rule),
-              message, null, transformSucceeded ? null : ErrorAction.TYPE
-          );
+              message, null, transformSucceeded ? null : ErrorAction.TYPE,
+              transformSucceeded);
         } catch (RuleException e) {
-          if (rm != null) {
-            rm.recordFailure(rule, ruleMode, subject);
-          }
           runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e,
-              ErrorAction.TYPE);
+              ErrorAction.TYPE, false);
         }
       } else {
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
             new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
-            ErrorAction.TYPE);
+            ErrorAction.TYPE, false);
       }
     }
     return message;
@@ -1043,7 +1037,16 @@ public abstract class AbstractKafkaSchemaSerDe
   }
 
   private void runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,
-      Object message, RuleException ex, String defaultAction) {
+      Object message, RuleException ex, String defaultAction, boolean ruleSucceeded) {
+    RuleMetrics rm = ruleMetrics;
+    if (rm != null) {
+      rm.recordExecution(rule, ruleMode, ctx.subject());
+      if (ruleSucceeded) {
+        rm.recordSuccess(rule, ruleMode, ctx.subject());
+      } else {
+        rm.recordFailure(rule, ruleMode, ctx.subject());
+      }
+    }
     String actionName = getRuleActionName(rule, ruleMode, action);
     if (actionName == null) {
       actionName = defaultAction;
@@ -1054,7 +1057,6 @@ public abstract class AbstractKafkaSchemaSerDe
         log.error("Could not find rule action of type {}", actionName);
         throw new ConfigException("Could not find rule action of type " + actionName);
       }
-      RuleMetrics rm = ruleMetrics;
       if (rm != null) {
         rm.recordAction(rule, ruleMode, ctx.subject(), actionName);
       }

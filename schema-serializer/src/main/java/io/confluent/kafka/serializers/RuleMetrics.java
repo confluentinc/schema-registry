@@ -29,7 +29,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 
 /**
- * Layer 1 rule-metrics registry for {@link AbstractKafkaSchemaSerDe}.
+ * Rule-metrics registry for {@link AbstractKafkaSchemaSerDe}.
  *
  * <p>Owns the lazy registration of one {@link Sensor} (with a single
  * {@link CumulativeCount} metric) per outcome / per rule tuple, and one
