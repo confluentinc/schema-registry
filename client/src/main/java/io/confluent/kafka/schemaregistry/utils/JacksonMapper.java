@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.utils;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -27,8 +29,27 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 public class JacksonMapper {
   public static final ObjectMapper INSTANCE = newObjectMapper();
 
+  // Default max string length (1MB) - matches default MAX_REQUEST_BODY_SIZE_CONFIG
+  private static final int DEFAULT_MAX_STRING_LENGTH = 1048576;
+
   public static ObjectMapper newObjectMapper() {
-    final ObjectMapper mapper = JsonMapper.builder()
+    return newObjectMapper(DEFAULT_MAX_STRING_LENGTH);
+  }
+
+  public static ObjectMapper newObjectMapper(int maxStringLength) {
+    // Configure StreamReadConstraints to prevent Jackson from loading
+    // excessively large strings/arrays/objects into memory
+    StreamReadConstraints streamReadConstraints = StreamReadConstraints.builder()
+        .maxStringLength(maxStringLength)
+        .maxNumberLength(1000)
+        .maxNestingDepth(1000)
+        .build();
+
+    JsonFactory jsonFactory = JsonFactory.builder()
+        .streamReadConstraints(streamReadConstraints)
+        .build();
+
+    final ObjectMapper mapper = JsonMapper.builder(jsonFactory)
         .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
         .build();
 
