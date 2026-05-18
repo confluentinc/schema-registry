@@ -29,8 +29,8 @@ public class JacksonMapper {
 
   public static ObjectMapper newObjectMapper() {
     final ObjectMapper mapper = JsonMapper.builder()
-        .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
-        .build();
+      .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
+      .build();
 
     return configure(mapper);
   }
