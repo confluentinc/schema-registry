@@ -210,6 +210,19 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
 
   /**
+   * <code>max.request.body.size</code>
+   */
+  public static final String MAX_REQUEST_BODY_SIZE_CONFIG = "max.request.body.size";
+  public static final int MAX_REQUEST_BODY_SIZE_DEFAULT = Integer.MAX_VALUE;
+
+  /**
+   * <code>max.response.body.size</code>
+   */
+  public static final String MAX_RESPONSE_BODY_SIZE_CONFIG = "max.response.body.size";
+  public static final int MAX_RESPONSE_BODY_SIZE_DEFAULT = Integer.MAX_VALUE;
+
+
+  /**
    * <code>schema.canonicalize.on.consume</code>
    */
   public static final String SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG =
@@ -431,6 +444,12 @@ public class SchemaRegistryConfig extends RestConfig {
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
       "The expiration in seconds for entries accessed in the cache.";
+  protected static final String MAX_REQUEST_BODY_SIZE_DOC =
+      "Maximum size in bytes for HTTP request bodies. "
+      + "Requests exceeding this limit will be rejected with HTTP 413";
+  protected static final String MAX_RESPONSE_BODY_SIZE_DOC =
+      "Maximum size in bytes for HTTP response bodies. "
+      + "Response exceeding this limit will be return 500";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
   protected static final String SCHEMA_SEARCH_DEFAULT_LIMIT_DOC =
@@ -675,6 +694,12 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
+    )
+    .define(MAX_REQUEST_BODY_SIZE_CONFIG, ConfigDef.Type.INT, MAX_REQUEST_BODY_SIZE_DEFAULT,
+        ConfigDef.Importance.MEDIUM, MAX_REQUEST_BODY_SIZE_DOC
+    )
+    .define(MAX_RESPONSE_BODY_SIZE_CONFIG, ConfigDef.Type.INT, MAX_RESPONSE_BODY_SIZE_DEFAULT,
+        ConfigDef.Importance.MEDIUM, MAX_RESPONSE_BODY_SIZE_DOC
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
