@@ -21,6 +21,11 @@
                 <include>notices/</include>
             </includes>
         </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/src/main/resources/META-INF/native-image</directory>
+            <outputDirectory>META-INF/native-image</outputDirectory>
+            <includes><include>*</include></includes>
+        </fileSet>
     </fileSets>
     <dependencySets>
         <dependencySet>

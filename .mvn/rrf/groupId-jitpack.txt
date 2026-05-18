@@ -1,0 +1,3 @@
+# Only io.jitpack artifacts may be resolved from the JitPack repository.
+# "io.jitpack" means io.jitpack and all sub-groupIds below it.
+io.jitpack

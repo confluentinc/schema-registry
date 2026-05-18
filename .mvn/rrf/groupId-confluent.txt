@@ -1,0 +1,5 @@
+# Only io.confluent artifacts may be resolved from the Confluent repository.
+# "io.confluent" means io.confluent and all sub-groupIds below it.
+io.confluent
+!org
+!*

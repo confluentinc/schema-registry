@@ -1,6 +1,8 @@
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://maven.apache.org/POM/4.0.0"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="http://maven.apache.org/POM/4.0.0"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd"
+>
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -38,8 +40,10 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:git://github.com/confluentinc/schema-registry.git</connection>
-        <developerConnection>scm:git:git@github.com:confluentinc/schema-registry.git</developerConnection>
+        <connection
+        >scm:git:git://github.com/confluentinc/schema-registry.git</connection>
+        <developerConnection
+        >scm:git:git@github.com:confluentinc/schema-registry.git</developerConnection>
         <url>https://github.com/confluentinc/schema-registry</url>
         <tag>HEAD</tag>
     </scm>
@@ -82,12 +86,15 @@
     </modules>
 
     <properties>
-        <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
+        <apache.directory.server.version
+        >2.0.0-M22</apache.directory.server.version>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <exec-maven-plugin.version>1.2.1</exec-maven-plugin.version>
         <podam.version>7.2.11.RELEASE</podam.version>
-        <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
-        <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
+        <checkstyle.suppressions.location
+        >checkstyle/suppressions.xml</checkstyle.suppressions.location>
+        <kafka.connect.maven.plugin.version
+        >0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.1</antlr.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
@@ -100,14 +107,16 @@
         <json-schema.version>1.14.6</json-schema.version>
         <json-skema.version>0.28.0</json-skema.version>
         <kcache.version>5.2.3</kcache.version>
-        <proto-google-common-protos.version>2.53.0</proto-google-common-protos.version>
+        <proto-google-common-protos.version
+        >2.53.0</proto-google-common-protos.version>
         <protobuf.maven.plugin.version>2.10.3</protobuf.maven.plugin.version>
         <okio.version>3.4.0</okio.version>
         <tink.version>1.20.0</tink.version>
         <tink.gcp.kms.version>1.10.0</tink.gcp.kms.version>
         <wire.version>5.5.0</wire.version>
         <swagger.version>2.2.29</swagger.version>
-        <io.confluent.schema-registry.version>8.2.0-0</io.confluent.schema-registry.version>
+        <io.confluent.schema-registry.version
+        >8.2.0-0</io.confluent.schema-registry.version>
         <commons.compress.version>1.26.1</commons.compress.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons.validator.version>1.9.0</commons.validator.version>
@@ -123,10 +132,10 @@
             <name>Confluent</name>
             <url>https://packages.confluent.io/maven/</url>
         </repository>
-        <repository>
-            <id>jitpack.io</id>
+        <!-- <repository>
+            <id>jitpack</id>
             <url>https://jitpack.io</url>
-        </repository>
+        </repository> -->
     </repositories>
 
     <dependencyManagement>
@@ -525,11 +534,16 @@
                     <artifactId>kafka-connect-maven-plugin</artifactId>
                     <version>${kafka.connect.maven.plugin.version}</version>
                     <configuration>
-                        <documentationUrl>https://docs.confluent.io/${io.confluent.schema-registry.version}/schema-registry/docs/connect.html</documentationUrl>
-                        <sourceUrl>https://github.com/confluentinc/schema-registry</sourceUrl>
-                        <supportProviderName>${project.organization.name}</supportProviderName>
-                        <supportSummary>Confluent supports the Avro Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
-                        <supportUrl>https://docs.confluent.io/current/</supportUrl>
+                        <documentationUrl
+                        >https://docs.confluent.io/${io.confluent.schema-registry.version}/schema-registry/docs/connect.html</documentationUrl>
+                        <sourceUrl
+                        >https://github.com/confluentinc/schema-registry</sourceUrl>
+                        <supportProviderName
+                        >${project.organization.name}</supportProviderName>
+                        <supportSummary
+                        >Confluent supports the Avro Converter alongside community members as part of its Confluent Platform offering.</supportSummary>
+                        <supportUrl
+                        >https://docs.confluent.io/current/</supportUrl>
                         <supportLogo>logos/confluent.png</supportLogo>
                         <ownerUsername>confluentinc</ownerUsername>
                         <ownerType>organization</ownerType>
@@ -559,7 +573,8 @@
                         <sourceDirectories>
                             <include>src/test/proto</include>
                         </sourceDirectories>
-                        <embedSourcesInClassOutputs>true</embedSourcesInClassOutputs>
+                        <embedSourcesInClassOutputs
+                        >true</embedSourcesInClassOutputs>
                     </configuration>
 
                     <executions>
@@ -590,7 +605,8 @@
                 <version>${spotbugs.maven.plugin.version}</version>
                 <configuration>
                     <xmlOutput>true</xmlOutput>
-                    <excludeFilterFile>findbugs/findbugs-exclude.xml</excludeFilterFile>
+                    <excludeFilterFile
+                    >findbugs/findbugs-exclude.xml</excludeFilterFile>
                     <effort>Max</effort>
                     <threshold>Max</threshold>
                     <failOnError>true</failOnError>
