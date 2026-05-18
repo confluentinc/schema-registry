@@ -15,7 +15,8 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.MAX_REQUEST_BODY_SIZE_CONFIG;
+import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.MAX_REQ_BODY_SIZE_CONFIG;
+import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.SIZE_LIMIT_HANDLER_ENABLED_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -40,7 +41,8 @@ public class RestApiRequestBodySizeClusterTest {
   public RestApiRequestBodySizeClusterTest() {
     this.harness = new ClusterTestHarness(1, true);
     Properties props = new Properties();
-    props.setProperty(MAX_REQUEST_BODY_SIZE_CONFIG, "1024"); // 1KB limit
+    props.setProperty(SIZE_LIMIT_HANDLER_ENABLED_CONFIG, "true"); // 1KB limit
+    props.setProperty(MAX_REQ_BODY_SIZE_CONFIG, "1024"); // 1KB limit
     this.harness.injectSchemaRegistryProperties(props);  // Pass props, not new Properties()!
   }
 

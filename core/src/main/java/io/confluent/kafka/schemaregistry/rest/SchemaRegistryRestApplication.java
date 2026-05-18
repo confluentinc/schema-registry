@@ -57,6 +57,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.MAX_REQ_BODY_SIZE_CONFIG;
+
+
 public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRestApplication.class);
@@ -76,15 +79,16 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     super.configurePreResourceHandling(context);
     context.setErrorHandler(new JsonErrorHandler());
 
-    // Install Jetty's SizeLimitHandler FIRST, before any other processing
+    // Install Jetty's SizeLimitHandler FIRST, before any other processing (if enabled)
     // This prevents large requests from consuming memory during deserialization
-    long maxRequestBodySize = config.getInt(SchemaRegistryConfig.MAX_REQUEST_BODY_SIZE_CONFIG);
-    long maxResponseBodySize = config.getInt(SchemaRegistryConfig.MAX_RESPONSE_BODY_SIZE_DOC);
-    log.info("Configuring SizeLimitHandler with max request/response body size: {}/{} bytes",
-        maxRequestBodySize, maxResponseBodySize);
-    SizeLimitHandler sizeLimitHandler =
-        new SizeLimitHandler(maxRequestBodySize, maxResponseBodySize);
-    context.insertHandler(sizeLimitHandler);
+    boolean sizeLimitHandlerEnabled = config.getBoolean(
+        SchemaRegistryConfig.SIZE_LIMIT_HANDLER_ENABLED_CONFIG);
+    if (sizeLimitHandlerEnabled) {
+      long maxReqBodySize = config.getInt(MAX_REQ_BODY_SIZE_CONFIG);
+      log.info("Configuring SizeLimitHandler with max req body size: {} bytes", maxReqBodySize);
+      SizeLimitHandler sizeLimitHandler = new SizeLimitHandler(maxReqBodySize, Long.MAX_VALUE);
+      context.insertHandler(sizeLimitHandler);
+    }
 
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
