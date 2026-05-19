@@ -16,36 +16,41 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
-import com.google.api.expr.v1alpha1.Decl;
-import com.google.api.expr.v1alpha1.Type;
+import com.google.common.collect.ImmutableList;
+import dev.cel.common.CelFunctionDecl;
+import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.CelValidationException;
+import dev.cel.common.CelVarDecl;
+import dev.cel.common.types.CelType;
+import dev.cel.common.types.SimpleType;
+import dev.cel.common.types.StructTypeReference;
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
+import dev.cel.extensions.CelExtensions;
+import dev.cel.parser.CelStandardMacro;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
-import org.projectnessie.cel.Env;
-import org.projectnessie.cel.EnvOption;
-import org.projectnessie.cel.Library;
-import org.projectnessie.cel.checker.Decls;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 /**
- * Strict cel-java type-checker for emitted CEL expressions. Used as the
- * post-emit safety net in {@link ConstraintToCelTranslator#translate}: every
- * constraint translation runs the resulting CEL through cel-java's checker
- * with the schema's actual column types declared (not {@code dyn}), so any
- * type/overload mismatch the hand-coded validator passes missed becomes a
- * parse-time {@link ValidationException} instead of a runtime CEL error
- * downstream.
+ * Strict Google cel-java type-checker for emitted CEL expressions. Used as
+ * the post-emit safety net in {@link ConstraintToCelTranslator#translate}:
+ * every constraint translation runs the resulting CEL through cel-java's
+ * checker with the schema's actual column types declared (not {@code dyn}),
+ * so any type/overload mismatch the hand-coded validator passed missed
+ * becomes a parse-time {@link ValidationException} instead of a runtime CEL
+ * error downstream.
  *
  * <p>The strict checker uses {@link ConstraintTypeProvider} to resolve
- * {@code this.<field>} accesses against the LT schema. CEL stdlib functions
- * are loaded via {@link Library#StdLib()}; extension methods our emit uses
- * (upperAscii, lowerAscii, trim, substring, indexOf, replace) are declared
- * here since nessie's stdlib doesn't ship them. Protovalidate-style format
- * validators (isEmail, isHostname, isIpv4, isIpv6, isUri, isUriRef, isUuid)
- * are also declared.
+ * {@code this.<field>} accesses against the LT schema. CEL standard
+ * functions are loaded via {@link CelCompilerFactory#standardCelCompilerBuilder()};
+ * {@link CelExtensions#strings()} supplies the StringsExt overloads our emit
+ * uses (upperAscii, lowerAscii, replace, substring, indexOf, trim).
+ * Protovalidate-style format validators (isEmail, isHostname, isIpv4, isIpv6,
+ * isUri, isUriRef, isUuid) are declared here.
  *
  * <p>{@code now} is declared as {@code timestamp} for the
  * CURRENT_TIMESTAMP runtime variable our emit references.
@@ -79,25 +84,13 @@ final class ConstraintCelChecker {
     if (vctx == null) {
       return;
     }
-    Env env = newStrictEnv(vctx);
-    Env.AstIssuesTuple parsed = env.parse(cel);
-    if (parsed.hasIssues()) {
-      throw new ValidationException(
-          "Emitted CEL fails parsing — internal translator bug. "
-              + sourceContext(sourceSql, cel) + parsed.getIssues());
-    }
-    Env.AstIssuesTuple checked;
+    CelCompiler compiler = newStrictCompiler(vctx);
     try {
-      checked = env.check(parsed.getAst());
-    } catch (org.projectnessie.cel.common.types.Err.ErrException e) {
+      compiler.compile(cel).getAst();
+    } catch (CelValidationException e) {
       throw new ValidationException(
           "Emitted CEL fails strict type-check. "
               + sourceContext(sourceSql, cel) + e.getMessage());
-    }
-    if (checked.hasIssues()) {
-      throw new ValidationException(
-          "Emitted CEL fails strict type-check. "
-              + sourceContext(sourceSql, cel) + checked.getIssues());
     }
   }
 
@@ -111,19 +104,19 @@ final class ConstraintCelChecker {
   }
 
   /**
-   * Build a strict env from {@code vctx}. {@code this} is declared with
+   * Build a strict compiler from {@code vctx}. {@code this} is declared with
    * the appropriate type:
    * <ul>
    *   <li>Column-level CHECK: {@code this} is the field's CEL primitive
-   *       type (or a synthetic object type if the column is a STRUCT).</li>
-   *   <li>Table-level CHECK: {@code this} is a synthetic object type
+   *       type (or a synthetic struct type if the column is a STRUCT).</li>
+   *   <li>Table-level CHECK: {@code this} is a synthetic struct type
    *       resolved by {@link ConstraintTypeProvider} to the column-table
    *       fields.</li>
    * </ul>
    */
-  private static Env newStrictEnv(ConstraintValidationContext vctx) {
+  private static CelCompiler newStrictCompiler(ConstraintValidationContext vctx) {
     ConstraintTypeProvider provider = new ConstraintTypeProvider(vctx);
-    Type thisType;
+    CelType thisType;
     if (vctx.isColumnLevel()) {
       // Column-level: `this` is the single column's value. Walk the
       // context's column map (it has exactly one entry) to find it.
@@ -134,74 +127,70 @@ final class ConstraintCelChecker {
       // root with the column-table fields.
       Schema rootStruct = buildRootStruct(vctx);
       provider.registerRoot(rootStruct);
-      thisType = Decls.newObjectType(ConstraintTypeProvider.ROOT_TYPE_NAME);
+      thisType = StructTypeReference.create(ConstraintTypeProvider.ROOT_TYPE_NAME);
     }
-    List<Decl> decls = new ArrayList<>();
-    decls.add(Decls.newVar("this", thisType));
-    decls.addAll(commonDeclarations());
-    // Bracket-access overload: emit uses `this["fieldname"]` for fields
-    // whose names are CEL-reserved words (`in`, `null`, etc.). nessie's
-    // stdlib `_[_]` is defined for map and list, not custom object types,
-    // so we declare a permissive overload that accepts our synthetic root
-    // type indexed by string and returns dyn (the field type).
+    List<CelVarDecl> varDecls = new ArrayList<>();
+    varDecls.add(CelVarDecl.newVarDeclaration("this", thisType));
+    varDecls.add(CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP));
+    List<CelFunctionDecl> funcDecls = new ArrayList<>(commonDeclarations());
+    // Bracket-access overload: emit uses `this["fieldname"]` for fields whose
+    // names are CEL-reserved words (`in`, `null`, etc.). Standard `_[_]` is
+    // declared for map and list only; declare a permissive overload that
+    // accepts our synthetic root type indexed by string and returns dyn.
+    // Strict-check only — no runtime binding (production evaluates against
+    // the actual data value, which supports bracket-access natively for
+    // maps/messages in cel-go).
     if (!vctx.isColumnLevel()) {
-      decls.add(Decls.newFunction("_[_]",
-          Decls.newOverload("index_lt_root_string",
-              Arrays.asList(Decls.newObjectType(
-                  ConstraintTypeProvider.ROOT_TYPE_NAME), Decls.String),
-              Decls.Dyn)));
+      funcDecls.add(CelFunctionDecl.newFunctionDeclaration(
+          "_[_]",
+          CelOverloadDecl.newGlobalOverload(
+              "index_lt_root_string",
+              SimpleType.DYN,
+              ImmutableList.of(
+                  StructTypeReference.create(ConstraintTypeProvider.ROOT_TYPE_NAME),
+                  SimpleType.STRING))));
     }
-    return Env.newCustomEnv(provider, Arrays.asList(
-        Library.StdLib(),
-        EnvOption.declarations(decls.toArray(new Decl[0]))));
+    // STANDARD_MACROS enables has(), all(), exists(), exists_one(), map(),
+    // filter() — without it, has(this.x) fails as an undeclared reference.
+    // Google cel-java's standardCelCompilerBuilder() omits these by default.
+    return CelCompilerFactory.standardCelCompilerBuilder()
+        .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+        .addLibraries(CelExtensions.strings())
+        .addVarDeclarations(varDecls)
+        .addFunctionDeclarations(funcDecls)
+        .setTypeProvider(provider)
+        .build();
   }
 
   /**
-   * Common variable + function declarations layered on top of CEL stdlib:
+   * Common function declarations layered on top of CEL stdlib and
+   * {@link CelExtensions#strings()}:
    * <ul>
-   *   <li>{@code now} (Timestamp) for {@code CURRENT_TIMESTAMP} emit</li>
-   *   <li>String extension methods our emit uses but nessie's stdlib
-   *       doesn't ship (upperAscii, lowerAscii, trim, substring, indexOf,
-   *       replace)</li>
    *   <li>Protovalidate-style format validators (isEmail, isHostname,
-   *       isIpv4, isIpv6, isUri, isUriRef, isUuid)</li>
+   *       isIpv4, isIpv6, isUri, isUriRef, isUuid) — receiver-style on
+   *       {@code string}.</li>
    * </ul>
-   * Nessie stdlib already declares {@code contains}, {@code endsWith},
-   * {@code matches}, {@code startsWith}, {@code size} and the timestamp
-   * accessors ({@code getFullYear} etc. via {@code timestamp_to_*}); we
-   * skip those to avoid overlapping-overload errors.
+   *
+   * <p>CEL stdlib (via {@code standardCelCompilerBuilder()}) already
+   * declares {@code contains}, {@code endsWith}, {@code matches},
+   * {@code startsWith}, {@code size} and timestamp accessors; we skip those
+   * to avoid overlapping-overload errors. {@link CelExtensions#strings()}
+   * supplies {@code upperAscii}, {@code lowerAscii}, {@code replace},
+   * {@code substring}, {@code indexOf}, {@code trim}, etc.
    */
-  static List<Decl> commonDeclarations() {
-    List<Decl> decls = new ArrayList<>();
-    decls.add(Decls.newVar("now", Decls.Timestamp));
+  static List<CelFunctionDecl> commonDeclarations() {
+    List<CelFunctionDecl> decls = new ArrayList<>();
     for (String name : Arrays.asList(
         "isEmail", "isHostname", "isIpv4", "isIpv6",
         "isUri", "isUriRef", "isUuid")) {
-      decls.add(Decls.newFunction(name, Decls.newInstanceOverload(
-          name + "_string",
-          Collections.singletonList(Decls.String), Decls.Bool)));
+      decls.add(CelFunctionDecl.newFunctionDeclaration(
+          name,
+          CelOverloadDecl.newMemberOverload(
+              name + "_string",
+              SimpleType.BOOL,
+              ImmutableList.of(SimpleType.STRING))));
     }
-    decls.add(Decls.newFunction("upperAscii", Decls.newInstanceOverload(
-        "upperAscii_string",
-        Collections.singletonList(Decls.String), Decls.String)));
-    decls.add(Decls.newFunction("lowerAscii", Decls.newInstanceOverload(
-        "lowerAscii_string",
-        Collections.singletonList(Decls.String), Decls.String)));
-    decls.add(Decls.newFunction("trim", Decls.newInstanceOverload(
-        "trim_string",
-        Collections.singletonList(Decls.String), Decls.String)));
-    decls.add(Decls.newFunction("substring",
-        Decls.newInstanceOverload("substring_string_int",
-            Arrays.asList(Decls.String, Decls.Int), Decls.String),
-        Decls.newInstanceOverload("substring_string_int_int",
-            Arrays.asList(Decls.String, Decls.Int, Decls.Int), Decls.String)));
-    decls.add(Decls.newFunction("indexOf", Decls.newInstanceOverload(
-        "indexOf_string_string",
-        Arrays.asList(Decls.String, Decls.String), Decls.Int)));
-    decls.add(Decls.newFunction("replace", Decls.newInstanceOverload(
-        "replace_string_string_string",
-        Arrays.asList(Decls.String, Decls.String, Decls.String), Decls.String)));
-    return decls;
+    return Collections.unmodifiableList(decls);
   }
 
   private static Schema singleColumnSchema(ConstraintValidationContext vctx) {

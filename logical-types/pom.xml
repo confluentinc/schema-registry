@@ -96,12 +96,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.projectnessie.cel</groupId>
-            <artifactId>cel-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.projectnessie.cel</groupId>
-            <artifactId>cel-generated-pb</artifactId>
+            <groupId>dev.cel</groupId>
+            <artifactId>cel</artifactId>
         </dependency>
     </dependencies>
 
