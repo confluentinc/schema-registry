@@ -19,11 +19,13 @@ package io.confluent.kafka.schemaregistry.rules;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import java.util.Map;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 
 /**
  * Base type for rule interfaces.
  */
-public interface RuleBase extends AutoCloseable, Configurable {
+public interface RuleBase extends AutoCloseable, Configurable, Monitorable {
 
   public static final String DEFAULT_NAME = "_default_";
 
@@ -40,5 +42,9 @@ public interface RuleBase extends AutoCloseable, Configurable {
   String type();
 
   default void close() throws RuleException {
+  }
+
+  @Override
+  default void withPluginMetrics(PluginMetrics metrics) {
   }
 }
