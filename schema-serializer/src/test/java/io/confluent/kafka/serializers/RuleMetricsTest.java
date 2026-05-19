@@ -28,8 +28,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricValueProvider;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
+import org.apache.kafka.common.metrics.PluginMetrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,23 +39,67 @@ import org.junit.Test;
 public class RuleMetricsTest {
 
   private Metrics metrics;
-  private PluginMetricsImpl pluginMetrics;
+  private TestPluginMetrics pluginMetrics;
   private RuleMetrics ruleMetrics;
 
   @Before
   public void setUp() {
     metrics = new Metrics();
-    LinkedHashMap<String, String> tags = new LinkedHashMap<>();
-    tags.put("config", "value.serializer");
-    tags.put("class", "KafkaAvroSerializer");
-    pluginMetrics = new PluginMetricsImpl(metrics, tags);
+    LinkedHashMap<String, String> defaultTags = new LinkedHashMap<>();
+    defaultTags.put("config", "value.serializer");
+    defaultTags.put("class", "KafkaAvroSerializer");
+    pluginMetrics = new TestPluginMetrics(metrics, defaultTags);
     ruleMetrics = new RuleMetrics(pluginMetrics);
   }
 
   @After
   public void tearDown() throws Exception {
-    pluginMetrics.close();
     metrics.close();
+  }
+
+  /**
+   * Test-only stub of {@link PluginMetrics}, equivalent in behavior to
+   * Kafka's {@code PluginMetricsImpl} but built against only the public
+   * {@link PluginMetrics} interface and {@link Metrics} class, so the
+   * test does not depend on Kafka internals.
+   */
+  private static final class TestPluginMetrics implements PluginMetrics {
+    private static final String GROUP = "plugins";
+    private final Metrics metrics;
+    private final Map<String, String> defaultTags;
+
+    TestPluginMetrics(Metrics metrics, Map<String, String> defaultTags) {
+      this.metrics = metrics;
+      this.defaultTags = defaultTags;
+    }
+
+    @Override
+    public MetricName metricName(
+        String name, String description, LinkedHashMap<String, String> tags) {
+      LinkedHashMap<String, String> merged = new LinkedHashMap<>(defaultTags);
+      merged.putAll(tags);
+      return metrics.metricName(name, GROUP, description, merged);
+    }
+
+    @Override
+    public void addMetric(MetricName metricName, MetricValueProvider<?> provider) {
+      metrics.addMetric(metricName, provider);
+    }
+
+    @Override
+    public void removeMetric(MetricName metricName) {
+      metrics.removeMetric(metricName);
+    }
+
+    @Override
+    public Sensor addSensor(String name) {
+      return metrics.sensor(name);
+    }
+
+    @Override
+    public void removeSensor(String name) {
+      metrics.removeSensor(name);
+    }
   }
 
   @Test
@@ -193,6 +239,8 @@ public class RuleMetricsTest {
   }
 
   private static final class TagMap extends HashMap<String, String> {
+    private static final long serialVersionUID = 1L;
+
     TagMap with(String k, String v) {
       put(k, v);
       return this;

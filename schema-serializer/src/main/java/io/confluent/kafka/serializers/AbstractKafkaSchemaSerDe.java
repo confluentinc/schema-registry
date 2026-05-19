@@ -257,7 +257,7 @@ public abstract class AbstractKafkaSchemaSerDe
   }
 
   @Override
-  public void withPluginMetrics(PluginMetrics metrics) {
+  public synchronized void withPluginMetrics(PluginMetrics metrics) {
     if (this.pluginMetrics != null) {
       return;
     }
@@ -283,6 +283,9 @@ public abstract class AbstractKafkaSchemaSerDe
   }
 
   private void propagateMetricsToRuleObjects() {
+    if (!ruleMetricsEnabled) {
+      return;
+    }
     PluginMetrics pm = pluginMetrics;
     if (pm == null) {
       return;
@@ -864,11 +867,11 @@ public abstract class AbstractKafkaSchemaSerDe
             default:
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
-          boolean transformSucceeded = message != null;
+          boolean ruleSucceeded = message != null;
           runAction(ctx, ruleMode, rule,
-              transformSucceeded ? getOnSuccess(rule) : getOnFailure(rule),
-              message, null, transformSucceeded ? null : ErrorAction.TYPE,
-              transformSucceeded);
+              ruleSucceeded ? getOnSuccess(rule) : getOnFailure(rule),
+              message, null, ruleSucceeded ? null : ErrorAction.TYPE,
+              ruleSucceeded);
         } catch (RuleException e) {
           runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e,
               ErrorAction.TYPE, false);

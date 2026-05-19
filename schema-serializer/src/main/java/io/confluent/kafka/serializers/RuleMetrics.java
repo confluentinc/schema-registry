@@ -113,9 +113,19 @@ final class RuleMetrics {
       return sensor;
     }
     return map.computeIfAbsent(key, k -> {
-      Sensor s = pluginMetrics.addSensor(sensorName(name, k));
-      s.add(pluginMetrics.metricName(name, description, baseTags(k)),
-          new CumulativeCount());
+      String sn = sensorName(name, k);
+      Sensor s = pluginMetrics.addSensor(sn);
+      // The addSensor succeeded but s.add can still throw (e.g., on a
+      // duplicate MetricName in the underlying Metrics). Roll the sensor
+      // back so a retry doesn't hit "Sensor already exists" on a sensor
+      // that was never wired up.
+      try {
+        s.add(pluginMetrics.metricName(name, description, baseTags(k)),
+            new CumulativeCount());
+      } catch (RuntimeException e) {
+        pluginMetrics.removeSensor(sn);
+        throw e;
+      }
       return s;
     });
   }
@@ -126,12 +136,19 @@ final class RuleMetrics {
       return sensor;
     }
     return actions.computeIfAbsent(key, k -> {
-      Sensor s = pluginMetrics.addSensor(actionSensorName(k));
-      LinkedHashMap<String, String> tags = baseTags(k.rule);
-      tags.put("action", k.action);
-      s.add(pluginMetrics.metricName(ACTIONS_NAME,
-              "Total rule action invocations.", tags),
-          new CumulativeCount());
+      String sn = actionSensorName(k);
+      Sensor s = pluginMetrics.addSensor(sn);
+      try {
+        LinkedHashMap<String, String> tags = baseTags(k.rule);
+        tags.put("action", k.action);
+        s.add(pluginMetrics.metricName(ACTIONS_NAME,
+                "Total rule action invocations; only incremented when an action "
+                    + "is actually dispatched.", tags),
+            new CumulativeCount());
+      } catch (RuntimeException e) {
+        pluginMetrics.removeSensor(sn);
+        throw e;
+      }
       return s;
     });
   }
