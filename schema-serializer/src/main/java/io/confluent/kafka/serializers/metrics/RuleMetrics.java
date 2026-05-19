@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.serializers;
+package io.confluent.kafka.serializers.metrics;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
@@ -29,7 +29,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 
 /**
- * Rule-metrics registry for {@link AbstractKafkaSchemaSerDe}.
+ * Rule-metrics registry for
+ * {@link io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe}.
  *
  * <p>Owns the lazy registration of one {@link Sensor} (with a single
  * {@link CumulativeCount} metric) per outcome / per rule tuple, and one
@@ -44,8 +45,13 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
  * {@code action} on action metrics. {@code config} (key/value
  * serializer) and {@code class} (simple class name) are added
  * automatically by {@code PluginMetricsImpl}.
+ *
+ * <p><b>Internal:</b> this class is public only so it can be referenced
+ * from {@code AbstractKafkaSchemaSerDe} in the parent package. It is
+ * not part of the schema-registry public API and may change without
+ * notice.
  */
-final class RuleMetrics {
+public final class RuleMetrics {
 
   private static final String EXECUTIONS_NAME = "rule.executions.total";
   private static final String SUCCESS_NAME = "rule.success.total";
@@ -62,11 +68,11 @@ final class RuleMetrics {
   private final ConcurrentMap<ActionKey, Sensor> actions = new ConcurrentHashMap<>();
   private final ConcurrentMap<RuleKey, AtomicLong> lastSuccess = new ConcurrentHashMap<>();
 
-  RuleMetrics(PluginMetrics pluginMetrics) {
+  public RuleMetrics(PluginMetrics pluginMetrics) {
     this.pluginMetrics = pluginMetrics;
   }
 
-  void recordExecution(Rule rule, RuleMode mode, String subject) {
+  public void recordExecution(Rule rule, RuleMode mode, String subject) {
     counter(executions, EXECUTIONS_NAME,
         "Total rule dispatches that reached the action stage. "
             + "Equals rule.success.total + rule.failure.total; excludes "
@@ -74,7 +80,7 @@ final class RuleMetrics {
         rule, mode, subject).record();
   }
 
-  void recordSuccess(Rule rule, RuleMode mode, String subject) {
+  public void recordSuccess(Rule rule, RuleMode mode, String subject) {
     counter(success, SUCCESS_NAME,
         "Total rule executions where the configured executor's transform "
             + "returned a non-null result (or, for CONDITION rules, returned true).",
@@ -82,7 +88,7 @@ final class RuleMetrics {
     lastSuccessGauge(rule, mode, subject).set(System.currentTimeMillis());
   }
 
-  void recordFailure(Rule rule, RuleMode mode, String subject) {
+  public void recordFailure(Rule rule, RuleMode mode, String subject) {
     counter(failure, FAILURE_NAME,
         "Total rule executions that failed. Includes: transform threw a "
             + "RuleException, transform returned null (TRANSFORM kind), "
@@ -91,7 +97,7 @@ final class RuleMetrics {
         rule, mode, subject).record();
   }
 
-  void recordSkipped(Rule rule, RuleMode mode, String subject) {
+  public void recordSkipped(Rule rule, RuleMode mode, String subject) {
     counter(skipped, SKIPPED_NAME,
         "Total rule invocations skipped by the dispatch loop before "
             + "reaching the action stage (mode mismatch, disabled, or "
@@ -99,7 +105,7 @@ final class RuleMetrics {
         rule, mode, subject).record();
   }
 
-  void recordAction(Rule rule, RuleMode mode, String subject, String action) {
+  public void recordAction(Rule rule, RuleMode mode, String subject, String action) {
     ActionKey key = new ActionKey(ruleKey(rule, mode, subject), action);
     actionSensor(key).record();
   }
