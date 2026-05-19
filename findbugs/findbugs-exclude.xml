@@ -152,6 +152,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.type.logical.generated.*"/>
+    </Match>
+
+    <Match>
         <Class name="~io.confluent.schemaregistry.benchmark.generated.*"/>
     </Match>
 
