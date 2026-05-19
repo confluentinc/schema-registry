@@ -92,6 +92,8 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -110,7 +112,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListener, Closeable {
+public abstract class AbstractKafkaSchemaSerDe
+    implements ClusterResourceListener, Closeable, Monitorable {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractKafkaSchemaSerDe.class);
 
@@ -144,6 +147,16 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
   private Map<Rule, String> onSuccessActions;
   private Map<Rule, String> onFailureActions;
   private Map<Rule, Boolean> disabledFlags;
+
+  private volatile PluginMetrics pluginMetrics;
+  private volatile RuleMetrics ruleMetrics;
+  // Default to false until configureClientProperties resolves the
+  // rule.metrics.enable config. This guarantees that if withPluginMetrics
+  // arrives before configure (a permitted ordering per the comment below),
+  // we don't eagerly construct RuleMetrics with the field default and then
+  // ignore a later configure-time disable. maybeBuildRuleMetrics() converges
+  // both code paths.
+  private volatile boolean ruleMetricsEnabled = false;
 
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
@@ -229,6 +242,8 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
     }
     executionEnv = config.getExecutionEnvironment();
     enableRuleServiceLoader = config.enableRuleServiceLoader();
+    ruleMetricsEnabled = config.enableRuleMetrics();
+    maybeBuildRuleMetrics();
     ruleExecutors = initRuleObjects(
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
     ruleActions = initRuleObjects(
@@ -236,6 +251,56 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
     onSuccessActions = new ConcurrentHashMap<>();
     onFailureActions = new ConcurrentHashMap<>();
     disabledFlags = new ConcurrentHashMap<>();
+    // If withPluginMetrics fired before configure, propagate the handle
+    // to the executors/actions we just created.
+    propagateMetricsToRuleObjects();
+  }
+
+  @Override
+  public void withPluginMetrics(PluginMetrics metrics) {
+    if (this.pluginMetrics != null) {
+      return;
+    }
+    this.pluginMetrics = metrics;
+    maybeBuildRuleMetrics();
+    // If configure already ran, executors/actions are already built;
+    // hand them the metrics handle now. If configure hasn't run yet,
+    // configureClientProperties will call propagate at the end.
+    propagateMetricsToRuleObjects();
+  }
+
+  private void maybeBuildRuleMetrics() {
+    // Single chokepoint called from both configureClientProperties and
+    // withPluginMetrics, which can fire in either order. Build RuleMetrics
+    // only when both prerequisites are satisfied: configure has resolved
+    // the rule.metrics.enable flag to true, and the host has handed us a
+    // PluginMetrics. The field-level default of ruleMetricsEnabled is
+    // false so that a withPluginMetrics arriving before configure cannot
+    // race ahead with the field default and ignore a later disable.
+    if (ruleMetrics == null && pluginMetrics != null && ruleMetricsEnabled) {
+      ruleMetrics = new RuleMetrics(pluginMetrics);
+    }
+  }
+
+  private void propagateMetricsToRuleObjects() {
+    PluginMetrics pm = pluginMetrics;
+    if (pm == null) {
+      return;
+    }
+    propagateTo(ruleExecutors, pm);
+    propagateTo(ruleActions, pm);
+  }
+
+  private static void propagateTo(
+      Map<String, Map<String, RuleBase>> objects, PluginMetrics pm) {
+    if (objects == null) {
+      return;
+    }
+    for (Map<String, RuleBase> byName : objects.values()) {
+      for (RuleBase obj : byName.values()) {
+        obj.withPluginMetrics(pm);
+      }
+    }
   }
 
   protected void postOp(Object payload) {
@@ -749,6 +814,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
         }
       }
     }
+    RuleMetrics rm = ruleMetrics;
     for (int i = 0; i < rules.size(); i++) {
       Rule rule = rules.get(i);
       RuleContext ctx = new RuleContext(configOriginals, enabledEnv, source, target,
@@ -757,17 +823,29 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
           isKey ? null : original,
           isKey, ruleMode, rule, i, rules);
       if (skipRule(ctx, rule, headers)) {
+        if (rm != null) {
+          rm.recordSkipped(rule, ruleMode, subject);
+        }
         continue;
       }
       if (rule.getMode() == RuleMode.WRITEREAD) {
         if (ruleMode != RuleMode.READ && ruleMode != RuleMode.WRITE) {
+          if (rm != null) {
+            rm.recordSkipped(rule, ruleMode, subject);
+          }
           continue;
         }
       } else if (rule.getMode() == RuleMode.UPDOWN) {
         if (ruleMode != RuleMode.UPGRADE && ruleMode != RuleMode.DOWNGRADE) {
+          if (rm != null) {
+            rm.recordSkipped(rule, ruleMode, subject);
+          }
           continue;
         }
       } else if (ruleMode != rule.getMode()) {
+        if (rm != null) {
+          rm.recordSkipped(rule, ruleMode, subject);
+        }
         continue;
       }
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
@@ -786,17 +864,19 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
             default:
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
+          boolean transformSucceeded = message != null;
           runAction(ctx, ruleMode, rule,
-              message != null ? getOnSuccess(rule) : getOnFailure(rule),
-              message, null, message != null ? null : ErrorAction.TYPE
-          );
+              transformSucceeded ? getOnSuccess(rule) : getOnFailure(rule),
+              message, null, transformSucceeded ? null : ErrorAction.TYPE,
+              transformSucceeded);
         } catch (RuleException e) {
-          runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e, ErrorAction.TYPE);
+          runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e,
+              ErrorAction.TYPE, false);
         }
       } else {
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
             new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
-            ErrorAction.TYPE);
+            ErrorAction.TYPE, false);
       }
     }
     return message;
@@ -975,7 +1055,16 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
   }
 
   private void runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,
-      Object message, RuleException ex, String defaultAction) {
+      Object message, RuleException ex, String defaultAction, boolean ruleSucceeded) {
+    RuleMetrics rm = ruleMetrics;
+    if (rm != null) {
+      rm.recordExecution(rule, ruleMode, ctx.subject());
+      if (ruleSucceeded) {
+        rm.recordSuccess(rule, ruleMode, ctx.subject());
+      } else {
+        rm.recordFailure(rule, ruleMode, ctx.subject());
+      }
+    }
     String actionName = getRuleActionName(rule, ruleMode, action);
     if (actionName == null) {
       actionName = defaultAction;
@@ -985,6 +1074,9 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       if (ruleAction == null) {
         log.error("Could not find rule action of type {}", actionName);
         throw new ConfigException("Could not find rule action of type " + actionName);
+      }
+      if (rm != null) {
+        rm.recordAction(rule, ruleMode, ctx.subject(), actionName);
       }
       try {
         ruleAction.run(ctx, message, ex);
