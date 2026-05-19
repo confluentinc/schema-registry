@@ -1,0 +1,2703 @@
+/*
+ * Copyright 2025 Confluent Inc.
+ *
+ * Licensed under the Confluent Community License (the "License"); you may not use
+ * this file except in compliance with the License.  You may obtain a copy of the
+ * License at
+ *
+ * http://www.confluent.io/confluent-community-license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.storage;
+
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.google.common.collect.Sets;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ContextId;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
+import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.OperationNotPermittedException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
+import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
+import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.schemaregistry.client.security.SslFactory;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
+import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
+import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
+import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
+import io.confluent.kafka.schemaregistry.rest.VersionId;
+import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
+import io.confluent.kafka.schemaregistry.rest.handlers.CompositeUpdateRequestHandler;
+import io.confluent.kafka.schemaregistry.rest.handlers.UpdateRequestHandler;
+import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
+import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.rest.NamedURI;
+import io.confluent.rest.RestConfig;
+import io.confluent.rest.exceptions.RestServerErrorException;
+import java.util.Comparator;
+import java.util.HashSet;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Time;
+import org.eclipse.jetty.server.Handler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.HostnameVerifier;
+import java.security.KeyStore;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
+
+import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
+import static io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet.mergeRuleSets;
+import static io.confluent.kafka.schemaregistry.storage.FilteredIterator.filter;
+import static io.confluent.kafka.schemaregistry.storage.TransformedIterator.transform;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_WILDCARD;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+
+/**
+ * Abstract base class for SchemaRegistry implementations that provides common state management
+ * and shared functionality.
+ */
+public abstract class AbstractSchemaRegistry implements SchemaRegistry,
+        SslFactory.SslFactoryCreated {
+
+  private static final Logger log = LoggerFactory.getLogger(AbstractSchemaRegistry.class);
+
+  protected static final Lock NO_OP_LOCK = new Lock() {
+
+    @Override
+    public void lock() {
+    }
+
+    @Override
+    public void lockInterruptibly() {
+    }
+
+    @Override
+    public boolean tryLock() {
+      return true;
+    }
+
+    @Override
+    public boolean tryLock(long time, TimeUnit unit) {
+      return true;
+    }
+
+    @Override
+    public void unlock() {
+    }
+
+    @Override
+    public java.util.concurrent.locks.Condition newCondition() {
+      throw new UnsupportedOperationException();
+    }
+  };
+
+  protected Store<SchemaRegistryKey, SchemaRegistryValue> store;
+
+  protected final SchemaRegistryConfig config;
+  protected final Map<String, Object> props;
+  protected final MetricsContainer metricsContainer;
+  protected final Map<String, SchemaProvider> providers;
+  protected final List<SchemaRegistryResourceExtension> resourceExtensions;
+  protected final List<Handler.Singleton> customHandler;
+  protected final List<UpdateRequestHandler> updateRequestHandlers;
+  protected final SslFactory sslFactory;
+  protected final LoadingCache<RawSchema, ParsedSchema> newSchemaCache;
+  protected final LoadingCache<RawSchema, ParsedSchema> oldSchemaCache;
+  protected final CompatibilityLevel defaultCompatibilityLevel;
+  protected final boolean defaultValidateFields;
+  protected final boolean defaultValidateNewSchemas;
+  protected final Mode defaultMode;
+  protected final int schemaSearchDefaultLimit;
+  protected final int schemaSearchMaxLimit;
+  protected final int subjectVersionSearchDefaultLimit;
+  protected final int subjectVersionSearchMaxLimit;
+  protected final int subjectSearchDefaultLimit;
+  protected final int contextSearchMaxLimit;
+  protected final int contextSearchDefaultLimit;
+  protected final int subjectSearchMaxLimit;
+  protected final boolean allowModeChanges;
+  protected final AtomicBoolean initialized;
+  protected final Time time;
+
+  protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
+  protected MetadataEncoderService metadataEncoder;
+  protected RuleSetHandler ruleSetHandler;
+
+  /**
+   * Constructs an AbstractSchemaRegistry with the given configuration.
+   *
+   * @param config the schema registry configuration
+   * @param metricsContainer the metrics container for tracking metrics
+   */
+  protected AbstractSchemaRegistry(SchemaRegistryConfig config, MetricsContainer metricsContainer)
+          throws SchemaRegistryException {
+    this.config = config;
+    this.props = new ConcurrentHashMap<>();
+    this.metricsContainer = metricsContainer;
+    this.providers = initProviders();
+    this.resourceExtensions = initResourceExtensions();
+    this.customHandler = new CopyOnWriteArrayList<>();
+    this.updateRequestHandlers = new CopyOnWriteArrayList<>();
+    this.ruleSetHandler = new RuleSetHandler();
+    String interInstanceListenerNameConfig = config.interInstanceListenerName();
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
+            interInstanceListenerNameConfig,
+            config.interInstanceProtocol());
+    Map<String, Object> sslConfig = config.getOverriddenSslConfigs(internalListener);
+    this.sslFactory =
+            new SslFactory(ConfigDef.convertToStringMapWithPasswordValues(sslConfig), this);
+    this.newSchemaCache = Caffeine.newBuilder()
+            .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
+            .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
+                    TimeUnit.SECONDS)
+            .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+    this.oldSchemaCache = Caffeine.newBuilder()
+            .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
+            .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
+                    TimeUnit.SECONDS)
+            .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+    this.defaultCompatibilityLevel = config.compatibilityType();
+    this.defaultValidateFields =
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
+    this.defaultValidateNewSchemas =
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG);
+    this.defaultMode = Mode.READWRITE;
+    this.schemaSearchDefaultLimit =
+        config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.schemaSearchMaxLimit =
+        config.getInt(SchemaRegistryConfig.SCHEMA_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectVersionSearchDefaultLimit =
+        config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectVersionSearchMaxLimit =
+        config.getInt(SchemaRegistryConfig.SUBJECT_VERSION_SEARCH_MAX_LIMIT_CONFIG);
+    this.subjectSearchDefaultLimit =
+        config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.contextSearchMaxLimit =
+        config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_MAX_LIMIT_CONFIG);
+    this.contextSearchDefaultLimit =
+        config.getInt(SchemaRegistryConfig.CONTEXT_SEARCH_DEFAULT_LIMIT_CONFIG);
+    this.subjectSearchMaxLimit =
+        config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
+    this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
+    this.initialized = new AtomicBoolean(false);
+    this.time = config.getTime();
+  }
+
+  protected List<SchemaRegistryResourceExtension> initResourceExtensions() {
+    return config.getConfiguredInstances(
+        config.definedResourceExtensionConfigName(),
+        SchemaRegistryResourceExtension.class);
+  }
+
+  /**
+   * <p>This method returns a listener to be used for inter-instance communication.
+   * It iterates through the list of listeners until it finds one whose name
+   * matches the inter.instance.listener.name config. If no such listener is found,
+   * it returns the last listener matching the requested scheme.
+   * </p>
+   * <p>When there is no matching named listener, in theory, any port from any listener
+   * would be sufficient. Choosing the last, instead of say the first, is arbitrary.
+   * The port used by this listener also forms the identity of the schema registry instance
+   * along with the host name.
+   * </p>
+   */
+  // TODO: once RestConfig.PORT_CONFIG is deprecated, remove the port parameter.
+  public static NamedURI getInterInstanceListener(List<NamedURI> listeners,
+                                                   String interInstanceListenerName,
+                                                   String requestedScheme)
+      throws SchemaRegistryException {
+    if (requestedScheme.isEmpty()) {
+      requestedScheme = SchemaRegistryConfig.HTTP;
+    }
+
+    NamedURI internalListener = null;
+    for (NamedURI listener : listeners) {
+      if (listener.getName() != null
+          && listener.getName().equalsIgnoreCase(interInstanceListenerName)) {
+        internalListener = listener;
+        break;
+      } else if (listener.getUri().getScheme().equalsIgnoreCase(requestedScheme)) {
+        internalListener = listener;
+      }
+    }
+    if (internalListener == null) {
+      throw new SchemaRegistryException(" No listener configured with requested scheme "
+          + requestedScheme);
+    }
+    return internalListener;
+  }
+
+  protected Map<String, SchemaProvider> initProviders() {
+    Map<String, Object> schemaProviderConfigs =
+        config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG + ".");
+    schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
+        new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
+    );
+    for (SchemaProvider provider : defaultSchemaProviders) {
+      provider.configure(schemaProviderConfigs);
+    }
+    Map<String, SchemaProvider> providerMap = new HashMap<>();
+    registerProviders(providerMap, defaultSchemaProviders);
+    List<SchemaProvider> customSchemaProviders =
+        config.getConfiguredInstances(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG,
+            SchemaProvider.class,
+            schemaProviderConfigs);
+    // Allow custom providers to override default providers
+    registerProviders(providerMap, customSchemaProviders);
+    metricsContainer.getCustomSchemaProviderCount().record(customSchemaProviders.size());
+    return providerMap;
+  }
+
+  protected void registerProviders(
+      Map<String, SchemaProvider> providerMap,
+      List<SchemaProvider> schemaProviders
+  ) {
+    for (SchemaProvider schemaProvider : schemaProviders) {
+      log.info("Registering schema provider for {}: {}",
+          schemaProvider.schemaType(),
+          schemaProvider.getClass().getName()
+      );
+      providerMap.put(schemaProvider.schemaType(), schemaProvider);
+    }
+  }
+
+  /**
+   * Loads a schema from the cache or parses it if not cached.
+   */
+  protected ParsedSchema loadSchema(Schema schema, boolean isNew, boolean normalize)
+          throws InvalidSchemaException {
+    String schemaType = schema.getSchemaType();
+    if (schemaType == null) {
+      schemaType = AvroSchema.TYPE;
+    }
+    SchemaProvider provider = schemaProvider(schemaType);
+    if (provider == null) {
+      String errMsg = "Invalid schema type " + schemaType;
+      log.error(errMsg);
+      throw new InvalidSchemaException(errMsg);
+    }
+    final String type = schemaType;
+
+    try {
+      return provider.parseSchemaOrElseThrow(schema, isNew, normalize);
+    } catch (Exception e) {
+      throw new InvalidSchemaException("Invalid schema of type " + type
+              + ", details: " + e.getMessage());
+    }
+  }
+
+  public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
+          throws SchemaRegistryException {
+    try {
+      Schema schema = new Schema(subject, request);
+
+      if (request.hasSchemaTagsToAddOrRemove()) {
+        ParsedSchema parsedSchema = parseSchema(schema);
+        ParsedSchema newSchema = parsedSchema
+                .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
+                        TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
+        // If a version was not specified, then use the latest version
+        // to ensure that the confluent:version metadata is added
+        int version = request.getVersion() != null ? request.getVersion() : -1;
+        schema = new Schema(subject, version, schema.getId(), newSchema);
+      }
+
+      return register(subject, schema, normalize, request.doPropagateSchemaTags());
+    } catch (IllegalArgumentException e) {
+      throw new InvalidSchemaException(e);
+    }
+  }
+
+  protected boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
+    Mode subjectMode = getModeInScope(subject);
+    return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  protected void checkRegisterMode(
+          String subject, Schema schema
+  ) throws OperationNotPermittedException, SchemaRegistryStoreException {
+    String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
+    if (isReadOnlyMode(subject)) {
+      throw new OperationNotPermittedException("Subject " + subject
+              + " in context " + context + " is in read-only mode");
+    }
+
+    if (schema.getId() >= 0) {
+      if (getModeInScope(subject) != Mode.IMPORT) {
+        throw new OperationNotPermittedException("Subject " + subject
+                + " in context " + context + " is not in import mode");
+      }
+    } else {
+      if (getModeInScope(subject) != Mode.READWRITE) {
+        throw new OperationNotPermittedException(
+                "Subject " + subject + " in context "
+                        + context + " is not in read-write mode"
+        );
+      }
+    }
+  }
+
+  private boolean maybePropagateSchemaTags(
+          Schema schema, ParsedSchemaHolder previousSchema, boolean propagateSchemaTags)
+          throws InvalidSchemaException {
+    if (!propagateSchemaTags || previousSchema == null) {
+      return false;
+    }
+    Map<SchemaEntity, Set<String>> schemaTags = previousSchema.schema().inlineTaggedEntities();
+    if (schemaTags.isEmpty()) {
+      return false;
+    }
+    ParsedSchema parsedSchema = parseSchema(schema);
+    parsedSchema = parsedSchema.copy(schemaTags, Collections.emptyMap());
+    schema.setSchema(parsedSchema.canonicalString());
+    return true;
+  }
+
+  private String getConfluentVersion(Metadata metadata) {
+    return metadata != null ? metadata.getConfluentVersion() : null;
+  }
+
+  protected boolean maybeSetMetadataRuleSet(
+          Config config, Schema schema, Schema previousSchema, Integer newVersion) {
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata specificMetadata = null;
+    if (schema.getMetadata() != null) {
+      specificMetadata = schema.getMetadata();
+    } else if (previousSchema != null) {
+      specificMetadata = previousSchema.getMetadata();
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata mergedMetadata;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata defaultMetadata;
+    io.confluent.kafka.schemaregistry.client.rest.entities.Metadata overrideMetadata;
+    defaultMetadata = config.getDefaultMetadata();
+    overrideMetadata = config.getOverrideMetadata();
+    mergedMetadata =
+            mergeMetadata(mergeMetadata(defaultMetadata, specificMetadata), overrideMetadata);
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet specificRuleSet = null;
+    if (schema.getRuleSet() != null) {
+      specificRuleSet = schema.getRuleSet();
+    } else if (previousSchema != null) {
+      specificRuleSet = previousSchema.getRuleSet();
+    }
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet mergedRuleSet;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet defaultRuleSet;
+    io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet overrideRuleSet;
+    defaultRuleSet = config.getDefaultRuleSet();
+    overrideRuleSet = config.getOverrideRuleSet();
+    mergedRuleSet = mergeRuleSets(mergeRuleSets(defaultRuleSet, specificRuleSet), overrideRuleSet);
+
+    // Set confluent:version if passed in version is not 0,
+    // or update confluent:version if it already exists in the metadata
+    if (newVersion != null
+            && (schema.getVersion() != 0 || getConfluentVersion(mergedMetadata) != null)) {
+      mergedMetadata = Metadata.setConfluentVersion(mergedMetadata, newVersion);
+    }
+
+    if (mergedMetadata != null || mergedRuleSet != null) {
+      schema.setMetadata(mergedMetadata);
+      schema.setRuleSet(mergedRuleSet);
+      return true;
+    }
+    return false;
+  }
+
+  protected boolean maybePopulateFromPrevious(
+          Config config, Schema schema, List<ParsedSchemaHolder> undeletedVersions, int newVersion,
+          boolean propagateSchemaTags)
+          throws SchemaRegistryException {
+    boolean populatedSchema = false;
+    SchemaValueHolder previousSchemaHolder = !undeletedVersions.isEmpty()
+            ? (SchemaValueHolder) undeletedVersions.get(0)
+            : null;
+    Schema previousSchema = previousSchemaHolder != null
+            ? toSchemaEntity(previousSchemaHolder.schemaValue())
+            : null;
+    if (schema == null
+            || schema.getSchema() == null
+            || schema.getSchema().trim().isEmpty()) {
+      if (previousSchema != null) {
+        schema.setSchema(previousSchema.getSchema());
+        schema.setSchemaType(previousSchema.getSchemaType());
+        schema.setReferences(previousSchema.getReferences());
+        populatedSchema = true;
+      } else {
+        throw new InvalidSchemaException("Empty schema");
+      }
+    }
+    boolean populatedSchemaTags = maybePropagateSchemaTags(
+            schema, previousSchemaHolder, propagateSchemaTags);
+    boolean populatedMetadataRuleSet = maybeSetMetadataRuleSet(
+            config, schema, previousSchema, newVersion);
+    return populatedSchema || populatedSchemaTags || populatedMetadataRuleSet;
+  }
+
+  private RuleSet maybeModifyPreviousRuleSet(String subject, TagSchemaRequest request)
+          throws SchemaRegistryException {
+    if (request.getRulesToMerge() == null && request.getRulesToRemove() == null) {
+      return request.getRuleSet();
+    }
+    int oldVersion = request.getNewVersion() != null ? request.getNewVersion() - 1 : -1;
+    Schema oldSchema = get(subject, oldVersion, false);
+    // Use the previous ruleSet instead of the passed in one
+    RuleSet ruleSet = oldSchema != null ? oldSchema.getRuleSet() : null;
+    if (request.getRulesToMerge() != null) {
+      ruleSet = mergeRuleSets(ruleSet, request.getRulesToMerge());
+    }
+    if (ruleSet != null && request.getRulesToRemove() != null) {
+      List<String> rulesToRemove = request.getRulesToRemove();
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.Rule> migrationRules =
+              ruleSet.getMigrationRules();
+      if (migrationRules != null) {
+        migrationRules = migrationRules.stream()
+                .filter(r -> !rulesToRemove.contains(r.getName()))
+                .collect(Collectors.toList());
+      }
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.Rule> domainRules =
+              ruleSet.getDomainRules();
+      if (domainRules != null) {
+        domainRules = domainRules.stream()
+                .filter(r -> !rulesToRemove.contains(r.getName()))
+                .collect(Collectors.toList());
+      }
+      List<Rule> encodingRules = ruleSet.getEncodingRules();
+      if (encodingRules != null) {
+        encodingRules = encodingRules.stream()
+                .filter(r -> !rulesToRemove.contains(r.getName()))
+                .collect(Collectors.toList());
+      }
+      ruleSet = new RuleSet(migrationRules, domainRules, encodingRules, ruleSet.getEnableAt());
+    }
+    return ruleSet;
+  }
+
+  public Schema modifySchemaTags(String subject, Schema schema, TagSchemaRequest request)
+          throws SchemaRegistryException {
+    ParsedSchema parsedSchema = parseSchema(schema);
+    int newVersion = request.getNewVersion() != null ? request.getNewVersion() : 0;
+
+    Metadata mergedMetadata = request.getMetadata() != null
+            ? request.getMetadata()
+            : parsedSchema.metadata();
+    mergedMetadata = Metadata.setConfluentVersion(mergedMetadata, newVersion);
+
+    RuleSet ruleSet = maybeModifyPreviousRuleSet(subject, request);
+
+    try {
+      ParsedSchema newSchema = parsedSchema
+              .copy(TagSchemaRequest.schemaTagsListToMap(request.getTagsToAdd()),
+                      TagSchemaRequest.schemaTagsListToMap(request.getTagsToRemove()))
+              .copy(mergedMetadata, ruleSet)
+              .copy(newVersion);
+      return register(subject, new Schema(subject, newVersion, -1, newSchema), false);
+    } catch (IllegalArgumentException e) {
+      throw new InvalidSchemaException(e);
+    }
+  }
+
+  protected void logSchemaOp(Schema schema, String operation) {
+    log.info("Resource association log - (tenant, id, subject, operation): ({}, {}, {}, {})",
+            tenant(), schema.getId(), schema.getSubject(), operation);
+  }
+
+  protected boolean isSchemaFieldValidationEnabled(Config config) {
+    return config.isValidateFields() != null ? config.isValidateFields() : defaultValidateFields;
+  }
+
+  protected boolean isSchemaNewSchemaValidationEnabled(Config config) {
+    return config.isValidateNewSchemas() != null
+        ? config.isValidateNewSchemas()
+        : defaultValidateNewSchemas;
+  }
+
+  protected ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
+                                                         Schema schema,
+                                                         Config config,
+                                                         boolean normalize)
+          throws InvalidSchemaException {
+    try {
+      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+        parsedSchema.validate(isSchemaFieldValidationEnabled(config));
+      }
+      if (normalize) {
+        parsedSchema = parsedSchema.normalize();
+      }
+    } catch (Exception e) {
+      String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
+      log.error(errMsg, e);
+      throw new InvalidSchemaException(errMsg, e);
+    }
+    schema.setSchemaType(parsedSchema.schemaType());
+    schema.setSchema(parsedSchema.canonicalString());
+    schema.setReferences(parsedSchema.references());
+    return parsedSchema;
+  }
+
+  protected ParsedSchema canonicalizeSchema(Schema schema,
+                                  Config config,
+                                  boolean isNew,
+                                  boolean normalize) throws InvalidSchemaException {
+    if (schema == null
+            || schema.getSchema() == null
+            || schema.getSchema().trim().isEmpty()) {
+      return null;
+    }
+    ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
+    return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, normalize);
+  }
+
+  protected boolean isSubjectVersionDeleted(String subject, int version)
+          throws SchemaRegistryException {
+    try {
+      SchemaValue schemaValue = (SchemaValue) this.store.get(new SchemaKey(subject, version));
+      return schemaValue == null || schemaValue.isDeleted();
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving schema from the backend Kafka"
+                      + " store", e);
+    }
+  }
+
+  protected Schema validateDeleteSchemaVersion(String subject,
+                                                int version,
+                                                boolean permanentDelete)
+      throws SchemaRegistryException {
+    Schema schema = null;
+    // Retrieve and validate schema
+    VersionId versionId = new VersionId(version);
+    String errorMessage =
+        "Error while retrieving schema for subject "
+            + subject
+            + " with version "
+            + version
+            + " from the schema registry";
+    try {
+      if (schemaVersionExists(subject, versionId, true)) {
+        if (!permanentDelete
+            && !schemaVersionExists(subject,
+            versionId, false)) {
+          throw Errors.schemaVersionSoftDeletedException(subject, String.valueOf(version));
+        }
+      }
+      schema = get(subject, versionId.getVersionId(), true);
+      if (schema == null) {
+        if (!hasSubjects(subject, true)) {
+          throw Errors.subjectNotFoundException(subject);
+        } else {
+          throw Errors.versionNotFoundException(versionId.getVersionId());
+        }
+      }
+    } catch (SchemaRegistryStoreException e) {
+      log.debug(errorMessage, e);
+      throw Errors.storeException(errorMessage, e);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+    return schema;
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersionsFromAllContexts(
+          BiFunction<String, Integer, SchemaRegistryKey> keyCreator,
+          String tenantPrefix, String unqualifiedSubjectOrPrefix, boolean isPrefix)
+          throws SchemaRegistryException {
+    List<SchemaRegistryValue> versions = new ArrayList<>();
+    // Add versions from default context
+    try (CloseableIterator<SchemaRegistryValue> iter =
+                 allVersions(keyCreator, tenantPrefix + unqualifiedSubjectOrPrefix, isPrefix)) {
+      while (iter.hasNext()) {
+        versions.add(iter.next());
+      }
+    }
+    List<ContextValue> contexts = new ArrayList<>();
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        contexts.add((ContextValue) iter.next());
+      }
+    }
+    for (ContextValue v : contexts) {
+      QualifiedSubject qualSub =
+              new QualifiedSubject(v.getTenant(), v.getContext(), unqualifiedSubjectOrPrefix);
+      try (CloseableIterator<SchemaRegistryValue> subiter =
+                   allVersions(keyCreator, qualSub.toQualifiedSubject(), isPrefix)) {
+        while (subiter.hasNext()) {
+          versions.add(subiter.next());
+        }
+      }
+    }
+    return new DelegatingIterator<>(versions.iterator());
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersions(
+          BiFunction<String, Integer, SchemaRegistryKey> keyCreator,
+          String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    try {
+      String start;
+      String end;
+      int idx = subjectOrPrefix.indexOf(CONTEXT_WILDCARD);
+      if (idx >= 0) {
+        // Context wildcard match (prefix may contain tenant)
+        String tenantPrefix = subjectOrPrefix.substring(0, idx);
+        String unqualifiedSubjectOrPrefix =
+                subjectOrPrefix.substring(idx + CONTEXT_WILDCARD.length());
+        if (!unqualifiedSubjectOrPrefix.isEmpty()) {
+          return allVersionsFromAllContexts(
+                  keyCreator, tenantPrefix, unqualifiedSubjectOrPrefix, isPrefix);
+        }
+        start = tenantPrefix + CONTEXT_PREFIX + CONTEXT_DELIMITER;
+        end = tenantPrefix + CONTEXT_PREFIX + Character.MAX_VALUE + CONTEXT_DELIMITER;
+      } else {
+        start = subjectOrPrefix;
+        end = isPrefix ? subjectOrPrefix + Character.MAX_VALUE : subjectOrPrefix;
+      }
+      SchemaRegistryKey key1 = keyCreator.apply(start, MIN_VERSION);
+      SchemaRegistryKey key2 = keyCreator.apply(end, MAX_VERSION);
+      return filter(transform(store.getAll(key1, key2), v -> {
+        if (v instanceof SchemaValue && metadataEncoder != null) {
+          try {
+            metadataEncoder.decodeMetadata(((SchemaValue) v));
+          } catch (SchemaRegistryStoreException e) {
+            log.error("Failed to decode metadata for schema id {}", ((SchemaValue) v).getId(), e);
+            return null;
+          }
+        }
+        return v;
+      }), Objects::nonNull);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error from the backend Kafka store", e);
+    }
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allVersions(
+          String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions(SchemaKey::new, subjectOrPrefix, isPrefix);
+  }
+
+  private static boolean shouldInclude(boolean isDeleted, LookupFilter filter) {
+    return switch (filter) {
+      case DEFAULT -> !isDeleted;
+      case INCLUDE_DELETED -> true;
+      case DELETED_ONLY -> isDeleted;
+      case DELETED_AS_NEGATIVE -> true;
+    };
+  }
+
+  private List<SchemaKey> schemaKeysByVersion(CloseableIterator<SchemaRegistryValue> schemas,
+                                              LookupFilter filter) {
+    List<SchemaKey> schemaList = new ArrayList<>();
+    while (schemas.hasNext()) {
+      SchemaValue schemaValue = (SchemaValue) schemas.next();
+      boolean shouldInclude = shouldInclude(schemaValue.isDeleted(), filter);
+      if (!shouldInclude) {
+        continue;
+      }
+      SchemaKey schemaKey = schemaValue.toKey();
+      if (filter == LookupFilter.DELETED_AS_NEGATIVE && schemaValue.isDeleted()) {
+        schemaKey = new SchemaKey(schemaKey.getSubject(), -schemaKey.getVersion());
+      }
+      schemaList.add(schemaKey);
+    }
+    return schemaList;
+  }
+
+  protected List<SchemaKey> getAllSchemaKeysDescending(String subject)
+          throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
+      List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, LookupFilter.INCLUDE_DELETED);
+      schemaKeys.sort(Collections.reverseOrder());
+      return schemaKeys;
+    }
+  }
+
+  protected Schema lookUpSchemaUnderSubject(
+          Config config, String subject, Schema schema, boolean normalize,
+          boolean lookupDeletedSchema, boolean lookupLatestOnly) throws SchemaRegistryException {
+    try {
+      // Pass a copy of the schema so the original is not modified during normalization
+      // to ensure that invalid defaults are not dropped since default validation is disabled
+      Schema newSchema = schema != null ? schema.copy() : null;
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, false, normalize);
+      if (parsedSchema != null && !lookupLatestOnly) {
+        SchemaIdAndSubjects schemaIdAndSubjects = this.lookupCache.schemaIdAndSubjects(newSchema);
+        if (schemaIdAndSubjects != null) {
+          if (schemaIdAndSubjects.hasSubject(subject)
+                  && (lookupDeletedSchema || !isSubjectVersionDeleted(subject, schemaIdAndSubjects
+                  .getVersion(subject)))) {
+            Schema matchingSchema = newSchema.copy();
+            matchingSchema.setSubject(subject);
+            matchingSchema.setVersion(schemaIdAndSubjects.getVersion(subject));
+            matchingSchema.setId(schemaIdAndSubjects.getSchemaId());
+            return matchingSchema;
+          }
+        }
+      }
+
+      if (lookupLatestOnly) {
+        Schema prev = getLatestVersion(subject);
+        if (prev != null
+                && parsedSchema != null
+                && parsedSchema.canLookup(parseSchema(prev), this)) {
+          // This handles the case where a schema is sent with all references resolved
+          // or without confluent:version
+          return prev;
+        }
+      } else {
+        List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
+
+        for (SchemaKey schemaKey : allVersions) {
+          Schema prev = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
+          if (prev != null
+                  && parsedSchema != null
+                  && parsedSchema.canLookup(parseSchema(prev), this)) {
+            // This handles the case where a schema is sent with all references resolved
+            // or without confluent:version
+            return prev;
+          }
+        }
+      }
+
+      return null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error from the backend Kafka store", e);
+    }
+  }
+
+  /**
+   * Checks if given schema was ever registered under a subject. If found, it returns the version of
+   * the schema under the subject. If not, returns -1
+   */
+  @Override
+  public Schema lookUpSchemaUnderSubject(
+          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
+          throws SchemaRegistryException {
+    if (schema == null) {
+      return null;
+    }
+    Config config = getConfigInScope(subject);
+    Schema existingSchema = lookUpSchemaUnderSubject(
+            config, subject, schema, normalize, lookupDeletedSchema, false);
+    if (existingSchema != null) {
+      return existingSchema;
+    }
+    Schema prev = getLatestVersion(subject);
+    if (prev == null) {
+      return null;
+    }
+    Schema next = schema.copy();
+    // If a previous schema is available, possibly populate the new schema with the
+    // metadata and rule set and perform another lookup.
+    // This mimics the additional lookup during schema registration.
+    maybeSetMetadataRuleSet(config, next, prev, null);
+    if (next.equals(schema)) {
+      return null;
+    }
+    return lookUpSchemaUnderSubject(
+            config, subject, next, normalize, lookupDeletedSchema, false);
+  }
+
+  public void checkIfSchemaWithIdExist(int id, Schema schema)
+          throws SchemaRegistryException, StoreException {
+    String qctx = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
+    SchemaKey existingKey = this.lookupCache.schemaKeyById(id, qctx);
+    if (existingKey != null) {
+      SchemaRegistryValue existingValue = this.lookupCache.get(existingKey);
+      if (existingValue instanceof SchemaValue existingSchemaValue) {
+        Schema existingSchema = toSchemaEntity(existingSchemaValue);
+        Schema schemaCopy = schema.copy();
+        schemaCopy.setId(existingSchema.getId());
+        schemaCopy.setSubject(existingSchema.getSubject());
+        schemaCopy.setVersion(existingSchema.getVersion());
+        if (!existingSchema.equals(schemaCopy)) {
+          String context = QualifiedSubject.qualifiedContextFor(tenant(), schema.getSubject());
+          throw new OperationNotPermittedException(
+                  String.format("Overwrite new schema with id %s in context"
+                                  + " %s is not permitted.",
+                          id, context)
+          );
+        }
+      }
+    }
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> allContexts() throws SchemaRegistryException {
+    try {
+      ContextKey key1 = new ContextKey(tenant(), String.valueOf(Character.MIN_VALUE));
+      ContextKey key2 = new ContextKey(tenant(), String.valueOf(Character.MAX_VALUE));
+      return lookupCache.getAll(key1, key2);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error from the backend Kafka store", e);
+    }
+  }
+
+  SchemaKey getSchemaKeyUsingContexts(int id, String subject)
+          throws StoreException, SchemaRegistryException {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    SchemaKey subjectVersionKey = lookupCache.schemaKeyById(id, subject);
+    if (qs == null
+            || qs.getSubject().isEmpty()
+            || isQualifiedSubject
+            || subjectVersionKey != null) {
+      return subjectVersionKey;
+    }
+    // Try qualifying the subject with each known context
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub =
+                new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
+        SchemaKey key = lookupCache.schemaKeyById(id, qualSub.toQualifiedSubject());
+        if (key != null) {
+          return key;
+        }
+      }
+    }
+    // Could not find the id in subjects in other contexts,
+    // just return the id in the given context if found
+    return lookupCache.schemaKeyById(id, qs.toQualifiedContext());
+  }
+
+  private Map.Entry<Integer, String> getIdUsingContexts(String guid)
+          throws StoreException, SchemaRegistryException {
+    Integer id = lookupCache.idByGuid(guid, DEFAULT_CONTEXT);
+    if (id != null) {
+      return new AbstractMap.SimpleEntry<>(id, DEFAULT_CONTEXT);
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
+        String ctx = qualSub.toQualifiedContext();
+        id = lookupCache.idByGuid(guid, ctx);
+        if (id != null) {
+          return new AbstractMap.SimpleEntry<>(id, ctx);
+        }
+      }
+    }
+    return null;
+  }
+
+  private Set<String> extractUniqueSubjects(Iterator<SchemaRegistryValue> allVersions,
+                                            LookupFilter filter) {
+    Map<String, Boolean> subjects = new HashMap<>();
+    while (allVersions.hasNext()) {
+      SchemaValue value = (SchemaValue) allVersions.next();
+      subjects.merge(value.getSubject(), value.isDeleted(), (v1, v2) -> v1 && v2);
+    }
+
+    return subjects.keySet().stream()
+            .filter(k -> shouldInclude(subjects.get(k), filter))
+            .sorted()
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+  }
+
+  public List<SubjectVersion> listVersionsForId(int id, String subject)
+          throws SchemaRegistryException {
+    return listVersionsForId(id, subject, false);
+  }
+
+  @Override
+  public List<SubjectVersion> listVersionsForId(int id, String subject, boolean lookupDeleted)
+          throws SchemaRegistryException {
+    SchemaValue schema;
+    try {
+      SchemaKey subjectVersionKey = getSchemaKeyUsingContexts(id, subject);
+      if (subjectVersionKey == null) {
+        return null;
+      }
+      schema = (SchemaValue) store.get(subjectVersionKey);
+      if (schema == null) {
+        return null;
+      }
+      Schema schemaEntity = toSchemaEntity(schema);
+      logSchemaOp(schemaEntity, "READ");
+
+      SchemaIdAndSubjects schemaIdAndSubjects =
+              this.lookupCache.schemaIdAndSubjects(schemaEntity);
+      if (schemaIdAndSubjects == null) {
+        return null;
+      }
+      return schemaIdAndSubjects
+              .allSubjectVersions()
+              .entrySet()
+              .stream()
+              .flatMap(e -> {
+                try {
+                  SchemaValue schemaValue =
+                          (SchemaValue) store.get(new SchemaKey(e.getKey(), e.getValue()));
+                  if (schemaValue != null && (!schemaValue.isDeleted() || lookupDeleted)) {
+                    return Stream.of(new SubjectVersion(e.getKey(), e.getValue()));
+                  } else {
+                    return Stream.empty();
+                  }
+                } catch (StoreException ex) {
+                  return Stream.empty();
+                }
+              })
+              .collect(Collectors.toList());
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with id "
+              + id + " from the backend Kafka store", e);
+    }
+  }
+
+  private CloseableIterator<SchemaRegistryValue> allConfigs(
+          String subjectOrPrefix, boolean isPrefix) throws SchemaRegistryException {
+    return allVersions((s, v) -> new ConfigKey(s), subjectOrPrefix, isPrefix);
+  }
+
+  private Map<String, List<String>> getAliases(String subjectPrefix)
+          throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> iter = allConfigs(subjectPrefix, true)) {
+      Map<String, List<String>> subjectToAliases = new HashMap<>();
+      while (iter.hasNext()) {
+        ConfigValue configValue = (ConfigValue) iter.next();
+        String alias = configValue.getAlias();
+        if (alias == null) {
+          continue;
+        }
+        // Use the subject of the configValue as the qualifying parent (not the subjectPrefix)
+        QualifiedSubject qualAlias = QualifiedSubject.qualifySubjectWithParent(
+                tenant(), configValue.getSubject(), alias, true);
+        List<String> aliases = subjectToAliases.computeIfAbsent(
+                qualAlias.toQualifiedSubject(), k -> new ArrayList<>());
+        aliases.add(configValue.getSubject());
+      }
+      return subjectToAliases;
+    }
+  }
+
+  private Map<String, List<ExtendedSchema>> schemasByVersion(
+          Map<String, List<String>> subjectByAliases,
+          CloseableIterator<SchemaRegistryValue> schemas,
+          LookupFilter filter,
+          boolean returnLatestOnly,
+          Predicate<Schema> postFilter) {
+    Map<String, List<ExtendedSchema>> schemaMap = new HashMap<>();
+    ExtendedSchema previousSchema = null;
+    while (schemas.hasNext()) {
+      SchemaValue schemaValue = (SchemaValue) schemas.next();
+      boolean shouldInclude = shouldInclude(schemaValue.isDeleted(), filter);
+      if (!shouldInclude) {
+        continue;
+      }
+      Schema schemaEntity;
+      try {
+        schemaEntity = toSchemaEntity(schemaValue);
+      } catch (SchemaRegistryStoreException e) {
+        log.error("Failed to decode metadata for schema id {}", schemaValue.getId(), e);
+        continue;
+      }
+      List<String> aliases = subjectByAliases.get(schemaValue.getSubject());
+      ExtendedSchema schema = new ExtendedSchema(schemaEntity, aliases, null);
+      List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
+              schemaValue.getSubject(), k -> new ArrayList<>());
+      if (returnLatestOnly) {
+        if (previousSchema != null && !schema.getSubject().equals(previousSchema.getSubject())) {
+          schemaList.add(previousSchema);
+        }
+      } else {
+        schemaList.add(schema);
+      }
+      previousSchema = schema;
+    }
+    if (returnLatestOnly && previousSchema != null) {
+      // handle last subject
+      List<ExtendedSchema> schemaList = schemaMap.computeIfAbsent(
+              previousSchema.getSubject(), k -> new ArrayList<>());
+      schemaList.add(previousSchema);
+    }
+    if (postFilter != null) {
+      for (Map.Entry<String, List<ExtendedSchema>> entry : schemaMap.entrySet()) {
+        List<ExtendedSchema> schemaList = entry.getValue();
+        schemaList = schemaList.stream()
+                .filter(postFilter)
+                .collect(Collectors.toList());
+        entry.setValue(schemaList);
+      }
+    }
+    return schemaMap;
+  }
+
+  public Iterator<ExtendedSchema> allVersionsIncludingAliasesWithSubjectPrefix(
+          String prefix, LookupFilter filter, boolean returnLatestOnly,
+          Predicate<Schema> postFilter) throws SchemaRegistryException {
+    Map<String, List<String>> aliases = getAliases(prefix);
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
+      Map<String, List<ExtendedSchema>> schemas = schemasByVersion(
+              aliases, allVersions, filter, returnLatestOnly, postFilter);
+      List<ExtendedSchema> result = new ArrayList<>();
+      for (List<ExtendedSchema> schemaList : schemas.values()) {
+        result.addAll(schemaList);
+      }
+      for (Map.Entry<String, List<String>> entry : aliases.entrySet()) {
+        String subject = entry.getKey();
+        if (!schemas.containsKey(subject)) {
+          // Collect schemas for the aliased subject
+          try (CloseableIterator<SchemaRegistryValue> subVersions = allVersions(subject, false)) {
+            Map<String, List<ExtendedSchema>> subSchemas = schemasByVersion(
+                    aliases, subVersions, filter, returnLatestOnly, postFilter);
+            for (List<ExtendedSchema> schemaList : subSchemas.values()) {
+              result.addAll(schemaList);
+            }
+          }
+        }
+      }
+      Collections.sort(result);
+      return result.iterator();
+    }
+  }
+
+  private Iterator<ExtendedSchema> allVersionsWithSubjectPrefix(String prefix,
+                                                                LookupFilter filter,
+                                                                boolean returnLatestOnly,
+                                                                Predicate<Schema> postFilter)
+          throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
+      Map<String, List<ExtendedSchema>> schemas = schemasByVersion(
+              Collections.emptyMap(), allVersions, filter, returnLatestOnly, postFilter);
+      List<ExtendedSchema> result = new ArrayList<>();
+      for (List<ExtendedSchema> schemaList : schemas.values()) {
+        result.addAll(schemaList);
+      }
+      Collections.sort(result);
+      return result.iterator();
+    }
+  }
+
+  private Schema getLatestVersionFromSubjectSchemas(
+          CloseableIterator<SchemaRegistryValue> schemas) throws SchemaRegistryException {
+    int latestVersionId = -1;
+    SchemaValue latestSchemaValue = null;
+
+    while (schemas.hasNext()) {
+      SchemaValue schemaValue = (SchemaValue) schemas.next();
+      if (schemaValue.isDeleted()) {
+        continue;
+      }
+      if (schemaValue.getVersion() > latestVersionId) {
+        latestVersionId = schemaValue.getVersion();
+        latestSchemaValue = schemaValue;
+      }
+    }
+
+    return latestSchemaValue != null ? toSchemaEntity(latestSchemaValue) : null;
+  }
+
+  private List<String> validateReservedFields(ParsedSchema currentSchema,
+                                              ParsedSchemaHolder previousSchema) {
+    List<String> errorMessages = new ArrayList<>();
+    Set<String> updatedReservedFields = currentSchema.getReservedFields();
+    if (previousSchema != null) {
+      // check to ensure that original reserved fields are not removed in the updated version
+      Sets.SetView<String> removedFields =
+              Sets.difference(previousSchema.schema().getReservedFields(), updatedReservedFields);
+      if (!removedFields.isEmpty()) {
+        removedFields.forEach(field -> errorMessages.add(String.format(RESERVED_FIELD_REMOVED,
+                field)));
+      }
+    }
+    updatedReservedFields.forEach(reservedField -> {
+      // check if updated fields conflict with reserved fields
+      if (currentSchema.hasTopLevelField(reservedField)) {
+        errorMessages.add(String.format(FIELD_CONFLICTS_WITH_RESERVED_FIELD, reservedField));
+      }
+    });
+    return errorMessages;
+  }
+
+  private static String getCompatibilityGroupValue(
+          ParsedSchema parsedSchema, String compatibilityGroup) {
+    if (parsedSchema.metadata() != null && parsedSchema.metadata().getProperties() != null) {
+      return parsedSchema.metadata().getProperties().get(compatibilityGroup);
+    }
+    return null;
+  }
+
+  protected List<String> isCompatibleWithPrevious(Config config,
+                                        ParsedSchema parsedSchema,
+                                        List<ParsedSchemaHolder> previousSchemas) {
+    List<String> errorMessages = new ArrayList<>();
+    ParsedSchemaHolder previousSchemaHolder = !previousSchemas.isEmpty()
+            ? previousSchemas.get(previousSchemas.size() - 1)
+            : null;
+    if (isSchemaFieldValidationEnabled(config)) {
+      errorMessages.addAll(validateReservedFields(parsedSchema, previousSchemaHolder));
+    }
+    CompatibilityLevel compatibility = CompatibilityLevel.forName(config.getCompatibilityLevel());
+    CompatibilityPolicy compatibilityPolicy =
+            CompatibilityPolicy.forName(config.getCompatibilityPolicy());
+    String compatibilityGroup = config.getCompatibilityGroup();
+    if (compatibilityGroup != null) {
+      String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
+      // Only check compatibility against schemas with the same compatibility group value,
+      // which may be null.
+      previousSchemas = previousSchemas.stream()
+              .filter(s -> Objects.equals(groupValue,
+                      getCompatibilityGroupValue(s.schema(), compatibilityGroup)))
+              .collect(Collectors.toList());
+    }
+    errorMessages.addAll(
+            parsedSchema.isCompatible(compatibility, compatibilityPolicy, previousSchemas));
+    if (!errorMessages.isEmpty()) {
+      try {
+        errorMessages.add(String.format("{validateFields: '%b', compatibility: '%s'}",
+                isSchemaFieldValidationEnabled(config),
+                compatibility));
+      } catch (UnsupportedOperationException e) {
+        // Ignore and return errorMessages
+        log.warn("Failed to append 'compatibility' to error messages");
+      }
+    }
+    return errorMessages;
+  }
+
+  public void removeCustomHandler(Handler.Singleton handler) {
+    customHandler.remove(handler);
+  }
+
+  public int normalizeLimit(int suppliedLimit, int defaultLimit, int maxLimit) {
+    int limit = defaultLimit;
+    if (suppliedLimit > 0 && suppliedLimit <= maxLimit) {
+      limit = suppliedLimit;
+    }
+    return limit;
+  }
+
+  @Override
+  public void clearNewSchemaCache() {
+    newSchemaCache.invalidateAll();
+  }
+
+  @Override
+  public void clearOldSchemaCache() {
+    oldSchemaCache.invalidateAll();
+  }
+
+  @Override
+  public void invalidateFromNewSchemaCache(Schema schemaKey) {
+    newSchemaCache.invalidate(new RawSchema(schemaKey, true, false));
+    newSchemaCache.invalidate(new RawSchema(schemaKey, true, true));
+  }
+
+  protected void invalidateFromOldSchemaCache(Schema schemaKey) {
+    oldSchemaCache.invalidate(new RawSchema(schemaKey, false, false));
+    oldSchemaCache.invalidate(new RawSchema(schemaKey, false, true));
+  }
+
+  @Override
+  public int normalizeSchemaLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, schemaSearchDefaultLimit, schemaSearchMaxLimit);
+  }
+
+  @Override
+  public int normalizeSubjectLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, subjectSearchDefaultLimit, subjectSearchMaxLimit);
+  }
+
+  @Override
+  public int normalizeContextLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit, contextSearchDefaultLimit, contextSearchMaxLimit);
+  }
+
+  @Override
+  public int normalizeSubjectVersionLimit(int suppliedLimit) {
+    return normalizeLimit(suppliedLimit,
+            subjectVersionSearchDefaultLimit, subjectVersionSearchMaxLimit);
+  }
+
+  @Override
+  public HostnameVerifier getHostnameVerifier() throws SchemaRegistryStoreException {
+    String sslEndpointIdentificationAlgo =
+            config.getString(RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+
+    if (sslEndpointIdentificationAlgo == null
+            || sslEndpointIdentificationAlgo.equals("none")
+            || sslEndpointIdentificationAlgo.isEmpty()) {
+      return (hostname, session) -> true;
+    }
+
+    if (sslEndpointIdentificationAlgo.equalsIgnoreCase("https")) {
+      return null;
+    }
+
+    throw new SchemaRegistryStoreException(
+            RestConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+                    + " "
+                    + sslEndpointIdentificationAlgo
+                    + " not supported");
+  }
+
+  @Override
+  public SchemaString get(int id, String subject) throws SchemaRegistryException {
+    return get(id, subject, null, false);
+  }
+
+  @Override
+  public Schema get(String subject, int version, boolean returnDeletedSchema)
+          throws SchemaRegistryException {
+    VersionId versionId = new VersionId(version);
+    if (versionId.isLatest()) {
+      return getLatestVersion(subject);
+    } else {
+      SchemaValue schemaValue = getSchemaValue(new SchemaKey(subject, version));
+      Schema schema = null;
+      if (schemaValue != null && (!schemaValue.isDeleted() || returnDeletedSchema)) {
+        schema = toSchemaEntity(schemaValue);
+      }
+      return schema;
+    }
+  }
+
+  @Override
+  public void setMode(String subject, ModeUpdateRequest mode) throws SchemaRegistryException {
+    setMode(subject, mode, false);
+  }
+
+  @Override
+  public Mode getModeInScope(String subject) throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.mode(subject, true, defaultMode);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Failed to get mode in scope for " + subject, e);
+    }
+  }
+
+  @Override
+  public Mode getMode(String subject) throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.mode(subject, false, defaultMode);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to get mode for " + subject, e);
+    }
+  }
+
+  /**
+   * @param previousSchemas Full schema history in chronological order
+   */
+  @Override
+  public List<String> isCompatible(String subject,
+                                   Schema newSchema,
+                                   List<SchemaKey> previousSchemas,
+                                   boolean normalize)
+          throws SchemaRegistryException {
+
+    if (previousSchemas == null) {
+      log.error("Previous schema not provided");
+      throw new InvalidSchemaException("Previous schema not provided");
+    }
+
+    try {
+      List<ParsedSchemaHolder> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
+      for (SchemaKey previousSchema : previousSchemas) {
+        prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));
+      }
+
+      Config config = getConfigInScope(subject);
+      boolean doValidation = isSchemaNewSchemaValidationEnabled(config);
+      ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, doValidation, normalize);
+      if (parsedSchema == null) {
+        log.error("Empty schema");
+        throw new InvalidSchemaException("Empty schema");
+      }
+      return isCompatibleWithPrevious(config, parsedSchema, prevParsedSchemas);
+    } catch (IllegalStateException e) {
+      if (e.getCause() instanceof SchemaRegistryException) {
+        throw (SchemaRegistryException) e.getCause();
+      }
+      throw e;
+    }
+  }
+
+  @Override
+  public Config getConfigInScope(String subject)
+          throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Failed to get config in scope for " + subject, e);
+    }
+  }
+
+  protected QualifiedSubject replaceAlias(String context, String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), context, subject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    Config config = null;
+    try {
+      config = getConfig(qualifiedSubject);
+    } catch (Exception e) {
+      // fall through
+    }
+    if (config == null) {
+      return qs;
+    }
+    String alias = config.getAlias();
+    if (alias != null && !alias.isEmpty()) {
+      return QualifiedSubject.qualifySubjectWithParent(tenant(), qualifiedSubject, alias, true);
+    } else {
+      return qs;
+    }
+  }
+
+  @Override
+  public Config getConfig(String subject)
+          throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.config(subject, false, new Config(defaultCompatibilityLevel.name));
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Failed to get config for " + subject, e);
+    }
+  }
+
+  @Override
+  public Schema getLatestVersion(String subject) throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
+      return getLatestVersionFromSubjectSchemas(allVersions);
+    }
+  }
+
+  @Override
+  public Iterator<ExtendedSchema> getVersionsWithSubjectPrefix(String prefix,
+                                                               boolean includeAliases,
+                                                               LookupFilter filter,
+                                                               boolean returnLatestOnly,
+                                                               Predicate<Schema> postFilter)
+          throws SchemaRegistryException {
+    if (includeAliases) {
+      return allVersionsIncludingAliasesWithSubjectPrefix(
+              prefix, filter, returnLatestOnly, postFilter);
+    } else {
+      return allVersionsWithSubjectPrefix(prefix, filter, returnLatestOnly, postFilter);
+    }
+  }
+
+  @Override
+  public Iterator<SchemaKey> getAllVersions(String subject, LookupFilter filter)
+          throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(subject, false)) {
+      List<SchemaKey> schemaKeys = schemaKeysByVersion(allVersions, filter);
+      // sort schemaKeys by the absolute value of version in ascending order
+      schemaKeys.sort(Comparator.comparingInt(k -> Math.abs(k.getVersion())));
+      return schemaKeys.iterator();
+    }
+  }
+
+  @Override
+  public boolean hasSubjects(String subject,
+                             boolean lookupDeletedSubjects)
+          throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.hasSubjects(subject, lookupDeletedSubjects);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error from the backend Kafka store", e);
+    }
+  }
+
+  @Override
+  public Set<String> subjects(String subject,
+                              boolean lookupDeletedSubjects)
+          throws SchemaRegistryStoreException {
+    try {
+      return lookupCache.subjects(subject, lookupDeletedSubjects);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error from the backend Kafka store", e);
+    }
+  }
+
+  @Override
+  public Set<String> listSubjectsForId(int id, String subject, boolean returnDeleted)
+          throws SchemaRegistryException {
+    List<SubjectVersion> versions = listVersionsForId(id, subject, returnDeleted);
+    return versions != null
+            ? versions.stream()
+            .map(SubjectVersion::getSubject)
+            .collect(Collectors.toCollection(LinkedHashSet::new))
+            : null;
+  }
+
+  @Override
+  public Set<String> listSubjectsForId(int id, String subject) throws SchemaRegistryException {
+    return listSubjectsForId(id, subject, false);
+  }
+
+  @Override
+  public List<String> listContexts() throws SchemaRegistryException {
+    List<String> contexts = new ArrayList<>();
+    contexts.add(DEFAULT_CONTEXT);
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue contextValue = (ContextValue) iter.next();
+        contexts.add(contextValue.getContext());
+      }
+    }
+    return contexts;
+  }
+
+  @Override
+  public Set<String> listSubjectsWithPrefix(String prefix, LookupFilter filter)
+          throws SchemaRegistryException {
+    try (CloseableIterator<SchemaRegistryValue> allVersions = allVersions(prefix, true)) {
+      return extractUniqueSubjects(allVersions, filter);
+    }
+  }
+
+  @Override
+  public Set<String> listSubjects(LookupFilter filter)
+          throws SchemaRegistryException {
+    return listSubjectsWithPrefix(CONTEXT_WILDCARD, filter);
+  }
+
+  @Override
+  public List<ContextId> getReferencedBy(
+      String subject, VersionId versionId, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    try {
+      int version = versionId.getVersionId();
+      if (versionId.isLatest()) {
+        version = getLatestVersion(subject).getVersion();
+      }
+      SchemaKey key = new SchemaKey(subject, version);
+      List<ContextId> ids = new ArrayList<>(getReferencedBy(key, lookupDeletedSchema));
+      Collections.sort(ids);
+      return ids;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error from the backend Kafka store", e);
+    }
+  }
+
+  protected Set<ContextId> getReferencedBy(SchemaKey key, boolean lookupDeletedSchema)
+      throws StoreException, SchemaRegistryException {
+    Set<ContextId> ids = lookupCache.referencesSchema(key);
+    if (lookupDeletedSchema) {
+      return ids;
+    }
+    // Filter out references that are soft-deleted
+    Set<ContextId> undeletedIds = new HashSet<>();
+    for (ContextId id : ids) {
+      String ctx = CONTEXT_DELIMITER + id.getContext() + CONTEXT_DELIMITER;
+      List<SubjectVersion> versions = listVersionsForId(id.getId(), ctx, false);
+      if (versions != null && !versions.isEmpty()) {
+        undeletedIds.add(id);
+      }
+    }
+    return undeletedIds;
+  }
+
+  /**
+   * Returns the set of subjects that have at least one schema version referencing the given key.
+   * When {@code lookupDeletedSchema} is false, references from soft-deleted schema versions
+   * are excluded.
+   */
+  protected Set<String> getReferencedBySubjects(SchemaKey key, boolean lookupDeletedSchema)
+      throws StoreException, SchemaRegistryException {
+    Set<ContextId> ids = lookupCache.referencesSchema(key);
+    Set<String> subjects = new HashSet<>();
+    for (ContextId id : ids) {
+      String ctx = CONTEXT_DELIMITER + id.getContext() + CONTEXT_DELIMITER;
+      List<SubjectVersion> versions = listVersionsForId(id.getId(), ctx, lookupDeletedSchema);
+      if (versions != null) {
+        versions.stream().map(SubjectVersion::getSubject).forEach(subjects::add);
+      }
+    }
+    return subjects;
+  }
+
+  @Override
+  public List<ContextId> listIdsForGuid(String guid)
+          throws SchemaRegistryException {
+    try {
+      List<ContextId> ids = new ArrayList<>();
+      Integer id = lookupCache.idByGuid(guid, DEFAULT_CONTEXT);
+      if (id != null) {
+        ids.add(new ContextId(DEFAULT_CONTEXT, id));
+      }
+      try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+        while (iter.hasNext()) {
+          ContextValue v = (ContextValue) iter.next();
+          QualifiedSubject qualSub = new QualifiedSubject(v.getTenant(), v.getContext(), null);
+          String ctx = qualSub.toQualifiedContext();
+          id = lookupCache.idByGuid(guid, ctx);
+          if (id != null) {
+            ids.add(new ContextId(qualSub.getContext(), id));
+          }
+        }
+      }
+      Collections.sort(ids);
+      return ids;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while retrieving schema with guid "
+              + guid + " from the backend Kafka store", e);
+    }
+  }
+
+  @Override
+  public SchemaString getByGuid(String guid, String format) throws SchemaRegistryException {
+    try {
+      Map.Entry<Integer, String> id = getIdUsingContexts(guid);
+      if (id == null) {
+        return null;
+      }
+      SchemaString schema = get(id.getKey(), id.getValue(), format, false);
+      schema.setSubject(null);
+      schema.setVersion(null);
+      return schema;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving schema with guid "
+                      + guid
+                      + " from the backend Kafka"
+                      + " store", e);
+    }
+  }
+
+  @Override
+  public SchemaValue getSchemaValue(SchemaKey key)
+          throws SchemaRegistryException {
+    try {
+      return (SchemaValue) store.get(key);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving schema from the backend Kafka"
+                      + " store", e);
+    }
+  }
+
+  @Override
+  public Schema toSchemaEntity(SchemaValue schemaValue) throws SchemaRegistryStoreException {
+    if (metadataEncoder != null) {
+      metadataEncoder.decodeMetadata(schemaValue);
+    }
+    return schemaValue.toSchemaEntity();
+  }
+
+  @Override
+  public boolean schemaVersionExists(String subject, VersionId versionId, boolean
+          returnDeletedSchema) throws SchemaRegistryException {
+    final int version = versionId.getVersionId();
+    Schema schema = this.get(subject, version, returnDeletedSchema);
+    return (schema != null);
+  }
+
+  @Override
+  public Schema getUsingContexts(String subject, int version, boolean
+          returnDeletedSchema) throws SchemaRegistryException {
+    Schema schema = get(subject, version, returnDeletedSchema);
+    if (schema != null) {
+      logSchemaOp(schema, "READ");
+      return schema;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    if (isQualifiedSubject) {
+      return null;
+    }
+    // Try qualifying the subject with each known context
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub =
+                new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
+        schema = get(qualSub.toQualifiedSubject(), version, returnDeletedSchema);
+        if (schema != null) {
+          logSchemaOp(schema, "READ");
+          return schema;
+        }
+      }
+    }
+    return null;
+  }
+
+  @Override
+  public ParsedSchema parseSchema(
+          Schema schema,
+          boolean isNew,
+          boolean normalize) throws InvalidSchemaException {
+    try {
+      AbstractSchemaRegistry.RawSchema rawSchema =
+              new AbstractSchemaRegistry.RawSchema(schema.toHashKey(), isNew, normalize);
+      ParsedSchema parsedSchema = isNew
+              ? newSchemaCache.get(rawSchema)
+              : oldSchemaCache.get(rawSchema);
+      if (schema.getVersion() != null) {
+        parsedSchema = parsedSchema.copy(schema.getVersion());
+      }
+      return parsedSchema;
+    } catch (Exception e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof InvalidSchemaException) {
+        throw (InvalidSchemaException) cause;
+      } else {
+        throw new InvalidSchemaException(e);
+      }
+    }
+  }
+
+  @Override
+  public ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException {
+    return parseSchema(schema, false, false);
+  }
+
+  @Override
+  public void extractSchemaTags(Schema schema, List<String> tags)
+          throws SchemaRegistryException {
+    ParsedSchema parsedSchema = parseSchema(schema);
+    boolean isWildcard = tags.contains("*");
+    List<SchemaTags> schemaTags = parsedSchema.inlineTaggedEntities().entrySet()
+            .stream()
+            .filter(e -> isWildcard || !Collections.disjoint(tags, e.getValue()))
+            .map(e -> new SchemaTags(e.getKey(), new ArrayList<>(e.getValue())))
+            .collect(Collectors.toList());
+    schema.setSchemaTags(schemaTags);
+  }
+
+  @Override
+  public Schema lookUpSchemaUnderSubjectUsingContexts(
+          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
+          throws SchemaRegistryException {
+    Schema matchingSchema =
+            lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
+    if (matchingSchema != null) {
+      logSchemaOp(matchingSchema, "READ");
+      return matchingSchema;
+    }
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    boolean isQualifiedSubject = qs != null && !DEFAULT_CONTEXT.equals(qs.getContext());
+    if (isQualifiedSubject) {
+      return null;
+    }
+    // Try qualifying the subject with each known context
+    try (CloseableIterator<SchemaRegistryValue> iter = allContexts()) {
+      while (iter.hasNext()) {
+        ContextValue v = (ContextValue) iter.next();
+        QualifiedSubject qualSub =
+                new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
+        Schema qualSchema = schema.copy();
+        qualSchema.setSubject(qualSub.toQualifiedSubject());
+        try {
+          matchingSchema = lookUpSchemaUnderSubject(
+                  qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
+        } catch (InvalidSchemaException e) {
+          // ignore
+        }
+        if (matchingSchema != null) {
+          logSchemaOp(matchingSchema, "READ");
+          return matchingSchema;
+        }
+      }
+    }
+    return null;
+  }
+
+  @Override
+  public Schema getLatestWithMetadata(
+          String subject, Map<String, String> metadata, boolean lookupDeletedSchema)
+          throws SchemaRegistryException {
+    List<SchemaKey> allVersions = getAllSchemaKeysDescending(subject);
+
+    for (SchemaKey schemaKey : allVersions) {
+      Schema schema = get(schemaKey.getSubject(), schemaKey.getVersion(), lookupDeletedSchema);
+      if (schema != null) {
+        logSchemaOp(schema, "READ");
+        if (schema.getMetadata() != null) {
+          Map<String, String> props = schema.getMetadata().getProperties();
+          if (props != null && props.entrySet().containsAll(metadata.entrySet())) {
+            return schema;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  @Override
+  public boolean allowEmptySubject() {
+    return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
+  }
+
+  @Override
+  public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
+    return lookupCache;
+  }
+
+  @Override
+  public Set<String> schemaTypes() {
+    return providers.keySet();
+  }
+
+  @Override
+  public SchemaRegistryConfig config() {
+    return config;
+  }
+
+  @Override
+  public Map<String, Object> properties() {
+    return props;
+  }
+
+  @Override
+  public MetadataEncoderService getMetadataEncoder() {
+    return metadataEncoder;
+  }
+
+  @Override
+  public void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler) {
+    updateRequestHandlers.add(updateRequestHandler);
+  }
+
+  @Override
+  public UpdateRequestHandler getCompositeUpdateRequestHandler() {
+    List<UpdateRequestHandler> handlers = new ArrayList<>();
+    handlers.add(ruleSetHandler);
+    handlers.addAll(updateRequestHandlers);
+    return new CompositeUpdateRequestHandler(handlers);
+  }
+
+  @Override
+  public List<Handler.Singleton> getCustomHandler() {
+    return customHandler;
+  }
+
+  @Override
+  public void addCustomHandler(Handler.Singleton handler) {
+    customHandler.add(handler);
+  }
+
+  @Override
+  public MetricsContainer getMetricsContainer() {
+    return metricsContainer;
+  }
+
+  @Override
+  public List<SchemaRegistryResourceExtension> getResourceExtensions() {
+    return resourceExtensions;
+  }
+
+  @Override
+  public SchemaProvider schemaProvider(String schemaType) {
+    return providers.get(schemaType);
+  }
+
+  @Override
+  public RuleSetHandler getRuleSetHandler() {
+    return ruleSetHandler;
+  }
+
+  @Override
+  public void setRuleSetHandler(RuleSetHandler ruleSetHandler) {
+    this.ruleSetHandler = ruleSetHandler;
+  }
+
+  @Override
+  public SslFactory getSslFactory() {
+    return sslFactory;
+  }
+
+  @Override
+  public void onKeystoreCreated(KeyStore keystore) {
+    metricsContainer.emitCertificateExpirationMetric(
+            keystore, metricsContainer.getCertificateExpirationKeystore());
+  }
+
+  @Override
+  public void onTruststoreCreated(KeyStore truststore) {
+    metricsContainer.emitCertificateExpirationMetric(
+            truststore, metricsContainer.getCertificateExpirationTruststore());
+  }
+
+  // --------------- Association hook methods ---------------
+
+  protected void syncBeforeAssociationWrite(String qualifiedSubject)
+      throws SchemaRegistryStoreException {
+  }
+
+  protected void putAssociation(AssociationValue associationValue)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException("putAssociation not implemented");
+  }
+
+  protected void deleteAssociationEntry(Association oldAssociation)
+      throws SchemaRegistryException {
+    throw new UnsupportedOperationException("deleteAssociationEntry not implemented");
+  }
+
+  protected Lock lockForAssociation(String context) {
+    return NO_OP_LOCK;
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceName(
+      String resourceName, String resourceNamespace, String resourceType)
+      throws StoreException {
+    String tenant = tenant();
+    String minResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = resourceNamespace != null
+        && !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  protected CloseableIterator<SchemaRegistryValue> listAssociationValuesByResourceNamespace(
+      String resourceNamespace, String resourceType) throws StoreException {
+    String tenant = tenant();
+    String minResourceName = String.valueOf(Character.MIN_VALUE);
+    String maxResourceName = String.valueOf(Character.MAX_VALUE);
+    String minResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceNamespace = !resourceNamespace.equals(RESOURCE_WILDCARD)
+        ? resourceNamespace
+        : String.valueOf(Character.MAX_VALUE);
+    String minResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MIN_VALUE);
+    String maxResourceType = resourceType != null
+        ? resourceType
+        : String.valueOf(Character.MAX_VALUE);
+    String minAssociationType = String.valueOf(Character.MIN_VALUE);
+    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
+    String minSubject = String.valueOf(Character.MIN_VALUE);
+    String maxSubject = String.valueOf(Character.MAX_VALUE);
+
+    AssociationKey key1 = new AssociationKey(tenant, minResourceName, minResourceNamespace,
+        minResourceType, minAssociationType, minSubject);
+    AssociationKey key2 = new AssociationKey(tenant, maxResourceName, maxResourceNamespace,
+        maxResourceType, maxAssociationType, maxSubject);
+    return store.getAll(key1, key2);
+  }
+
+  // --------------- Association mutation methods ---------------
+
+  public AssociationResponse createAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociation(context, dryRun, request, true);
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    return createOrUpdateAssociation(context, dryRun, request, false);
+  }
+
+  public AssociationResponse createOrUpdateAssociation(
+      String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
+      boolean isCreate)
+      throws SchemaRegistryException {
+    String defaultSubjectPrefix = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
+        + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName() + "-";
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      if (unqualifiedSubject != null) {
+        QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
+        String qualifiedSubject = qs.toQualifiedSubject();
+        if (isReadOnlyMode(qualifiedSubject)) {
+          throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+              + qs.getContext() + " is in read-only mode");
+        }
+
+        info.setSubject(qs.toUnqualifiedSubject());
+
+        syncBeforeAssociationWrite(qualifiedSubject);
+      }
+    }
+
+    Map<String, AssociationCreateOrUpdateInfo> infosByType = new LinkedHashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      if (infosByType.containsKey(associationType)) {
+        throw new IllegalPropertyException(
+            "associationType", "Duplicate association type: " + associationType);
+      }
+      infosByType.put(associationType, info);
+    }
+
+    List<Association> associations = getAssociationsByResourceId(
+        request.getResourceId(), request.getResourceType(),
+        new ArrayList<>(infosByType.keySet()), null);
+
+    Map<String, Association> assocsByType;
+    if (associations.isEmpty() && isCreate && dryRun && request.getResourceId() == null) {
+      // At validate-phase the caller may not yet have a resourceId.
+      // Fall back to (name, namespace, type) so the equivalence check below can recognize an
+      // idempotent retry.
+      List<Association> fallback = getAssociationsByResourceName(
+          request.getResourceName(), request.getResourceNamespace(),
+          request.getResourceType(), new ArrayList<>(infosByType.keySet()), null);
+      // The fallback can return entries from multiple resourceIds sharing (name, namespace,
+      // type) — e.g. an orphan from a deleted topic alongside a live one. Keep the
+      // most-recently-updated entry per type so equivalence compares against the live one.
+      assocsByType = fallback.stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a,
+              (a, b) -> {
+                Long timestampA = a.getUpdateTimestamp();
+                Long timestampB = b.getUpdateTimestamp();
+                if (timestampA == null) {
+                  return b;
+                }
+                if (timestampB == null) {
+                  return a;
+                }
+                return timestampA >= timestampB ? a : b;
+              }));
+    } else {
+      // By-resourceId guarantees one row per associationType. Keep fail-fast on duplicates
+      assocsByType = associations.stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    }
+    Set<String> assocTypesToSkip = new HashSet<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+
+      if (association == null && !isCreate) {
+        info.applyDefaults(false);
+      }
+
+      String unqualifiedSubject = info.getSubject();
+      String defaultSubject = defaultSubjectPrefix + associationType;
+      if (unqualifiedSubject == null) {
+        if (association != null) {
+          unqualifiedSubject = association.getSubject();
+        } else if (info.getLifecycle() == LifecyclePolicy.STRONG) {
+          unqualifiedSubject = defaultSubject;
+        } else {
+          throw new IllegalPropertyException(
+              "subject", "must be provided for WEAK associations");
+        }
+        info.setSubject(unqualifiedSubject);
+      }
+
+      String qualifiedSubject = unqualifiedSubject != null
+          ? QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject)
+              .toQualifiedSubject()
+          : null;
+
+      LifecyclePolicy effectiveLifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : (association != null ? association.getLifecycle() : null);
+      if (effectiveLifecycle == null) {
+        throw new IllegalPropertyException("lifecycle", "lifecycle must be set");
+      }
+      if (effectiveLifecycle == LifecyclePolicy.WEAK) {
+        if (info.getSchema() != null) {
+          throw new IllegalPropertyException(
+              "lifecycle", "cannot be WEAK when schema is provided");
+        }
+        if (unqualifiedSubject != null && unqualifiedSubject.equals(defaultSubject)) {
+          throw new IllegalPropertyException(
+              "subject", "WEAK associations cannot use subject '" + defaultSubject + "'");
+        }
+      }
+
+      boolean isFrozen = association != null
+          ? association.isFrozen() : Boolean.TRUE.equals(info.getFrozen());
+      if (isFrozen && unqualifiedSubject != null
+          && !unqualifiedSubject.equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "frozen associations must use subject '" + defaultSubject + "'");
+      }
+
+      if (association == null) {
+        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null
+            && getModeInScope(qualifiedSubject) != Mode.IMPORT) {
+          if (isCreate && info.getSchema() == null) {
+            throw new IllegalPropertyException(
+                "schema", "schema must be provided when creating a frozen association");
+          }
+          Schema latestSchema = getLatestVersion(qualifiedSubject);
+          if (latestSchema != null) {
+            boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+            if (info.getSchema() == null
+                || latestSchema.getVersion() != 1
+                || lookUpSchemaUnderSubject(qualifiedSubject,
+                    new Schema(qualifiedSubject, info.getSchema()),
+                    normalize, false) == null) {
+              throw new IllegalPropertyException(
+                  "frozen", "cannot create a frozen association when schemas already exist "
+                      + "in the subject");
+            }
+          }
+        }
+        continue;
+      }
+      if (association.isEquivalent(info)) {
+        if (isCreate && info.getSchema() != null) {
+          boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+          Schema oldSchema = lookUpSchemaUnderSubject(
+              qualifiedSubject, new Schema(qualifiedSubject, info.getSchema()), normalize, false);
+          if (oldSchema == null) {
+            throw new AssociationForResourceExistsException(
+                association.getAssociationType(), association.getResourceName());
+          }
+        }
+        assocTypesToSkip.add(info.getAssociationType());
+        continue;
+      }
+      if (isCreate) {
+        throw new AssociationForResourceExistsException(
+            association.getAssociationType(), association.getResourceName());
+      }
+      if (info.getLifecycle() == null && info.getSchema() == null) {
+        throw new IllegalPropertyException(
+            "lifecycle", "at least lifecycle or schema must be provided for update");
+      }
+      if (unqualifiedSubject != null
+          && !association.getSubject().equals(unqualifiedSubject)) {
+        throw new IllegalPropertyException(
+            "subject", "subject of association cannot be changed from '"
+                + association.getSubject() + "' to '" + unqualifiedSubject + "'");
+      }
+      if (association.getLifecycle() == LifecyclePolicy.STRONG
+          && info.getLifecycle() == LifecyclePolicy.WEAK
+          && association.getSubject().equals(defaultSubject)) {
+        throw new IllegalPropertyException(
+            "lifecycle", "cannot change to WEAK when subject matches default format '"
+                + defaultSubject + "'");
+      }
+      if (info.getFrozen() != null && association.isFrozen() != info.getFrozen()) {
+        throw new IllegalPropertyException(
+            "frozen", "frozen attribute of association cannot be changed");
+      }
+      if (association.isFrozen()) {
+        throw new AssociationFrozenException(
+            association.getAssociationType(), association.getSubject());
+      }
+    }
+
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      String associationType = info.getAssociationType();
+      Association association = assocsByType.get(associationType);
+      if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
+        throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
+      }
+      List<Association> assocsBySubject = getAssociationsBySubject(
+          qualifiedSubject, null, Collections.emptyList(), null).stream()
+          .filter(a -> association == null
+              || !(a.getResourceId().equals(association.getResourceId())
+                   && a.getResourceType().equals(association.getResourceType())
+                   && a.getAssociationType().equals(association.getAssociationType())))
+          .collect(Collectors.toList());
+      LifecyclePolicy lifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : (association != null ? association.getLifecycle() : null);
+      if (lifecycle == null) {
+        throw new IllegalPropertyException("lifecycle", "lifecycle must be set");
+      }
+      switch (lifecycle) {
+        case STRONG:
+          if (!assocsBySubject.isEmpty()) {
+            throw new AssociationForSubjectExistsException(unqualifiedSubject);
+          }
+          break;
+        case WEAK:
+          if (Boolean.TRUE.equals(info.getFrozen())) {
+            throw new IllegalPropertyException(
+                "frozen", "association with lifecycle of WEAK cannot be frozen");
+          }
+          if (assocsBySubject.stream()
+              .anyMatch(assoc -> assoc.getLifecycle() == LifecyclePolicy.STRONG)) {
+            throw new StrongAssociationForSubjectExistsException(unqualifiedSubject);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      RegisterSchemaRequest schema = info.getSchema();
+      if (schema == null) {
+        continue;
+      }
+      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+
+      List<SchemaKey> previousSchemas = new ArrayList<>();
+      getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
+
+      List<String> errorLogs = isCompatible(qualifiedSubject,
+          new Schema(qualifiedSubject, schema), previousSchemas, normalize);
+      if (!errorLogs.isEmpty()) {
+        throw new IncompatibleSchemaException(errorLogs.toString());
+      }
+    }
+
+    if (dryRun) {
+      return new AssociationResponse(
+          request.getResourceName(),
+          request.getResourceNamespace(),
+          request.getResourceId(),
+          request.getResourceType(),
+          Collections.emptyList()
+      );
+    }
+
+    Map<String, Schema> registeredSchemas = new HashMap<>();
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      String associationType = info.getAssociationType();
+      String unqualifiedSubject = info.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      RegisterSchemaRequest schema = info.getSchema();
+      if (schema == null) {
+        continue;
+      }
+      Mode subjectMode = getModeInScope(qualifiedSubject);
+      if (subjectMode == Mode.IMPORT) {
+        continue;
+      }
+      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
+      Schema registeredSchema = register(qualifiedSubject,
+          new Schema(qualifiedSubject, schema), normalize, false);
+      registeredSchemas.put(associationType, registeredSchema);
+    }
+
+    List<AssociationValue> associationValues =
+        AssociationValue.fromAssociationCreateOrUpdateRequest(
+            tenant(), request, associations, assocTypesToSkip);
+    for (AssociationValue associationValue : associationValues) {
+      putAssociation(associationValue);
+    }
+    return Association.toAssociationResponse(
+        request.getResourceName(), request.getResourceNamespace(),
+        request.getResourceId(), request.getResourceType(),
+        associationValues.stream()
+            .map(AssociationValue::toAssociationEntity)
+            .collect(Collectors.toList()),
+        registeredSchemas);
+  }
+
+  protected void checkDeleteAssociation(
+      Association oldAssociation, boolean cascadeLifecycle)
+      throws SchemaRegistryException {
+    String unqualifiedSubject = oldAssociation.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+    String qualifiedSubject = qs.toQualifiedSubject();
+    if (isReadOnlyMode(qualifiedSubject)) {
+      throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
+          + qs.getContext() + " is in read-only mode");
+    }
+
+    if (!cascadeLifecycle && oldAssociation.isFrozen()) {
+      throw new AssociationFrozenException(
+          oldAssociation.getAssociationType(), oldAssociation.getSubject());
+    }
+  }
+
+  public void deleteAssociations(
+      String resourceId, String resourceType, List<String> associationTypes,
+      boolean cascadeLifecycle, boolean dryRun)
+      throws SchemaRegistryException {
+    List<Association> associations = getAssociationsByResourceId(resourceId,
+        resourceType, associationTypes, null);
+    for (Association association : associations) {
+      checkDeleteAssociation(association, cascadeLifecycle);
+    }
+    if (dryRun) {
+      return;
+    }
+    for (Association association : associations) {
+      deleteAssociationEntry(association);
+      String unqualifiedSubject = association.getSubject();
+      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
+      String qualifiedSubject = qs.toQualifiedSubject();
+      Mode subjectMode = getModeInScope(qualifiedSubject);
+      if (subjectMode != Mode.IMPORT
+          && cascadeLifecycle
+          && association.getLifecycle() == LifecyclePolicy.STRONG) {
+        deleteSubject(qualifiedSubject, false);
+        deleteSubject(qualifiedSubject, true);
+      }
+    }
+  }
+
+  private void collectSchemas(AssociationResponse response, Map<String, Schema> schemas) {
+    if (response != null && response.getAssociations() != null) {
+      for (AssociationInfo info : response.getAssociations()) {
+        if (info.getSchema() != null) {
+          schemas.put(info.getAssociationType(), info.getSchema());
+        }
+      }
+    }
+  }
+
+  public AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws SchemaRegistryException {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationGetRequest query : request.getRequests()) {
+      try {
+        query.validate();
+        String resourceType = query.getResourceType();
+        if (resourceType == null || resourceType.isEmpty()) {
+          resourceType = "topic";
+        }
+        List<String> associationTypes = query.getAssociationTypes();
+        if (associationTypes == null) {
+          associationTypes = Collections.emptyList();
+        }
+        String resourceName = query.getResourceName();
+        String resourceNamespace = query.getResourceNamespace();
+        String resourceId = query.getResourceId();
+        List<Association> associations;
+        if (resourceId != null && !resourceId.isEmpty()) {
+          associations = getAssociationsByResourceId(
+              resourceId, resourceType, associationTypes, query.getLifecycle());
+        } else {
+          associations = getAssociationsByResourceName(
+              resourceName, resourceNamespace,
+              resourceType, associationTypes, query.getLifecycle());
+        }
+        if (!associations.isEmpty()) {
+          Association first = associations.get(0);
+          if (resourceName == null) {
+            resourceName = first.getResourceName();
+          }
+          if (resourceNamespace == null) {
+            resourceNamespace = first.getResourceNamespace();
+          }
+          if (resourceId == null) {
+            resourceId = first.getResourceId();
+          }
+        }
+        Map<String, Schema> schemas = Collections.emptyMap();
+        if (includeSchemas) {
+          schemas = new HashMap<>();
+          for (Association association : associations) {
+            String qualifiedSubject = QualifiedSubject.createFromUnqualified(
+                tenant(), association.getSubject()).toQualifiedSubject();
+            Schema schema = getLatestVersion(qualifiedSubject);
+            if (schema != null) {
+              schemas.put(association.getAssociationType(), schema);
+            }
+          }
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                resourceName, resourceNamespace,
+                resourceId, resourceType,
+                associations, schemas)));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while getting associations: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
+  public AssociationBatchResponse mutateAssociations(
+      String context, boolean dryRun, AssociationBatchRequest request) {
+    List<AssociationResult> results = new ArrayList<>();
+    for (AssociationOpRequest req : request.getRequests()) {
+      if (req.getError() != null) {
+        results.add(new AssociationResult(req.getError(), null));
+        continue;
+      }
+      Lock lock = lockForAssociation(context);
+      lock.lock();
+      try {
+        req.validate(dryRun);
+        Map<String, Schema> schemas = new HashMap<>();
+        for (AssociationOp op : req.getAssociations()) {
+          switch (op.getType()) {
+            case CREATE:
+              AssociationResponse createResp = createAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
+              collectSchemas(createResp, schemas);
+              break;
+            case UPSERT:
+              AssociationResponse upsertResp = createOrUpdateAssociation(context, dryRun,
+                  new AssociationCreateOrUpdateRequest(req, op));
+              collectSchemas(upsertResp, schemas);
+              break;
+            case DELETE:
+              AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
+              deleteAssociations(
+                  req.getResourceId(),
+                  req.getResourceType(),
+                  Collections.singletonList(deleteOp.getAssociationType()),
+                  Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
+              );
+              break;
+            default:
+              break;
+          }
+        }
+        List<Association> associations = null;
+        if (!dryRun) {
+          associations = getAssociationsByResourceId(
+              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
+        }
+        results.add(new AssociationResult(null,
+            Association.toAssociationResponse(
+                req.getResourceName(), req.getResourceNamespace(),
+                req.getResourceId(), req.getResourceType(),
+                associations, schemas)));
+      } catch (IllegalPropertyException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForResourceExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getResource()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (AssociationFrozenException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            ASSOCIATION_FROZEN_ERROR_CODE,
+            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
+                e.getAssociationType(), e.getSubject()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (NoActiveSubjectVersionExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
+            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
+                e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (StrongAssociationForSubjectExistsException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
+            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
+        results.add(new AssociationResult(errMsg, null));
+      } catch (TooManyAssociationsException e) {
+        // TODO maxKeys
+        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+      } catch (InvalidSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INVALID_ASSOCIATION_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (SchemaTooLargeException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            SCHEMA_TOO_LARGE_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (IncompatibleSchemaException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            INCOMPATIBLE_SCHEMA_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (Exception e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            RestServerErrorException.DEFAULT_ERROR_CODE,
+            "Error while creating association: " + e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } finally {
+        lock.unlock();
+      }
+    }
+    return new AssociationBatchResponse(results);
+  }
+
+  // --------------- Association query methods ---------------
+
+  public Association getAssociationByGuid(String guid)
+      throws SchemaRegistryException {
+    try {
+      AssociationValue associationValue = lookupCache.associationByGuid(guid);
+      return associationValue != null ? associationValue.toAssociationEntity() : null;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting association for guid '"
+          + guid + "' in the backend store", e);
+    }
+  }
+
+  public List<Association> getAssociationsBySubject(
+      String subject, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (subject == null) {
+      return associations;
+    }
+    try (CloseableIterator<AssociationValue> iter = lookupCache.associationsBySubject(subject)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for subject '"
+          + subject + "' in the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceId(
+      String resourceId, String resourceType, List<String> associationTypes,
+      LifecyclePolicy lifecycle) throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceId == null) {
+      return associations;
+    }
+    try (CloseableIterator<AssociationValue> iter =
+        lookupCache.associationsByResourceId(resourceId)) {
+      while (iter.hasNext()) {
+        AssociationValue value = iter.next();
+        if ((resourceType == null || value.getResourceType().equals(resourceType))
+            && (associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error while getting associations for resource id '"
+          + resourceId + "' in the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceName(
+      String resourceName, String resourceNamespace,
+      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+      throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceName == null) {
+      return associations;
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceName(resourceName, resourceNamespace, resourceType)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+            || associationTypes.contains(value.getAssociationType()))
+            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while retrieving associations from the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  public List<Association> getAssociationsByResourceNamespace(
+          String resourceNamespace,
+          String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+          throws SchemaRegistryException {
+    List<Association> associations = new ArrayList<>();
+    if (resourceNamespace == null) {
+      return associations;
+    }
+    try (CloseableIterator<SchemaRegistryValue> iter =
+        listAssociationValuesByResourceNamespace(resourceNamespace, resourceType)) {
+      while (iter.hasNext()) {
+        AssociationValue value = (AssociationValue) iter.next();
+        if ((associationTypes == null || associationTypes.isEmpty()
+                || associationTypes.contains(value.getAssociationType()))
+                && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)
+                && (resourceNamespace.equals(RESOURCE_WILDCARD)
+                || value.getResourceNamespace().equals(resourceNamespace))) {
+          associations.add(value.toAssociationEntity());
+        }
+      }
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+              "Error while retrieving associations from the backend store", e);
+    }
+    Collections.sort(associations);
+    return associations;
+  }
+
+  /**
+   * Internal class representing a raw schema with parsing options.
+   */
+  protected static class RawSchema {
+    private final Schema schema;
+    private final boolean isNew;
+    private final boolean normalize;
+
+    public RawSchema(Schema schema, boolean isNew, boolean normalize) {
+      this.schema = schema;
+      this.isNew = isNew;
+      this.normalize = normalize;
+    }
+
+    public Schema getSchema() {
+      return schema;
+    }
+
+    public boolean isNew() {
+      return isNew;
+    }
+
+    public boolean isNormalize() {
+      return normalize;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      RawSchema that = (RawSchema) o;
+      return isNew == that.isNew
+          && normalize == that.normalize
+          && Objects.equals(schema, that.schema);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schema, isNew, normalize);
+    }
+
+    @Override
+    public String toString() {
+      return "RawSchema{"
+          + "schema=" + schema
+          + ", isNew=" + isNew
+          + ", normalize=" + normalize
+          + '}';
+    }
+  }
+
+  public static class SchemeAndPort {
+    public int port;
+    public String scheme;
+
+    public SchemeAndPort(String scheme, int port) {
+      this.port = port;
+      this.scheme = scheme;
+    }
+  }
+}

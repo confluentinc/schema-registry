@@ -16,7 +16,6 @@
 
 package io.confluent.kafka.streams.serdes.avro;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -47,7 +46,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
  * streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
  * streamsConfiguration.put(
- *     AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *     AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *     "http://confluent-schema-registry-server:8081/");
  * }</pre>
  *
@@ -59,14 +58,13 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
  * boolean isKeySerde = false;
  * specificAvroSerde.configure(
  *     Collections.singletonMap(
- *         AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+ *         AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
  *         "http://confluent-schema-registry-server:8081/"),
  *     isKeySerde);
  * KStream<String, MyJavaClassGeneratedFromAvroSchema> stream = ...;
  * stream.to(Serdes.String(), specificAvroSerde, "my-output-topic");
  * }</pre>
  */
-@InterfaceStability.Unstable
 public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord>
     implements Serde<T> {
 

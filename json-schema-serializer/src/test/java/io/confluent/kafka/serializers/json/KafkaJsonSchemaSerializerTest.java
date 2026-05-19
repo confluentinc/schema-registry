@@ -30,11 +30,18 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaInject;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaString;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
+import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -45,6 +52,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
 import javax.validation.constraints.Min;
@@ -90,11 +98,7 @@ public class KafkaJsonSchemaSerializerTest {
   private final String topic;
 
   public KafkaJsonSchemaSerializerTest() {
-    config = new Properties();
-    config.put(KafkaJsonSchemaSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
-    config.put(KafkaJsonSchemaSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    config.put(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, true);
-    config.put(KafkaJsonSchemaSerializerConfig.WRITE_DATES_AS_ISO8601, true);
+    config = createSerializerConfig();
     schemaRegistry = new MockSchemaRegistryClient(
         Collections.singletonList(new JsonSchemaProvider()));
     serializer = new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(config));
@@ -109,6 +113,15 @@ public class KafkaJsonSchemaSerializerTest {
     topic = "test";
   }
 
+  protected Properties createSerializerConfig() {
+    Properties serializerConfig = new Properties();
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA, true);
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.WRITE_DATES_AS_ISO8601, true);
+    return serializerConfig;
+  }
+
   private <T> KafkaJsonSchemaDeserializer<T> getDeserializer(Class<T> cls) {
     return new KafkaJsonSchemaDeserializer<>(schemaRegistry, new HashMap(config), cls);
   }
@@ -117,51 +130,91 @@ public class KafkaJsonSchemaSerializerTest {
   public void testKafkaJsonSchemaSerializer() {
     byte[] bytes;
 
-    bytes = serializer.serialize(topic, null);
-    assertEquals(null, deserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, null);
+    assertEquals(null, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, NullNode.getInstance());
-    assertEquals(null, deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, NullNode.getInstance());
+    assertEquals(null, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, true);
-    assertEquals(true, deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, true);
+    assertEquals(true, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, BooleanNode.getTrue());
-    assertEquals(true, deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, BooleanNode.getTrue());
+    assertEquals(true, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, 123);
-    assertEquals(123, deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, 123);
+    assertEquals(123, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, IntNode.valueOf(123));
-    assertEquals(123, deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, IntNode.valueOf(123));
+    assertEquals(123, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, 345L);
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, 345L);
     // JSON can't distinguish longs
-    assertEquals(345, deserializer.deserialize(topic, bytes));
+    assertEquals(345, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, LongNode.valueOf(345L));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, LongNode.valueOf(345L));
     // JSON can't distinguish longs
-    assertEquals(345, deserializer.deserialize(topic, bytes));
+    assertEquals(345, deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, 1.23f);
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, 1.23f);
     // JSON can't distinguish doubles
-    assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, bytes));
+    assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, FloatNode.valueOf(1.23f));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, FloatNode.valueOf(1.23f));
     // JSON can't distinguish doubles
-    assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, bytes));
+    assertEquals(new BigDecimal("1.23"), deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, 2.34d);
-    assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, 2.34d);
+    assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, DoubleNode.valueOf(2.34d));
-    assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, DoubleNode.valueOf(2.34d));
+    assertEquals(new BigDecimal("2.34"), deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, "abc");
-    assertEquals("abc", deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, "abc");
+    assertEquals("abc", deserializer.deserialize(topic, headers, bytes));
 
-    bytes = serializer.serialize(topic, TextNode.valueOf("abc"));
-    assertEquals("abc", deserializer.deserialize(topic, bytes));
+    headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, TextNode.valueOf("abc"));
+    assertEquals("abc", deserializer.deserialize(topic, headers, bytes));
+  }
+
+  @Test
+  public void testSerializeWithSchema() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    JsonSchema schema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user, schema);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
+    assertEquals(user, deserialized);
+
+    // verify null returns null
+    headers = new RecordHeaders();
+    byte[] nullBytes = serializer.serialize(topic, headers, null, schema);
+    assertEquals(null, nullBytes);
+
+    // verify same result as regular serialize
+    headers = new RecordHeaders();
+    byte[] regularBytes = serializer.serialize(topic, headers, user);
+    RecordHeaders headers2 = new RecordHeaders();
+    byte[] withSchemaBytes = serializer.serialize(topic, headers2, user, schema);
+    Object regular = getDeserializer(User.class).deserialize(topic, headers, regularBytes);
+    Object withSchema = getDeserializer(User.class).deserialize(topic, headers2, withSchemaBytes);
+    assertEquals(regular, withSchema);
   }
 
   @Test
@@ -171,37 +224,40 @@ public class KafkaJsonSchemaSerializerTest {
 
     // restore configs
     serializer.configure(new HashMap(config), false);
-    serializer.configure(new HashMap(config), false);
   }
 
   @Test
   public void testKafkaJsonSchemaSerializerExceptionHandler() throws IOException, RestClientException {
     KafkaJsonSchemaSerializer unconfiguredSerializer = new KafkaJsonSchemaSerializer();
     User user = new User();
-    assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.serialize("foo", user));
+    RecordHeaders headers = new RecordHeaders();
+    assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.serialize("foo", headers, user));
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
-    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, new HashMap(config));
+    HashMap serializerConfig = new HashMap(config);
+    serializerConfig.put(KafkaJsonSchemaSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        TopicNameStrategy.class.getName());
+    KafkaJsonSchemaSerializer serializer = new KafkaJsonSchemaSerializer<>(mockClient, serializerConfig);
 
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(ThrottlingQuotaExceededException.class, () -> serializer.serialize("foo", user));
+    assertThrows(ThrottlingQuotaExceededException.class, () -> serializer.serialize("foo", headers, user));
 
     doThrow(new RestClientException("err", 408, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", headers, user));
 
     doThrow(new RestClientException("err", 503, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", headers, user));
 
     doThrow(new RestClientException("err", 504, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", headers, user));
 
     doThrow(new RestClientException("err", 500, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", user));
+    assertThrows(TimeoutException.class, () -> serializer.serialize("foo", headers, user));
 
     doThrow(new RestClientException("err", 502, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(DisconnectException.class, () -> serializer.serialize("foo", user));
+    assertThrows(DisconnectException.class, () -> serializer.serialize("foo", headers, user));
 
     doThrow(new RestClientException("err", 501, 0)).when(mockClient).registerWithResponse(any(), any(), anyBoolean(), anyBoolean());
-    assertThrows(SerializationException.class, () -> serializer.serialize("foo", user));
+    assertThrows(SerializationException.class, () -> serializer.serialize("foo", headers, user));
   }
 
   @Test
@@ -211,40 +267,55 @@ public class KafkaJsonSchemaSerializerTest {
     message.put("foo", "bar");
     message.put("baz", new BigDecimal("354.99"));
 
-    byte[] randomBytes = serializer.serialize("foo", message);
-    assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.deserialize("foo", randomBytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] randomBytes = serializer.serialize("foo", headers, message);
+    assertThrows(InvalidConfigurationException.class, () -> unconfiguredSerializer.deserialize("foo", headers, randomBytes));
 
 
     SchemaRegistryClient mockClient = Mockito.spy(SchemaRegistryClient.class);
-    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, new HashMap(config));
+    HashMap deserializerConfig = new HashMap(config);
+    deserializerConfig.put(KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        TopicNameStrategy.class.getName());
+    KafkaJsonSchemaDeserializer deserializer = new KafkaJsonSchemaDeserializer<>(mockClient, deserializerConfig);
 
     doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(ThrottlingQuotaExceededException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 429, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(ThrottlingQuotaExceededException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
     doThrow(new RestClientException("err", 408, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 408, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
     doThrow(new RestClientException("err", 503, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 503, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
     doThrow(new RestClientException("err", 504, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 504, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
     doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
+
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
+    doThrow(new RestClientException("err", 500, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
+    assertThrows(TimeoutException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
     doThrow(new RestClientException("err", 502, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(DisconnectException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 502, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(DisconnectException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
 
     doThrow(new RestClientException("err", 501, 0)).when(mockClient).getSchemaBySubjectAndId(any(), anyInt());
-    assertThrows(SerializationException.class, () -> deserializer.deserialize("foo", randomBytes));
+    doThrow(new RestClientException("err", 501, 0)).when(mockClient).getSchemaByGuid(any(), any());
+    assertThrows(SerializationException.class, () -> deserializer.deserialize("foo", headers, randomBytes));
   }
-
-
 
   @Test
   public void serializeNull() {
-    assertNull(serializer.serialize("foo", null));
+    RecordHeaders headers = new RecordHeaders();
+    assertNull(serializer.serialize("foo", headers, null));
   }
 
   @Test
@@ -253,8 +324,9 @@ public class KafkaJsonSchemaSerializerTest {
     message.put("foo", "bar");
     message.put("baz", new BigDecimal("354.99"));
 
-    byte[] bytes = serializer.serialize("foo", message);
-    Object deserialized = deserializer.deserialize(topic, bytes);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize("foo", headers, message);
+    Object deserialized = deserializer.deserialize(topic, headers, bytes);
     assertEquals(message, deserialized);
   }
 
@@ -262,39 +334,50 @@ public class KafkaJsonSchemaSerializerTest {
   public void serializeUser() throws Exception {
     User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
 
-    byte[] bytes = serializer.serialize("foo", user);
-    Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
 
+    ParsedSchemaAndValue schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes);
+    ParsedSchema expectedSchema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
+
     // Test for javaType property
-    deserialized = getDeserializer(null).deserialize(topic, bytes);
+    deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
 
     // Test javaType overrides the default Object.class
-    deserialized = getDeserializer(Object.class).deserialize(topic, bytes);
+    deserialized = getDeserializer(Object.class).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
   }
 
   @Test
   public void javaTypeAllowlistAcceptsClassInPackage() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    byte[] bytes = serializer.serialize(topic, user);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
 
     Object deserialized = getDeserializerWithAllowedPackages(
         null, "io.confluent.kafka.serializers.json.")
-        .deserialize(topic, bytes);
+        .deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
   }
 
   @Test
   public void javaTypeAllowlistRejectsClassOutsidePackage() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    byte[] bytes = serializer.serialize(topic, user);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
 
     KafkaJsonSchemaDeserializer<Object> deser =
         getDeserializerWithAllowedPackages(null, "com.mycorp.");
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, bytes));
+        () -> deser.deserialize(topic, headers, bytes));
     assertTrue(ex.getMessage(),
         ex.getMessage().contains("not in json.type.allowed.packages")
             || (ex.getCause() != null
@@ -304,12 +387,13 @@ public class KafkaJsonSchemaSerializerTest {
   @Test
   public void javaTypeAllowlistEmptyDisablesResolution() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    byte[] bytes = serializer.serialize(topic, user);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
 
     KafkaJsonSchemaDeserializer<Object> deser =
         getDeserializerWithAllowedPackages(null, "");
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, bytes));
+        () -> deser.deserialize(topic, headers, bytes));
     String msg = ex.getMessage() + (ex.getCause() != null ? " | " + ex.getCause().getMessage() : "");
     assertTrue(msg, msg.contains("javaType resolution is disabled"));
   }
@@ -317,13 +401,14 @@ public class KafkaJsonSchemaSerializerTest {
   @Test
   public void javaTypeAllowlistTreatsEmptyStringEntryAsNoop() {
     User user = new User("john", "doe", (short) 50, "jack", null);
-    byte[] bytes = serializer.serialize(topic, user);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
 
     // A list entry of "" must not act as a wildcard (every string startsWith("")).
     KafkaJsonSchemaDeserializer<Object> deser =
         getDeserializerWithAllowedPackages(null, ",");
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, bytes));
+        () -> deser.deserialize(topic, headers, bytes));
     String msg = ex.getMessage() + (ex.getCause() != null ? " | " + ex.getCause().getMessage() : "");
     assertTrue(msg, msg.contains("not in json.type.allowed.packages"));
   }
@@ -335,11 +420,12 @@ public class KafkaJsonSchemaSerializerTest {
     JsonSchema schema = new JsonSchema(schemaStr);
     schemaRegistry.register(topic + "-value", schema);
 
-    byte[] bytes = latestSerializer.serialize(topic, "hello");
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = latestSerializer.serialize(topic, headers, "hello");
 
     KafkaJsonSchemaDeserializer<Object> deser = getDeserializer(null);
     SerializationException ex = assertThrows(SerializationException.class,
-        () -> deser.deserialize(topic, bytes));
+        () -> deser.deserialize(topic, headers, bytes));
     String msg = ex.getMessage() + (ex.getCause() != null ? " | " + ex.getCause().getMessage() : "");
     assertTrue(msg, msg.contains("non-object/array JSON payload"));
   }
@@ -355,9 +441,32 @@ public class KafkaJsonSchemaSerializerTest {
   public void serializeInvalidUser() throws Exception {
     User user = new User("john", "doe", (short) -1, "jack", LocalDate.parse("2018-12-27"));
 
-    byte[] bytes = serializer.serialize("foo", user);
-    Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize("foo", headers, user);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
+  }
+
+  @Test
+  public void testValidateBeforeDomainRules() throws Exception {
+    Properties validateBeforeConfig = createSerializerConfig();
+    validateBeforeConfig.put(
+        KafkaJsonSchemaSerializerConfig.VALIDATE_BEFORE_DOMAIN_RULES, true);
+    KafkaJsonSchemaSerializer<Object> validateBeforeSerializer =
+        new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(validateBeforeConfig));
+
+    // Valid user should succeed
+    User validUser = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = validateBeforeSerializer.serialize(topic, headers, validUser);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
+    assertEquals(validUser, deserialized);
+
+    // Invalid user (age < 0 violates @Min(0)) should fail validation before domain rules
+    User invalidUser = new User("john", "doe", (short) -1, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers2 = new RecordHeaders();
+    assertThrows(SerializationException.class,
+        () -> validateBeforeSerializer.serialize(topic, headers2, invalidUser));
   }
 
   @Test
@@ -366,8 +475,9 @@ public class KafkaJsonSchemaSerializerTest {
     JsonSchema userSchema = JsonSchemaUtils.getSchema(user, null, false, null);
     schemaRegistry.register(topic + "-value", userSchema);
 
-    byte[] bytes = latestSerializer.serialize(topic, user);
-    Object deserialized = getDeserializer(User.class).deserialize(topic, bytes);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = latestSerializer.serialize(topic, headers, user);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
   }
 
@@ -401,16 +511,18 @@ public class KafkaJsonSchemaSerializerTest {
     JsonSchema jsonSchema = new JsonSchema(schema, refs, resolvedRefs, null);
     schemaRegistry.register(topic + "-value", jsonSchema);
 
-    byte[] bytes = latestSerializer.serialize(topic, user);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = latestSerializer.serialize(topic, headers, user);
 
     // Test for javaType property
-    Object deserialized = getDeserializer(null).deserialize(topic, bytes);
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
     assertEquals(user, deserialized);
 
-    bytes = latestSerializer.serialize(topic, customer);
+    headers = new RecordHeaders();
+    bytes = latestSerializer.serialize(topic, headers, customer);
 
     // Test for javaType property
-    deserialized = getDeserializer(null).deserialize(topic, bytes);
+    deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
     assertEquals(customer, deserialized);
   }
 
@@ -420,7 +532,8 @@ public class KafkaJsonSchemaSerializerTest {
 
     String json = "{}";
     JsonNode record = new ObjectMapper().readTree(json);
-    byte[] bytes = latestSerializer.serialize(topic, record);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = latestSerializer.serialize(topic, headers, record);
 
     String expectedJson = "{\n"
         + "    \"null\": null,\n"
@@ -429,10 +542,191 @@ public class KafkaJsonSchemaSerializerTest {
         + "    \"string\": \"abc\"\n"
         + "}";
     JsonNode expectedRecord = new ObjectMapper().readTree(expectedJson);
-    Object deserialized = getDeserializer(null).deserialize(topic, bytes);
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
     assertEquals(expectedRecord, deserialized);
   }
-  
+
+  @Test
+  public void serializeRecordEnvelope() throws Exception {
+    String json = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode record = objectMapper.readTree(json);
+    JsonNode schemaNode = objectMapper.readTree(recordWithDefaultsSchemaString);
+    JsonNode envelope = JsonSchemaUtils.envelope(schemaNode, record);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, envelope);
+
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
+    assertEquals(record, deserialized);
+  }
+
+  @Test
+  public void serializeRecordEnvelopeWithoutDetection() throws Exception {
+    Properties noDetectionConfig = createSerializerConfig();
+    noDetectionConfig.put(KafkaJsonSchemaSerializerConfig.JSON_ENVELOPE_DETECTION, false);
+    KafkaJsonSchemaSerializer<Object> noDetectionSerializer =
+        new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(noDetectionConfig));
+
+    String json = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode record = objectMapper.readTree(json);
+    JsonNode schemaNode = objectMapper.readTree(recordWithDefaultsSchemaString);
+    JsonNode envelope = JsonSchemaUtils.envelope(schemaNode, record);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = noDetectionSerializer.serialize(topic, headers, envelope);
+
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
+    assertEquals(envelope, deserialized);
+  }
+
+  @Test
+  public void testKafkaJsonSchemaDeserializerWithAssociatedNameStrategy()
+      throws IOException, RestClientException {
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    schemaRegistry.register("mysubject", schema);
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        topic,
+        "myresourcens",
+        "123",
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                "mysubject",
+                "value",
+                LifecyclePolicy.STRONG,
+                false,
+                null,
+                null
+            )
+        )
+    );
+    schemaRegistry.createAssociation(request);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    assertEquals(user, deserializer.deserialize(topic, headers, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+    deserializer.configure(new HashMap(config), false);
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerWithAssociatedNameStrategyFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to TopicNameStrategy
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    String fallbackTopic = "fallback-test";
+
+    // Pre-register the schema with TopicNameStrategy subject name
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    schemaRegistry.register(fallbackTopic + "-value", schema);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName()
+        // subject.name.strategy.fallback.type defaults to "TOPIC"
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to TopicNameStrategy since no association exists
+    byte[] bytes = serializer.serialize(fallbackTopic, headers, user);
+    assertEquals(user, deserializer.deserialize(fallbackTopic, headers, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerWithAssociatedNameStrategyRecordFallback()
+      throws IOException, RestClientException {
+    // No association is created, so it should fall back to RecordNameStrategy
+    User user = new User("john", "doe", (short) 50, "jack", null);
+
+    // Pre-register the schema with RecordNameStrategy subject name
+    JsonSchema schema = JsonSchemaUtils.getSchema(user);
+    schemaRegistry.register("com.acme.User", schema);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        false,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_TYPE,
+        "RECORD"
+    );
+    serializer.configure(configs, false);
+    deserializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should fall back to RecordNameStrategy since no association exists
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    assertEquals(user, deserializer.deserialize(topic, headers, bytes));
+
+    // restore configs
+    serializer.configure(new HashMap(config), false);
+  }
+
+  @Test(expected = SerializationException.class)
+  public void testKafkaJsonSchemaSerializerWithAssociatedNameStrategyNoFallback()
+      throws IOException, RestClientException {
+    // No association is created and fallback is disabled
+    String noFallbackTopic = "no-fallback-test";
+    User user = new User("john", "doe", (short) 50, "jack", null);
+
+    Map configs = ImmutableMap.of(
+        KafkaJsonSchemaDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+        "bogus",
+        KafkaJsonSchemaDeserializerConfig.AUTO_REGISTER_SCHEMAS,
+        false,
+        KafkaJsonSchemaDeserializerConfig.USE_LATEST_VERSION,
+        true,
+        KafkaJsonSchemaDeserializerConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        AssociatedNameStrategy.class.getName(),
+        AssociatedNameStrategy.FALLBACK_TYPE,
+        "NONE"
+    );
+    serializer.configure(configs, false);
+    RecordHeaders headers = new RecordHeaders();
+    // Should throw SerializationException since no association exists and fallback is disabled
+    serializer.serialize(noFallbackTopic, headers, user);
+  }
+
   @Test
   public void testKafkaJsonSchemaDeserializerWithPreRegisteredUseLatestRecordNameStrategy()
       throws IOException, RestClientException {
@@ -451,11 +745,11 @@ public class KafkaJsonSchemaSerializerTest {
     User user = new User("john", "doe", (short) 50, "jack", null);
     JsonSchema schema = JsonSchemaUtils.getSchema(user);
     schemaRegistry.register("com.acme.User", schema);
-    byte[] bytes = serializer.serialize(topic, user);
-    assertEquals(user, deserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+    assertEquals(user, deserializer.deserialize(topic, headers, bytes));
 
     // restore configs
-    serializer.configure(new HashMap(config), false);
     serializer.configure(new HashMap(config), false);
   }
 
@@ -541,5 +835,30 @@ public class KafkaJsonSchemaSerializerTest {
     public int hashCode() {
       return Objects.hash(firstName, lastName, age, nickName, birthdate);
     }
+  }
+
+  @Test
+  public void testDeserializeWithSchemaFunction() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user);
+
+    // Test deserializeWithSchema with a function that returns the same schema
+    ParsedSchemaAndValue schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes, writerSchema -> writerSchema);
+
+    ParsedSchema expectedSchema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
+
+    // Test with null function (should use default behavior)
+    schemaAndValue = getDeserializer(User.class)
+        .deserializeWithSchema(topic, headers, bytes, null);
+    assertEquals(expectedSchema.normalize().canonicalString(),
+        schemaAndValue.getSchema().normalize().canonicalString());
+    assertEquals(user, schemaAndValue.getValue());
   }
 }

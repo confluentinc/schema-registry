@@ -17,7 +17,6 @@
 package io.confluent.kafka.streams.serdes.avro;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -37,7 +36,6 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
  *
  * <p>See {@link GenericAvroSerializer} for its serializer counterpart.</p>
  */
-@InterfaceStability.Unstable
 public class GenericAvroDeserializer implements Deserializer<GenericRecord> {
 
   private final KafkaAvroDeserializer inner;

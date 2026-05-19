@@ -23,6 +23,7 @@ import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto.EnumReservedRange;
 import com.google.protobuf.DescriptorProtos.EnumValueDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FeatureSet;
+import com.google.protobuf.DescriptorProtos.FieldOptions.FeatureSupport;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -73,12 +74,13 @@ public class EnumDefinition {
     }
 
     public Builder addValue(String name, int num) {
-      return addValue(name, num, null, null, null, null);
+      return addValue(name, num, null, null, null, null, null);
     }
 
     // Note: added
     public Builder addValue(String name, int num, ProtobufMeta meta,
-        Boolean isDeprecated, Boolean isDebugRedact, FeatureSet features) {
+        Boolean isDeprecated, Boolean isDebugRedact,
+        FeatureSet features, FeatureSupport featureSupport) {
       EnumValueDescriptorProto.Builder enumValBuilder = EnumValueDescriptorProto.newBuilder();
       enumValBuilder.setName(name).setNumber(num);
       if (isDeprecated != null) {
@@ -97,6 +99,12 @@ public class EnumDefinition {
         DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
             DescriptorProtos.EnumValueOptions.newBuilder();
         optionsBuilder.setFeatures(features);
+        enumValBuilder.mergeOptions(optionsBuilder.build());
+      }
+      if (featureSupport != null) {
+        DescriptorProtos.EnumValueOptions.Builder optionsBuilder =
+            DescriptorProtos.EnumValueOptions.newBuilder();
+        optionsBuilder.setFeatureSupport(featureSupport);
         enumValBuilder.mergeOptions(optionsBuilder.build());
       }
       Meta m = toMeta(meta);
