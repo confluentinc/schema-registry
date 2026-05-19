@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.serializers;
+package io.confluent.kafka.serializers.metrics;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
