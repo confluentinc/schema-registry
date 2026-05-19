@@ -88,7 +88,7 @@
  *
  * <h2>Cross-engine concerns</h2>
  *
- * <p>The strict checker uses cel-java (org.projectnessie.cel) but the
+ * <p>The strict checker uses Google cel-java ({@code dev.cel}) but the
  * emitted CEL may be evaluated by cel-go in production. A few overloads
  * differ between the two implementations:
  * <ul>

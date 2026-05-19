@@ -327,14 +327,17 @@ class StrictCelCheckSmokeTest {
     CelValidator.assertValidStrictColumnLevel("this.zip > 0", "addr", struct);
   }
 
-  @Test void columnLevelIntThisStringComparisonAcceptedByStrict() {
-    // Documents that strict alone DOES NOT catch `int == string` — CEL
-    // accepts cross-type equality and evaluates always-false. The
-    // hand-coded validateCompare cross-type check (restored after Round 2)
-    // is what actually rejects this in the SQL→CEL translator.
+  @Test void columnLevelIntThisStringComparisonRejectedByStrict() {
+    // Google cel-java's strict type-checker rejects `int == string` — its
+    // `_==_` overload requires both operands to be the same type. This is
+    // stricter than Nessie cel-java, which accepted cross-type equality and
+    // evaluated always-false at runtime. The hand-coded validateCompare
+    // cross-type check still produces the primary user-facing diagnostic;
+    // strict here is now a redundant safety net (catches the same case).
     Schema intCol = Schema.create(Schema.Type.INT);
-    CelValidator.assertValidStrictColumnLevel(
-        "this == 'foo'", "x", intCol);
+    assertThrows(AssertionError.class, () ->
+        CelValidator.assertValidStrictColumnLevel(
+            "this == 'foo'", "x", intCol));
   }
 
   @Test void columnLevelIntThisStringRelationalRejected() {
