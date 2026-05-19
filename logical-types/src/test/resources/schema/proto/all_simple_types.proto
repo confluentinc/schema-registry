@@ -1,0 +1,166 @@
+syntax = "proto3";
+package io.confluent.protobuf.generated;
+
+import "confluent/type/decimal.proto";
+import "google/protobuf/timestamp.proto";
+import "google/type/date.proto";
+import "google/type/timeofday.proto";
+
+message Row {
+  bool booleanNotNull = 1;
+  bool boolean = 2;
+  int32 tinyIntNotNull = 3 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int8"
+      }
+    ]
+  }];
+  optional int32 tinyInt = 4 [(confluent.field_meta) = {
+    doc: "tinyInt comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int8"
+      }
+    ]
+  }];
+  int32 smallIntNotNull = 5 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int16"
+      }
+    ]
+  }];
+  optional int32 smallInt = 6 [(confluent.field_meta) = {
+    doc: "smallInt comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "connect.type",
+        value: "int16"
+      }
+    ]
+  }];
+  int32 intNotNull = 7;
+  optional int32 int = 8 [(confluent.field_meta) = {
+    doc: "int comment"
+  }];
+  int64 bigintNotNull = 9;
+  optional int64 bigint = 10 [(confluent.field_meta) = {
+    doc: "bigint comment"
+  }];
+  double doubleNotNull = 11;
+  optional double double = 12 [(confluent.field_meta) = {
+    doc: "double comment"
+  }];
+  float floatNotNull = 13;
+  optional float float = 14 [(confluent.field_meta) = {
+    doc: "float comment"
+  }];
+  optional .google.type.Date date = 15 [(confluent.field_meta) = {
+    doc: "date comment"
+  }];
+  optional .confluent.type.Decimal decimal = 16 [(confluent.field_meta) = {
+    doc: "decimal comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        value: "5",
+        key: "precision"
+      },
+      {
+        value: "1",
+        key: "scale"
+      }
+    ]
+  }];
+  optional .google.protobuf.Timestamp timestamp_ltz = 17 [(confluent.field_meta) = {
+    doc: "timestamp comment"
+  }];
+  optional .google.protobuf.Timestamp timestamp_ltz_3 = 18 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.precision",
+        value: "3"
+      }
+    ]
+  }];
+  optional .google.protobuf.Timestamp timestamp = 19 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.type",
+        value: "timestamp"
+      }
+    ]
+  }];
+  optional .google.protobuf.Timestamp timestamp_3 = 20 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.precision",
+        value: "3"
+      },
+      {
+        key: "flink.type",
+        value: "timestamp"
+      }
+    ]
+  }];
+  optional .google.type.TimeOfDay time = 21 [(confluent.field_meta) = {
+    doc: "time comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.precision",
+        value: "3"
+      }
+    ]
+  }];
+  optional .google.type.TimeOfDay time_2 = 22 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.precision",
+        value: "2"
+      }
+    ]
+  }];
+}

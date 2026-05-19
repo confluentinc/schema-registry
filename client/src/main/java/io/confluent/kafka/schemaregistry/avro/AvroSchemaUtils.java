@@ -668,6 +668,9 @@ public class AvroSchemaUtils {
             o.append("}");
           }
           o.append("]");
+          if (lt != null) {
+            setLogicalProps(o, lt);
+          }
         }
         if (lt != null) {
           setLogicalProps(o, lt);

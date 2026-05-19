@@ -1,0 +1,121 @@
+syntax = "proto3";
+package io.confluent.protobuf.generated;
+
+message Row {
+  nullableMapRepeatedWrapper nullableMap = 1 [(confluent.field_meta) = {
+    doc: "nullableMap comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.wrapped",
+        value: "true"
+      }
+    ]
+  }];
+  repeated arrayOfMapsElementWrapper arrayOfMaps = 2 [(confluent.field_meta) = {
+    doc: "arrayOfMaps comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.wrapped",
+        value: "true"
+      }
+    ]
+  }];
+  nullableArrayOfNullableMapsRepeatedWrapper nullableArrayOfNullableMaps = 3 [(confluent.field_meta) = {
+    doc: "nullableArrayOfNullableMaps comment",
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.wrapped",
+        value: "true"
+      }
+    ]
+  }];
+  repeated MapofnullablearraysEntry mapOfNullableArrays = 4 [(confluent.field_meta) = {
+    doc: "mapOfNullableArrays comment"
+  }];
+
+  message nullableMapRepeatedWrapper {
+    repeated ValueEntry value = 1;
+
+    message ValueEntry {
+      int64 key = 1;
+      int64 value = 2;
+    }
+  }
+  message arrayOfMapsElementWrapper {
+    repeated ValueEntry value = 1;
+
+    message ValueEntry {
+      int64 key = 1;
+      int64 value = 2;
+    }
+  }
+  message nullableArrayOfNullableMapsRepeatedWrapper {
+    repeated valueElementWrapper value = 1 [(confluent.field_meta) = {
+      params: [
+        {
+          key: "flink.version",
+          value: "1"
+        },
+        {
+          key: "flink.wrapped",
+          value: "true"
+        }
+      ]
+    }];
+
+    message valueElementWrapper {
+      valueRepeatedWrapper value = 1 [(confluent.field_meta) = {
+        params: [
+          {
+            key: "flink.version",
+            value: "1"
+          },
+          {
+            key: "flink.wrapped",
+            value: "true"
+          }
+        ]
+      }];
+
+      message valueRepeatedWrapper {
+        repeated ValueEntry value = 1;
+
+        message ValueEntry {
+          int64 key = 1;
+          int64 value = 2;
+        }
+      }
+    }
+  }
+  message MapofnullablearraysEntry {
+    int64 key = 1;
+    valueRepeatedWrapper value = 2 [(confluent.field_meta) = {
+      params: [
+        {
+          key: "flink.version",
+          value: "1"
+        },
+        {
+          key: "flink.wrapped",
+          value: "true"
+        }
+      ]
+    }];
+
+    message valueRepeatedWrapper {
+      repeated int64 value = 1;
+    }
+  }
+}
