@@ -45,11 +45,6 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
  * {@code action} on action metrics. {@code config} (key/value
  * serializer) and {@code class} (simple class name) are added
  * automatically by {@code PluginMetricsImpl}.
- *
- * <p><b>Internal:</b> this class is public only so it can be referenced
- * from {@code AbstractKafkaSchemaSerDe} in the parent package. It is
- * not part of the schema-registry public API and may change without
- * notice.
  */
 public final class RuleMetrics {
 
