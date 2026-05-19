@@ -212,13 +212,13 @@ public class SchemaRegistryConfig extends RestConfig {
   /**
    * <code>size.limit.handler.enabled</code>
    */
-  public static final String SIZE_LIMIT_HANDLER_ENABLED_CONFIG = "size.limit.handler.enabled";
-  public static final boolean SIZE_LIMIT_HANDLER_ENABLED_DEFAULT = false;
+  public static final String SIZE_LIMIT_FILTER_ENABLED_CONFIG = "size.limit.filter.enabled";
+  public static final boolean SIZE_LIMIT_FILTER_ENABLED_DEFAULT = false;
 
   /**
    * <code>max.body.size</code>
    */
-  public static final String MAX_REQ_BODY_SIZE_CONFIG = "max.request.body.size";
+  public static final String MAX_REQ_BODY_SIZE_CONFIG = "size.limit.filter.max.request.body.size";
   public static final int MAX_REQ_BODY_SIZE_DEFAULT = 1048576; // 1MB
 
 
@@ -688,8 +688,8 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
     )
-    .define(SIZE_LIMIT_HANDLER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
-        SIZE_LIMIT_HANDLER_ENABLED_DEFAULT,
+    .define(SIZE_LIMIT_FILTER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        SIZE_LIMIT_FILTER_ENABLED_DEFAULT,
         ConfigDef.Importance.MEDIUM, SIZE_LIMIT_HANDLER_ENABLED_DOC
     )
     .define(MAX_REQ_BODY_SIZE_CONFIG, ConfigDef.Type.INT, MAX_REQ_BODY_SIZE_DEFAULT,
