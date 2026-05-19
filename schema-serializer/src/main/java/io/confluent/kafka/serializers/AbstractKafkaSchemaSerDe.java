@@ -150,7 +150,13 @@ public abstract class AbstractKafkaSchemaSerDe
 
   private volatile PluginMetrics pluginMetrics;
   private volatile RuleMetrics ruleMetrics;
-  private volatile boolean ruleMetricsEnabled = true;
+  // Default to false until configureClientProperties resolves the
+  // rule.metrics.enable config. This guarantees that if withPluginMetrics
+  // arrives before configure (a permitted ordering per the comment below),
+  // we don't eagerly construct RuleMetrics with the field default and then
+  // ignore a later configure-time disable. maybeBuildRuleMetrics() converges
+  // both code paths.
+  private volatile boolean ruleMetricsEnabled = false;
 
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
@@ -237,6 +243,7 @@ public abstract class AbstractKafkaSchemaSerDe
     executionEnv = config.getExecutionEnvironment();
     enableRuleServiceLoader = config.enableRuleServiceLoader();
     ruleMetricsEnabled = config.enableRuleMetrics();
+    maybeBuildRuleMetrics();
     ruleExecutors = initRuleObjects(
         config, RULE_EXECUTORS, RuleExecutor.class, enableRuleServiceLoader);
     ruleActions = initRuleObjects(
@@ -255,13 +262,24 @@ public abstract class AbstractKafkaSchemaSerDe
       return;
     }
     this.pluginMetrics = metrics;
-    if (ruleMetricsEnabled) {
-      this.ruleMetrics = new RuleMetrics(metrics);
-    }
+    maybeBuildRuleMetrics();
     // If configure already ran, executors/actions are already built;
     // hand them the metrics handle now. If configure hasn't run yet,
     // configureClientProperties will call propagate at the end.
     propagateMetricsToRuleObjects();
+  }
+
+  private void maybeBuildRuleMetrics() {
+    // Single chokepoint called from both configureClientProperties and
+    // withPluginMetrics, which can fire in either order. Build RuleMetrics
+    // only when both prerequisites are satisfied: configure has resolved
+    // the rule.metrics.enable flag to true, and the host has handed us a
+    // PluginMetrics. The field-level default of ruleMetricsEnabled is
+    // false so that a withPluginMetrics arriving before configure cannot
+    // race ahead with the field default and ignore a later disable.
+    if (ruleMetrics == null && pluginMetrics != null && ruleMetricsEnabled) {
+      ruleMetrics = new RuleMetrics(pluginMetrics);
+    }
   }
 
   private void propagateMetricsToRuleObjects() {

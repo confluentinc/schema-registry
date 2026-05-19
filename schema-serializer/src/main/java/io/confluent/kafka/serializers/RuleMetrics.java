@@ -68,26 +68,34 @@ final class RuleMetrics {
 
   void recordExecution(Rule rule, RuleMode mode, String subject) {
     counter(executions, EXECUTIONS_NAME,
-        "Total rule transform invocations.", rule, mode, subject).record();
+        "Total rule dispatches that reached the action stage. "
+            + "Equals rule.success.total + rule.failure.total; excludes "
+            + "rule.skipped.total.",
+        rule, mode, subject).record();
   }
 
   void recordSuccess(Rule rule, RuleMode mode, String subject) {
     counter(success, SUCCESS_NAME,
-        "Total rule transform invocations that succeeded.",
+        "Total rule executions where the configured executor's transform "
+            + "returned a non-null result (or, for CONDITION rules, returned true).",
         rule, mode, subject).record();
     lastSuccessGauge(rule, mode, subject).set(System.currentTimeMillis());
   }
 
   void recordFailure(Rule rule, RuleMode mode, String subject) {
     counter(failure, FAILURE_NAME,
-        "Total rule transform invocations that failed.",
+        "Total rule executions that failed. Includes: transform threw a "
+            + "RuleException, transform returned null (TRANSFORM kind), "
+            + "CONDITION returned false, and no executor registered for "
+            + "the rule type.",
         rule, mode, subject).record();
   }
 
   void recordSkipped(Rule rule, RuleMode mode, String subject) {
     counter(skipped, SKIPPED_NAME,
-        "Total rule invocations skipped by the dispatch loop "
-            + "(mode mismatch, disabled, or filtered).",
+        "Total rule invocations skipped by the dispatch loop before "
+            + "reaching the action stage (mode mismatch, disabled, or "
+            + "filtered). Not counted in rule.executions.total.",
         rule, mode, subject).record();
   }
 
