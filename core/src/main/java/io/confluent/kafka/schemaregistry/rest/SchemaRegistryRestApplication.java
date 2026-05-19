@@ -69,7 +69,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     // Install Jetty's SizeLimitHandler FIRST, before any other processing (if enabled)
     // This prevents large requests from consuming memory during deserialization
     boolean sizeLimitHandlerEnabled = config.getBoolean(
-        SchemaRegistryConfig.SIZE_LIMIT_HANDLER_ENABLED_CONFIG);
+        SchemaRegistryConfig.SIZE_LIMIT_FILTER_ENABLED_CONFIG);
     if (sizeLimitHandlerEnabled) {
       long maxReqBodySize = config.getInt(MAX_REQ_BODY_SIZE_CONFIG);
       log.info("Configuring SizeLimitHandler with max req body size: {} bytes", maxReqBodySize);
