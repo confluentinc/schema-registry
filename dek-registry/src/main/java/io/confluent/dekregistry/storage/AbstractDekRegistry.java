@@ -826,7 +826,13 @@ public abstract class AbstractDekRegistry implements Closeable {
     // Retrieve key with ts set
     key = getDekById(keyId);
     if (rawKeyMaterial != null) {
-      key.setKeyMaterial(rawKeyMaterial);
+      // Return a copy with keyMaterial populated so we don't mutate the cached entry.
+      DataEncryptionKey withMaterial = new DataEncryptionKey(
+          key.getKekName(), key.getSubject(), key.getAlgorithm(), key.getVersion(),
+          key.getEncryptedKeyMaterial(), key.isDeleted());
+      withMaterial.setTimestamp(key.getTimestamp());
+      withMaterial.setKeyMaterial(rawKeyMaterial);
+      key = withMaterial;
     }
     return key;
   }
