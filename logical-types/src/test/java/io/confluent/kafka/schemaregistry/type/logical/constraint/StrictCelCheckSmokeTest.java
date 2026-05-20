@@ -437,4 +437,70 @@ class StrictCelCheckSmokeTest {
         CelValidator.assertValidStrict(
             "(this.active ? 1 : 'a') == 1", fixture()));
   }
+
+  // -------------------------------------------------------------------
+  // Extended function-family declarations (schema-rules' BuiltinDeclarations)
+  //
+  // These smoke tests lock in that the Decimal / Timestamp.of / Variant /
+  // CelExtensions.math function families are visible to the strict checker.
+  // The SQL emit doesn't currently produce calls into these families — these
+  // tests pass hand-written CEL through the strict checker directly to verify
+  // the declarations are wired. Catches regressions if BuiltinDeclarations
+  // drifts or if the library wiring in ConstraintCelChecker is altered.
+  // -------------------------------------------------------------------
+
+  @Test void acceptsDecimalArithmetic() {
+    Schema intCol = Schema.create(Schema.Type.INT);
+    CelValidator.assertValidStrictColumnLevel(
+        "decimals.gt(decimals.add(decimal(\"1.5\"), decimal(\"2.5\")),"
+            + " decimal(\"3\"))",
+        "x", intCol);
+  }
+
+  @Test void acceptsDecimalRoundAndTrunc() {
+    Schema intCol = Schema.create(Schema.Type.INT);
+    CelValidator.assertValidStrictColumnLevel(
+        "decimals.eq(decimals.round(decimal(\"1.55\"), 1), decimal(\"1.6\"))"
+            + " && decimals.eq(decimals.trunc(decimal(\"1.55\"), 1), decimal(\"1.5\"))",
+        "x", intCol);
+  }
+
+  @Test void acceptsTimestampOf() {
+    Schema intCol = Schema.create(Schema.Type.INT);
+    CelValidator.assertValidStrictColumnLevel(
+        "timestamp.of(this, \"millis\") < now", "x", intCol);
+  }
+
+  @Test void acceptsVariantConstructorAndNavigation() {
+    Schema stringCol = Schema.createVarchar(255);
+    CelValidator.assertValidStrictColumnLevel(
+        "variants.as("
+            + " variants.field(variants.parseJson(this), \"name\"),"
+            + " \"string\") == \"alice\"",
+        "json", stringCol);
+  }
+
+  @Test void acceptsVariantTryAsAndIsNull() {
+    Schema stringCol = Schema.createVarchar(255);
+    CelValidator.assertValidStrictColumnLevel(
+        "variants.tryAs(variants.parseJson(this), \"int\") == null"
+            + " || variants.isNull(variants.parseJson(this))",
+        "json", stringCol);
+  }
+
+  @Test void acceptsMathExtension() {
+    Schema intCol = Schema.create(Schema.Type.INT);
+    CelValidator.assertValidStrictColumnLevel(
+        "math.abs(this) > 0 && math.sign(this) >= -1", "x", intCol);
+  }
+
+  @Test void rejectsDecimalArithmeticOnNonDecimal() {
+    // Strict catches passing an int where Decimal is expected — decimals.add
+    // declares (Decimal, Decimal) only; int isn't assignable.
+    Schema intCol = Schema.create(Schema.Type.INT);
+    assertThrows(AssertionError.class, () ->
+        CelValidator.assertValidStrictColumnLevel(
+            "decimals.add(this, decimal(\"1\")) == decimal(\"2\")",
+            "x", intCol));
+  }
 }
