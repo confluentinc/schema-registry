@@ -507,6 +507,57 @@ public abstract class RestApiTest {
     }
   }
 
+  // A failed createDek must not leave an orphan DEK that turns retries into 409.
+  @Test
+  public void testNoOrphanDekOnUnwrapFailure() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-fail-decrypt";
+    String subject = "orphan-test-subject";
+    String failKmsType = "test-fail-decrypt-kms";
+    String failKmsKeyId = "test-fail-decrypt-kms://anykey";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    client.createKek(headers, kekName, failKmsType, failKmsKeyId, null, null, true, false);
+
+    try {
+      client.createDek(headers, kekName, subject, null, algorithm, null, false);
+      fail("Expected DekGenerationException on first createDek");
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
+    }
+
+    try {
+      List<String> deks = client.listDeks(kekName, false);
+      assertEquals(Collections.emptyList(), deks);
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+    try {
+      List<String> deksIncludingDeleted = client.listDeks(kekName, true);
+      assertEquals(Collections.emptyList(), deksIncludingDeleted);
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+    try {
+      client.getDek(kekName, subject, algorithm, false);
+      fail("Expected no DEK record after failed createDek");
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+
+    // An orphan from a prior persist would surface as AlreadyExists here.
+    try {
+      client.createDek(headers, kekName, subject, null, algorithm, null, false);
+      fail("Expected DekGenerationException on retried createDek");
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
+    }
+
+    client.deleteKek(headers, kekName, false);
+    client.deleteKek(headers, kekName, true);
+  }
+
   @Test
   public void testRegisterCreatesKmsDefaults() throws Exception {
     String subject = "testSubject";
