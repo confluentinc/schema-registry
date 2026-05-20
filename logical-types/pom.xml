@@ -99,6 +99,11 @@
             <groupId>dev.cel</groupId>
             <artifactId>cel</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-rules</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

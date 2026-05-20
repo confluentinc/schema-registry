@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
 import com.google.common.collect.ImmutableList;
 import dev.cel.common.CelFunctionDecl;
+import dev.cel.common.CelOptions;
 import dev.cel.common.CelOverloadDecl;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelVarDecl;
@@ -28,11 +29,10 @@ import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.extensions.CelExtensions;
 import dev.cel.parser.CelStandardMacro;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.BuiltinDeclarations;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -46,11 +46,22 @@ import java.util.List;
  *
  * <p>The strict checker uses {@link ConstraintTypeProvider} to resolve
  * {@code this.<field>} accesses against the LT schema. CEL standard
- * functions are loaded via {@link CelCompilerFactory#standardCelCompilerBuilder()};
- * {@link CelExtensions#strings()} supplies the StringsExt overloads our emit
- * uses (upperAscii, lowerAscii, replace, substring, indexOf, trim).
- * Protovalidate-style format validators (isEmail, isHostname, isIpv4, isIpv6,
- * isUri, isUriRef, isUuid) are declared here.
+ * functions are loaded via {@link CelCompilerFactory#standardCelCompilerBuilder()}.
+ * Extension libraries:
+ * <ul>
+ *   <li>{@link CelExtensions#strings()} — upperAscii, lowerAscii, replace,
+ *       substring, indexOf, trim, etc.</li>
+ *   <li>{@link CelExtensions#math(CelOptions)} — math.abs, math.round,
+ *       math.trunc, math.floor, math.ceil, math.bitAnd, math.bitOr, math.sqrt,
+ *       etc.</li>
+ * </ul>
+ *
+ * <p>Extended function-family decls (Decimal / Timestamp.of / Variant /
+ * isEmail / isHostname / isIpv4 / isIpv6 / isUri / isUriRef / isUuid) come from
+ * schema-rules' {@link BuiltinDeclarations#create()} — a single source of
+ * truth shared with schema-rules' runtime compiler. Decls-only on this side
+ * (no runtime bindings); emitted CEL is consumed by downstream runtimes
+ * (cel-go etc.) which register their own bindings.
  *
  * <p>{@code now} is declared as {@code timestamp} for the
  * CURRENT_TIMESTAMP runtime variable our emit references.
@@ -132,7 +143,7 @@ final class ConstraintCelChecker {
     List<CelVarDecl> varDecls = new ArrayList<>();
     varDecls.add(CelVarDecl.newVarDeclaration("this", thisType));
     varDecls.add(CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP));
-    List<CelFunctionDecl> funcDecls = new ArrayList<>(commonDeclarations());
+    List<CelFunctionDecl> funcDecls = new ArrayList<>(BuiltinDeclarations.create());
     // Bracket-access overload: emit uses `this["fieldname"]` for fields whose
     // names are CEL-reserved words (`in`, `null`, etc.). Standard `_[_]` is
     // declared for map and list only; declare a permissive overload that
@@ -155,42 +166,13 @@ final class ConstraintCelChecker {
     // Google cel-java's standardCelCompilerBuilder() omits these by default.
     return CelCompilerFactory.standardCelCompilerBuilder()
         .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
-        .addLibraries(CelExtensions.strings())
+        .addLibraries(
+            CelExtensions.strings(),
+            CelExtensions.math(CelOptions.DEFAULT))
         .addVarDeclarations(varDecls)
         .addFunctionDeclarations(funcDecls)
         .setTypeProvider(provider)
         .build();
-  }
-
-  /**
-   * Common function declarations layered on top of CEL stdlib and
-   * {@link CelExtensions#strings()}:
-   * <ul>
-   *   <li>Protovalidate-style format validators (isEmail, isHostname,
-   *       isIpv4, isIpv6, isUri, isUriRef, isUuid) — receiver-style on
-   *       {@code string}.</li>
-   * </ul>
-   *
-   * <p>CEL stdlib (via {@code standardCelCompilerBuilder()}) already
-   * declares {@code contains}, {@code endsWith}, {@code matches},
-   * {@code startsWith}, {@code size} and timestamp accessors; we skip those
-   * to avoid overlapping-overload errors. {@link CelExtensions#strings()}
-   * supplies {@code upperAscii}, {@code lowerAscii}, {@code replace},
-   * {@code substring}, {@code indexOf}, {@code trim}, etc.
-   */
-  static List<CelFunctionDecl> commonDeclarations() {
-    List<CelFunctionDecl> decls = new ArrayList<>();
-    for (String name : Arrays.asList(
-        "isEmail", "isHostname", "isIpv4", "isIpv6",
-        "isUri", "isUriRef", "isUuid")) {
-      decls.add(CelFunctionDecl.newFunctionDeclaration(
-          name,
-          CelOverloadDecl.newMemberOverload(
-              name + "_string",
-              SimpleType.BOOL,
-              ImmutableList.of(SimpleType.STRING))));
-    }
-    return Collections.unmodifiableList(decls);
   }
 
   private static Schema singleColumnSchema(ConstraintValidationContext vctx) {
