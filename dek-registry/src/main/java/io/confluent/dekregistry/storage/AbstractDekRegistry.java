@@ -817,14 +817,16 @@ public abstract class AbstractDekRegistry implements Closeable {
     } else {
       throw new InvalidKeyException("encryptedKeyMaterial");
     }
+    // Verify the DEK round-trip before persisting
+    String rawKeyMaterial = null;
+    if (kek.isShared() && schemaRegistry.getModeInScope(request.getSubject()) != Mode.IMPORT) {
+      rawKeyMaterial = generateRawDek(kek, key).getKeyMaterial();
+    }
     putKey(keyId, key);
     // Retrieve key with ts set
     key = getDekById(keyId);
-    if (kek.isShared()) {
-      Mode mode = schemaRegistry.getModeInScope(request.getSubject());
-      if (mode != Mode.IMPORT) {
-        key = generateRawDek(kek, key);
-      }
+    if (rawKeyMaterial != null) {
+      key.setKeyMaterial(rawKeyMaterial);
     }
     return key;
   }
