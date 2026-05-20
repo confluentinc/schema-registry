@@ -206,6 +206,8 @@
                                 >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.ResourceLeakDetectorFactory</buildArg>
                                 <!-- Step 4: where the hell is my instrumented logic! -->
                                 <buildArg>--verbose</buildArg>
+                                <buildArg>--enable-http</buildArg>
+                                <buildArg>--enable-https</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
