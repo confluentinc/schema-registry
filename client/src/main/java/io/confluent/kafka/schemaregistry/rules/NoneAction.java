@@ -31,7 +31,7 @@ public class NoneAction implements RuleAction {
 
   public void run(RuleContext ctx, Object message, RuleException ex) throws RuleException {
     if (ex != null) {
-      log.warn("NONE action: ignoring exception", ex);
+      log.info("NONE action: ignoring exception", ex);
     }
   }
 }
