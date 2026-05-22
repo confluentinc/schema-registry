@@ -83,22 +83,22 @@ public class MetricsManagerTest {
   }
 
   @Test
-  public void getTrackedTenants_emptyByDefault() {
-    assertTrue(metricsManager.getTrackedTenants().isEmpty());
+  public void getTenants_emptyByDefault() {
+    assertTrue(metricsManager.getTenants().isEmpty());
   }
 
   @Test
-  public void getTrackedTenants_returnsTenantsAfterIncrements() {
+  public void getTenants_returnsTenantsAfterIncrements() {
     metricsManager.incrementKeyCount("tenant-a", KeyType.KEK);
     metricsManager.incrementSharedKeyCount("tenant-b");
 
-    assertEquals(Set.of("tenant-a", "tenant-b"), metricsManager.getTrackedTenants());
+    assertEquals(Set.of("tenant-a", "tenant-b"), metricsManager.getTenants());
   }
 
   @Test
-  public void getTrackedTenants_isSnapshot() {
+  public void getTenants_isSnapshot() {
     metricsManager.incrementKeyCount("tenant-a", KeyType.KEK);
-    Set<String> snapshot = metricsManager.getTrackedTenants();
+    Set<String> snapshot = metricsManager.getTenants();
 
     metricsManager.incrementKeyCount("tenant-b", KeyType.KEK);
 
@@ -121,7 +121,7 @@ public class MetricsManagerTest {
 
     metricsManager.removeTenant("tenant-a");
 
-    assertFalse(metricsManager.getTrackedTenants().contains("tenant-a"));
+    assertFalse(metricsManager.getTenants().contains("tenant-a"));
     assertNull(metrics.getSensor(sensorName(MetricsManager.NUM_KEKS, "tenant-a")));
     assertNull(metrics.getSensor(sensorName(MetricsManager.NUM_KEKS_SHARED, "tenant-a")));
     assertNull(metrics.getSensor(sensorName(MetricsManager.NUM_DEKS, "tenant-a")));
@@ -138,7 +138,7 @@ public class MetricsManagerTest {
 
     metricsManager.removeTenant("tenant-a");
 
-    assertEquals(Set.of("tenant-b"), metricsManager.getTrackedTenants());
+    assertEquals(Set.of("tenant-b"), metricsManager.getTenants());
     assertNotNull(metrics.getSensor(sensorName(MetricsManager.NUM_KEKS, "tenant-b")));
     assertNotNull(metrics.metric(tenantMetric(MetricsManager.NUM_KEKS, "tenant-b")));
     assertEquals(2L, metricsManager.getKeyCount("tenant-b", KeyType.KEK));
@@ -150,7 +150,7 @@ public class MetricsManagerTest {
 
     assertDoesNotThrow(() -> metricsManager.removeTenant("never-registered"));
 
-    assertEquals(Set.of("tenant-a"), metricsManager.getTrackedTenants());
+    assertEquals(Set.of("tenant-a"), metricsManager.getTenants());
   }
 
   @Test
@@ -159,7 +159,7 @@ public class MetricsManagerTest {
     metricsManager.removeTenant("tenant-a");
 
     assertDoesNotThrow(() -> metricsManager.removeTenant("tenant-a"));
-    assertTrue(metricsManager.getTrackedTenants().isEmpty());
+    assertTrue(metricsManager.getTenants().isEmpty());
   }
 
   @Test
@@ -170,7 +170,7 @@ public class MetricsManagerTest {
 
     metricsManager.incrementKeyCount("tenant-a", KeyType.KEK);
 
-    assertTrue(metricsManager.getTrackedTenants().contains("tenant-a"));
+    assertTrue(metricsManager.getTenants().contains("tenant-a"));
     assertEquals(1L, metricsManager.getKeyCount("tenant-a", KeyType.KEK));
     assertNotNull(metrics.getSensor(sensorName(MetricsManager.NUM_KEKS, "tenant-a")));
     assertNotNull(metrics.metric(tenantMetric(MetricsManager.NUM_KEKS, "tenant-a")));

@@ -85,7 +85,7 @@ public class MetricsManager implements Closeable {
     tenantMetrics.getSensor(MetricDescriptor.NUM_KEKS_SHARED_MD, null, null).add(-1);
   }
 
-  public Set<String> getTrackedTenants() {
+  public Set<String> getTenants() {
     return Set.copyOf(tenantMetrics.keySet());
   }
 
