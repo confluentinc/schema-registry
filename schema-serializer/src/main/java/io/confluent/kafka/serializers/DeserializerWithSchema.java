@@ -28,4 +28,8 @@ public interface DeserializerWithSchema<T> extends Deserializer<T> {
 
   ParsedSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] data,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc);
+
+  ParsedSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] data,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults);
 }
