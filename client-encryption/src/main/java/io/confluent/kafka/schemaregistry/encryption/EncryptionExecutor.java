@@ -70,11 +70,11 @@ public class EncryptionExecutor implements RuleExecutor {
   public static final String TYPE = "ENCRYPT_PAYLOAD";
 
   /**
-   * Key used in {@code ParsedSchemaAndValue.getRuleData()} for the
+   * Key used inside this rule's {@code RuleResult.data()} map for the
    * per-field outcomes recorded by this executor during deserialization.
    * The value is a {@code List<EncryptResult>}.
    */
-  public static final String RULE_METADATA_KEY = "encrypt.results";
+  public static final String FIELDS_KEY = "fields";
 
   public static final String ENCRYPT_KEK_NAME = "encrypt.kek.name";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
@@ -617,7 +617,7 @@ public class EncryptionExecutor implements RuleExecutor {
       @SuppressWarnings("unchecked")
       List<EncryptResult> results = (List<EncryptResult>)
           ctx.customData().computeIfAbsent(
-              RULE_METADATA_KEY, k -> new ArrayList<EncryptResult>());
+              FIELDS_KEY, k -> new ArrayList<EncryptResult>());
       results.add(new EncryptResult(
           field.getFullName(), status, kekName, dekVersion, errorMessage));
     }

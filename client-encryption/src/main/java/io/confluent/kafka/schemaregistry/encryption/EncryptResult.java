@@ -21,9 +21,10 @@ import java.util.Objects;
 /**
  * Per-field outcome of an ENCRYPT rule execution during deserialization.
  *
- * <p>Records appear in {@code List<EncryptResult>} stored under the
- * {@link EncryptionExecutor#RULE_METADATA_KEY} entry of
- * {@code ParsedSchemaAndValue.getRuleData()}.
+ * <p>Records appear in a {@code List<EncryptResult>} stored under the
+ * {@link EncryptionExecutor#FIELDS_KEY} entry of the corresponding
+ * {@code RuleResult.data()} map (accessible via
+ * {@code ParsedSchemaAndValue.getRuleResults()}).
  */
 public final class EncryptResult {
 

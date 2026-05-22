@@ -18,9 +18,10 @@ package io.confluent.kafka.serializers.protobuf;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import java.util.Collections;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 
 public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
@@ -28,24 +29,24 @@ public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
   private final ProtobufSchema schema;
   private final Object value;
   private final SchemaInfo writerSchemaInfo;
-  private final ParsedSchema writerSchema;
-  private final Map<String, Object> ruleData;
+  private final ProtobufSchema writerSchema;
+  private final List<RuleResult> ruleResults;
 
   public ProtobufSchemaAndValue(ProtobufSchema schema, Object value) {
-    this(schema, value, null, null, Collections.emptyMap());
+    this(schema, value, null, null, Collections.emptyList());
   }
 
   public ProtobufSchemaAndValue(
       ProtobufSchema schema,
       Object value,
       SchemaInfo writerSchemaInfo,
-      ParsedSchema writerSchema,
-      Map<String, Object> ruleData) {
+      ProtobufSchema writerSchema,
+      List<RuleResult> ruleResults) {
     this.schema = schema;
     this.value = value;
     this.writerSchemaInfo = writerSchemaInfo;
     this.writerSchema = writerSchema;
-    this.ruleData = ruleData != null ? ruleData : Collections.emptyMap();
+    this.ruleResults = ruleResults != null ? ruleResults : Collections.emptyList();
   }
 
   @Override
@@ -64,13 +65,13 @@ public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
   }
 
   @Override
-  public ParsedSchema getWriterSchema() {
+  public ProtobufSchema getWriterSchema() {
     return writerSchema;
   }
 
   @Override
-  public Map<String, Object> getRuleData() {
-    return ruleData;
+  public List<RuleResult> getRuleResults() {
+    return ruleResults;
   }
 
   @Override

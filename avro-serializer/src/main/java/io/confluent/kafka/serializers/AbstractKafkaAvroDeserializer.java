@@ -23,6 +23,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -314,17 +315,17 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         schemaId.getId(),
         version,
         schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
-    Map<String, Object> ruleData = context.getRuleData().isEmpty()
-        ? Collections.emptyMap()
-        : Collections.unmodifiableMap(new LinkedHashMap<>(context.getRuleData()));
+    List<RuleResult> ruleResults = context.getRuleResults().isEmpty()
+        ? Collections.emptyList()
+        : Collections.unmodifiableList(new ArrayList<>(context.getRuleResults()));
     if (readerAvroSchema.rawSchema().getType().equals(Schema.Type.RECORD)) {
       return new GenericContainerWithVersion(
           readerAvroSchema, (GenericContainer) result, version,
-          writerInfo, schema, ruleData);
+          writerInfo, schema, ruleResults);
     } else {
       return new GenericContainerWithVersion(
           readerAvroSchema, new NonRecordContainer(readerAvroSchema.rawSchema(), result), version,
-          writerInfo, schema, ruleData);
+          writerInfo, schema, ruleResults);
     }
   }
 
@@ -439,7 +440,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private final ByteBuffer buffer;
     private final SchemaId schemaId;
     private AvroSchema readerSchema;
-    private final Map<String, Object> ruleData = new LinkedHashMap<>();
+    private final List<RuleResult> ruleResults = new ArrayList<>();
     private String subject;
 
     DeserializationContext(
@@ -457,7 +458,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         String subjectName = getSubject();
         Object buf = executeRules(
             subjectName, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
-            schema, buffer, ruleData
+            schema, buffer, ruleResults
         );
         this.buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
       } catch (IOException e) {
@@ -552,8 +553,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return readerSchema;
     }
 
-    Map<String, Object> getRuleData() {
-      return ruleData;
+    List<RuleResult> getRuleResults() {
+      return ruleResults;
     }
 
     Object read(AvroSchema writerAvroSchema) {
@@ -635,7 +636,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             // Next apply domain rules
             result = executeRules(
                 getSubject(), topic, headers, payload, RulePhase.DOMAIN, RuleMode.READ, null,
-                readerAvroSchema, result, ruleData
+                readerAvroSchema, result, ruleResults
             );
           } finally {
             AvroSchemaUtils.clearThreadLocalData();

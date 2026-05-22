@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Confluent Inc.
+ * Copyright 2026 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -62,19 +63,17 @@ public interface ParsedSchemaAndValue {
   }
 
   /**
-   * Arbitrary data produced by rule executors during deserialization.
-   * Keys are namespaced by rule type to avoid collisions between rules.
+   * Results of the rules visited during deserialization, one entry per rule
+   * (including rules that were skipped because they were disabled, in the
+   * wrong execution environment, or whose mode did not match the current
+   * phase). Order matches rule execution order.
    *
-   * <p>Returns an empty, unmodifiable map when no rule produced data.
+   * <p>Returns an empty, unmodifiable list when no rules ran.
    */
-  default Map<String, Object> getRuleData() {
-    return Collections.emptyMap();
+  default List<RuleResult> getRuleResults() {
+    return Collections.emptyList();
   }
 
-  /**
-   * Identifying info for a schema. Any field may be {@code null} when the
-   * deserializer could not resolve it.
-   */
   final class SchemaInfo {
 
     private final String subject;

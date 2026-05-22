@@ -18,9 +18,10 @@ package io.confluent.kafka.serializers.json;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.util.Collections;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 
 public class JsonSchemaAndValue implements ParsedSchemaAndValue {
@@ -28,24 +29,24 @@ public class JsonSchemaAndValue implements ParsedSchemaAndValue {
   private final JsonSchema schema;
   private final Object value;
   private final SchemaInfo writerSchemaInfo;
-  private final ParsedSchema writerSchema;
-  private final Map<String, Object> ruleData;
+  private final JsonSchema writerSchema;
+  private final List<RuleResult> ruleResults;
 
   public JsonSchemaAndValue(JsonSchema schema, Object value) {
-    this(schema, value, null, null, Collections.emptyMap());
+    this(schema, value, null, null, Collections.emptyList());
   }
 
   public JsonSchemaAndValue(
       JsonSchema schema,
       Object value,
       SchemaInfo writerSchemaInfo,
-      ParsedSchema writerSchema,
-      Map<String, Object> ruleData) {
+      JsonSchema writerSchema,
+      List<RuleResult> ruleResults) {
     this.schema = schema;
     this.value = value;
     this.writerSchemaInfo = writerSchemaInfo;
     this.writerSchema = writerSchema;
-    this.ruleData = ruleData != null ? ruleData : Collections.emptyMap();
+    this.ruleResults = ruleResults != null ? ruleResults : Collections.emptyList();
   }
 
   @Override
@@ -64,13 +65,13 @@ public class JsonSchemaAndValue implements ParsedSchemaAndValue {
   }
 
   @Override
-  public ParsedSchema getWriterSchema() {
+  public JsonSchema getWriterSchema() {
     return writerSchema;
   }
 
   @Override
-  public Map<String, Object> getRuleData() {
-    return ruleData;
+  public List<RuleResult> getRuleResults() {
+    return ruleResults;
   }
 
   @Override

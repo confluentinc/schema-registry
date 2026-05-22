@@ -18,9 +18,10 @@ package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import java.util.Collections;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import org.apache.avro.generic.GenericContainer;
 
@@ -38,17 +39,17 @@ public class GenericContainerWithVersion implements ParsedSchemaAndValue {
   private final GenericContainer container;
   private final Integer version;
   private final SchemaInfo writerSchemaInfo;
-  private final ParsedSchema writerSchema;
-  private final Map<String, Object> ruleData;
+  private final AvroSchema writerSchema;
+  private final List<RuleResult> ruleResults;
 
   public GenericContainerWithVersion(GenericContainer container, Integer version) {
     this(new AvroSchema(container.getSchema()), container, version, null, null,
-        Collections.emptyMap());
+        Collections.emptyList());
   }
 
   public GenericContainerWithVersion(
       AvroSchema schema, GenericContainer container, Integer version) {
-    this(schema, container, version, null, null, Collections.emptyMap());
+    this(schema, container, version, null, null, Collections.emptyList());
   }
 
   public GenericContainerWithVersion(
@@ -56,14 +57,14 @@ public class GenericContainerWithVersion implements ParsedSchemaAndValue {
       GenericContainer container,
       Integer version,
       SchemaInfo writerSchemaInfo,
-      ParsedSchema writerSchema,
-      Map<String, Object> ruleData) {
+      AvroSchema writerSchema,
+      List<RuleResult> ruleResults) {
     this.schema = schema;
     this.container = container;
     this.version = version;
     this.writerSchemaInfo = writerSchemaInfo;
     this.writerSchema = writerSchema;
-    this.ruleData = ruleData != null ? ruleData : Collections.emptyMap();
+    this.ruleResults = ruleResults != null ? ruleResults : Collections.emptyList();
   }
 
   @Override
@@ -87,8 +88,8 @@ public class GenericContainerWithVersion implements ParsedSchemaAndValue {
   }
 
   @Override
-  public Map<String, Object> getRuleData() {
-    return ruleData;
+  public List<RuleResult> getRuleResults() {
+    return ruleResults;
   }
 
   public GenericContainer container() {
