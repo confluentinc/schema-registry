@@ -31,6 +31,7 @@ import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
+import io.confluent.kafka.schemaregistry.rules.RuleResult;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
@@ -719,6 +720,15 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       String subject, String topic, Headers headers, Object original,
       RulePhase rulePhase, RuleMode ruleMode,
       ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(subject, topic, headers, original, rulePhase, ruleMode,
+        source, target, message, null);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RulePhase rulePhase, RuleMode ruleMode,
+      ParsedSchema source, ParsedSchema target, Object message,
+      List<RuleResult> ruleResults) {
     if (message == null || target == null) {
       return message;
     }
@@ -755,51 +765,92 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
           subject, topic, headers,
           isKey ? original : key(),
           isKey ? null : original,
-          isKey, ruleMode, rule, i, rules);
+          isKey, ruleMode, rule, i, rules,
+          ruleResults != null);
       if (skipRule(ctx, rule, headers)) {
+        appendRuleResult(ruleResults, rule, RuleResult.Result.SKIPPED, null, ctx);
         continue;
       }
       if (rule.getMode() == RuleMode.WRITEREAD) {
         if (ruleMode != RuleMode.READ && ruleMode != RuleMode.WRITE) {
+          appendRuleResult(ruleResults, rule, RuleResult.Result.SKIPPED, null, ctx);
           continue;
         }
       } else if (rule.getMode() == RuleMode.UPDOWN) {
         if (ruleMode != RuleMode.UPGRADE && ruleMode != RuleMode.DOWNGRADE) {
+          appendRuleResult(ruleResults, rule, RuleResult.Result.SKIPPED, null, ctx);
           continue;
         }
       } else if (ruleMode != rule.getMode()) {
+        appendRuleResult(ruleResults, rule, RuleResult.Result.SKIPPED, null, ctx);
         continue;
       }
+      RuleResult.Result result = RuleResult.Result.SUCCESS;
+      String errorMessage = null;
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
-          Object result = ruleExecutor.transform(ctx, message);
+          Object output = ruleExecutor.transform(ctx, message);
           switch (rule.getKind()) {
             case CONDITION:
-              if (Boolean.FALSE.equals(result)) {
+              if (Boolean.FALSE.equals(output)) {
                 throw new RuleConditionException(rule);
               }
               break;
             case TRANSFORM:
-              message = result;
+              message = output;
               break;
             default:
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
+          }
+          if (message == null) {
+            result = RuleResult.Result.FAILURE;
           }
           runAction(ctx, ruleMode, rule,
               message != null ? getOnSuccess(rule) : getOnFailure(rule),
               message, null, message != null ? null : ErrorAction.TYPE
           );
         } catch (RuleException e) {
+          result = RuleResult.Result.FAILURE;
+          errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
           runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e, ErrorAction.TYPE);
         }
       } else {
+        result = RuleResult.Result.FAILURE;
+        errorMessage = "Could not find rule executor of type " + rule.getType();
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
-            new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
+            new RuleException(rule, errorMessage),
             ErrorAction.TYPE);
       }
+      appendRuleResult(ruleResults, rule, result, errorMessage, ctx);
     }
     return message;
+  }
+
+  private static void appendRuleResult(
+      List<RuleResult> ruleResults,
+      Rule rule,
+      RuleResult.Result result,
+      String errorMessage,
+      RuleContext ctx) {
+    if (ruleResults == null) {
+      return;
+    }
+    Map<String, String> messageMetadata = ctx.messageMetadata().isEmpty()
+        ? Collections.emptyMap()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(ctx.messageMetadata()));
+    Map<String, Map<String, String>> fieldMetadata;
+    if (ctx.fieldMetadata().isEmpty()) {
+      fieldMetadata = Collections.emptyMap();
+    } else {
+      Map<String, Map<String, String>> copy = new LinkedHashMap<>();
+      for (Map.Entry<String, Map<String, String>> e : ctx.fieldMetadata().entrySet()) {
+        copy.put(e.getKey(), Collections.unmodifiableMap(new LinkedHashMap<>(e.getValue())));
+      }
+      fieldMetadata = Collections.unmodifiableMap(copy);
+    }
+    ruleResults.add(new RuleResult(
+        rule, result, errorMessage, messageMetadata, fieldMetadata));
   }
 
   protected Object executeValidationRules(
