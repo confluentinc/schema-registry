@@ -22,6 +22,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -30,6 +31,7 @@ import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -302,14 +304,27 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             ? new AvroSchema(specificAvroReaderSchema)
             : null;
     Object result = context.read(schema, readerAvroSchema);
+    readerAvroSchema = context.getReaderSchema();
 
     Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
         context.getSubject(), schema, result);
-    if (schema.rawSchema().getType().equals(Schema.Type.RECORD)) {
-      return new GenericContainerWithVersion(schema, (GenericContainer) result, version);
+    SchemaId schemaId = context.getSchemaId();
+    ParsedSchemaAndValue.SchemaInfo writerInfo = new ParsedSchemaAndValue.SchemaInfo(
+        context.getSubject(),
+        schemaId.getId(),
+        version,
+        schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
+    Map<String, Object> ruleData = context.getRuleData().isEmpty()
+        ? Collections.emptyMap()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(context.getRuleData()));
+    if (readerAvroSchema.rawSchema().getType().equals(Schema.Type.RECORD)) {
+      return new GenericContainerWithVersion(
+          readerAvroSchema, (GenericContainer) result, version,
+          writerInfo, schema, ruleData);
     } else {
       return new GenericContainerWithVersion(
-          schema, new NonRecordContainer(schema.rawSchema(), result), version);
+          readerAvroSchema, new NonRecordContainer(readerAvroSchema.rawSchema(), result), version,
+          writerInfo, schema, ruleData);
     }
   }
 
@@ -423,6 +438,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private final byte[] payload;
     private final ByteBuffer buffer;
     private final SchemaId schemaId;
+    private AvroSchema readerSchema;
+    private final Map<String, Object> ruleData = new LinkedHashMap<>();
     private String subject;
 
     DeserializationContext(
@@ -440,7 +457,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         String subjectName = getSubject();
         Object buf = executeRules(
             subjectName, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
-            schema, buffer
+            schema, buffer, ruleData
         );
         this.buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
       } catch (IOException e) {
@@ -531,6 +548,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return schemaId;
     }
 
+    AvroSchema getReaderSchema() {
+      return readerSchema;
+    }
+
+    Map<String, Object> getRuleData() {
+      return ruleData;
+    }
+
     Object read(AvroSchema writerAvroSchema) {
       return read(writerAvroSchema,
           specificAvroReaderSchema != null ? new AvroSchema(specificAvroReaderSchema) : null);
@@ -589,6 +614,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         if (readerAvroSchema == null) {
           readerAvroSchema = writerAvroSchema;
         }
+        this.readerSchema = readerAvroSchema;
 
         if (!migrations.isEmpty() || (readerAvroSchema.ruleSet() != null
             && !readerAvroSchema.ruleSet().getDomainRules().isEmpty())) {
@@ -608,7 +634,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
             // Next apply domain rules
             result = executeRules(
-                getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
+                getSubject(), topic, headers, payload, RulePhase.DOMAIN, RuleMode.READ, null,
+                readerAvroSchema, result, ruleData
             );
           } finally {
             AvroSchemaUtils.clearThreadLocalData();
