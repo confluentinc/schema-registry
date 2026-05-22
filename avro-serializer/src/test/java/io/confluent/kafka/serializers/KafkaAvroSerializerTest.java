@@ -1346,12 +1346,14 @@ public class KafkaAvroSerializerTest {
 
     ParsedSchemaAndValue schemaAndValue = avroDeserializer.deserializeWithSchema(
         topic, headers, bytes, User.getClassSchema());
-    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(new AvroSchema(User.getClassSchema()), schemaAndValue.getSchema());
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getWriterSchema());
     assertEquals(obj, schemaAndValue.getValue());
 
     schemaAndValue = avroDeserializer.deserializeWithSchema(
         topic, headers, bytes, x -> new AvroSchema(User.getClassSchema()));
-    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getSchema());
+    assertEquals(new AvroSchema(User.getClassSchema()), schemaAndValue.getSchema());
+    assertEquals(new AvroSchema(ExtendedUser.SCHEMA$), schemaAndValue.getWriterSchema());
     assertEquals(obj, schemaAndValue.getValue());
   }
 

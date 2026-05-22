@@ -719,6 +719,15 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       String subject, String topic, Headers headers, Object original,
       RulePhase rulePhase, RuleMode ruleMode,
       ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(subject, topic, headers, original, rulePhase, ruleMode,
+        source, target, message, null);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RulePhase rulePhase, RuleMode ruleMode,
+      ParsedSchema source, ParsedSchema target, Object message,
+      Map<String, Object> ruleData) {
     if (message == null || target == null) {
       return message;
     }
@@ -797,6 +806,11 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
             new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
             ErrorAction.TYPE);
+      }
+      if (ruleData != null && !ctx.customData().isEmpty()) {
+        for (Map.Entry<Object, Object> entry : ctx.customData().entrySet()) {
+          ruleData.put(entry.getKey().toString(), entry.getValue());
+        }
       }
     }
     return message;

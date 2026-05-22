@@ -16,19 +16,36 @@
 
 package io.confluent.kafka.serializers.json;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
-import java.util.Objects;
-
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
 
 public class JsonSchemaAndValue implements ParsedSchemaAndValue {
 
   private final JsonSchema schema;
   private final Object value;
+  private final SchemaInfo writerSchemaInfo;
+  private final ParsedSchema writerSchema;
+  private final Map<String, Object> ruleData;
 
   public JsonSchemaAndValue(JsonSchema schema, Object value) {
+    this(schema, value, null, null, Collections.emptyMap());
+  }
+
+  public JsonSchemaAndValue(
+      JsonSchema schema,
+      Object value,
+      SchemaInfo writerSchemaInfo,
+      ParsedSchema writerSchema,
+      Map<String, Object> ruleData) {
     this.schema = schema;
     this.value = value;
+    this.writerSchemaInfo = writerSchemaInfo;
+    this.writerSchema = writerSchema;
+    this.ruleData = ruleData != null ? ruleData : Collections.emptyMap();
   }
 
   @Override
@@ -39,6 +56,21 @@ public class JsonSchemaAndValue implements ParsedSchemaAndValue {
   @Override
   public Object getValue() {
     return value;
+  }
+
+  @Override
+  public SchemaInfo getWriterSchemaInfo() {
+    return writerSchemaInfo;
+  }
+
+  @Override
+  public ParsedSchema getWriterSchema() {
+    return writerSchema;
+  }
+
+  @Override
+  public Map<String, Object> getRuleData() {
+    return ruleData;
   }
 
   @Override
