@@ -58,6 +58,7 @@ public class RuleContext {
   private final Map<String, String> messageMetadata = new LinkedHashMap<>();
   private final Map<String, Map<String, String>> fieldMetadata = new LinkedHashMap<>();
   private final Deque<FieldContext> fieldContexts;
+  private final boolean includeRuleResults;
 
   public RuleContext(
       Map<String, ?> configs,
@@ -73,7 +74,8 @@ public class RuleContext {
       RuleMode ruleMode,
       Rule rule,
       int index,
-      List<Rule> rules) {
+      List<Rule> rules,
+      boolean includeRuleResults) {
     this.configs = configs;
     this.enabledEnv = enabledEnv;
     this.source = source;
@@ -89,6 +91,7 @@ public class RuleContext {
     this.index = index;
     this.rules = rules;
     this.fieldContexts = new ArrayDeque<>();
+    this.includeRuleResults = includeRuleResults;
   }
 
   public Map<String, ?> configs() {
@@ -153,25 +156,28 @@ public class RuleContext {
 
   /**
    * Record a message-level metadata key/value for this rule's execution.
-   * When {@code value} is null, the key is not stored (consumers can rely
-   * on key presence to mean "value known"). String values keep the audit
-   * log uniformly typed.
+   * When the enclosing deserialize call did not opt into rule-result
+   * collection, or when {@code value} is null, the key is not stored.
+   * Consumers can rely on key presence to mean "value known".
    */
   public void putMessageMetadata(String key, String value) {
-    if (value != null) {
-      messageMetadata.put(key, value);
+    if (!includeRuleResults || value == null) {
+      return;
     }
+    messageMetadata.put(key, value);
   }
 
   /**
    * Record a per-field metadata key/value for this rule's execution.
-   * When {@code value} is null, the key is not stored.
+   * When the enclosing deserialize call did not opt into rule-result
+   * collection, or when {@code value} is null, the key is not stored.
    */
   public void putFieldMetadata(String fieldPath, String key, String value) {
-    if (value != null) {
-      fieldMetadata.computeIfAbsent(fieldPath, k -> new LinkedHashMap<>())
-          .put(key, value);
+    if (!includeRuleResults || value == null) {
+      return;
     }
+    fieldMetadata.computeIfAbsent(fieldPath, k -> new LinkedHashMap<>())
+        .put(key, value);
   }
 
   /** Live view of message-level metadata collected so far. */

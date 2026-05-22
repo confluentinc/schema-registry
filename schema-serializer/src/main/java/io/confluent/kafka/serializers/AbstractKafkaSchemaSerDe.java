@@ -765,7 +765,8 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
           subject, topic, headers,
           isKey ? original : key(),
           isKey ? null : original,
-          isKey, ruleMode, rule, i, rules);
+          isKey, ruleMode, rule, i, rules,
+          ruleResults != null);
       if (skipRule(ctx, rule, headers)) {
         appendRuleResult(ruleResults, rule, RuleResult.Result.SKIPPED, null, ctx);
         continue;

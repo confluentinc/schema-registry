@@ -2290,7 +2290,7 @@ public abstract class FieldEncryptionExecutorTest {
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
     GenericContainerWithVersion wrapper =
-        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
     assertNotNull(wrapper);
 
     // Writer info
@@ -2343,7 +2343,7 @@ public abstract class FieldEncryptionExecutorTest {
         new KafkaAvroDeserializer(schemaRegistry, passthroughProps);
 
     GenericContainerWithVersion wrapper =
-        passthroughDeserializer.deserializeWithSchema(topic, headers, bytes);
+        passthroughDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
     assertNotNull(wrapper);
 
     RuleResult rr = findEncryptRuleResult(wrapper);
@@ -2376,7 +2376,7 @@ public abstract class FieldEncryptionExecutorTest {
     // Swap in a bad cryptor on the deserializer to force a decrypt failure.
     addBadSpyToCryptor(avroDeserializer);
     GenericContainerWithVersion wrapper =
-        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
     assertNotNull(wrapper);
 
     RuleResult rr = findEncryptRuleResult(wrapper);
@@ -2398,7 +2398,7 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
     GenericContainerWithVersion wrapper =
-        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
     assertNotNull(wrapper);
     assertTrue("rule results should be empty when no rules ran",
         wrapper.getRuleResults().isEmpty());
@@ -2428,7 +2428,7 @@ public abstract class FieldEncryptionExecutorTest {
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
 
     GenericContainerWithVersion wrapper =
-        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
     assertNotNull(wrapper);
 
     // Two RuleResults, one per rule, each with its own fieldMetadata entry.

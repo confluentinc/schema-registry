@@ -131,11 +131,20 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
     return deserialize(includeSchemaAndVersion, topic, isKey, headers, payload, null);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(
+        includeSchemaAndVersion, topic, key, headers, payload, writerToReaderSchemaFunc, false);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
-      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -150,7 +159,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
     boolean isKey = key != null ? key : this.isKey;
     SchemaId schemaId = new SchemaId(ProtobufSchema.TYPE);
-    List<RuleResult> ruleResults = new ArrayList<>();
+    List<RuleResult> ruleResults = includeRuleResults ? new ArrayList<>() : null;
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
       ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
@@ -267,7 +276,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             schemaId.getId(),
             writerVersion,
             schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
-        List<RuleResult> ruleResultsCopy = ruleResults.isEmpty()
+        List<RuleResult> ruleResultsCopy = ruleResults == null || ruleResults.isEmpty()
             ? Collections.emptyList()
             : Collections.unmodifiableList(new ArrayList<>(ruleResults));
         return new ProtobufSchemaAndValue(schema, value, writerInfo, writerSchema, ruleResultsCopy);
@@ -353,8 +362,17 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       String topic, boolean isKey, Headers headers, byte[] payload,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, payload, writerToReaderSchemaFunc, false);
+  }
+
+  protected ProtobufSchemaAndValue deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults
+  ) throws SerializationException {
     return (ProtobufSchemaAndValue) deserialize(
-        true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
+        true, topic, isKey, headers, payload, writerToReaderSchemaFunc, includeRuleResults);
   }
 
   static class Pair<K, V> {

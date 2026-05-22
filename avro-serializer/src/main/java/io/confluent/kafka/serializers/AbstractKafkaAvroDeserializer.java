@@ -281,6 +281,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       String topic, boolean isKey, Headers headers, byte[] payload,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc)
       throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, payload, writerToReaderSchemaFunc, false);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults)
+      throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -296,7 +305,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // Converter to let a version provided by a Kafka Connect source take priority over the
     // schema registry's ordering (which is implicit by auto-registration time rather than
     // explicit from the Connector).
-    DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
+    DeserializationContext context =
+        new DeserializationContext(topic, isKey, headers, payload, includeRuleResults);
     AvroSchema schema = context.schemaForDeserialize();
     AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
         ? (AvroSchema) writerToReaderSchemaFunc.apply(schema)
@@ -314,7 +324,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         schemaId.getId(),
         version,
         schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
-    List<RuleResult> ruleResults = context.getRuleResults().isEmpty()
+    List<RuleResult> ruleResults = context.getRuleResults() == null
+        || context.getRuleResults().isEmpty()
         ? Collections.emptyList()
         : Collections.unmodifiableList(new ArrayList<>(context.getRuleResults()));
     if (readerAvroSchema.rawSchema().getType().equals(Schema.Type.RECORD)) {
@@ -439,15 +450,22 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private final ByteBuffer buffer;
     private final SchemaId schemaId;
     private AvroSchema readerSchema;
-    private final List<RuleResult> ruleResults = new ArrayList<>();
+    private final List<RuleResult> ruleResults;
     private String subject;
 
     DeserializationContext(
         final String topic, final Boolean key, Headers headers, final byte[] payload) {
+      this(topic, key, headers, payload, false);
+    }
+
+    DeserializationContext(
+        final String topic, final Boolean key, Headers headers, final byte[] payload,
+        boolean includeRuleResults) {
       this.topic = topic;
       this.isKey = key != null ? key : AbstractKafkaAvroDeserializer.this.isKey;
       this.headers = headers;
       this.payload = payload;
+      this.ruleResults = includeRuleResults ? new ArrayList<>() : null;
       SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
       try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
         ByteBuffer buffer = schemaIdDeserializer.deserialize(
