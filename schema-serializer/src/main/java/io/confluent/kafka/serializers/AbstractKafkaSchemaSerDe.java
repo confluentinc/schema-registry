@@ -867,8 +867,6 @@ public abstract class AbstractKafkaSchemaSerDe
         appendRuleResult(ruleResults, rule, RuleResult.Result.SKIPPED, null, ctx);
         continue;
       }
-      RuleResult.Result result = RuleResult.Result.SUCCESS;
-      String errorMessage = null;
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
@@ -886,27 +884,20 @@ public abstract class AbstractKafkaSchemaSerDe
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
           boolean ruleSucceeded = message != null;
-          if (!ruleSucceeded) {
-            result = RuleResult.Result.FAILURE;
-          }
           runAction(ctx, ruleMode, rule,
               ruleSucceeded ? getOnSuccess(rule) : getOnFailure(rule),
               message, null, ruleSucceeded ? null : ErrorAction.TYPE,
-              ruleSucceeded);
+              ruleSucceeded, ruleResults);
         } catch (RuleException e) {
-          result = RuleResult.Result.FAILURE;
-          errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
           runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e,
-              ErrorAction.TYPE, false);
+              ErrorAction.TYPE, false, ruleResults);
         }
       } else {
-        result = RuleResult.Result.FAILURE;
-        errorMessage = "Could not find rule executor of type " + rule.getType();
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
-            new RuleException(rule, errorMessage),
-            ErrorAction.TYPE, false);
+            new RuleException(rule,
+                "Could not find rule executor of type " + rule.getType()),
+            ErrorAction.TYPE, false, ruleResults);
       }
-      appendRuleResult(ruleResults, rule, result, errorMessage, ctx);
     }
     return message;
   }
@@ -1110,7 +1101,8 @@ public abstract class AbstractKafkaSchemaSerDe
   }
 
   private void runAction(RuleContext ctx, RuleMode ruleMode, Rule rule, String action,
-      Object message, RuleException ex, String defaultAction, boolean ruleSucceeded) {
+      Object message, RuleException ex, String defaultAction, boolean ruleSucceeded,
+      List<RuleResult> ruleResults) {
     RuleMetrics rm = ruleMetrics;
     if (rm != null) {
       rm.recordExecution(rule, ruleMode, ctx.subject());
@@ -1120,6 +1112,14 @@ public abstract class AbstractKafkaSchemaSerDe
         rm.recordFailure(rule, ruleMode, ctx.subject());
       }
     }
+    RuleResult.Result result = ruleSucceeded
+        ? RuleResult.Result.SUCCESS
+        : RuleResult.Result.FAILURE;
+    String errorMessage = null;
+    if (!ruleSucceeded && ex != null) {
+      errorMessage = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+    }
+    appendRuleResult(ruleResults, rule, result, errorMessage, ctx);
     String actionName = getRuleActionName(rule, ruleMode, action);
     if (actionName == null) {
       actionName = defaultAction;
