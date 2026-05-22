@@ -55,6 +55,7 @@ import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
@@ -2257,9 +2258,9 @@ public abstract class FieldEncryptionExecutorTest {
   // ---- Tests for ParsedSchemaAndValue rule results + writer info ----
 
   /** Find the RuleResult for the first ENCRYPT rule in the wrapper. */
-  private static io.confluent.kafka.schemaregistry.RuleResult findEncryptRuleResult(
+  private static RuleResult findEncryptRuleResult(
       ParsedSchemaAndValue wrapper) {
-    for (io.confluent.kafka.schemaregistry.RuleResult rr : wrapper.getRuleResults()) {
+    for (RuleResult rr : wrapper.getRuleResults()) {
       if (rr.rule() != null && FieldEncryptionExecutor.TYPE.equals(rr.rule().getType())) {
         return rr;
       }
@@ -2267,11 +2268,10 @@ public abstract class FieldEncryptionExecutorTest {
     return null;
   }
 
-  @SuppressWarnings("unchecked")
-  private static List<EncryptResult> fields(
-      io.confluent.kafka.schemaregistry.RuleResult rr) {
-    Object o = rr.data().get(EncryptionExecutor.FIELDS_KEY);
-    return o instanceof List ? (List<EncryptResult>) o : null;
+  /** First (only) per-field metadata entry for this rule. */
+  private static Map.Entry<String, Map<String, String>> firstFieldEntry(
+      RuleResult rr) {
+    return rr.fieldMetadata().entrySet().iterator().next();
   }
 
   @Test
@@ -2301,21 +2301,23 @@ public abstract class FieldEncryptionExecutorTest {
     assertNotNull("expected non-null writer version", info.version());
     assertNotNull(wrapper.getWriterSchema());
 
-    // RuleResult for the ENCRYPT rule, SUCCESS, with one DECRYPTED entry under "fields"
-    io.confluent.kafka.schemaregistry.RuleResult rr = findEncryptRuleResult(wrapper);
+    // RuleResult for the ENCRYPT rule, SUCCESS, with one DECRYPTED field entry.
+    RuleResult rr = findEncryptRuleResult(wrapper);
     assertNotNull("expected an ENCRYPT RuleResult", rr);
     assertEquals("rule1", rr.rule().getName());
-    assertEquals(io.confluent.kafka.schemaregistry.RuleResult.Result.SUCCESS, rr.result());
+    assertEquals(RuleResult.Result.SUCCESS, rr.result());
     assertNull(rr.errorMessage());
+    assertTrue("expected empty messageMetadata", rr.messageMetadata().isEmpty());
 
-    List<EncryptResult> results = fields(rr);
-    assertNotNull("expected List<EncryptResult> under fields, got " + rr.data(), results);
-    assertEquals(1, results.size());
-    EncryptResult r = results.get(0);
-    assertEquals(EncryptResult.Status.DECRYPTED, r.status());
-    assertEquals("kek1", r.kekName());
-    assertNull(r.errorMessage());
-    assertNotNull(r.fieldPath());
+    assertEquals(1, rr.fieldMetadata().size());
+    Map.Entry<String, Map<String, String>> entry = firstFieldEntry(rr);
+    assertNotNull("expected non-null fieldPath", entry.getKey());
+    Map<String, String> meta = entry.getValue();
+    assertEquals(EncryptionExecutor.Status.DECRYPTED.name(),
+        meta.get(EncryptionExecutor.META_STATUS));
+    assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
+    assertFalse("errorMessage should be absent for DECRYPTED",
+        meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
@@ -2344,13 +2346,13 @@ public abstract class FieldEncryptionExecutorTest {
         passthroughDeserializer.deserializeWithSchema(topic, headers, bytes);
     assertNotNull(wrapper);
 
-    io.confluent.kafka.schemaregistry.RuleResult rr = findEncryptRuleResult(wrapper);
+    RuleResult rr = findEncryptRuleResult(wrapper);
     assertNotNull(rr);
-    List<EncryptResult> results = fields(rr);
-    assertNotNull(results);
-    assertEquals(1, results.size());
-    assertEquals(EncryptResult.Status.PASSTHROUGH, results.get(0).status());
-    assertEquals("kek1", results.get(0).kekName());
+    assertEquals(1, rr.fieldMetadata().size());
+    Map<String, String> meta = firstFieldEntry(rr).getValue();
+    assertEquals(EncryptionExecutor.Status.PASSTHROUGH.name(),
+        meta.get(EncryptionExecutor.META_STATUS));
+    assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
   }
 
   @Test
@@ -2377,16 +2379,13 @@ public abstract class FieldEncryptionExecutorTest {
         avroDeserializer.deserializeWithSchema(topic, headers, bytes);
     assertNotNull(wrapper);
 
-    io.confluent.kafka.schemaregistry.RuleResult rr = findEncryptRuleResult(wrapper);
+    RuleResult rr = findEncryptRuleResult(wrapper);
     assertNotNull("expected an ENCRYPT RuleResult under NONE-action failure", rr);
-    // The rule itself ends up FAILURE (NoneAction swallows the *action* but the
-    // executor still threw, which records as FAILURE on the outer outcome).
-    // Importantly the per-field FAILED entry must survive.
-    List<EncryptResult> results = fields(rr);
-    assertNotNull("expected fields list with FAILED entry, got: " + rr, results);
-    assertEquals(1, results.size());
-    assertEquals(EncryptResult.Status.FAILED, results.get(0).status());
-    assertNotNull(results.get(0).errorMessage());
+    assertEquals(1, rr.fieldMetadata().size());
+    Map<String, String> meta = firstFieldEntry(rr).getValue();
+    assertEquals(EncryptionExecutor.Status.FAILED.name(),
+        meta.get(EncryptionExecutor.META_STATUS));
+    assertNotNull(meta.get(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
@@ -2411,7 +2410,7 @@ public abstract class FieldEncryptionExecutorTest {
   @Test
   public void testRuleResultsMultipleRules() throws Exception {
     // Two ENCRYPT rules tagging disjoint field sets. Both should appear in
-    // the wrapper's RuleResult list with their own "fields" entries.
+    // the wrapper's RuleResult list with their own per-field metadata.
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
     Rule rule1 = new Rule("rule1", null, null, null,
@@ -2432,15 +2431,15 @@ public abstract class FieldEncryptionExecutorTest {
         avroDeserializer.deserializeWithSchema(topic, headers, bytes);
     assertNotNull(wrapper);
 
-    // Two RuleResults, one per rule, each with its own per-field list.
+    // Two RuleResults, one per rule, each with its own fieldMetadata entry.
     int encryptRules = 0;
-    for (io.confluent.kafka.schemaregistry.RuleResult rr : wrapper.getRuleResults()) {
+    for (RuleResult rr : wrapper.getRuleResults()) {
       if (rr.rule() != null && FieldEncryptionExecutor.TYPE.equals(rr.rule().getType())) {
         encryptRules++;
-        List<EncryptResult> results = fields(rr);
-        assertNotNull("expected fields for rule " + rr.rule().getName(), results);
-        assertEquals("each rule encrypts one field", 1, results.size());
-        assertEquals(EncryptResult.Status.DECRYPTED, results.get(0).status());
+        assertEquals("each rule encrypts one field", 1, rr.fieldMetadata().size());
+        Map<String, String> meta = firstFieldEntry(rr).getValue();
+        assertEquals(EncryptionExecutor.Status.DECRYPTED.name(),
+            meta.get(EncryptionExecutor.META_STATUS));
       }
     }
     assertEquals("expected two ENCRYPT RuleResults", 2, encryptRules);

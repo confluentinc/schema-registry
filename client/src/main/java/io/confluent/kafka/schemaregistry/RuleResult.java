@@ -22,15 +22,28 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Result of a single rule's execution during deserialization, along with any
- * data the rule executor produced. One {@code RuleResult} is appended per
+ * Outcome of a single rule's execution during deserialization, along with any
+ * metadata the rule executor produced. One {@code RuleResult} is appended per
  * rule visited (including skipped rules) and surfaced via
  * {@link ParsedSchemaAndValue#getRuleResults()}.
+ *
+ * <p>Executor metadata is published in two parallel maps:
+ * <ul>
+ *   <li>{@link #messageMetadata()} — message-level key/value attributes
+ *       (one map for the whole rule execution).</li>
+ *   <li>{@link #fieldMetadata()} — per-field attributes, keyed by field
+ *       path; each value is a key/value map specific to that field.</li>
+ * </ul>
+ *
+ * <p>All values are {@code String}. Absent keys mean "not recorded" — null
+ * values are never stored. Specific key conventions are documented by the
+ * executor that produces them (for example, see
+ * {@code EncryptionExecutor}).
  */
 public final class RuleResult {
 
   /**
-   * Result of a rule's execution.
+   * Outcome of a rule's execution.
    */
   public enum Result {
     /** The rule's transform ran without throwing. */
@@ -45,17 +58,20 @@ public final class RuleResult {
   private final Rule rule;
   private final Result result;
   private final String errorMessage;
-  private final Map<String, Object> data;
+  private final Map<String, String> messageMetadata;
+  private final Map<String, Map<String, String>> fieldMetadata;
 
   public RuleResult(
       Rule rule,
       Result result,
       String errorMessage,
-      Map<String, Object> data) {
+      Map<String, String> messageMetadata,
+      Map<String, Map<String, String>> fieldMetadata) {
     this.rule = rule;
     this.result = result;
     this.errorMessage = errorMessage;
-    this.data = data != null ? data : Collections.emptyMap();
+    this.messageMetadata = messageMetadata != null ? messageMetadata : Collections.emptyMap();
+    this.fieldMetadata = fieldMetadata != null ? fieldMetadata : Collections.emptyMap();
   }
 
   public Rule rule() {
@@ -75,14 +91,20 @@ public final class RuleResult {
   }
 
   /**
-   * Per-rule data produced by the executor. The shape of this map is defined
-   * by the executor that ran. For example, the ENCRYPT executor writes
-   * {@code "fields" -> List<EncryptResult>}.
-   *
-   * <p>Always non-null; empty when the executor produced nothing.
+   * Message-level metadata produced by the executor. Always non-null;
+   * empty when the executor produced nothing at the message level.
    */
-  public Map<String, Object> data() {
-    return data;
+  public Map<String, String> messageMetadata() {
+    return messageMetadata;
+  }
+
+  /**
+   * Per-field metadata produced by the executor, keyed by field path.
+   * Always non-null; empty when the executor produced no field-level
+   * metadata.
+   */
+  public Map<String, Map<String, String>> fieldMetadata() {
+    return fieldMetadata;
   }
 
   @Override
@@ -97,12 +119,13 @@ public final class RuleResult {
     return Objects.equals(rule, that.rule)
         && result == that.result
         && Objects.equals(errorMessage, that.errorMessage)
-        && Objects.equals(data, that.data);
+        && Objects.equals(messageMetadata, that.messageMetadata)
+        && Objects.equals(fieldMetadata, that.fieldMetadata);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(rule, result, errorMessage, data);
+    return Objects.hash(rule, result, errorMessage, messageMetadata, fieldMetadata);
   }
 
   @Override
@@ -110,7 +133,8 @@ public final class RuleResult {
     return "RuleResult{rule=" + (rule != null ? rule.getName() : null)
         + ", result=" + result
         + (errorMessage != null ? ", errorMessage=" + errorMessage : "")
-        + (data.isEmpty() ? "" : ", data=" + data)
+        + (messageMetadata.isEmpty() ? "" : ", messageMetadata=" + messageMetadata)
+        + (fieldMetadata.isEmpty() ? "" : ", fieldMetadata=" + fieldMetadata)
         + '}';
   }
 }
