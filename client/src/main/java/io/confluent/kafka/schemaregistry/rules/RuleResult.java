@@ -47,9 +47,18 @@ public final class RuleResult {
    * Outcome of a rule's execution.
    */
   public enum Result {
-    /** The rule's transform ran without throwing. */
+    /** The rule's transform ran, did not throw, and (for TRANSFORM rules)
+     *  returned a non-null value. */
     SUCCESS,
-    /** The rule's transform threw, or a CONDITION rule returned false. */
+    /** The rule failed. Any of:
+     *  <ul>
+     *    <li>the transform threw,</li>
+     *    <li>a CONDITION rule returned false,</li>
+     *    <li>a TRANSFORM rule returned null, or</li>
+     *    <li>no executor was registered for the rule's type.</li>
+     *  </ul>
+     *  In all cases the rule's {@code onFailure} action runs; if
+     *  {@link #errorMessage()} is set it reflects the underlying cause. */
     FAILURE,
     /** The rule was skipped — disabled, environment mismatch, or its mode
      *  did not match the current phase. The transform did not run. */
