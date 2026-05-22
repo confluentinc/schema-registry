@@ -99,6 +99,14 @@ public class KafkaProtobufDeserializer<T extends Message>
   }
 
   @Override
+  public ProtobufSchemaAndValue deserializeWithSchema(String topic, Headers headers, byte[] bytes,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults) {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, bytes, writerToReaderSchemaFunc, includeRuleResults);
+  }
+
+  @Override
   public void close() {
     try {
       super.close();
