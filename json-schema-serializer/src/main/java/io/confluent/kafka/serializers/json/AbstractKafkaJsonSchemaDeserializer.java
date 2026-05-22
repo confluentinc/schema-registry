@@ -253,8 +253,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
 
-        Integer writerVersion = schemaVersion(
-            topic, isKey, schemaId, subject, writerSchema, null);
+        Integer writerVersion = schemaVersion(topic, isKey, schemaId, subject, writerSchema, null);
         ParsedSchemaAndValue.SchemaInfo writerInfo = new ParsedSchemaAndValue.SchemaInfo(
             subject,
             schemaId.getId(),
@@ -263,8 +262,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         Map<String, Object> ruleDataCopy = ruleData.isEmpty()
             ? Collections.emptyMap()
             : Collections.unmodifiableMap(new LinkedHashMap<>(ruleData));
-        return new JsonSchemaAndValue(
-            schema, value, writerInfo, writerSchema, ruleDataCopy);
+        return new JsonSchemaAndValue(schema, value, writerInfo, writerSchema, ruleDataCopy);
       }
 
       return value;
