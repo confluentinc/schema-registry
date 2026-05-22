@@ -18,10 +18,12 @@ package io.confluent.kafka.serializers;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
-import org.apache.avro.generic.GenericContainer;
-
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
+import org.apache.avro.generic.GenericContainer;
 
 /**
  * Wrapper for GenericContainer along with a version number, which may be null.
@@ -36,18 +38,33 @@ public class GenericContainerWithVersion implements ParsedSchemaAndValue {
   private final AvroSchema schema;
   private final GenericContainer container;
   private final Integer version;
+  private final SchemaInfo writerSchemaInfo;
+  private final AvroSchema writerSchema;
+  private final List<RuleResult> ruleResults;
 
   public GenericContainerWithVersion(GenericContainer container, Integer version) {
-    this.schema = new AvroSchema(container.getSchema());
-    this.container = container;
-    this.version = version;
+    this(new AvroSchema(container.getSchema()), container, version, null, null,
+        Collections.emptyList());
   }
 
   public GenericContainerWithVersion(
       AvroSchema schema, GenericContainer container, Integer version) {
+    this(schema, container, version, null, null, Collections.emptyList());
+  }
+
+  public GenericContainerWithVersion(
+      AvroSchema schema,
+      GenericContainer container,
+      Integer version,
+      SchemaInfo writerSchemaInfo,
+      AvroSchema writerSchema,
+      List<RuleResult> ruleResults) {
     this.schema = schema;
     this.container = container;
     this.version = version;
+    this.writerSchemaInfo = writerSchemaInfo;
+    this.writerSchema = writerSchema;
+    this.ruleResults = ruleResults != null ? ruleResults : Collections.emptyList();
   }
 
   @Override
@@ -58,6 +75,21 @@ public class GenericContainerWithVersion implements ParsedSchemaAndValue {
   @Override
   public Object getValue() {
     return container;
+  }
+
+  @Override
+  public SchemaInfo getWriterSchemaInfo() {
+    return writerSchemaInfo;
+  }
+
+  @Override
+  public ParsedSchema getWriterSchema() {
+    return writerSchema;
+  }
+
+  @Override
+  public List<RuleResult> getRuleResults() {
+    return ruleResults;
   }
 
   public GenericContainer container() {

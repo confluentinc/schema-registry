@@ -16,19 +16,37 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
-import java.util.Objects;
-
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 
 public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
 
   private final ProtobufSchema schema;
   private final Object value;
+  private final SchemaInfo writerSchemaInfo;
+  private final ProtobufSchema writerSchema;
+  private final List<RuleResult> ruleResults;
 
   public ProtobufSchemaAndValue(ProtobufSchema schema, Object value) {
+    this(schema, value, null, null, Collections.emptyList());
+  }
+
+  public ProtobufSchemaAndValue(
+      ProtobufSchema schema,
+      Object value,
+      SchemaInfo writerSchemaInfo,
+      ProtobufSchema writerSchema,
+      List<RuleResult> ruleResults) {
     this.schema = schema;
     this.value = value;
+    this.writerSchemaInfo = writerSchemaInfo;
+    this.writerSchema = writerSchema;
+    this.ruleResults = ruleResults != null ? ruleResults : Collections.emptyList();
   }
 
   @Override
@@ -39,6 +57,21 @@ public class ProtobufSchemaAndValue implements ParsedSchemaAndValue {
   @Override
   public Object getValue() {
     return value;
+  }
+
+  @Override
+  public SchemaInfo getWriterSchemaInfo() {
+    return writerSchemaInfo;
+  }
+
+  @Override
+  public ProtobufSchema getWriterSchema() {
+    return writerSchema;
+  }
+
+  @Override
+  public List<RuleResult> getRuleResults() {
+    return ruleResults;
   }
 
   @Override
