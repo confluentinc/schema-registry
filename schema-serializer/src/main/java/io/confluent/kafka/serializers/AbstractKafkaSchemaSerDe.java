@@ -719,6 +719,15 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       String subject, String topic, Headers headers, Object original,
       RulePhase rulePhase, RuleMode ruleMode,
       ParsedSchema source, ParsedSchema target, Object message) {
+    return executeRules(subject, topic, headers, original, rulePhase, ruleMode,
+        source, target, message, null);
+  }
+
+  protected Object executeRules(
+      String subject, String topic, Headers headers, Object original,
+      RulePhase rulePhase, RuleMode ruleMode,
+      ParsedSchema source, ParsedSchema target, Object message,
+      List<io.confluent.kafka.schemaregistry.RuleResult> ruleResults) {
     if (message == null || target == null) {
       return message;
     }
@@ -757,19 +766,30 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
           isKey ? null : original,
           isKey, ruleMode, rule, i, rules);
       if (skipRule(ctx, rule, headers)) {
+        appendRuleResult(ruleResults, rule,
+            io.confluent.kafka.schemaregistry.RuleResult.Result.SKIPPED, null, ctx);
         continue;
       }
       if (rule.getMode() == RuleMode.WRITEREAD) {
         if (ruleMode != RuleMode.READ && ruleMode != RuleMode.WRITE) {
+          appendRuleResult(ruleResults, rule,
+              io.confluent.kafka.schemaregistry.RuleResult.Result.SKIPPED, null, ctx);
           continue;
         }
       } else if (rule.getMode() == RuleMode.UPDOWN) {
         if (ruleMode != RuleMode.UPGRADE && ruleMode != RuleMode.DOWNGRADE) {
+          appendRuleResult(ruleResults, rule,
+              io.confluent.kafka.schemaregistry.RuleResult.Result.SKIPPED, null, ctx);
           continue;
         }
       } else if (ruleMode != rule.getMode()) {
+        appendRuleResult(ruleResults, rule,
+            io.confluent.kafka.schemaregistry.RuleResult.Result.SKIPPED, null, ctx);
         continue;
       }
+      io.confluent.kafka.schemaregistry.RuleResult.Result outcome =
+          io.confluent.kafka.schemaregistry.RuleResult.Result.SUCCESS;
+      String errorMessage = null;
       RuleExecutor ruleExecutor = getRuleExecutor(ctx);
       if (ruleExecutor != null) {
         try {
@@ -786,20 +806,51 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
             default:
               throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
+          if (message == null) {
+            outcome = io.confluent.kafka.schemaregistry.RuleResult.Result.FAILURE;
+          }
           runAction(ctx, ruleMode, rule,
               message != null ? getOnSuccess(rule) : getOnFailure(rule),
               message, null, message != null ? null : ErrorAction.TYPE
           );
         } catch (RuleException e) {
+          outcome = io.confluent.kafka.schemaregistry.RuleResult.Result.FAILURE;
+          errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
           runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e, ErrorAction.TYPE);
         }
       } else {
+        outcome = io.confluent.kafka.schemaregistry.RuleResult.Result.FAILURE;
+        errorMessage = "Could not find rule executor of type " + rule.getType();
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
-            new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
+            new RuleException(rule, errorMessage),
             ErrorAction.TYPE);
       }
+      appendRuleResult(ruleResults, rule, outcome, errorMessage, ctx);
     }
     return message;
+  }
+
+  private static void appendRuleResult(
+      List<io.confluent.kafka.schemaregistry.RuleResult> ruleResults,
+      Rule rule,
+      io.confluent.kafka.schemaregistry.RuleResult.Result outcome,
+      String errorMessage,
+      RuleContext ctx) {
+    if (ruleResults == null) {
+      return;
+    }
+    Map<String, Object> data;
+    if (ctx.customData().isEmpty()) {
+      data = Collections.emptyMap();
+    } else {
+      data = new LinkedHashMap<>();
+      for (Map.Entry<Object, Object> entry : ctx.customData().entrySet()) {
+        data.put(entry.getKey().toString(), entry.getValue());
+      }
+      data = Collections.unmodifiableMap(data);
+    }
+    ruleResults.add(new io.confluent.kafka.schemaregistry.RuleResult(
+        rule, outcome, errorMessage, data));
   }
 
   protected Object executeValidationRules(

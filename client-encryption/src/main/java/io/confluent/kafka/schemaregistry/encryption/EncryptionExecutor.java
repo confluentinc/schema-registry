@@ -44,6 +44,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -67,6 +68,13 @@ public class EncryptionExecutor implements RuleExecutor {
   private static final Logger log = LoggerFactory.getLogger(EncryptionExecutor.class);
 
   public static final String TYPE = "ENCRYPT_PAYLOAD";
+
+  /**
+   * Key used inside this rule's {@code RuleResult.data()} map for the
+   * per-field outcomes recorded by this executor during deserialization.
+   * The value is a {@code List<EncryptResult>}.
+   */
+  public static final String FIELDS_KEY = "fields";
 
   public static final String ENCRYPT_KEK_NAME = "encrypt.kek.name";
   public static final String ENCRYPT_KMS_KEY_ID = "encrypt.kms.key.id";
@@ -533,6 +541,7 @@ public class EncryptionExecutor implements RuleExecutor {
           return null;
         }
         if (passthroughOnRead) {
+          recordResult(ctx, EncryptResult.Status.PASSTHROUGH, null, null);
           return value;
         }
         Dek dek;
@@ -573,11 +582,16 @@ public class EncryptionExecutor implements RuleExecutor {
             }
             dek = getOrCreateDek(ctx, version);
             plaintext = cryptor.decrypt(dek.getKeyMaterialBytes(), ciphertext, EMPTY_AAD);
+            recordResult(ctx, EncryptResult.Status.DECRYPTED, dek.getVersion(), null);
             return toObject(type, plaintext);
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
         }
       } catch (Exception e) {
+        if (ctx.ruleMode() == RuleMode.READ) {
+          String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+          recordResult(ctx, EncryptResult.Status.FAILED, null, msg);
+        }
         if (e instanceof RuleException) {
           RuleException re = (RuleException) e;
           if (re.getRule() == null) {
@@ -588,6 +602,24 @@ public class EncryptionExecutor implements RuleExecutor {
           throw new RuleException(ctx.rule(), e);
         }
       }
+    }
+
+    private void recordResult(
+        RuleContext ctx,
+        EncryptResult.Status status,
+        Integer dekVersion,
+        String errorMessage) {
+      RuleContext.FieldContext field = ctx.currentField();
+      if (field == null) {
+        // Payload-level transforms (no field) are out of scope.
+        return;
+      }
+      @SuppressWarnings("unchecked")
+      List<EncryptResult> results = (List<EncryptResult>)
+          ctx.customData().computeIfAbsent(
+              FIELDS_KEY, k -> new ArrayList<EncryptResult>());
+      results.add(new EncryptResult(
+          field.getFullName(), status, kekName, dekVersion, errorMessage));
     }
 
     private byte[] prefixVersion(int version, byte[] ciphertext) {

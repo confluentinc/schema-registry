@@ -22,6 +22,7 @@ import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -53,6 +54,7 @@ import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment;
@@ -72,6 +74,7 @@ import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.GenericContainerWithVersion;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
@@ -2249,6 +2252,198 @@ public abstract class FieldEncryptionExecutorTest {
     assertNull(cryptor);
     GenericRecord record = (GenericRecord) badDeserializer.deserialize(topic, headers, bytes);
     assertNotEquals("testUser", record.get("name").toString()); // still encrypted
+  }
+
+  // ---- Tests for ParsedSchemaAndValue rule results + writer info ----
+
+  /** Find the RuleResult for the first ENCRYPT rule in the wrapper. */
+  private static io.confluent.kafka.schemaregistry.RuleResult findEncryptRuleResult(
+      ParsedSchemaAndValue wrapper) {
+    for (io.confluent.kafka.schemaregistry.RuleResult rr : wrapper.getRuleResults()) {
+      if (rr.rule() != null && FieldEncryptionExecutor.TYPE.equals(rr.rule().getType())) {
+        return rr;
+      }
+    }
+    return null;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<EncryptResult> fields(
+      io.confluent.kafka.schemaregistry.RuleResult rr) {
+    Object o = rr.data().get(EncryptionExecutor.FIELDS_KEY);
+    return o instanceof List ? (List<EncryptResult>) o : null;
+  }
+
+  @Test
+  public void testRuleResultsDecryptedAndWriterInfo() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    int registeredId = schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    GenericContainerWithVersion wrapper =
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+    assertNotNull(wrapper);
+
+    // Writer info
+    ParsedSchemaAndValue.SchemaInfo info = wrapper.getWriterSchemaInfo();
+    assertNotNull(info);
+    assertEquals(topic + "-value", info.subject());
+    assertEquals(Integer.valueOf(registeredId), info.id());
+    assertNotNull("expected non-null writer version", info.version());
+    assertNotNull(wrapper.getWriterSchema());
+
+    // RuleResult for the ENCRYPT rule, SUCCESS, with one DECRYPTED entry under "fields"
+    io.confluent.kafka.schemaregistry.RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals("rule1", rr.rule().getName());
+    assertEquals(io.confluent.kafka.schemaregistry.RuleResult.Result.SUCCESS, rr.result());
+    assertNull(rr.errorMessage());
+
+    List<EncryptResult> results = fields(rr);
+    assertNotNull("expected List<EncryptResult> under fields, got " + rr.data(), results);
+    assertEquals(1, results.size());
+    EncryptResult r = results.get(0);
+    assertEquals(EncryptResult.Status.DECRYPTED, r.status());
+    assertEquals("kek1", r.kekName());
+    assertNull(r.errorMessage());
+    assertNotNull(r.fieldPath());
+  }
+
+  @Test
+  public void testRuleResultsPassthrough() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+    dekRegistry.createKek("kek1", fieldEncryptionProps.getKmsType(),
+        fieldEncryptionProps.getKmsKeyId(), null, null, false);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    Map<String, Object> passthroughProps = fieldEncryptionProps.getClientProperties("mock://");
+    passthroughProps.put(EncryptionExecutor.ENCRYPT_NONSHARED_KEK_PASSTHROUGH, "true");
+    KafkaAvroDeserializer passthroughDeserializer =
+        new KafkaAvroDeserializer(schemaRegistry, passthroughProps);
+
+    GenericContainerWithVersion wrapper =
+        passthroughDeserializer.deserializeWithSchema(topic, headers, bytes);
+    assertNotNull(wrapper);
+
+    io.confluent.kafka.schemaregistry.RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull(rr);
+    List<EncryptResult> results = fields(rr);
+    assertNotNull(results);
+    assertEquals(1, results.size());
+    assertEquals(EncryptResult.Status.PASSTHROUGH, results.get(0).status());
+    assertEquals("kek1", results.get(0).kekName());
+  }
+
+  @Test
+  public void testRuleResultsFailedWithNoneAction() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // NONE,NONE so the decrypt failure is swallowed and the wrapper is still built.
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    // Serialize with a good cryptor to produce valid ciphertext.
+    RecordHeaders headers = new RecordHeaders();
+    addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    // Swap in a bad cryptor on the deserializer to force a decrypt failure.
+    addBadSpyToCryptor(avroDeserializer);
+    GenericContainerWithVersion wrapper =
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+    assertNotNull(wrapper);
+
+    io.confluent.kafka.schemaregistry.RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult under NONE-action failure", rr);
+    // The rule itself ends up FAILURE (NoneAction swallows the *action* but the
+    // executor still threw, which records as FAILURE on the outer outcome).
+    // Importantly the per-field FAILED entry must survive.
+    List<EncryptResult> results = fields(rr);
+    assertNotNull("expected fields list with FAILED entry, got: " + rr, results);
+    assertEquals(1, results.size());
+    assertEquals(EncryptResult.Status.FAILED, results.get(0).status());
+    assertNotNull(results.get(0).errorMessage());
+  }
+
+  @Test
+  public void testRuleResultsEmptyWhenNoRules() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // No rule set, no metadata.
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    GenericContainerWithVersion wrapper =
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+    assertNotNull(wrapper);
+    assertTrue("rule results should be empty when no rules ran",
+        wrapper.getRuleResults().isEmpty());
+    // Writer info still populated.
+    assertNotNull(wrapper.getWriterSchemaInfo());
+    assertEquals(topic + "-value", wrapper.getWriterSchemaInfo().subject());
+  }
+
+  @Test
+  public void testRuleResultsMultipleRules() throws Exception {
+    // Two ENCRYPT rules tagging disjoint field sets. Both should appear in
+    // the wrapper's RuleResult list with their own "fields" entries.
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule1 = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, null, false);
+    Rule rule2 = new Rule("rule2", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII2"),
+        null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule1, rule2));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    GenericContainerWithVersion wrapper =
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes);
+    assertNotNull(wrapper);
+
+    // Two RuleResults, one per rule, each with its own per-field list.
+    int encryptRules = 0;
+    for (io.confluent.kafka.schemaregistry.RuleResult rr : wrapper.getRuleResults()) {
+      if (rr.rule() != null && FieldEncryptionExecutor.TYPE.equals(rr.rule().getType())) {
+        encryptRules++;
+        List<EncryptResult> results = fields(rr);
+        assertNotNull("expected fields for rule " + rr.rule().getName(), results);
+        assertEquals("each rule encrypts one field", 1, results.size());
+        assertEquals(EncryptResult.Status.DECRYPTED, results.get(0).status());
+      }
+    }
+    assertEquals("expected two ENCRYPT RuleResults", 2, encryptRules);
   }
 
   protected Metadata getMetadata(String kekName) {

@@ -25,6 +25,8 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Message;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.RuleResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -32,6 +34,8 @@ import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -147,6 +151,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
 
     boolean isKey = key != null ? key : this.isKey;
     SchemaId schemaId = new SchemaId(ProtobufSchema.TYPE);
+    List<RuleResult> ruleResults = new ArrayList<>();
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
       ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
@@ -162,7 +167,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       }
       Object buf = executeRules(
           subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
-          schema, buffer
+          schema, buffer, ruleResults
       );
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
@@ -203,6 +208,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         message = readerSchema.fromJson((JsonNode) message);
       }
 
+      ProtobufSchema writerSchema = schema;
       if (readerSchema != null) {
         schema = readerSchema;
       }
@@ -213,7 +219,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
               ProtobufSchema.EXTENSION_REGISTRY);
         }
         message = executeRules(
-            subject, topic, headers, payload, RuleMode.READ, null, schema, message
+            subject, topic, headers, payload, RulePhase.DOMAIN, RuleMode.READ, null,
+            schema, message, ruleResults
         );
       }
 
@@ -255,7 +262,16 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
 
-        return new ProtobufSchemaAndValue(schema, value);
+        Integer writerVersion = schemaVersion(topic, isKey, schemaId, subject, writerSchema, null);
+        ParsedSchemaAndValue.SchemaInfo writerInfo = new ParsedSchemaAndValue.SchemaInfo(
+            subject,
+            schemaId.getId(),
+            writerVersion,
+            schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
+        List<RuleResult> ruleResultsCopy = ruleResults.isEmpty()
+            ? Collections.emptyList()
+            : Collections.unmodifiableList(new ArrayList<>(ruleResults));
+        return new ProtobufSchemaAndValue(schema, value, writerInfo, writerSchema, ruleResultsCopy);
       }
 
       return value;
