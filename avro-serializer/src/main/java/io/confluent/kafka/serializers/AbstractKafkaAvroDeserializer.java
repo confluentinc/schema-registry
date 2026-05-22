@@ -323,7 +323,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         context.getSubject(),
         schemaId.getId(),
         version,
-        schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
+        schemaId.getGuid());
     List<RuleResult> ruleResults = context.getRuleResults() == null
         || context.getRuleResults().isEmpty()
         ? Collections.emptyList()

@@ -275,7 +275,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
             subject,
             schemaId.getId(),
             writerVersion,
-            schemaId.getGuid() != null ? schemaId.getGuid().toString() : null);
+            schemaId.getGuid());
         List<RuleResult> ruleResultsCopy = ruleResults == null || ruleResults.isEmpty()
             ? Collections.emptyList()
             : Collections.unmodifiableList(new ArrayList<>(ruleResults));

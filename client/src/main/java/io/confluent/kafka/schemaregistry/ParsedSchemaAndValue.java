@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleResult;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * A parsed schema with a value, produced by deserialization.
@@ -79,9 +80,9 @@ public interface ParsedSchemaAndValue {
     private final String subject;
     private final Integer id;
     private final Integer version;
-    private final String guid;
+    private final UUID guid;
 
-    public SchemaInfo(String subject, Integer id, Integer version, String guid) {
+    public SchemaInfo(String subject, Integer id, Integer version, UUID guid) {
       this.subject = subject;
       this.id = id;
       this.version = version;
@@ -100,7 +101,7 @@ public interface ParsedSchemaAndValue {
       return version;
     }
 
-    public String guid() {
+    public UUID guid() {
       return guid;
     }
 
