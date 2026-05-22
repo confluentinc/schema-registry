@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,6 +55,8 @@ public class RuleContext {
   private final int index;
   private final List<Rule> rules;
   private final Map<Object, Object> customData = new ConcurrentHashMap<>();
+  private final Map<String, String> messageMetadata = new LinkedHashMap<>();
+  private final Map<String, Map<String, String>> fieldMetadata = new LinkedHashMap<>();
   private final Deque<FieldContext> fieldContexts;
 
   public RuleContext(
@@ -146,6 +149,39 @@ public class RuleContext {
 
   public Map<Object, Object> customData() {
     return customData;
+  }
+
+  /**
+   * Record a message-level metadata key/value for this rule's execution.
+   * When {@code value} is null, the key is not stored (consumers can rely
+   * on key presence to mean "value known"). String values keep the audit
+   * log uniformly typed.
+   */
+  public void putMessageMetadata(String key, String value) {
+    if (value != null) {
+      messageMetadata.put(key, value);
+    }
+  }
+
+  /**
+   * Record a per-field metadata key/value for this rule's execution.
+   * When {@code value} is null, the key is not stored.
+   */
+  public void putFieldMetadata(String fieldPath, String key, String value) {
+    if (value != null) {
+      fieldMetadata.computeIfAbsent(fieldPath, k -> new LinkedHashMap<>())
+          .put(key, value);
+    }
+  }
+
+  /** Live view of message-level metadata collected so far. */
+  public Map<String, String> messageMetadata() {
+    return messageMetadata;
+  }
+
+  /** Live view of per-field metadata collected so far, keyed by field path. */
+  public Map<String, Map<String, String>> fieldMetadata() {
+    return fieldMetadata;
   }
 
   public Set<String> getTags(String fullName) {
