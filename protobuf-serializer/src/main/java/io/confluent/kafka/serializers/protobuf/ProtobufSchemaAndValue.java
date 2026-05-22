@@ -16,9 +16,8 @@
 
 package io.confluent.kafka.serializers.protobuf;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
-import io.confluent.kafka.schemaregistry.RuleResult;
+import io.confluent.kafka.schemaregistry.rules.RuleResult;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import java.util.Collections;
 import java.util.List;

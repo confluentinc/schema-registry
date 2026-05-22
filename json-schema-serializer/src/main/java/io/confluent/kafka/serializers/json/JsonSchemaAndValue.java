@@ -16,9 +16,8 @@
 
 package io.confluent.kafka.serializers.json;
 
-import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
-import io.confluent.kafka.schemaregistry.RuleResult;
+import io.confluent.kafka.schemaregistry.rules.RuleResult;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.util.Collections;
 import java.util.List;

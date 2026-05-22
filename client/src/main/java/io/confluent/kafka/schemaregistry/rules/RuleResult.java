@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry;
+package io.confluent.kafka.schemaregistry.rules;
 
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import java.util.Collections;
 import java.util.Map;
