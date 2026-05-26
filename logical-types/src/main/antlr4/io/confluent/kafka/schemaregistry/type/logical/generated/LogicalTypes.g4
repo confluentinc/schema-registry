@@ -4,7 +4,7 @@ grammar LogicalTypes;
 
 script
     : ( declareNamespaceStmt ';' )?
-      ( referenceTypeStmt ';' )*
+      ( aliasStmt ';' )*
       ( createTypeStmt ( ';' createTypeStmt )* ';'? )?
       ( registerTypeStmt ';'? )?
       EOF
@@ -16,25 +16,34 @@ declareNamespaceStmt
     : NAMESPACE qualifiedName
     ;
 
-// ─── external type declarations ──────────────────────────────────────────────
+// ─── external aliases ────────────────────────────────────────────────────────
 //
-// Optional `AS SYNONYM FOR <stringLiteral>` carries a synthetic-wrapper URI
-// binding for the named external — used when the source isn't addressable by
-// FQN alone (whole-doc JSON refs, arbitrary JSON-Pointer refs, etc.). Visitor
-// records (qualifiedName -> URI) in the LT's externalImports; writers emit the
-// URI as the reference target. Without `AS SYNONYM FOR`, the external is
-// canonical and the writer discovers its source by walking resolvedReferences.
+// External-ness of a type is *inferred* by the visitor: any NAMED_TYPE_REF FQN
+// reachable from the root or from a local body that isn't itself declared
+// locally is treated as external. There is no syntactic marker for it.
 //
-// `AS SYNONYM FOR` controls only the WIRE-FORMAT shape of the reference (the
-// $ref URI in JSON, the import string in Proto). It deliberately does NOT
-// carry SR coordinates (subject + version) — those are deployment metadata
-// that vary across environments and aren't expressible in DDL. To produce an
+// `ALIAS <qualifiedName> FOR <stringLiteral>` optionally attaches a
+// synthetic-wrapper URI to a named external — used when the source isn't
+// addressable by FQN alone (whole-doc JSON refs, arbitrary JSON-Pointer refs,
+// etc.). Visitor records (qualifiedName -> URI) in the LT's externalImports;
+// writers emit the URI as the reference target. Without an ALIAS, the external
+// is canonical and the writer discovers its source by walking
+// resolvedReferences.
+//
+// `ALIAS` controls only the WIRE-FORMAT shape of the reference (the $ref URI
+// in JSON, the import string in Proto). It deliberately does NOT carry SR
+// coordinates (subject + version) — those are deployment metadata that vary
+// across environments and aren't expressible in DDL. To produce an
 // SR-publishable LT from DDL, the caller attaches a SchemaReference list
 // (with matching resolvedReferences content) to the LogicalType separately
 // after the visitor runs.
+//
+// Validation: each ALIAS's FQN must (a) actually be referenced by some local
+// body or by the root (no dangling aliases) and (b) not collide with a local
+// ROW/ENUM declaration of the same name (no shadowing).
 
-referenceTypeStmt
-    : REFERENCE TYPE qualifiedName ( AS SYNONYM FOR stringLiteral )?
+aliasStmt
+    : ALIAS qualifiedName FOR stringLiteral
     ;
 
 // ─── named type declarations ──────────────────────────────────────────────────
@@ -443,7 +452,6 @@ nonReservedKeyword
     : ENUM
     | MAP
     | NAMESPACE
-    | REFERENCE
     | TAGS
     | TYPE
     | VARIANT
@@ -452,6 +460,7 @@ nonReservedKeyword
 
 // ─── lexer rules ──────────────────────────────────────────────────────────────
 
+ALIAS           : A L I A S ;
 AND             : A N D ;
 ARRAY           : A R R A Y ;
 AS              : A S ;
@@ -506,7 +515,6 @@ SMALLINT        : S M A L L I N T ;
 STRING          : S T R I N G ;
 SUBSTRING       : S U B S T R I N G ;
 SYMMETRIC       : S Y M M E T R I C ;
-SYNONYM         : S Y N O N Y M ;
 TAGS            : T A G S ;
 THEN            : T H E N ;
 TIME            : T I M E ;
@@ -518,7 +526,6 @@ TRIM            : T R I M ;
 TRUE            : T R U E ;
 TYPE            : T Y P E ;
 UNION           : U N I O N ;
-REFERENCE       : R E F E R E N C E ;
 VARBINARY       : V A R B I N A R Y ;
 VARCHAR         : V A R C H A R ;
 VARYING         : V A R Y I N G ;

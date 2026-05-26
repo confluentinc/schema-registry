@@ -163,8 +163,9 @@ public class LogicalType {
    * {@code $ref} (for entries IN this set).
    *
    * <p>The set is populated by readers when they lazily promote external
-   * bodies into {@code namedTypes}, and by the visitor from the user's
-   * {@code REFERENCE TYPE} declarations.
+   * bodies into {@code namedTypes}, and by the DDL visitor by inferring
+   * external-ness from usage (any {@code NAMED_TYPE_REF} FQN not declared
+   * locally).
    */
   public Set<String> getExternalTypes() {
     return externalTypes;
@@ -183,7 +184,7 @@ public class LogicalType {
    * synthesizes {@code Ref<N>}-style names for non-canonical $refs (whole-doc,
    * arbitrary JSON Pointers, and other shapes that don't extract cleanly to a
    * {@code $defs} key), and by the DDL visitor when it parses
-   * {@code REFERENCE TYPE x AS SYNONYM FOR '<uri>'} clauses.
+   * {@code ALIAS x FOR '<uri>'} statements.
    *
    * <p>The JSON writer consults this map to emit those externals as a local
    * {@code #/$defs/<name>} reference whose body is a single
@@ -199,7 +200,7 @@ public class LogicalType {
    * carries wire-format binding (typeName → URI used in {@code $ref}); the
    * {@code references} list carries SR coordinates (subject + version used by
    * the SR client to fetch external content). They are populated independently
-   * — DDL's {@code FROM} populates {@code externalImports} but never the
+   * — DDL's {@code ALIAS} populates {@code externalImports} but never the
    * references list. To produce an SR-publishable LT from DDL, attach a
    * {@code references} list (with matching {@code resolvedReferences}
    * content) separately after the visitor runs.

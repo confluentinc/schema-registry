@@ -577,36 +577,36 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testReferenceType() {
+  void testInferredExternals() {
+    // Externals are inferred from usage — any NAMED_TYPE_REF FQN not declared
+    // locally is treated as external. No syntactic marker needed.
     LogicalTypesSchemaVisitor v = parseScript(
-        "REFERENCE TYPE com.example.Money;"
-        + "REFERENCE TYPE com.example.Address;"
-        + "ROW MyOrder ("
-        + "  amount Money,"
-        + "  addr Address"
+        "ROW MyOrder ("
+        + "  amount com.example.Money,"
+        + "  addr com.example.Address"
         + ");"
         + "TYPE MyOrder"
     );
-    assertEquals(2, v.getReferencedTypes().size());
-    assertEquals("com.example.Money", v.getReferencedTypes().get(0));
-    assertEquals("com.example.Address", v.getReferencedTypes().get(1));
     Schema order = v.getNamedTypes().get("MyOrder");
     assertNotNull(order);
     assertEquals(Schema.Type.NAMED_TYPE_REF,
         order.getField("amount").getSchema().getType());
-    assertEquals("Money",
+    assertEquals("com.example.Money",
         order.getField("amount").getSchema().getQualifiedName());
-    // No AS SYNONYM FOR clauses → externalImports stays empty.
+    // No ALIAS clauses → externalImports stays empty.
     assertTrue(v.getExternalImports().isEmpty());
+
+    LogicalType lt = v.toLogicalType();
+    assertTrue(lt.isExternal("com.example.Money"));
+    assertTrue(lt.isExternal("com.example.Address"));
   }
 
   @Test
-  void testReferenceTypeWithFrom() {
-    // Mix of canonical (no AS SYNONYM FOR) and synthetic-wrapper (AS SYNONYM FOR) externals.
+  void testAlias() {
+    // ALIAS attaches a URI binding to a (necessarily external) FQN.
     LogicalTypesSchemaVisitor v = parseScript(
-        "REFERENCE TYPE Inner;"
-        + "REFERENCE TYPE Ref1 AS SYNONYM FOR 'ext.Outer';"
-        + "REFERENCE TYPE Ref2 AS SYNONYM FOR 'https://example.com/foo#/properties/bar';"
+        "ALIAS Ref1 FOR 'ext.Outer';"
+        + "ALIAS Ref2 FOR 'https://example.com/foo#/properties/bar';"
         + "ROW Holder ("
         + "  i Inner,"
         + "  one Ref1,"
@@ -614,60 +614,59 @@ class LogicalTypesSchemaVisitorTest {
         + ");"
         + "TYPE Holder"
     );
-    assertEquals(java.util.Arrays.asList("Inner", "Ref1", "Ref2"),
-        v.getReferencedTypes());
     Map<String, String> imports = v.getExternalImports();
-    assertEquals(2, imports.size(),
-        "Inner has no AS SYNONYM FOR clause; Ref1 and Ref2 do");
+    assertEquals(2, imports.size());
     assertEquals("ext.Outer", imports.get("Ref1"));
     assertEquals("https://example.com/foo#/properties/bar", imports.get("Ref2"));
 
-    // The bundled LT carries the bindings.
+    // The bundled LT carries the bindings; externals are inferred (Inner has
+    // no ALIAS but is still external because it isn't locally declared).
     LogicalType lt = v.toLogicalType();
     assertEquals(imports, lt.getExternalImports());
     assertTrue(lt.isExternal("Inner"));
     assertTrue(lt.isExternal("Ref1"));
+    assertTrue(lt.isExternal("Ref2"));
   }
 
   @Test
-  void testReferenceTypeFromEmptyStringRejected() {
+  void testAliasEmptyStringRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "REFERENCE TYPE Ref1 AS SYNONYM FOR '';"
+        "ALIAS Ref1 FOR '';"
+        + "ROW H (one Ref1);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testDuplicateAliasRejected() {
+    // Two ALIAS declarations for the same name. Last-write-wins would hide
+    // the user's mistake — reject explicitly.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "ALIAS Foo FOR 'a';"
+        + "ALIAS Foo FOR 'b';"
+        + "ROW H (f Foo);"
+        + "TYPE H"
+    ));
+  }
+
+  @Test
+  void testDanglingAliasRejected() {
+    // ALIAS whose FQN isn't referenced anywhere — visitor rejects since
+    // externals are inferred from usage and an unused alias has no effect.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "ALIAS Foo FOR 'a';"
         + "TYPE INT"
     ));
   }
 
   @Test
-  void testDuplicateReferenceTypeBareRejected() {
-    // Two bare REFERENCE TYPE declarations for the same name. The second
-    // is redundant; the visitor rejects rather than silently coalescing.
+  void testShadowedAliasRejected() {
+    // ALIAS for a name that's also a local ROW declaration. The ALIAS's URI
+    // binding can't apply to a local type; reject the collision.
     assertThrows(ValidationException.class, () -> parseScript(
-        "REFERENCE TYPE Foo;"
-        + "REFERENCE TYPE Foo;"
-        + "TYPE INT"
-    ));
-  }
-
-  @Test
-  void testDuplicateReferenceTypeWithDifferentFromRejected() {
-    // Two REFERENCE TYPEs with the same name but different AS SYNONYM FOR URIs. Last-
-    // write-wins on externalImports would silently pick one URI, hiding the
-    // user's mistake. Reject explicitly.
-    assertThrows(ValidationException.class, () -> parseScript(
-        "REFERENCE TYPE Foo AS SYNONYM FOR 'a';"
-        + "REFERENCE TYPE Foo AS SYNONYM FOR 'b';"
-        + "TYPE INT"
-    ));
-  }
-
-  @Test
-  void testDuplicateReferenceTypeMixedFromRejected() {
-    // Bare declaration followed by AS SYNONYM FOR-clause declaration for the same
-    // name. Ambiguous intent — reject.
-    assertThrows(ValidationException.class, () -> parseScript(
-        "REFERENCE TYPE Foo;"
-        + "REFERENCE TYPE Foo AS SYNONYM FOR 'a';"
-        + "TYPE INT"
+        "ALIAS Foo FOR 'a';"
+        + "ROW Foo (x INT);"
+        + "TYPE Foo"
     ));
   }
 
@@ -1004,20 +1003,10 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testNamespaceDoesNotQualifyReferenceType() {
-    LogicalTypesSchemaVisitor v = parseScript(
-        "NAMESPACE a.b;"
-        + "REFERENCE TYPE Money;"
-        + "ROW Holder (amount Money);"
-        + "TYPE Holder");
-    // REFERENCE TYPE name is captured as-written
-    assertTrue(v.getReferencedTypes().contains("Money"));
-    assertFalse(v.getReferencedTypes().contains("a.b.Money"));
-  }
-
-  @Test
   void testNamespaceQualifiesUnqualifiedFieldRef() {
-    // A bare field-type reference with no matching REFERENCE TYPE → namespace applies.
+    // A bare field-type reference always inherits the active namespace,
+    // matching Avro's rule. Locally-declared `Inner` is matched after
+    // qualification.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
         + "ROW Inner (x INT);"
@@ -1030,17 +1019,20 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testReferencedNameWinsOverNamespacePrefix() {
-    // A bare field-type reference matching a REFERENCE TYPE entry → use as-is.
+  void testBareExternalUnderNamespaceIsQualified() {
+    // Externals are inferred from usage. Bare names always inherit the
+    // active namespace; an external must be written FQN or namespace-relative
+    // dotted form (matching Avro). Here the bare `Money` is qualified to
+    // `a.b.Money`, which has no local declaration, so it's inferred external.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "REFERENCE TYPE Money;"
         + "ROW Holder (amount Money);"
         + "TYPE Holder");
     Schema holder = v.getNamedTypes().get("a.b.Holder");
     Schema.Field amount = holder.getField("amount");
     assertEquals(Schema.Type.NAMED_TYPE_REF, amount.getSchema().getType());
-    assertEquals("Money", amount.getSchema().getQualifiedName());
+    assertEquals("a.b.Money", amount.getSchema().getQualifiedName());
+    assertTrue(v.toLogicalType().isExternal("a.b.Money"));
   }
 
   @Test
@@ -1057,12 +1049,12 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testNoNamespaceLeavesNamesUnchanged() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "REFERENCE TYPE Money;"
-        + "ROW Holder (amount Money, name STRING);"
+        "ROW Holder (amount Money, name STRING);"
         + "TYPE Holder");
     assertNotNull(v.getNamedTypes().get("Holder"));
     assertEquals("Money",
         v.getNamedTypes().get("Holder").getField("amount").getSchema().getQualifiedName());
+    assertTrue(v.toLogicalType().isExternal("Money"));
   }
 
   @Test
@@ -1075,25 +1067,28 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testNamespaceCollisionImportsWin() {
-    // If a ROW/ENUM declaration name and a REFERENCE TYPE name collide on the bare
-    // identifier, unqualified field references resolve to the import. The
-    // local definition is still accessible via its fully-qualified name.
+  void testBareNameUnderNamespaceMatchesLocal() {
+    // A bare field-type reference under an active namespace always qualifies
+    // to `<namespace>.<name>` (matching Avro). When that qualified form
+    // matches a locally-declared type, the field resolves to the local; when
+    // it doesn't, the field is inferred external.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "REFERENCE TYPE Foo;"
         + "ROW Foo (x INT);"
         + "ROW Holder ("
-        + "  importedFoo Foo,"
-        + "  localFoo a.b.Foo"
+        + "  localFoo Foo,"
+        + "  externalFoo other.Foo"
         + ");"
         + "TYPE Holder");
     Schema holder = v.getNamedTypes().get("a.b.Holder");
-    assertEquals("Foo", holder.getField("importedFoo").getSchema().getQualifiedName(), "imports win for unqualified field refs");
     assertEquals("a.b.Foo",
         holder.getField("localFoo").getSchema().getQualifiedName());
-    // Local definition is registered under its qualified name
+    assertEquals("other.Foo",
+        holder.getField("externalFoo").getSchema().getQualifiedName());
     assertNotNull(v.getNamedTypes().get("a.b.Foo"));
+    LogicalType lt = v.toLogicalType();
+    assertFalse(lt.isExternal("a.b.Foo"));
+    assertTrue(lt.isExternal("other.Foo"));
   }
 
   // =========================================================================
@@ -1466,14 +1461,15 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testSugarReferenceTypeIsNotADefinedType() {
-    // REFERENCE TYPE Ext is external; Foo is the unique defined root.
+  void testSugarInferredExternalIsNotADefinedType() {
+    // Ext is referenced but not locally declared → inferred external; Foo is
+    // the unique defined root.
     LogicalTypesSchemaVisitor v = parseScript(
-        "REFERENCE TYPE Ext;"
-        + "ROW Foo (x Ext)"
+        "ROW Foo (x Ext)"
     );
     Schema root = v.getRootSchema();
     assertEquals("Foo", root.getQualifiedName());
+    assertTrue(v.toLogicalType().isExternal("Ext"));
   }
 
   @Test
@@ -1721,18 +1717,18 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testReferenceTypeIgnoresNestingRule() {
-    // External REFERENCE TYPE names may have dots but are NOT subject to the
-    // local nesting rule — they're stored verbatim and used verbatim.
+  void testExternalDottedNameIgnoresNestingRule() {
+    // External (inferred) names with dots that don't match any local parent
+    // are stored verbatim and used verbatim — no namespace prefix is applied.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "REFERENCE TYPE com.other.Outer.Inner;"
         + "ROW Holder (inner com.other.Outer.Inner);"
         + "TYPE Holder"
     );
     Schema holder = v.getNamedTypes().get("com.example.Holder");
     assertEquals("com.other.Outer.Inner",
         holder.getField("inner").getSchema().getQualifiedName());
+    assertTrue(v.toLogicalType().isExternal("com.other.Outer.Inner"));
   }
 
   @Test
