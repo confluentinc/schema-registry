@@ -76,9 +76,10 @@ public class ConversionService {
   }
 
   /**
-   * Convert {@code activeDocument}, resolving any REFERENCE TYPE against other documents.
-   * Documents are indexed by the qualified type names they <em>define</em> (not by tab name),
-   * so REFERENCE TYPE lookup works regardless of how tabs are labeled.
+   * Convert {@code activeDocument}, resolving any inferred external reference against
+   * other documents. Documents are indexed by the qualified type names they
+   * <em>define</em> (not by tab name), so external lookup works regardless of how
+   * tabs are labeled.
    */
   private ConvertResponse convertMulti(
       List<ConvertRequest.Document> documents,
@@ -161,10 +162,12 @@ public class ConversionService {
   }
 
   /**
-   * Recursively resolve every REFERENCE TYPE declared by {@code doc}, converting each
-   * dependency to {@code target} and recording it under its qualified name. The lookup
-   * matches a reference name against any document that <em>defines</em> that name in its
-   * {@code namedTypes}. Handles transitive references and cycles via {@code visiting}.
+   * Recursively resolve every external reference of {@code doc}, converting each
+   * dependency to {@code target} and recording it under its qualified name. Externals
+   * are inferred from usage (any NAMED_TYPE_REF FQN not declared locally in the doc).
+   * The lookup matches a reference name against any document that <em>defines</em>
+   * that name in its {@code namedTypes}. Handles transitive references and cycles
+   * via {@code visiting}.
    */
   private void resolveReferences(
       ParsedDoc doc,
@@ -183,12 +186,12 @@ public class ConversionService {
       }
       if (visiting.contains(refName)) {
         throw new ValidationException(
-            "Cyclic REFERENCE TYPE chain involving '" + refName + "'");
+            "Cyclic reference chain involving '" + refName + "'");
       }
       ParsedDoc dep = byDefinedType.get(refName);
       if (dep == null) {
         throw new ValidationException(
-            "REFERENCE TYPE '" + refName + "' has no defining document in the workspace");
+            "Referenced type '" + refName + "' has no defining document in the workspace");
       }
       visiting.add(refName);
       // Depth-first: resolve transitive refs of the dep before rendering it.
@@ -285,7 +288,25 @@ public class ConversionService {
         visitor.getNamespace(),
         visitor.getRootSchema(),
         visitor.getNamedTypes(),
-        visitor.getReferencedTypes());
+        inferReferencedTypes(visitor.getRootSchema(), visitor.getNamedTypes()));
+  }
+
+  /**
+   * Mirror of {@code LogicalTypesSchemaVisitor#inferExternalTypes()}: walk the root +
+   * every local body, collect every NAMED_TYPE_REF FQN, subtract locally-declared
+   * names. Returns the inferred external set in insertion order.
+   */
+  private static List<String> inferReferencedTypes(
+      Schema rootSchema, Map<String, Schema> namedTypes) {
+    Set<String> refs = new java.util.LinkedHashSet<>();
+    if (rootSchema != null) {
+      LogicalType.collectNamedRefs(rootSchema, refs);
+    }
+    for (Schema body : namedTypes.values()) {
+      LogicalType.collectNamedRefs(body, refs);
+    }
+    refs.removeAll(namedTypes.keySet());
+    return new ArrayList<>(refs);
   }
 
   /**

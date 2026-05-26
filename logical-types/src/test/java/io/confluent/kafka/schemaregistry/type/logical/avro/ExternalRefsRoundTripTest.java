@@ -100,12 +100,11 @@ class ExternalRefsRoundTripTest {
     assertTrue(lt.isExternal("com.example.Stuff"),
         "Stuff should be flagged as external");
 
-    // Pin the DDL projection of the resulting LT — externals appear as
-    // REFERENCE TYPE declarations and Person becomes the registered root.
+    // Pin the DDL projection of the resulting LT — bare externals have no
+    // syntactic marker (re-inferred from usage on read-back) and Person
+    // becomes the registered root.
     assertEquals(
-        "REFERENCE TYPE com.example.Outer;\n"
-            + "REFERENCE TYPE com.example.Stuff;\n"
-            + "ROW acme.Person (home com.example.Outer NOT NULL,"
+        "ROW acme.Person (home com.example.Outer NOT NULL,"
             + " thing com.example.Stuff NOT NULL);\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 

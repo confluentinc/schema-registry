@@ -31,8 +31,11 @@ import java.util.Set;
  *
  * <p><b>Lossy points</b> (intentional, matching visitor capability):
  * <ul>
- *   <li>{@code REFERENCE TYPE} carries only the FQN — subject and version
- *       are not part of the visitor's grammar.</li>
+ *   <li>External references have no syntactic marker — they're inferred on
+ *       read-back from usage. {@code ALIAS} statements survive (carrying the
+ *       wire-format URI binding) but bare externals (no URI) are implicit,
+ *       identified by appearing in a type position without a matching local
+ *       {@code ROW}/{@code ENUM}.</li>
  *   <li>Path-keyed {@code defaultValues} aren't re-emitted; field-level
  *       defaults survive via {@link Schema.Field#getDefaultValue()}.</li>
  *   <li>The single-root sugar is detected and the trailing root-registration
@@ -74,26 +77,27 @@ public final class LogicalTypeToDdlConverter {
             .append(";\n");
       }
 
-      // External references: every NAMED_TYPE_REF FQN reachable from the
-      // root or from any local named-type body that isn't itself a local
-      // named type. Emit one REFERENCE TYPE per distinct FQN. When the LT
-      // carries a synthetic-wrapper URI binding for the FQN (via
-      // externalImports), emit `AS SYNONYM FOR '<uri>'` so the binding round-trips
-      // through DDL → LT → DDL.
-      for (String fqn : collectExternalRefs()) {
-        sb.append("REFERENCE TYPE ").append(qualifiedName(fqn));
-        String uri = lt.getExternalImports().get(fqn);
-        if (uri != null) {
-          sb.append(" AS SYNONYM FOR ").append(stringLiteral(uri));
+      // ALIAS declarations: external-ness is inferred on read-back from
+      // usage, so bare externals don't need a syntactic marker. Only the
+      // URI bindings (synthetic-wrapper $ref / import targets) need to be
+      // emitted so they survive DDL → LT → DDL round-trip. Restrict to FQNs
+      // that local code actually references (intersect with externalRefs)
+      // to drop any stale entries.
+      Set<String> externalRefs = new LinkedHashSet<>(collectExternalRefs());
+      for (Map.Entry<String, String> e : lt.getExternalImports().entrySet()) {
+        if (!externalRefs.contains(e.getKey())) {
+          continue;
         }
-        sb.append(";\n");
+        sb.append("ALIAS ").append(qualifiedName(e.getKey()))
+            .append(" FOR ").append(stringLiteral(e.getValue()))
+            .append(";\n");
       }
 
       // Named-type declarations (`ROW <name> (...)` / `ENUM <name> (...)`) in
       // declaration order, LOCAL types only. Externals' bodies are also in
       // namedTypes (lazy-promoted by the reader from resolvedReferences),
-      // but they're emitted as REFERENCE TYPE above — must NOT be re-emitted
-      // here.
+      // but they're external by inference on read-back — must NOT be
+      // re-emitted here.
       for (String name : orderedLocalNames()) {
         if (lt.getExternalTypes().contains(name)) {
           continue;
@@ -379,12 +383,12 @@ public final class LogicalTypeToDdlConverter {
      * Walk the root schema and every LOCAL named-type body, collecting every
      * {@link Schema.Type#NAMED_TYPE_REF} FQN. Intersect with
      * {@link LogicalType#getExternalTypes} to find externals that local code
-     * actually references. Returns the FQNs that need {@code REFERENCE TYPE}
-     * statements.
+     * actually references. Returns the FQNs eligible to receive a
+     * {@code ALIAS} statement (when a URI binding exists).
      *
      * <p>Walking only LOCAL bodies (not external-promoted ones) avoids
      * surfacing transitive externals in the emitted DDL — only the externals
-     * the user's local code directly references appear as REFERENCE TYPE.
+     * the user's local code directly references.
      */
     private List<String> collectExternalRefs() {
       Set<String> all = new LinkedHashSet<>();
@@ -410,7 +414,7 @@ public final class LogicalTypeToDdlConverter {
         return false;
       }
       // The visitor's sugar reasons over LOCAL types only — externals are
-      // declared via REFERENCE TYPE and don't participate in root inference.
+      // inferred from usage and don't participate in root inference.
       Set<String> defined = new LinkedHashSet<>(lt.getNamedTypes().keySet());
       defined.removeAll(lt.getExternalTypes());
       if (defined.isEmpty()) {

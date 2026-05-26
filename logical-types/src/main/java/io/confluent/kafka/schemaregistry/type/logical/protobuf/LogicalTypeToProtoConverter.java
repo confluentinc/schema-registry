@@ -240,9 +240,9 @@ public class LogicalTypeToProtoConverter {
    * consumers resolve the root through {@code schema.toDescriptor()} which
    * uses {@link ProtobufSchema#name()}'s public-import fall-through.
    *
-   * <p>Matches the behavior expected when a script declares
-   * {@code REFERENCE TYPE com.Foo; TYPE com.Foo;} — the registered
-   * root IS the external type, with no local body to define.
+   * <p>Matches the behavior expected when a script's registered root IS the
+   * external type (e.g. {@code TYPE com.Foo;} where {@code com.Foo} is not
+   * locally declared), with no local body to define.
    */
   private static ProtobufSchema buildPublicImportFile(
       LogicalType logicalType, String externalTypeFullName,
@@ -387,7 +387,7 @@ public class LogicalTypeToProtoConverter {
                 + (ns.isEmpty() ? "<none>" : ns) + "' while the file's package "
                 + "is '" + (expected.isEmpty() ? "<none>" : expected) + "'. "
                 + "Either align the namespaces, or split cross-namespace types "
-                + "into separate schemas referenced via REFERENCE TYPE.");
+                + "into separate schemas referenced as externals.");
       }
     }
   }

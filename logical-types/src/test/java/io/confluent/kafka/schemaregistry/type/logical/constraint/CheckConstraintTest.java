@@ -3448,9 +3448,9 @@ class CheckConstraintTest {
   void namedTypeRefUnresolvedFallsBackToDyn() {
     // Externally-referenced type with no definition — ConstraintTypeProvider
     // falls back to dyn so the CHECK still translates (any field accesses
-    // type-check as dyn).
-    String script = "REFERENCE TYPE com.example.Address;"
-        + "ROW Person ("
+    // type-check as dyn). Externals are inferred from usage; the bare
+    // reference `Address` is sufficient to make Address external.
+    String script = "ROW Person ("
         + "  addr Address NOT NULL,"
         + "  CHECK (addr.zip > 0)"
         + ");";

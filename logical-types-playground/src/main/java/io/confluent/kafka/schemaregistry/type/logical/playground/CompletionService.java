@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.playground;
 
+import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.ALIAS;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.AND;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.ARRAY;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.AS;
@@ -61,7 +62,6 @@ import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTy
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.POSITION;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.PRECISION;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.REAL;
-import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.REFERENCE;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.ROW;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.SMALLINT;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.STRING;
@@ -121,9 +121,9 @@ public class CompletionService {
     TYPE_POSITION = concat(PRIMITIVES, extra);
   }
 
-  // Statement-leading keywords: `NAMESPACE`, `REFERENCE` (TYPE), `ROW`,
-  // `ENUM`, and bare `TYPE` (trailing root-registration form).
-  private static final int[] STMT_START = {NAMESPACE, REFERENCE, ROW, ENUM, TYPE};
+  // Statement-leading keywords: `NAMESPACE`, `ALIAS`, `ROW`, `ENUM`, and bare
+  // `TYPE` (trailing root-registration form).
+  private static final int[] STMT_START = {NAMESPACE, ALIAS, ROW, ENUM, TYPE};
 
   // Map from "previous keyword token type" → allowed next keyword token types.
   // Misses fall through to ALL_KEYWORDS, so the table only needs entries
@@ -133,10 +133,11 @@ public class CompletionService {
   static {
     // After NAMESPACE the user types a free-form qualifiedName; no keywords legal.
     FOLLOW.put(NAMESPACE, new int[0]);
-    FOLLOW.put(REFERENCE, new int[] {TYPE});
-    // `AS` mid-expression — appears in `REFERENCE TYPE x AS SYNONYM FOR ...`
-    // (rare) and `CAST(x AS castType)`. Offer the primitive-type set, which
-    // covers the CAST case; the user picks SYNONYM by typing.
+    // After ALIAS the user types `<qualifiedName> FOR '<uri>'`; no keywords
+    // legal until FOR, which is a token but isn't predicted positionally here.
+    FOLLOW.put(ALIAS, new int[0]);
+    // `AS` only appears in `CAST(x AS castType)` — offer the primitive-type
+    // set so the user can pick a cast target.
     FOLLOW.put(AS, PRIMITIVES);
     FOLLOW.put(CHARACTER, new int[] {VARYING});
     FOLLOW.put(BINARY, new int[] {VARYING});
@@ -480,14 +481,8 @@ public class CompletionService {
     // Statement-leading bare `TYPE` opens the trailing root-registration form
     // `TYPE <typeExpr>` — a typeExpr is expected next. Detect by checking that
     // the token before `TYPE` is either nothing (doc start) or a `;`.
-    // Same shape applies after `REFERENCE TYPE` (an external import name),
-    // though the playground client today short-circuits that case with a
-    // cross-tab-only completion path.
     if (previous.getType() == TYPE) {
       if (previousPrev == null) {
-        return true;
-      }
-      if (previousPrev.getType() == REFERENCE) {
         return true;
       }
       return ";".equals(previousPrev.getText());
@@ -1304,9 +1299,12 @@ public class CompletionService {
   /**
    * Collects names that can be referenced as types in this doc:
    * <ul>
-   *   <li>{@code ROW <qualifiedName> (...)}</li>
-   *   <li>{@code ENUM <qualifiedName> (...)}</li>
-   *   <li>{@code REFERENCE TYPE <qualifiedName>}</li>
+   *   <li>{@code ROW <qualifiedName> (...)} — local declaration</li>
+   *   <li>{@code ENUM <qualifiedName> (...)} — local declaration</li>
+   *   <li>{@code ALIAS <qualifiedName> FOR '<uri>'} — external with URI
+   *       binding (bare externals have no syntactic marker; their names
+   *       appear inline as field types and aren't enumerable from tokens
+   *       alone)</li>
    * </ul>
    * For each, the full dotted qualifiedName is captured. If a
    * {@code NAMESPACE} is present and the name is unqualified, the
@@ -1333,13 +1331,12 @@ public class CompletionService {
           i += 1 + consumed[0];
           continue;
         }
-      } else if (kind == REFERENCE && i + 1 < n
-          && tokens.get(i + 1).getType() == TYPE) {
+      } else if (kind == ALIAS && isStatementStart(tokens, i)) {
         int[] consumed = new int[1];
-        String name = readQualifiedName(tokens, i + 2, consumed);
+        String name = readQualifiedName(tokens, i + 1, consumed);
         if (name != null) {
           addNameAndQualified(out, name, namespace);
-          i += 2 + consumed[0];
+          i += 1 + consumed[0];
           continue;
         }
       }
@@ -1407,7 +1404,7 @@ public class CompletionService {
 
   private static final Set<Integer> IDENTIFIER_TOKEN_TYPES = Set.of(
       LogicalTypesLexer.ID, LogicalTypesLexer.QUOTED_ID,
-      ENUM, MAP, NAMESPACE, REFERENCE,
+      ENUM, MAP, NAMESPACE,
       LogicalTypesLexer.TAGS, TYPE, VARIANT, ZONE);
 
   /**
