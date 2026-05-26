@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -171,17 +172,16 @@ class LogicalTypeToDdlConverterTest {
   }
 
   // -----------------------------------------------------------------------
-  // Phase B: REFERENCE TYPE (external NAMED_TYPE_REFs)
+  // Phase B: ALIAS (URI bindings for external NAMED_TYPE_REFs)
   // -----------------------------------------------------------------------
 
   @Test
-  void referenceTypeForExternalNamedRef() {
+  void bareExternalRefHasNoSyntacticMarker() {
+    // External-ness is inferred from usage on read-back, so a bare external
+    // (no URI binding) needs no syntactic marker in the emitted DDL.
     Schema struct = Schema.createStruct(Arrays.asList(
         new Schema.Field("addr",
             Schema.createNamedTypeRef("com.example.Address").setNullable(false), 0)));
-    // The DDL emitter emits REFERENCE TYPE only for FQNs explicitly marked
-    // external via LogicalType.externalTypes — declared-but-unused REFERENCE
-    // TYPEs are dropped. So include com.example.Address in externalTypes.
     LogicalType lt = new LogicalType(
         null,
         Schema.createNamedTypeRef("Row").setNullable(false),
@@ -191,16 +191,18 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("REFERENCE TYPE com.example.Address;"),
-        "expected REFERENCE TYPE for external ref, got:\n" + ddl);
+    assertFalse(ddl.contains("ALIAS"),
+        "expected no ALIAS for bare external, got:\n" + ddl);
+    assertTrue(ddl.contains("com.example.Address"),
+        "field type should still reference the external by FQN, got:\n" + ddl);
     assertRoundTrip(lt);
   }
 
   @Test
-  void referenceTypeWithFromClause() {
+  void aliasCarriesUriBinding() {
     // External Ref1 carries a synthetic-wrapper URI binding via externalImports.
-    // Emitter writes `REFERENCE TYPE Ref1 AS SYNONYM FOR '<uri>';` so the binding
-    // round-trips through DDL → LT → DDL.
+    // Emitter writes `ALIAS Ref1 FOR '<uri>';` so the binding round-trips
+    // through DDL → LT → DDL.
     Schema struct = Schema.createStruct(Arrays.asList(
         new Schema.Field("a",
             Schema.createNamedTypeRef("Ref1").setNullable(false), 0)));
@@ -216,13 +218,13 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("REFERENCE TYPE Ref1 AS SYNONYM FOR 'ext.Outer';"),
-        "expected AS SYNONYM FOR clause, got:\n" + ddl);
+    assertTrue(ddl.contains("ALIAS Ref1 FOR 'ext.Outer';"),
+        "expected ALIAS with URI binding, got:\n" + ddl);
     assertRoundTrip(lt);
   }
 
   @Test
-  void referenceTypeFromClauseEscapesSingleQuotes() {
+  void aliasEscapesSingleQuotes() {
     // Single quotes in the URI must be doubled per the SQL string-literal
     // convention so the emitted DDL re-parses cleanly.
     Schema struct = Schema.createStruct(Arrays.asList(
@@ -240,8 +242,8 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("REFERENCE TYPE Ref1 AS SYNONYM FOR 'ext.O''Hare';"),
-        "expected escaped single-quote in AS SYNONYM FOR, got:\n" + ddl);
+    assertTrue(ddl.contains("ALIAS Ref1 FOR 'ext.O''Hare';"),
+        "expected escaped single-quote in ALIAS URI, got:\n" + ddl);
     assertRoundTrip(lt);
   }
 

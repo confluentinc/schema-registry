@@ -63,16 +63,7 @@ require(['vs/editor/editor.main'], function () {
       // onto whatever's left of the trailing word.
       const dottedRange = dottedPrefixRange(model, position, caretOffset);
 
-      // After `REFERENCE TYPE`, only suggest qualified names of types defined
-      // in *other* tabs (no keywords). Handled client-side because the server
-      // only sees the active doc, while these suggestions span the workspace.
-      // Replaces the full dotted prefix (e.g. `io.t`), not just the trailing
-      // word, so the qualified name doesn't get jammed onto an existing
-      // namespace.
       const before = sql.substring(0, caretOffset);
-      if (/\bREFERENCE\s+TYPE\s+[\w.]*$/i.test(before)) {
-        return crossTabTypeSuggestions(model, position, caretOffset, false);
-      }
 
       const r = await fetch('/api/complete', {
         method: 'POST',
@@ -95,13 +86,10 @@ require(['vs/editor/editor.main'], function () {
 
       // At a typeExpr position (after `(`, `,`, `<`, or `AS`), also offer
       // named types from *other* tabs alongside the server's local types.
-      // The user still needs to add `REFERENCE TYPE foo.X;` for these to
-      // resolve at convert time, but completing them here makes the workflow
-      // less mode-switchy.
+      // Externals are inferred from usage on read-back, so just writing the
+      // FQN is enough — no separate import statement needed.
       if (atTypeExprPosition(before)) {
-        const extra = crossTabTypeSuggestions(model, position, caretOffset, true).suggestions;
-        // Skip names that already appear in the server's suggestion set so
-        // we don't duplicate types the user already imported via REFERENCE.
+        const extra = crossTabTypeSuggestions(model, position, caretOffset).suggestions;
         const seen = new Set(suggestions.map(s => s.label));
         for (const item of extra) {
           if (!seen.has(item.label)) suggestions.push(item);
@@ -116,11 +104,9 @@ require(['vs/editor/editor.main'], function () {
    * Build a Monaco completion list of named types declared in tabs other than
    * the active one, filtered by the dotted prefix immediately left of caret.
    * The completion range covers the full dotted prefix so qualified names
-   * replace cleanly. When {@code withImport} is true, accepting a suggestion
-   * also inserts a `REFERENCE TYPE name;` line at the top of the active doc
-   * (unless one already exists for that name).
+   * replace cleanly.
    */
-  function crossTabTypeSuggestions(model, position, caretOffset, withImport) {
+  function crossTabTypeSuggestions(model, position, caretOffset) {
     const text = model.getValue();
     const range = dottedPrefixRange(model, position, caretOffset);
     let start = caretOffset;
@@ -128,9 +114,6 @@ require(['vs/editor/editor.main'], function () {
       start--;
     }
     const prefix = text.substring(start, caretOffset).toLowerCase();
-
-    const existingRefs = withImport ? referencedTypesIn(text) : new Set();
-    const importPos = withImport ? referenceInsertionPosition(text) : null;
 
     const seen = new Set();
     const items = [];
@@ -141,59 +124,16 @@ require(['vs/editor/editor.main'], function () {
         if (seen.has(name)) continue;
         seen.add(name);
         if (prefix && !name.toLowerCase().startsWith(prefix)) continue;
-        const item = {
+        items.push({
           label: name,
           kind: monaco.languages.CompletionItemKind.Class,
           insertText: name,
           range: range,
           detail: tab.name
-        };
-        if (withImport && !existingRefs.has(name)) {
-          item.additionalTextEdits = [{
-            range: {
-              startLineNumber: importPos.lineNumber,
-              startColumn: importPos.column,
-              endLineNumber: importPos.lineNumber,
-              endColumn: importPos.column
-            },
-            text: `REFERENCE TYPE ${name};\n`
-          }];
-        }
-        items.push(item);
+        });
       }
     });
     return { suggestions: items };
-  }
-
-  /** Names already imported in the active doc via `REFERENCE TYPE ...;`. */
-  function referencedTypesIn(ddl) {
-    const out = new Set();
-    if (!ddl) return out;
-    const stripped = ddl
-        .replace(/\/\/.*$/gm, '')
-        .replace(/\/\*[\s\S]*?\*\//g, '');
-    const re = /\bREFERENCE\s+TYPE\s+([a-zA-Z_][\w.]*)\s*;/gi;
-    let m;
-    while ((m = re.exec(stripped)) !== null) out.add(m[1]);
-    return out;
-  }
-
-  /**
-   * Position to insert a new `REFERENCE TYPE` line: just below the last existing
-   * `REFERENCE TYPE` (preferred), otherwise just below `NAMESPACE`, otherwise
-   * the very top of the doc. Returned as a 1-based line/column.
-   */
-  function referenceInsertionPosition(ddl) {
-    const lines = ddl.split('\n');
-    let lastRef = -1;
-    let lastNs = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (/^\s*REFERENCE\s+TYPE\b/i.test(lines[i])) lastRef = i;
-      else if (/^\s*NAMESPACE\b/i.test(lines[i])) lastNs = i;
-    }
-    const anchor = lastRef >= 0 ? lastRef : lastNs;
-    if (anchor < 0) return { lineNumber: 1, column: 1 };
-    return { lineNumber: anchor + 2, column: 1 };
   }
 
   /**
@@ -202,8 +142,7 @@ require(['vs/editor/editor.main'], function () {
    * `,`, `<`, the keyword `AS`, a fieldName identifier (an identifier
    * preceded by `(` or `,`, which opens a fieldDef in a struct body), or a
    * statement-leading bare `TYPE` keyword (the trailing root-registration
-   * `TYPE <typeExpr>`). `REFERENCE TYPE` is handled separately by the
-   * dedicated cross-tab-only short-circuit above.
+   * `TYPE <typeExpr>`).
    */
   function atTypeExprPosition(textBefore) {
     const stripped = textBefore.replace(/[\w.]*$/, '').replace(/\s+$/, '');
@@ -269,7 +208,9 @@ require(['vs/editor/editor.main'], function () {
   // Each tab is a (name, ddl) document with its own Monaco model (so undo/redo
   // history is per-tab). Workspace state is persisted in localStorage so a
   // browser refresh keeps everything. The active tab is what gets converted;
-  // other tabs are available as REFERENCE TYPE targets in the active tab.
+  // other tabs are available as cross-tab type references in the active tab —
+  // any FQN used in a type position that isn't declared locally is treated as
+  // an external reference and resolved against the workspace at convert time.
 
   const STORAGE_KEY = 'lt-playground/workspace/v1';
 
@@ -721,8 +662,6 @@ ROW Address (
           name: 'com.example.demo.Order',
           ddl:
 `NAMESPACE com.example.demo;
-
-REFERENCE TYPE com.example.demo.Address;
 
 ROW Order (
   id STRING NOT NULL,

@@ -41,14 +41,18 @@ import java.util.stream.Collectors;
  *   <li>{@code namespace} — from any {@code NAMESPACE} statement.</li>
  *   <li>{@code namedTypes} — from each {@code ROW <name> (...)} or
  *       {@code ENUM <name> (...)} statement (locals).</li>
- *   <li>{@code referencedTypes} → seeds {@code externalTypes} — from each
- *       {@code REFERENCE TYPE} statement.</li>
- *   <li>{@code externalImports} — from any
- *       {@code REFERENCE TYPE x AS SYNONYM FOR 'uri'} clause; maps the typeName to
- *       the wire-format URI.</li>
+ *   <li>{@code externalImports} — from each
+ *       {@code ALIAS x FOR 'uri'} statement; maps the typeName to the
+ *       wire-format URI.</li>
  *   <li>{@code rootSchema} — from the trailing {@code TYPE <typeExpr>}
  *       statement (or sugar-inferred when absent).</li>
  * </ul>
+ *
+ * <p>{@code externalTypes} is <b>inferred</b> by {@link #toLogicalType}:
+ * any {@code NAMED_TYPE_REF} FQN reachable from the root or from a local body
+ * that isn't declared locally is treated as external. There is no syntactic
+ * marker; bare names always inherit the active {@code NAMESPACE}, matching
+ * Avro's rule.
  *
  * <p><b>What the visitor does NOT produce: the {@code references} list.</b>
  * The DDL grammar has no syntax for SR-side coordinates (subject + version)
@@ -56,14 +60,13 @@ import java.util.stream.Collectors;
  * shouldn't be embedded in schema source. So the produced LT has an empty
  * {@code references} list. The caller is responsible for attaching
  * {@code references} (and the corresponding {@code resolvedReferences}
- * content) before SR registration. {@code AS SYNONYM FOR} populates schema-text
- * shape (which {@code $ref}/{@code import} string to emit); it does not bridge
- * to SR resolution.
+ * content) before SR registration. {@code ALIAS} populates schema-text shape
+ * (which {@code $ref}/{@code import} string to emit); it does not bridge to SR
+ * resolution.
  */
 public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
 
   private String namespace;
-  private final List<String> referencedTypes = new ArrayList<>();
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
   private Schema rootSchema;
@@ -72,13 +75,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     return namespace;
   }
 
-  public List<String> getReferencedTypes() {
-    return referencedTypes;
-  }
-
   /**
-   * URI bindings for {@code REFERENCE TYPE x AS SYNONYM FOR '<uri>';} declarations.
-   * Becomes {@link LogicalType#getExternalImports()} on {@link #toLogicalType}.
+   * URI bindings for {@code ALIAS x FOR '<uri>';} declarations. Becomes
+   * {@link LogicalType#getExternalImports()} on {@link #toLogicalType}.
    */
   public Map<String, String> getExternalImports() {
     return externalImports;
@@ -96,27 +95,39 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * Convenience: bundles all visitor outputs into a {@link LogicalType},
    * including the namespace from any {@code NAMESPACE} statement.
    *
-   * <p>The {@code REFERENCE TYPE} declarations populate
-   * {@link LogicalType#getExternalTypes()} so the user's intent to treat
-   * those FQNs as external survives into the LT (bodies aren't available at
-   * visitor stage; downstream enrichment is responsible for SR-fetching and
-   * promoting bodies into {@code namedTypes}). Rejects ambiguous combinations
-   * where a name appears in both a {@code REFERENCE TYPE} and a local
-   * {@code ROW}/{@code ENUM} declaration.
+   * <p>{@link LogicalType#getExternalTypes()} is inferred: every
+   * {@code NAMED_TYPE_REF} FQN reachable from the root or any local body that
+   * isn't itself a local declaration is treated as external. Downstream
+   * enrichment is responsible for SR-fetching and promoting bodies into
+   * {@code namedTypes}.
+   *
+   * <p>ALIAS validation (no shadowing, no dangling entries) runs during
+   * parsing inside {@link #visitScript}, so a {@code LogicalType} produced
+   * here is guaranteed to satisfy both invariants.
    */
   public LogicalType toLogicalType() {
-    java.util.Set<String> externals = new java.util.LinkedHashSet<>(referencedTypes);
-    java.util.Set<String> conflicts = new java.util.LinkedHashSet<>(externals);
-    conflicts.retainAll(namedTypes.keySet());
-    if (!conflicts.isEmpty()) {
-      throw new ValidationException(
-          "Name(s) appear in both REFERENCE TYPE and a local declaration — "
-              + "a name must be either external or local, not both: " + conflicts);
-    }
-    return new LogicalType(namespace, rootSchema, namedTypes, externals,
+    return new LogicalType(namespace, rootSchema, namedTypes,
+        inferExternalTypes(),
         externalImports,
         java.util.Collections.emptyList(), java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
+  }
+
+  /**
+   * Walk the root + every local body, collect every {@code NAMED_TYPE_REF}
+   * FQN, subtract the locally-declared names. What remains is the inferred
+   * set of external types.
+   */
+  private Set<String> inferExternalTypes() {
+    Set<String> refs = new LinkedHashSet<>();
+    if (rootSchema != null) {
+      LogicalType.collectNamedRefs(rootSchema, refs);
+    }
+    for (Schema body : namedTypes.values()) {
+      LogicalType.collectNamedRefs(body, refs);
+    }
+    refs.removeAll(namedTypes.keySet());
+    return refs;
   }
 
   // =========================================================================
@@ -128,7 +139,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     if (ctx.declareNamespaceStmt() != null) {
       visit(ctx.declareNamespaceStmt());
     }
-    for (LogicalTypesParser.ReferenceTypeStmtContext stmt : ctx.referenceTypeStmt()) {
+    for (LogicalTypesParser.AliasStmtContext stmt : ctx.aliasStmt()) {
       visit(stmt);
     }
     // Pre-pass: register every named-type declaration's qualified name (with
@@ -148,7 +159,38 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     } else {
       inferAndRegisterRoot(ctx);
     }
+    validateAliases();
     return null;
+  }
+
+  /**
+   * After parsing completes, reject ALIAS declarations that either shadow a
+   * local declaration or aren't referenced by any local body / the root.
+   * Externals are inferred from usage, so an unused ALIAS has no effect and
+   * an ALIAS-on-local-name is contradictory — both are surfaced as errors at
+   * parse time rather than allowed to silently no-op.
+   */
+  private void validateAliases() {
+    if (externalImports.isEmpty()) {
+      return;
+    }
+    Set<String> shadowed = new LinkedHashSet<>(externalImports.keySet());
+    shadowed.retainAll(namedTypes.keySet());
+    if (!shadowed.isEmpty()) {
+      throw new ValidationException(
+          "ALIAS declared for name(s) that are also locally declared as "
+              + "ROW/ENUM — an ALIAS attaches a URI to an external reference, "
+              + "so it must not collide with a local declaration: " + shadowed);
+    }
+    Set<String> externals = inferExternalTypes();
+    Set<String> dangling = new LinkedHashSet<>(externalImports.keySet());
+    dangling.removeAll(externals);
+    if (!dangling.isEmpty()) {
+      throw new ValidationException(
+          "ALIAS declared for name(s) that aren't referenced by any local "
+              + "type or by the root — externals are inferred from usage, so "
+              + "an unused ALIAS has no effect: " + dangling);
+    }
   }
 
   /**
@@ -188,8 +230,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * {@code TYPE <root> NOT NULL} at the end.
    *
    * <p>The unique root is the single defined type that is not referenced by
-   * any other defined type. {@code REFERENCE TYPE} names are external, so
-   * they don't influence the in-script dependency graph.
+   * any other defined type. Externals (inferred from any FQN used in a type
+   * position that isn't declared locally) don't influence the in-script
+   * dependency graph.
    *
    * <p><b>Note on nullability:</b> the sugar bakes in {@code NOT NULL} because
    * a registered root is almost always non-null at the wire level (Avro would
@@ -352,22 +395,19 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   @Override
-  public Object visitReferenceTypeStmt(LogicalTypesParser.ReferenceTypeStmtContext ctx) {
+  public Object visitAliasStmt(LogicalTypesParser.AliasStmtContext ctx) {
     String name = buildQualifiedName(ctx.qualifiedName());
-    if (referencedTypes.contains(name)) {
+    if (externalImports.containsKey(name)) {
       throw error(ctx.qualifiedName(),
-          "Duplicate REFERENCE TYPE: " + name
-              + " (each external must be declared exactly once)");
+          "Duplicate ALIAS: " + name
+              + " (each alias FQN may be declared at most once)");
     }
-    referencedTypes.add(name);
-    if (ctx.stringLiteral() != null) {
-      String uri = stripStringLiteral(ctx.stringLiteral().getText());
-      if (uri.trim().isEmpty()) {
-        throw error(ctx.stringLiteral(),
-            "REFERENCE TYPE " + name + " AS SYNONYM FOR clause must be a non-empty URI");
-      }
-      externalImports.put(name, uri);
+    String uri = stripStringLiteral(ctx.stringLiteral().getText());
+    if (uri.trim().isEmpty()) {
+      throw error(ctx.stringLiteral(),
+          "ALIAS " + name + " FOR clause must be a non-empty URI");
     }
+    externalImports.put(name, uri);
     return null;
   }
 
@@ -862,25 +902,19 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
 
   /**
    * Applies the active namespace to a name used as a type reference (field
-   * type, root schema reference). Same rule as {@link #qualifyWithNamespace}
-   * with one addition: an unqualified name that matches a previously-declared
-   * {@code REFERENCE TYPE} entry is used as-is, even when a namespace is
-   * active. (Imports take precedence over local namespace fallback.)
+   * type, root schema reference). Bare names are always namespace-prefixed
+   * (matching Avro's rule); externals must be written fully qualified.
+   *
+   * <p>Dotted names pass through unless a dotted prefix matches a locally
+   * declared parent type — in which case the name is treated as a nested-type
+   * reference and inherits the active namespace.
    */
   private String qualifyTypeRef(String name) {
     if (namespace == null || namespace.isEmpty()) {
       return name;
     }
     if (!name.contains(".")) {
-      if (referencedTypes.contains(name)) {
-        return name;
-      }
       return namespace + "." + name;
-    }
-    // Dotted name. If it matches a REFERENCE TYPE entry verbatim, leave as-is
-    // (external nested-style names are opaque to the local nesting rule).
-    if (referencedTypes.contains(name)) {
-      return name;
     }
     if (hasLocalParentPrefix(name)) {
       if (name.startsWith(namespace + ".")) {

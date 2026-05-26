@@ -365,14 +365,14 @@ public abstract class Schema {
    */
   private static final java.util.Set<String> SQL_KEYWORDS_NEEDING_QUOTING =
       Collections.unmodifiableSet(new java.util.HashSet<>(java.util.Arrays.asList(
-          "AND", "ARRAY", "AS", "BETWEEN", "BIGINT", "BINARY", "BOOLEAN", "BOTH",
+          "ALIAS", "AND", "ARRAY", "AS", "BETWEEN", "BIGINT", "BINARY", "BOOLEAN", "BOTH",
           "BYTES", "CASE", "CAST", "CHARACTER", "CHAR", "CHECK", "COMMENT",
           "CONSTRAINT", "CREATE", "CURRENT_TIMESTAMP", "DATE", "DEC", "DECIMAL",
           "DECLARE", "DEFAULT", "DOUBLE", "ELSE", "END", "ESCAPE", "EXTRACT",
           "FALSE", "FLOAT", "FOR", "FROM", "IN", "INT", "INTEGER", "IS",
           "LEADING", "LIKE", "LOCAL", "MESSAGE", "MULTISET", "NOT", "NULL",
           "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "ROW", "SMALLINT",
-          "STRING", "SUBSTRING", "SYMMETRIC", "SYNONYM", "THEN", "TIME",
+          "STRING", "SUBSTRING", "SYMMETRIC", "THEN", "TIME",
           "TIMESTAMP", "TIMESTAMP_LTZ", "TINYINT", "TRAILING", "TRIM", "TRUE",
           "UNION", "VARBINARY", "VARCHAR", "VARYING", "WHEN", "WITH", "WITHOUT")));
 
