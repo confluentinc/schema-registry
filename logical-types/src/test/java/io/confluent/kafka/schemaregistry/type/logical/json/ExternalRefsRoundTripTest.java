@@ -97,13 +97,13 @@ class ExternalRefsRoundTripTest {
     assertTrue(lt.isExternal("Inner"));
     assertEquals("ext.Outer", lt.getExternalImports().get("Ref1"));
 
-    // Pin the DDL projection — clean REFERENCE TYPE statements. The
-    // synthesized Ref1 stands in for the whole-doc ext.Outer URI (rendered
-    // as a AS SYNONYM FOR clause); Inner extracted from the canonical /$defs/Inner
-    // ref needs no AS SYNONYM FOR (its source is discoverable via resolvedReferences).
+    // Pin the DDL projection — bare externals have no syntactic marker (they
+    // re-infer from usage on read-back). The synthesized Ref1 stands in for
+    // the whole-doc ext.Outer URI and is emitted as an ALIAS statement;
+    // Inner extracted from the canonical /$defs/Inner ref needs no ALIAS
+    // (its source is discoverable via resolvedReferences).
     assertEquals(
-        "REFERENCE TYPE Inner;\n"
-            + "REFERENCE TYPE Ref1 AS SYNONYM FOR 'ext.Outer';\n"
+        "ALIAS Ref1 FOR 'ext.Outer';\n"
             + "TYPE ROW(inner Inner, outer Ref1) NOT NULL;\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
@@ -219,15 +219,15 @@ class ExternalRefsRoundTripTest {
         lt.getExternalImports().get(subName));
 
     // DDL projects clean: Local is local (ROW declaration — backticked because
-    // "Local" is a reserved word), the synthesized names appear as
-    // REFERENCE TYPE.
+    // "Local" is a reserved word); the synthesized names appear as ALIAS
+    // statements carrying their URI bindings.
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
     assertTrue(
-        ddl.contains("REFERENCE TYPE " + wholeName + " AS SYNONYM FOR 'ext.Doc';"),
+        ddl.contains("ALIAS " + wholeName + " FOR 'ext.Doc';"),
         ddl);
     assertTrue(
-        ddl.contains("REFERENCE TYPE " + subName
-            + " AS SYNONYM FOR 'ext.Doc#/properties/foo/items';"),
+        ddl.contains("ALIAS " + subName
+            + " FOR 'ext.Doc#/properties/foo/items';"),
         ddl);
     assertTrue(ddl.contains("ROW `Local` ("), ddl);
 

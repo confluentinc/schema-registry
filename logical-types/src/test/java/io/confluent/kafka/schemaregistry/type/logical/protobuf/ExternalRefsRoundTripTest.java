@@ -90,12 +90,11 @@ class ExternalRefsRoundTripTest {
     assertTrue(lt.isExternal("com.example.M2"),
         "M2 should be flagged as external");
 
-    // Pin the DDL projection of the resulting LT — both externals surface as
-    // REFERENCE TYPE declarations and the file's package becomes a namespace.
+    // Pin the DDL projection of the resulting LT — bare externals have no
+    // syntactic marker (re-inferred from usage on read-back) and the file's
+    // package becomes a namespace.
     assertEquals(
         "NAMESPACE acme;\n"
-            + "REFERENCE TYPE com.example.M1;\n"
-            + "REFERENCE TYPE com.example.M2;\n"
             + "TYPE ROW(a com.example.M1, b com.example.M2) NOT NULL;\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
