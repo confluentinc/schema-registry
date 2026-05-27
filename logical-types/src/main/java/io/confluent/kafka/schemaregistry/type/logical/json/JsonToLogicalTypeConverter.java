@@ -35,6 +35,9 @@ import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.StringSchema;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -82,11 +85,20 @@ import static io.confluent.kafka.schemaregistry.type.logical.json.CommonConstant
 /**
  * Converts JSON Schema to logical type {@link Schema}.
  *
- * <p><b>Default-value path emission.</b> ARRAY contributes no index — descending into its element
- * type uses the parent path directly. All other container conventions follow
+ * <p><b>Default-value path emission.</b> ARRAY appends {@code [0]} for the element type
+ * (matching the Avro convention); MAP appends {@code [0]} for key and {@code [1]} for value;
+ * UNION appends the branch index; STRUCT appends the field position. See
  * {@link io.confluent.kafka.schemaregistry.type.logical.LogicalType#getDefaultValues()}.
  */
 public class JsonToLogicalTypeConverter {
+
+  private static final Logger LOG =
+      LoggerFactory.getLogger(JsonToLogicalTypeConverter.class);
+
+  /**
+   * JSON Schema {@code default} keyword.
+   */
+  private static final String DEFAULT_KEYWORD = "default";
 
   private static final int MAX_LENGTH = Integer.MAX_VALUE;
   private static final int DEFAULT_DECIMAL_PRECISION = 38;
@@ -101,7 +113,8 @@ public class JsonToLogicalTypeConverter {
     // Recover named types from $defs (entries are keyed by qualified name).
     recoverNamedTypesFromDefs(schema, ctx);
     final Schema logicalType =
-        convertWithCycleDetection(schema.rawSchema(), false, ctx);
+        convertWithCycleDetection(schema.rawSchema(), false, ctx,
+            Collections.emptyList());
     Object ns = schema.rawSchema().getUnprocessedProperties()
         .get("confluent:namespace");
     return new LogicalType(
@@ -112,7 +125,119 @@ public class JsonToLogicalTypeConverter {
         ctx.getExternalImports(),
         schema.references(),
         schema.resolvedReferences(),
-        Collections.emptyMap());
+        ctx.getDefaultValues());
+  }
+
+  private static List<Integer> appendToList(final List<Integer> list, final int value) {
+    List<Integer> result = new ArrayList<>(list);
+    result.add(value);
+    return result;
+  }
+
+  /**
+   * Capture the JSON Schema {@code default} keyword on an object property and
+   * record it in {@code ctx}'s path-keyed defaults map. Returns the converted
+   * default value for use as the LT {@code Field.defaultValue} (or null when
+   * no default applies).
+   *
+   * <p>Read order: {@code unprocessedProperties.get("default")} first (where
+   * SchemaLoader-loaded schemas put it — the loader consumes the keyword for
+   * its own ref-resolution pipeline), then the typed everit API (populated
+   * when the schema was constructed via the builder, e.g. by our V1 writer).
+   * Resolves {@link ReferenceSchema} chains first so a {@code default}
+   * declared on a {@code $ref}'d schema is reachable.
+   *
+   * <p>Skips null defaults to avoid the "no default vs default null"
+   * ambiguity (per Avro convention). everit represents JSON {@code null} as
+   * {@link JSONObject#NULL}, a non-null Java sentinel — treat it the same as
+   * Java null for the null-skip.
+   *
+   * <p>Converter failures (e.g. a non-ISO timestamp string for a TIMESTAMP
+   * field) are logged and the default is dropped — failing the whole schema
+   * walk would be a regression for in-the-wild schemas that previously had
+   * malformed {@code default} keywords silently ignored. The log line is
+   * deliberately structural (indexPath + type root + exception class) — no
+   * field name, no value, no message text, since any of those may carry
+   * customer data.
+   *
+   * <p>The path-keyed map drives downstream consumers (Flink shim,
+   * schema-evolution checker) that want unambiguous typed defaults. Multi-
+   * non-null UNION defaults are skipped from the path-keyed map — the value
+   * can't be tagged with a branch, so propagating it would mislead consumers.
+   * The returned {@link Field#getDefaultValue()} still carries it for DDL
+   * round-trip / V1 writer purposes.
+   */
+  private static Object captureDefaultValue(
+      final ToLogicalContext<String> ctx,
+      final org.everit.json.schema.Schema fieldSchema,
+      final Schema fieldType,
+      final List<Integer> fieldIndex) {
+    final org.everit.json.schema.Schema resolved = resolveReference(fieldSchema);
+    final Object rawDefault = extractDefault(resolved);
+    if (rawDefault == null || rawDefault == JSONObject.NULL) {
+      return null;
+    }
+    Object defaultValue;
+    try {
+      defaultValue = JsonDefaultValueConverter.toJavaData(fieldType, rawDefault);
+    } catch (RuntimeException e) {
+      LOG.warn(
+          "Skipping unconvertible JSON Schema default at field index path {} "
+              + "(target type: {}, exception: {})",
+          fieldIndex, fieldType.getType(), e.getClass().getSimpleName());
+      return null;
+    }
+    if (defaultValue == null) {
+      return null;
+    }
+    if (!isMultiNonNullUnion(fieldType)) {
+      ctx.putDefaultValue(fieldIndex, defaultValue);
+    }
+    return defaultValue;
+  }
+
+  private static Object extractDefault(final org.everit.json.schema.Schema schema) {
+    final Map<String, Object> unprocessed = schema.getUnprocessedProperties();
+    if (unprocessed != null && unprocessed.containsKey(DEFAULT_KEYWORD)) {
+      return unprocessed.get(DEFAULT_KEYWORD);
+    }
+    if (schema.hasDefaultValue()) {
+      return schema.getDefaultValue();
+    }
+    return null;
+  }
+
+  /**
+   * Unwrap chained {@link ReferenceSchema}s to reach the referred body. Used
+   * before reading the {@code default} keyword so that defaults declared on a
+   * {@code $ref}'d schema (rather than on the ref-using property itself) are
+   * not missed.
+   */
+  private static org.everit.json.schema.Schema resolveReference(
+      org.everit.json.schema.Schema schema) {
+    org.everit.json.schema.Schema current = schema;
+    while (current instanceof ReferenceSchema) {
+      org.everit.json.schema.Schema referred =
+          ((ReferenceSchema) current).getReferredSchema();
+      if (referred == null) {
+        return current;
+      }
+      current = referred;
+    }
+    return current;
+  }
+
+  /**
+   * True iff {@code type} is a UNION with more than one (necessarily non-null)
+   * branch. The singleton-collapse path in {@code convertCombinedSchema}
+   * collapses single-branch oneOfs to the branch type, so any UNION that
+   * survives that path carries ≥ 2 non-null branches — and is ambiguous for
+   * a property-level default value.
+   */
+  private static boolean isMultiNonNullUnion(Schema type) {
+    return type != null
+        && type.getType() == Schema.Type.UNION
+        && type.getBranches().size() > 1;
   }
 
   /**
@@ -193,21 +318,26 @@ public class JsonToLogicalTypeConverter {
             if (referredSchema != null) {
               ctx.putNamedType(entry.getKey(),
                   Schema.createStruct(new ArrayList<>()));
-              Schema body = convertWithCycleDetection(referredSchema, false, ctx);
+              // Named-type body walks start with an empty indexPath; defaults
+              // inside named types aren't part of the root schema's positional
+              // path-keyed map.
+              Schema body = convertWithCycleDetection(
+                  referredSchema, false, ctx, Collections.emptyList());
               ctx.putNamedType(entry.getKey(), body);
             }
           }
           continue;
         }
       }
-      Schema converted = convertWithCycleDetection(defSchema, false, ctx);
+      Schema converted = convertWithCycleDetection(
+          defSchema, false, ctx, Collections.emptyList());
       ctx.putNamedType(entry.getKey(), converted);
     }
   }
 
   private static Schema convertWithCycleDetection(
       final org.everit.json.schema.Schema schema, boolean isNullable,
-      ToLogicalContext<String> ctx) {
+      ToLogicalContext<String> ctx, final List<Integer> indexPath) {
     if (schema instanceof ReferenceSchema) {
       ReferenceSchema refSchema = (ReferenceSchema) schema;
       // Prefer NAMED_TYPE_REF emission via convert() — every $ref from our
@@ -215,27 +345,27 @@ public class JsonToLogicalTypeConverter {
       // extracts the name as the addressable identifier without recursing
       // into the referred body.
       if (refSchema.getReferenceValue() != null) {
-        return convert(schema, isNullable, ctx);
+        return convert(schema, isNullable, ctx, indexPath);
       }
       // Defensive fallback for unusual inputs (e.g. an in-memory ReferenceSchema
       // with no refValue set): follow the referred body with cycle detection.
       org.everit.json.schema.Schema referredSchema = refSchema.getReferredSchema();
       if (referredSchema == null) {
-        return convert(schema, isNullable, ctx);
+        return convert(schema, isNullable, ctx, indexPath);
       }
       if (!ctx.addSeenSchema(referredSchema.toString())) {
         throw new ValidationException(ctx.getCyclicSchemaErrorMessage());
       }
-      final Schema result = convert(referredSchema, isNullable, ctx);
+      final Schema result = convert(referredSchema, isNullable, ctx, indexPath);
       ctx.removeSeenSchema(referredSchema.toString());
       return result;
     }
-    return convert(schema, isNullable, ctx);
+    return convert(schema, isNullable, ctx, indexPath);
   }
 
   private static Schema convert(
       final org.everit.json.schema.Schema schema, boolean isNullable,
-      ToLogicalContext<String> ctx) {
+      ToLogicalContext<String> ctx, final List<Integer> indexPath) {
     final String title = schema.getTitle();
 
     if (schema instanceof BooleanSchema) {
@@ -276,13 +406,13 @@ public class JsonToLogicalTypeConverter {
       return result;
     } else if (schema instanceof CombinedSchema) {
       return convertCombinedSchema(
-          (CombinedSchema) schema, isNullable, ctx);
+          (CombinedSchema) schema, isNullable, ctx, indexPath);
     } else if (schema instanceof ArraySchema) {
       return convertArraySchema(
-          (ArraySchema) schema, isNullable, ctx);
+          (ArraySchema) schema, isNullable, ctx, indexPath);
     } else if (schema instanceof ObjectSchema) {
       return convertObjectSchema(
-          (ObjectSchema) schema, isNullable, ctx);
+          (ObjectSchema) schema, isNullable, ctx, indexPath);
     } else if (schema instanceof EmptySchema) {
       return Schema.create(Schema.Type.VARIANT).setNullable(isNullable);
     } else if (schema instanceof ReferenceSchema) {
@@ -308,8 +438,12 @@ public class JsonToLogicalTypeConverter {
         boolean wasKnown = ctx.hasNamedType(typeName);
         if (!wasKnown && refSchema.getReferredSchema() != null) {
           ctx.putNamedType(typeName, Schema.createStruct(new ArrayList<>()));
+          // Named-type body walks start with an empty indexPath; defaults
+          // inside named types aren't part of the root schema's positional
+          // path-keyed map.
           Schema body = convertWithCycleDetection(
-              refSchema.getReferredSchema(), false, ctx);
+              refSchema.getReferredSchema(), false, ctx,
+              Collections.emptyList());
           ctx.putNamedType(typeName, body);
         }
         // Mark as external only on first-time-seen canonical cross-doc refs.
@@ -329,7 +463,7 @@ public class JsonToLogicalTypeConverter {
             "Unresolved $ref with no reference value");
       }
       return convertWithCycleDetection(
-          refSchema.getReferredSchema(), isNullable, ctx);
+          refSchema.getReferredSchema(), isNullable, ctx, indexPath);
     } else {
       throw new ValidationException(
           "Unsupported JSON schema type " + schema.getClass().getName());
@@ -433,12 +567,13 @@ public class JsonToLogicalTypeConverter {
   }
 
   private static Schema convertCombinedSchema(
-      CombinedSchema combinedSchema, boolean isNullable, ToLogicalContext<String> ctx) {
+      CombinedSchema combinedSchema, boolean isNullable, ToLogicalContext<String> ctx,
+      final List<Integer> indexPath) {
     CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
     if (criterion == CombinedSchema.ALL_CRITERION) {
       return convertWithCycleDetection(
           CombinedSchemaUtils.simplifyAllOfSchema(combinedSchema), isNullable,
-          ctx);
+          ctx, indexPath);
     } else if (criterion != CombinedSchema.ONE_CRITERION
         && criterion != CombinedSchema.ANY_CRITERION) {
       throw new ValidationException("Unsupported criterion " + criterion);
@@ -460,7 +595,7 @@ public class JsonToLogicalTypeConverter {
     }
     if (nonNullSubschemas.size() == 1) {
       return convertWithCycleDetection(
-          nonNullSubschemas.get(0), isNullable || hasNullMember, ctx);
+          nonNullSubschemas.get(0), isNullable || hasNullMember, ctx, indexPath);
     }
 
     // Proper union: oneOf/anyOf with multiple non-null types
@@ -489,7 +624,8 @@ public class JsonToLogicalTypeConverter {
         @SuppressWarnings("unchecked")
         Map<String, Object> branchParams = hint != null
             ? (Map<String, Object>) hint.get("params") : null;
-        Schema branchType = convertWithCycleDetection(subSchema, true, ctx);
+        Schema branchType = convertWithCycleDetection(
+            subSchema, true, ctx, appendToList(indexPath, index));
         branches.add(new UnionBranch(branchName, branchType, branchDoc, branchParams));
         index++;
       }
@@ -498,7 +634,8 @@ public class JsonToLogicalTypeConverter {
   }
 
   private static Schema convertArraySchema(
-      ArraySchema arraySchema, boolean isNullable, ToLogicalContext<String> ctx) {
+      ArraySchema arraySchema, boolean isNullable, ToLogicalContext<String> ctx,
+      final List<Integer> indexPath) {
     org.everit.json.schema.Schema allItemSchema = arraySchema.getAllItemSchema();
     if (allItemSchema == null) {
       if (arraySchema.getItemSchemas() != null) {
@@ -513,34 +650,43 @@ public class JsonToLogicalTypeConverter {
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           arraySchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
+      // MAP: key at appendToList(indexPath, 0), value at appendToList(indexPath, 1).
       final Schema keyType = convertWithCycleDetection(
           objectSchema.getPropertySchemas().get(KEY_FIELD), false,
-          ctx);
+          ctx, appendToList(indexPath, 0));
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getPropertySchemas().get(VALUE_FIELD), false,
-          ctx);
+          ctx, appendToList(indexPath, 1));
       return createMapLikeType(isNullable, keyType, valueType, isMultiset);
     } else {
+      // ARRAY appends [0] for the element type, matching upstream Flink's
+      // JSON convention (Avro-style). Proto's ARRAY adds no index, which is
+      // why a single LT doc can carry both — the writers each pick the path
+      // shape their own consumers expect.
       return Schema.createArray(
-          convertWithCycleDetection(allItemSchema, false, ctx))
+          convertWithCycleDetection(
+              allItemSchema, false, ctx, appendToList(indexPath, 0)))
           .setNullable(isNullable);
     }
   }
 
   private static Schema convertObjectSchema(
-      ObjectSchema objectSchema, boolean isNullable, ToLogicalContext<String> ctx) {
+      ObjectSchema objectSchema, boolean isNullable, ToLogicalContext<String> ctx,
+      final List<Integer> indexPath) {
     String type = (String) objectSchema.getUnprocessedProperties().get(CONNECT_TYPE_PROP);
     if (CONNECT_TYPE_MAP.equals(type)) {
       final boolean isMultiset = Objects.equals(
           FLINK_TYPE_MULTISET,
           objectSchema.getUnprocessedProperties().get(FLINK_TYPE_PROP));
+      // MAP value at appendToList(indexPath, 1); key type read from
+      // unprocessedProperties (no schema body to walk for default capture).
       final Schema valueType = convertWithCycleDetection(
           objectSchema.getSchemaOfAdditionalProperties(), false,
-          ctx);
+          ctx, appendToList(indexPath, 1));
       final Schema keyType = readMapKeyType(objectSchema);
       return createMapLikeType(isNullable, keyType, valueType, isMultiset);
     } else {
-      return convertRowType(isNullable, ctx, objectSchema);
+      return convertRowType(isNullable, ctx, objectSchema, indexPath);
     }
   }
 
@@ -558,7 +704,8 @@ public class JsonToLogicalTypeConverter {
   }
 
   private static Schema convertRowType(
-      boolean isNullable, ToLogicalContext<String> ctx, ObjectSchema objectSchema) {
+      boolean isNullable, ToLogicalContext<String> ctx, ObjectSchema objectSchema,
+      final List<Integer> indexPath) {
     Map<String, org.everit.json.schema.Schema> properties = objectSchema.getPropertySchemas();
     final Comparator<Entry<String, org.everit.json.schema.Schema>> indexComparator =
         Comparator.comparing(
@@ -579,23 +726,19 @@ public class JsonToLogicalTypeConverter {
       boolean isFieldNullable =
           !objectSchema.getRequiredProperties().contains(subFieldName);
       ctx.pushFieldPath(subFieldName);
+      final List<Integer> fieldIndex = appendToList(indexPath, pos);
       final Schema fieldType;
       try {
-        fieldType = convertWithCycleDetection(subSchema, isFieldNullable, ctx);
+        fieldType = convertWithCycleDetection(subSchema, isFieldNullable, ctx, fieldIndex);
       } finally {
         ctx.popFieldPath();
       }
+      Object defaultValue = captureDefaultValue(ctx, subSchema, fieldType, fieldIndex);
+      boolean hasDefault = defaultValue != null;
       List<String> fieldTags = readFieldTags(subSchema);
       Map<String, Object> fieldParams = readFieldParams(subSchema);
       List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
           readRules(subSchema);
-      Object defaultValue = null;
-      boolean hasDefault = false;
-      if (subSchema.hasDefaultValue()) {
-        defaultValue = JsonDefaultValueConverter.toJavaData(
-            fieldType, subSchema.getDefaultValue());
-        hasDefault = true;
-      }
       fields.add(new Field(subFieldName, fieldType, pos++,
           defaultValue, hasDefault, subSchema.getDescription(),
           fieldTags, fieldParams, fieldRules));
