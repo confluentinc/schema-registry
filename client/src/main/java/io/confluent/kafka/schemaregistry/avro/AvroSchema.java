@@ -245,12 +245,20 @@ public class AvroSchema implements ParsedSchema {
     AvroSchema schemaCopy = this.copy();
     JsonNode original;
     try {
-      original = jsonMapper.readTree(schemaCopy.canonicalString());
+      // Resolve tag paths against the fully expanded schema JSON
+      String schemaJson = schemaCopy.schemaObj != null
+          ? schemaCopy.schemaObj.toString()
+          : schemaCopy.canonicalString();
+      original = jsonMapper.readTree(schemaJson);
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
     modifySchemaTags(original, tagsToAdd, tagsToRemove, addBeforeRemove);
-    return new AvroSchema(original.toString(),
+    // Re-parse without pre-loading resolvedReferences, since the expanded JSON already
+    // inlines them; pre-loading would conflict with the inlined definitions.
+    Schema newSchemaObj = schemaCopy.getParser().parse(original.toString());
+    return new AvroSchema(newSchemaObj,
+      null,
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),

@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity.EntityType;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -184,6 +185,44 @@ public abstract class RestApiRegisterSchemaTagsTest {
     schemaString = restApp.restClient.getId(RestService.DEFAULT_REQUEST_PROPERTIES,
         expectedSchemaId(5), subject, ImmutableSet.of("TAG1", "TAG2"), false);
     assertEquals(expectedSchemaTags, schemaString.getSchemaTags());
+  }
+
+  @Test
+  public void testRegisterSchemaTagsWithReferences() throws Exception {
+    // Register the referenced sub-record schema.
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    String referenceSubject = "my_reference";
+    TestUtils.registerAndVerifySchema(
+        restApp.restClient, schemas.get(0), expectedSchemaId(1), referenceSubject);
+
+    // Register the parent schema that references the sub-record (v1 of the parent subject).
+    SchemaReference ref = new SchemaReference("otherns.Subrecord", referenceSubject, 1);
+    RegisterSchemaRequest initialRequest = new RegisterSchemaRequest();
+    initialRequest.setSchema(schemas.get(1));
+    initialRequest.setReferences(Collections.singletonList(ref));
+    String parentSubject = "my_referrer";
+    RegisterSchemaResponse initialResponse = restApp.restClient
+        .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, initialRequest, parentSubject, false);
+    assertEquals(expectedSchemaId(2), initialResponse.getId());
+
+    // POST v2 of the parent subject with both schemaTagsToAdd AND references populated.
+    // The tag targets a field inside the referenced sub-record, whose record node is
+    // collapsed to a bare FQN in the parent's canonical form. AvroSchema.copy resolves
+    // tag paths against that canonical form, so findMatchingEntity's BFS fails with
+    // "No matching path 'otherns.Subrecord.field2' found in the schema".
+    RegisterSchemaRequest tagSchemaRequest = new RegisterSchemaRequest();
+    tagSchemaRequest.setSchema(schemas.get(1));
+    tagSchemaRequest.setReferences(Collections.singletonList(ref));
+    tagSchemaRequest.setVersion(2);
+    List<SchemaTags> schemaTags = Collections.singletonList(
+        new SchemaTags(
+            new SchemaEntity("otherns.Subrecord.field2", SchemaEntity.EntityType.SR_FIELD),
+            Collections.singletonList("TAG1")));
+    tagSchemaRequest.setSchemaTagsToAdd(schemaTags);
+
+    RegisterSchemaResponse responses = restApp.restClient
+        .registerSchema(RestService.DEFAULT_REQUEST_PROPERTIES, tagSchemaRequest, parentSubject, false);
+    assertEquals(expectedSchemaId(3), responses.getId());
   }
 
   @Test
