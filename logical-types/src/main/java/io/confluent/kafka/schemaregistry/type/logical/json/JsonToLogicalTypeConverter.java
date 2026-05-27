@@ -52,7 +52,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static io.confluent.kafka.schemaregistry.type.logical.json.CommonConstants.CONNECT_INDEX_PROP;
 import static io.confluent.kafka.schemaregistry.type.logical.json.CommonConstants.CONNECT_PARAMETERS;
@@ -128,10 +127,10 @@ public class JsonToLogicalTypeConverter {
         ctx.getDefaultValues());
   }
 
-  private static List<Integer> appendToList(final List<Integer> list, final int value) {
-    List<Integer> result = new ArrayList<>(list);
-    result.add(value);
-    return result;
+  private static <V> List<V> appendToList(final List<V> list, final V value) {
+    final List<V> newList = new ArrayList<>(list);
+    newList.add(value);
+    return newList;
   }
 
   /**
@@ -177,23 +176,23 @@ public class JsonToLogicalTypeConverter {
     if (rawDefault == null || rawDefault == JSONObject.NULL) {
       return null;
     }
-    Object defaultValue;
     try {
-      defaultValue = JsonDefaultValueConverter.toJavaData(fieldType, rawDefault);
+      final Object defaultValue =
+          JsonDefaultValueConverter.toJavaData(fieldType, rawDefault);
+      if (defaultValue == null) {
+        return null;
+      }
+      if (!isMultiNonNullUnion(fieldType)) {
+        ctx.putDefaultValue(fieldIndex, defaultValue);
+      }
+      return defaultValue;
     } catch (RuntimeException e) {
       LOG.warn(
           "Skipping unconvertible JSON Schema default at field index path {} "
-              + "(target type: {}, exception: {})",
+              + "(target type root: {}, exception: {})",
           fieldIndex, fieldType.getType(), e.getClass().getSimpleName());
       return null;
     }
-    if (defaultValue == null) {
-      return null;
-    }
-    if (!isMultiNonNullUnion(fieldType)) {
-      ctx.putDefaultValue(fieldIndex, defaultValue);
-    }
-    return defaultValue;
   }
 
   private static Object extractDefault(final org.everit.json.schema.Schema schema) {
@@ -715,31 +714,33 @@ public class JsonToLogicalTypeConverter {
               return index != null ? (Integer) index : null;
             },
             Comparator.nullsLast(Comparator.comparing(Function.identity())));
-    final Stream<Entry<String, org.everit.json.schema.Schema>> sortedFields =
-        properties.entrySet().stream().sorted(indexComparator.thenComparing(Entry::getKey));
-    final List<Field> fields = new ArrayList<>();
-    int pos = 0;
-    for (Entry<String, org.everit.json.schema.Schema> property :
-        sortedFields.collect(Collectors.toList())) {
-      String subFieldName = property.getKey();
-      org.everit.json.schema.Schema subSchema = property.getValue();
-      boolean isFieldNullable =
+    final List<Entry<String, org.everit.json.schema.Schema>> sortedFields =
+        properties.entrySet().stream()
+            .sorted(indexComparator.thenComparing(Entry::getKey))
+            .collect(Collectors.toList());
+    final List<Field> fields = new ArrayList<>(sortedFields.size());
+    int fieldPos = 0;
+    for (Entry<String, org.everit.json.schema.Schema> property : sortedFields) {
+      final String subFieldName = property.getKey();
+      final org.everit.json.schema.Schema subSchema = property.getValue();
+      final boolean isFieldNullable =
           !objectSchema.getRequiredProperties().contains(subFieldName);
-      ctx.pushFieldPath(subFieldName);
+      final int pos = fieldPos++;
       final List<Integer> fieldIndex = appendToList(indexPath, pos);
+      ctx.pushFieldPath(subFieldName);
       final Schema fieldType;
       try {
         fieldType = convertWithCycleDetection(subSchema, isFieldNullable, ctx, fieldIndex);
       } finally {
         ctx.popFieldPath();
       }
-      Object defaultValue = captureDefaultValue(ctx, subSchema, fieldType, fieldIndex);
-      boolean hasDefault = defaultValue != null;
-      List<String> fieldTags = readFieldTags(subSchema);
-      Map<String, Object> fieldParams = readFieldParams(subSchema);
-      List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
+      final Object defaultValue = captureDefaultValue(ctx, subSchema, fieldType, fieldIndex);
+      final boolean hasDefault = defaultValue != null;
+      final List<String> fieldTags = readFieldTags(subSchema);
+      final Map<String, Object> fieldParams = readFieldParams(subSchema);
+      final List<io.confluent.kafka.schemaregistry.type.logical.Rule> fieldRules =
           readRules(subSchema);
-      fields.add(new Field(subFieldName, fieldType, pos++,
+      fields.add(new Field(subFieldName, fieldType, pos,
           defaultValue, hasDefault, subSchema.getDescription(),
           fieldTags, fieldParams, fieldRules));
     }

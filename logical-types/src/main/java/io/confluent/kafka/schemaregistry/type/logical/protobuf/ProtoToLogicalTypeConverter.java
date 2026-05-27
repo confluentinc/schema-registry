@@ -452,9 +452,9 @@ public class ProtoToLogicalTypeConverter {
   }
 
   private static List<Integer> appendToList(final List<Integer> list, final int value) {
-    List<Integer> result = new ArrayList<>(list);
-    result.add(value);
-    return result;
+    final List<Integer> newList = new ArrayList<>(list);
+    newList.add(value);
+    return newList;
   }
 
   private static Schema toLogicalTypeOneof(
@@ -506,12 +506,18 @@ public class ProtoToLogicalTypeConverter {
       // LT-specific and intentionally not mirrored — Flink's converter
       // doesn't read it.
       ctx.putDefaultValue(indexPath, defaultValue);
-    } else if (!hasDefault) {
+    } else if (!hasDefault && !isInsideMapEntry(field)) {
       // proto3 implicit scalar default: 0 / 0L / 0.0f / 0.0 / false / "" /
       // empty bytes / first-declared enum value. Recorded in the path-keyed
       // map ONLY (not on the Field's defaultValue) — the implicit default is
       // a wire-level proto-spec rule, not an explicit user declaration, so
       // DDL roundtrip stays clean.
+      //
+      // The {@code isInsideMapEntry} guard is LT-specific: our walker recurses
+      // into synthetic MapEntry structs (via toLogicalTypeNested from
+      // toMapSchema), unlike Flink's converter which reads key/value types
+      // directly. Skip entry-struct sub-fields so their implicit defaults
+      // don't surface as spurious entries below the map's own indexPath.
       final Object implicitDefault = synthesizeProto3ImplicitScalarDefault(field);
       if (implicitDefault != null) {
         ctx.putDefaultValue(indexPath, implicitDefault);
@@ -969,10 +975,10 @@ public class ProtoToLogicalTypeConverter {
                 schema, ctx, false, indexPath))
             .setNullable(isNullableType);
       }
-      // Proto spec: an absent repeated field is an empty list. Record that
-      // as the implicit default at this field's indexPath so downstream
-      // consumers (schema-evolution checker, Flink shim) can treat
-      // adding-a-repeated as safe.
+      // Proto spec: an absent repeated field is an empty list. Record that as
+      // the implicit default so downstream consumers (e.g. Tableflow
+      // schema-evolution compat checks) can treat "adding a new repeated
+      // field" as safe.
       ctx.putDefaultValue(indexPath, Collections.emptyList());
       return arraySchema;
     }
@@ -1081,10 +1087,10 @@ public class ProtoToLogicalTypeConverter {
                 m.getParamsOrDefault(CommonConstants.FLINK_TYPE_PROP, null)))
             .orElse(false);
 
-    // Proto spec: an absent map is an empty map. Record as the implicit
-    // default at this field's indexPath. Applies to MULTISET too — Flink's
-    // MULTISET<T> is a Map<T,Integer> under the hood, so emptyMap() is the
-    // matching empty value.
+    // Proto spec: an absent map field (including the multiset encoding, which
+    // is built on top of a proto map) is an empty map. Record that as the
+    // implicit default so downstream consumers (e.g. Tableflow schema-evolution
+    // compat checks) can treat "adding a new map field" as safe.
     ctx.putDefaultValue(indexPath, Collections.emptyMap());
 
     if (isMultiset) {
@@ -1106,14 +1112,6 @@ public class ProtoToLogicalTypeConverter {
    * synthesis belongs to the repeated/map code path in
    * {@link #convertRepeated}/{@link #toMapSchema}.
    *
-   * <p>LT-specific carve-out: the LT walker recurses into synthetic MapEntry
-   * structs (via {@link #toLogicalTypeNested} from {@link #toMapSchema}),
-   * unlike Flink's converter which reads key/value types directly. Skip
-   * entry-struct sub-fields so their implicit defaults don't surface as
-   * spurious entries below the map's own indexPath. Both native map entries
-   * (parent option {@code map_entry}) and Flink-MULTISET-style user-defined
-   * entries (matched structurally by {@link #isMapEntryShape}) are covered.
-   *
    * <p>Note: despite the misleading name,
    * {@link FieldDescriptor#getDefaultValue()} returns the type-correct zero
    * for implicit-presence scalars even when
@@ -1129,10 +1127,6 @@ public class ProtoToLogicalTypeConverter {
     if (field.isRepeated() || field.hasPresence()) {
       return null;
     }
-    Descriptor parent = field.getContainingType();
-    if (parent != null && (parent.getOptions().getMapEntry() || isMapEntryShape(parent))) {
-      return null;
-    }
     // MESSAGE/GROUP always have presence and should have been filtered by the
     // guard above; if that ever changes, fail loudly rather than silently
     // swallowing the default because FieldDescriptor#getDefaultValue() throws
@@ -1146,6 +1140,25 @@ public class ProtoToLogicalTypeConverter {
       default:
         return field.getDefaultValue();
     }
+  }
+
+  /**
+   * LT-specific guard for {@link #synthesizeProto3ImplicitScalarDefault}: skip
+   * sub-fields of synthetic MapEntry structs. The LT walker recurses into the
+   * entry struct (via {@link #toLogicalTypeNested} from {@link #toMapSchema}),
+   * unlike Flink's converter which reads key/value types directly. Without
+   * this guard, the entry's {@code key}/{@code value} fields would get
+   * implicit defaults that surface as spurious entries below the map's own
+   * indexPath. Both native map entries (parent option {@code map_entry}) and
+   * Flink-MULTISET-style user-defined entries (matched structurally by
+   * {@link #isMapEntryShape}) are covered.
+   */
+  private static boolean isInsideMapEntry(final FieldDescriptor field) {
+    Descriptor parent = field.getContainingType();
+    if (parent == null) {
+      return false;
+    }
+    return parent.getOptions().getMapEntry() || isMapEntryShape(parent);
   }
 
   /**
