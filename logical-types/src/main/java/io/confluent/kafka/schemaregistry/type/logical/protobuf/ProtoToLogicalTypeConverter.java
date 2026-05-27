@@ -125,10 +125,12 @@ public class ProtoToLogicalTypeConverter {
       throw new ValidationException(
           "Protobuf file has no top-level messages");
     }
-    // Convention: the first top-level message is the root. All other top-level
-    // messages and all top-level enums are local named types (corresponding to
-    // ROW/ENUM declarations). Anonymous structs synthesized for inline
-    // anonymous types remain nested inside their parent message.
+    // Convention: the descriptor stored in {@code schema} is the root (callers
+    // that pass {@code new ProtobufSchema(specificMessage)} can pick any top-
+    // level message). All other top-level messages and all top-level enums are
+    // local named types (corresponding to ROW/ENUM declarations). Anonymous
+    // structs synthesized for inline anonymous types remain nested inside
+    // their parent message.
     // Pre-register every named-type peer (full name) so field-side conversion
     // can recognize them via ctx.hasNamedType when their typeName is
     // referenced. Each entry gets a placeholder; the body is filled in below.
@@ -139,7 +141,7 @@ public class ProtoToLogicalTypeConverter {
     // bodies are built we either keep the root as a NAMED_TYPE_REF (recursive
     // case) or unwrap it back to a STRUCT (non-recursive case — preserves
     // existing behavior for callers that probe getRootSchema().getField).
-    Descriptor rootMessage = messageTypes.get(0);
+    Descriptor rootMessage = rootDescriptor;
     for (Descriptor msg : messageTypes) {
       ctx.putNamedType(msg.getFullName(),
           Schema.createStruct(new ArrayList<>()));
@@ -160,9 +162,13 @@ public class ProtoToLogicalTypeConverter {
     Schema rootBody = toLogicalTypeNested(
         false, rootMessage, ctx, Collections.emptyList());
     ctx.putNamedType(rootFqn, rootBody);
-    // Build peer bodies (replacing placeholders).
-    for (int i = 1; i < messageTypes.size(); i++) {
-      Descriptor peer = messageTypes.get(i);
+    // Build peer bodies (replacing placeholders). Iterate every top-level
+    // message and skip whichever one is the root (which may or may not be at
+    // file index 0, depending on which descriptor the caller passed).
+    for (Descriptor peer : messageTypes) {
+      if (peer == rootMessage) {
+        continue;
+      }
       ctx.putNamedType(peer.getFullName(),
           toLogicalTypeNested(false, peer, ctx,
               Collections.singletonList(peer.getIndex())));
@@ -418,32 +424,24 @@ public class ProtoToLogicalTypeConverter {
       final Descriptor schema,
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
-    List<OneofDescriptor> oneOfDescriptors = schema.getRealOneofs();
+    // Walk regular fields first, then oneofs, so each field's indexPath matches its
+    // position in the resulting struct. Downstream consumers rely on the
+    // regulars-then-oneofs layout, so we align path numbering to it rather than
+    // reordering the fields.
     final List<Field> fields = new ArrayList<>();
-    final List<Field> oneOfFields = new ArrayList<>();
     int index = 0;
-
-    // Convert oneofs to UNION types
-    for (OneofDescriptor oneOfDescriptor : oneOfDescriptors) {
+    for (FieldDescriptor fieldDescriptor : schema.getFields()) {
+      if (fieldDescriptor.getRealContainingOneof() != null) {
+        continue;
+      }
+      fields.add(toField(ctx, fieldDescriptor, appendToList(indexPath, index++)));
+    }
+    for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
       Schema unionSchema = toLogicalTypeOneof(
           oneOfDescriptor, ctx, appendToList(indexPath, index));
-      oneOfFields.add(new Field(oneOfDescriptor.getName(), unionSchema, index,
+      fields.add(new Field(oneOfDescriptor.getName(), unionSchema, index++,
           null, false, null, null, null));
-      index++;
     }
-
-    // Convert regular fields
-    List<FieldDescriptor> fieldDescriptors = schema.getFields();
-    for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-      OneofDescriptor oneOfDescriptor = fieldDescriptor.getRealContainingOneof();
-      if (oneOfDescriptor != null) {
-        continue; // Already handled as oneof
-      }
-      fields.add(toField(ctx, fieldDescriptor,
-          appendToList(indexPath, index)));
-      index++;
-    }
-    fields.addAll(oneOfFields);
     Schema structSchema = Schema.createStruct(fields).setNullable(isNullable);
     // Read message-level doc/tags/params from MessageOptions
     if (schema.getOptions().hasExtension(MetaProto.messageMeta)) {
@@ -508,6 +506,16 @@ public class ProtoToLogicalTypeConverter {
       // LT-specific and intentionally not mirrored — Flink's converter
       // doesn't read it.
       ctx.putDefaultValue(indexPath, defaultValue);
+    } else if (!hasDefault) {
+      // proto3 implicit scalar default: 0 / 0L / 0.0f / 0.0 / false / "" /
+      // empty bytes / first-declared enum value. Recorded in the path-keyed
+      // map ONLY (not on the Field's defaultValue) — the implicit default is
+      // a wire-level proto-spec rule, not an explicit user declaration, so
+      // DDL roundtrip stays clean.
+      final Object implicitDefault = synthesizeProto3ImplicitScalarDefault(field);
+      if (implicitDefault != null) {
+        ctx.putDefaultValue(indexPath, implicitDefault);
+      }
     }
     List<String> fieldTags = getFieldTags(field);
     Map<String, Object> fieldParams = getFieldParams(field);
@@ -945,6 +953,7 @@ public class ProtoToLogicalTypeConverter {
               .flatMap(getParam(CommonConstants.FLINK_WRAPPER))
               .map(Boolean::parseBoolean)
               .orElse(false);
+      final Schema arraySchema;
       if (isArrayElementWrapped) {
         // The wrapper is a single-payload struct: either a regular field named
         // "value" (RepeatedWrapper), or a oneof named "value" (OneofWrapper for
@@ -954,12 +963,18 @@ public class ProtoToLogicalTypeConverter {
         // paths aligned with the returned schema's structure.
         Schema elementSchema = convertWrapperPayload(
             schema.getMessageType(), ctx, indexPath);
-        return Schema.createArray(elementSchema).setNullable(isNullableType);
+        arraySchema = Schema.createArray(elementSchema).setNullable(isNullableType);
       } else {
-        return Schema.createArray(convertNonRepeated(
+        arraySchema = Schema.createArray(convertNonRepeated(
                 schema, ctx, false, indexPath))
             .setNullable(isNullableType);
       }
+      // Proto spec: an absent repeated field is an empty list. Record that
+      // as the implicit default at this field's indexPath so downstream
+      // consumers (schema-evolution checker, Flink shim) can treat
+      // adding-a-repeated as safe.
+      ctx.putDefaultValue(indexPath, Collections.emptyList());
+      return arraySchema;
     }
   }
 
@@ -1066,6 +1081,12 @@ public class ProtoToLogicalTypeConverter {
                 m.getParamsOrDefault(CommonConstants.FLINK_TYPE_PROP, null)))
             .orElse(false);
 
+    // Proto spec: an absent map is an empty map. Record as the implicit
+    // default at this field's indexPath. Applies to MULTISET too — Flink's
+    // MULTISET<T> is a Map<T,Integer> under the hood, so emptyMap() is the
+    // matching empty value.
+    ctx.putDefaultValue(indexPath, Collections.emptyMap());
+
     if (isMultiset) {
       if (valueType.getType() != Schema.Type.INT) {
         throw new ValidationException(
@@ -1077,33 +1098,104 @@ public class ProtoToLogicalTypeConverter {
     }
   }
 
+  /**
+   * The {@link FieldDescriptor#hasPresence()} gate is what makes this correct:
+   * fields with presence semantics (proto2 singular, proto3 {@code optional},
+   * oneof members, MESSAGE/GROUP) map "absent" to {@code null} not to an
+   * implicit scalar zero. Repeated and map fields are skipped — their
+   * synthesis belongs to the repeated/map code path in
+   * {@link #convertRepeated}/{@link #toMapSchema}.
+   *
+   * <p>LT-specific carve-out: the LT walker recurses into synthetic MapEntry
+   * structs (via {@link #toLogicalTypeNested} from {@link #toMapSchema}),
+   * unlike Flink's converter which reads key/value types directly. Skip
+   * entry-struct sub-fields so their implicit defaults don't surface as
+   * spurious entries below the map's own indexPath. Both native map entries
+   * (parent option {@code map_entry}) and Flink-MULTISET-style user-defined
+   * entries (matched structurally by {@link #isMapEntryShape}) are covered.
+   *
+   * <p>Note: despite the misleading name,
+   * {@link FieldDescriptor#getDefaultValue()} returns the type-correct zero
+   * for implicit-presence scalars even when
+   * {@link FieldDescriptor#hasDefaultValue()} is {@code false}. Only
+   * MESSAGE/GROUP throw {@link UnsupportedOperationException} from it, and
+   * the {@code hasPresence()} guard already excludes those — the explicit
+   * throw below is a defensive boundary check.
+   *
+   * @return the synthesized default, or {@code null} if no default should be
+   *     recorded
+   */
+  private static Object synthesizeProto3ImplicitScalarDefault(final FieldDescriptor field) {
+    if (field.isRepeated() || field.hasPresence()) {
+      return null;
+    }
+    Descriptor parent = field.getContainingType();
+    if (parent != null && (parent.getOptions().getMapEntry() || isMapEntryShape(parent))) {
+      return null;
+    }
+    // MESSAGE/GROUP always have presence and should have been filtered by the
+    // guard above; if that ever changes, fail loudly rather than silently
+    // swallowing the default because FieldDescriptor#getDefaultValue() throws
+    // UnsupportedOperationException for them.
+    switch (field.getType()) {
+      case MESSAGE:
+      case GROUP:
+        throw new IllegalStateException(
+            "MESSAGE/GROUP fields should have been filtered by the hasPresence() guard; "
+                + "got " + field.getType() + " for field " + field.getFullName());
+      default:
+        return field.getDefaultValue();
+    }
+  }
+
+  /**
+   * Structural map-entry detection: the descriptor's name ends with
+   * {@code Entry} and it has exactly two logical entities, named {@code key}
+   * (regular field or oneof) and {@code value} (regular field). A oneof
+   * counts as one entity (a UNION) so a {@code MULTISET&lt;UNION&lt;...&gt;&gt;}
+   * entry — where {@code key} is a oneof — still matches.
+   *
+   * <p>Two callers depend on this gate:
+   * <ul>
+   *   <li>{@link #isMapDescriptor}, which is the routing gate for
+   *       {@link #toMapSchema}.</li>
+   *   <li>{@link #synthesizeProto3ImplicitScalarDefault}, which uses it to
+   *       exclude entry-struct sub-fields from implicit-default synthesis —
+   *       every descriptor walked as a map entry must also be excluded
+   *       there. Sharing this helper keeps the two checks in lock-step.</li>
+   * </ul>
+   */
+  private static boolean isMapEntryShape(final Descriptor descriptor) {
+    if (!descriptor.getName().endsWith(CommonConstants.MAP_ENTRY_SUFFIX)) {
+      return false;
+    }
+    int regularFieldCount = 0;
+    boolean hasKeyRegular = false;
+    boolean hasValueRegular = false;
+    for (FieldDescriptor f : descriptor.getFields()) {
+      if (f.getRealContainingOneof() != null) {
+        continue;
+      }
+      regularFieldCount++;
+      if (CommonConstants.KEY_FIELD.equals(f.getName())) {
+        hasKeyRegular = true;
+      } else if (CommonConstants.VALUE_FIELD.equals(f.getName())) {
+        hasValueRegular = true;
+      }
+    }
+    List<com.google.protobuf.Descriptors.OneofDescriptor> oneofs = descriptor.getRealOneofs();
+    if (regularFieldCount + oneofs.size() != 2) {
+      return false;
+    }
+    boolean hasKeyOneof = oneofs.stream()
+        .anyMatch(o -> CommonConstants.KEY_FIELD.equals(o.getName()));
+    return (hasKeyRegular || hasKeyOneof) && hasValueRegular;
+  }
+
   private static boolean isMapDescriptor(final FieldDescriptor fieldDescriptor) {
     if (fieldDescriptor.getType() != Type.MESSAGE) {
       return false;
     }
-    Descriptor descriptor = fieldDescriptor.getMessageType();
-    if (!descriptor.getName().endsWith(CommonConstants.MAP_ENTRY_SUFFIX)) {
-      return false;
-    }
-    // Count "logical entities": each oneof counts as one entity (a UNION),
-    // each non-oneof field counts as one. A map-entry wrapper has exactly two
-    // entities — "key" and "value" — even when "key" is a UNION (oneof).
-    List<FieldDescriptor> regularFields = new ArrayList<>();
-    for (FieldDescriptor f : descriptor.getFields()) {
-      if (f.getRealContainingOneof() == null) {
-        regularFields.add(f);
-      }
-    }
-    List<com.google.protobuf.Descriptors.OneofDescriptor> oneofs = descriptor.getRealOneofs();
-    if (regularFields.size() + oneofs.size() != 2) {
-      return false;
-    }
-    boolean hasKey = oneofs.stream()
-        .anyMatch(o -> o.getName().equals(CommonConstants.KEY_FIELD))
-        || regularFields.stream()
-            .anyMatch(f -> f.getName().equals(CommonConstants.KEY_FIELD));
-    boolean hasValue = regularFields.stream()
-        .anyMatch(f -> f.getName().equals(CommonConstants.VALUE_FIELD));
-    return hasKey && hasValue;
+    return isMapEntryShape(fieldDescriptor.getMessageType());
   }
 }

@@ -476,8 +476,8 @@ public class LogicalType {
    * STRUCT {
    *   arr: ARRAY&lt;STRUCT { value: STRUCT { a: INT (default 17), b: INT (default 18) } }&gt;
    * }
-   *   → Proto/JSON: { [0, 0, 0] = 17, [0, 0, 1] = 18 }      // ARRAY adds no index
-   *   → Avro:       { [0, 0, 0, 0] = 17, [0, 0, 0, 1] = 18 } // ARRAY adds [0]
+   *   → Proto:      { [0, 0, 0] = 17, [0, 0, 1] = 18 }      // ARRAY adds no index
+   *   → Avro/JSON:  { [0, 0, 0, 0] = 17, [0, 0, 0, 1] = 18 } // ARRAY adds [0]
    *
    * STRUCT {
    *   wrappedMap: MAP&lt;BIGINT, BIGINT&gt; (proto-wrapped, key default 15, value default 16)
