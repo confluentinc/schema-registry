@@ -93,7 +93,13 @@ public final class JsonDefaultValueConverter {
     }
   }
 
-  /** Decode a JSON-schema default value back into a typed Java value. */
+  /**
+   * Decode a JSON-schema default value back into a typed Java value. Returns
+   * {@code null} when the value's JSON type doesn't match the LT type — the
+   * caller (the schema reader's default-capture path) treats a null return as
+   * "drop this default" rather than failing the whole schema walk. This keeps
+   * in-the-wild schemas with malformed defaults parseable.
+   */
   public static Object toJavaData(final Schema type, final Object value) {
     if (value == null) {
       return null;
@@ -188,7 +194,9 @@ public final class JsonDefaultValueConverter {
         throw new ValidationException(
             "Default values are not supported for type: " + type.getType());
     }
-    return value;
+    // Type mismatch: the value's Java type didn't match any branch above for
+    // the requested LT type. Return null so the caller drops this default.
+    return null;
   }
 
   /** Convenience: encode and produce a string suitable for ISO timestamp etc. */

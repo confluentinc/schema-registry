@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -52,6 +53,10 @@ class ProtoReaderDefaultsTest {
     // index — the wrapper is invisible in the returned schema, so its
     // pseudo-field index would be unreachable. ARRAY contributes no index
     // either; descending into the element type uses the parent path directly.
+    //
+    // Empty-collection defaults: per proto spec, an absent map is empty map
+    // and an absent repeated is empty list — recorded as implicit defaults at
+    // the field's own indexPath.
     assertThat(lt.getDefaultValues()).containsOnly(
         Map.entry(List.of(0), 1),
         Map.entry(List.of(1), 2),
@@ -65,14 +70,16 @@ class ProtoReaderDefaultsTest {
         Map.entry(List.of(9), 10.0),
         Map.entry(List.of(10), 11.0f),
         Map.entry(List.of(11), 12.0f),
-        // nullableMap (wrapped MAP) → key/value
+        // nullableMap (wrapped MAP) → empty-map default + key/value
+        Map.entry(List.of(12), Collections.emptyMap()),
         Map.entry(List.of(12, 0), 15L),
         Map.entry(List.of(12, 1), 16L),
         // nested → value (record) → a/b
         Map.entry(List.of(13, 0, 0), 17L),
         Map.entry(List.of(13, 0, 1), 18L),
-        // arr (repeated record) → element doesn't extend path →
-        // value (record field at pos 0) → a/b
+        // arr (repeated record) → empty-list default at the array, then
+        // element doesn't extend path → value (record field at pos 0) → a/b
+        Map.entry(List.of(14), Collections.emptyList()),
         Map.entry(List.of(14, 0, 0), 17L),
         Map.entry(List.of(14, 0, 1), 18L));
   }
