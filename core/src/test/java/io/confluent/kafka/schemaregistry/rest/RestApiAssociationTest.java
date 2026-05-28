@@ -3066,12 +3066,6 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
   @Test
   public void testHardDeleteSchemaVersionAllowedWhenAssociationExists() throws Exception {
-    // The version-level hard delete used to throw AssociationForSubjectExistsException
-    // whenever any association referenced the subject. That guard was redundant: a hard
-    // delete requires the version to already be soft-deleted, and the soft-delete path
-    // enforces that at least one active version remains on an associated subject. So a
-    // hard delete cannot violate the "associated subject has >=1 active version"
-    // invariant, and is now permitted.
     String subject1 = "subject1";
     String resourceName = "topic1";
     String resourceNamespace = "default";
