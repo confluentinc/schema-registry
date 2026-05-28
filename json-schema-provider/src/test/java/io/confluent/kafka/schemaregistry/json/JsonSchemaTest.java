@@ -39,6 +39,7 @@ import com.google.common.collect.ImmutableSet;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
@@ -611,6 +612,193 @@ public class JsonSchemaTest {
     Optional<ParsedSchema> parsedSchema = jsonSchemaProvider.parseSchema(invalidSchemaString,
             new ArrayList<>(), false, false);
     assertFalse(parsedSchema.isPresent());
+  }
+
+  @Test
+  public void testParseSchemaRejectsExternalRef() {
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    String[] externalRefs = {
+        "https://example.com/foo.json",
+        "http://internal.corp/bar.json",
+        "file:///etc/passwd",
+        "urn:my:thing",
+    };
+    for (String ref : externalRefs) {
+      String schemaString = "{\"$ref\": \"" + ref + "\"}";
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+              new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+              true, false));
+      assertTrue(e.getMessage(),
+          e.getMessage().contains("External JSON Schema references are not allowed"));
+      assertTrue(e.getMessage(), e.getMessage().contains(ref));
+    }
+  }
+
+  @Test
+  public void testParseSchemaRejectsNestedExternalRef() {
+    String schemaString = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"foo\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"items\": { \"$ref\": \"https://evil.example/x.json\" }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+            new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+            true, false));
+    assertTrue(e.getMessage(), e.getMessage().contains("https://evil.example/x.json"));
+  }
+
+  @Test
+  public void testParseSchemaRejectsUnknownJsonSchemaOrgUri() {
+    String schemaString = "{\"$ref\": \"https://json-schema.org/some/other/path\"}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+            new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+            true, false));
+    assertTrue(e.getMessage(),
+        e.getMessage().contains("https://json-schema.org/some/other/path"));
+  }
+
+  @Test
+  public void testParseSchemaSkipsExternalRefCheckOnReadPath() {
+    // The disallow check is registration-only (isNew=true). Read/compatibility/cache-load
+    // paths pass isNew=false and must still parse already-stored schemas that may contain
+    // external refs (which the egress allowlist permitted historically).
+    String schemaString = "{\"$ref\": \"https://example.com/foo.json\"}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+        false, false);
+    assertNotNull(parsedSchema);
+  }
+
+  @Test
+  public void testParseSchemaRejectsExternalDynamicRef() {
+    String rootLevel = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"$dynamicRef\": \"https://attacker.example/x\"\n"
+        + "}";
+    String nested = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"x\": { \"$dynamicRef\": \"https://attacker.example/x\" }\n"
+        + "  }\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    for (String schemaString : new String[] {rootLevel, nested}) {
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+              new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+              true, false));
+      assertTrue(e.getMessage(), e.getMessage().contains("https://attacker.example/x"));
+    }
+  }
+
+  @Test
+  public void testParseSchemaRejectsExternalRecursiveRef() {
+    String schemaString = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"$recursiveRef\": \"https://attacker.example/x\"\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+            new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+            true, false));
+    assertTrue(e.getMessage(), e.getMessage().contains("https://attacker.example/x"));
+  }
+
+  @Test
+  public void testParseSchemaAllowsLocalPointerRef() {
+    String schemaString = "{\n"
+        + "  \"$defs\": { \"Foo\": { \"type\": \"string\" } },\n"
+        + "  \"$ref\": \"#/$defs/Foo\"\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+        true, false);
+    assertNotNull(parsedSchema);
+  }
+
+  @Test
+  public void testParseSchemaAllowsMetaSchemaRef() {
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    String[] metaSchemaRefs = {
+        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft-07/schema",
+        "https://json-schema.org/draft/2020-12/schema",
+    };
+    for (String ref : metaSchemaRefs) {
+      String schemaString = "{\"$ref\": \"" + ref + "\"}";
+      ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+          new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+          true, false);
+      assertNotNull(parsedSchema);
+    }
+  }
+
+  @Test
+  public void testParseSchemaAllowsSelfIdRef() {
+    String schemaString = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"$id\": \"task.schema.json\",\n"
+        + "  \"type\": [\"null\", \"object\"],\n"
+        + "  \"properties\": {\n"
+        + "    \"parent\": { \"$ref\": \"task.schema.json\" }\n"
+        + "  }\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+        true, false);
+    assertNotNull(parsedSchema);
+  }
+
+  @Test
+  public void testParseSchemaAllowsRelativeRegisteredRef() {
+    String parent = "{\n"
+        + "  \"$id\": \"acme.webhooks.checkout-application_updated.jsonschema.json\",\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"application\": {\n"
+        + "      \"$ref\": \"./checkout.common.webhooks.jsonschema.json#/components/schemas/Application\"\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    String child = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"components\": { \"schemas\": { \"Application\": { \"type\": \"object\" } } }\n"
+        + "}";
+    SchemaVersionFetcher fetcher = new SchemaVersionFetcher() {
+      @Override
+      public String tenant() {
+        return null;
+      }
+      @Override
+      public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
+        return new Schema(subject, version, 1, JsonSchema.TYPE,
+            Collections.emptyList(), child);
+      }
+    };
+    JsonSchemaProvider provider = new JsonSchemaProvider();
+    provider.configure(Collections.singletonMap(
+        SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, fetcher));
+    SchemaReference ref = new SchemaReference(
+        "checkout.common.webhooks.jsonschema.json", "ref-subject", 1);
+    ParsedSchema parsedSchema = provider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, Collections.singletonList(ref), parent),
+        true, false);
+    assertNotNull(parsedSchema);
   }
 
   @Test
