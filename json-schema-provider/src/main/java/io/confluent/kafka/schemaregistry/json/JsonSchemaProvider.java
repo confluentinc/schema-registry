@@ -35,8 +35,11 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
   private static final Set<String> META_SCHEMA_URIS = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           "http://json-schema.org/draft-04/schema",
+          "https://json-schema.org/draft-04/schema",
           "http://json-schema.org/draft-06/schema",
+          "https://json-schema.org/draft-06/schema",
           "http://json-schema.org/draft-07/schema",
+          "https://json-schema.org/draft-07/schema",
           "http://json-schema.org/draft/2019-09/schema",
           "https://json-schema.org/draft/2019-09/schema",
           "https://json-schema.org/draft/2019-09/meta/core",
@@ -66,7 +69,9 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
               schema.getRuleSet(),
               null
       );
-      rejectExternalRefs(parsed.toJsonNode(), resolvedReferences.keySet());
+      if (isNew) {
+        rejectExternalRefs(parsed.toJsonNode(), resolvedReferences.keySet());
+      }
       return parsed;
     } catch (Exception e) {
       log.error("Could not parse JSON schema", e);

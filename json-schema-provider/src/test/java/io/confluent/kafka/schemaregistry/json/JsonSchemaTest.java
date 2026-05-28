@@ -628,7 +628,7 @@ public class JsonSchemaTest {
       IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
           () -> jsonSchemaProvider.parseSchemaOrElseThrow(
               new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
-              false, false));
+              true, false));
       assertTrue(e.getMessage(),
           e.getMessage().contains("External JSON Schema references are not allowed"));
       assertTrue(e.getMessage(), e.getMessage().contains(ref));
@@ -650,7 +650,7 @@ public class JsonSchemaTest {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
         () -> jsonSchemaProvider.parseSchemaOrElseThrow(
             new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
-            false, false));
+            true, false));
     assertTrue(e.getMessage(), e.getMessage().contains("https://evil.example/x.json"));
   }
 
@@ -661,9 +661,22 @@ public class JsonSchemaTest {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
         () -> jsonSchemaProvider.parseSchemaOrElseThrow(
             new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
-            false, false));
+            true, false));
     assertTrue(e.getMessage(),
         e.getMessage().contains("https://json-schema.org/some/other/path"));
+  }
+
+  @Test
+  public void testParseSchemaSkipsExternalRefCheckOnReadPath() {
+    // The disallow check is registration-only (isNew=true). Read/compatibility/cache-load
+    // paths pass isNew=false and must still parse already-stored schemas that contain
+    // external refs (which the egress allowlist may have permitted historically).
+    String schemaString = "{\"$ref\": \"https://example.com/foo.json\"}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
+        new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+        false, false);
+    assertNotNull(parsedSchema);
   }
 
   @Test
@@ -675,7 +688,7 @@ public class JsonSchemaTest {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
         new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
-        false, false);
+        true, false);
     assertNotNull(parsedSchema);
   }
 
@@ -684,13 +697,14 @@ public class JsonSchemaTest {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     String[] metaSchemaRefs = {
         "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft-07/schema",
         "https://json-schema.org/draft/2020-12/schema",
     };
     for (String ref : metaSchemaRefs) {
       String schemaString = "{\"$ref\": \"" + ref + "\"}";
       ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
           new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
-          false, false);
+          true, false);
       assertNotNull(parsedSchema);
     }
   }
@@ -708,7 +722,7 @@ public class JsonSchemaTest {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
         new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
-        false, false);
+        true, false);
     assertNotNull(parsedSchema);
   }
 
