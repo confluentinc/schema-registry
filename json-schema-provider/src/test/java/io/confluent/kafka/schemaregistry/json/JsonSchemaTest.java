@@ -669,14 +669,51 @@ public class JsonSchemaTest {
   @Test
   public void testParseSchemaSkipsExternalRefCheckOnReadPath() {
     // The disallow check is registration-only (isNew=true). Read/compatibility/cache-load
-    // paths pass isNew=false and must still parse already-stored schemas that contain
-    // external refs (which the egress allowlist may have permitted historically).
+    // paths pass isNew=false and must still parse already-stored schemas that may contain
+    // external refs (which the egress allowlist permitted historically).
     String schemaString = "{\"$ref\": \"https://example.com/foo.json\"}";
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
         new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
         false, false);
     assertNotNull(parsedSchema);
+  }
+
+  @Test
+  public void testParseSchemaRejectsExternalDynamicRef() {
+    String rootLevel = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"$dynamicRef\": \"https://attacker.example/x\"\n"
+        + "}";
+    String nested = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"x\": { \"$dynamicRef\": \"https://attacker.example/x\" }\n"
+        + "  }\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    for (String schemaString : new String[] {rootLevel, nested}) {
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+              new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+              true, false));
+      assertTrue(e.getMessage(), e.getMessage().contains("https://attacker.example/x"));
+    }
+  }
+
+  @Test
+  public void testParseSchemaRejectsExternalRecursiveRef() {
+    String schemaString = "{\n"
+        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
+        + "  \"$recursiveRef\": \"https://attacker.example/x\"\n"
+        + "}";
+    SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> jsonSchemaProvider.parseSchemaOrElseThrow(
+            new Schema(null, null, null, JsonSchema.TYPE, new ArrayList<>(), schemaString),
+            true, false));
+    assertTrue(e.getMessage(), e.getMessage().contains("https://attacker.example/x"));
   }
 
   @Test

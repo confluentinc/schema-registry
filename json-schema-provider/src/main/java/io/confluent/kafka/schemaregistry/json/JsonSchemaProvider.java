@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -31,6 +32,9 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 public class JsonSchemaProvider extends AbstractSchemaProvider {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchemaProvider.class);
+
+  private static final List<String> REF_KEYWORDS =
+      Arrays.asList("$ref", "$dynamicRef", "$recursiveRef");
 
   private static final Set<String> META_SCHEMA_URIS = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
@@ -98,18 +102,20 @@ public class JsonSchemaProvider extends AbstractSchemaProvider {
 
   private static void scanRefs(JsonNode node, Set<String> allowed) {
     if (node.isObject()) {
-      JsonNode ref = node.get("$ref");
-      if (ref != null && ref.isTextual()) {
-        String value = ref.asText();
-        if (!value.isEmpty() && !value.startsWith("#")) {
-          int hash = value.indexOf('#');
-          String base = hash < 0 ? value : value.substring(0, hash);
-          if (base.startsWith("./")) {
-            base = base.substring(2);
-          }
-          if (!allowed.contains(base) && !META_SCHEMA_URIS.contains(base)) {
-            throw new IllegalArgumentException(
-                "External JSON Schema references are not allowed: " + value);
+      for (String keyword : REF_KEYWORDS) {
+        JsonNode ref = node.get(keyword);
+        if (ref != null && ref.isTextual()) {
+          String value = ref.asText();
+          if (!value.isEmpty() && !value.startsWith("#")) {
+            int hash = value.indexOf('#');
+            String base = hash < 0 ? value : value.substring(0, hash);
+            if (base.startsWith("./")) {
+              base = base.substring(2);
+            }
+            if (!allowed.contains(base) && !META_SCHEMA_URIS.contains(base)) {
+              throw new IllegalArgumentException(
+                  "External JSON Schema references are not allowed: " + value);
+            }
           }
         }
       }
