@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
@@ -3061,6 +3062,70 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertThrows(Exception.class, () ->
         restApp.restClient.createAssociation(
             RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  @Test
+  public void testHardDeleteSchemaVersionAllowedWhenAssociationExists() throws Exception {
+    // The version-level hard delete used to throw AssociationForSubjectExistsException
+    // whenever any association referenced the subject. That guard was redundant: a hard
+    // delete requires the version to already be soft-deleted, and the soft-delete path
+    // enforces that at least one active version remains on an associated subject. So a
+    // hard delete cannot violate the "associated subject has >=1 active version"
+    // invariant, and is now permitted.
+    String subject1 = "subject1";
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "hard-delete-with-assoc-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    // Allow incompatible second version so we have two versions to work with.
+    restApp.restClient.updateCompatibility(CompatibilityLevel.NONE.name, subject1);
+    restApp.restClient.registerSchema(allSchemas.get(0), subject1);
+    restApp.restClient.registerSchema(allSchemas.get(1), subject1);
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                subject1,
+                "key",
+                LifecyclePolicy.WEAK,
+                false,
+                null,
+                null
+            )
+        )
+    );
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+
+    // Soft delete v1 — still allowed because v2 remains active.
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "1", false);
+
+    // Hard delete v1 — previously rejected with AssociationForSubjectExistsException,
+    // now permitted since the version is already soft-deleted and v2 is still active.
+    int hardDeleted = restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "1", true);
+    assertEquals(1, hardDeleted);
+
+    // Subject still has an active version and the association is intact.
+    List<Integer> activeVersions = restApp.restClient.getAllVersions(subject1);
+    assertEquals(ImmutableList.of(2), activeVersions);
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.singletonList("key"), null, 0, -1);
+    assertEquals(1, associations.size());
+
+    // The soft-delete guard on the last remaining active version is still in force —
+    // this is what keeps the "associated subject has >=1 active version" invariant safe
+    // and makes the hard-delete relaxation above sound.
+    assertThrows(Exception.class, () ->
+        restApp.restClient.deleteSchemaVersion(
+            RestService.DEFAULT_REQUEST_PROPERTIES, subject1, "2", false));
   }
 
   @Test

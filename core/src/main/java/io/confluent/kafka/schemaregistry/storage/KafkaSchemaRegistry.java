@@ -690,23 +690,19 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
       List<Association> assocsBySubject = getAssociationsBySubject(
           subject, null, Collections.emptyList(), null);
-      if (!assocsBySubject.isEmpty()) {
-        if (permanentDelete) {
-          throw new AssociationForSubjectExistsException(subject);
-        } else {
-          boolean hasActive = false;
-          Iterator<SchemaKey> allVersions = getAllVersions(subject, LookupFilter.DEFAULT);
-          while (allVersions.hasNext()) {
-            SchemaKey key = allVersions.next();
-            // Check if there will still be an active version after the deletion
-            if (key.getVersion() != schema.getVersion()) {
-              hasActive = true;
-              break;
-            }
+      if (!assocsBySubject.isEmpty() && !permanentDelete) {
+        boolean hasActive = false;
+        Iterator<SchemaKey> allVersions = getAllVersions(subject, LookupFilter.DEFAULT);
+        while (allVersions.hasNext()) {
+          SchemaKey key = allVersions.next();
+          // Check if there will still be an active version after the deletion
+          if (key.getVersion() != schema.getVersion()) {
+            hasActive = true;
+            break;
           }
-          if (!hasActive) {
-            throw new NoActiveSubjectVersionExistsException(subject);
-          }
+        }
+        if (!hasActive) {
+          throw new NoActiveSubjectVersionExistsException(subject);
         }
       }
 
