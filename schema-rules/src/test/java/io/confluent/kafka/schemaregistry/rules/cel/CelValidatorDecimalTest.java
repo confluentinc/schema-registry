@@ -225,6 +225,81 @@ public class CelValidatorDecimalTest {
         "expected canonical 'decimals.div: division by zero' in cause chain; got: " + chain);
   }
 
+  @Test
+  void decimalSqrt_exactRoot() {
+    // sqrt(144) == 12. Verifies decimals.sqrt returns a Decimal that compares
+    // equal (compareTo, so trailing-zero scale differences don't matter).
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.eq(decimals.sqrt(decimal(this)),"
+        + "                                 decimal(\\\"12\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "144"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
+  void decimalSqrt_irrationalRoot_38DigitPrecision() {
+    // sqrt(2) is non-terminating; MathContext(38, HALF_UP) gives 38 significant
+    // digits. Round to 10 dp and compare against the known prefix.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.eq(decimals.round(decimals.sqrt(decimal(this)), 10),"
+        + "                                 decimal(\\\"1.4142135624\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "2"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
+  void decimalSqrt_negative_throwsCanonicalMessage() {
+    // BigDecimal.sqrt throws a bare ArithmeticException on a negative input;
+    // our binding re-emits the canonical "decimals.sqrt: square root of
+    // negative number" message. Locks in the user-visible cause.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.ge(decimals.sqrt(decimal(this)),"
+        + "                                 decimal(\\\"0\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "-4"))
+        .build();
+    List<ValidationRuleError> errors = schema.validateMessage(new CelValidator(), msg);
+    assertEquals(1, errors.size());
+    String chain = causeChainMessages(errors.get(0).getCause());
+    assertTrue(chain.contains("decimals.sqrt: square root of negative number"),
+        "expected canonical 'decimals.sqrt: square root of negative number' in cause chain; "
+            + "got: " + chain);
+  }
+
   private static String causeChainMessages(Throwable t) {
     StringBuilder sb = new StringBuilder();
     while (t != null) {
