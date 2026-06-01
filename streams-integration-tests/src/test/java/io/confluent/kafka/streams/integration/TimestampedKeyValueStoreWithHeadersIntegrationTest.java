@@ -1102,8 +1102,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
         // Strip schema-id headers from the incoming record's headers before performing tombstone-producing
         // store ops, so the changelog tombstone is written without a stale value schema id.
-        // We mutate the record's headers in place — acceptable here because no downstream operator reads
-        // these headers after this processor; if that ever changes, copy with new RecordHeaders(...).
+        // We mutate the record's headers in place here.
         private void handlePutNull(Record<GenericRecord, GenericRecord> record) {
             record.headers().remove(SchemaId.KEY_SCHEMA_ID_HEADER);
             record.headers().remove(SchemaId.VALUE_SCHEMA_ID_HEADER);
