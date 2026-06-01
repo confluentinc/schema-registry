@@ -187,6 +187,102 @@
       ]
     },
     {
+      "type": "com.sun.crypto.provider.RSACipher",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHKeyAgreement",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHKeyFactory",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHKeyPairGenerator",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHParameterGenerator",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECKeyFactory",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECKeyPairGenerator",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDHKeyAgreement",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$Raw",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA1",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA224",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA256",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA384",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA512",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA256inP1363Format",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA384inP1363Format",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA512inP1363Format",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyFactory$X25519",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyFactory$X448",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyPairGenerator$X25519",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyPairGenerator$X448",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyAgreement$X25519",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyAgreement$X448",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ssl.KeyManagerFactoryImpl$PKIX",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
       "type": "com.sun.crypto.provider.AESKeyGenerator",
       "methods": [
         {

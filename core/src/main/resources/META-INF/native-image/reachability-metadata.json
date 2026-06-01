@@ -1,6 +1,9 @@
 {
   "reflection": [
     {
+      "type": "android.app.Application"
+    },
+    {
       "type": "boolean"
     },
     {
@@ -184,6 +187,111 @@
       ]
     },
     {
+      "type": "com.sun.crypto.provider.RSACipher",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHKeyAgreement",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHKeyFactory",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHKeyPairGenerator",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.DHParameterGenerator",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECKeyFactory",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECKeyPairGenerator",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDHKeyAgreement",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$Raw",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA1",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA224",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA256",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA384",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA512",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA256inP1363Format",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA384inP1363Format",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.ECDSASignature$SHA512inP1363Format",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyFactory$X25519",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyFactory$X448",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyPairGenerator$X25519",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyPairGenerator$X448",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyAgreement$X25519",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ec.XDHKeyAgreement$X448",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "sun.security.ssl.KeyManagerFactoryImpl$PKIX",
+      "methods": [{ "name": "<init>", "parameterTypes": [] }]
+    },
+    {
+      "type": "com.sun.crypto.provider.AESKeyGenerator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "com.sun.crypto.provider.ARCFOURCipher",
       "methods": [
         {
@@ -220,7 +328,61 @@
       ]
     },
     {
+      "type": "com.sun.crypto.provider.DHParameters",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "com.sun.crypto.provider.GaloisCounterMode$AESGCM",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.HKDFKeyDerivation$HKDFSHA384",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": ["javax.crypto.KDFParameters"]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.HmacCore$HmacSHA384",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.TlsKeyMaterialGenerator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.TlsMasterSecretGenerator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.TlsPrfGenerator$V12",
       "methods": [
         {
           "name": "<init>",
@@ -345,6 +507,59 @@
       "type": "io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet"
     },
     {
+      "type": "io.confluent.kafka.schemaregistry.client.rest.entities.Schema",
+      "methods": [
+        {
+          "name": "getDeleted",
+          "parameterTypes": []
+        },
+        {
+          "name": "getGuid",
+          "parameterTypes": []
+        },
+        {
+          "name": "getId",
+          "parameterTypes": []
+        },
+        {
+          "name": "getMetadata",
+          "parameterTypes": []
+        },
+        {
+          "name": "getReferences",
+          "parameterTypes": []
+        },
+        {
+          "name": "getRuleSet",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSchema",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSchemaTags",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSchemaType",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "getTimestamp",
+          "parameterTypes": []
+        },
+        {
+          "name": "getVersion",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity"
     },
     {
@@ -365,9 +580,11 @@
         },
         {
           "name": "setSchema",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
+          "parameterTypes": ["java.lang.String"]
+        },
+        {
+          "name": "setSchemaType",
+          "parameterTypes": ["java.lang.String"]
         }
       ]
     },
@@ -462,9 +679,7 @@
       "methods": [
         {
           "name": "main",
-          "parameterTypes": [
-            "java.lang.String[]"
-          ]
+          "parameterTypes": ["java.lang.String[]"]
         }
       ]
     },
@@ -490,7 +705,21 @@
       "type": "io.confluent.kafka.schemaregistry.rest.jmx.RequestHeaderHandlerMBean"
     },
     {
-      "type": "io.confluent.kafka.schemaregistry.rest.resources.AssociationsResource"
+      "type": "io.confluent.kafka.schemaregistry.rest.resources.AssociationsResource",
+      "methods": [
+        {
+          "name": "getAssociationsByResourceName",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.util.List",
+            "io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy",
+            "int",
+            "int"
+          ]
+        }
+      ]
     },
     {
       "type": "io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource"
@@ -511,7 +740,13 @@
       "type": "io.confluent.kafka.schemaregistry.rest.resources.RootResource"
     },
     {
-      "type": "io.confluent.kafka.schemaregistry.rest.resources.SchemasResource"
+      "type": "io.confluent.kafka.schemaregistry.rest.resources.SchemasResource",
+      "methods": [
+        {
+          "name": "getSchemaTypes",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "io.confluent.kafka.schemaregistry.rest.resources.ServerMetadataResource"
@@ -533,7 +768,20 @@
       ]
     },
     {
-      "type": "io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource"
+      "type": "io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource",
+      "methods": [
+        {
+          "name": "lookUpSchemaUnderSubject",
+          "parameterTypes": [
+            "jakarta.ws.rs.container.AsyncResponse",
+            "java.lang.String",
+            "boolean",
+            "java.lang.String",
+            "boolean",
+            "io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest"
+          ]
+        }
+      ]
     },
     {
       "type": "io.confluent.kafka.schemaregistry.storage.ExecutionEnvironment"
@@ -567,10 +815,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "int"
-          ]
+          "parameterTypes": ["java.lang.String", "int"]
         },
         {
           "name": "getVersion",
@@ -619,15 +864,11 @@
         },
         {
           "name": "setLeader",
-          "parameterTypes": [
-            "java.lang.Boolean"
-          ]
+          "parameterTypes": ["java.lang.Boolean"]
         },
         {
           "name": "setVersion",
-          "parameterTypes": [
-            "java.lang.Integer"
-          ]
+          "parameterTypes": ["java.lang.Integer"]
         }
       ]
     },
@@ -650,9 +891,7 @@
         },
         {
           "name": "setMagicByte",
-          "parameterTypes": [
-            "int"
-          ]
+          "parameterTypes": ["int"]
         }
       ]
     },
@@ -754,6 +993,9 @@
     },
     {
       "type": "io.confluent.rest.ApplicationServer"
+    },
+    {
+      "type": "io.confluent.rest.alpn.server.BouncyCastleServerALPNProcessor"
     },
     {
       "type": "io.confluent.rest.annotations.PerformanceMetric"
@@ -891,6 +1133,9 @@
       "type": "jakarta.ws.rs.POST"
     },
     {
+      "type": "jakarta.ws.rs.PUT"
+    },
+    {
       "type": "jakarta.ws.rs.Path"
     },
     {
@@ -961,15 +1206,11 @@
       "methods": [
         {
           "name": "getBoolean",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
+          "parameterTypes": ["java.lang.String"]
         },
         {
           "name": "valueOf",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
+          "parameterTypes": ["java.lang.String"]
         }
       ]
     },
@@ -1036,9 +1277,7 @@
       "methods": [
         {
           "name": "valueOf",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
+          "parameterTypes": ["java.lang.String"]
         }
       ]
     },
@@ -1087,9 +1326,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
+          "parameterTypes": ["java.lang.String"]
         }
       ]
     },
@@ -1263,9 +1500,7 @@
       "methods": [
         {
           "name": "doPrivileged",
-          "parameterTypes": [
-            "java.security.PrivilegedAction"
-          ]
+          "parameterTypes": ["java.security.PrivilegedAction"]
         }
       ]
     },
@@ -1274,6 +1509,18 @@
     },
     {
       "type": "java.security.KeyStoreSpi"
+    },
+    {
+      "type": "java.security.MessageDigestSpi"
+    },
+    {
+      "type": "java.security.interfaces.RSAPrivateKey"
+    },
+    {
+      "type": "java.security.interfaces.RSAPublicKey"
+    },
+    {
+      "type": "java.security.spec.ECParameterSpec"
     },
     {
       "type": "java.sql.Date"
@@ -1285,14 +1532,18 @@
       "type": "java.sql.Timestamp"
     },
     {
+      "type": "java.util.AbstractCollection"
+    },
+    {
+      "type": "java.util.AbstractSet"
+    },
+    {
       "type": "java.util.Arrays",
       "jniAccessible": true,
       "methods": [
         {
           "name": "asList",
-          "parameterTypes": [
-            "java.lang.Object[]"
-          ]
+          "parameterTypes": ["java.lang.Object[]"]
         }
       ]
     },
@@ -1315,6 +1566,9 @@
       "type": "java.util.EventListener"
     },
     {
+      "type": "java.util.HashMap$KeySet"
+    },
+    {
       "type": "java.util.HashSet",
       "methods": [
         {
@@ -1333,6 +1587,9 @@
       "type": "java.util.SequencedCollection"
     },
     {
+      "type": "java.util.Set"
+    },
+    {
       "type": "java.util.concurrent.CopyOnWriteArrayList"
     },
     {
@@ -1343,9 +1600,7 @@
       "methods": [
         {
           "name": "newThreadPerTaskExecutor",
-          "parameterTypes": [
-            "java.util.concurrent.ThreadFactory"
-          ]
+          "parameterTypes": ["java.util.concurrent.ThreadFactory"]
         }
       ]
     },
@@ -1427,9 +1682,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.rmi.server.RemoteRef"
-          ]
+          "parameterTypes": ["java.rmi.server.RemoteRef"]
         }
       ]
     },
@@ -1549,9 +1802,7 @@
         },
         {
           "name": "removeEmitWhenNonDefaultMetricSensor",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
+          "parameterTypes": ["java.lang.String"]
         }
       ]
     },
@@ -1975,9 +2226,7 @@
       "methods": [
         {
           "name": "createAppenders",
-          "parameterTypes": [
-            "org.apache.logging.log4j.core.Appender[]"
-          ]
+          "parameterTypes": ["org.apache.logging.log4j.core.Appender[]"]
         }
       ]
     },
@@ -2788,9 +3037,7 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": [
-            "java.lang.String[]"
-          ]
+          "parameterTypes": ["java.lang.String[]"]
         }
       ]
     },
@@ -2829,9 +3076,7 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": [
-            "java.lang.String[]"
-          ]
+          "parameterTypes": ["java.lang.String[]"]
         }
       ]
     },
@@ -2843,9 +3088,7 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": [
-            "java.lang.String[]"
-          ]
+          "parameterTypes": ["java.lang.String[]"]
         }
       ]
     },
@@ -2857,9 +3100,7 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": [
-            "java.lang.String[]"
-          ]
+          "parameterTypes": ["java.lang.String[]"]
         }
       ]
     },
@@ -2963,6 +3204,27 @@
       "type": "org.apache.logging.log4j.util.SystemPropertiesPropertySource"
     },
     {
+      "type": "org.conscrypt.NativeLibraryUtil",
+      "methods": [
+        {
+          "name": "loadLibrary",
+          "parameterTypes": ["java.lang.String", "boolean"]
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.alpn.conscrypt.server.ConscryptServerALPNProcessor"
+    },
+    {
+      "type": "org.eclipse.jetty.alpn.java.server.JDK9ServerALPNProcessor"
+    },
+    {
+      "type": "org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory"
+    },
+    {
+      "type": "org.eclipse.jetty.alpn.server.jmx.ALPNServerConnectionFactoryMBean"
+    },
+    {
       "type": "org.eclipse.jetty.ee10.servlet.BaseHolder"
     },
     {
@@ -3024,9 +3286,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3035,9 +3295,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3064,9 +3322,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3090,9 +3346,7 @@
       "methods": [
         {
           "name": "filterReturnType",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3253,6 +3507,12 @@
       "type": "org.eclipse.jetty.server.ConnectionFactory"
     },
     {
+      "type": "org.eclipse.jetty.server.ConnectionFactory$Configuring"
+    },
+    {
+      "type": "org.eclipse.jetty.server.ConnectionFactory$Detecting"
+    },
+    {
       "type": "org.eclipse.jetty.server.ConnectionFactory$Upgrading"
     },
     {
@@ -3290,10 +3550,7 @@
         },
         {
           "name": "logLiteral",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.StringBuilder"
-          ]
+          "parameterTypes": ["java.lang.String", "java.lang.StringBuilder"]
         },
         {
           "name": "logNothing",
@@ -3390,6 +3647,9 @@
       "type": "org.eclipse.jetty.server.NegotiatingServerConnection$CipherDiscriminator"
     },
     {
+      "type": "org.eclipse.jetty.server.NegotiatingServerConnectionFactory"
+    },
+    {
       "type": "org.eclipse.jetty.server.NetworkConnector"
     },
     {
@@ -3415,6 +3675,9 @@
     },
     {
       "type": "org.eclipse.jetty.server.Slf4jRequestLogWriter"
+    },
+    {
+      "type": "org.eclipse.jetty.server.SslConnectionFactory"
     },
     {
       "type": "org.eclipse.jetty.server.SymlinkAllowedResourceAliasChecker"
@@ -3460,9 +3723,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3486,9 +3747,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3503,6 +3762,12 @@
     },
     {
       "type": "org.eclipse.jetty.server.jmx.AllowedResourceAliasCheckerMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.server.jmx.ConnectionFactory$ConfiguringMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.server.jmx.ConnectionFactory$DetectingMBean"
     },
     {
       "type": "org.eclipse.jetty.server.jmx.ConnectionFactory$UpgradingMBean"
@@ -3524,9 +3789,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
@@ -3561,6 +3824,9 @@
       "type": "org.eclipse.jetty.server.jmx.NegotiatingServerConnection$CipherDiscriminatorMBean"
     },
     {
+      "type": "org.eclipse.jetty.server.jmx.NegotiatingServerConnectionFactoryMBean"
+    },
+    {
       "type": "org.eclipse.jetty.server.jmx.NetworkConnectorMBean"
     },
     {
@@ -3586,14 +3852,15 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Object"]
         }
       ]
     },
     {
       "type": "org.eclipse.jetty.server.jmx.Slf4jRequestLogWriterMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.server.jmx.SslConnectionFactoryMBean"
     },
     {
       "type": "org.eclipse.jetty.server.jmx.SymlinkAllowedResourceAliasCheckerMBean"
@@ -3711,27 +3978,19 @@
       "methods": [
         {
           "name": "getClassLoaderLocation",
-          "parameterTypes": [
-            "java.lang.Class"
-          ]
+          "parameterTypes": ["java.lang.Class"]
         },
         {
           "name": "getCodeSourceLocation",
-          "parameterTypes": [
-            "java.lang.Class"
-          ]
+          "parameterTypes": ["java.lang.Class"]
         },
         {
           "name": "getModuleLocation",
-          "parameterTypes": [
-            "java.lang.Class"
-          ]
+          "parameterTypes": ["java.lang.Class"]
         },
         {
           "name": "getSystemClassLoaderLocation",
-          "parameterTypes": [
-            "java.lang.Class"
-          ]
+          "parameterTypes": ["java.lang.Class"]
         }
       ]
     },
@@ -3867,7 +4126,49 @@
       "type": "org.eclipse.jetty.util.resource.FileSystemPool"
     },
     {
+      "type": "org.eclipse.jetty.util.resource.ResourceFactory"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.ResourceFactory$2"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.ResourceFactory$LifeCycle"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.ResourceFactoryInternals$LifeCycle"
+    },
+    {
       "type": "org.eclipse.jetty.util.resource.jmx.FileSystemPoolMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.jmx.ResourceFactory$2MBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.jmx.ResourceFactory$LifeCycleMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.jmx.ResourceFactoryInternals$LifeCycleMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.resource.jmx.ResourceFactoryMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.ssl.SniX509ExtendedKeyManager$SniSelector"
+    },
+    {
+      "type": "org.eclipse.jetty.util.ssl.SslContextFactory"
+    },
+    {
+      "type": "org.eclipse.jetty.util.ssl.SslContextFactory$Server"
+    },
+    {
+      "type": "org.eclipse.jetty.util.ssl.jmx.SniX509ExtendedKeyManager$SniSelectorMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.ssl.jmx.SslContextFactory$ServerMBean"
+    },
+    {
+      "type": "org.eclipse.jetty.util.ssl.jmx.SslContextFactoryMBean"
     },
     {
       "type": "org.eclipse.jetty.util.thread.ExecutionStrategy"
@@ -4085,9 +4386,6 @@
       ]
     },
     {
-      "type": "org.glassfish.jersey.internal.RuntimeDelegateImpl"
-    },
-    {
       "type": "org.glassfish.jersey.internal.inject.AbstractBinder"
     },
     {
@@ -4230,9 +4528,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "jakarta.inject.Provider"
-          ]
+          "parameterTypes": ["jakarta.inject.Provider"]
         }
       ]
     },
@@ -4241,9 +4537,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "jakarta.inject.Provider"
-          ]
+          "parameterTypes": ["jakarta.inject.Provider"]
         }
       ]
     },
@@ -4347,6 +4641,9 @@
           "parameterTypes": []
         }
       ]
+    },
+    {
+      "type": "org.glassfish.jersey.server.internal.RuntimeDelegateImpl"
     },
     {
       "type": "org.glassfish.jersey.server.internal.inject.FormParamValueParamProvider$MultipartFormParamValueProvider$FormParamHolder"
@@ -4604,9 +4901,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "org.jboss.logging.Logger"
-          ]
+          "parameterTypes": ["org.jboss.logging.Logger"]
         }
       ]
     },
@@ -4638,9 +4933,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "org.glassfish.hk2.api.ServiceLocator"
-          ]
+          "parameterTypes": ["org.glassfish.hk2.api.ServiceLocator"]
         }
       ]
     },
@@ -4649,9 +4942,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "org.glassfish.hk2.api.ServiceLocator"
-          ]
+          "parameterTypes": ["org.glassfish.hk2.api.ServiceLocator"]
         }
       ]
     },
@@ -4687,11 +4978,7 @@
       "methods": [
         {
           "name": "checkAndLoadMain",
-          "parameterTypes": [
-            "boolean",
-            "int",
-            "java.lang.String"
-          ]
+          "parameterTypes": ["boolean", "int", "java.lang.String"]
         },
         {
           "name": "getApplicationClass",
@@ -4699,10 +4986,7 @@
         },
         {
           "name": "makePlatformString",
-          "parameterTypes": [
-            "boolean",
-            "byte[]"
-          ]
+          "parameterTypes": ["boolean", "byte[]"]
         }
       ]
     },
@@ -4794,9 +5078,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.rmi.server.RemoteRef"
-          ]
+          "parameterTypes": ["java.rmi.server.RemoteRef"]
         }
       ]
     },
@@ -4810,7 +5092,34 @@
       ]
     },
     {
-      "type": "sun.security.pkcs12.PKCS12KeyStore$DualFormatPKCS12",
+      "type": "sun.security.provider.DSA$SHA224withDSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.DSA$SHA256withDSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.JavaKeyStore$DualFormatJKS",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.JavaKeyStore$JKS",
       "methods": [
         {
           "name": "<init>",
@@ -4832,14 +5141,48 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.security.SecureRandomParameters"
-          ]
+          "parameterTypes": ["java.security.SecureRandomParameters"]
         }
       ]
     },
     {
       "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA2$SHA224",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA2$SHA256",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA5$SHA384",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA5$SHA512",
       "methods": [
         {
           "name": "<init>",
@@ -4857,6 +5200,24 @@
       ]
     },
     {
+      "type": "sun.security.provider.certpath.PKIXCertPathValidator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.PSSParameters",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "sun.security.rsa.RSAKeyFactory$Legacy",
       "methods": [
         {
@@ -4866,7 +5227,52 @@
       ]
     },
     {
+      "type": "sun.security.rsa.RSAPSSSignature",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSASignature$SHA224withRSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSASignature$SHA256withRSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.ssl.KeyManagerFactoryImpl$SunX509",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "sun.security.ssl.SSLContextImpl$TLS13Context",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.ssl.SSLContextImpl$TLSContext",
       "methods": [
         {
           "name": "<init>",
@@ -4888,10 +5294,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4900,10 +5303,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4912,10 +5312,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4924,10 +5321,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4936,10 +5330,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4948,10 +5339,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4960,10 +5348,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4972,10 +5357,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4984,10 +5366,16 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.SubjectAlternativeNameExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -4996,10 +5384,7 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
+          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
         }
       ]
     },
@@ -5025,6 +5410,15 @@
       "type": "sun.util.resources.cldr.CalendarData"
     },
     {
+      "type": "sun.util.resources.cldr.TimeZoneNames"
+    },
+    {
+      "type": "sun.util.resources.cldr.TimeZoneNames_en"
+    },
+    {
+      "type": "sun.util.resources.cldr.TimeZoneNames_en_US"
+    },
+    {
       "type": {
         "proxy": [
           "jakarta.ws.rs.core.HttpHeaders",
@@ -5036,9 +5430,7 @@
       "type": {
         "lambda": {
           "declaringClass": "io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry",
-          "interfaces": [
-            "com.github.benmanes.caffeine.cache.CacheLoader"
-          ]
+          "interfaces": ["com.github.benmanes.caffeine.cache.CacheLoader"]
         }
       }
     }
@@ -5046,6 +5438,15 @@
   "resources": [
     {
       "glob": "META-INF/log4j-provider.properties"
+    },
+    {
+      "glob": "META-INF/native/libconscrypt.so"
+    },
+    {
+      "glob": "META-INF/native/libconscrypt_openjdk_jni-linux-aarch_64.so"
+    },
+    {
+      "glob": "META-INF/native/libconscrypt_openjdk_jni.so"
     },
     {
       "glob": "META-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat"
@@ -5084,6 +5485,9 @@
       "glob": "META-INF/services/java.nio.channels.spi.SelectorProvider"
     },
     {
+      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
       "glob": "META-INF/services/java.util.spi.ResourceBundleControlProvider"
     },
     {
@@ -5106,6 +5510,12 @@
     },
     {
       "glob": "META-INF/services/org.eclipse.jetty.http.HttpFieldPreEncoder"
+    },
+    {
+      "glob": "META-INF/services/org.eclipse.jetty.io.ssl.ALPNProcessor$Server"
+    },
+    {
+      "glob": "META-INF/services/org.eclipse.jetty.util.security.CredentialProvider"
     },
     {
       "glob": "META-INF/services/org.eclipse.jetty.websocket.core.Extension"
@@ -5220,6 +5630,18 @@
     },
     {
       "glob": "schema-registry-client-app.properties"
+    },
+    {
+      "module": "java.base",
+      "glob": "jdk/internal/icu/impl/data/icudt76b/nfkc.nrm"
+    },
+    {
+      "module": "java.base",
+      "glob": "jdk/internal/icu/impl/data/icudt76b/uprops.icu"
+    },
+    {
+      "module": "java.base",
+      "glob": "sun/net/idn/uidna.spp"
     },
     {
       "module": "java.logging",
