@@ -73,6 +73,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="io.confluent.kafka.schemaregistry.utils.ShutdownableThread"/>
+        <Bug pattern="DM_EXIT"/>
+    </Match>
+
+    <Match>
         <Class name="io.confluent.connect.avro.AvroData"/>
         <Bug pattern="RC_REF_COMPARISON_BAD_PRACTICE"/>
     </Match>
@@ -135,6 +140,11 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     <Match>
         <Class name="~io.confluent.schemaregistry.benchmark.*"/>
         <Bug pattern="THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <Class name="~io.confluent.kafka.schemaregistry.type.VariantFormat"/>
+        <Bug pattern="INT_VACUOUS_BIT_OPERATION"/>
     </Match>
 
     <Match>

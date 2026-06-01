@@ -476,7 +476,10 @@ public class SubjectVersionsResource {
       }
     }
     if (subjectName != null
-        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subjectName)) {
+        && !QualifiedSubject.isValidSubject(
+               schemaRegistry.tenant(), subjectName, false, schemaRegistry.allowEmptySubject())) {
+      log.warn("Rejecting register: invalid subject name (tenant={}, subject={})",
+          schemaRegistry.tenant(), subjectName);
       throw Errors.invalidSubjectException(subjectName);
     }
 

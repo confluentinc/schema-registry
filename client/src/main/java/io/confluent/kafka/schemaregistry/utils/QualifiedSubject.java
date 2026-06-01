@@ -495,13 +495,31 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    */
   public static boolean isValidSubject(
       String tenant, String qualifiedSubject, boolean isConfigOrMode) {
+    return isValidSubject(tenant, qualifiedSubject, isConfigOrMode, true);
+  }
+
+  /**
+   * Validates the given qualified subject for the given tenant, optionally rejecting the
+   * empty-string subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @param isConfigOrMode true if the subject is for config or mode settings
+   * @param allowEmpty if false, reject an empty-string subject as invalid
+   * @return true if the qualified subject is valid, false otherwise
+   */
+  public static boolean isValidSubject(
+      String tenant, String qualifiedSubject, boolean isConfigOrMode, boolean allowEmpty) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
     }
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
-    // For backward compatibility, we allow an empty subject
+    // For backward compatibility, we allow an empty subject unless the caller opts out.
     if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)
         || qs.getSubject().equals(EMPTY_SUBJECT_NAME)) {
+      return false;
+    }
+    if (!allowEmpty && qs.getSubject().isEmpty()) {
       return false;
     }
     if (!isConfigOrMode && qs.getContext().equals(GLOBAL_CONTEXT_NAME)) {

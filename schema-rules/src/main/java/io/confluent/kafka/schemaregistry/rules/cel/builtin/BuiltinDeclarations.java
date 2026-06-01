@@ -16,59 +16,266 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
-import com.google.api.expr.v1alpha1.Decl;
+import com.google.common.collect.ImmutableList;
+import dev.cel.common.CelFunctionDecl;
+import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.types.CelType;
+import dev.cel.common.types.OpaqueType;
+import dev.cel.common.types.SimpleType;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import org.projectnessie.cel.checker.Decls;
 
 final class BuiltinDeclarations {
 
-  static List<Decl> create() {
-    List<Decl> decls = new ArrayList<>();
+  private static final OpaqueType DECIMAL = CelTypeLabels.DECIMAL;
+  private static final OpaqueType VARIANT = CelTypeLabels.VARIANT;
 
-    decls.add(
-        Decls.newFunction(
-            "isEmail",
-            Decls.newInstanceOverload(
-                "is_email", Collections.singletonList(Decls.String), Decls.Bool)));
+  private BuiltinDeclarations() {
+  }
 
-    decls.add(
-        Decls.newFunction(
-            "isHostname",
-            Decls.newInstanceOverload(
-                "is_hostname", Collections.singletonList(Decls.String), Decls.Bool)));
+  static List<CelFunctionDecl> create() {
+    List<CelFunctionDecl> decls = new ArrayList<>();
+    decls.add(member("isEmail", "is_email"));
+    decls.add(member("isHostname", "is_hostname"));
+    decls.add(member("isIpv4", "is_ipv4"));
+    decls.add(member("isIpv6", "is_ipv6"));
+    decls.add(member("isUriRef", "is_uri_ref"));
+    decls.add(member("isUri", "is_uri"));
+    decls.add(member("isUuid", "is_uuid"));
+    addDecimal(decls);
+    addTimestamp(decls);
+    addVariant(decls);
+    return ImmutableList.copyOf(decls);
+  }
 
-    decls.add(
-        Decls.newFunction(
-            "isIpv4",
-            Decls.newInstanceOverload(
-                "is_ipv4", Collections.singletonList(Decls.String), Decls.Bool)));
+  /**
+   * Build a member-style function declaration: {@code STRING.isFoo() -> bool}.
+   */
+  private static CelFunctionDecl member(String functionName, String overloadId) {
+    return CelFunctionDecl.newFunctionDeclaration(
+        functionName,
+        CelOverloadDecl.newMemberOverload(
+            overloadId, SimpleType.BOOL, SimpleType.STRING));
+  }
 
-    decls.add(
-        Decls.newFunction(
-            "isIpv6",
-            Decls.newInstanceOverload(
-                "is_ipv6", Collections.singletonList(Decls.String), Decls.Bool)));
+  // ---- Decimal ----
 
-    decls.add(
-        Decls.newFunction(
-            "isUriRef",
-            Decls.newInstanceOverload(
-                "is_uri_ref", Collections.singletonList(Decls.String), Decls.Bool)));
+  private static void addDecimal(List<CelFunctionDecl> decls) {
+    // decimal(...) constructor overloads. No separate (string) overload —
+    // cel-java's checker rejects it as overlapping with (dyn) (string is
+    // assignable to dyn). The (dyn) overload's runtime dispatch handles
+    // String via DecimalUtils.toBigDecimal(Object)'s String arm.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "decimal",
+        CelOverloadDecl.newGlobalOverload(
+            "dyn_to_decimal",
+            "Convert a value to Decimal (runtime dispatches on actual type)",
+            DECIMAL, ImmutableList.of(SimpleType.DYN)),
+        CelOverloadDecl.newGlobalOverload(
+            "bytes_int_to_decimal",
+            "Construct from unscaled two's-complement bytes + scale",
+            DECIMAL, ImmutableList.of(SimpleType.BYTES, SimpleType.INT))));
 
-    decls.add(
-        Decls.newFunction(
-            "isUri",
-            Decls.newInstanceOverload(
-                "is_uri", Collections.singletonList(Decls.String), Decls.Bool)));
+    // Comparison: decimals.eq/lt/le/gt/ge.
+    decls.add(binaryDecimal("decimals.eq", SimpleType.BOOL));
+    decls.add(binaryDecimal("decimals.lt", SimpleType.BOOL));
+    decls.add(binaryDecimal("decimals.le", SimpleType.BOOL));
+    decls.add(binaryDecimal("decimals.gt", SimpleType.BOOL));
+    decls.add(binaryDecimal("decimals.ge", SimpleType.BOOL));
 
-    decls.add(
-        Decls.newFunction(
-            "isUuid",
-            Decls.newInstanceOverload(
-                "is_uuid", Collections.singletonList(Decls.String), Decls.Bool)));
+    // Arithmetic: decimals.add/sub/mul/div
+    decls.add(binaryDecimal("decimals.add", DECIMAL));
+    decls.add(binaryDecimal("decimals.sub", DECIMAL));
+    decls.add(binaryDecimal("decimals.mul", DECIMAL));
+    decls.add(binaryDecimal("decimals.div", DECIMAL));
 
-    return Collections.unmodifiableList(decls);
+    // Square root: decimals.sqrt — MathContext(38, HALF_UP), like div. Throws on
+    // negative input (no complex result).
+    decls.add(unaryDecimal("decimals.sqrt", DECIMAL));
+
+    // Unary numeric: decimals.neg/abs/sign.
+    decls.add(unaryDecimal("decimals.neg", DECIMAL));
+    decls.add(unaryDecimal("decimals.abs", DECIMAL));
+    decls.add(unaryDecimal("decimals.sign", SimpleType.INT));
+
+    // String coercion via CEL built-in: extend stdlib `string(...)` with a
+    // (Decimal) -> string overload. No overlap with any existing
+    // string(int/uint/double/bytes/timestamp/duration/string) overload because
+    // our opaque Decimal type isn't assignable to any of them.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "string",
+        CelOverloadDecl.newGlobalOverload(
+            "decimal_to_string",
+            "Convert a Decimal to its plain-string form (no scientific notation)",
+            SimpleType.STRING, ImmutableList.of(DECIMAL))));
+
+    // Rounding family: decimals.round/trunc accept either 1 or 2 args; floor/ceil unary.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "decimals.round",
+        CelOverloadDecl.newGlobalOverload(
+            "decimals_round_unary",
+            "Round to integer (HALF_UP, away from zero on ties)",
+            DECIMAL, ImmutableList.of(DECIMAL)),
+        CelOverloadDecl.newGlobalOverload(
+            "decimals_round_scale",
+            "Round to the given scale (HALF_UP). Negative scale rounds left of the decimal.",
+            DECIMAL, ImmutableList.of(DECIMAL, SimpleType.INT))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "decimals.trunc",
+        CelOverloadDecl.newGlobalOverload(
+            "decimals_trunc_unary",
+            "Truncate to integer (toward zero)",
+            DECIMAL, ImmutableList.of(DECIMAL)),
+        CelOverloadDecl.newGlobalOverload(
+            "decimals_trunc_scale",
+            "Truncate to the given scale (toward zero)",
+            DECIMAL, ImmutableList.of(DECIMAL, SimpleType.INT))));
+    decls.add(unaryDecimal("decimals.floor", DECIMAL));
+    decls.add(unaryDecimal("decimals.ceil", DECIMAL));
+  }
+
+  private static CelFunctionDecl binaryDecimal(String name, CelType result) {
+    return CelFunctionDecl.newFunctionDeclaration(
+        name,
+        CelOverloadDecl.newGlobalOverload(
+            overloadId(name, "decimal_decimal"),
+            result, ImmutableList.of(DECIMAL, DECIMAL)));
+  }
+
+  private static CelFunctionDecl unaryDecimal(String name, CelType result) {
+    return CelFunctionDecl.newFunctionDeclaration(
+        name,
+        CelOverloadDecl.newGlobalOverload(
+            overloadId(name, "decimal"),
+            result, ImmutableList.of(DECIMAL)));
+  }
+
+  // ---- Timestamp ----
+
+  private static void addTimestamp(List<CelFunctionDecl> decls) {
+    // timestamp.of — two overloads (matches the decimal(...) / variant(...)
+    // pattern: (dyn) runtime-dispatch + explicit (int, string) epoch + unit).
+    // The arity check in SignaturesOverlap short-circuits, so the overlap rule
+    // doesn't trigger.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "timestamp.of",
+        CelOverloadDecl.newGlobalOverload(
+            "timestamp_of_dyn",
+            "Convert a value to a Timestamp (runtime dispatches on actual type)",
+            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.DYN)),
+        CelOverloadDecl.newGlobalOverload(
+            "timestamp_of_int_string",
+            "Construct from epoch numeric + unit (millis, micros, nanos, seconds)",
+            SimpleType.TIMESTAMP, ImmutableList.of(SimpleType.INT, SimpleType.STRING))));
+  }
+
+  // ---- Variant ----
+
+  private static void addVariant(List<CelFunctionDecl> decls) {
+    // variant(dyn) — runtime dispatch for proto-Variant decoding and primitive
+    // wrapping; rejects strings (use variants.parseJson). variant(bytes, bytes)
+    // — construct from binary value/metadata pair.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variant",
+        CelOverloadDecl.newGlobalOverload(
+            "dyn_to_variant",
+            "Convert a non-string value to a Variant (runtime dispatch);"
+                + " for JSON strings use variants.parseJson.",
+            VARIANT, ImmutableList.of(SimpleType.DYN)),
+        CelOverloadDecl.newGlobalOverload(
+            "bytes_bytes_to_variant",
+            "Construct from value + metadata byte arrays",
+            VARIANT, ImmutableList.of(SimpleType.BYTES, SimpleType.BYTES))));
+
+    // variants.parseJson — strict JSON-string parser (Spark parse_json / Flink
+    // PARSE_JSON). variants.tryParseJson — soft form (Spark try_parse_json):
+    // returns CEL null on parse failure instead of throwing.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.parseJson",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_parsejson_string",
+            "Parse JSON string; throws on parse failure.",
+            VARIANT, ImmutableList.of(SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.tryParseJson",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_tryparsejson_string",
+            "Parse JSON string; returns CEL null on parse failure.",
+            VARIANT, ImmutableList.of(SimpleType.STRING))));
+
+    // Type inspection. variants.type returns the type label as a string.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.type",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_type_variant",
+            "Variant type label as a string",
+            SimpleType.STRING, ImmutableList.of(VARIANT))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.isNull",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_isnull_dyn",
+            "True iff input is a Variant whose top type is NULL; false for CEL null",
+            SimpleType.BOOL, ImmutableList.of(VARIANT))));
+
+    // Navigation. Each returns sub-Variant or CEL null on miss. For typed
+    // extraction, compose with variants.as / variants.tryAs:
+    //   variants.as(variants.path(v, "$.x"), "string")   — strict
+    //   variants.tryAs(variants.field(v, "k"), "int")    — soft
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.path",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_path_dyn_string",
+            "JSONPath subset navigation; missing path → CEL null;"
+                + " explicit JSON null → variant-null; malformed path throws.",
+            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.field",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_field_dyn_string",
+            "Object field by name; missing → CEL null; explicit JSON null →"
+                + " variant-null.",
+            VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.elem",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_elem_dyn_int",
+            "Array element by index; out-of-bounds → CEL null; explicit JSON"
+                + " null at index → variant-null.",
+            VARIANT, ImmutableList.of(VARIANT, SimpleType.INT))));
+
+    // Standalone typed extraction. variants.as throws on type mismatch
+    // (Spark variant_get root-path analog). variants.tryAs returns CEL null on
+    // type mismatch (Spark try_variant_get root-path analog). Both propagate
+    // CEL-null input to CEL null.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.as",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_as_dyn_string",
+            "Extract a typed value from a Variant; throws on type mismatch;"
+                + " null in → null out.",
+            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.tryAs",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_tryas_dyn_string",
+            "Extract a typed value from a Variant; CEL null on type mismatch.",
+            SimpleType.DYN, ImmutableList.of(VARIANT, SimpleType.STRING))));
+
+    // variants.toJson(Variant) — serialize a Variant to its JSON string form.
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "variants.toJson",
+        CelOverloadDecl.newGlobalOverload(
+            "variants_tojson_variant",
+            "Serialize a Variant to its JSON string form",
+            SimpleType.STRING, ImmutableList.of(VARIANT))));
+  }
+
+  private static String overloadId(String functionName, String suffix) {
+    // Overload IDs are lowercase by cel-java convention (string_char_at_int,
+    // list_sets_contains_list, etc.) and we lowercase here so the binding-side
+    // IDs in BuiltinOverload (also lowercase) match the decl-side IDs exactly.
+    return (functionName + "_" + suffix)
+        .replace('.', '_')
+        .toLowerCase(java.util.Locale.ROOT);
   }
 }

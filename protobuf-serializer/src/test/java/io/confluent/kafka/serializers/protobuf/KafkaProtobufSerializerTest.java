@@ -1028,6 +1028,40 @@ public class KafkaProtobufSerializerTest {
   }
 
   @Test
+  public void testKafkaProtobufSerializerUseLatestWithMismatchedDescriptorName()
+      throws IOException, RestClientException {
+    // If the runtime descriptor's full name doesn't match any message in the
+    // registered schema, ProtobufSchema.toMessageIndexes returns an empty list.
+    // The serializer must still emit the default message-index varint (0x00).
+    String subject = topic + "-value";
+    String renamedSchema = "syntax = \"proto3\";\n"
+        + "package com.test.renamed;\n"
+        + "message Renamed {\n"
+        + "  string test_string = 1;\n"
+        + "  int32 test_int32 = 8;\n"
+        + "}\n";
+    schemaRegistry.register(subject, new ProtobufSchema(renamedSchema));
+
+    Map configs = ImmutableMap.of(
+        KafkaProtobufSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        KafkaProtobufSerializerConfig.AUTO_REGISTER_SCHEMAS, false,
+        KafkaProtobufSerializerConfig.USE_LATEST_VERSION, true,
+        KafkaProtobufSerializerConfig.LATEST_COMPATIBILITY_STRICT, false
+    );
+    protobufSerializer.configure(configs, false);
+    protobufDeserializer.configure(configs, false);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    DynamicMessage result =
+        (DynamicMessage) protobufDeserializer.deserialize(topic, headers, bytes);
+    assertEquals(TEST_MSG_STRING, getField(result, "test_string"));
+
+    protobufSerializer.configure(new HashMap(serializerConfig), false);
+    protobufDeserializer.configure(new HashMap(deserializerConfig), false);
+  }
+
+  @Test
   public void testDependencyPreregisterRefWithNegativeOne() throws Exception {
     String refSubject = "TestProto.proto";
     String refSchemaString = "syntax = \"proto3\";\n"

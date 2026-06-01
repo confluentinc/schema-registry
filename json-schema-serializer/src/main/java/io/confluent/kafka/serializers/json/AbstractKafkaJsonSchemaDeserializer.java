@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.rules.RuleResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.rules.RulePhase;
@@ -28,6 +30,7 @@ import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Function;
@@ -56,6 +59,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected Class<T> type;
   protected String typeProperty;
+  protected List<String> allowedTypePackages = Collections.singletonList("*");
   protected boolean validate;
   protected boolean validateBeforeDomainRules;
 
@@ -77,6 +81,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     this.validateBeforeDomainRules =
         config.getBoolean(KafkaJsonSchemaDeserializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
+    this.allowedTypePackages =
+        config.getList(KafkaJsonSchemaDeserializerConfig.TYPE_ALLOWED_PACKAGES);
   }
 
   protected KafkaJsonSchemaDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -121,11 +127,20 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return deserialize(includeSchemaAndVersion, topic, isKey, headers, payload, null);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(
+        includeSchemaAndVersion, topic, key, headers, payload, writerToReaderSchemaFunc, false);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
       boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
-      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -140,6 +155,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
     boolean isKey = key != null ? key : this.isKey;
     SchemaId schemaId = new SchemaId(JsonSchema.TYPE);
+    List<RuleResult> ruleResults = includeRuleResults ? new ArrayList<>() : null;
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
       ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
@@ -152,7 +168,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       }
       Object buf = executeRules(
           subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
-          schema, buffer
+          schema, buffer, ruleResults
       );
       buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
@@ -184,6 +200,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         jsonNode = (JsonNode) executeMigrations(migrations, subject, topic, headers, jsonNode);
       }
 
+      JsonSchema writerSchema = schema;
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
@@ -195,7 +212,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
           jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
         }
         jsonNode = (JsonNode) executeRules(
-            subject, topic, headers, payload, RuleMode.READ, null, schema, jsonNode
+            subject, topic, headers, payload, RulePhase.DOMAIN, RuleMode.READ, null,
+            schema, jsonNode, ruleResults
         );
       }
 
@@ -245,7 +263,16 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         // schema registry's ordering (which is implicit by auto-registration time rather than
         // explicit from the Connector).
 
-        return new JsonSchemaAndValue(schema, value);
+        Integer writerVersion = schemaVersion(topic, isKey, schemaId, subject, writerSchema, null);
+        ParsedSchemaAndValue.SchemaInfo writerInfo = new ParsedSchemaAndValue.SchemaInfo(
+            subject,
+            schemaId.getId(),
+            writerVersion,
+            schemaId.getGuid());
+        List<RuleResult> ruleResultsCopy = ruleResults == null || ruleResults.isEmpty()
+            ? Collections.emptyList()
+            : Collections.unmodifiableList(new ArrayList<>(ruleResults));
+        return new JsonSchemaAndValue(schema, value, writerInfo, writerSchema, ruleResultsCopy);
       }
 
       return value;
@@ -283,6 +310,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   private Object deriveType(
       ByteBuffer buffer, int length, int start, String typeName
   ) throws IOException {
+    checkTypeAllowed(typeName);
+    if (!isJsonContainerPayload(buffer.array(), start, length)) {
+      throw new SerializationException("Refusing to resolve javaType " + typeName
+          + " for non-object/array JSON payload");
+    }
     try {
       Class<?> cls = Class.forName(typeName);
       return objectMapper.readValue(buffer.array(), start, length, cls);
@@ -292,12 +324,46 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private Object deriveType(JsonNode jsonNode, String typeName) throws IOException {
+    checkTypeAllowed(typeName);
+    if (!jsonNode.isContainerNode()) {
+      throw new SerializationException("Refusing to resolve javaType " + typeName
+          + " for non-object/array JSON payload");
+    }
     try {
       Class<?> cls = Class.forName(typeName);
       return objectMapper.convertValue(jsonNode, cls);
     } catch (ClassNotFoundException e) {
       throw new SerializationException("Class " + typeName + " could not be found.");
     }
+  }
+
+  private void checkTypeAllowed(String typeName) {
+    if (allowedTypePackages == null || allowedTypePackages.isEmpty()) {
+      throw new SerializationException("javaType resolution is disabled "
+          + "(json.type.allowed.packages is empty); refusing to load class " + typeName);
+    }
+    for (String pkg : allowedTypePackages) {
+      if (pkg.isEmpty()) {
+        continue;
+      }
+      if ("*".equals(pkg) || typeName.startsWith(pkg)) {
+        return;
+      }
+    }
+    throw new SerializationException(
+        "Class " + typeName + " is not in json.type.allowed.packages");
+  }
+
+  private static boolean isJsonContainerPayload(byte[] arr, int start, int length) {
+    int end = start + length;
+    for (int i = start; i < end; i++) {
+      byte b = arr[i];
+      if (b == ' ' || b == '\t' || b == '\n' || b == '\r') {
+        continue;
+      }
+      return b == '{' || b == '[';
+    }
+    return false;
   }
 
   private Integer schemaVersion(
@@ -336,8 +402,17 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       String topic, boolean isKey, Headers headers, byte[] payload,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, payload, writerToReaderSchemaFunc, false);
+  }
+
+  protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc,
+      boolean includeRuleResults
+  ) throws SerializationException {
     return (JsonSchemaAndValue) deserialize(
-        true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
+        true, topic, isKey, headers, payload, writerToReaderSchemaFunc, includeRuleResults);
   }
 
   protected JsonNode validateJson(JsonNode jsonNode, ByteBuffer buffer, int start, int length,
