@@ -183,11 +183,21 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default void setTenant(String tenant) {
   }
 
+  /**
+   * Whether the current registration context allows an empty-string subject name
+   */
+  default boolean allowEmptySubject() {
+    return true;
+  }
+
   SchemaRegistryConfig config();
 
   // Can be used to pass values between extensions
   Map<String, Object> properties();
 
+  /**
+   * Returns the metadata encoder, or {@code null} if SR-level encoding is disabled.
+   */
   MetadataEncoderService getMetadataEncoder();
 
   void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler);

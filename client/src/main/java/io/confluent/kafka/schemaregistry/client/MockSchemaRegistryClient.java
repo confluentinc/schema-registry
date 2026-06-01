@@ -210,7 +210,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
         SchemaProvider schemaProvider = providers.get(schemaType);
         if (schemaProvider == null) {
           log.error("Invalid schema type {}", schemaType);
-          throw new IllegalStateException("Invalid schema type " + schemaType);
+          throw new IllegalArgumentException("Invalid schema type " + schemaType);
         }
         return schemaProvider.parseSchema(schema, false, false).orElseThrow(
             () -> new IOException("Invalid schema of type " + schema.getSchemaType()));

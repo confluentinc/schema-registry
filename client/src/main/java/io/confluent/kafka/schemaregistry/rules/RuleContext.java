@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,7 +55,10 @@ public class RuleContext {
   private final int index;
   private final List<Rule> rules;
   private final Map<Object, Object> customData = new ConcurrentHashMap<>();
+  private final Map<String, String> messageMetadata = new LinkedHashMap<>();
+  private final Map<String, Map<String, String>> fieldMetadata = new LinkedHashMap<>();
   private final Deque<FieldContext> fieldContexts;
+  private final boolean includeRuleResults;
 
   public RuleContext(
       Map<String, ?> configs,
@@ -70,7 +74,8 @@ public class RuleContext {
       RuleMode ruleMode,
       Rule rule,
       int index,
-      List<Rule> rules) {
+      List<Rule> rules,
+      boolean includeRuleResults) {
     this.configs = configs;
     this.enabledEnv = enabledEnv;
     this.source = source;
@@ -86,6 +91,7 @@ public class RuleContext {
     this.index = index;
     this.rules = rules;
     this.fieldContexts = new ArrayDeque<>();
+    this.includeRuleResults = includeRuleResults;
   }
 
   public Map<String, ?> configs() {
@@ -146,6 +152,42 @@ public class RuleContext {
 
   public Map<Object, Object> customData() {
     return customData;
+  }
+
+  /**
+   * Record a message-level metadata key/value for this rule's execution.
+   * When the enclosing deserialize call did not opt into rule-result
+   * collection, or when {@code value} is null, the key is not stored.
+   * Consumers can rely on key presence to mean "value known".
+   */
+  public void putMessageMetadata(String key, String value) {
+    if (!includeRuleResults || value == null) {
+      return;
+    }
+    messageMetadata.put(key, value);
+  }
+
+  /**
+   * Record a per-field metadata key/value for this rule's execution.
+   * When the enclosing deserialize call did not opt into rule-result
+   * collection, or when {@code value} is null, the key is not stored.
+   */
+  public void putFieldMetadata(String fieldPath, String key, String value) {
+    if (!includeRuleResults || value == null) {
+      return;
+    }
+    fieldMetadata.computeIfAbsent(fieldPath, k -> new LinkedHashMap<>())
+        .put(key, value);
+  }
+
+  /** Live view of message-level metadata collected so far. */
+  public Map<String, String> messageMetadata() {
+    return messageMetadata;
+  }
+
+  /** Live view of per-field metadata collected so far, keyed by field path. */
+  public Map<String, Map<String, String>> fieldMetadata() {
+    return fieldMetadata;
   }
 
   public Set<String> getTags(String fullName) {

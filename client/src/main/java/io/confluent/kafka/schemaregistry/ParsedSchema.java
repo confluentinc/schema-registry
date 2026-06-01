@@ -28,6 +28,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -181,6 +183,29 @@ public interface ParsedSchema {
                     Map<SchemaEntity, Set<String>> tagsToRemove);
 
   /**
+   * Returns a copy of this schema, but with the given tags.
+   *
+   * @param tagsToAdd map of tags to add to the schema record or field, where the key is the entity
+   *                  and the value is the set of tags. If the tag already exists, do nothing.
+   * @param tagsToRemove map of tags to remove from the schema record or field, where the key is
+   *                     the entity and the value is the set of tags. If the tag does not exist,
+   *                     do nothing.
+   * @param addBeforeRemove whether to add tags before removing tags.
+   * @return a copy of this schema, but with the given tags
+   */
+  default ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                            Map<SchemaEntity, Set<String>> tagsToRemove,
+                            boolean addBeforeRemove) {
+    // Implementations of this interface should override this with a more efficient implementation
+    if (addBeforeRemove) {
+      return copy(tagsToAdd, tagsToRemove);
+    } else {
+      ParsedSchema schema = copy(Collections.emptyMap(), tagsToRemove);
+      return schema.copy(tagsToAdd, Collections.emptyMap());
+    }
+  }
+
+  /**
    * Returns a normalized copy of this schema.
    * Normalization generally ignores ordering when it is not significant.
    *
@@ -327,6 +352,26 @@ public interface ParsedSchema {
   default Object transformMessage(RuleContext ctx, FieldTransform transform, Object message)
       throws RuleException {
     throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Validate {@code message} against the validation rules attached to the schema,
+   * returning every failure observed during the walk.
+   */
+  default List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  /**
+   * Validate {@code message} against the validation rules attached to the schema.
+   * When {@code failFast} is true the walker stops at the first violation and
+   * returns just that one; when false (default), every node is visited and all
+   * violations are returned.
+   */
+  default List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
+    return Collections.emptyList();
   }
 
   default Set<String> getReservedFields() {

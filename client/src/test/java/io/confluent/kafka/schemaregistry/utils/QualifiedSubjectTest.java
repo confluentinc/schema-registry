@@ -218,6 +218,31 @@ public class QualifiedSubjectTest {
   }
 
   @Test
+  public void testSubjectValidationRejectEmpty() {
+    // allowEmpty=true mirrors the legacy overload
+    assertTrue(QualifiedSubject.isValidSubject("default", "foo", false, true));
+    assertTrue(QualifiedSubject.isValidSubject("default", "", false, true));
+    assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:", false, true));
+
+    // Legacy 3-arg overload must still allow the empty-string subject (locks the contract)
+    assertTrue(QualifiedSubject.isValidSubject("default", "", false));
+    assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:", false));
+
+    // allowEmpty=false rejects the empty-string subject in every context
+    assertTrue(QualifiedSubject.isValidSubject("default", "foo", false, false));
+    assertFalse(QualifiedSubject.isValidSubject("default", "", false, false));
+    assertFalse(QualifiedSubject.isValidSubject("default", ":.ctx:", false, false));
+    assertTrue(QualifiedSubject.isValidSubject("default", ":.ctx:foo", false, false));
+
+    // Pre-existing rules still apply with the new flag
+    assertFalse(QualifiedSubject.isValidSubject("default", null, false, false));
+    assertFalse(QualifiedSubject.isValidSubject(
+        "default", String.valueOf((char) 31), false, false));
+    assertFalse(QualifiedSubject.isValidSubject("default", "__GLOBAL", false, false));
+    assertFalse(QualifiedSubject.isValidSubject("default", "__EMPTY", false, false));
+  }
+
+  @Test
   public void testSubjectInContextCheck() {
     assertTrue(QualifiedSubject.isSubjectInContext(
         "default", "foo", QualifiedSubject.create("default", ":.:")));

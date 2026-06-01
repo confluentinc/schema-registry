@@ -194,6 +194,9 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
   public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
 
+  public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
+  public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
+
   /**
    * <code>schema.cache.size</code>
    */
@@ -205,6 +208,19 @@ public class SchemaRegistryConfig extends RestConfig {
    */
   public static final String SCHEMA_CACHE_EXPIRY_SECS_CONFIG = "schema.cache.expiry.secs";
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
+
+  /**
+   * <code>size.limit.handler.enabled</code>
+   */
+  public static final String SIZE_LIMIT_FILTER_ENABLED_CONFIG = "size.limit.filter.enabled";
+  public static final boolean SIZE_LIMIT_FILTER_ENABLED_DEFAULT = false;
+
+  /**
+   * <code>max.body.size</code>
+   */
+  public static final String MAX_REQ_BODY_SIZE_CONFIG = "size.limit.filter.max.request.body.size";
+  public static final int MAX_REQ_BODY_SIZE_DEFAULT = 1048576; // 1MB
+
 
   /**
    * <code>schema.canonicalize.on.consume</code>
@@ -420,10 +436,20 @@ public class SchemaRegistryConfig extends RestConfig {
       + "beginning with $$";
   protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
       + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
+  protected static final String REJECT_EMPTY_SUBJECT_DOC =
+      "If true, reject schema registration requests whose subject name is the empty string. "
+      + "Defaults to false to preserve backward compatibility with existing deployments that "
+      + "may have schemas registered under an empty subject.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
       "The expiration in seconds for entries accessed in the cache.";
+  protected static final String SIZE_LIMIT_HANDLER_ENABLED_DOC =
+      "Enable the size limit handler to enforce request body size limits. "
+      + "When enabled, requests exceeding the configured size will be rejected.";
+  protected static final String MAX_REQ_BODY_SIZE_DOC =
+      "Maximum size in bytes for HTTP request and response bodies. "
+      + "Requests exceeding this limit will be rejected with HTTP 413.";
   protected static final String SCHEMA_CANONICALIZE_ON_CONSUME_DOC =
       "A list of schema types to canonicalize on consume, to be used if canonicalization changes.";
   protected static final String SCHEMA_SEARCH_DEFAULT_LIMIT_DOC =
@@ -659,11 +685,22 @@ public class SchemaRegistryConfig extends RestConfig {
         SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
     )
+    .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
+        ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
+    )
+    .define(SIZE_LIMIT_FILTER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        SIZE_LIMIT_FILTER_ENABLED_DEFAULT,
+        ConfigDef.Importance.MEDIUM, SIZE_LIMIT_HANDLER_ENABLED_DOC
+    )
+    .define(MAX_REQ_BODY_SIZE_CONFIG, ConfigDef.Type.INT, MAX_REQ_BODY_SIZE_DEFAULT,
+        ConfigDef.Importance.MEDIUM, MAX_REQ_BODY_SIZE_DOC
     )
     .define(SCHEMA_CANONICALIZE_ON_CONSUME_CONFIG, ConfigDef.Type.LIST, "",
         ConfigDef.Importance.LOW, SCHEMA_CANONICALIZE_ON_CONSUME_DOC
