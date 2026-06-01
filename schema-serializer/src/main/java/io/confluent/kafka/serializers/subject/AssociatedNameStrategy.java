@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers.subject;
 
+import com.google.common.base.Ticker;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -25,22 +26,23 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * A {@link SubjectNameStrategy} that will query schema registry for
- * the associated subject name for the topic.  The topic is passed as the resource name
- * to schema registry.  If there is a configuration property named
+ * the associated subject name for the topic. If there is a configuration property named
  * "subject.name.strategy.kafka.cluster.id", then its value will be passed as the resource
  * namespace; otherwise the value "-" will be passed as the resource namespace.
- * If more than subject is returned from the query, an exception will be thrown.
+ * If more than one subject is returned from the query, an exception will be thrown.
  * If no subjects are returned from the query, then the behavior will fall back
  * to {@link TopicNameStrategy}, unless the configuration property
  * "subject.name.strategy.fallback.type" is set to "RECORD", "TOPIC_RECORD", or "NONE".
@@ -49,55 +51,92 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
 
   private static final Logger log = LoggerFactory.getLogger(AssociatedNameStrategy.class);
 
+  public static final String CACHE_EXPIRY_SECS = "subject.name.strategy.cache.expiry.secs";
+  public static final String CACHE_SIZE = "subject.name.strategy.cache.size";
   public static final String KAFKA_CLUSTER_ID = "subject.name.strategy.kafka.cluster.id";
   public static final String NAMESPACE_WILDCARD = "-";
   public static final String FALLBACK_TYPE = "subject.name.strategy.fallback.type";
-  private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
   private SchemaRegistryClient client;
-  private String kafkaClusterId;
+  private Map<String, ?> configs;
+  private int cacheExpirySecs = -1;
+  private int cacheSize = 1000;
+  private volatile String kafkaClusterId;
   private SubjectNameStrategy fallbackSubjectNameStrategy = new TopicNameStrategy();
-  private final LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private volatile boolean warnedNoClient;
+  private volatile boolean warnedEndpointNotFound;
+  private volatile boolean warnedEndpointNotImplemented;
+  private volatile LoadingCache<CacheKey, Optional<String>> subjectNameCache;
+  private final Ticker ticker;
 
   public AssociatedNameStrategy() {
-    this.subjectNameCache = CacheBuilder.newBuilder()
-        .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build(new CacheLoader<>() {
-          @Override
-          public Optional<String> load(CacheKey key) throws Exception {
-            return Optional.ofNullable(loadSubjectName(key.topic, key.isKey, key.schema));
-          }
-        });
+    this(Ticker.systemTicker());
+  }
+
+
+  public AssociatedNameStrategy(Ticker ticker) {
+    this.ticker = ticker;
   }
 
   @Override
   public void configure(Map<String, ?> configs) {
-    Object kafkaClusterIdConfig = configs.get(KAFKA_CLUSTER_ID);
-    if (kafkaClusterIdConfig != null) {
-      this.kafkaClusterId = kafkaClusterIdConfig.toString();
+    this.configs = configs;
+    this.kafkaClusterId = configureKafkaClusterId();
+    this.fallbackSubjectNameStrategy = configureFallbackNameStrategy();
+    Object cacheExpirySecsConfig = configs.get(CACHE_EXPIRY_SECS);
+    if (cacheExpirySecsConfig != null) {
+      try {
+        this.cacheExpirySecs = Integer.parseInt(cacheExpirySecsConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + CACHE_EXPIRY_SECS);
+      }
     }
-    Object fallbackConfig = configs.get(FALLBACK_TYPE);
+    Object cacheSizeConfig = configs.get(CACHE_SIZE);
+    if (cacheSizeConfig != null) {
+      try {
+        this.cacheSize = Integer.parseInt(cacheSizeConfig.toString());
+      } catch (NumberFormatException e) {
+        throw new ConfigException("Cannot parse " + CACHE_SIZE);
+      }
+    }
+    CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder()
+        .maximumSize(cacheSize)
+        .ticker(ticker);
+    if (cacheExpirySecs >= 0) {
+      cacheBuilder = cacheBuilder.expireAfterWrite(Duration.ofSeconds(cacheExpirySecs));
+    }
+    this.subjectNameCache = cacheBuilder.build(new CacheLoader<>() {
+      @Override
+      public Optional<String> load(CacheKey key) throws Exception {
+        return Optional.ofNullable(loadSubjectName(key.topic, key.isKey, key.schema));
+      }
+    });
+  }
+
+  private String configureKafkaClusterId() {
+    Object kafkaClusterIdConfig = configs != null ? configs.get(KAFKA_CLUSTER_ID) : null;
+    return kafkaClusterIdConfig != null ? kafkaClusterIdConfig.toString() : null;
+  }
+
+  private SubjectNameStrategy configureFallbackNameStrategy() {
+    Object fallbackConfig = configs != null ? configs.get(FALLBACK_TYPE) : null;
     if (fallbackConfig != null) {
       switch (fallbackConfig.toString().toUpperCase()) {
         case "TOPIC":
-          this.fallbackSubjectNameStrategy = new TopicNameStrategy();
-          break;
+          return new TopicNameStrategy();
         case "RECORD":
-          this.fallbackSubjectNameStrategy = new RecordNameStrategy();
-          break;
+          return new RecordNameStrategy();
         case "TOPIC_RECORD":
-          this.fallbackSubjectNameStrategy = new TopicRecordNameStrategy();
-          break;
+          return new TopicRecordNameStrategy();
         case "NONE":
-          this.fallbackSubjectNameStrategy = null;
-          break;
+          return null;
         default:
           throw new IllegalArgumentException("Invalid value for "
               + FALLBACK_TYPE + ": " + fallbackConfig);
       }
     } else {
       // default is TopicNameStrategy
-      this.fallbackSubjectNameStrategy = new TopicNameStrategy();
+      return new TopicNameStrategy();
     }
   }
 
@@ -113,9 +152,13 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
 
     if (client == null) {
+      SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
       if (fallbackSubjectNameStrategy != null) {
-        log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
-            + " was not called, using fallback strategy");
+        if (!warnedNoClient) {
+          warnedNoClient = true;
+          log.warn("Client is not set in AssociatedNameStrategy, perhaps configure() on serde "
+              + " was not called, using fallback strategy");
+        }
         return fallbackSubjectNameStrategy.subjectName(topic, isKey, schema);
       } else {
         throw new SerializationException("Client is not set in AssociatedNameStrategy, "
@@ -133,10 +176,32 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
     }
   }
 
+  @Override
+  public void setKafkaClusterId(String clusterId) {
+    if (!Objects.equals(this.kafkaClusterId, clusterId)) {
+      if (this.kafkaClusterId != null && clusterId != null) {
+        log.warn("Kafka cluster ID changed from {} to {}", this.kafkaClusterId, clusterId);
+      }
+      this.kafkaClusterId = clusterId;
+      if (subjectNameCache != null) {
+        subjectNameCache.invalidateAll();
+      }
+    }
+  }
+
+  protected String getKafkaClusterId() {
+    return kafkaClusterId;
+  }
+
+  protected SubjectNameStrategy getFallbackSubjectNameStrategy() {
+    return fallbackSubjectNameStrategy;
+  }
+
   private String loadSubjectName(String topic, boolean isKey, ParsedSchema schema)
       throws IOException, RestClientException {
     List<Association> associations;
     try {
+      String kafkaClusterId = getKafkaClusterId();
       associations = client.getAssociationsByResourceName(
           topic,
           kafkaClusterId != null ? kafkaClusterId : NAMESPACE_WILDCARD,
@@ -148,17 +213,24 @@ public class AssociatedNameStrategy implements SubjectNameStrategy {
       );
     } catch (RestClientException e) {
       if (e.getStatus() == 404) {
-        log.warn("Associations endpoint not found (404), using fallback strategy");
+        if (!warnedEndpointNotFound) {
+          warnedEndpointNotFound = true;
+          log.warn("Associations endpoint not found (404), using fallback strategy");
+        }
         // empty list will invoke fallback strategy
         associations = Collections.emptyList();
       } else {
         throw e;
       }
     } catch (UnsupportedOperationException e) {
-      log.warn("Associations endpoint not implemented in the client, using fallback strategy");
+      if (!warnedEndpointNotImplemented) {
+        warnedEndpointNotImplemented = true;
+        log.warn("Associations endpoint not implemented in the client, using fallback strategy");
+      }
       // empty list will invoke fallback strategy
       associations = Collections.emptyList();
     }
+    SubjectNameStrategy fallbackSubjectNameStrategy = getFallbackSubjectNameStrategy();
     if (associations.size() > 1) {
       throw new SerializationException("Multiple associated subjects found for topic " + topic);
     } else if (associations.size() == 1) {

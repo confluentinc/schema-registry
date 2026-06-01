@@ -33,6 +33,11 @@ public class KafkaJsonSchemaDeserializerConfig extends AbstractKafkaSchemaSerDeC
   public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail deserialization if the "
       + "payload does not match the schema";
 
+  public static final String VALIDATE_BEFORE_DOMAIN_RULES = "json.validate.before.domain.rules";
+  public static final boolean VALIDATE_BEFORE_DOMAIN_RULES_DEFAULT = false;
+  public static final String VALIDATE_BEFORE_DOMAIN_RULES_DOC = "Whether to validate the JSON "
+      + "message against the schema before running domain rules instead of after";
+
   public static final String JSON_KEY_TYPE = "json.key.type";
   public static final String JSON_KEY_TYPE_DEFAULT = Object.class.getName();
   public static final String JSON_KEY_TYPE_DOC = "Classname of the type that the message key "
@@ -61,6 +66,11 @@ public class KafkaJsonSchemaDeserializerConfig extends AbstractKafkaSchemaSerDeC
         FAIL_INVALID_SCHEMA_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         FAIL_INVALID_SCHEMA_DOC
+    ).define(VALIDATE_BEFORE_DOMAIN_RULES,
+        ConfigDef.Type.BOOLEAN,
+        VALIDATE_BEFORE_DOMAIN_RULES_DEFAULT,
+        ConfigDef.Importance.LOW,
+        VALIDATE_BEFORE_DOMAIN_RULES_DOC
     ).define(JSON_KEY_TYPE,
         ConfigDef.Type.CLASS,
         JSON_KEY_TYPE_DEFAULT,

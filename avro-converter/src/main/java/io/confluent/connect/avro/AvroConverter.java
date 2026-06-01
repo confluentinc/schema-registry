@@ -199,6 +199,7 @@ public class AvroConverter implements Converter {
       return serializeImpl(
           getSubjectName(topic, isKey, value, schema),
           topic,
+          isKey,
           headers,
           value,
           schema);

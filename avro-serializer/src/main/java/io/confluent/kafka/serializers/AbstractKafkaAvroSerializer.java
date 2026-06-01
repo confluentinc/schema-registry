@@ -97,11 +97,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected byte[] serializeImpl(String subject, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
-    return serializeImpl(subject, null, null, object, schema);
+    return serializeImpl(subject, null, null, null, object, schema);
   }
 
   protected byte[] serializeImpl(
-      String subject, String topic, Headers headers, Object object, AvroSchema schema)
+      String subject, String topic, Boolean key, Headers headers,
+      Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       StringBuilder userFriendlyMsgBuilder = new StringBuilder();
@@ -117,6 +118,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
       SchemaId schemaId;
@@ -134,15 +136,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
         schemaId = new SchemaId(AvroSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
-        schema = (AvroSchema)
-            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        // omit the GUID when useSchemaId is set
-        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, (String) null);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            lookupSchemaEntityBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        schema = (AvroSchema) schemaRegistry.parseSchemaOrElseThrow(s);
+        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, s.getGuid());
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
         schema = (AvroSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
-        // omit the ID when useSchemaGuid is set
-        schemaId = new SchemaId(AvroSchema.TYPE, null, useSchemaGuid);
+        int id = schemaRegistry.getId(subject, schema);
+        schemaId = new SchemaId(AvroSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
@@ -214,7 +216,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   @SuppressWarnings("unchecked")
   private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
           throws ExecutionException, IOException {
-    BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
+    BinaryEncoder encoder = getBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
@@ -228,5 +230,31 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected DatumWriter<?> getDatumWriter(
       Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
     return AvroSchemaUtils.getDatumWriter(value, schema, useLogicalTypes, allowNull);
+  }
+
+  /**
+   * Returns a {@link BinaryEncoder} for marshaling output.
+   *
+   * <p>The default implementation returns a non-buffering encoder via
+   * {@link EncoderFactory#directBinaryEncoder}, preserving existing behavior.  Subclasses 
+   * may override this method to supply a reused BinaryEncoder instance, for example, via 
+   * a {@link ThreadLocal}, to eliminate per-record encoder allocation on high-throughput 
+   * marshal paths.  Furthermore, subclasses may wish to use a buffering BinaryEncoder 
+   * instead and should override entirely to call {@link EncoderFactory#binaryEncoder} 
+   * directly, which is likely the better choice in reuse scenarios.
+   *
+   * <p>Note: if a subclass were to call super.getBinaryEncoder(), the {@code reuse} argument
+   * must be a DirectBinaryEncoder instance for actual reuse to occur; the factory performs 
+   * an exact class equality check and will allocate a new DirectBinaryEncoder if the 
+   * provided instance is of any other type.
+   *
+   * <p>@see EncoderFactory
+   *
+   * @param out    the OutputStream to initialize to. Cannot be null.
+   * @param reuse  the BinaryEncoder to attempt to reuse. If null, a new instance is returned.
+   * @return a BinaryEncoder that uses {@code out} as its data output.
+   */
+  protected BinaryEncoder getBinaryEncoder(ByteArrayOutputStream out, BinaryEncoder reuse) {
+    return encoderFactory.directBinaryEncoder(out, reuse);
   }
 }

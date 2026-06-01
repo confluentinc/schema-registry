@@ -2250,15 +2250,15 @@ paths:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: string
-                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+                example: "\"string\""
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
-                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+                example: "\"string\""
             application/json; qs=0.5:
               schema:
                 type: string
-                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+                example: "\"string\""
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
@@ -2341,15 +2341,15 @@ paths:
             application/vnd.schemaregistry.v1+json:
               schema:
                 type: string
-                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+                example: "\"string\""
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: string
-                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+                example: "\"string\""
             application/json; qs=0.5:
               schema:
                 type: string
-                example: "{\"schema\": \"{\"type\": \"string\"}\"}"
+                example: "\"string\""
         "404":
           description: Not Found. Error code 40403 indicates schema not found.
           content:

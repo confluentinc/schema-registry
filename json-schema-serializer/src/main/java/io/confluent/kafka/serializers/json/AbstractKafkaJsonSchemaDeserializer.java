@@ -57,6 +57,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected Class<T> type;
   protected String typeProperty;
   protected boolean validate;
+  protected boolean validateBeforeDomainRules;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -73,6 +74,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         failUnknownProperties
     );
     this.validate = config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA);
+    this.validateBeforeDomainRules =
+        config.getBoolean(KafkaJsonSchemaDeserializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
   }
 
@@ -121,7 +124,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload,
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
@@ -135,14 +138,15 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       return null;
     }
 
+    boolean isKey = key != null ? key : this.isKey;
     SchemaId schemaId = new SchemaId(JsonSchema.TYPE);
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
       ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
-      String subject = isKey == null || strategyUsesSchema(isKey)
+      String subject = strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
       JsonSchema schema = (JsonSchema) getSchemaBySchemaId(subject, schemaId);
-      if (isKey != null && (subject == null || strategyUsesSchema(isKey))) {
+      if (subject == null || strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
@@ -183,6 +187,9 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
+      if (validate && validateBeforeDomainRules) {
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
+      }
       if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
           jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
@@ -192,16 +199,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         );
       }
 
-      if (validate) {
-        try {
-          if (jsonNode == null) {
-            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
-          }
-          jsonNode = schema.validate(jsonNode);
-        } catch (JsonProcessingException | ValidationException e) {
-          throw new SerializationException("JSON does not match schema of type "
-              + schema.schemaType(), e);
-        }
+      if (validate && !validateBeforeDomainRules) {
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
 
       Object value;
@@ -339,5 +338,18 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   ) throws SerializationException {
     return (JsonSchemaAndValue) deserialize(
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
+  }
+
+  protected JsonNode validateJson(JsonNode jsonNode, ByteBuffer buffer, int start, int length,
+      JsonSchema schema) throws IOException {
+    try {
+      if (jsonNode == null) {
+        jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+      }
+      return schema.validate(jsonNode);
+    } catch (JsonProcessingException | ValidationException e) {
+      throw new SerializationException("JSON does not match schema of type "
+          + schema.schemaType(), e);
+    }
   }
 }

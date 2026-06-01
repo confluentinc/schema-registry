@@ -181,6 +181,29 @@ public interface ParsedSchema {
                     Map<SchemaEntity, Set<String>> tagsToRemove);
 
   /**
+   * Returns a copy of this schema, but with the given tags.
+   *
+   * @param tagsToAdd map of tags to add to the schema record or field, where the key is the entity
+   *                  and the value is the set of tags. If the tag already exists, do nothing.
+   * @param tagsToRemove map of tags to remove from the schema record or field, where the key is
+   *                     the entity and the value is the set of tags. If the tag does not exist,
+   *                     do nothing.
+   * @param addBeforeRemove whether to add tags before removing tags.
+   * @return a copy of this schema, but with the given tags
+   */
+  default ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                            Map<SchemaEntity, Set<String>> tagsToRemove,
+                            boolean addBeforeRemove) {
+    // Implementations of this interface should override this with a more efficient implementation
+    if (addBeforeRemove) {
+      return copy(tagsToAdd, tagsToRemove);
+    } else {
+      ParsedSchema schema = copy(Collections.emptyMap(), tagsToRemove);
+      return schema.copy(tagsToAdd, Collections.emptyMap());
+    }
+  }
+
+  /**
    * Returns a normalized copy of this schema.
    * Normalization generally ignores ordering when it is not significant.
    *

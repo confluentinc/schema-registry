@@ -77,6 +77,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -105,7 +107,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Common fields and helper methods for both the serializer and the deserializer.
  */
-public abstract class AbstractKafkaSchemaSerDe implements Closeable {
+public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListener, Closeable {
 
   private static final Logger log = LoggerFactory.getLogger(AbstractKafkaSchemaSerDe.class);
 
@@ -577,6 +579,11 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     return schemaRegistry.getSchemaBySubjectAndId(subject, id);
   }
 
+  public Schema getSchemaEntityBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    return schemaRegistry.getSchemaEntityBySubjectAndId(subject, id);
+  }
+
   protected ParsedSchema getSchemaBySchemaId(String subject, SchemaId schemaId)
       throws IOException, RestClientException {
     if (schemaId.getId() != null) {
@@ -588,12 +595,25 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
     }
   }
 
+  @Deprecated
   protected ParsedSchema lookupSchemaBySubjectAndId(
       String subject, int id, ParsedSchema schema, boolean idCompatStrict)
       throws IOException, RestClientException {
     ParsedSchema lookupSchema = getSchemaBySubjectAndId(subject, id);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
       throw new IOException("Incompatible schema of type '" + lookupSchema.schemaType()
+          + "'. Set id.compatibility.strict=false to disable this check");
+    }
+    return lookupSchema;
+  }
+
+  protected Schema lookupSchemaEntityBySubjectAndId(
+      String subject, int id, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    Schema lookupSchema = getSchemaEntityBySubjectAndId(subject, id);
+    ParsedSchema lookupParsedSchema = schemaRegistry.parseSchemaOrElseThrow(lookupSchema);
+    if (idCompatStrict && !lookupParsedSchema.isBackwardCompatible(schema).isEmpty()) {
+      throw new IOException("Incompatible schema of type '" + lookupParsedSchema.schemaType()
           + "'. Set id.compatibility.strict=false to disable this check");
     }
     return lookupSchema;
@@ -757,7 +777,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
               message = result;
               break;
             default:
-              throw new IllegalStateException("Unsupported rule kind " + rule.getKind());
+              throw new IllegalArgumentException("Unsupported rule kind " + rule.getKind());
           }
           runAction(ctx, ruleMode, rule,
               message != null ? getOnSuccess(rule) : getOnFailure(rule),
@@ -768,7 +788,7 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         }
       } else {
         runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
-            new RuleException("Could not find rule executor of type " + rule.getType()),
+            new RuleException(rule, "Could not find rule executor of type " + rule.getType()),
             ErrorAction.TYPE);
       }
     }
@@ -901,10 +921,19 @@ public abstract class AbstractKafkaSchemaSerDe implements Closeable {
         case DOWNGRADE:
           return parts[1];
         default:
-          throw new IllegalStateException("Unsupported rule mode " + ruleMode);
+          throw new IllegalArgumentException("Unsupported rule mode " + ruleMode);
       }
     } else {
       return actionName;
+    }
+  }
+
+  @Override
+  public void onUpdate(ClusterResource clusterResource) {
+    if (clusterResource != null && clusterResource.clusterId() != null) {
+      String clusterId = clusterResource.clusterId();
+      keySubjectNameStrategy.setKafkaClusterId(clusterId);
+      valueSubjectNameStrategy.setKafkaClusterId(clusterId);
     }
   }
 

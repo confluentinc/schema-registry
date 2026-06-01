@@ -131,7 +131,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload,
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
       Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
@@ -145,17 +145,18 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
       return null;
     }
 
+    boolean isKey = key != null ? key : this.isKey;
     SchemaId schemaId = new SchemaId(ProtobufSchema.TYPE);
     try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
       ByteBuffer buffer =
           schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
-      String subject = isKey == null || strategyUsesSchema(isKey)
+      String subject = strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
       ProtobufSchema schema = (ProtobufSchema) getSchemaBySchemaId(subject, schemaId);
       MessageIndexes indexes = new MessageIndexes(schemaId.getMessageIndexes());
       String name = schema.toMessageName(indexes);
       schema = schemaWithName(schema, name);
-      if (isKey != null && (subject == null || strategyUsesSchema(isKey))) {
+      if (subject == null || strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
         schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }

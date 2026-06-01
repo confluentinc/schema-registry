@@ -15,20 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.ASSOCIATION_FROZEN_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.INVALID_ASSOCIATION_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
-import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
@@ -39,30 +25,21 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
-import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
-import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOp;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationOpRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResponse;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.TagSchemaRequest;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.IllegalPropertyException;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
-import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
-import io.confluent.kafka.schemaregistry.exceptions.AssociationFrozenException;
 import io.confluent.kafka.schemaregistry.exceptions.IdGenerationException;
+import io.confluent.kafka.schemaregistry.exceptions.AssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.IncompatibleSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.NoActiveSubjectVersionExistsException;
@@ -75,7 +52,6 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryTimeoutException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaVersionNotSoftDeletedException;
-import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotFoundException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectNotSoftDeletedException;
 import io.confluent.kafka.schemaregistry.exceptions.SubjectSoftDeletedException;
@@ -87,24 +63,18 @@ import io.confluent.kafka.schemaregistry.metrics.MetricsContainer;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.storage.encoder.KafkaMetadataEncoderService;
-import io.confluent.kafka.schemaregistry.exceptions.AssociationForResourceExistsException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.EntryTooLargeException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreInitializationException;
 import io.confluent.kafka.schemaregistry.storage.exceptions.StoreTimeoutException;
-import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
 import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.exceptions.RestException;
-import io.confluent.rest.exceptions.RestServerErrorException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -115,9 +85,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
 
-import java.util.stream.Collectors;
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -693,10 +663,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   @Override
-  public void deleteSchemaVersion(String subject,
-                                  Schema schema,
+  public int deleteSchemaVersion(String subject,
+                                  int version,
                                   boolean permanentDelete)
       throws SchemaRegistryException {
+    Schema schema = validateDeleteSchemaVersion(subject, version, permanentDelete);
+
     try {
       if (isReadOnlyMode(subject)) {
         String context = QualifiedSubject.qualifiedContextFor(tenant(), subject);
@@ -761,24 +733,28 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       throw new SchemaRegistryStoreException("Error while deleting the schema for subject '"
                                             + subject + "' in the backend Kafka store", e);
     }
+    // in case need to resolve the latest version to reflect the real version
+    return schema.getVersion();
   }
 
-  public void deleteSchemaVersionOrForward(
-      Map<String, String> headerProperties, String subject,
-      Schema schema, boolean permanentDelete) throws SchemaRegistryException {
-
+  @Override
+  public int deleteSchemaVersionOrForward(
+      Map<String, String> requestProperties,
+      String subject,
+      int version,
+      boolean permanentDelete) throws SchemaRegistryException {
     kafkaStore.lockFor(subject).lock();
     try {
       if (isLeader()) {
-        deleteSchemaVersion(subject, schema, permanentDelete);
+        return deleteSchemaVersion(subject, version, permanentDelete);
       } else {
-        // forward registering request to the leader
+        // Follower forwards to leader without validation
         if (leaderIdentity != null) {
-          forwardDeleteSchemaVersionRequestToLeader(headerProperties, subject,
-                  schema.getVersion(), permanentDelete);
+          return forwardDeleteSchemaVersionRequestToLeader(requestProperties, subject,
+                  version, permanentDelete);
         } else {
-          throw new UnknownLeaderException("Register schema request failed since leader is "
-                                           + "unknown");
+          throw new UnknownLeaderException("Delete schema version request failed since leader is "
+                  + "unknown");
         }
       }
     } finally {
@@ -812,7 +788,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       while (schemasToBeDeleted.hasNext()) {
         deleteWatermarkVersion = schemasToBeDeleted.next().getVersion();
         SchemaKey key = new SchemaKey(subject, deleteWatermarkVersion);
-        if (!getReferencedBy(key, permanentDelete).isEmpty()) {
+        Set<String> referencedBySubjects = getReferencedBySubjects(key, permanentDelete);
+        referencedBySubjects.remove(subject);
+        if (!referencedBySubjects.isEmpty()) {
           throw new ReferenceExistsException(key.toString());
         }
         if (permanentDelete) {
@@ -829,8 +807,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         DeleteSubjectValue value = new DeleteSubjectValue(subject, deleteWatermarkVersion);
         kafkaStore.put(key, value);
       } else {
-        for (Integer version : deletedVersions) {
-          kafkaStore.put(new SchemaKey(subject, version), null);
+        // delete in descending order to account for intra-subject references
+        for (int i = deletedVersions.size() - 1; i >= 0; i--) {
+          kafkaStore.put(new SchemaKey(subject, deletedVersions.get(i)), null);
         }
         if (getMode(subject) != null) {
           deleteMode(subject);
@@ -923,12 +902,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public AssociationResponse createAssociation(
-      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
-      throws SchemaRegistryException {
-    return createOrUpdateAssociation(context, dryRun, request, true);
-  }
-
   public AssociationResponse createAssociationOrForward(String context, boolean dryRun,
       AssociationCreateOrUpdateRequest request,
       Map<String, String> headerProperties)
@@ -951,108 +924,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public AssociationBatchResponse mutateAssociations(
-      String context, boolean dryRun, AssociationBatchRequest request) {
-    List<AssociationResult> results = new ArrayList<>();
-    for (AssociationOpRequest req : request.getRequests()) {
-      kafkaStore.lockFor(context).lock();
-      try {
-        req.validate(dryRun);
-        for (AssociationOp op : req.getAssociations()) {
-          switch (op.getType()) {
-            case CREATE:
-              createAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op));
-              break;
-            case UPSERT:
-              createOrUpdateAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op));
-              break;
-            case DELETE:
-              deleteAssociations(
-                  req.getResourceId(),
-                  req.getResourceType(),
-                  Collections.singletonList(((AssociationDeleteOp) op).getAssociationType()),
-                  false, dryRun
-              );
-              break;
-            default:
-              break;
-          }
-        }
-        List<Association> associations = null;
-        if (!dryRun) {
-          associations = getAssociationsByResourceId(
-              req.getResourceId(), req.getResourceType(), Collections.emptyList(), null);
-        }
-        results.add(new AssociationResult(null,
-            Association.toAssociationResponse(
-                req.getResourceName(), req.getResourceNamespace(),
-                req.getResourceId(), req.getResourceType(),
-                associations, Collections.emptyMap())));
-      } catch (IllegalPropertyException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INVALID_ASSOCIATION_ERROR_CODE,
-            String.format(INVALID_ASSOCIATION_MESSAGE_FORMAT, e.getPropertyName(), e.getDetail()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationForResourceExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FOR_RESOURCE_EXISTS_ERROR_CODE,
-            String.format(ASSOCIATION_FOR_RESOURCE_EXISTS_MESSAGE_FORMAT,
-                e.getAssociationType(), e.getResource()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationForSubjectExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
-            String.format(ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (AssociationFrozenException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            ASSOCIATION_FROZEN_ERROR_CODE,
-            String.format(ASSOCIATION_FROZEN_MESSAGE_FORMAT,
-                e.getAssociationType(), e.getSubject()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (NoActiveSubjectVersionExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            NO_ACTIVE_SUBJECT_VERSION_EXISTS_ERROR_CODE,
-            String.format(NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT,
-                e.getMessage()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (StrongAssociationForSubjectExistsException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE,
-            String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
-        results.add(new AssociationResult(errMsg, null));
-      } catch (TooManyAssociationsException e) {
-        // TODO maxKeys
-        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
-      } catch (InvalidSchemaException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INVALID_ASSOCIATION_ERROR_CODE,
-            e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } catch (SchemaTooLargeException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            SCHEMA_TOO_LARGE_ERROR_CODE,
-            e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } catch (IncompatibleSchemaException e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            INCOMPATIBLE_SCHEMA_ERROR_CODE,
-            e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } catch (Exception e) {
-        ErrorMessage errMsg = new ErrorMessage(
-            RestServerErrorException.DEFAULT_ERROR_CODE,
-            "Error while creating association: " + e.getMessage());
-        results.add(new AssociationResult(errMsg, null));
-      } finally {
-        kafkaStore.lockFor(context).unlock();
-      }
-    }
-    return new AssociationBatchResponse(results);
-  }
-
   public AssociationBatchResponse mutateAssociationsOrForward(
       String context, boolean dryRun,
       AssociationBatchRequest request,
@@ -1072,226 +943,21 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public AssociationResponse createOrUpdateAssociation(
-      String context, boolean dryRun, AssociationCreateOrUpdateRequest request)
-      throws SchemaRegistryException {
-    return createOrUpdateAssociation(context, dryRun, request, false);
+  @Override
+  protected void syncBeforeAssociationWrite(String qualifiedSubject)
+      throws SchemaRegistryStoreException {
+    try {
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while syncing for subject '" + qualifiedSubject
+              + "' in the backend Kafka store", e);
+    }
   }
 
-  public AssociationResponse createOrUpdateAssociation(
-      String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
-      boolean isCreateOnly)
+  @Override
+  protected void putAssociation(AssociationValue associationValue)
       throws SchemaRegistryException {
-    // Replace aliases and check for read-only mode
-    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String unqualifiedSubject = info.getSubject();
-      QualifiedSubject qs = replaceAlias(context, unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      if (isReadOnlyMode(qualifiedSubject)) {
-        throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
-            + qs.getContext() + " is in read-only mode");
-      }
-
-      // Set the subject in the request to the subject with context
-      info.setSubject(qs.toUnqualifiedSubject());
-
-      try {
-        // Ensure cache is up-to-date before any potential writes
-        kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
-      } catch (StoreException e) {
-        throw new SchemaRegistryStoreException("Error while putting the association for subject '"
-            + qualifiedSubject + "' in the backend Kafka store", e);
-      }
-    }
-
-    // Check that association types are unique
-    Map<String, AssociationCreateOrUpdateInfo> infosByType = new LinkedHashMap<>();
-    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String associationType = info.getAssociationType();
-      if (infosByType.containsKey(associationType)) {
-        throw new IllegalPropertyException(
-            "associationType", "Duplicate association type: " + associationType);
-      }
-      infosByType.put(associationType, info);
-    }
-
-    List<Association> associations = getAssociationsByResourceId(
-        request.getResourceId(), request.getResourceType(),
-        new ArrayList<>(infosByType.keySet()), null);
-
-    // Check whether the resource already has an association
-    Map<String, Association> assocsByType = associations.stream()
-        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
-    Set<String> assocTypesToSkip = new HashSet<>();
-    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String unqualifiedSubject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      String associationType = info.getAssociationType();
-      Association association = assocsByType.get(associationType);
-      if (association == null) {
-        // If on create, frozen is set to true, ensure that a schema is being
-        // passed in, and that no other schemas exist in the subject
-        if (Boolean.TRUE.equals(info.getFrozen())) {
-          if (info.getSchema() == null) {
-            throw new IllegalPropertyException(
-                "schema", "schema must be provided when creating a frozen association");
-          }
-          if (getLatestVersion(qualifiedSubject) != null) {
-            throw new IllegalPropertyException(
-                "frozen", "cannot create a frozen association when schemas already exist "
-                    + "in the subject");
-          }
-        }
-        continue;
-      }
-      if (association.isEquivalent(info)) {
-        if (isCreateOnly && info.getSchema() != null) {
-          boolean normalize = Boolean.TRUE.equals(info.getNormalize());
-          Schema oldSchema = lookUpSchemaUnderSubject(
-              qualifiedSubject, new Schema(qualifiedSubject, info.getSchema()), normalize, false);
-          if (oldSchema == null) {
-            throw new AssociationForResourceExistsException(
-                association.getAssociationType(), association.getResourceName());
-          }
-        }
-        // Idempotent case - skip
-        assocTypesToSkip.add(info.getAssociationType());
-        continue;
-      }
-      if (isCreateOnly) {
-        throw new AssociationForResourceExistsException(
-            association.getAssociationType(), association.getResourceName());
-      }
-      if (!association.getSubject().equals(unqualifiedSubject)) {
-        throw new IllegalPropertyException(
-            "subject", "subject of association cannot be changed");
-      }
-      // Don't allow the frozen attribute to be updated
-      if (info.getFrozen() != null && association.isFrozen() != info.getFrozen()) {
-        throw new IllegalPropertyException(
-            "frozen", "frozen attribute of association cannot be changed");
-      }
-      if (association.isFrozen()) {
-        throw new AssociationFrozenException(
-            association.getAssociationType(), association.getSubject());
-      }
-      if (association.getLifecycle() == LifecyclePolicy.WEAK
-          && Boolean.TRUE.equals(info.getFrozen())) {
-        throw new IllegalPropertyException(
-            "frozen", "association with lifecycle of WEAK cannot be frozen");
-      }
-    }
-
-    // Check that at least one schema exists
-    // If this association is strong, check no other associations exist
-    // If this association is weak, check no strong associations exist
-    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String unqualifiedSubject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      String associationType = info.getAssociationType();
-      Association association = assocsByType.get(associationType);
-      if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
-        throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
-      }
-      List<Association> assocsBySubject = getAssociationsBySubject(
-          qualifiedSubject, null, Collections.emptyList(), null).stream()
-          .filter(a -> association == null
-              || !(a.getResourceId().equals(association.getResourceId())
-                   && a.getResourceType().equals(association.getResourceType())
-                   && a.getAssociationType().equals(association.getAssociationType())))
-          .collect(Collectors.toList());
-      switch (info.getLifecycle()) {
-        case STRONG:
-          if (!assocsBySubject.isEmpty()) {
-            throw new AssociationForSubjectExistsException(unqualifiedSubject);
-          }
-          break;
-        case WEAK:
-          if (Boolean.TRUE.equals(info.getFrozen())) {
-            throw new IllegalPropertyException(
-                "frozen", "association with lifecycle of WEAK cannot be frozen");
-          }
-          if (assocsBySubject.stream()
-              .anyMatch(assoc -> assoc.getLifecycle() == LifecyclePolicy.STRONG)) {
-            throw new StrongAssociationForSubjectExistsException(unqualifiedSubject);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-
-    // Check compatibility of all schemas
-    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String unqualifiedSubject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      RegisterSchemaRequest schema = info.getSchema();
-      if (schema == null) {
-        continue;
-      }
-      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
-
-      List<SchemaKey> previousSchemas = new ArrayList<>();
-      // Don't check compatibility against deleted schema
-      getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
-
-      List<String> errorLogs = isCompatible(qualifiedSubject,
-          new Schema(qualifiedSubject, schema), previousSchemas, normalize);
-      if (!errorLogs.isEmpty()) {
-        throw new IncompatibleSchemaException(errorLogs.toString());
-      }
-    }
-
-    if (dryRun) {
-      return new AssociationResponse(
-          request.getResourceName(),
-          request.getResourceNamespace(),
-          request.getResourceId(),
-          request.getResourceType(),
-          Collections.emptyList()
-      );
-    }
-
-    // Register schemas
-    Map<String, Schema> registeredSchemas = new HashMap<>();
-    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
-      String associationType = info.getAssociationType();
-      String unqualifiedSubject = info.getSubject();
-      QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-      String qualifiedSubject = qs.toQualifiedSubject();
-      RegisterSchemaRequest schema = info.getSchema();
-      if (schema == null) {
-        continue;
-      }
-      Mode subjectMode = getModeInScope(qualifiedSubject);
-      if (subjectMode == Mode.IMPORT) {
-        continue;
-      }
-      boolean normalize = Boolean.TRUE.equals(info.getNormalize());
-      Schema registeredSchema = register(qualifiedSubject,
-          new Schema(qualifiedSubject, schema), normalize, false);
-      registeredSchemas.put(associationType, registeredSchema);
-    }
-
-    List<AssociationValue> associationValues =
-        AssociationValue.fromAssociationCreateOrUpdateRequest(
-            tenant(), request, associations, assocTypesToSkip);
-    for (AssociationValue associationValue : associationValues) {
-      putAssociation(associationValue);
-    }
-    return Association.toAssociationResponse(
-        request.getResourceName(), request.getResourceNamespace(),
-        request.getResourceId(), request.getResourceType(),
-        associationValues.stream()
-            .map(AssociationValue::toAssociationEntity)
-            .collect(Collectors.toList()),
-        registeredSchemas);
-  }
-
-  private void putAssociation(AssociationValue associationValue) throws SchemaRegistryException {
     String qualifiedSubject = associationValue.getSubject();
     try {
       AssociationKey associationKey = associationValue.toKey();
@@ -1306,24 +972,31 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private QualifiedSubject replaceAlias(String context, String subject) {
-    QualifiedSubject qs = QualifiedSubject.create(tenant(), context, subject);
+  @Override
+  protected void deleteAssociationEntry(Association oldAssociation)
+      throws SchemaRegistryException {
+    String unqualifiedSubject = oldAssociation.getSubject();
+    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
     String qualifiedSubject = qs.toQualifiedSubject();
-    Config config = null;
     try {
-      config = getConfig(qualifiedSubject);
-    } catch (Exception e) {
-      // fall through
+      AssociationKey key = new AssociationKey(
+          tenant(), oldAssociation.getResourceName(),
+          oldAssociation.getResourceNamespace(), oldAssociation.getResourceType(),
+          oldAssociation.getAssociationType(), qualifiedSubject);
+      kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
+      kafkaStore.put(key, null);
+    } catch (StoreTimeoutException te) {
+      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out", te);
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException(
+          "Error while deleting the association for subject '"
+              + qualifiedSubject + "' in the backend Kafka store", e);
     }
-    if (config == null) {
-      return qs;
-    }
-    String alias = config.getAlias();
-    if (alias != null && !alias.isEmpty()) {
-      return QualifiedSubject.qualifySubjectWithParent(tenant(), qualifiedSubject, alias, true);
-    } else {
-      return qs;
-    }
+  }
+
+  @Override
+  protected Lock lockForAssociation(String context) {
+    return kafkaStore.lockFor(context);
   }
 
   public AssociationResponse createOrUpdateAssociationOrForward(String context, boolean dryRun,
@@ -1348,183 +1021,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  public Association getAssociationByGuid(String guid)
-      throws SchemaRegistryException {
-    try {
-      AssociationValue associationValue = lookupCache.associationByGuid(guid);
-      return associationValue != null ? associationValue.toAssociationEntity() : null;
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while getting association for guid '"
-          + guid + "' in the backend Kafka store", e);
-    }
-  }
-
-  public List<Association> getAssociationsBySubject(
-      String subject, String resourceType, List<String> associationTypes,
-      LifecyclePolicy lifecycle) throws SchemaRegistryException {
-    List<Association> associations = new ArrayList<>();
-    if (subject == null) {
-      return associations;
-    }
-    try (CloseableIterator<AssociationValue> iter = lookupCache.associationsBySubject(subject)) {
-      while (iter.hasNext()) {
-        AssociationValue value = iter.next();
-        if ((resourceType == null || value.getResourceType().equals(resourceType))
-            && (associationTypes == null || associationTypes.isEmpty()
-            || associationTypes.contains(value.getAssociationType()))
-            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
-          associations.add(value.toAssociationEntity());
-        }
-      }
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while getting associations for subject '"
-          + subject + "' in the backend Kafka store", e);
-    }
-    Collections.sort(associations);
-    return associations;
-  }
-
-  public List<Association> getAssociationsByResourceId(
-      String resourceId, String resourceType, List<String> associationTypes,
-      LifecyclePolicy lifecycle) throws SchemaRegistryException {
-    List<Association> associations = new ArrayList<>();
-    if (resourceId == null) {
-      return associations;
-    }
-    try (CloseableIterator<AssociationValue> iter =
-        lookupCache.associationsByResourceId(resourceId)) {
-      while (iter.hasNext()) {
-        AssociationValue value = iter.next();
-        if ((resourceType == null || value.getResourceType().equals(resourceType))
-            && (associationTypes == null || associationTypes.isEmpty()
-            || associationTypes.contains(value.getAssociationType()))
-            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
-          associations.add(value.toAssociationEntity());
-        }
-      }
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while getting associations for resource id '"
-          + resourceId + "' in the backend Kafka store", e);
-    }
-    Collections.sort(associations);
-    return associations;
-  }
-
-  public List<Association> getAssociationsByResourceName(
-      String resourceName, String resourceNamespace,
-      String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
-      throws SchemaRegistryException {
-    String tenant = tenant();
-    List<Association> associations = new ArrayList<>();
-    if (resourceName == null) {
-      return associations;
-    }
-    String minResourceNamespace = resourceNamespace != null
-        && !resourceNamespace.equals(RESOURCE_WILDCARD)
-        ? resourceNamespace
-        : String.valueOf(Character.MIN_VALUE);
-    String maxResourceNamespace = resourceNamespace != null
-        && !resourceNamespace.equals(RESOURCE_WILDCARD)
-        ? resourceNamespace
-        : String.valueOf(Character.MAX_VALUE);
-    String minResourceType = resourceType != null
-        ? resourceType
-        : String.valueOf(Character.MIN_VALUE);
-    String maxResourceType = resourceType != null
-        ? resourceType
-        : String.valueOf(Character.MAX_VALUE);
-    String minAssociationType = String.valueOf(Character.MIN_VALUE);
-    String maxAssociationType = String.valueOf(Character.MAX_VALUE);
-    String minSubject = String.valueOf(Character.MIN_VALUE);
-    String maxSubject = String.valueOf(Character.MAX_VALUE);
-
-    AssociationKey key1 = new AssociationKey(tenant, resourceName, minResourceNamespace,
-        minResourceType, minAssociationType, minSubject);
-    AssociationKey key2 = new AssociationKey(tenant, resourceName, maxResourceNamespace,
-        maxResourceType, maxAssociationType, maxSubject);
-    try (CloseableIterator<SchemaRegistryValue> iter = kafkaStore.getAll(key1, key2)) {
-      while (iter.hasNext()) {
-        AssociationValue value = (AssociationValue) iter.next();
-        if ((associationTypes == null || associationTypes.isEmpty()
-            || associationTypes.contains(value.getAssociationType()))
-            && (lifecycle == null || value.getLifecycle().toLifecyclePolicy() == lifecycle)) {
-          associations.add(value.toAssociationEntity());
-        }
-      }
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException(
-          "Error while retrieving schema from the backend Kafka"
-              + " store", e);
-    }
-    Collections.sort(associations);
-    return associations;
-  }
-
-  public void deleteAssociations(
-      String resourceId, String resourceType, List<String> associationTypes,
-      boolean cascadeLifecycle, boolean dryRun)
-      throws SchemaRegistryException {
-    List<Association> associations = getAssociationsByResourceId(resourceId,
-        resourceType, associationTypes, null);
-    for (Association association : associations) {
-      checkDeleteAssociation(association, cascadeLifecycle);
-    }
-    if (dryRun) {
-      return;
-    }
-    for (Association association : associations) {
-      deleteAssociation(association, cascadeLifecycle);
-    }
-  }
-
-  private void checkDeleteAssociation(
-      Association oldAssociation, boolean cascadeLifecycle)
-      throws SchemaRegistryException {
-    String unqualifiedSubject = oldAssociation.getSubject();
-    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-    String qualifiedSubject = qs.toQualifiedSubject();
-    if (isReadOnlyMode(qualifiedSubject)) {
-      throw new OperationNotPermittedException("Subject " + qs.getSubject() + " in context "
-          + qs.getContext() + " is in read-only mode");
-    }
-
-    // If the association is frozen, cascadeLifecycle must be true when deleting
-    if (!cascadeLifecycle && oldAssociation.isFrozen()) {
-      throw new AssociationFrozenException(
-          oldAssociation.getAssociationType(), oldAssociation.getSubject());
-    }
-  }
-
-  private void deleteAssociation(Association oldAssociation, boolean cascadeLifecycle)
-      throws SchemaRegistryException {
-    String unqualifiedSubject = oldAssociation.getSubject();
-    QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
-    String qualifiedSubject = qs.toQualifiedSubject();
-    try {
-      AssociationKey key = new AssociationKey(
-          tenant(), oldAssociation.getResourceName(),
-          oldAssociation.getResourceNamespace(), oldAssociation.getResourceType(),
-          oldAssociation.getAssociationType(), qualifiedSubject);
-      // Ensure cache is up-to-date before any potential writes
-      kafkaStore.waitUntilKafkaReaderReachesLastOffset(qualifiedSubject, kafkaStoreTimeoutMs);
-      kafkaStore.put(key, null);
-    } catch (StoreTimeoutException te) {
-      throw new SchemaRegistryTimeoutException("Write to the Kafka store timed out while", te);
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error while deleting the association for subject '"
-          + qualifiedSubject + "' in the backend Kafka store", e);
-    }
-
-    Mode subjectMode = getModeInScope(qualifiedSubject);
-    if (subjectMode == Mode.IMPORT) {
-      return;
-    }
-    if (cascadeLifecycle && oldAssociation.getLifecycle() == LifecyclePolicy.STRONG) {
-      // Delete subject
-      deleteSubject(qualifiedSubject, false);
-      deleteSubject(qualifiedSubject, true);
-    }
-  }
 
   public void deleteAssociationsOrForward(
       String subject,  // subject is only used for locking per tenant
@@ -1612,7 +1108,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
   }
 
-  private void forwardDeleteSchemaVersionRequestToLeader(
+  private int forwardDeleteSchemaVersionRequestToLeader(
       Map<String, String> headerProperties,
       String subject,
       Integer version,
@@ -1622,7 +1118,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     log.debug("Forwarding deleteSchemaVersion schema version request {}-{} to {}", subject,
             version, baseUrl);
     try {
-      leaderRestService.deleteSchemaVersion(headerProperties, subject,
+      return leaderRestService.deleteSchemaVersion(headerProperties, subject,
               String.valueOf(version), permanentDelete);
     } catch (IOException e) {
       throw new SchemaRegistryRequestForwardingException(

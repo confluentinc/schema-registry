@@ -142,6 +142,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.DecimalProto;
+import io.confluent.protobuf.type.VariantProto;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -261,6 +262,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static final String CFLT_META_LOCATION = "confluent/meta.proto";
   public static final String CFLT_DECIMAL_LOCATION = "confluent/type/decimal.proto";
+  public static final String CFLT_VARIANT_LOCATION = "confluent/type/variant.proto";
   public static final String CALENDAR_PERIOD_LOCATION = "google/type/calendar_period.proto";
   public static final String COLOR_LOCATION = "google/type/color.proto";
   public static final String DATE_LOCATION = "google/type/date.proto";
@@ -293,6 +295,8 @@ public class ProtobufSchema implements ParsedSchema {
       toProtoFile(MetaProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement CFLT_DECIMAL_SCHEMA =
       toProtoFile(DecimalProto.getDescriptor().toProto()) ;
+  private static final ProtoFileElement CFLT_VARIANT_SCHEMA =
+      toProtoFile(VariantProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement CALENDAR_PERIOD_SCHEMA =
       toProtoFile(CalendarPeriodProto.getDescriptor().toProto()) ;
   private static final ProtoFileElement COLOR_SCHEMA =
@@ -355,10 +359,12 @@ public class ProtobufSchema implements ParsedSchema {
     EXTENSION_REGISTRY = ExtensionRegistry.newInstance();
     DecimalProto.registerAllExtensions(EXTENSION_REGISTRY);
     MetaProto.registerAllExtensions(EXTENSION_REGISTRY);
+    VariantProto.registerAllExtensions(EXTENSION_REGISTRY);
 
     KNOWN_DEPENDENCIES = new HashMap<>();
     KNOWN_DEPENDENCIES.put(CFLT_META_LOCATION, CFLT_META_SCHEMA);
     KNOWN_DEPENDENCIES.put(CFLT_DECIMAL_LOCATION, CFLT_DECIMAL_SCHEMA);
+    KNOWN_DEPENDENCIES.put(CFLT_VARIANT_LOCATION, CFLT_VARIANT_SCHEMA);
     KNOWN_DEPENDENCIES.put(CALENDAR_PERIOD_LOCATION, CALENDAR_PERIOD_SCHEMA);
     KNOWN_DEPENDENCIES.put(COLOR_LOCATION, COLOR_SCHEMA);
     KNOWN_DEPENDENCIES.put(DATE_LOCATION, DATE_SCHEMA);
@@ -460,7 +466,7 @@ public class ProtobufSchema implements ParsedSchema {
           )));
       this.metadata = metadata;
       this.ruleSet = ruleSet;
-    } catch (IllegalStateException e) {
+    } catch (IllegalArgumentException | IllegalStateException e) {
       log.error("Could not parse Protobuf schema", e);
       throw e;
     }
@@ -639,9 +645,16 @@ public class ProtobufSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
+    return copy(tagsToAdd, tagsToRemove, true);
+  }
+
+  @Override
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove,
+                           boolean addBeforeRemove) {
     ProtobufSchema schemaCopy = this.copy();
     JsonNode original = jsonMapper.valueToTree(schemaCopy.rawSchema());
-    modifySchemaTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(schemaCopy.rawSchema(), original, tagsToAdd, tagsToRemove, addBeforeRemove);
     try {
       ProtoFileElement newFileElement = jsonToFile(original);
       return new ProtobufSchema(newFileElement.toSchema(),
@@ -656,7 +669,7 @@ public class ProtobufSchema implements ParsedSchema {
         schemaCopy.name()
       );
     } catch (JsonProcessingException e) {
-      throw new IllegalStateException("Cannot deserialize json into ProtoFileElement", e);
+      throw new IllegalArgumentException("Cannot deserialize json into ProtoFileElement", e);
     }
   }
 
@@ -1692,7 +1705,8 @@ public class ProtobufSchema implements ParsedSchema {
       cache.put(name, dynamicSchema);
       return dynamicSchema;
     } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalArgumentException(
+          "Invalid protobuf schema definition: " + e.getMessage(), e);
     }
   }
 
@@ -1912,7 +1926,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static Declaration toDeclaration(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     Declaration.Builder builder = Declaration.newBuilder();
@@ -1941,7 +1955,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static FeatureSet toFeatures(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     FeatureSet.Builder builder = FeatureSet.newBuilder();
@@ -2002,7 +2016,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static FeatureSupport toFeatureSupport(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     FeatureSupport.Builder builder = FeatureSupport.newBuilder();
@@ -2039,7 +2053,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   public static EditionDefault toEditionDefault(OptionElement option) {
     if (option.getKind() != Kind.MAP) {
-      throw new IllegalStateException("Expected option of kind MAP");
+      throw new IllegalArgumentException("Expected option of kind MAP");
     }
     Map<String, ?> map = (Map<String, ?>) option.getValue();
     EditionDefault.Builder builder = EditionDefault.newBuilder();
@@ -3027,7 +3041,8 @@ public class ProtobufSchema implements ParsedSchema {
 
   private void modifySchemaTags(ProtoFileElement original, JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap,
+                                boolean addBeforeRemove) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
     Map<Object, OptionElement> optionCache = new HashMap<>();
@@ -3065,47 +3080,95 @@ public class ProtobufSchema implements ParsedSchema {
       }
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        OptionElement newOption = new OptionElement(metaName, Kind.OPTION,
-            new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
-        allOptions.add(newOption);
-      }
-      mergedOptions = mergeOptions(allOptions);
-
       Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
-      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        OptionElement metaOptionElement = mergedOptions.get(metaName);
-        if (metaOptionElement != null) {
-          LinkedHashMap<String, Object> metaMap =
-              new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
-          Object tagsObj = metaMap.get(TAGS_FIELD);
-          if (tagsObj != null) {
-            List<Object> allTags;
-            if (tagsObj instanceof List) {
-              allTags = (List<Object>) tagsObj;
-            } else {
-              allTags = Collections.singletonList(tagsObj);
-            }
-            List<Object> remainingTags = allTags.stream()
-                .filter(tag -> !tagsToRemove.contains(tag))
-                .collect(Collectors.toCollection(ArrayList::new));
 
-            if (remainingTags.isEmpty()) {
-              metaMap.remove(TAGS_FIELD);
-            } else {
-              metaMap.put(TAGS_FIELD, remainingTags);
-            }
-
-            if (metaMap.isEmpty()) {
-              mergedOptions.remove(metaName);
-            } else {
-              mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
-            }
-          }
+      if (addBeforeRemove) {
+        // Add tags to allOptions before merging so they are folded in by mergeOptions()
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          OptionElement newOption = new OptionElement(metaName, Kind.OPTION,
+              new OptionElement(TAGS_FIELD, Kind.LIST, new ArrayList<>(tagsToAdd), false), true);
+          allOptions.add(newOption);
+        }
+        mergedOptions = mergeOptions(allOptions);
+        removeTags(mergedOptions, metaName, tagsToRemove);
+      } else {
+        // Merge existing options first, remove, then add directly into the merged result
+        // via addTags() since mergeOptions() has already been called
+        mergedOptions = mergeOptions(allOptions);
+        removeTags(mergedOptions, metaName, tagsToRemove);
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          addTags(mergedOptions, metaName, tagsToAdd);
         }
       }
       optionCache.put(matchingElement, mergedOptions.get(metaName));
       ((ObjectNode) entityNode).replace("options", jsonMapper.valueToTree(mergedOptions.values()));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void removeTags(Map<String, OptionElement> mergedOptions,
+                          String metaName, Set<String> tagsToRemove) {
+    if (tagsToRemove == null || tagsToRemove.isEmpty()) {
+      return;
+    }
+    OptionElement metaOptionElement = mergedOptions.get(metaName);
+    if (metaOptionElement != null) {
+      LinkedHashMap<String, Object> metaMap =
+          new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
+      Object tagsObj = metaMap.get(TAGS_FIELD);
+      if (tagsObj != null) {
+        List<Object> allTags;
+        if (tagsObj instanceof List) {
+          allTags = (List<Object>) tagsObj;
+        } else {
+          allTags = Collections.singletonList(tagsObj);
+        }
+        List<Object> remainingTags = allTags.stream()
+            .filter(tag -> !tagsToRemove.contains(tag))
+            .collect(Collectors.toCollection(ArrayList::new));
+
+        if (remainingTags.isEmpty()) {
+          metaMap.remove(TAGS_FIELD);
+        } else {
+          metaMap.put(TAGS_FIELD, remainingTags);
+        }
+
+        if (metaMap.isEmpty()) {
+          mergedOptions.remove(metaName);
+        } else {
+          mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
+        }
+      }
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void addTags(Map<String, OptionElement> mergedOptions,
+                       String metaName, Set<String> tagsToAdd) {
+    OptionElement metaOptionElement = mergedOptions.get(metaName);
+    if (metaOptionElement != null) {
+      LinkedHashMap<String, Object> metaMap =
+          new LinkedHashMap<>((Map<String, Object>) metaOptionElement.getValue());
+      Object tagsObj = metaMap.get(TAGS_FIELD);
+      List<Object> allTags;
+      if (tagsObj instanceof List) {
+        allTags = new ArrayList<>((List<Object>) tagsObj);
+      } else if (tagsObj != null) {
+        allTags = new ArrayList<>(Collections.singletonList(tagsObj));
+      } else {
+        allTags = new ArrayList<>();
+      }
+      for (String tag : tagsToAdd) {
+        if (!allTags.contains(tag)) {
+          allTags.add(tag);
+        }
+      }
+      metaMap.put(TAGS_FIELD, allTags);
+      mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
+    } else {
+      LinkedHashMap<String, Object> metaMap = new LinkedHashMap<>();
+      metaMap.put(TAGS_FIELD, new ArrayList<>(tagsToAdd));
+      mergedOptions.put(metaName, new OptionElement(metaName, Kind.MAP, metaMap, true));
     }
   }
 

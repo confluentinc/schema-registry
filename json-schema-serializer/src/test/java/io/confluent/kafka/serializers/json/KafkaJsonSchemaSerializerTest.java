@@ -35,7 +35,6 @@ import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
@@ -193,6 +192,32 @@ public class KafkaJsonSchemaSerializerTest {
   }
 
   @Test
+  public void testSerializeWithSchema() throws Exception {
+    User user = new User("john", "doe", (short) 50, "jack", null);
+    JsonSchema schema = JsonSchemaUtils.getSchema(
+        user, null, null, true, true, serializer.objectMapper(), schemaRegistry);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, user, schema);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
+    assertEquals(user, deserialized);
+
+    // verify null returns null
+    headers = new RecordHeaders();
+    byte[] nullBytes = serializer.serialize(topic, headers, null, schema);
+    assertEquals(null, nullBytes);
+
+    // verify same result as regular serialize
+    headers = new RecordHeaders();
+    byte[] regularBytes = serializer.serialize(topic, headers, user);
+    RecordHeaders headers2 = new RecordHeaders();
+    byte[] withSchemaBytes = serializer.serialize(topic, headers2, user, schema);
+    Object regular = getDeserializer(User.class).deserialize(topic, headers, regularBytes);
+    Object withSchema = getDeserializer(User.class).deserialize(topic, headers2, withSchemaBytes);
+    assertEquals(regular, withSchema);
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerForKey() {
     serializer.configure(new HashMap(config), true);
     assertTrue(serializer.isKey());
@@ -342,6 +367,28 @@ public class KafkaJsonSchemaSerializerTest {
   }
 
   @Test
+  public void testValidateBeforeDomainRules() throws Exception {
+    Properties validateBeforeConfig = createSerializerConfig();
+    validateBeforeConfig.put(
+        KafkaJsonSchemaSerializerConfig.VALIDATE_BEFORE_DOMAIN_RULES, true);
+    KafkaJsonSchemaSerializer<Object> validateBeforeSerializer =
+        new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(validateBeforeConfig));
+
+    // Valid user should succeed
+    User validUser = new User("john", "doe", (short) 50, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = validateBeforeSerializer.serialize(topic, headers, validUser);
+    Object deserialized = getDeserializer(User.class).deserialize(topic, headers, bytes);
+    assertEquals(validUser, deserialized);
+
+    // Invalid user (age < 0 violates @Min(0)) should fail validation before domain rules
+    User invalidUser = new User("john", "doe", (short) -1, "jack", LocalDate.parse("2018-12-27"));
+    RecordHeaders headers2 = new RecordHeaders();
+    assertThrows(SerializationException.class,
+        () -> validateBeforeSerializer.serialize(topic, headers2, invalidUser));
+  }
+
+  @Test
   public void serializeUserIgnoreNulls() throws Exception {
     User user = new User("john", "doe", (short) 50, "jack", null);
     JsonSchema userSchema = JsonSchemaUtils.getSchema(user, null, false, null);
@@ -419,11 +466,56 @@ public class KafkaJsonSchemaSerializerTest {
   }
 
   @Test
+  public void serializeRecordEnvelope() throws Exception {
+    String json = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode record = objectMapper.readTree(json);
+    JsonNode schemaNode = objectMapper.readTree(recordWithDefaultsSchemaString);
+    JsonNode envelope = JsonSchemaUtils.envelope(schemaNode, record);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = serializer.serialize(topic, headers, envelope);
+
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
+    assertEquals(record, deserialized);
+  }
+
+  @Test
+  public void serializeRecordEnvelopeWithoutDetection() throws Exception {
+    Properties noDetectionConfig = createSerializerConfig();
+    noDetectionConfig.put(KafkaJsonSchemaSerializerConfig.JSON_ENVELOPE_DETECTION, false);
+    KafkaJsonSchemaSerializer<Object> noDetectionSerializer =
+        new KafkaJsonSchemaSerializer<>(schemaRegistry, new HashMap(noDetectionConfig));
+
+    String json = "{\n"
+        + "    \"null\": null,\n"
+        + "    \"boolean\": true,\n"
+        + "    \"number\": 123,\n"
+        + "    \"string\": \"abc\"\n"
+        + "}";
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode record = objectMapper.readTree(json);
+    JsonNode schemaNode = objectMapper.readTree(recordWithDefaultsSchemaString);
+    JsonNode envelope = JsonSchemaUtils.envelope(schemaNode, record);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = noDetectionSerializer.serialize(topic, headers, envelope);
+
+    Object deserialized = getDeserializer(null).deserialize(topic, headers, bytes);
+    assertEquals(envelope, deserialized);
+  }
+
+  @Test
   public void testKafkaJsonSchemaDeserializerWithAssociatedNameStrategy()
       throws IOException, RestClientException {
     User user = new User("john", "doe", (short) 50, "jack", null);
     JsonSchema schema = JsonSchemaUtils.getSchema(user);
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    schemaRegistry.register("mysubject", schema);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         topic,
         "myresourcens",
@@ -435,7 +527,7 @@ public class KafkaJsonSchemaSerializerTest {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )

@@ -319,6 +319,24 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   /**
+   * Returns a BinaryDecoder that uses the given {@code bytes} as its source of data.
+   * 
+   * <p>Subclasses may override this method to supply a {@code reuse} BinaryDecoder
+   * instance, for example, via a {@link ThreadLocal}, to eliminate per-record 
+   * decoder allocation on high-throughput unmarshal paths.
+   *
+   * @param bytes  serialized payload after {@link DeserializationContext} processing.
+   * @param start  the offset into the bytes.
+   * @param length the number of bytes to read.
+   * @param reuse  the BinaryDecoder to attempt to reuse. If null, a new instance is returned.
+   * @return a BinaryDecoder positioned at {@code start}
+   */
+  protected BinaryDecoder getBinaryDecoder(
+      byte[] bytes, int start, int length, BinaryDecoder reuse) {
+    return decoderFactory.binaryDecoder(bytes, start, length, reuse);
+  }
+
+  /**
    * Normalizes the reader schema, puts the resolved schema into the cache. 
    * <li>
    * <ul>if the reader schema is provided, use the provided one</ul>
@@ -418,7 +436,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   class DeserializationContext {
     private final String topic;
-    private final Boolean isKey;
+    private final boolean isKey;
     private final Headers headers;
     private final byte[] payload;
     private final ByteBuffer buffer;
@@ -426,9 +444,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     private String subject;
 
     DeserializationContext(
-        final String topic, final Boolean isKey, Headers headers, final byte[] payload) {
+        final String topic, final Boolean key, Headers headers, final byte[] payload) {
       this.topic = topic;
-      this.isKey = isKey;
+      this.isKey = key != null ? key : AbstractKafkaAvroDeserializer.this.isKey;
       this.headers = headers;
       this.payload = payload;
       SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
@@ -451,10 +469,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaFromRegistry() {
       try {
-        String subjectName = isKey == null || strategyUsesSchema(isKey)
+        String subjectName = strategyUsesSchema(isKey)
             ? getContext() : getSubject();
         AvroSchema schema = (AvroSchema) getSchemaBySchemaId(subjectName, schemaId);
-        if (isKey != null && subjectName == null) {
+        if (subjectName == null) {
           this.subject = subjectName(topic, isKey, schema);
           schema = (AvroSchema) getSchemaBySchemaId(this.subject, schemaId);
         }
@@ -575,7 +593,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           result = bytes;
         } else {
           int start = buffer.position() + buffer.arrayOffset();
-          BinaryDecoder decoder = decoderFactory.binaryDecoder(buffer.array(), start, length, null);
+          BinaryDecoder decoder = getBinaryDecoder(buffer.array(), start, length, null);
           result = reader.read(null, decoder);
           if (avroFailOnTrailingData && !decoder.isEnd()) {
             throw new SerializationException("Trailing data found after deserializing Avro "
@@ -673,10 +691,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
-  private static String getSchemaType(Boolean isKey) {
-    if (isKey == null) {
-      return "unknown";
-    } else if (isKey) {
+  private static String getSchemaType(boolean isKey) {
+    if (isKey) {
       return "key";
     } else {
       return "value";

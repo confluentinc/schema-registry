@@ -20,6 +20,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.OauthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.UamiCredentialProvider;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -70,6 +71,18 @@ public class BearerAuthCredentialProviderFactoryTest {
 
     assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
         "CUSTOM", CONFIG_MAP), CustomBearerAuthCredentialProvider.class);
+  }
+
+  @Test
+  public void testUamiCredentialProvider() {
+    Map<String, String> CONFIG_MAP = new HashMap<>();
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, "lsrc-dummy");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, "my-pool-id");
+    CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_UAMI_ENDPOINT_QUERY,
+        "api-version=2025-04-07&resource=https%3A%2F%2Fconfluent.azure.com&client_id=uami-id");
+
+    assertInstance(BearerAuthCredentialProviderFactory.getBearerAuthCredentialProvider(
+        "UAMI", CONFIG_MAP), UamiCredentialProvider.class);
   }
 
   @Test

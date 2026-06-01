@@ -31,6 +31,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -894,6 +895,45 @@ public class AvroSchemaTest {
   }
 
   @Test
+  public void testAddBeforeRemoveTags() {
+    String schemaString = "{\n" +
+      "  \"name\": \"sampleRecord\",\n" +
+      "  \"namespace\": \"com.example.mynamespace\",\n" +
+      "  \"type\": \"record\",\n" +
+      "  \"fields\": [\n" +
+      "    {\n" +
+      "      \"name\": \"my_field1\",\n" +
+      "      \"type\": \"string\",\n" +
+      "      \"confluent:tags\": [ \"EXISTING\" ]\n" +
+      "    }\n" +
+      "  ]\n" +
+      "}\n";
+
+    AvroSchema schema = new AvroSchema(schemaString);
+    SchemaEntity fieldEntity = new SchemaEntity(
+        "com.example.mynamespace.sampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD);
+
+    // Use same tag "OVERLAP" in both add and remove, plus "EXISTING" in remove
+    Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(fieldEntity, ImmutableSet.of("OVERLAP", "EXISTING"));
+
+    // addBeforeRemove=true: add then remove, so OVERLAP is removed (remove wins)
+    ParsedSchema resultAddFirst = schema.copy(tagsToAdd, tagsToRemove, true);
+    Map<SchemaEntity, Set<String>> expectedAddFirst = new HashMap<>();
+    expectedAddFirst.put(fieldEntity, ImmutableSet.of("NEW"));
+    assertEquals(expectedAddFirst, resultAddFirst.inlineTaggedEntities());
+
+    // addBeforeRemove=false: remove then add, so OVERLAP is added (add wins)
+    ParsedSchema resultRemoveFirst = schema.copy(tagsToAdd, tagsToRemove, false);
+    Map<SchemaEntity, Set<String>> expectedRemoveFirst = new HashMap<>();
+    expectedRemoveFirst.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    assertEquals(expectedRemoveFirst, resultRemoveFirst.inlineTaggedEntities());
+  }
+
+  @Test
   public void testComplexAddAndRemoveTags() {
     String schemaString = "[\n" +
       "  \"null\",\n" +
@@ -1319,6 +1359,31 @@ public class AvroSchemaTest {
 
     ParsedSchema resultSchema = schema.copy(tags, Collections.emptyMap());
     assertEquals(expectSchema.canonicalString(), resultSchema.canonicalString());
+  }
+
+
+  @Test
+  public void testVariantLogicalTypeParse() {
+    AvroSchemaUtils.getGenericData(); // ensure static block fires
+    String json = "{\"type\":\"record\",\"name\":\"x\","
+        + "\"fields\":["
+        + "{\"name\":\"metadata\",\"type\":\"bytes\"},"
+        + "{\"name\":\"value\",\"type\":\"bytes\"}],"
+        + "\"logicalType\":\"variant\"}";
+    org.apache.avro.Schema parsed = new org.apache.avro.Schema.Parser().parse(json);
+    org.apache.avro.LogicalType lt = parsed.getLogicalType();
+    assertNotNull(
+        "Parsing a record schema with \"logicalType\":\"variant\" must "
+            + "reattach a VariantLogicalType instance — without registration, "
+            + "Avro's parser ignores the prop.",
+        lt);
+    assertEquals(VariantLogicalType.NAME, lt.getName());
+
+    AvroSchema schema = new AvroSchema(parsed).normalize();
+    parsed = schema.rawSchema();
+    lt = parsed.getLogicalType();
+    assertNotNull(lt);
+    assertEquals(VariantLogicalType.NAME, lt.getName());
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {

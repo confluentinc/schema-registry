@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.rest.RestService;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -160,8 +161,15 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   void close() throws IOException;
 
-  void deleteSchemaVersion(String subject, Schema schema,
+  int deleteSchemaVersion(String subject, int version,
                            boolean permanentDelete) throws SchemaRegistryException;
+
+  default int deleteSchemaVersionOrForward(Map<String, String> requestProperties,
+                                           String subject, int version,
+                                           boolean permanentDelete) throws
+          SchemaRegistryException {
+    return version;
+  }
 
   default String tenant() {
     return DEFAULT_TENANT;
@@ -180,6 +188,9 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   // Can be used to pass values between extensions
   Map<String, Object> properties();
 
+  /**
+   * Returns the metadata encoder, or {@code null} if SR-level encoding is disabled.
+   */
   MetadataEncoderService getMetadataEncoder();
 
   void addUpdateRequestHandler(UpdateRequestHandler updateRequestHandler);
@@ -316,10 +327,6 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
                                 Map<String, String> headerProperties) throws
           SchemaRegistryException {}
 
-  default void deleteSchemaVersionOrForward(Map<String, String> headerProperties, String subject,
-                                            Schema schema, boolean permanentDelete) throws
-          SchemaRegistryException {}
-
   default Schema modifySchemaTagsOrForward(String subject, Schema schema, TagSchemaRequest request,
                                            Map<String, String> headerProperties) throws
           SchemaRegistryException {
@@ -361,6 +368,12 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   default AssociationResponse createAssociationOrForward(String context, boolean dryRun,
       AssociationCreateOrUpdateRequest request,
       Map<String, String> headerProperties)
+      throws SchemaRegistryException {
+    return null;
+  }
+
+  default AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
       throws SchemaRegistryException {
     return null;
   }
@@ -412,6 +425,13 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
       String resourceName, String resourceNamespace,
       String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
       throws SchemaRegistryException {
+    return null;
+  }
+
+  default List<Association> getAssociationsByResourceNamespace(
+          String resourceNamespace,
+          String resourceType, List<String> associationTypes, LifecyclePolicy lifecycle)
+          throws SchemaRegistryException {
     return null;
   }
 

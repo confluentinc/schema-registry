@@ -160,13 +160,7 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode> {
         JsonNode object,
         ParsedSchema schema
     ) {
-      boolean oldIsKey = this.isKey;
-      this.isKey = isKey;
-      try {
-        return super.serializeImpl(subject, topic, headers, object, (JsonSchema) schema);
-      } finally {
-        this.isKey = oldIsKey;
-      }
+      return super.serializeImpl(subject, topic, isKey, headers, object, (JsonSchema) schema);
     }
 
     @Override

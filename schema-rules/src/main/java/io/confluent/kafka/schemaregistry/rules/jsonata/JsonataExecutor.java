@@ -103,7 +103,7 @@ public class JsonataExecutor implements RuleExecutor {
       try {
         return function.apply(config.toString());
       } catch (Exception e) {
-        throw new ConfigException("Cannot parse " + name);
+        throw new ConfigException("Cannot parse " + name, e);
       }
     }
     return null;
@@ -124,7 +124,7 @@ public class JsonataExecutor implements RuleExecutor {
       try {
         jsonObj = ctx.target().toJson(message);
       } catch (IOException e) {
-        throw new RuleException(e);
+        throw new RuleException(ctx.rule(), e);
       }
     }
     Expressions expr;
@@ -132,16 +132,24 @@ public class JsonataExecutor implements RuleExecutor {
       expr = cache.get(ctx.rule().getExpr());
     } catch (ExecutionException e) {
       if (e.getCause() instanceof RuleException) {
-        throw (RuleException) e.getCause();
+        RuleException re = (RuleException) e.getCause();
+        if (re.getRule() == null) {
+          throw new RuleException(ctx.rule(), re.getMessage(), re.getCause());
+        }
+        throw re;
       } else {
-        throw new RuleException("Could not get expression", e.getCause());
+        throw new RuleException(ctx.rule(), "Could not get expression", e.getCause());
       }
     }
     try {
       JsonNode result = expr.evaluate(jsonObj, timeoutMs, maxDepth);
-      return ctx.rule().getKind() == RuleKind.CONDITION ? result.asBoolean(true) : result;
+      if (ctx.rule().getKind() == RuleKind.CONDITION) {
+        return result != null ? result.asBoolean(true) : true;
+      } else {
+        return result != null ? result : message;
+      }
     } catch (EvaluateException e) {
-      throw new RuleException("Could not evaluate expression", e);
+      throw new RuleException(ctx.rule(), "Could not evaluate expression", e);
     }
   }
 }

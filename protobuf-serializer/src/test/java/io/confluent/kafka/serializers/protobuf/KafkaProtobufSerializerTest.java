@@ -28,7 +28,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.Format;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -332,6 +331,30 @@ public class KafkaProtobufSerializerTest {
     assertEquals(null, protobufDeserializer.deserialize(topic, headers, bytes));
   }
 
+
+  @Test
+  public void testSerializeWithSchema() {
+    ProtobufSchema schema = new ProtobufSchema(HELLO_WORLD_MESSAGE.getDescriptorForType());
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE, schema);
+    assertEquals(HELLO_WORLD_MESSAGE, testMessageDeserializer.deserialize(topic, headers, bytes));
+
+    // verify null returns null
+    headers = new RecordHeaders();
+    byte[] nullBytes = protobufSerializer.serialize(topic, headers, null, schema);
+    assertEquals(null, nullBytes);
+
+    // verify same result as regular serialize
+    headers = new RecordHeaders();
+    byte[] regularBytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    RecordHeaders headers2 = new RecordHeaders();
+    byte[] withSchemaBytes = protobufSerializer.serialize(
+        topic, headers2, HELLO_WORLD_MESSAGE, schema);
+    assertEquals(
+        testMessageDeserializer.deserialize(topic, headers, regularBytes),
+        testMessageDeserializer.deserialize(topic, headers2, withSchemaBytes));
+  }
 
   @Test(expected = InvalidConfigurationException.class)
   public void testKafkaJsonSchemaSerializerWithoutConfigure() {
@@ -847,7 +870,7 @@ public class KafkaProtobufSerializerTest {
   public void testKafkaProtobufDeserializerWithAssociatedNameStrategy()
       throws IOException, RestClientException {
     ProtobufSchema schema = new ProtobufSchema(TestMessage.getDescriptor());
-    RegisterSchemaRequest valueRequest = new RegisterSchemaRequest(schema);
+    schemaRegistry.register("mysubject", schema);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         topic,
         "myresourcens",
@@ -859,7 +882,7 @@ public class KafkaProtobufSerializerTest {
                 "value",
                 LifecyclePolicy.STRONG,
                 false,
-                valueRequest,
+                null,
                 null
             )
         )

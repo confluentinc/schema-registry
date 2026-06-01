@@ -94,7 +94,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
 
   @SuppressWarnings("unchecked")
   protected byte[] serializeImpl(
-      String subject, String topic, boolean isKey, Headers headers, T object, ProtobufSchema schema
+      String subject, String topic, Boolean key, Headers headers, T object, ProtobufSchema schema
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -109,6 +109,7 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
       boolean autoRegisterForDeps = autoRegisterSchema && !onlyLookupReferencesBySchema;
@@ -139,10 +140,10 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           String formatted = schema.formattedString(schemaFormat);
           schema = schema.copyWithSchema(formatted);
         }
-        schema = (ProtobufSchema)
-            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        // omit the GUID when useSchemaId is set
-        schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, (String) null);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            lookupSchemaEntityBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        schema = (ProtobufSchema) schemaRegistry.parseSchemaOrElseThrow(s);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, useSchemaId, s.getGuid());
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
         if (schemaFormat != null) {
@@ -150,8 +151,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           schema = schema.copyWithSchema(formatted);
         }
         schema = (ProtobufSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
-        // omit the ID when useSchemaGuid is set
-        schemaId = new SchemaId(ProtobufSchema.TYPE, null, useSchemaGuid);
+        int id = schemaRegistry.getId(subject, schema);
+        schemaId = new SchemaId(ProtobufSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);

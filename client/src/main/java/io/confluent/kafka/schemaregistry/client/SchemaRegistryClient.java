@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryDeployment;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaRegistryServerVersion;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -172,6 +173,11 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
       throws IOException, RestClientException;
 
+  default Schema getSchemaEntityBySubjectAndId(String subject, int id)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   default ParsedSchema getSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
     throw new UnsupportedOperationException();
@@ -263,6 +269,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     return getConfig(subject).getCompatibilityLevel();
   }
 
+  default String getCompatibility(
+      String subject, boolean defaultToGlobal)
+      throws IOException, RestClientException {
+    return getConfig(subject, defaultToGlobal).getCompatibilityLevel();
+  }
+
   default void deleteCompatibility(String subject) throws IOException, RestClientException {
     deleteConfig(subject);
   }
@@ -273,6 +285,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   default Config getConfig(String subject) throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  default Config getConfig(
+      String subject, boolean defaultToGlobal)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 
@@ -454,6 +472,12 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   public default void deleteAssociations(String resourceId, String resourceType,
                                          List<String> associationTypes, boolean cascadeLifecycle)
           throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
+  public default AssociationBatchResponse batchGetAssociations(
+      boolean includeSchemas, AssociationBatchGetRequest request)
+      throws IOException, RestClientException {
     throw new UnsupportedOperationException();
   }
 

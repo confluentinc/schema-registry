@@ -26,6 +26,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.avro.type.VariantConversion;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -45,6 +47,7 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaParseException;
 import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
@@ -73,6 +76,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -90,6 +94,7 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
+    LogicalTypes.register(VariantLogicalType.NAME, schema -> VariantLogicalType.get());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
@@ -122,6 +127,84 @@ public class AvroSchemaUtils {
     genericData.remove();
     reflectData.remove();
     specificData.remove();
+  }
+
+  // Walks a parsed Schema and validates simple names of named types, field names,
+  // and enum symbols against Avro's STRICT_VALIDATOR rules. Namespaces and aliases
+  // are intentionally not validated. Used in the NO_VALIDATION parser path so
+  // that callers can keep strict name checks while leaving namespaces unchecked.
+  public static void validateNames(Schema schema) {
+    if (schema == null) {
+      return;
+    }
+    validateNames(schema, Collections.newSetFromMap(new IdentityHashMap<>()));
+  }
+
+  private static void validateNames(Schema schema, Set<Schema> seen) {
+    if (schema == null || !seen.add(schema)) {
+      return;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        validateName(schema.getName(), "Name");
+        for (Schema.Field field : schema.getFields()) {
+          validateName(field.name(), "Name");
+          validateNames(field.schema(), seen);
+        }
+        break;
+      case ENUM:
+        validateName(schema.getName(), "Name");
+        for (String symbol : schema.getEnumSymbols()) {
+          validateName(symbol, "Name");
+        }
+        break;
+      case FIXED:
+        validateName(schema.getName(), "Name");
+        break;
+      case ARRAY:
+        validateNames(schema.getElementType(), seen);
+        break;
+      case MAP:
+        validateNames(schema.getValueType(), seen);
+        break;
+      case UNION:
+        for (Schema branch : schema.getTypes()) {
+          validateNames(branch, seen);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private static void validateName(String name, String typeOfName) {
+    if (name == null) {
+      throw new SchemaParseException(typeOfName + " is null");
+    }
+    int length = name.length();
+    if (length == 0) {
+      throw new SchemaParseException(typeOfName + " is empty");
+    }
+    char first = name.charAt(0);
+    if (!isStrictLetter(first) && first != '_') {
+      throw new SchemaParseException(
+          typeOfName + " \"" + name + "\" is invalid: Illegal initial character: " + name);
+    }
+    for (int i = 1; i < length; i++) {
+      char c = name.charAt(i);
+      if (!isStrictLetter(c) && !isStrictDigit(c) && c != '_') {
+        throw new SchemaParseException(
+            typeOfName + " \"" + name + "\" is invalid: Illegal character in: " + name);
+      }
+    }
+  }
+
+  private static boolean isStrictLetter(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+  }
+
+  private static boolean isStrictDigit(char c) {
+    return c >= '0' && c <= '9';
   }
 
   public static GenericData getGenericData(boolean useLogicalTypes) {
@@ -171,6 +254,7 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    avroData.addLogicalTypeConversion(new VariantConversion());
     avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
@@ -557,6 +641,9 @@ public class AvroSchemaUtils {
         } else {
           build(env, s.getValueType(), o.append(",\"values\":"));
         }
+        if (lt != null) {
+          setLogicalProps(o, lt);
+        }
         setSimpleProps(o, s.getObjectProps());
         return o.append("}");
 
@@ -584,11 +671,6 @@ public class AvroSchemaUtils {
           o.append("]");
         } else if (st == Schema.Type.FIXED) {
           o.append(",\"size\":").append(Integer.toString(s.getFixedSize()));
-          lt = s.getLogicalType();
-          // adding the logical property
-          if (lt != null) {
-            setLogicalProps(o, lt);
-          }
         } else { // st == Schema.Type.RECORD
           o.append(",\"fields\":[");
           for (Schema.Field f : s.getFields()) {
@@ -603,6 +685,9 @@ public class AvroSchemaUtils {
             o.append("}");
           }
           o.append("]");
+        }
+        if (lt != null) {
+          setLogicalProps(o, lt);
         }
         setComplexProps(o, s);
         setSimpleProps(o, s.getObjectProps());

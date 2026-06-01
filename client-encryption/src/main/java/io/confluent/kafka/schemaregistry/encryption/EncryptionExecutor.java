@@ -277,20 +277,20 @@ public class EncryptionExecutor implements RuleExecutor {
     protected String getKekName(RuleContext ctx) throws RuleException {
       String name = ctx.getParameter(ENCRYPT_KEK_NAME);
       if (name == null) {
-        throw new RuleException("No kek name found");
+        throw new RuleException(ctx.rule(), "No kek name found");
       }
       int length = name.length();
       if (length == 0) {
-        throw new RuleException("Empty kek name");
+        throw new RuleException(ctx.rule(), "Empty kek name");
       }
       char first = name.charAt(0);
       if (!(Character.isLetter(first) || first == '_')) {
-        throw new RuleException("Illegal initial character in kek name: " + name);
+        throw new RuleException(ctx.rule(), "Illegal initial character in kek name: " + name);
       }
       for (int i = 1; i < length; i++) {
         char c = name.charAt(i);
         if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
-          throw new RuleException("Illegal character in kek name: " + name);
+          throw new RuleException(ctx.rule(), "Illegal character in kek name: " + name);
         }
       }
       return name;
@@ -303,32 +303,34 @@ public class EncryptionExecutor implements RuleExecutor {
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
       String kmsKeyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
 
-      Kek kek = retrieveKekFromRegistry(kekId);
+      Kek kek = retrieveKekFromRegistry(ctx, kekId);
       if (kek == null) {
         if (isRead) {
-          throw new RuleException("No kek found for " + kekName + " during consume");
+          throw new RuleException(ctx.rule(), "No kek found for " + kekName + " during consume");
         }
         if (kmsType == null || kmsType.isEmpty()) {
-          throw new RuleException("No kms type found for " + kekName + " during produce");
+          throw new RuleException(ctx.rule(),
+              "No kms type found for " + kekName + " during produce");
         }
         if (kmsKeyId == null || kmsKeyId.isEmpty()) {
-          throw new RuleException("No kms key id found for " + kekName + " during produce");
+          throw new RuleException(ctx.rule(),
+              "No kms key id found for " + kekName + " during produce");
         }
-        kek = storeKekToRegistry(kekId, kmsType, kmsKeyId, false);
+        kek = storeKekToRegistry(ctx, kekId, kmsType, kmsKeyId, false);
         if (kek == null) {
           // Handle conflicts (409)
-          kek = retrieveKekFromRegistry(kekId);
+          kek = retrieveKekFromRegistry(ctx, kekId);
         }
         if (kek == null) {
-          throw new RuleException("No kek found for " + kekName + " during produce");
+          throw new RuleException(ctx.rule(), "No kek found for " + kekName + " during produce");
         }
       }
       if (kmsType != null && !kmsType.isEmpty() && !kmsType.equals(kek.getKmsType())) {
-        throw new RuleException("Found " + kekName + " with kms type '"
+        throw new RuleException(ctx.rule(), "Found " + kekName + " with kms type '"
             + kek.getKmsType() + "' which differs from rule kms type '" + kmsType + "'");
       }
       if (kmsKeyId != null && !kmsKeyId.isEmpty() && !kmsKeyId.equals(kek.getKmsKeyId())) {
-        throw new RuleException("Found " + kekName + " with kms key id '"
+        throw new RuleException(ctx.rule(), "Found " + kekName + " with kms key id '"
             + kek.getKmsKeyId() + "' which differs from rule kms key id '" + kmsKeyId + "'");
       }
       return kek;
@@ -343,28 +345,31 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         dekExpiryDays = Integer.parseInt(expiryStr);
       } catch (NumberFormatException e) {
-        throw new RuleException("Invalid value for " + ENCRYPT_DEK_EXPIRY_DAYS + ": " + expiryStr);
+        throw new RuleException(
+            ctx.rule(), "Invalid value for " + ENCRYPT_DEK_EXPIRY_DAYS + ": " + expiryStr);
       }
       if (dekExpiryDays < 0) {
-        throw new RuleException("Invalid value for " + ENCRYPT_DEK_EXPIRY_DAYS + ": " + expiryStr);
+        throw new RuleException(
+            ctx.rule(), "Invalid value for " + ENCRYPT_DEK_EXPIRY_DAYS + ": " + expiryStr);
       }
       return dekExpiryDays;
     }
 
-    private Kek retrieveKekFromRegistry(KekId key) throws RuleException {
+    private Kek retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
       try {
         return client.getKek(key.getName(), key.isLookupDeleted());
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;
         }
-        throw new RuleClientException("Could not get kek " + key.getName(), e);
+        throw new RuleClientException(ctx.rule(), "Could not get kek " + key.getName(), e);
       } catch (IOException e) {
-        throw new RuleClientException("Could not get kek " + key.getName(), e);
+        throw new RuleClientException(ctx.rule(), "Could not get kek " + key.getName(), e);
       }
     }
 
-    private Kek storeKekToRegistry(KekId key, String kmsType, String kmsKeyId, boolean shared)
+    private Kek storeKekToRegistry(
+        RuleContext ctx, KekId key, String kmsType, String kmsKeyId, boolean shared)
         throws RuleException {
       try {
         Kek kek = client.createKek(
@@ -376,9 +381,9 @@ public class EncryptionExecutor implements RuleExecutor {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleClientException("Could not register kek " + key.getName(), e);
+        throw new RuleClientException(ctx.rule(), "Could not register kek " + key.getName(), e);
       } catch (IOException e) {
-        throw new RuleClientException("Could not register kek " + key.getName(), e);
+        throw new RuleClientException(ctx.rule(), "Could not register kek " + key.getName(), e);
       }
     }
 
@@ -388,7 +393,7 @@ public class EncryptionExecutor implements RuleExecutor {
       DekId dekId = new DekId(kekName, ctx.subject(), version, cryptor.getDekFormat(), isRead);
 
       Aead aead = null;
-      Dek dek = retrieveDekFromRegistry(dekId);
+      Dek dek = retrieveDekFromRegistry(ctx, dekId);
       boolean isExpired = isExpired(ctx, dek);
       if (isExpired) {
         log.info("Dek with ts " + dek.getTimestamp()
@@ -396,7 +401,8 @@ public class EncryptionExecutor implements RuleExecutor {
       }
       if (dek == null || isExpired) {
         if (isRead) {
-          throw new RuleException("No dek found for " + kekName + " during consume");
+          throw new RuleException(
+              ctx.rule(), "No dek found for " + kekName + " during consume");
         }
         byte[] encryptedDek = null;
         if (!kek.isShared()) {
@@ -409,7 +415,7 @@ public class EncryptionExecutor implements RuleExecutor {
         }
         Integer newVersion = isExpired ? dek.getVersion() + 1 : null;
         try {
-          dek = createDek(dekId, newVersion, encryptedDek);
+          dek = createDek(ctx, dekId, newVersion, encryptedDek);
         } catch (RuleException e) {
           if (dek == null) {
             throw e;
@@ -430,19 +436,20 @@ public class EncryptionExecutor implements RuleExecutor {
       return dek;
     }
 
-    private Dek createDek(DekId dekId, Integer newVersion, byte[] encryptedDek)
+    private Dek createDek(RuleContext ctx, DekId dekId, Integer newVersion, byte[] encryptedDek)
         throws RuleException {
       DekId newDekId = new DekId(dekId.getKekName(), dekId.getSubject(), newVersion,
           dekId.getDekFormat(), dekId.isLookupDeleted());
       // encryptedDek may be passed as null if kek is shared
-      Dek dek = storeDekToRegistry(newDekId, encryptedDek);
+      Dek dek = storeDekToRegistry(ctx, newDekId, encryptedDek);
       if (dek == null) {
         // Handle conflicts (409)
         // Use the original version, which should be null or LATEST_VERSION
-        dek = retrieveDekFromRegistry(dekId);
+        dek = retrieveDekFromRegistry(ctx, dekId);
       }
       if (dek == null) {
-        throw new RuleException("No dek found for " + dekId.getKekName() + " during produce");
+        throw new RuleException(
+            ctx.rule(), "No dek found for " + dekId.getKekName() + " during produce");
       }
       return dek;
     }
@@ -454,7 +461,7 @@ public class EncryptionExecutor implements RuleExecutor {
           && (clock.millis() - dek.getTimestamp()) / MILLIS_IN_DAY >= dekExpiryDays;
     }
 
-    private Dek retrieveDekFromRegistry(DekId key)
+    private Dek retrieveDekFromRegistry(RuleContext ctx, DekId key)
         throws RuleException {
       try {
         Dek dek;
@@ -471,15 +478,15 @@ public class EncryptionExecutor implements RuleExecutor {
         if (e.getStatus() == 404) {
           return null;
         }
-        throw new RuleClientException("Could not get dek for kek " + key.getKekName()
+        throw new RuleClientException(ctx.rule(), "Could not get dek for kek " + key.getKekName()
             + ", subject " + key.getSubject(), e);
       } catch (IOException e) {
-        throw new RuleClientException("Could not get dek for kek " + key.getKekName()
+        throw new RuleClientException(ctx.rule(), "Could not get dek for kek " + key.getKekName()
             + ", subject " + key.getSubject(), e);
       }
     }
 
-    private Dek storeDekToRegistry(DekId key, byte[] encryptedDek)
+    private Dek storeDekToRegistry(RuleContext ctx, DekId key, byte[] encryptedDek)
         throws RuleException {
       try {
         String encryptedDekStr = encryptedDek != null
@@ -500,11 +507,11 @@ public class EncryptionExecutor implements RuleExecutor {
         if (e.getStatus() == 409) {
           return null;
         }
-        throw new RuleClientException("Could not register dek for kek " + key.getKekName()
-            + ", subject " + key.getSubject(), e);
+        throw new RuleClientException(ctx.rule(), "Could not register dek for kek "
+            + key.getKekName() + ", subject " + key.getSubject(), e);
       } catch (IOException e) {
-        throw new RuleClientException("Could not register dek for kek " + key.getKekName()
-            + ", subject " + key.getSubject(), e);
+        throw new RuleClientException(ctx.rule(), "Could not register dek for kek "
+            + key.getKekName() + ", subject " + key.getSubject(), e);
       }
     }
 
@@ -523,7 +530,7 @@ public class EncryptionExecutor implements RuleExecutor {
             if (plaintext == null) {
               if (ctx.currentField() == null || !ctx.currentField().isInCombined()) {
                 throw new RuleException(
-                    "Type '" + type + "' not supported for encryption");
+                    ctx.rule(), "Type '" + type + "' not supported for encryption");
               }
               return value;
             }
@@ -557,7 +564,15 @@ public class EncryptionExecutor implements RuleExecutor {
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
         }
       } catch (Exception e) {
-        throw new RuleException(e);
+        if (e instanceof RuleException) {
+          RuleException re = (RuleException) e;
+          if (re.getRule() == null) {
+            throw new RuleException(ctx.rule(), re.getMessage(), re.getCause());
+          }
+          throw re;
+        } else {
+          throw new RuleException(ctx.rule(), e);
+        }
       }
     }
 

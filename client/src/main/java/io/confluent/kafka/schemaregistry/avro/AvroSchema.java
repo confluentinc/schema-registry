@@ -121,6 +121,14 @@ public class AvroSchema implements ParsedSchema {
       parser.parse(schema);
     }
     this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
+    if (!isNew) {
+      // For new schemas, strict validation is already applied.
+      // For non-new schemas, validation is skipped.
+      // The NO_VALIDATION parser path skips both name and namespace checks;
+      // we still want strict name validation for non-new schemas, so apply it
+      // here on the main schema only (references are already-registered schemas).
+      AvroSchemaUtils.validateNames(this.schemaObj);
+    }
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
     this.metadata = metadata;
@@ -207,6 +215,13 @@ public class AvroSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
+    return copy(tagsToAdd, tagsToRemove, true);
+  }
+
+  @Override
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove,
+                           boolean addBeforeRemove) {
     AvroSchema schemaCopy = this.copy();
     JsonNode original;
     try {
@@ -214,7 +229,7 @@ public class AvroSchema implements ParsedSchema {
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);
     }
-    modifySchemaTags(original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(original, tagsToAdd, tagsToRemove, addBeforeRemove);
     return new AvroSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
@@ -744,7 +759,7 @@ public class AvroSchema implements ParsedSchema {
       getInlineTagsRecursively(tags, jsonNode);
       return tags;
     } catch (IOException e) {
-      throw new IllegalStateException("Could not parse schema: " + canonicalString());
+      throw new IllegalArgumentException("Could not parse Avro schema");
     }
   }
 
@@ -839,7 +854,8 @@ public class AvroSchema implements ParsedSchema {
 
   private void modifySchemaTags(JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap,
+                                boolean addBeforeRemove) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
@@ -848,13 +864,22 @@ public class AvroSchema implements ParsedSchema {
       Set<String> allTags = getInlineTags(nodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        allTags.addAll(tagsToAdd);
-      }
-
       Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
-      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        allTags.removeAll(tagsToRemove);
+
+      if (addBeforeRemove) {
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+      } else {
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
       }
 
       if (allTags.isEmpty()) {

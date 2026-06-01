@@ -34,7 +34,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
@@ -97,7 +96,7 @@ public class KafkaAvroConfigDeserializerTest {
     return io.confluent.kafka.example.annotated.User.newBuilder().setName("testUser").build();
   }
 
-  @Test(expected = SerializationException.class)
+  @Test
   public void testKafkaAvroSerializerWithPreRegisteredUseSchemaId()
       throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
@@ -116,5 +115,7 @@ public class KafkaAvroConfigDeserializerTest {
     IndexedRecord annotatedUserRecord = createAnnotatedUserRecord();
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = avroSerializer.serialize(topic, headers, annotatedUserRecord);
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, headers, bytes));
+    assertEquals(avroRecord, avroDecoder.fromBytes(headers, bytes));
   }
 }

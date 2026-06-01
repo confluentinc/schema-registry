@@ -59,9 +59,11 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
   protected ObjectMapper objectMapper = Jackson.newObjectMapper();
   protected SpecificationVersion specVersion;
   protected List<String> scanPackages;
+  protected boolean envelopeDetection;
   protected boolean oneofForNullables;
   protected boolean failUnknownProperties;
   protected boolean validate;
+  protected boolean validateBeforeDomainRules;
 
   protected void configure(KafkaJsonSchemaSerializerConfig config) {
     configureClientProperties(config, new JsonSchemaProvider());
@@ -81,6 +83,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.specVersion = SpecificationVersion.get(
         config.getString(KafkaJsonSchemaSerializerConfig.SCHEMA_SPEC_VERSION));
     this.scanPackages = config.getList(KafkaJsonSchemaSerializerConfig.SCHEMA_SCAN_PACKAGES);
+    this.envelopeDetection =
+        config.getBoolean(KafkaJsonSchemaSerializerConfig.JSON_ENVELOPE_DETECTION);
     this.oneofForNullables = config.getBoolean(KafkaJsonSchemaSerializerConfig.ONEOF_FOR_NULLABLES);
     String inclusion = config.getString(KafkaJsonSchemaSerializerConfig.DEFAULT_PROPERTY_INCLUSION);
     if (inclusion != null) {
@@ -89,6 +93,8 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     this.failUnknownProperties =
         config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_UNKNOWN_PROPERTIES);
     this.validate = config.getBoolean(KafkaJsonSchemaSerializerConfig.FAIL_INVALID_SCHEMA);
+    this.validateBeforeDomainRules =
+        config.getBoolean(KafkaJsonSchemaSerializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
   }
 
   protected KafkaJsonSchemaSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -108,13 +114,14 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
       T object,
       JsonSchema schema
   ) throws SerializationException, InvalidConfigurationException {
-    return serializeImpl(subject, null, null, object, schema);
+    return serializeImpl(subject, null, null, null, object, schema);
   }
 
   @SuppressWarnings("unchecked")
   protected byte[] serializeImpl(
       String subject,
       String topic,
+      Boolean key,
       Headers headers,
       T object,
       JsonSchema schema
@@ -132,6 +139,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
       SchemaId schemaId;
@@ -149,15 +157,15 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         schemaId = new SchemaId(JsonSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
-        schema = (JsonSchema)
-            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        // omit the GUID when useSchemaId is set
-        schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, (String) null);
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            lookupSchemaEntityBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        schema = (JsonSchema) schemaRegistry.parseSchemaOrElseThrow(s);
+        schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, s.getGuid());
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
         schema = (JsonSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
-        // omit the ID when useSchemaGuid is set
-        schemaId = new SchemaId(JsonSchema.TYPE, null, useSchemaGuid);
+        int id = schemaRegistry.getId(subject, schema);
+        schemaId = new SchemaId(JsonSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
@@ -176,8 +184,11 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
             schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
         schemaId = new SchemaId(JsonSchema.TYPE, response.getId(), response.getGuid());
       }
+      if (validate && validateBeforeDomainRules) {
+        object = validateJson(object, schema);
+      }
       object = (T) executeRules(subject, topic, headers, RuleMode.WRITE, null, schema, object);
-      if (validate) {
+      if (validate && !validateBeforeDomainRules) {
         object = validateJson(object, schema);
       }
       try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey)) {

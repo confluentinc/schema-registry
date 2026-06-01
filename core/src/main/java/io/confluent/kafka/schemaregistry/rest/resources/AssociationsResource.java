@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.rest.resources;
 import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchGetRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
@@ -164,8 +165,14 @@ public class AssociationsResource {
     }
     try {
       limit = schemaRegistry.normalizeSchemaLimit(limit);
-      List<Association> associations = schemaRegistry.getAssociationsByResourceName(
-          resourceName, resourceNamespace, resourceType, associationTypes, lifecycle);
+      List<Association> associations;
+      if (SchemaRegistry.RESOURCE_WILDCARD.equals(resourceName)) {
+        associations = schemaRegistry.getAssociationsByResourceNamespace(
+            resourceNamespace, resourceType, associationTypes, lifecycle);
+      } else {
+        associations = schemaRegistry.getAssociationsByResourceName(
+            resourceName, resourceNamespace, resourceType, associationTypes, lifecycle);
+      }
       return associations.stream()
           .skip(offset)
           .limit(limit)
@@ -243,7 +250,7 @@ public class AssociationsResource {
     log.debug("Creating association {}", request);
 
     try {
-      request.validate(dryRun);
+      request.validate(true, dryRun);
     } catch (IllegalPropertyException e) {
       throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     }
@@ -333,7 +340,7 @@ public class AssociationsResource {
     }
 
     try {
-      request.validate(dryRun);
+      request.validate(false, dryRun);
     } catch (IllegalPropertyException e) {
       throw Errors.invalidAssociationException(e.getPropertyName(), e.getDetail());
     }
@@ -387,13 +394,43 @@ public class AssociationsResource {
     }
   }
 
-  @Path("/associations:batch")
+  @Path("/associations:batchGet")
+  @POST
+  @Operation(summary = "Batch get associations.", responses = {
+      @ApiResponse(responseCode = "207", description = "The batch get response",
+          content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
+  })
+  @PerformanceMetric("associations.batch-get")
+  @DocumentedName("batchGetAssociations")
+  public Response batchGetAssociations(
+      @Parameter(description = "Include schemas in response")
+      @DefaultValue("false") @QueryParam("includeSchemas") boolean includeSchemas,
+      @Parameter(description = "The batch get request", required = true)
+      @NotNull AssociationBatchGetRequest request) {
+
+    if (request.getRequests() == null || request.getRequests().isEmpty()) {
+      throw Errors.invalidAssociationException("requests", "cannot be null or empty");
+    }
+
+    String errorMessage = "Error while batch getting associations";
+    try {
+      AssociationBatchResponse response =
+          schemaRegistry.batchGetAssociations(includeSchemas, request);
+      return Response.status(207).entity(response).build();
+    } catch (SchemaRegistryStoreException e) {
+      throw Errors.storeException(errorMessage, e);
+    } catch (SchemaRegistryException e) {
+      throw Errors.schemaRegistryException(errorMessage, e);
+    }
+  }
+
+  @Path("/associations:batchMutate")
   @POST
   @Operation(summary = "Mutate associations in batch.", responses = {
       @ApiResponse(responseCode = "207", description = "The batch response",
           content = @Content(schema = @Schema(implementation = AssociationBatchResponse.class)))
   })
-  @PerformanceMetric("associations.mutate")
+  @PerformanceMetric("associations.batch-mutate")
   @DocumentedName("mutateAssociations")
   public void mutateAssociations(
       final @Suspended AsyncResponse asyncResponse,
@@ -418,7 +455,7 @@ public class AssociationsResource {
       }
       AssociationBatchResponse response = schemaRegistry.mutateAssociationsOrForward(
           context, dryRun, request, headerProperties);
-      asyncResponse.resume(response);
+      asyncResponse.resume(Response.status(207).entity(response).build());
     } catch (SchemaRegistryTimeoutException e) {
       throw Errors.operationTimeoutException("Register operation timed out", e);
     } catch (SchemaRegistryStoreException e) {

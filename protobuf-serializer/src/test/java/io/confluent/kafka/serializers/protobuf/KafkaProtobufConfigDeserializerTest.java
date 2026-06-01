@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
@@ -78,7 +77,7 @@ public class KafkaProtobufConfigDeserializerTest {
     return deserializerConfig;
   }
 
-  @Test(expected = SerializationException.class)
+  @Test
   public void testKafkaProtobufSerializerWithPreRegisteredUseSchemaId()
       throws IOException, RestClientException {
     Map configs = ImmutableMap.of(
@@ -96,5 +95,6 @@ public class KafkaProtobufConfigDeserializerTest {
     schemaRegistry.register("io.confluent.kafka.serializers.protobuf.test.TestMessage", schema);
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = protobufSerializer.serialize(topic, headers, HELLO_WORLD_MESSAGE);
+    assertEquals(HELLO_WORLD_MESSAGE, protobufDeserializer.deserialize(topic, headers, bytes));
   }
 }

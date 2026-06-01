@@ -2764,6 +2764,45 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testAddBeforeRemoveTags() {
+    String schemaString = "syntax = \"proto3\";\n" +
+        "package com.example.mynamespace;\n" +
+        "\n" +
+        "import \"confluent/meta.proto\";\n" +
+        "\n" +
+        "message SampleRecord {\n" +
+        "  string my_field1 = 1 [(confluent.field_meta) = {\n" +
+        "    tags: [\n" +
+        "      \"EXISTING\"\n" +
+        "    ]\n" +
+        "  }];\n" +
+        "}\n";
+
+    SchemaEntity fieldEntity = new SchemaEntity(".SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD);
+
+    // Use same tag "OVERLAP" in both add and remove, plus "EXISTING" in remove
+    Map<SchemaEntity, Set<String>> tagsToAdd = new HashMap<>();
+    tagsToAdd.put(fieldEntity, ImmutableSet.of("OVERLAP", "NEW"));
+    Map<SchemaEntity, Set<String>> tagsToRemove = new HashMap<>();
+    tagsToRemove.put(fieldEntity, ImmutableSet.of("OVERLAP", "EXISTING"));
+
+    // addBeforeRemove=true: add then remove, so OVERLAP is removed (remove wins)
+    ParsedSchema resultAddFirst = new ProtobufSchema(schemaString)
+        .copy(tagsToAdd, tagsToRemove, true);
+    Map<SchemaEntity, Set<String>> addBeforeRemoveTags = resultAddFirst.inlineTaggedEntities();
+    SchemaEntity normalizedField = new SchemaEntity("SampleRecord.my_field1",
+        SchemaEntity.EntityType.SR_FIELD);
+    assertEquals(ImmutableSet.of("NEW"), addBeforeRemoveTags.get(normalizedField));
+
+    // addBeforeRemove=false: remove then add, so OVERLAP is added (add wins)
+    ParsedSchema resultRemoveFirst = new ProtobufSchema(schemaString)
+        .copy(tagsToAdd, tagsToRemove, false);
+    Map<SchemaEntity, Set<String>> removeFirstTags = resultRemoveFirst.inlineTaggedEntities();
+    assertEquals(ImmutableSet.of("OVERLAP", "NEW"), removeFirstTags.get(normalizedField));
+  }
+
+  @Test
   public void testAddDuplicateTags() {
     String schemaString = "syntax = \"proto3\";\n" +
         "package com.example.mynamespace;\n" +

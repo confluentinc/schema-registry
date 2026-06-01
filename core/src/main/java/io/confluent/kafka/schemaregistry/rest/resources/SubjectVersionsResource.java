@@ -223,7 +223,7 @@ public class SubjectVersionsResource {
       responses = {
           @ApiResponse(responseCode = "200", description = "The schema string.", content = @Content(
               schema = @io.swagger.v3.oas.annotations.media.Schema(example =
-                      Schema.SCHEMA_EXAMPLE))),
+                      Schema.RAW_SCHEMA_EXAMPLE))),
           @ApiResponse(responseCode = "404",
             description = "Not Found. "
                     + "Error code 40401 indicates subject not found. "
@@ -355,6 +355,8 @@ public class SubjectVersionsResource {
       @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description = "Whether to return deleted schemas only")
       @QueryParam("deletedOnly") boolean lookupDeletedOnlySchema,
+      @Parameter(description = "Whether to return deleted schemas as negative numbers")
+      @QueryParam("deletedAsNegative") boolean deletedAsNegative,
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
@@ -379,8 +381,10 @@ public class SubjectVersionsResource {
     errorMessage = "Error while listing all versions for subject "
                    + subject;
     LookupFilter filter = LookupFilter.DEFAULT;
-    // if both deleted && deletedOnly are true, return deleted only
-    if (lookupDeletedOnlySchema) {
+    if (deletedAsNegative) {
+      filter = LookupFilter.DELETED_AS_NEGATIVE;
+    } else if (lookupDeletedOnlySchema) {
+      // if both deleted && deletedOnly are true, return deleted only
       filter = LookupFilter.DELETED_ONLY;
     } else if (lookupDeletedSchema) {
       filter = LookupFilter.INCLUDE_DELETED;
@@ -572,43 +576,13 @@ public class SubjectVersionsResource {
     } catch (InvalidVersionException e) {
       throw Errors.invalidVersionException(e.getMessage());
     }
-    Schema schema;
-    String errorMessage =
-            "Error while retrieving schema for subject "
-                    + subject
-                    + " with version "
-                    + version
-                    + " from the schema registry";
-    try {
-      if (schemaRegistry.schemaVersionExists(subject, versionId, true)) {
-        if (!permanentDelete
-                && !schemaRegistry.schemaVersionExists(subject,
-                        versionId, false)) {
-          throw Errors.schemaVersionSoftDeletedException(subject, version);
-        }
-      }
-      schema = schemaRegistry.get(subject, versionId.getVersionId(), true);
-      if (schema == null) {
-        if (!schemaRegistry.hasSubjects(subject, true)) {
-          throw Errors.subjectNotFoundException(subject);
-        } else {
-          throw Errors.versionNotFoundException(versionId.getVersionId());
-        }
-      }
-    } catch (SchemaRegistryStoreException e) {
-      log.debug(errorMessage, e);
-      throw Errors.storeException(errorMessage, e);
-    } catch (InvalidVersionException e) {
-      throw Errors.invalidVersionException(e.getMessage());
-    } catch (SchemaRegistryException e) {
-      throw Errors.schemaRegistryException(errorMessage, e);
-    }
 
     try {
       Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
-              headers, schemaRegistry.config().whitelistHeaders());
-      schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
-              schema, permanentDelete);
+          headers, schemaRegistry.config().whitelistHeaders());
+      int deletedVersion = schemaRegistry.deleteSchemaVersionOrForward(headerProperties, subject,
+              versionId.getVersionId(), permanentDelete);
+      asyncResponse.resume(deletedVersion);
     } catch (AssociationForSubjectExistsException e) {
       throw Errors.associationForSubjectExistsException(e.getMessage());
     } catch (StrongAssociationForSubjectExistsException e) {
@@ -634,8 +608,6 @@ public class SubjectVersionsResource {
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while deleting Schema Version", e);
     }
-
-    asyncResponse.resume(schema.getVersion());
   }
 
   @POST

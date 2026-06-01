@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionWriter
 import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
 import io.confluent.kafka.schemaregistry.rest.filters.AliasFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.ContextFilter;
+import io.confluent.kafka.schemaregistry.rest.filters.RestCallLoggingFilter;
 import io.confluent.kafka.schemaregistry.rest.filters.RestCallMetricFilter;
 import io.confluent.kafka.schemaregistry.rest.resources.AssociationsResource;
 import io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource;
@@ -154,6 +155,7 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
     config.register(new ServerMetadataResource(schemaRegistry));
     config.register(new ContextFilter(schemaRegistry));
     config.register(new AliasFilter(schemaRegistry));
+    config.register(new RestCallLoggingFilter());
     config.register(new RestCallMetricFilter(
             schemaRegistry.getMetricsContainer().getApiCallsSuccess(),
             schemaRegistry.getMetricsContainer().getApiCallsFailure()));

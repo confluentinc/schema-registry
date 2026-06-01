@@ -37,6 +37,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final String FAIL_INVALID_SCHEMA_DOC = "Whether to fail serialization if the "
       + "payload does not match the schema";
 
+  public static final String VALIDATE_BEFORE_DOMAIN_RULES = "json.validate.before.domain.rules";
+  public static final boolean VALIDATE_BEFORE_DOMAIN_RULES_DEFAULT = false;
+  public static final String VALIDATE_BEFORE_DOMAIN_RULES_DOC = "Whether to validate the JSON "
+      + "message against the schema before running domain rules instead of after";
+
   public static final String WRITE_DATES_AS_ISO8601 = "json.write.dates.iso8601";
   public static final boolean WRITE_DATES_AS_ISO8601_DEFAULT = false;
   public static final String WRITE_DATES_AS_ISO8601_DOC = "Whether to write dates as "
@@ -52,6 +57,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final String SCHEMA_SCAN_PACKAGES_DOC = "A list of packages to scan for Jackson "
       + "annotations when deriving schemas from objects";
 
+  public static final String JSON_ENVELOPE_DETECTION = "json.envelope.detection";
+  public static final boolean JSON_ENVELOPE_DETECTION_DEFAULT = true;
+  public static final String JSON_ENVELOPE_DETECTION_DOC = "Whether envelope auto-detection is "
+      + "enabled, which looks for a JSON object with 'schema' and 'payload' fields";
+
   public static final String ONEOF_FOR_NULLABLES = "json.oneof.for.nullables";
   public static final boolean ONEOF_FOR_NULLABLES_DEFAULT = true;
   public static final String ONEOF_FOR_NULLABLES_DOC = "Whether JSON schemas derived from objects "
@@ -65,7 +75,7 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
   public static final boolean JSON_INDENT_OUTPUT_DEFAULT = false;
   public static final String JSON_INDENT_OUTPUT_DOC = "Whether JSON output should be indented "
       + "(\"pretty-printed\")";
-
+  
   private static ConfigDef config;
 
   static {
@@ -79,6 +89,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         FAIL_INVALID_SCHEMA_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         FAIL_INVALID_SCHEMA_DOC
+    ).define(VALIDATE_BEFORE_DOMAIN_RULES,
+        ConfigDef.Type.BOOLEAN,
+        VALIDATE_BEFORE_DOMAIN_RULES_DEFAULT,
+        ConfigDef.Importance.LOW,
+        VALIDATE_BEFORE_DOMAIN_RULES_DOC
     ).define(WRITE_DATES_AS_ISO8601,
         ConfigDef.Type.BOOLEAN,
         WRITE_DATES_AS_ISO8601_DEFAULT,
@@ -95,6 +110,11 @@ public class KafkaJsonSchemaSerializerConfig extends AbstractKafkaSchemaSerDeCon
         "",
         ConfigDef.Importance.LOW,
         SCHEMA_SCAN_PACKAGES_DOC
+    ).define(JSON_ENVELOPE_DETECTION,
+        ConfigDef.Type.BOOLEAN,
+        JSON_ENVELOPE_DETECTION_DEFAULT,
+        ConfigDef.Importance.LOW,
+        JSON_ENVELOPE_DETECTION_DOC
     ).define(ONEOF_FOR_NULLABLES,
         ConfigDef.Type.BOOLEAN,
         ONEOF_FOR_NULLABLES_DEFAULT,

@@ -34,6 +34,9 @@ public class SubjectKeyComparator<K> implements Comparator<K> {
   @Override
   @SuppressWarnings("unchecked")
   public int compare(K o1, K o2) {
+    if (o1 == o2) {
+      return 0;
+    }
     if (o1 instanceof AssociationKey && o2 instanceof AssociationKey) {
       // AssociationKeys are compared via resourceName and other fields
       return ((Comparable) o1).compareTo(o2);
