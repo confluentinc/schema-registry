@@ -37,9 +37,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Collectors;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -292,7 +292,10 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             }
 
             // Expect 8 records: PUT(1) + PUT(2) + PUT_IF_ABSENT(existing) + PUT_IF_ABSENT(new) + DELETE + PUT_ALL(3)
-            consumeRecords(iqv1OutputTopic, "iqv1-consumer", 8);
+            List<ConsumerRecord<GenericRecord, GenericRecord>> iqv1Results =
+                consumeRecords(iqv1OutputTopic, "iqv1-consumer", 8);
+            assertEquals(8, iqv1Results.size(),
+                "Should have 8 output records before IQv1 verification");
 
             ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
                 streams.store(
@@ -690,8 +693,8 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 producer.flush();
             }
 
-            // PUT(3) + GET(1) + GET(1) + GET(1) + PUT_IF_ABSENT_NULL(1) + GET(1) + GET(1) + PUT(1) + GET(1) + GET(1)
-            // + PUT(1) + DELETE(1) + GET(1) + GET(1) = 16
+            // PUT_IF_ABSENT_NULL on a missing key produces 0 output, so the breakdown is:
+            // PUT(3) + GET(4) + PUT_IF_ABSENT_NULL(0) + PUT(1) + GET(2) + PUT(1) + DELETE(1) + GET(4) = 16
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
                 consumeRecords(outputTopic, "delete-test-consumer", 16);
 
@@ -792,8 +795,9 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                         "Tombstone record should have key schema ID header");
                 }
             }
-            assertTrue(tombstoneCount >= 4,
-                "Should have at least 4 tombstone records (PUT_NULL word-1, PUT_NULL word-99, PUT_NULL word-3, DELETE word-4)");
+            assertEquals(6, tombstoneCount,
+                "Should have exactly 6 tombstone records: PUT_NULL word-1, PUT_NULL word-99, "
+                    + "PUT_IF_ABSENT_NULL word-98, PUT_NULL word-3, DELETE word-4, DELETE word-97");
 
             // Verify which keys have been deleted
             KafkaAvroDeserializer keyDeserializer = new KafkaAvroDeserializer();
@@ -936,10 +940,12 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         private void handleTestPrefixScan(Record<GenericRecord, GenericRecord> record) {
             GenericRecord prefixKey = createKeyWithSchema(record.key().getSchema(), "word-");
 
-            // Serialize an actual stored key to get the byte format
+            // PrefixScan relies on the keySerde's byte format: serialize a real key and trim its trailing
+            // distinguishing byte to get a shared prefix. Works because all stored keys are the same length
+            // (Avro string field encodes [length-byte][utf8]; identical length -> identical length-byte).
+            // Would break if stored keys had different lengths.
             GenericRecord sampleKey = createKeyWithSchema(record.key().getSchema(), "word-1");
             byte[] sampleBytes = keySerializer.serialize("iterator-input", new RecordHeaders(), sampleKey);
-            // Common prefix is all bytes except the last digit
             final byte[] prefixBytes = Arrays.copyOf(sampleBytes, sampleBytes.length - 1);
 
             Serializer<GenericRecord> prefixSerializer = (topic, data) -> prefixBytes;
@@ -1095,6 +1101,10 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 record.key(), stored.value(), stored.timestamp(), stored.headers()));
         }
 
+        // Strip schema-id headers from the incoming record's headers before performing tombstone-producing
+        // store ops, so the changelog tombstone is written without a stale value schema id.
+        // We mutate the record's headers in place — acceptable here because no downstream operator reads
+        // these headers after this processor; if that ever changes, copy with new RecordHeaders(...).
         private void handlePutNull(Record<GenericRecord, GenericRecord> record) {
             record.headers().remove(SchemaId.KEY_SCHEMA_ID_HEADER);
             record.headers().remove(SchemaId.VALUE_SCHEMA_ID_HEADER);
@@ -1373,7 +1383,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 }
             }
         }
-        assertTrue(results.size() <= expectedCount,
+        assertEquals(expectedCount, results.size(),
             "Expected " + expectedCount + " records but got " + results.size());
         return results;
     }
