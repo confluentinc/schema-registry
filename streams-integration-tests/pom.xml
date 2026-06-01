@@ -105,7 +105,6 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-streams</artifactId>
-            <version>${kafka.version}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
