@@ -200,7 +200,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
             // 8 PUT + 2 FETCH + (2+2) FETCH_RANGE_1 + (1+1) FETCH_RANGE_2 + (2+2) BACKWARD_FETCH
             // + (5+5) FETCH_ALL + (5+5) BACKWARD_FETCH_ALL + (4+4) FETCH_KEY_RANGE + (4+4) BACKWARD_FETCH_KEY_RANGE = 56
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(OUTPUT_TOPIC, "window-store-test-consumer", 56);
+                consumeRecords(OUTPUT_TOPIC, "window-store-test-consumer", 56, KafkaAvroDeserializer.class);
 
             assertEquals(56, results.size(), "Should have 56 output records");
 
@@ -501,7 +501,10 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
                 producer.flush();
             }
 
-            consumeRecords(iqv1OutputTopic, "iqv1-consumer", 8);
+            List<ConsumerRecord<GenericRecord, GenericRecord>> iqv1Results =
+                consumeRecords(iqv1OutputTopic, "iqv1-consumer", 8, KafkaAvroDeserializer.class);
+            assertEquals(8, iqv1Results.size(),
+                "Should have 8 output records before IQv1 verification");
 
             ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
                 streams.store(
@@ -728,7 +731,8 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
             }
 
             // PUT(8) + FETCH(6) = 14
-            List<ConsumerRecord<GenericRecord, GenericRecord>> results = consumeRecords(outputTopic, "delete-test-consumer", 14);
+            List<ConsumerRecord<GenericRecord, GenericRecord>> results =
+                consumeRecords(outputTopic, "delete-test-consumer", 14, KafkaAvroDeserializer.class);
 
             assertEquals(14, results.size());
 
@@ -771,11 +775,11 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
             // Verify changelog topic tombstones have key schema ID header
             String changelogTopic = "delete-integration-test-delete-store-changelog";
 
-            List<ConsumerRecord<byte[], byte[]>> changelogRecords =
-                consumeChangelogRecords(changelogTopic, "changelog-consumer", 12);
+            List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
+                consumeRecords(changelogTopic, "changelog-consumer", 12, ByteArrayDeserializer.class);
 
             int tombstoneCount = 0;
-            for (ConsumerRecord<byte[], byte[]> record : changelogRecords) {
+            for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
                 if (record.value() == null) {
                     tombstoneCount++;
                     Header keySchemaIdHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
@@ -783,7 +787,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
                         "Tombstone record should have key schema ID header");
                 }
             }
-            assertTrue(tombstoneCount >= 1, "Should have at least 1 tombstone record");
+            assertTrue(tombstoneCount >= 3, "Should have at least 3 tombstone records");
 
         } finally {
             closeStreams(streams);
@@ -843,9 +847,9 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
 
             // PUT(8) + ALL(7) + ITERATOR_METHODS(1) = 16
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(outputTopic, "iterator-test-consumer", 16);
+                consumeRecords(outputTopic, "iterator-test-consumer", 16, KafkaAvroDeserializer.class);
 
-            assertEquals(16, results.size(), "Should have 7 output records");
+            assertEquals(16, results.size(), "Should have 16 output records");
 
             int idx = 0;
 
@@ -1422,17 +1426,6 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         return props;
     }
 
-    private Properties createConsumerProps(String groupId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
-        return props;
-    }
 
     private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
@@ -1462,22 +1455,31 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         }
     }
 
-    private List<ConsumerRecord<GenericRecord, GenericRecord>> consumeRecords(
-        String topic, String groupId, int expectedCount) {
-        List<ConsumerRecord<GenericRecord, GenericRecord>> results = new ArrayList<>();
-        try (KafkaConsumer<GenericRecord, GenericRecord> consumer =
-                 new KafkaConsumer<>(createConsumerProps(groupId))) {
+    private <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
+        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+
+        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
+        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
             long deadline = System.currentTimeMillis() + 30_000;
             while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<GenericRecord, GenericRecord> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<GenericRecord, GenericRecord> record : records) {
+                ConsumerRecords<GenericRecord, V> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<GenericRecord, V> record : records) {
                     results.add(record);
                 }
             }
         }
-        assertTrue(results.size() <= expectedCount,
-            "Expected " + expectedCount + " records but got " + results.size());
+        assertEquals(expectedCount, results.size(),
+            "Expected " + expectedCount + " records from " + topic
+                + " but got " + results.size() + " within 30s");
         return results;
     }
 
@@ -1565,34 +1567,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         assertEquals(expectedCounts, multiKeyBackwardCounts, assertionContext + " counts");
     }
 
-    private Properties createChangelogConsumerProps(String groupId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        return props;
-    }
-
-    private List<ConsumerRecord<byte[], byte[]>> consumeChangelogRecords(
-        String topic, String groupId, int expectedCount) {
-        List<ConsumerRecord<byte[], byte[]>> results = new ArrayList<>();
-        try (KafkaConsumer<byte[], byte[]> consumer =
-                 new KafkaConsumer<>(createChangelogConsumerProps(groupId))) {
-            consumer.subscribe(Collections.singletonList(topic));
-            long deadline = System.currentTimeMillis() + 30_000;
-            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<byte[], byte[]> record : records) {
-                    results.add(record);
-                }
-            }
-        }
-        return results;
-    }
-
-    private static long calculateWindowStartTime(long timestamp) {
+private static long calculateWindowStartTime(long timestamp) {
         return (timestamp / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
     }
 
