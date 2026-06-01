@@ -81,6 +81,7 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
+            <version>${kafka.version}</version>
             <classifier>test</classifier>
             <scope>test</scope>
             <exclusions>
@@ -105,6 +106,7 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-streams</artifactId>
+            <version>${kafka.version}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -112,6 +114,12 @@
                     <artifactId>cc-custom-dns-resolver-java18</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-streams-test-utils</artifactId>
+            <version>${kafka.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -139,6 +147,11 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
