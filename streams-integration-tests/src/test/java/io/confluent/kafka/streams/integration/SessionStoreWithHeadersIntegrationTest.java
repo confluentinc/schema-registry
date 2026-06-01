@@ -296,7 +296,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // REMOVE user3 + user6 = 2 records
             // FETCH_KEY_RANGE_AFTER_REMOVE = 3 records (user4 + user5 + user6 remaining)
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(OUTPUT_TOPIC, "session-store-test-consumer", 102);
+                consumeRecords(OUTPUT_TOPIC, "session-store-test-consumer", 102, KafkaAvroDeserializer.class);
 
             assertEquals(102, results.size(), "Should have 102 output records");
 
@@ -417,30 +417,39 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
                 new String[]{"user2:202", "user2:201"},
                 "BACKWARD_FIND_SESSIONS_SINGLE_KEY user2");
 
-            // Verify FETCH_KEY_RANGE user2-user4
+            // Verify FETCH_KEY_RANGE user2-user4 (ordered by session end time:
+            // user2:201@50s, user3:300@100s, user4:400@150s, user2:202@600s)
             idx = assertRangeResults(results, idx,
-                new String[]{"user2:201", "user2:202", "user3:300", "user4:400"},
+                new String[]{"user2:201", "user3:300", "user4:400", "user2:202"},
                 "FETCH_KEY_RANGE user2-user4");
 
-            // Verify FETCH_KEY_RANGE user5-user7
+            // Verify FETCH_KEY_RANGE user5-user7 (ordered by session end time:
+            // user5:500@200s, user6:601@250s, user7:700@300s, user6:602@800s)
             idx = assertRangeResults(results, idx,
-                new String[]{"user5:500", "user6:601", "user6:602", "user7:700"},
+                new String[]{"user5:500", "user6:601", "user7:700", "user6:602"},
                 "FETCH_KEY_RANGE user5-user7");
 
             // Verify FIND_SESSIONS_KEY_RANGE user3-user5
             idx = assertRangeResults(results, idx, new String[]{"user3:300", "user4:400", "user5:500"},
                 "FIND_SESSIONS_KEY_RANGE user3-user5");
 
-            // Verify FIND_SESSIONS_TIME_RANGE_ALL - all 12 sessions across all keys
+            // Verify FIND_SESSIONS_TIME_RANGE_ALL - all 12 sessions across all keys, in session-end-time order:
+            // 0s user1:100, 10s user1:101, 50s user2:201, 100s user3:300, 150s user4:400,
+            // 200s user5:500, 250s user6:601, 300s user7:700, 500s user1:102, 600s user2:202,
+            // 800s user6:602, 1000s user1:103
             idx = assertRangeResults(results, idx,
                 new String[]{
-                    "user1:100", "user1:101", "user1:102", "user1:103",
-                    "user2:201", "user2:202",
+                    "user1:100", "user1:101",
+                    "user2:201",
                     "user3:300",
                     "user4:400",
                     "user5:500",
-                    "user6:601", "user6:602",
-                    "user7:700"
+                    "user6:601",
+                    "user7:700",
+                    "user1:102",
+                    "user2:202",
+                    "user6:602",
+                    "user1:103"
                 },
                 "FIND_SESSIONS_TIME_RANGE_ALL");
 
@@ -452,29 +461,39 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             // FIND_SESSIONS_TIME_RANGE_EMPTY - 0 records (no assertions needed)
 
-            // Verify BACKWARD_FETCH_KEY_RANGE (all 12 sessions in reverse key order)
+            // Verify BACKWARD_FETCH_KEY_RANGE (all 12 sessions, latest-to-earliest session-end-time order)
             idx = assertRangeResults(results, idx,
                 new String[]{
+                    "user1:103",
+                    "user6:602",
+                    "user2:202",
+                    "user1:102",
                     "user7:700",
-                    "user6:602", "user6:601",
+                    "user6:601",
                     "user5:500",
                     "user4:400",
                     "user3:300",
-                    "user2:202", "user2:201",
-                    "user1:103", "user1:102", "user1:101", "user1:100"
+                    "user2:201",
+                    "user1:101",
+                    "user1:100"
                 },
                 "BACKWARD_FETCH_KEY_RANGE");
 
-            // Verify BACKWARD_FIND_SESSIONS_KEY_RANGE (all 12 sessions in reverse key order)
+            // Verify BACKWARD_FIND_SESSIONS_KEY_RANGE (all 12 sessions, latest-to-earliest session-end-time order)
             idx = assertRangeResults(results, idx,
                 new String[]{
+                    "user1:103",
+                    "user6:602",
+                    "user2:202",
+                    "user1:102",
                     "user7:700",
-                    "user6:602", "user6:601",
+                    "user6:601",
                     "user5:500",
                     "user4:400",
                     "user3:300",
-                    "user2:202", "user2:201",
-                    "user1:103", "user1:102", "user1:101", "user1:100"
+                    "user2:201",
+                    "user1:101",
+                    "user1:100"
                 },
                 "BACKWARD_FIND_SESSIONS_KEY_RANGE");
 
@@ -588,7 +607,10 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             }
 
             // Consume outputs: 5 PUTs + 1 REMOVE = 6 records
-            consumeRecords(iqv1OutputTopic, "iqv1-session-consumer", 6);
+            List<ConsumerRecord<GenericRecord, GenericRecord>> iqv1Results =
+                consumeRecords(iqv1OutputTopic, "iqv1-session-consumer", 6, KafkaAvroDeserializer.class);
+            assertEquals(6, iqv1Results.size(),
+                "Should have 6 output records before IQv1 verification");
 
             // Query store via IQv1
             ReadOnlySessionStore<GenericRecord, AggregationWithHeaders<GenericRecord>> store =
@@ -1258,18 +1280,6 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         return props;
     }
 
-    private Properties createConsumerProps(String groupId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
-        return props;
-    }
-
     private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
@@ -1290,22 +1300,31 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         }
     }
 
-    private List<ConsumerRecord<GenericRecord, GenericRecord>> consumeRecords(
-        String topic, String groupId, int expectedCount) {
-        List<ConsumerRecord<GenericRecord, GenericRecord>> results = new ArrayList<>();
-        try (KafkaConsumer<GenericRecord, GenericRecord> consumer =
-                 new KafkaConsumer<>(createConsumerProps(groupId))) {
+    private <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
+        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+
+        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
+        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
             long deadline = System.currentTimeMillis() + 30_000;
             while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<GenericRecord, GenericRecord> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<GenericRecord, GenericRecord> record : records) {
+                ConsumerRecords<GenericRecord, V> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<GenericRecord, V> record : records) {
                     results.add(record);
                 }
             }
         }
-        assertTrue(results.size() <= expectedCount,
-            "Expected " + expectedCount + " records but got " + results.size());
+        assertEquals(expectedCount, results.size(),
+            "Expected " + expectedCount + " records from " + topic
+                + " but got " + results.size() + " within 30s");
         return results;
     }
 
@@ -1329,17 +1348,14 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
     private int assertRangeResults(List<ConsumerRecord<GenericRecord, GenericRecord>> results,
                                    int startIdx, String[] expectedPairs, String context) {
-        Map<String, Long> found = new HashMap<>();
         for (int i = 0; i < expectedPairs.length; i++) {
-            String key = results.get(startIdx).key().get("userId").toString();
-            Long count = (Long) results.get(startIdx).value().get("count");
-            found.put(key + ":" + count, count);
-            assertSchemaIdHeaders(results.get(startIdx++), context);
+            String key = results.get(startIdx + i).key().get("userId").toString();
+            Long count = (Long) results.get(startIdx + i).value().get("count");
+            assertEquals(expectedPairs[i], key + ":" + count,
+                context + ": record at position " + i);
+            assertSchemaIdHeaders(results.get(startIdx + i), context);
         }
-        for (String pair : expectedPairs) {
-            assertTrue(found.containsKey(pair), context + ": Should contain " + pair);
-        }
-        return startIdx;
+        return startIdx + expectedPairs.length;
     }
 
     private GenericRecord createKey(String userId) {
@@ -1355,34 +1371,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
         return value;
     }
 
-    private Properties createChangelogConsumerProps(String groupId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        return props;
-    }
-
-    private List<ConsumerRecord<byte[], byte[]>> consumeChangelogRecords(
-        String topic, String groupId, int expectedCount) {
-        List<ConsumerRecord<byte[], byte[]>> results = new ArrayList<>();
-        try (KafkaConsumer<byte[], byte[]> consumer =
-                 new KafkaConsumer<>(createChangelogConsumerProps(groupId))) {
-            consumer.subscribe(Collections.singletonList(topic));
-            long deadline = System.currentTimeMillis() + 30_000;
-            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<byte[], byte[]> record : records) {
-                    results.add(record);
-                }
-            }
-        }
-        return results;
-    }
-
-    @Test
+@Test
     public void shouldRemoveSessionAndVerifyChangelogHeaders() throws Exception {
         String inputTopic = "session-delete-input";
         String outputTopic = "session-delete-output";
@@ -1454,7 +1443,7 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
             // Expected: 3 PUTs + 1 FETCH_SESSION_SINGLE (user-1) + 1 REMOVE (user-1) + 1 REMOVE (user-2) + 1 PUT_NULL (user-3) = 7
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(outputTopic, "session-delete-test-consumer", 7);
+                consumeRecords(outputTopic, "session-delete-test-consumer", 7, KafkaAvroDeserializer.class);
 
             assertEquals(7, results.size());
 
@@ -1498,11 +1487,11 @@ public class SessionStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             // Verify changelog topic tombstones have key schema ID header
             String changelogTopic = "session-delete-integration-test-session-delete-store-changelog";
 
-            List<ConsumerRecord<byte[], byte[]>> changelogRecords =
-                consumeChangelogRecords(changelogTopic, "session-changelog-consumer", 5);
+            List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
+                consumeRecords(changelogTopic, "session-changelog-consumer", 6, ByteArrayDeserializer.class);
 
             int tombstoneCount = 0;
-            for (ConsumerRecord<byte[], byte[]> record : changelogRecords) {
+            for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
                 if (record.value() == null) {
                     tombstoneCount++;
                     Header keySchemaIdHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
