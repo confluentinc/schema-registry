@@ -51,6 +51,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -63,7 +64,7 @@ import org.junit.jupiter.api.Test;
  * {@link GenericAvroSerde} configured to use {@link HeaderSchemaIdSerializer} for header-based
  * schema ID transport. Both keys and values use Avro with header-based schema IDs.
  */
-public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarness {
+public class StatelessHeaderIntegrationTest extends ClusterTestHarness {
 
   private static final String INPUT_TOPIC = "sensor-readings-input";
   private static final String OUTPUT_TOPIC = "sensor-readings-output";
@@ -89,7 +90,7 @@ public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarnes
           + "]"
           + "}";
 
-  public KafkaStreamsHeaderSchemaIdIntegrationTest() {
+  public StatelessHeaderIntegrationTest() {
     super(1, true);
   }
 
@@ -178,7 +179,7 @@ public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarnes
           HeaderSchemaIdSerializer.class.getName());
 
       try (KafkaProducer<GenericRecord, GenericRecord> producer =
-          new KafkaProducer<>(producerProps)) {
+               new KafkaProducer<>(producerProps)) {
         GenericRecord hotKey = new GenericData.Record(keySchema);
         hotKey.put("sensorId", "sensor-1");
 
@@ -213,7 +214,7 @@ public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarnes
 
       List<ConsumerRecord<GenericRecord, GenericRecord>> results = new ArrayList<>();
       try (KafkaConsumer<GenericRecord, GenericRecord> consumer =
-          new KafkaConsumer<>(consumerProps)) {
+               new KafkaConsumer<>(consumerProps)) {
         consumer.subscribe(Collections.singletonList(OUTPUT_TOPIC));
 
         // Poll until we get the expected record or timeout
@@ -232,42 +233,32 @@ public class KafkaStreamsHeaderSchemaIdIntegrationTest extends ClusterTestHarnes
 
       ConsumerRecord<GenericRecord, GenericRecord> result = results.get(0);
 
-      // Verify the key
       GenericRecord key = result.key();
       assertNotNull(key, "Key should not be null");
       assertEquals("sensor-1", key.get("sensorId").toString());
 
-      // Verify the value
       GenericRecord value = result.value();
       assertEquals(35.5, value.get("temperature"));
 
-      // Verify __key_schema_id header is present with V1 magic byte (GUID format, 17 bytes)
-      Header keySchemaIdHeader = result.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-      assertNotNull(keySchemaIdHeader, "Output record should have __key_schema_id header");
-      byte[] keyHeaderBytes = keySchemaIdHeader.value();
-      assertEquals(
-          17, keyHeaderBytes.length, "Key GUID header should be 17 bytes (1 magic + 16 UUID)");
-      assertEquals(
-          SchemaId.MAGIC_BYTE_V1,
-          keyHeaderBytes[0],
-          "Key header should start with V1 magic byte for GUID format");
-
-      // Verify __value_schema_id header is present with V1 magic byte (GUID format, 17 bytes)
-      Header valueSchemaIdHeader = result.headers().lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
-      assertNotNull(valueSchemaIdHeader, "Output record should have __value_schema_id header");
-      byte[] valueHeaderBytes = valueSchemaIdHeader.value();
-      assertEquals(
-          17,
-          valueHeaderBytes.length,
-          "Value GUID header should be 17 bytes (1 magic + 16 UUID)");
-      assertEquals(
-          SchemaId.MAGIC_BYTE_V1,
-          valueHeaderBytes[0],
-          "Value header should start with V1 magic byte for GUID format");
+      assertSchemaIdHeaders(result.headers(), "Output record");
     } finally {
       if (streams != null) {
         streams.close(Duration.ofSeconds(10));
       }
     }
+  }
+
+  private void assertSchemaIdHeaders(Headers headers, String context) {
+    Header keySchemaIdHeader = headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
+    assertNotNull(keySchemaIdHeader, context + ": should have __key_schema_id header");
+    byte[] keyHeaderBytes = keySchemaIdHeader.value();
+    assertEquals(17, keyHeaderBytes.length, context + ": Key GUID header should be 17 bytes");
+    assertEquals(SchemaId.MAGIC_BYTE_V1, keyHeaderBytes[0], context + ": Key header should have V1 magic byte");
+
+    Header valueSchemaIdHeader = headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
+    assertNotNull(valueSchemaIdHeader, context + ": should have __value_schema_id header");
+    byte[] valueHeaderBytes = valueSchemaIdHeader.value();
+    assertEquals(17, valueHeaderBytes.length, context + ": Value GUID header should be 17 bytes");
+    assertEquals(SchemaId.MAGIC_BYTE_V1, valueHeaderBytes[0], context + ": Value header should have V1 magic byte");
   }
 }
