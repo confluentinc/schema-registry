@@ -176,7 +176,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
             // Expect 8 records: PUT(1) + PUT(2) + PUT_IF_ABSENT(existing) + PUT_IF_ABSENT(new) + DELETE + PUT_ALL(3)
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(OUTPUT_TOPIC, "kv-store-test-consumer", 8);
+                consumeRecords(OUTPUT_TOPIC, "kv-store-test-consumer", 8, KafkaAvroDeserializer.class);
 
             assertEquals(8, results.size(), "Should have 8 output records");
 
@@ -293,7 +293,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
             // Expect 8 records: PUT(1) + PUT(2) + PUT_IF_ABSENT(existing) + PUT_IF_ABSENT(new) + DELETE + PUT_ALL(3)
             List<ConsumerRecord<GenericRecord, GenericRecord>> iqv1Results =
-                consumeRecords(iqv1OutputTopic, "iqv1-consumer", 8);
+                consumeRecords(iqv1OutputTopic, "iqv1-consumer", 8, KafkaAvroDeserializer.class);
             assertEquals(8, iqv1Results.size(),
                 "Should have 8 output records before IQv1 verification");
 
@@ -444,7 +444,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             // APPROXIMATE_NUM_ENTRIES: 1
             // ITERATOR_METHODS: 1
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(outputTopic, "iterator-test-consumer", 28);
+                consumeRecords(outputTopic, "iterator-test-consumer", 28, KafkaAvroDeserializer.class);
 
             assertEquals(28, results.size(), "Should have 28 output records");
 
@@ -580,7 +580,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             }
 
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(outputTopic, "state-test-consumer", 1);
+                consumeRecords(outputTopic, "state-test-consumer", 1, KafkaAvroDeserializer.class);
 
             assertEquals(1, results.size(), "Should have 1 output record");
             assertEquals(1L, results.get(0).value().get("count"),
@@ -695,7 +695,7 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
 
             // PUT(3) + GET(4) + PUT_IF_ABSENT_NULL(0) + PUT(1) + GET(2) + PUT(1) + DELETE(1) + GET(4) = 16
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-                consumeRecords(outputTopic, "delete-test-consumer", 16);
+                consumeRecords(outputTopic, "delete-test-consumer", 16, KafkaAvroDeserializer.class);
 
             assertEquals(16, results.size());
 
@@ -781,37 +781,24 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
             // Verify changelog topic tombstones have key schema ID header
             String changelogTopic = "delete-integration-test-delete-store-changelog";
 
-            List<ConsumerRecord<byte[], byte[]>> changelogRecords =
-                consumeChangelogRecords(changelogTopic, "changelog-consumer", 4);
+            // 5 non-null writes (3 initial PUTs + PUT word-3:100 + PUT word-4) + 6 tombstones = 11.
+            List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
+                consumeRecords(changelogTopic, "changelog-consumer", 11, ByteArrayDeserializer.class);
 
             int tombstoneCount = 0;
-            for (ConsumerRecord<byte[], byte[]> record : changelogRecords) {
+            List<String> deletedKeys = new ArrayList<>();
+            for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
                 if (record.value() == null) {
-                    // Verify key schema ID header is present in tombstone record
                     tombstoneCount++;
                     Header keySchemaIdHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
                     assertNotNull(keySchemaIdHeader,
                         "Tombstone record should have key schema ID header");
+                    deletedKeys.add(record.key().get("word").toString());
                 }
             }
             assertEquals(6, tombstoneCount,
                 "Should have exactly 6 tombstone records: PUT_NULL word-1, PUT_NULL word-99, "
                     + "PUT_IF_ABSENT_NULL word-98, PUT_NULL word-3, DELETE word-4, DELETE word-97");
-
-            // Verify which keys have been deleted
-            KafkaAvroDeserializer keyDeserializer = new KafkaAvroDeserializer();
-            Map<String, Object> deserializerConfig = new HashMap<>();
-            deserializerConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
-                restApp.restConnect);
-            keyDeserializer.configure(deserializerConfig, true);
-            List<String> deletedKeys = new ArrayList<>();
-            for (ConsumerRecord<byte[], byte[]> record : changelogRecords) {
-                if (record.value() == null) {
-                    GenericRecord key = (GenericRecord) keyDeserializer.deserialize(
-                        changelogTopic, record.headers(), record.key());
-                    deletedKeys.add(key.get("word").toString());
-                }
-            }
             assertTrue(deletedKeys.containsAll(
                 Arrays.asList("word-1", "word-99", "word-3", "word-4")),
                 "Deleted keys should include word-1, word-99, word-3, word-4 but got: "
@@ -1327,18 +1314,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         return props;
     }
 
-    private Properties createConsumerProps(String groupId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
-        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
-        return props;
-    }
-
     private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
@@ -1367,49 +1342,31 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         }
     }
 
-    private List<ConsumerRecord<GenericRecord, GenericRecord>> consumeRecords(
-        String topic, String groupId, int expectedCount) {
-        List<ConsumerRecord<GenericRecord, GenericRecord>> results = new ArrayList<>();
-        try (KafkaConsumer<GenericRecord, GenericRecord> consumer =
-                 new KafkaConsumer<>(createConsumerProps(groupId))) {
+    private <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
+        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
+        props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
+        props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
+
+        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
+        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
             long deadline = System.currentTimeMillis() + 30_000;
             while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<GenericRecord, GenericRecord> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<GenericRecord, GenericRecord> record : records) {
+                ConsumerRecords<GenericRecord, V> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<GenericRecord, V> record : records) {
                     results.add(record);
                 }
             }
         }
         assertEquals(expectedCount, results.size(),
-            "Expected " + expectedCount + " records but got " + results.size());
-        return results;
-    }
-
-    private Properties createChangelogConsumerProps(String groupId) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        return props;
-    }
-
-    private List<ConsumerRecord<byte[], byte[]>> consumeChangelogRecords(
-        String topic, String groupId, int expectedCount) {
-        List<ConsumerRecord<byte[], byte[]>> results = new ArrayList<>();
-        try (KafkaConsumer<byte[], byte[]> consumer =
-                 new KafkaConsumer<>(createChangelogConsumerProps(groupId))) {
-            consumer.subscribe(Collections.singletonList(topic));
-            long deadline = System.currentTimeMillis() + 30_000;
-            while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<byte[], byte[]> record : records) {
-                    results.add(record);
-                }
-            }
-        }
+            "Expected " + expectedCount + " records from " + topic
+                + " but got " + results.size() + " within 30s");
         return results;
     }
 
