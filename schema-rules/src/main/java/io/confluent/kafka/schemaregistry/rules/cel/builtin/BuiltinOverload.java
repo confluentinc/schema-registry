@@ -171,6 +171,17 @@ final class BuiltinOverload {
       }
     }));
 
+    // Square root — MathContext(38, HALF_UP), same precision/rounding as div.
+    // BigDecimal.sqrt throws ArithmeticException on a negative value; re-emit
+    // the canonical "decimals.sqrt: square root of negative number" message so
+    // the user-visible cause is clear and stable across refactors.
+    out.add(decimalsUnary("decimals_sqrt_decimal", d -> {
+      if (d.signum() < 0) {
+        throw new IllegalArgumentException("decimals.sqrt: square root of negative number");
+      }
+      return d.sqrt(DIV_MC);
+    }));
+
     // Unary
     out.add(decimalsUnary("decimals_neg_decimal", BigDecimal::negate));
     out.add(decimalsUnary("decimals_abs_decimal", BigDecimal::abs));
