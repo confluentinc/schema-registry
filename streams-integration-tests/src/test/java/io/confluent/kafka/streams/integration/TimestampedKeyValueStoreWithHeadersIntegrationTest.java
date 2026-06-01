@@ -693,7 +693,6 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 producer.flush();
             }
 
-            // PUT_IF_ABSENT_NULL on a missing key produces 0 output, so the breakdown is:
             // PUT(3) + GET(4) + PUT_IF_ABSENT_NULL(0) + PUT(1) + GET(2) + PUT(1) + DELETE(1) + GET(4) = 16
             List<ConsumerRecord<GenericRecord, GenericRecord>> results =
                 consumeRecords(outputTopic, "delete-test-consumer", 16);
