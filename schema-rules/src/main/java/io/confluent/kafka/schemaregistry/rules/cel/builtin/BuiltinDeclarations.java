@@ -89,6 +89,10 @@ final class BuiltinDeclarations {
     decls.add(binaryDecimal("decimals.mul", DECIMAL));
     decls.add(binaryDecimal("decimals.div", DECIMAL));
 
+    // Square root: decimals.sqrt — MathContext(38, HALF_UP), like div. Throws on
+    // negative input (no complex result).
+    decls.add(unaryDecimal("decimals.sqrt", DECIMAL));
+
     // Unary numeric: decimals.neg/abs/sign.
     decls.add(unaryDecimal("decimals.neg", DECIMAL));
     decls.add(unaryDecimal("decimals.abs", DECIMAL));
