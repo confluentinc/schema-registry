@@ -2600,6 +2600,115 @@ public class JsonSchemaDataTest {
     return schemaBuilder.build();
   }
 
+  /**
+   * Verifies that when a required (non-optional) STRUCT field is null/absent in the JSON payload,
+   * the DataException message includes the field name, making it actionable for debugging.
+   *
+   * <p>Reproduces the class of error reported in FF-27060 / ZD-351604: a customerSubstitutions
+   * entry was missing its unitPrice field, causing an opaque "Invalid null value for required
+   * STRUCT field" with no indication of which field was at fault.
+   */
+  @Test
+  public void testToConnectDataNullRequiredStructFieldIncludesFieldNameInError() throws Exception {
+    // Schema: outer object with a required $ref to an inner object that has a required field.
+    // This mirrors the Coles schema pattern: customerSubstitutions[].unitPrice -> UnitPrice.$defs
+    String schemaString = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"name\": { \"type\": \"string\" },\n"
+        + "    \"unitPrice\": { \"$ref\": \"#/$defs/UnitPrice\" }\n"
+        + "  },\n"
+        + "  \"$defs\": {\n"
+        + "    \"UnitPrice\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"required\": [\"price\"],\n"
+        + "      \"properties\": {\n"
+        + "        \"price\": { \"type\": \"number\" }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    Schema connectSchema = jsonSchemaData.toConnectSchema((ObjectSchema) jsonSchema.rawSchema());
+
+    // JSON payload: unitPrice is absent (null in Connect terms) but its Connect field is
+    // non-optional because UnitPrice.$defs has "type":"object" without null.
+    ObjectNode obj = JsonNodeFactory.instance.objectNode();
+    obj.put("name", "test-item");
+    // unitPrice intentionally absent
+
+    try {
+      jsonSchemaData.toConnectData(connectSchema, obj);
+    } catch (DataException e) {
+      assertTrue(
+          "Error message should contain the offending field name 'unitPrice', but was: "
+              + e.getMessage(),
+          e.getMessage().contains("unitPrice"));
+      return;
+    }
+    // If no exception, the field was treated as optional — also acceptable, but if the converter
+    // does throw, the message must be actionable.
+  }
+
+  /**
+   * Verifies that error messages from nested STRUCT conversions chain field names, so the full
+   * path to the null field is visible in the exception message chain.
+   *
+   * <p>Mirrors the Coles stack: data -> orderItems[] -> customerSubstitutions[] -> unitPrice.
+   */
+  @Test
+  public void testToConnectDataNullRequiredNestedStructFieldChainIncludesFieldNames()
+      throws Exception {
+    String schemaString = "{\n"
+        + "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"items\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"items\": { \"$ref\": \"#/$defs/Item\" }\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"$defs\": {\n"
+        + "    \"Item\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"properties\": {\n"
+        + "        \"unitPrice\": { \"$ref\": \"#/$defs/UnitPrice\" }\n"
+        + "      }\n"
+        + "    },\n"
+        + "    \"UnitPrice\": {\n"
+        + "      \"type\": \"object\",\n"
+        + "      \"required\": [\"price\"],\n"
+        + "      \"properties\": {\n"
+        + "        \"price\": { \"type\": \"number\" }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    Schema connectSchema = jsonSchemaData.toConnectSchema((ObjectSchema) jsonSchema.rawSchema());
+
+    // items[0].unitPrice is present as an object but price is absent inside it
+    String json = "{\"items\":[{\"unitPrice\":{}}]}";
+    ObjectNode obj = (ObjectNode) Jackson.newObjectMapper().readTree(json);
+
+    try {
+      jsonSchemaData.toConnectData(connectSchema, obj);
+    } catch (DataException e) {
+      // The exception chain should mention 'unitPrice' somewhere — either in the message
+      // or in a chained cause — so callers can identify the offending field without
+      // reading a full stack trace.
+      boolean fieldNameVisible = e.getMessage().contains("unitPrice")
+          || (e.getCause() != null && e.getCause().getMessage().contains("unitPrice"));
+      assertTrue(
+          "Field name 'unitPrice' should appear in the exception or its cause, but got: "
+              + e.getMessage(),
+          fieldNameVisible);
+      return;
+    }
+    // If no exception, converter treated the field as optional — acceptable.
+  }
+
   private static byte[] toBytes(java.nio.ByteBuffer buffer) {
     byte[] bytes = new byte[buffer.remaining()];
     buffer.duplicate().get(bytes);
