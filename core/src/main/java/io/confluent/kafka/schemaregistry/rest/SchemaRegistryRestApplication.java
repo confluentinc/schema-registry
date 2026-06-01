@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.server.handler.SizeLimitHandler;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceFactory;
 import org.slf4j.Logger;
@@ -55,6 +56,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.MAX_REQ_BODY_SIZE_CONFIG;
+
 
 public class SchemaRegistryRestApplication extends Application<SchemaRegistryConfig> {
 
@@ -74,6 +78,18 @@ public class SchemaRegistryRestApplication extends Application<SchemaRegistryCon
   protected void configurePreResourceHandling(ServletContextHandler context) {
     super.configurePreResourceHandling(context);
     context.setErrorHandler(new JsonErrorHandler());
+
+    // Install Jetty's SizeLimitHandler FIRST, before any other processing (if enabled)
+    // This prevents large requests from consuming memory during deserialization
+    boolean sizeLimitHandlerEnabled = config.getBoolean(
+        SchemaRegistryConfig.SIZE_LIMIT_FILTER_ENABLED_CONFIG);
+    if (sizeLimitHandlerEnabled) {
+      long maxReqBodySize = config.getInt(MAX_REQ_BODY_SIZE_CONFIG);
+      log.info("Configuring SizeLimitHandler with max req body size: {} bytes", maxReqBodySize);
+      SizeLimitHandler sizeLimitHandler = new SizeLimitHandler(maxReqBodySize, Long.MAX_VALUE);
+      context.insertHandler(sizeLimitHandler);
+    }
+
     // This handler runs before first Session, Security or ServletHandler
     context.insertHandler(new RequestHeaderHandler());
     List<Handler.Singleton> schemaRegistryCustomHandlers =

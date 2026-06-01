@@ -270,8 +270,15 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
   public SchemaContext visitContainsSchema(ContainsSchema schema) {
     SchemaContext ctx = super.visitContainsSchema(schema);
     assert ctx != null;
-    return new SchemaContext(schema, ArraySchema.builder().requiresArray(false)
-        .containsItemSchema(ctx.schema()));
+    ArraySchema.Builder builder = ArraySchema.builder().requiresArray(false)
+        .containsItemSchema(ctx.schema());
+    Map<String, Object> unprocessed = new HashMap<>();
+    unprocessed.put("minContains", schema.getMinContains());
+    if (schema.getMaxContains() != null) {
+      unprocessed.put("maxContains", schema.getMaxContains());
+    }
+    builder.unprocessedProperties(unprocessed);
+    return new SchemaContext(schema, builder);
   }
 
   @Override

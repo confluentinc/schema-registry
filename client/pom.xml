@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>8.3.0-0</version>
+        <version>8.4.0-0</version>
     </parent>
 
     <licenses>
@@ -27,10 +27,11 @@
     </properties>
 
     <dependencies>
-         <dependency>
-             <groupId>org.yaml</groupId>
-             <artifactId>snakeyaml</artifactId>
-         </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-types</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
@@ -56,6 +57,10 @@
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jdk8</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>

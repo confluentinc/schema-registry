@@ -17,7 +17,9 @@
 package io.confluent.kafka.serializers.subject;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Ticker;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -92,6 +94,46 @@ public class AssociatedNameStrategyTest {
     strategy.setKafkaClusterId("cluster-1");
 
     assertEquals("correct-subject", strategy.subjectName("my-topic", false, SCHEMA));
+  }
+
+  @Test
+  public void testUsesSchemaWithRecordFallback() {
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy();
+    strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "RECORD");
+    strategy.configure(configs);
+    assertTrue(strategy.usesSchema());
+  }
+
+  @Test
+  public void testUsesSchemaWithTopicRecordFallback() {
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy();
+    strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "TOPIC_RECORD");
+    strategy.configure(configs);
+    assertTrue(strategy.usesSchema());
+  }
+
+  @Test
+  public void testUsesSchemaWithTopicFallback() {
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy();
+    strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "TOPIC");
+    strategy.configure(configs);
+    assertFalse(strategy.usesSchema());
+  }
+
+  @Test
+  public void testUsesSchemaWithNoneFallback() {
+    AssociatedNameStrategy strategy = new AssociatedNameStrategy();
+    strategy.setSchemaRegistryClient(new MockSchemaRegistryClient());
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AssociatedNameStrategy.FALLBACK_TYPE, "NONE");
+    strategy.configure(configs);
+    assertFalse(strategy.usesSchema());
   }
 
   @Test

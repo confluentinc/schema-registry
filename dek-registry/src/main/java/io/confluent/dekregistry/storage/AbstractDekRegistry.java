@@ -49,6 +49,7 @@ import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.rest.exceptions.RestException;
 import io.kcache.Cache;
 import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
 import jakarta.ws.rs.core.UriBuilder;
 import java.io.Closeable;
 import java.io.IOException;
@@ -214,11 +215,36 @@ public abstract class AbstractDekRegistry implements Closeable {
    * Get the underlying keys kcache (only kafka-based implementations override this).
    * Provides backward compatibility for external components relying on direct cache access.
    * @return the keys cache
+   * @deprecated callers should use {@link #getKey(EncryptionKeyId)} or
+   *     {@link #rangeKeys(EncryptionKeyId, boolean, EncryptionKeyId, boolean)} instead.
    */
   @Deprecated
   public Cache<EncryptionKeyId, EncryptionKey> keys() {
     throw new UnsupportedOperationException(
         "Direct access to the keys cache is not supported in AbstractDekRegistry");
+  }
+
+  /**
+   * Returns the encryption key for the given id, or {@code null} if not found.
+   *
+   * <p>The default implementation delegates to {@link #keys()} for kafka-based
+   * subclasses.
+   */
+  public EncryptionKey getKey(EncryptionKeyId id) {
+    return keys().get(id);
+  }
+
+  /**
+   * Returns an iterator over the encryption keys whose ids fall in the given range.
+   * Caller is responsible for closing the returned iterator.
+   *
+   * <p>The default implementation delegates to {@link #keys()} for kafka-based
+   * subclasses.
+   */
+  public KeyValueIterator<EncryptionKeyId, EncryptionKey> rangeKeys(
+      EncryptionKeyId start, boolean startInclusive,
+      EncryptionKeyId end, boolean endInclusive) {
+    return keys().range(start, startInclusive, end, endInclusive);
   }
 
   // ==================== Cryptor Management ====================
@@ -791,14 +817,22 @@ public abstract class AbstractDekRegistry implements Closeable {
     } else {
       throw new InvalidKeyException("encryptedKeyMaterial");
     }
+    // Verify the DEK round-trip before persisting
+    String rawKeyMaterial = null;
+    if (kek.isShared() && schemaRegistry.getModeInScope(request.getSubject()) != Mode.IMPORT) {
+      rawKeyMaterial = generateRawDek(kek, key).getKeyMaterial();
+    }
     putKey(keyId, key);
     // Retrieve key with ts set
     key = getDekById(keyId);
-    if (kek.isShared()) {
-      Mode mode = schemaRegistry.getModeInScope(request.getSubject());
-      if (mode != Mode.IMPORT) {
-        key = generateRawDek(kek, key);
-      }
+    if (rawKeyMaterial != null) {
+      // Return a copy with keyMaterial populated so we don't mutate the cached entry.
+      DataEncryptionKey withMaterial = new DataEncryptionKey(
+          key.getKekName(), key.getSubject(), key.getAlgorithm(), key.getVersion(),
+          key.getEncryptedKeyMaterial(), key.isDeleted());
+      withMaterial.setTimestamp(key.getTimestamp());
+      withMaterial.setKeyMaterial(rawKeyMaterial);
+      key = withMaterial;
     }
     return key;
   }
