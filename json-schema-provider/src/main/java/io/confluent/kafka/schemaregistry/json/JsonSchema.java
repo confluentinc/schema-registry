@@ -164,8 +164,8 @@ public class JsonSchema implements ParsedSchema {
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
-  private static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
+  protected static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
 
   private static final Cache<String, Map<String, BeanPropertyWriter>> beanGetters =
       CacheBuilder.newBuilder()
@@ -439,13 +439,13 @@ public class JsonSchema implements ParsedSchema {
                 case DRAFT_2020_12:
                 case DRAFT_2019_09:
                   if (ignoreModernDialects) {
-                    loadPreviousDraft(spec);
+                    schemaObj = loadPreviousDraft(spec);
                   } else {
-                    loadLatestDraft();
+                    schemaObj = loadLatestDraft();
                   }
                   break;
                 default:
-                  loadPreviousDraft(spec);
+                  schemaObj = loadPreviousDraft(spec);
                   break;
               }
             }
@@ -463,7 +463,11 @@ public class JsonSchema implements ParsedSchema {
     return prepopulatedMetaSchemas;
   }
 
-  private void loadLatestDraft() throws URISyntaxException, IOException {
+  protected void setSkemaObj(com.github.erosb.jsonsKema.Schema skemaObj) {
+    this.skemaObj = skemaObj;
+  }
+
+  protected Schema loadLatestDraft() throws URISyntaxException, IOException {
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
     URI base = URI.create(DEFAULT_BASE_URI);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
@@ -492,11 +496,13 @@ public class JsonSchema implements ParsedSchema {
         objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
     JsonValue schemaJson = objectMapper.convertValue(
         objectMapper.readTree(rootJson), JsonObject.class);
-    skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
+    com.github.erosb.jsonsKema.Schema skemaObj =
+        new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
     SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
     assert ctx != null;
     ctx.close();
-    schemaObj = ctx.schema();
+    setSkemaObj(skemaObj);
+    return ctx.schema();
   }
 
   /**
@@ -556,7 +562,7 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
-  private void loadPreviousDraft(SpecificationVersion spec)
+  protected Schema loadPreviousDraft(SpecificationVersion spec)
       throws JsonProcessingException {
     org.everit.json.schema.loader.SpecificationVersion loaderSpec =
         org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
@@ -603,7 +609,7 @@ public class JsonSchema implements ParsedSchema {
     JSONObject jsonObject = new JSONObject(rootJson);
     builder.schemaJson(jsonObject);
     SchemaLoader loader = builder.build();
-    schemaObj = loader.load().build();
+    return loader.load().build();
   }
 
   @Override
