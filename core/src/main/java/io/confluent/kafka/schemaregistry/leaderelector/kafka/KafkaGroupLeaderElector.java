@@ -40,8 +40,8 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -201,17 +201,8 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
     log.debug("Initializing schema registry group member");
 
     executor = Executors.newSingleThreadExecutor();
-    executor.submit(() -> {
-      try {
-        while (!stopped.get()) {
-          coordinator.poll(Integer.MAX_VALUE);
-        }
-      } catch (WakeupException we) {
-        // do nothing because the thread is closing -- see stop()
-      } catch (Throwable t) {
-        log.error("Unexpected exception in schema registry group processing thread", t);
-      }
-    });
+    executor.submit(() -> runPollLoop(
+        () -> coordinator.poll(Integer.MAX_VALUE), stopped, retryBackoffMs, log));
 
     try {
       if (!joinedLatch.await(initTimeout, TimeUnit.MILLISECONDS)) {
@@ -232,6 +223,47 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
       return;
     }
     stop(false);
+  }
+
+  /**
+   * Drives {@code pollOnce} in a loop until {@code stopped} flips to {@code true}.
+   *
+   * <p>Any {@link Throwable} other than {@link WakeupException} is logged and the loop
+   * continues after sleeping for {@code retryBackoffMs}. This is intentional: prior
+   * to this, an exception escaping {@code SchemaRegistryCoordinator.poll} (for example
+   * an {@code IllegalStateException} from {@code onAssigned} on a bad rebalance, or
+   * any transient {@code KafkaException}) would terminate the elector thread, leaving
+   * the SR pod alive but permanently unable to elect a leader. Writes would then fail
+   * with {@code RestUnknownLeaderException} / {@code "Register operation timed out;
+   * error code: 50002"} until a JVM restart. See upstream issues #1696, #2492, #3135,
+   * #3910.
+   *
+   * <p>Package-private and static so it can be exercised in isolation by unit tests.
+   */
+  static void runPollLoop(
+      Runnable pollOnce,
+      AtomicBoolean stopped,
+      long retryBackoffMs,
+      Logger log
+  ) {
+    while (!stopped.get()) {
+      try {
+        pollOnce.run();
+      } catch (WakeupException we) {
+        // do nothing because the thread is closing -- see stop()
+        return;
+      } catch (Throwable t) {
+        log.error(
+            "Unexpected exception in schema registry group processing thread; "
+            + "will retry after backoff", t);
+        try {
+          Thread.sleep(retryBackoffMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+      }
+    }
   }
 
   @Override

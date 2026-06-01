@@ -597,10 +597,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         : defaultValidateNewSchemas;
   }
 
-  private ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
-                                                       Schema schema,
-                                                       Config config,
-                                                       boolean normalize)
+  protected ParsedSchema maybeValidateAndNormalizeSchema(ParsedSchema parsedSchema,
+                                                         Schema schema,
+                                                         Config config,
+                                                         boolean normalize)
           throws InvalidSchemaException {
     try {
       Mode mode = getModeInScope(schema.getSubject());
@@ -1808,6 +1808,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   @Override
+  public boolean allowEmptySubject() {
+    return !config().getBoolean(SchemaRegistryConfig.SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG);
+  }
+
+  @Override
   public LookupCache<SchemaRegistryKey, SchemaRegistryValue> getLookupCache() {
     return lookupCache;
   }
@@ -2026,8 +2031,35 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         request.getResourceId(), request.getResourceType(),
         new ArrayList<>(infosByType.keySet()), null);
 
-    Map<String, Association> assocsByType = associations.stream()
-        .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    Map<String, Association> assocsByType;
+    if (associations.isEmpty() && isCreate && dryRun && request.getResourceId() == null) {
+      // At validate-phase the caller may not yet have a resourceId.
+      // Fall back to (name, namespace, type) so the equivalence check below can recognize an
+      // idempotent retry.
+      List<Association> fallback = getAssociationsByResourceName(
+          request.getResourceName(), request.getResourceNamespace(),
+          request.getResourceType(), new ArrayList<>(infosByType.keySet()), null);
+      // The fallback can return entries from multiple resourceIds sharing (name, namespace,
+      // type) — e.g. an orphan from a deleted topic alongside a live one. Keep the
+      // most-recently-updated entry per type so equivalence compares against the live one.
+      assocsByType = fallback.stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a,
+              (a, b) -> {
+                Long timestampA = a.getUpdateTimestamp();
+                Long timestampB = b.getUpdateTimestamp();
+                if (timestampA == null) {
+                  return b;
+                }
+                if (timestampB == null) {
+                  return a;
+                }
+                return timestampA >= timestampB ? a : b;
+              }));
+    } else {
+      // By-resourceId guarantees one row per associationType. Keep fail-fast on duplicates
+      assocsByType = associations.stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a));
+    }
     Set<String> assocTypesToSkip = new HashSet<>();
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String associationType = info.getAssociationType();
@@ -2082,7 +2114,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
 
       if (association == null) {
-        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null) {
+        if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null
+            && getModeInScope(qualifiedSubject) != Mode.IMPORT) {
+          if (isCreate && info.getSchema() == null) {
+            throw new IllegalPropertyException(
+                "schema", "schema must be provided when creating a frozen association");
+          }
           Schema latestSchema = getLatestVersion(qualifiedSubject);
           if (latestSchema != null) {
             boolean normalize = Boolean.TRUE.equals(info.getNormalize());

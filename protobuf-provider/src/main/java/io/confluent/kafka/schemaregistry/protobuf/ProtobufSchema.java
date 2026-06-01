@@ -134,10 +134,13 @@ import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.MessageDefinition;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.ServiceDefinition;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.ValidationRule;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
@@ -168,6 +171,7 @@ import java.util.stream.Stream;
 import kotlin.Pair;
 import kotlin.ranges.IntRange;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -183,6 +187,10 @@ public class ProtobufSchema implements ParsedSchema {
   public static final String DOC_FIELD = "doc";
   public static final String PARAMS_FIELD = "params";
   public static final String TAGS_FIELD = "tags";
+  public static final String RULES_FIELD = "rules";
+  public static final String NAME_FIELD = "name";
+  public static final String EXPR_FIELD = "expr";
+  public static final String SQL_FIELD = "sql";
   public static final String PRECISION_KEY = "precision";
   public static final String SCALE_KEY = "scale";
 
@@ -1104,6 +1112,31 @@ public class ProtobufSchema implements ParsedSchema {
     if (!tags.isEmpty()) {
       map.put(TAGS_FIELD, tags);
     }
+    List<MetaProto.Rule> rules = meta.getRulesList();
+    if (!rules.isEmpty()) {
+      List<Map<String, String>> ruleEntries = new ArrayList<>(rules.size());
+      for (MetaProto.Rule rule : rules) {
+        Map<String, String> entry = new LinkedHashMap<>();
+        if (!rule.getName().isEmpty()) {
+          entry.put(NAME_FIELD, rule.getName());
+        }
+        if (!rule.getDoc().isEmpty()) {
+          entry.put(DOC_FIELD, rule.getDoc());
+        }
+        if (!rule.getExpr().isEmpty()) {
+          entry.put(EXPR_FIELD, rule.getExpr());
+        }
+        if (!rule.getSql().isEmpty()) {
+          entry.put(SQL_FIELD, rule.getSql());
+        }
+        if (!entry.isEmpty()) {
+          ruleEntries.add(entry);
+        }
+      }
+      if (!ruleEntries.isEmpty()) {
+        map.put(RULES_FIELD, ruleEntries);
+      }
+    }
     return map.isEmpty() ? null : new OptionElement(name, Kind.MAP, map, true);
   }
 
@@ -1509,8 +1542,8 @@ public class ProtobufSchema implements ParsedSchema {
     return toDynamicSchema().getEnumValue(enumTypeName, enumNumber);
   }
 
-  private MessageElement firstMessage() {
-    for (TypeElement typeElement : schemaObj.getTypes()) {
+  private static MessageElement firstMessage(ProtoFileElement file) {
+    for (TypeElement typeElement : file.getTypes()) {
       if (typeElement instanceof MessageElement) {
         return (MessageElement) typeElement;
       }
@@ -1518,8 +1551,8 @@ public class ProtobufSchema implements ParsedSchema {
     return null;
   }
 
-  private EnumElement firstEnum() {
-    for (TypeElement typeElement : schemaObj.getTypes()) {
+  private static EnumElement firstEnum(ProtoFileElement file) {
+    for (TypeElement typeElement : file.getTypes()) {
       if (typeElement instanceof EnumElement) {
         return (EnumElement) typeElement;
       }
@@ -2215,7 +2248,8 @@ public class ProtobufSchema implements ParsedSchema {
     if (!meta.isPresent()) {
       return null;
     }
-    return new ProtobufMeta(findDoc(meta), findParams(meta), findTags(meta));
+    return new ProtobufMeta(
+        findDoc(meta), findParams(meta), findTags(meta), findRules(meta));
   }
 
   public static String findDoc(Optional<OptionElement> meta) {
@@ -2254,6 +2288,20 @@ public class ProtobufSchema implements ParsedSchema {
       return (List<String>) result;
     } else {
       return result != null ? Collections.singletonList(result.toString()) : null;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static List<Map<String, String>> findRules(Optional<OptionElement> meta) {
+    Object result = findMetaField(meta, RULES_FIELD);
+    if (result == null) {
+      return null;
+    } else if (result instanceof Map) {
+      return Collections.singletonList((Map<String, String>) result);
+    } else if (result instanceof List) {
+      return (List<Map<String, String>>) result;
+    } else {
+      throw new IllegalStateException("Unrecognized rules type " + result.getClass().getName());
     }
   }
 
@@ -2353,7 +2401,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public boolean hasTopLevelField(String field) {
-    return schemaObj != null && schemaObj.getTypes()
+    return schemaObj != null && effectiveFile().getTypes()
             .stream()
             .map(ProtobufSchema::getFieldNames)
             .flatMap(Collection::stream)
@@ -2370,18 +2418,76 @@ public class ProtobufSchema implements ParsedSchema {
     if (name != null) {
       return name;
     }
-    TypeElement typeElement = firstMessage();
+    ProtoFileElement file = effectiveFile();
+    TypeElement typeElement = firstMessage(file);
     if (typeElement == null) {
-      typeElement = firstEnum();
+      typeElement = firstEnum(file);
     }
-    if (typeElement == null) {
-      throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
+    if (typeElement != null) {
+      String typeName = typeElement.getName();
+      String packageName = file.getPackageName();
+      return packageName != null && !packageName.isEmpty()
+          ? packageName + '.' + typeName
+          : typeName;
     }
-    String typeName = typeElement.getName();
-    String packageName = schemaObj.getPackageName();
-    return packageName != null && !packageName.isEmpty()
-        ? packageName + '.' + typeName
-        : typeName;
+    throw new IllegalArgumentException("Protobuf schema definition contains no type definitions");
+  }
+
+  /**
+   * For an empty file with exactly one {@code import public} and no private
+   * imports, returns the directly-imported {@link ProtoFileElement} provided
+   * it has at least one local type. Returns null if the shape is malformed
+   * (zero or multiple public imports, any private imports, missing dep, or
+   * the dep itself has no local types).
+   *
+   * <p>Resolution is depth-1 only: the empty wrapper must directly import a
+   * non-empty file. Chains of empty wrappers are not supported.
+   */
+  private ProtoFileElement resolvePublicImportWrapper() {
+    if (schemaObj == null) {
+      return null;
+    }
+    if (!schemaObj.getTypes().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getImports().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getServices().isEmpty()) {
+      return null;
+    }
+    if (!schemaObj.getExtendDeclarations().isEmpty()) {
+      return null;
+    }
+    if (schemaObj.getPublicImports().size() != 1) {
+      return null;
+    }
+    // Mirror descriptor resolution: well-known protos (timestamp, struct, etc.)
+    // live in KNOWN_DEPENDENCIES, not user-provided `dependencies`. Two cheap
+    // lookups avoid the HashMap allocation in `dependenciesWithLogicalTypes()`
+    // — important since this method runs on the per-record serialize path.
+    String depName = schemaObj.getPublicImports().get(0);
+    ProtoFileElement leaf = dependencies.get(depName);
+    if (leaf == null) {
+      leaf = KNOWN_DEPENDENCIES.get(depName);
+    }
+    if (leaf == null || leaf.getTypes().isEmpty()) {
+      return null;
+    }
+    return leaf;
+  }
+
+  /**
+   * The {@link ProtoFileElement} whose types and package define this schema's
+   * effective type space. For a normal schema this is {@link #schemaObj}. For
+   * a resolvable empty public-import wrapper, this is the imported file.
+   * Used to centralize the "look at the imported file's types instead of
+   * mine" logic across {@link #toMessageIndexes}, {@link #toMessageName},
+   * {@link #hasTopLevelField}, etc.
+   */
+  private ProtoFileElement effectiveFile() {
+    ProtoFileElement leaf = resolvePublicImportWrapper();
+    return leaf != null ? leaf : schemaObj;
   }
 
   @Override
@@ -2489,6 +2595,9 @@ public class ProtobufSchema implements ParsedSchema {
   public void validate(boolean strict) {
     // Normalization will try to resolve types
     normalize();
+    if (strict) {
+      toDynamicSchema();
+    }
   }
 
   @Override
@@ -2660,8 +2769,17 @@ public class ProtobufSchema implements ParsedSchema {
 
   public MessageIndexes toMessageIndexes(String name, boolean normalize) {
     List<Integer> indexes = new ArrayList<>();
+    ProtoFileElement file = effectiveFile();
+    List<TypeElement> types = file.getTypes();
+    // For an empty public-import wrapper, `file` is the imported file. Strip
+    // its package from `name` so the per-part walk matches local type names.
+    if (file != schemaObj) {
+      String pkg = file.getPackageName();
+      if (pkg != null && !pkg.isEmpty() && name.startsWith(pkg + ".")) {
+        name = name.substring(pkg.length() + 1);
+      }
+    }
     String[] parts = name.split("\\.");
-    List<TypeElement> types = schemaObj.getTypes();
     for (String part : parts) {
       int i = 0;
       for (TypeElement type : types) {
@@ -2688,7 +2806,9 @@ public class ProtobufSchema implements ParsedSchema {
 
   public String toMessageName(MessageIndexes indexes) {
     StringBuilder sb = new StringBuilder();
-    List<TypeElement> types = schemaObj.getTypes();
+    ProtoFileElement file = effectiveFile();
+    List<TypeElement> types = file.getTypes();
+    String packageName = file.getPackageName();
     boolean first = true;
     List<Integer> indexList = indexes.indexes();
     if (indexList.isEmpty()) {
@@ -2709,7 +2829,6 @@ public class ProtobufSchema implements ParsedSchema {
       types = message.getNestedTypes();
     }
     String messageName = sb.toString();
-    String packageName = schemaObj.getPackageName();
     return packageName != null && !packageName.isEmpty()
         ? packageName + '.' + messageName
         : messageName;
@@ -2871,6 +2990,178 @@ public class ProtobufSchema implements ParsedSchema {
       result = ByteString.copyFrom((byte[]) result);
     }
     return result;
+  }
+
+  /**
+   * Walk {@code message} against this schema's descriptor and evaluate every
+   * inline {@code Meta.rules} CHECK constraint encountered, collecting all
+   * failures into the returned list. Read-only — does not modify the message.
+   *
+   * <p>Two kinds of rules are evaluated:
+   * <ul>
+   *   <li><b>Message-level</b> ({@code Meta.message_meta.rules}) — the rule's
+   *       CEL receives the message itself as {@code this}. Evaluated once
+   *       per message node visited.</li>
+   *   <li><b>Field-level</b> ({@code Meta.field_meta.rules}) — the rule's
+   *       CEL receives the field value as {@code this}. Honors the
+   *       column-level skip-on-null contract: skipped when the field is
+   *       absent (oneof unset, {@code optional} scalar unset, or message
+   *       field unset).</li>
+   * </ul>
+   *
+   * <p>Failures (rules evaluating to {@code false} OR runtime CEL errors)
+   * are appended to the returned list with their dotted-path location
+   * (e.g. {@code addr.zip}, {@code tags[3]}). The walk continues after
+   * each failure so callers see the full set rather than only the first.
+   */
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
+    List<ValidationRuleError> violations = new ArrayList<>();
+    if (executor == null || !(message instanceof Message)) {
+      return violations;
+    }
+    Message msg = (Message) message;
+    // Use the schema-side descriptor (carries the Meta extensions) — the
+    // runtime descriptor on `msg` may not have them.
+    Descriptor desc = toDescriptor(msg.getDescriptorForType().getFullName());
+    if (desc == null) {
+      return violations;
+    }
+    toValidatedMessage(desc, msg, "", executor, failFast, violations);
+    return violations;
+  }
+
+  /**
+   * Mirrors {@link #toTransformedMessage}'s value-driven dispatch shape.
+   * Each call receives a {@code (descriptor, value)} pair and dispatches
+   * on the value type:
+   * <ul>
+   *   <li>{@code List} — repeated field or proto3 map (which arrives as a
+   *       {@code List<MapEntry>}); recurse on each element with the same
+   *       descriptor and an indexed path.</li>
+   *   <li>{@code Map} — Java {@code Map} adapters; nothing to walk
+   *       (proto3 maps go through the {@code List} branch above).</li>
+   *   <li>{@code Message} — evaluate message-level rules with
+   *       {@code this = msg}; iterate fields, evaluate field-level rules,
+   *       then recurse on each field's value (handles nested messages,
+   *       repeated, and map descent uniformly via the value-type
+   *       dispatch).</li>
+   *   <li>otherwise — primitive leaf; field-level rules were already
+   *       evaluated by the parent {@code Message} case.</li>
+   * </ul>
+   */
+  private static void toValidatedMessage(
+      Descriptor desc, Object value, String path,
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
+    if (desc == null) {
+      return;
+    }
+    if (value instanceof List) {
+      int i = 0;
+      for (Object element : (List<?>) value) {
+        toValidatedMessage(desc, element, path + "[" + i + "]", executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+        i++;
+      }
+    } else if (value instanceof Map) {
+      // Proto3 maps arrive as List<MapEntry>, hitting the List branch
+      // above. Java Map only appears for some adapters; no walk needed.
+      return;
+    } else if (value instanceof Message) {
+      Message msg = (Message) value;
+      // Message-level rules: this = msg, type hint = desc.
+      if (desc.getOptions().hasExtension(MetaProto.messageMeta)) {
+        Meta meta = desc.getOptions().getExtension(MetaProto.messageMeta);
+        for (MetaProto.Rule rule : meta.getRulesList()) {
+          evaluateOne(rule, desc, msg, path, executor, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+      }
+      // Iterate fields — same shape as toTransformedMessage's field loop.
+      for (FieldDescriptor fd : msg.getDescriptorForType().getFields()) {
+        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        if (schemaFd == null) {
+          continue;
+        }
+        // Skip-on-null per proto3 presence: hasPresence() returns true for
+        // any field that tracks presence (oneof, optional scalar, singular
+        // message field). Non-optional plain scalars in proto3 don't track
+        // presence — their typed-default value is passed through.
+        // Repeated/map fields are never null in proto3; the collection
+        // itself is bound to `this` (per the design's "empty == null"
+        // convention for collection IS NULL).
+        if (fd.hasPresence() && !msg.hasField(fd)) {
+          continue;
+        }
+        Object fieldValue = msg.getField(fd);
+        String childPath = path.isEmpty() ? fd.getName() : path + "." + fd.getName();
+        // Field-level rules: this = fieldValue. Hint is the field's own
+        // message descriptor for nested messages, or the containing-type
+        // descriptor for primitives.
+        if (schemaFd.getOptions().hasExtension(MetaProto.fieldMeta)) {
+          Meta meta = schemaFd.getOptions().getExtension(MetaProto.fieldMeta);
+          Descriptor hint = (fd.getJavaType() == FieldDescriptor.JavaType.MESSAGE)
+              ? schemaFd.getMessageType()
+              : schemaFd.getContainingType();
+          for (MetaProto.Rule rule : meta.getRulesList()) {
+            evaluateOne(rule, hint, fieldValue, childPath, executor, out);
+            if (failFast && !out.isEmpty()) {
+              return;
+            }
+          }
+        }
+        // Recurse — the value-type dispatch handles repeated (List),
+        // proto3 maps (List<MapEntry>), and singular nested messages
+        // uniformly. For non-message fields the recursion lands at the
+        // leaf branch and returns immediately.
+        Descriptor childDesc = (schemaFd.getType() == Type.MESSAGE)
+            ? schemaFd.getMessageType()
+            : desc;
+        toValidatedMessage(childDesc, fieldValue, childPath, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+      }
+    }
+    // else: primitive leaf — no rules at this level.
+  }
+
+  private static void evaluateOne(
+      MetaProto.Rule rule, Object schema, Object value,
+      String fieldPath, ValidationRuleExecutor executor,
+      List<ValidationRuleError> out) {
+    ValidationRule validationRule =
+        new ValidationRule(rule.getName(), rule.getDoc(), rule.getExpr(), rule.getSql());
+    try {
+      Object result = executor.execute(validationRule, schema, value);
+      if (result instanceof Boolean) {
+        if (Boolean.FALSE.equals(result)) {
+          out.add(new ValidationRuleError(validationRule, fieldPath, null, null));
+        }
+      } else if (result instanceof String) {
+        String msg = (String) result;
+        if (!msg.isEmpty()) {
+          out.add(new ValidationRuleError(validationRule, fieldPath, msg, null));
+        }
+      } else {
+        throw new SerializationException(
+            "Validation rule '" + validationRule.getName() + "' resolved to an unexpected type: "
+                + (result == null ? "null" : result.getClass().getName()));
+      }
+    } catch (RuleException e) {
+      out.add(new ValidationRuleError(validationRule, fieldPath, null, e));
+    }
   }
 
   private RuleContext.Type getType(FieldDescriptor field) {
@@ -3256,11 +3547,21 @@ public class ProtobufSchema implements ParsedSchema {
     private final String doc;
     private final Map<String, String> params;
     private final List<String> tags;
+    private final List<Map<String, String>> rules;
 
     public ProtobufMeta(String doc, Map<String, String> params, List<String> tags) {
+      this(doc, params, tags, null);
+    }
+
+    public ProtobufMeta(
+        String doc,
+        Map<String, String> params,
+        List<String> tags,
+        List<Map<String, String>> rules) {
       this.doc = doc;
       this.params = params;
       this.tags = tags;
+      this.rules = rules;
     }
 
     public String getDoc() {
@@ -3275,10 +3576,15 @@ public class ProtobufSchema implements ParsedSchema {
       return tags;
     }
 
+    public List<Map<String, String>> getRules() {
+      return rules;
+    }
+
     public boolean isEmpty() {
       return doc == null
           && (params == null || params.isEmpty())
-          && (tags == null || tags.isEmpty());
+          && (tags == null || tags.isEmpty())
+          && (rules == null || rules.isEmpty());
     }
 
     @Override
@@ -3292,12 +3598,13 @@ public class ProtobufSchema implements ParsedSchema {
       ProtobufMeta metadata = (ProtobufMeta) o;
       return Objects.equals(doc, metadata.doc)
           && Objects.equals(params, metadata.params)
-          && Objects.equals(tags, metadata.tags);
+          && Objects.equals(tags, metadata.tags)
+          && Objects.equals(rules, metadata.rules);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(doc, params, tags);
+      return Objects.hash(doc, params, tags, rules);
     }
   }
 }

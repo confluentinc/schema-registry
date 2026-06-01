@@ -66,6 +66,9 @@ import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.ValidationRule;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
@@ -94,6 +97,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -1040,6 +1044,241 @@ public class JsonSchema implements ParsedSchema {
       return null;
     } else {
       return message;
+    }
+  }
+
+  /**
+   * Walk {@code message} against this schema and evaluate every inline
+   * {@code confluent:rules} CHECK constraint encountered, collecting all
+   * failures into the returned list. Read-only — does not modify the
+   * message.
+   *
+   * <p>Two kinds of rules are evaluated:
+   * <ul>
+   *   <li><b>Object-level</b> ({@code confluent:rules} on an
+   *       {@link ObjectSchema}) — {@code this} = the object value.</li>
+   *   <li><b>Property-level</b> ({@code confluent:rules} on a property's
+   *       schema) — {@code this} = the property value. Honors the
+   *       column-level skip-on-null contract: when the property value is
+   *       {@code null} (or the property is absent), property-level rules
+   *       are skipped.</li>
+   * </ul>
+   *
+   * <p>Failures are appended to the returned list with their dotted-path
+   * location (e.g. {@code $.addr.zip}, {@code $.tags[3]}). The walk
+   * continues after each failure so callers see the full set rather than
+   * only the first.
+   */
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
+    List<ValidationRuleError> violations = new ArrayList<>();
+    if (executor == null || message == null) {
+      return violations;
+    }
+    toValidatedMessage(rawSchema(), "$", message, executor, failFast, violations);
+    return violations;
+  }
+
+  /**
+   * Mirrors {@link #toTransformedMessage}'s instanceof dispatch on the
+   * org.everit {@link Schema} subtypes:
+   * <ul>
+   *   <li>{@link CombinedSchema} — for {@code allOf}, walk each
+   *       subschema; for {@code oneOf}/{@code anyOf}, validate against
+   *       each subschema and walk into matching ones.</li>
+   *   <li>{@link ArraySchema} — recurse on each element with {@code [i]}
+   *       path.</li>
+   *   <li>{@link ObjectSchema} — evaluate object-level rules with
+   *       {@code this = message}; iterate properties, evaluate
+   *       property-level rules (with skip-on-null), then recurse on each
+   *       property value.</li>
+   *   <li>{@link ReferenceSchema} — resolve to the referred schema and
+   *       recurse.</li>
+   *   <li>{@link ConditionalSchema}, {@link EmptySchema},
+   *       {@link FalseSchema}, {@link NotSchema} — no-op (return).</li>
+   *   <li>otherwise (primitive) — no-op; property-level rules were
+   *       already evaluated by the parent {@code ObjectSchema} case.</li>
+   * </ul>
+   */
+  private void toValidatedMessage(
+      Schema schema, String path, Object message,
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
+    if (schema == null) {
+      return;
+    }
+    message = getValue(message);
+    if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
+      Collection<Schema> subschemas = combinedSchema.getSubschemas();
+      if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
+        for (Schema subschema : subschemas) {
+          toValidatedMessage(subschema, path, message, executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+        return;
+      }
+      JsonNode jsonNode;
+      try {
+        jsonNode = objectMapper.convertValue(message, JsonNode.class);
+      } catch (IllegalArgumentException e) {
+        // Can't introspect this message — skip oneOf/anyOf branch selection at this
+        // node. Structural JSON validation (if enabled) will have already surfaced
+        // the underlying serialization issue with a clearer error.
+        return;
+      }
+      for (Schema subschema : subschemas) {
+        boolean valid = false;
+        try {
+          validate(subschema, jsonNode);
+          valid = true;
+        } catch (Exception e) {
+          // noop
+        }
+        if (valid) {
+          toValidatedMessage(subschema, path, message, executor, failFast, out);
+          if (criterion.equals(CombinedSchema.ONE_CRITERION)) {
+            return;
+          }
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+      }
+      return;
+    } else if (schema instanceof ArraySchema) {
+      if (!(message instanceof Iterable)) {
+        return;
+      }
+      Schema subschema = ((ArraySchema) schema).getAllItemSchema();
+      int i = 0;
+      for (Object element : (Iterable<?>) message) {
+        toValidatedMessage(subschema, path + "[" + i + "]", element, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+        i++;
+      }
+      return;
+    } else if (schema instanceof ObjectSchema) {
+      if (message == null) {
+        return;
+      }
+      // Object-level rules: this = the object value, hint = its class.
+      for (ValidationRule rule : readRulesProp(schema)) {
+        evaluateOne(rule, message.getClass(), message, path, executor, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+      }
+      Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
+      for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
+        String propertyName = entry.getKey();
+        Schema propertySchema = entry.getValue();
+        String fullName = path + "." + propertyName;
+        // ctx is unused by getBeanGetter/Setter — pass null safely.
+        PropertyAccessor propertyAccessor =
+            getPropertyAccessor(null, message, propertyName);
+        if (propertyAccessor == null) {
+          continue;
+        }
+        Object propertyValue = getValue(propertyAccessor.getPropertyValue());
+        // Skip-on-null for property-level rules: when the property value
+        // is null (or the property is absent), don't evaluate. The
+        // recursion still happens but lands at branches that no-op for
+        // null values.
+        if (propertyValue != null) {
+          for (ValidationRule rule : readRulesProp(propertySchema)) {
+            evaluateOne(rule, propertyValue.getClass(), propertyValue,
+                fullName, executor, out);
+            if (failFast && !out.isEmpty()) {
+              return;
+            }
+          }
+        }
+        toValidatedMessage(propertySchema, fullName, propertyValue, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+      }
+      return;
+    } else if (schema instanceof ReferenceSchema) {
+      if (message == null) {
+        return;
+      }
+      toValidatedMessage(((ReferenceSchema) schema).getReferredSchema(),
+          path, message, executor, failFast, out);
+      return;
+    } else if (schema instanceof ConditionalSchema
+        || schema instanceof EmptySchema
+        || schema instanceof FalseSchema
+        || schema instanceof NotSchema) {
+      return;
+    }
+    // Primitive leaf — no rules at this level (property-level rules
+    // were evaluated by the parent ObjectSchema case).
+  }
+
+  /**
+   * Read the {@code confluent:rules} property off a schema's unprocessed
+   * properties map. Empty / missing / malformed entries return an empty
+   * list. Used for both object-level (the {@link ObjectSchema} itself)
+   * and property-level (each property's schema) rule reads.
+   */
+  private static List<ValidationRule> readRulesProp(Schema schema) {
+    Map<String, Object> unprocessed = schema.getUnprocessedProperties();
+    if (unprocessed == null) {
+      return Collections.emptyList();
+    }
+    Object propValue = unprocessed.get("confluent:rules");
+    if (!(propValue instanceof List<?>)) {
+      return Collections.emptyList();
+    }
+    List<ValidationRule> rules = new ArrayList<>();
+    for (Object entry : (List<?>) propValue) {
+      if (entry instanceof Map) {
+        Map<?, ?> m = (Map<?, ?>) entry;
+        rules.add(new ValidationRule(
+            (String) m.get("name"),
+            (String) m.get("doc"),
+            (String) m.get("expr"),
+            (String) m.get("sql")));
+      }
+    }
+    return rules;
+  }
+
+  private static void evaluateOne(
+      ValidationRule rule, Object schemaHint, Object value,
+      String path, ValidationRuleExecutor executor,
+      List<ValidationRuleError> out) {
+    try {
+      Object result = executor.execute(rule, schemaHint, value);
+      if (result instanceof Boolean) {
+        if (Boolean.FALSE.equals(result)) {
+          out.add(new ValidationRuleError(rule, path, null, null));
+        }
+      } else if (result instanceof String) {
+        String msg = (String) result;
+        if (!msg.isEmpty()) {
+          out.add(new ValidationRuleError(rule, path, msg, null));
+        }
+      } else {
+        throw new SerializationException(
+            "Validation rule '" + rule.getName() + "' resolved to an unexpected type: "
+                + (result == null ? "null" : result.getClass().getName()));
+      }
+    } catch (RuleException e) {
+      out.add(new ValidationRuleError(rule, path, null, e));
     }
   }
 
