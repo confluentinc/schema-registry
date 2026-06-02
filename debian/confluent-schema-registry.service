@@ -1,7 +1,7 @@
 [Unit]
 Description=RESTful Avro schema registry for Apache Kafka
 Documentation=http://docs.confluent.io/
-After=network.target confluent-kafka.target
+After=network.target confluent-zookeeper.service confluent-kafka.service
 
 [Service]
 Type=simple
