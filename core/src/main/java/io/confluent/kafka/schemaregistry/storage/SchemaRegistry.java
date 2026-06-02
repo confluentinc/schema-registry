@@ -227,7 +227,7 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
 
   ParsedSchema parseSchema(Schema schema) throws InvalidSchemaException;
 
-  ParsedSchema parseSchema(Schema schema, boolean isNew, boolean normalize) throws
+  ParsedSchema parseSchema(Schema schema, boolean validateAsNew, boolean normalize) throws
           InvalidSchemaException;
 
   Set<String> listSubjectsWithPrefix(String prefix, LookupFilter filter) throws

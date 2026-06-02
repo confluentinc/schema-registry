@@ -51,12 +51,12 @@ public interface SchemaProvider extends Configurable {
    * Parses a schema.
    *
    * @param schema the schema
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @return an optional parsed schema
    */
-  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew) {
+  default Optional<ParsedSchema> parseSchema(Schema schema, boolean validateAsNew) {
     try {
-      return Optional.of(parseSchemaOrElseThrow(schema, isNew, false));
+      return Optional.of(parseSchemaOrElseThrow(schema, validateAsNew, false));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -66,13 +66,14 @@ public interface SchemaProvider extends Configurable {
    * Parses a schema.
    *
    * @param schema the schema
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @param normalize whether to normalize the schema
    * @return an optional parsed schema
    */
-  default Optional<ParsedSchema> parseSchema(Schema schema, boolean isNew, boolean normalize) {
+  default Optional<ParsedSchema> parseSchema(
+      Schema schema, boolean validateAsNew, boolean normalize) {
     try {
-      return Optional.of(parseSchemaOrElseThrow(schema, isNew, normalize));
+      return Optional.of(parseSchemaOrElseThrow(schema, validateAsNew, normalize));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -83,15 +84,16 @@ public interface SchemaProvider extends Configurable {
    *
    * @param schemaString the schema
    * @param references a list of schema references
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @return an optional parsed schema
    */
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references,
-                                             boolean isNew) {
+                                             boolean validateAsNew) {
     try {
       return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString), isNew, false));
+          new Schema(null, null, null, schemaType(), references, schemaString),
+          validateAsNew, false));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -102,17 +104,18 @@ public interface SchemaProvider extends Configurable {
    *
    * @param schemaString the schema
    * @param references a list of schema references
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @param normalize whether to normalize the schema
    * @return an optional parsed schema
    */
   default Optional<ParsedSchema> parseSchema(String schemaString,
                                              List<SchemaReference> references,
-                                             boolean isNew,
+                                             boolean validateAsNew,
                                              boolean normalize) {
     try {
       return Optional.of(parseSchemaOrElseThrow(
-          new Schema(null, null, null, schemaType(), references, schemaString), isNew, normalize));
+          new Schema(null, null, null, schemaType(), references, schemaString),
+          validateAsNew, normalize));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -127,9 +130,9 @@ public interface SchemaProvider extends Configurable {
    * Parses a string representing a schema.
    *
    * @param schema the schema
-   * @param isNew whether the schema is new
+   * @param validateAsNew whether the schema should be validated as a new schema
    * @param normalize whether to normalize the schema
    * @return a parsed schema or throw an error
    */
-  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize);
+  ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean validateAsNew, boolean normalize);
 }
