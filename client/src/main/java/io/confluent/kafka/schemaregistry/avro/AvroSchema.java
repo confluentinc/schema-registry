@@ -86,7 +86,7 @@ public class AvroSchema implements ParsedSchema {
   private final Map<String, String> resolvedReferences;
   private final Metadata metadata;
   private final RuleSet ruleSet;
-  private final boolean isNew;
+  private final boolean validateAsNew;
 
   private transient volatile int hashCode = NO_HASHCODE;
 
@@ -109,8 +109,8 @@ public class AvroSchema implements ParsedSchema {
                     List<SchemaReference> references,
                     Map<String, String> resolvedReferences,
                     Integer version,
-                    boolean isNew) {
-    this(schemaString, references, resolvedReferences, null, null, version, isNew);
+                    boolean validateAsNew) {
+    this(schemaString, references, resolvedReferences, null, null, version, validateAsNew);
   }
 
   public AvroSchema(String schemaString,
@@ -119,14 +119,14 @@ public class AvroSchema implements ParsedSchema {
                     Metadata metadata,
                     RuleSet ruleSet,
                     Integer version,
-                    boolean isNew) {
-    this.isNew = isNew;
+                    boolean validateAsNew) {
+    this.validateAsNew = validateAsNew;
     Schema.Parser parser = getParser();
     for (String schema : resolvedReferences.values()) {
       parser.parse(schema);
     }
     this.schemaObj = schemaString != null ? parser.parse(schemaString) : null;
-    if (!isNew) {
+    if (!validateAsNew) {
       // For new schemas, strict validation is already applied.
       // For non-new schemas, validation is skipped.
       // The NO_VALIDATION parser path skips both name and namespace checks;
@@ -146,7 +146,7 @@ public class AvroSchema implements ParsedSchema {
   }
 
   public AvroSchema(Schema schemaObj, Integer version) {
-    this.isNew = false;
+    this.validateAsNew = false;
     this.schemaObj = schemaObj;
     this.references = Collections.emptyList();
     this.resolvedReferences = Collections.emptyMap();
@@ -161,7 +161,7 @@ public class AvroSchema implements ParsedSchema {
       Map<String, String> resolvedReferences,
       Integer version
   ) {
-    this.isNew = false;
+    this.validateAsNew = false;
     this.schemaObj = schemaObj;
     this.references = Collections.unmodifiableList(references);
     this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
@@ -178,9 +178,9 @@ public class AvroSchema implements ParsedSchema {
       Metadata metadata,
       RuleSet ruleSet,
       Integer version,
-      boolean isNew
+      boolean validateAsNew
   ) {
-    this.isNew = isNew;
+    this.validateAsNew = validateAsNew;
     this.schemaObj = schemaObj;
     this.canonicalString = canonicalString;
     this.references = references;
@@ -200,7 +200,7 @@ public class AvroSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         this.version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
@@ -214,7 +214,7 @@ public class AvroSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
@@ -228,7 +228,7 @@ public class AvroSchema implements ParsedSchema {
         metadata,
         ruleSet,
         this.version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
@@ -256,16 +256,16 @@ public class AvroSchema implements ParsedSchema {
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
       schemaCopy.version(),
-      schemaCopy.isNew());
+      schemaCopy.isValidateAsNew());
   }
 
   protected Schema.Parser getParser() {
-    boolean isNew = isNew();
-    NameValidator nameValidator = isNew
+    boolean validateAsNew = isValidateAsNew();
+    NameValidator nameValidator = validateAsNew
         ? NameValidator.STRICT_VALIDATOR
         : NameValidator.NO_VALIDATION;
     Schema.Parser parser = new Schema.Parser(nameValidator);
-    parser.setValidateDefaults(isNew);
+    parser.setValidateDefaults(validateAsNew);
     return parser;
   }
 
@@ -361,8 +361,13 @@ public class AvroSchema implements ParsedSchema {
     return ruleSet;
   }
 
+  @Deprecated
   public boolean isNew() {
-    return isNew;
+    return validateAsNew;
+  }
+
+  public boolean isValidateAsNew() {
+    return validateAsNew;
   }
 
   @Override
@@ -375,7 +380,7 @@ public class AvroSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         this.version,
-        this.isNew
+        this.validateAsNew
     );
   }
 
