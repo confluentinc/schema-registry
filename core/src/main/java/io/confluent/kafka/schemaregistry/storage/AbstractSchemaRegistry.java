@@ -238,12 +238,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
             .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                     TimeUnit.SECONDS)
-            .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+            .build(s -> loadSchema(s.getSchema(), s.isValidateAsnew(), s.isNormalize()));
     this.oldSchemaCache = Caffeine.newBuilder()
             .maximumSize(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_SIZE_CONFIG) / 2)
             .expireAfterAccess(config.getInt(SchemaRegistryConfig.SCHEMA_CACHE_EXPIRY_SECS_CONFIG),
                     TimeUnit.SECONDS)
-            .build(s -> loadSchema(s.getSchema(), s.isNew(), s.isNormalize()));
+            .build(s -> loadSchema(s.getSchema(), s.isValidateAsnew(), s.isNormalize()));
     this.defaultCompatibilityLevel = config.compatibilityType();
     this.defaultValidateFields =
         config.getBoolean(SchemaRegistryConfig.SCHEMA_VALIDATE_FIELDS_CONFIG);
@@ -353,7 +353,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   /**
    * Loads a schema from the cache or parses it if not cached.
    */
-  protected ParsedSchema loadSchema(Schema schema, boolean isNew, boolean normalize)
+  protected ParsedSchema loadSchema(Schema schema, boolean validateAsNew, boolean normalize)
           throws InvalidSchemaException {
     String schemaType = schema.getSchemaType();
     if (schemaType == null) {
@@ -368,7 +368,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     final String type = schemaType;
 
     try {
-      return provider.parseSchemaOrElseThrow(schema, isNew, normalize);
+      return provider.parseSchemaOrElseThrow(schema, validateAsNew, normalize);
     } catch (Exception e) {
       throw new InvalidSchemaException("Invalid schema of type " + type
               + ", details: " + e.getMessage());
@@ -623,14 +623,14 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
   protected ParsedSchema canonicalizeSchema(Schema schema,
                                   Config config,
-                                  boolean isNew,
+                                  boolean validateAsNew,
                                   boolean normalize) throws InvalidSchemaException {
     if (schema == null
             || schema.getSchema() == null
             || schema.getSchema().trim().isEmpty()) {
       return null;
     }
-    ParsedSchema parsedSchema = parseSchema(schema, isNew, normalize);
+    ParsedSchema parsedSchema = parseSchema(schema, validateAsNew, normalize);
     return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, normalize);
   }
 
@@ -1707,12 +1707,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   @Override
   public ParsedSchema parseSchema(
           Schema schema,
-          boolean isNew,
+          boolean validateAsNew,
           boolean normalize) throws InvalidSchemaException {
     try {
       AbstractSchemaRegistry.RawSchema rawSchema =
-              new AbstractSchemaRegistry.RawSchema(schema.toHashKey(), isNew, normalize);
-      ParsedSchema parsedSchema = isNew
+              new AbstractSchemaRegistry.RawSchema(schema.toHashKey(), validateAsNew, normalize);
+      ParsedSchema parsedSchema = validateAsNew
               ? newSchemaCache.get(rawSchema)
               : oldSchemaCache.get(rawSchema);
       if (schema.getVersion() != null) {
@@ -2642,12 +2642,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    */
   protected static class RawSchema {
     private final Schema schema;
-    private final boolean isNew;
+    private final boolean validateAsNew;
     private final boolean normalize;
 
-    public RawSchema(Schema schema, boolean isNew, boolean normalize) {
+    public RawSchema(Schema schema, boolean validateAsNew, boolean normalize) {
       this.schema = schema;
-      this.isNew = isNew;
+      this.validateAsNew = validateAsNew;
       this.normalize = normalize;
     }
 
@@ -2655,8 +2655,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       return schema;
     }
 
-    public boolean isNew() {
-      return isNew;
+    public boolean isValidateAsnew() {
+      return validateAsNew;
     }
 
     public boolean isNormalize() {
@@ -2672,21 +2672,21 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         return false;
       }
       RawSchema that = (RawSchema) o;
-      return isNew == that.isNew
+      return validateAsNew == that.validateAsNew
           && normalize == that.normalize
           && Objects.equals(schema, that.schema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(schema, isNew, normalize);
+      return Objects.hash(schema, validateAsNew, normalize);
     }
 
     @Override
     public String toString() {
       return "RawSchema{"
           + "schema=" + schema
-          + ", isNew=" + isNew
+          + ", isNew=" + validateAsNew
           + ", normalize=" + normalize
           + '}';
     }
