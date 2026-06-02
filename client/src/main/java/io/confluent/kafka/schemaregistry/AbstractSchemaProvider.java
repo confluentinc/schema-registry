@@ -48,20 +48,20 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
     return resolveReferences(schema, false);
   }
 
-  protected Map<String, String> resolveReferences(Schema schema, boolean isNew) {
+  protected Map<String, String> resolveReferences(Schema schema, boolean validateAsNew) {
     List<SchemaReference> references = schema.getReferences();
     if (references == null) {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
     Set<String> visited = new HashSet<>();
-    resolveReferences(schema, result, visited, isNew);
+    resolveReferences(schema, result, visited, validateAsNew);
     return result;
   }
 
   private void resolveReferences(
-      Schema schema, Map<String, String> schemas, Set<String> visited, boolean isNew) {
-    boolean lookupDeletedSchema = !isNew;
+      Schema schema, Map<String, String> schemas, Set<String> visited, boolean validateAsNew) {
+    boolean lookupDeletedSchema = !validateAsNew;
     List<SchemaReference> references = schema.getReferences();
     for (SchemaReference reference : references) {
       if (reference.getName() == null
@@ -89,7 +89,7 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         visited.add(reference.getName());
       }
       if (!schemas.containsKey(reference.getName())) {
-        resolveReferences(s, schemas, visited, isNew);
+        resolveReferences(s, schemas, visited, validateAsNew);
         schemas.put(reference.getName(), s.getSchema());
       }
     }

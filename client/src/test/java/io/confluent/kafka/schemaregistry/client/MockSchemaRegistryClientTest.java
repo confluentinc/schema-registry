@@ -1088,7 +1088,7 @@ public class MockSchemaRegistryClientTest {
 
         @Override
         public ParsedSchema parseSchemaOrElseThrow(
-            Schema schema, boolean isNew, boolean normalize) {
+            Schema schema, boolean validateAsNew, boolean normalize) {
             return new DummySchema(schema);
         }
     }
