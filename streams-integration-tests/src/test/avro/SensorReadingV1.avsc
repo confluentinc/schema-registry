@@ -1,0 +1,9 @@
+{
+  "type": "record",
+  "name": "SensorReadingV1",
+  "namespace": "io.confluent.kafka.streams.integration.avro",
+  "fields": [
+    {"name": "temperature", "type": "double"},
+    {"name": "timestamp", "type": "long"}
+  ]
+}
