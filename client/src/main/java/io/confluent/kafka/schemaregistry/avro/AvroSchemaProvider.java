@@ -32,16 +32,17 @@ public class AvroSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
+  public ParsedSchema parseSchemaOrElseThrow(
+      Schema schema, boolean validateAsNew, boolean normalize) {
     try {
       return new AvroSchema(
           schema.getSchema(),
           schema.getReferences(),
-          resolveReferences(schema, isNew),
+          resolveReferences(schema, validateAsNew),
           schema.getMetadata(),
           schema.getRuleSet(),
           null,
-          isNew
+          validateAsNew
       );
     } catch (Exception e) {
       log.error("Could not parse Avro schema", e);
