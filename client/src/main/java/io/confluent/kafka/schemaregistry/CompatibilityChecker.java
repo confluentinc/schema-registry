@@ -65,7 +65,7 @@ public class CompatibilityChecker {
       FULL_TRANSITIVE_VALIDATOR);
 
   private static final SchemaValidator NO_OP_VALIDATOR =
-      (schema, schemas) -> Collections.emptyList();
+      (policy, schema, schemas) -> Collections.emptyList();
 
   public static final CompatibilityChecker NO_OP_CHECKER =
       new CompatibilityChecker(NO_OP_VALIDATOR);
@@ -80,18 +80,26 @@ public class CompatibilityChecker {
   public List<String> isCompatible(
       ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas
   ) {
-    return isCompatibleWithHolders(newSchema, previousSchemas.stream()
+    return isCompatible(CompatibilityPolicy.STRICT, newSchema, previousSchemas);
+  }
+
+  // visible for testing
+  public List<String> isCompatible(
+      CompatibilityPolicy policy,
+      ParsedSchema newSchema, List<? extends ParsedSchema> previousSchemas
+  ) {
+    return isCompatibleWithHolders(policy, newSchema, previousSchemas.stream()
         .map(SimpleParsedSchemaHolder::new)
         .collect(Collectors.toCollection(ArrayList::new)));
   }
 
   public List<String> isCompatibleWithHolders(
-      ParsedSchema newSchema, List<ParsedSchemaHolder> previousSchemas
+      CompatibilityPolicy policy, ParsedSchema newSchema, List<ParsedSchemaHolder> previousSchemas
   ) {
     List<ParsedSchemaHolder> previousSchemasCopy = new ArrayList<>(previousSchemas);
     // Validator checks in list order, but checks should occur in reverse chronological order
     Collections.reverse(previousSchemasCopy);
-    return validator.validate(newSchema, previousSchemasCopy);
+    return validator.validate(policy, newSchema, previousSchemasCopy);
   }
 
   public static CompatibilityChecker checker(CompatibilityLevel level) {

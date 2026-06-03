@@ -160,7 +160,7 @@ public class JsonSchemaMessageReader extends SchemaMessageReader<JsonNode> {
         JsonNode object,
         ParsedSchema schema
     ) {
-      return super.serializeImpl(subject, topic, headers, object, (JsonSchema) schema);
+      return super.serializeImpl(subject, topic, isKey, headers, object, (JsonSchema) schema);
     }
 
     @Override
