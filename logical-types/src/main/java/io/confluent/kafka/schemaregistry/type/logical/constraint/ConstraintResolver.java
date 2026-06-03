@@ -450,16 +450,35 @@ final class ConstraintResolver {
     if (is.IS() != null) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    // `<x> <op> <y>` (size 2) yields boolean. Same goes for LIKE below.
-    if (compare.check_expr_like().size() > 1) {
+    return tryResolveCompareValueType(is.check_expr_compare(), vctx);
+  }
+
+  /**
+   * Resolve the value type below a {@code check_expr_compare} that has no
+   * comparison operator (a single {@code check_expr_between} operand). Any
+   * relational operator below it (BETWEEN/IN/LIKE) yields BOOLEAN; otherwise
+   * the cascade passes through to the {@code check_expr_add} value root.
+   */
+  static Schema tryResolveCompareValueType(
+      LogicalTypesParser.Check_expr_compareContext compare,
+      ConstraintValidationContext vctx) {
+    // `<x> <op> <y>` (size 2) yields boolean. Same goes for BETWEEN/IN/LIKE.
+    if (compare.check_expr_between().size() > 1) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
+    if (between.BETWEEN() != null) {
+      return Schema.create(Schema.Type.BOOLEAN);
+    }
+    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+    if (in.IN() != null) {
+      return Schema.create(Schema.Type.BOOLEAN);
+    }
+    LogicalTypesParser.Check_expr_likeContext like = in.check_expr_like();
     if (like.LIKE() != null) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    return tryResolveCheckExprConcatType(like.check_expr_concat(), vctx);
+    return tryResolveAddType(like.check_expr_add(), vctx);
   }
 
   static Schema tryResolveUnarySignType(
@@ -532,19 +551,11 @@ final class ConstraintResolver {
     if (ctx.IN() != null) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    LogicalTypesParser.Check_expr_isnullContext is = ctx.check_expr_isnull();
-    if (is.IS() != null) {
-      return Schema.create(Schema.Type.BOOLEAN);
-    }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_like().size() > 1) {
-      return Schema.create(Schema.Type.BOOLEAN);
-    }
-    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
+    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like();
     if (like.LIKE() != null) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    return tryResolveCheckExprConcatType(like.check_expr_concat(), vctx);
+    return tryResolveAddType(like.check_expr_add(), vctx);
   }
 
   /**
@@ -571,28 +582,12 @@ final class ConstraintResolver {
     if (unaryNot instanceof LogicalTypesParser.CheckExprNotContext) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_between();
-    if (between.BETWEEN() != null) {
-      return Schema.create(Schema.Type.BOOLEAN);
-    }
-    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
-    if (in.IN() != null) {
-      return Schema.create(Schema.Type.BOOLEAN);
-    }
-    LogicalTypesParser.Check_expr_isnullContext is = in.check_expr_isnull();
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_isnull();
     if (is.IS() != null) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_like().size() > 1) {
-      return Schema.create(Schema.Type.BOOLEAN);
-    }
-    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
-    if (like.LIKE() != null) {
-      return Schema.create(Schema.Type.BOOLEAN);
-    }
-    return tryResolveCheckExprConcatType(like.check_expr_concat(), vctx);
+    return tryResolveCompareValueType(is.check_expr_compare(), vctx);
   }
 
   /**
@@ -620,22 +615,26 @@ final class ConstraintResolver {
     if (like.LIKE() != null) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
-    return tryResolveCheckExprConcatType(like.check_expr_concat(), vctx);
+    return tryResolveAddType(like.check_expr_add(), vctx);
   }
 
   /**
-   * Resolve the type of a {@code check_expr_concat} cascade. For a single
-   * {@code add} operand, delegates to {@link #tryResolveAddType}. For a
-   * multi-{@code ||} chain, unifies operand categories — returns the
-   * shared category type when all operands resolve consistently, null
-   * otherwise. Used by the LIKE-receiver validator and the comparison
-   * validator's resolver chain.
+   * Resolve the type of a comparison operand ({@code check_expr_between}). A
+   * BETWEEN/IN relation yields BOOLEAN; otherwise the cascade passes through
+   * the single {@code check_expr_in} → {@code check_expr_like} to the value
+   * resolver.
    */
-  static Schema tryResolveCheckExprConcatType(
-      LogicalTypesParser.Check_expr_concatContext concat,
+  static Schema tryResolveCompareOperandType(
+      LogicalTypesParser.Check_expr_betweenContext between,
       ConstraintValidationContext vctx) {
-    return unifyOperandTypes(concat.check_expr_add(),
-        add -> tryResolveAddType(add, vctx));
+    if (between.BETWEEN() != null) {
+      return Schema.create(Schema.Type.BOOLEAN);
+    }
+    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+    if (in.IN() != null) {
+      return Schema.create(Schema.Type.BOOLEAN);
+    }
+    return tryResolveSimpleColumnRefType(in.check_expr_like(), vctx);
   }
 
   // -------------------------------------------------------------------------
@@ -667,16 +666,6 @@ final class ConstraintResolver {
     }
     Schema.Type t = s.getType();
     return t == Schema.Type.TIMESTAMP || t == Schema.Type.TIMESTAMP_LTZ;
-  }
-
-  static boolean concatHasDecimal(
-      LogicalTypesParser.Check_expr_concatContext concat, ConstraintValidationContext vctx) {
-    for (LogicalTypesParser.Check_expr_addContext add : concat.check_expr_add()) {
-      if (addHasDecimal(add, vctx)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   static boolean addHasDecimal(
@@ -1026,19 +1015,11 @@ final class ConstraintResolver {
     if (ctx.IN() != null) {
       return false;
     }
-    LogicalTypesParser.Check_expr_isnullContext is = ctx.check_expr_isnull();
-    if (is.IS() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_like().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
+    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like();
     if (like.LIKE() != null) {
       return false;
     }
-    return isSimplePrimaryConcat(like.check_expr_concat());
+    return isSimplePrimaryAdd(like.check_expr_add());
   }
 
   /**
@@ -1066,8 +1047,16 @@ final class ConstraintResolver {
     if (unaryNot instanceof LogicalTypesParser.CheckExprNotContext) {
       return null;
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_between();
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_isnull();
+    if (is.IS() != null) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
+    if (compare.check_expr_between().size() > 1) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
     if (between.BETWEEN() != null) {
       return null;
     }
@@ -1082,15 +1071,7 @@ final class ConstraintResolver {
     if (in.IN() != null) {
       return null;
     }
-    LogicalTypesParser.Check_expr_isnullContext is = in.check_expr_isnull();
-    if (is.IS() != null) {
-      return null;
-    }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_like().size() > 1) {
-      return null;
-    }
-    return tryAsLiteralLike(compare.check_expr_like(0));
+    return tryAsLiteralLike(in.check_expr_like());
   }
 
   /**
@@ -1101,11 +1082,7 @@ final class ConstraintResolver {
     if (like.LIKE() != null) {
       return null;
     }
-    LogicalTypesParser.Check_expr_concatContext concat = like.check_expr_concat();
-    if (concat.check_expr_add().size() > 1) {
-      return null;
-    }
-    LogicalTypesParser.Check_expr_addContext add = concat.check_expr_add(0);
+    LogicalTypesParser.Check_expr_addContext add = like.check_expr_add();
     if (add.check_expr_mul().size() > 1) {
       return null;
     }
@@ -1154,10 +1131,10 @@ final class ConstraintResolver {
    *
    * <p>Each cascade level has a dedicated entry point used when the
    * caller already holds a sub-context: {@link #isSimplePrimaryUnaryNot}
-   * (NOT operand), {@link #isSimplePrimaryBetween} (NOT body),
-   * {@link #isSimplePrimaryIn} (BETWEEN bound), {@link #isSimplePrimaryConcat}
-   * (LIKE/method receiver). Each one delegates down to the next level so
-   * the cascade descent isn't duplicated across helpers.
+   * (NOT operand), {@link #isSimplePrimaryIn} (BETWEEN bound),
+   * {@link #isSimplePrimaryAdd} (LIKE/method receiver). Each one delegates
+   * down to the next level so the cascade descent isn't duplicated across
+   * helpers.
    */
   static boolean isSimplePrimary(
       LogicalTypesParser.Check_exprContext ctx) {
@@ -1185,16 +1162,24 @@ final class ConstraintResolver {
       return isSimplePrimaryUnaryNot(
           ((LogicalTypesParser.CheckExprNotContext) ctx).check_expr_unary_not());
     }
-    return isSimplePrimaryBetween(
-        ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_between());
+    return isSimplePrimaryIsnull(
+        ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_isnull());
   }
 
   /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_between}
-   * level.
+   * {@link #isSimplePrimary} starting from a {@code check_expr_isnull}
+   * level — descends isnull → compare → between → in → like → add.
    */
-  static boolean isSimplePrimaryBetween(
-      LogicalTypesParser.Check_expr_betweenContext between) {
+  private static boolean isSimplePrimaryIsnull(
+      LogicalTypesParser.Check_expr_isnullContext is) {
+    if (is.IS() != null) {
+      return false;
+    }
+    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
+    if (compare.check_expr_between().size() > 1) {
+      return false;
+    }
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
     if (between.BETWEEN() != null) {
       return false;
     }
@@ -1202,16 +1187,12 @@ final class ConstraintResolver {
   }
 
   /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_concat}
-   * level — used by emit sites whose receiver is exposed at the concat
-   * level (LIKE → matches).
+   * {@link #isSimplePrimary} starting from a {@code check_expr_add}
+   * level — used by emit sites whose receiver is exposed at the additive
+   * value-root level (LIKE → matches).
    */
-  static boolean isSimplePrimaryConcat(
-      LogicalTypesParser.Check_expr_concatContext concat) {
-    if (concat.check_expr_add().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_addContext add = concat.check_expr_add(0);
+  static boolean isSimplePrimaryAdd(
+      LogicalTypesParser.Check_expr_addContext add) {
     if (add.check_expr_mul().size() > 1) {
       return false;
     }
@@ -1246,12 +1227,15 @@ final class ConstraintResolver {
 
   /**
    * Like {@link #isLiteralNull(LogicalTypesParser.Check_exprContext)} but
-   * starting from a {@code check_expr_like} (one cascade level below
-   * {@code check_expr}, no LIKE operator), used by the comparison validator.
+   * starting from a {@code check_expr_between} (a comparison operand, with no
+   * BETWEEN operator), used by the comparison validator.
    */
-  static boolean isLiteralNullLikeChild(
-      LogicalTypesParser.Check_expr_likeContext like) {
-    return isLiteralNullMatch(tryAsLiteralLike(like));
+  static boolean isLiteralNullBetweenChild(
+      LogicalTypesParser.Check_expr_betweenContext between) {
+    if (between.BETWEEN() != null || between.check_expr_in().size() != 1) {
+      return false;
+    }
+    return isLiteralNullMatch(tryAsLiteralIn(between.check_expr_in(0)));
   }
 
   private static boolean isLiteralNullMatch(LiteralMatch m) {
@@ -1327,16 +1311,8 @@ final class ConstraintResolver {
     if (unaryNot instanceof LogicalTypesParser.CheckExprNotContext) {
       return false;
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_between();
-    if (between.BETWEEN() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
-    if (in.IN() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_isnullContext is = in.check_expr_isnull();
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_isnull();
     if (is.IS() != null) {
       return false;
     }
@@ -1352,18 +1328,22 @@ final class ConstraintResolver {
   static boolean isHasCompatible(
       LogicalTypesParser.Check_expr_compareContext ctx,
       ConstraintValidationContext vctx) {
-    if (ctx.check_expr_like().size() > 1) {
+    if (ctx.check_expr_between().size() > 1) {
       return false;
     }
-    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like(0);
+    LogicalTypesParser.Check_expr_betweenContext between = ctx.check_expr_between(0);
+    if (between.BETWEEN() != null) {
+      return false;
+    }
+    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+    if (in.IN() != null) {
+      return false;
+    }
+    LogicalTypesParser.Check_expr_likeContext like = in.check_expr_like();
     if (like.LIKE() != null) {
       return false;
     }
-    LogicalTypesParser.Check_expr_concatContext concat = like.check_expr_concat();
-    if (concat.check_expr_add().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_addContext add = concat.check_expr_add(0);
+    LogicalTypesParser.Check_expr_addContext add = like.check_expr_add();
     if (add.check_expr_mul().size() > 1) {
       return false;
     }
@@ -1572,24 +1552,8 @@ final class ConstraintResolver {
     if (unaryNot instanceof LogicalTypesParser.CheckExprNotContext) {
       return null;
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_between();
-    if (between.BETWEEN() != null) {
-      return null;
-    }
-    return tryExtractLeafFuncNameIn(between.check_expr_in(0));
-  }
-
-  /**
-   * {@link #tryExtractLeafFuncName} starting from a {@code check_expr_in}
-   * level — used by the BETWEEN-bound validator (H-2).
-   */
-  static String tryExtractLeafFuncNameIn(
-      LogicalTypesParser.Check_expr_inContext ctx) {
-    if (ctx.IN() != null) {
-      return null;
-    }
-    LogicalTypesParser.Check_expr_isnullContext is = ctx.check_expr_isnull();
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_isnull();
     if (is.IS() != null) {
       return null;
     }
@@ -1597,23 +1561,43 @@ final class ConstraintResolver {
   }
 
   /**
-   * {@link #tryExtractLeafFuncName} starting from a {@code check_expr_compare}
-   * level — used by the IS NULL operand validator (H-3).
+   * {@link #tryExtractLeafFuncName} starting from a {@code check_expr_in}
+   * level — used by the BETWEEN-bound validator.
    */
-  static String tryExtractLeafFuncNameCompare(
-      LogicalTypesParser.Check_expr_compareContext ctx) {
-    if (ctx.check_expr_like().size() > 1) {
+  static String tryExtractLeafFuncNameIn(
+      LogicalTypesParser.Check_expr_inContext ctx) {
+    if (ctx.IN() != null) {
       return null;
     }
-    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like(0);
+    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like();
     if (like.LIKE() != null) {
       return null;
     }
-    LogicalTypesParser.Check_expr_concatContext concat = like.check_expr_concat();
-    if (concat.check_expr_add().size() > 1) {
+    return tryExtractLeafFuncNameAdd(like.check_expr_add());
+  }
+
+  /**
+   * {@link #tryExtractLeafFuncName} starting from a {@code check_expr_compare}
+   * level — used by the IS NULL operand validator.
+   */
+  static String tryExtractLeafFuncNameCompare(
+      LogicalTypesParser.Check_expr_compareContext ctx) {
+    if (ctx.check_expr_between().size() > 1) {
       return null;
     }
-    LogicalTypesParser.Check_expr_addContext add = concat.check_expr_add(0);
+    LogicalTypesParser.Check_expr_betweenContext between = ctx.check_expr_between(0);
+    if (between.BETWEEN() != null) {
+      return null;
+    }
+    return tryExtractLeafFuncNameIn(between.check_expr_in(0));
+  }
+
+  /**
+   * {@link #tryExtractLeafFuncName} starting from a {@code check_expr_add}
+   * value root.
+   */
+  private static String tryExtractLeafFuncNameAdd(
+      LogicalTypesParser.Check_expr_addContext add) {
     if (add.check_expr_mul().size() > 1) {
       return null;
     }
@@ -1716,16 +1700,8 @@ final class ConstraintResolver {
     if (unaryNot instanceof LogicalTypesParser.CheckExprNotContext) {
       return null;
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_between();
-    if (between.BETWEEN() != null) {
-      return null;
-    }
-    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
-    if (in.IN() != null) {
-      return null;
-    }
-    LogicalTypesParser.Check_expr_isnullContext is = in.check_expr_isnull();
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_isnull();
     if (is.IS() != null) {
       return null;
     }
@@ -1734,22 +1710,26 @@ final class ConstraintResolver {
 
   /**
    * {@link #tryExtractLeafColumnRef} starting from a {@code check_expr_compare}
-   * level — used by the IS NULL operand validator (H-3 / B-8).
+   * level — used by the IS NULL operand validator.
    */
   static LogicalTypesParser.ColumnrefContext tryExtractLeafColumnRefCompare(
       LogicalTypesParser.Check_expr_compareContext ctx) {
-    if (ctx.check_expr_like().size() > 1) {
+    if (ctx.check_expr_between().size() > 1) {
       return null;
     }
-    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like(0);
+    LogicalTypesParser.Check_expr_betweenContext between = ctx.check_expr_between(0);
+    if (between.BETWEEN() != null) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+    if (in.IN() != null) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_likeContext like = in.check_expr_like();
     if (like.LIKE() != null) {
       return null;
     }
-    LogicalTypesParser.Check_expr_concatContext concat = like.check_expr_concat();
-    if (concat.check_expr_add().size() > 1) {
-      return null;
-    }
-    LogicalTypesParser.Check_expr_addContext add = concat.check_expr_add(0);
+    LogicalTypesParser.Check_expr_addContext add = like.check_expr_add();
     if (add.check_expr_mul().size() > 1) {
       return null;
     }
