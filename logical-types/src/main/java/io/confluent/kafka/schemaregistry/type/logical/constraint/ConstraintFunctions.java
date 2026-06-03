@@ -617,9 +617,11 @@ final class ConstraintFunctions {
               + ". For more, nest calls: " + sqlName + "(a, " + sqlName + "(b, c))");
     }
     // Null checks use the native emit (so the has() guard sees a field
-    // selection); numeric coercion routes the comparison and returned values by the common
-    // numeric type — DECIMAL uses decimals.gt/lt (opaque Decimal has no native
-    // >/<), DOUBLE casts both operands to double, temporal normalizes.
+    // selection). The inner min/max picks by common type: DECIMAL uses
+    // decimals.greatest/least; INT/DOUBLE use the math extension's
+    // greatest/least (operands cast to the common type); temporal/other use a
+    // native compare ternary. The NULL-skipping wrapper means greatest/least
+    // only ever see non-null operands.
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     String common = (vctx != null)
         ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
@@ -662,15 +664,19 @@ final class ConstraintFunctions {
     emitIsNullCheck(args.get(0), nativeA, sb);
     sb.append(" ? ").append(b).append(" : (");
     emitIsNullCheck(args.get(1), nativeB, sb);
-    sb.append(" ? ").append(a).append(" : (");
+    sb.append(" ? ").append(a).append(" : ");
     if (decimal) {
-      String fn = ">".equals(op) ? "decimals.gt" : "decimals.lt";
-      sb.append(fn).append('(').append(a).append(", ").append(b).append(')');
+      sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
+          .append('(').append(a).append(", ").append(b).append(')');
+    } else if (dbl || "int".equals(common)) {
+      sb.append(">".equals(op) ? "math.greatest" : "math.least")
+          .append('(').append(a).append(", ").append(b).append(')');
     } else {
-      sb.append(a).append(' ').append(op).append(' ').append(b);
+      // Temporal / string / other comparable — native min/max via ternary.
+      sb.append('(').append(a).append(' ').append(op).append(' ').append(b)
+          .append(" ? ").append(a).append(" : ").append(b).append(')');
     }
-    sb.append(" ? ").append(a).append(" : ").append(b);
-    sb.append(")))");
+    sb.append("))");
   }
 
   // -------------------------------------------------------------------------
