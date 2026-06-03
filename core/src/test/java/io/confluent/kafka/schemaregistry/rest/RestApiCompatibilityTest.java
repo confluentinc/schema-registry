@@ -1027,16 +1027,16 @@ public abstract class RestApiCompatibilityTest {
     // Set global normalize = true
     ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
     globalConfig.setNormalize(true);
-    assertEquals("Setting global normalize config should succeed",
-        globalConfig,
-        restApp.restClient.updateConfig(globalConfig, null));
+    assertEquals(globalConfig,
+        restApp.restClient.updateConfig(globalConfig, null),
+        "Setting global normalize config should succeed");
 
     // Set a subject-level config that does NOT explicitly set normalize.
     ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
     subjectConfig.setCompatibilityLevel(CompatibilityLevel.BACKWARD.name);
-    assertEquals("Setting subject-level compatibility should succeed",
-        subjectConfig,
-        restApp.restClient.updateConfig(subjectConfig, subject));
+    assertEquals(subjectConfig,
+        restApp.restClient.updateConfig(subjectConfig, subject),
+        "Setting subject-level compatibility should succeed");
 
     // A schema whose int field has a string default is only rejected when
     // normalization (and the strict validation it triggers) is active. If
@@ -1055,7 +1055,7 @@ public abstract class RestApiCompatibilityTest {
           + Errors.INVALID_SCHEMA_ERROR_CODE
           + " when normalize is inherited from the global config");
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode(), "Invalid schema");
     }
 
     try {
@@ -1064,7 +1064,7 @@ public abstract class RestApiCompatibilityTest {
           + Errors.INVALID_SCHEMA_ERROR_CODE
           + " when normalize is inherited from the global config");
     } catch (RestClientException rce) {
-      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+      assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode(), "Invalid schema");
     }
   }
 
