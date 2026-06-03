@@ -1619,6 +1619,14 @@ class CheckConstraintTest {
   }
 
   @Test
+  void decimalCastToDouble() {
+    // CAST(decimalExpr AS DOUBLE) → double(<decimal value>) (the (Decimal) ->
+    // double overload), symmetric with the STRING cast.
+    assertEquals("double(this.amount) > 1.5",
+        translateCheck("CAST(amount AS DOUBLE) > 1.5"));
+  }
+
+  @Test
   void decimalBetween() {
     assertEquals(
         "decimals.le(decimal(\"0\"), this.amount) && decimals.le(this.amount, decimal(\"100\"))",

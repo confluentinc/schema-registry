@@ -714,10 +714,12 @@ final class ConstraintFunctions {
    *       {@code decimals.round(decimal(x), s)} — applies the scale (HALF_UP),
    *       faithful to SQL CAST; scale defaults to 0 when absent. Precision
    *       {@code p} is not enforced.</li>
-   *   <li><b>From decimal to string:</b> {@code CAST(decimalExpr AS STRING)} →
-   *       {@code string(<decimal value>)} via the {@code (Decimal) -> string}
-   *       overload. Other CAST targets from a decimal source (INT/DOUBLE/
-   *       BOOLEAN/BYTES) have no CEL conversion and are rejected.</li>
+   *   <li><b>From decimal to string/double:</b> {@code CAST(decimalExpr AS STRING)}
+   *       → {@code string(<decimal value>)} and {@code CAST(decimalExpr AS DOUBLE)}
+   *       → {@code double(<decimal value>)} (narrowing; may lose precision) via the
+   *       {@code (Decimal) -> string} / {@code (Decimal) -> double} overloads. Other
+   *       CAST targets from a decimal source (INT/BOOLEAN/BYTES) have no conversion
+   *       and are rejected.</li>
    * </ul>
    */
   private static void visitCast(
@@ -749,10 +751,18 @@ final class ConstraintFunctions {
         sb.append(')');
         return;
       }
+      if ("double".equals(celFn)) {
+        // (Decimal) -> double overload (FLOAT/REAL/DOUBLE target); narrowing,
+        // may lose precision (out-of-range magnitudes become ±Infinity).
+        sb.append("double(");
+        ConstraintEmitter.emitDecimalValue(arg, sb);
+        sb.append(')');
+        return;
+      }
       throw locatedError(ctx,
           "CAST from DECIMAL to " + pt.getText().toUpperCase(java.util.Locale.ROOT)
-              + " is not supported. From a DECIMAL source only CAST(... AS STRING) "
-              + "and CAST(... AS DECIMAL(p,s)) are available.");
+              + " is not supported. From a DECIMAL source only CAST(... AS STRING), "
+              + "CAST(... AS DOUBLE), and CAST(... AS DECIMAL(p,s)) are available.");
     }
     sb.append(celFn).append('(');
     visitCheckExpr(arg, sb);
