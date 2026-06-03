@@ -332,6 +332,28 @@ public class CelValidatorDecimalTest {
   }
 
   @Test
+  void doubleDecimal_extendsStdlib() {
+    // CEL stdlib double(...) is extended with a (Decimal) -> double overload.
+    // Verifies the extension registers cleanly and uses BigDecimal.doubleValue.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"double(decimal(this)) == 100.5\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "100.50"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
   void decimalFromBytesAndScale_byteOverload() {
     // Use the (bytes, int) overload from rule text. Message-level rule so `this`
     // is the X message and we can reference both fields.

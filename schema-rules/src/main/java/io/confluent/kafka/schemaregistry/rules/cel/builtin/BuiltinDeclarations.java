@@ -109,6 +109,18 @@ final class BuiltinDeclarations {
             "Convert a Decimal to its plain-string form (no scientific notation)",
             SimpleType.STRING, ImmutableList.of(DECIMAL))));
 
+    // Double coercion via CEL built-in: extend stdlib `double(...)` with a
+    // (Decimal) -> double overload. No overlap with the existing
+    // double(int/uint/string/double) overloads because our opaque Decimal type
+    // isn't assignable to any of them. Narrowing conversion (may lose precision;
+    // out-of-range magnitudes become ±Infinity).
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "double",
+        CelOverloadDecl.newGlobalOverload(
+            "decimal_to_double",
+            "Convert a Decimal to a 64-bit double (narrowing; may lose precision)",
+            SimpleType.DOUBLE, ImmutableList.of(DECIMAL))));
+
     // Rounding family: decimals.round/trunc accept either 1 or 2 args; floor/ceil unary.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
         "decimals.round",
