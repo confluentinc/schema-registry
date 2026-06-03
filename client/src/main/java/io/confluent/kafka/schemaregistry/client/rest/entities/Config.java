@@ -168,20 +168,29 @@ public class Config {
         || overrideRuleSet != null;
   }
 
-  public static Config mergeConfigs(Config subjectConfig, Config globalConfig) {
+  public static Config mergeConfigs(Config globalConfig, Config subjectConfig) {
     if (subjectConfig == null) {
       return globalConfig;
     }
     if (globalConfig == null || globalConfig == subjectConfig) {
       return subjectConfig;
     }
-    if (subjectConfig.isNormalize() == null) {
-      subjectConfig.setNormalize(globalConfig.isNormalize());
-    }
-    if (subjectConfig.getCompatibilityGroup() == null) {
-      subjectConfig.setCompatibilityGroup(globalConfig.getCompatibilityGroup());
-    }
-    return subjectConfig;
+    Boolean normalize = subjectConfig.isNormalize() != null
+        ? subjectConfig.isNormalize()
+        : globalConfig.isNormalize();
+    String compatibilityGroup = subjectConfig.getCompatibilityGroup() != null
+        ? subjectConfig.getCompatibilityGroup()
+        : globalConfig.getCompatibilityGroup();
+    return new Config(
+        subjectConfig.getAlias(),
+        normalize,
+        subjectConfig.getCompatibilityLevel(),
+        compatibilityGroup,
+        subjectConfig.getDefaultMetadata(),
+        subjectConfig.getOverrideMetadata(),
+        subjectConfig.getDefaultRuleSet(),
+        subjectConfig.getOverrideRuleSet()
+    );
   }
 
   @Override
