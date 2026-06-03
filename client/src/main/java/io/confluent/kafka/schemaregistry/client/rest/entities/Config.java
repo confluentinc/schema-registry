@@ -270,13 +270,30 @@ public class Config {
     Boolean normalize = subjectConfig.isNormalize() != null
         ? subjectConfig.isNormalize()
         : globalConfig.isNormalize();
+    Boolean validateFields = subjectConfig.isValidateFields() != null
+        ? subjectConfig.isValidateFields()
+        : globalConfig.isValidateFields();
+    Boolean validateNewSchemas = subjectConfig.isValidateNewSchemas() != null
+        ? subjectConfig.isValidateNewSchemas()
+        : globalConfig.isValidateNewSchemas();
+    Boolean validateRules = subjectConfig.isValidateRules() != null
+        ? subjectConfig.isValidateRules()
+        : globalConfig.isValidateRules();
+    String compatibilityPolicy = subjectConfig.getCompatibilityPolicy() != null
+        ? subjectConfig.getCompatibilityPolicy()
+        : globalConfig.getCompatibilityPolicy();
     String compatibilityGroup = subjectConfig.getCompatibilityGroup() != null
         ? subjectConfig.getCompatibilityGroup()
         : globalConfig.getCompatibilityGroup();
     return new Config(
         subjectConfig.getAlias(),
+        subjectConfig.getAliasForDeks(),
         normalize,
+        validateFields,
+        validateNewSchemas,
+        validateRules,
         subjectConfig.getCompatibilityLevel(),
+        compatibilityPolicy,
         compatibilityGroup,
         subjectConfig.getDefaultMetadata(),
         subjectConfig.getOverrideMetadata(),
