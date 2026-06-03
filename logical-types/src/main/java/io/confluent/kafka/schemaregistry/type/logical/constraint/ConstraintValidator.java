@@ -141,8 +141,16 @@ final class ConstraintValidator {
     if (unaryNot instanceof LogicalTypesParser.CheckExprNotContext) {
       return true;  // NOT
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_between();
+    LogicalTypesParser.Check_expr_isnullContext is =
+        ((LogicalTypesParser.CheckExprNotPassContext) unaryNot).check_expr_isnull();
+    if (is.IS() != null) {
+      return true;
+    }
+    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
+    if (compare.check_expr_between().size() > 1) {
+      return true;  // comparison
+    }
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
     if (between.BETWEEN() != null) {
       return true;
     }
@@ -150,26 +158,14 @@ final class ConstraintValidator {
     if (in.IN() != null) {
       return true;
     }
-    LogicalTypesParser.Check_expr_isnullContext is = in.check_expr_isnull();
-    if (is.IS() != null) {
-      return true;
-    }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_like().size() > 1) {
-      return true;  // comparison
-    }
-    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
+    LogicalTypesParser.Check_expr_likeContext like = in.check_expr_like();
     if (like.LIKE() != null) {
       return true;
     }
-    // Below the LIKE level we're in non-boolean territory — concat, additive,
-    // multiplicative, unary, c_expr. The exception: bool literal, boolean
-    // column ref, or call to a boolean-returning function/macro.
-    LogicalTypesParser.Check_expr_concatContext concat = like.check_expr_concat();
-    if (concat.check_expr_add().size() > 1) {
-      return false;  // ||
-    }
-    LogicalTypesParser.Check_expr_addContext add = concat.check_expr_add(0);
+    // Below the LIKE level we're in non-boolean territory — additive,
+    // multiplicative (incl. ||), unary, c_expr. The exception: bool literal,
+    // boolean column ref, or call to a boolean-returning function/macro.
+    LogicalTypesParser.Check_expr_addContext add = like.check_expr_add();
     if (add.check_expr_mul().size() > 1) {
       return false;
     }
@@ -504,7 +500,8 @@ final class ConstraintValidator {
     if (node instanceof LogicalTypesParser.Check_expr_compareContext) {
       LogicalTypesParser.Check_expr_compareContext cmp =
           (LogicalTypesParser.Check_expr_compareContext) node;
-      java.util.List<LogicalTypesParser.Check_expr_likeContext> sides = cmp.check_expr_like();
+      java.util.List<LogicalTypesParser.Check_expr_betweenContext> sides =
+          cmp.check_expr_between();
       if (sides.size() == 2) {
         validateCompare(cmp, sides.get(0), sides.get(1), vctx);
       }
@@ -520,8 +517,8 @@ final class ConstraintValidator {
 
   private static void validateCompare(
       LogicalTypesParser.Check_expr_compareContext cmp,
-      LogicalTypesParser.Check_expr_likeContext lhs,
-      LogicalTypesParser.Check_expr_likeContext rhs,
+      LogicalTypesParser.Check_expr_betweenContext lhs,
+      LogicalTypesParser.Check_expr_betweenContext rhs,
       ConstraintValidationContext vctx) {
     String op = findComparisonOp(cmp);
     boolean isEquality = "=".equals(op) || "<>".equals(op) || "!=".equals(op);
@@ -529,15 +526,15 @@ final class ConstraintValidator {
     // `x == null` is a real boolean comparison that fails for non-null rows.
     // Translating `=`/`<>` against NULL would silently flip the constraint's
     // semantics, so reject at parse time and direct the user to IS NULL.
-    if (ConstraintResolver.isLiteralNullLikeChild(lhs)
-        || ConstraintResolver.isLiteralNullLikeChild(rhs)) {
+    if (ConstraintResolver.isLiteralNullBetweenChild(lhs)
+        || ConstraintResolver.isLiteralNullBetweenChild(rhs)) {
       throw locatedError(cmp,
           "Comparison " + op + " against NULL is always UNKNOWN in SQL "
               + "but would emit CEL that fails for non-null rows; "
               + "use IS NULL or IS NOT NULL instead.");
     }
-    Schema lhsType = ConstraintResolver.tryResolveSimpleColumnRefType(lhs, vctx);
-    Schema rhsType = ConstraintResolver.tryResolveSimpleColumnRefType(rhs, vctx);
+    Schema lhsType = ConstraintResolver.tryResolveCompareOperandType(lhs, vctx);
+    Schema rhsType = ConstraintResolver.tryResolveCompareOperandType(rhs, vctx);
     // Cross-category check for EQUALITY operators only. CEL spec: `==`/`!=`
     // accept any two types and return false for type mismatch — strict
     // cel-java accepts `int == string`. SQL semantics treats this as a
@@ -619,7 +616,10 @@ final class ConstraintValidator {
           (LogicalTypesParser.Check_expr_mulContext) node;
       List<LogicalTypesParser.Check_expr_unary_signContext> signs =
           mul.check_expr_unary_sign();
-      if (signs.size() > 1) {
+      // The multiplicative level also hosts `||` (string concat), whose
+      // operands are string/bytes — validated by validateConcatOperands. Only
+      // enforce the numeric rule when a real `* / %` operator is present.
+      if (signs.size() > 1 && hasArithmeticMulOperator(mul)) {
         for (LogicalTypesParser.Check_expr_unary_signContext sign : signs) {
           checkArithmeticUnarySignIsNumeric(sign, vctx);
         }
@@ -653,6 +653,23 @@ final class ConstraintValidator {
               + "decimal) or a timestamp (± interval); got " + t.getType()
               + ". For string/bytes concatenation use ||.");
     }
+  }
+
+  /**
+   * True if the multiplicative chain has at least one {@code * / %} operator.
+   */
+  private static boolean hasArithmeticMulOperator(
+      LogicalTypesParser.Check_expr_mulContext mul) {
+    for (int i = 0; i < mul.getChildCount(); i++) {
+      ParseTree child = mul.getChild(i);
+      if (child instanceof TerminalNode) {
+        String op = child.getText();
+        if ("*".equals(op) || "/".equals(op) || "%".equals(op)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private static void checkArithmeticUnarySignIsNumeric(
@@ -690,13 +707,13 @@ final class ConstraintValidator {
    */
   static void validateConcatOperands(
       org.antlr.v4.runtime.tree.ParseTree node, ConstraintValidationContext vctx) {
-    if (node instanceof LogicalTypesParser.Check_expr_concatContext) {
-      LogicalTypesParser.Check_expr_concatContext concat =
-          (LogicalTypesParser.Check_expr_concatContext) node;
-      List<LogicalTypesParser.Check_expr_addContext> adds = concat.check_expr_add();
-      if (adds.size() > 1) {
-        for (LogicalTypesParser.Check_expr_addContext add : adds) {
-          checkConcatOperandIsStringLike(add, vctx);
+    if (node instanceof LogicalTypesParser.Check_expr_mulContext) {
+      LogicalTypesParser.Check_expr_mulContext mul =
+          (LogicalTypesParser.Check_expr_mulContext) node;
+      if (hasConcatOperator(mul)) {
+        for (LogicalTypesParser.Check_expr_unary_signContext sign
+            : mul.check_expr_unary_sign()) {
+          checkConcatOperandIsStringLike(sign, vctx);
         }
       }
     }
@@ -709,21 +726,30 @@ final class ConstraintValidator {
     }
   }
 
-  private static void checkConcatOperandIsStringLike(
-      LogicalTypesParser.Check_expr_addContext add, ConstraintValidationContext vctx) {
-    // Only inspect the leaf type when there's no nested arithmetic — `||`
-    // applied to a compound numeric expression like `(x + 1)` is rare and
-    // we let it through (strict-check will catch the resulting emit if
-    // the types don't unify).
-    if (add.check_expr_mul().size() > 1) {
-      return;
+  /**
+   * True if the multiplicative chain has at least one {@code ||} operator.
+   */
+  private static boolean hasConcatOperator(LogicalTypesParser.Check_expr_mulContext mul) {
+    for (int i = 0; i < mul.getChildCount(); i++) {
+      ParseTree child = mul.getChild(i);
+      if (child instanceof TerminalNode && "||".equals(child.getText())) {
+        return true;
+      }
     }
-    Schema type = ConstraintResolver.tryResolveMulType(add.check_expr_mul(0), vctx);
+    return false;
+  }
+
+  private static void checkConcatOperandIsStringLike(
+      LogicalTypesParser.Check_expr_unary_signContext sign, ConstraintValidationContext vctx) {
+    // `||` applied to a compound numeric expression like `(x + 1)` is rare; the
+    // resolver returns the unified leaf type when resolvable, null otherwise
+    // (deferred — strict-check catches the resulting emit if types don't unify).
+    Schema type = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
     if (type == null) {
       return;
     }
     if (!ConstraintResolver.isStringOrBytes(type.getType())) {
-      throw locatedError(add,
+      throw locatedError(sign,
           "Operator || is string/bytes concatenation only — got "
               + type.getType() + ". Use + for numeric addition.");
     }
