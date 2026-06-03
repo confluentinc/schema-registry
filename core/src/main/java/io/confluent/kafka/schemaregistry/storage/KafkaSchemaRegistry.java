@@ -2059,16 +2059,8 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
       }
-      // A subject-level config exists. Inherit fields the subject did not explicitly
-      // set from the global config so a subject-level override (e.g. setting only
-      // compatibilityLevel) does not silently disable settings (e.g. normalize)
-      // configured at the global scope.
       Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
-      if (globalConfig != null && globalConfig != subjectConfig
-          && subjectConfig.isNormalize() == null) {
-        subjectConfig.setNormalize(globalConfig.isNormalize());
-      }
-      return subjectConfig;
+      return Config.mergeConfigs(subjectConfig, globalConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
