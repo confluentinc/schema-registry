@@ -1298,8 +1298,11 @@ final class ConstraintValidator {
   static void validateLiterals(org.antlr.v4.runtime.tree.ParseTree node) {
     if (node instanceof LogicalTypesParser.LiteralContext) {
       LogicalTypesParser.LiteralContext lit = (LogicalTypesParser.LiteralContext) node;
-      if (lit.floatLiteral() != null) {
-        String text = lit.floatLiteral().getText();
+      if (lit.doubleLiteral() != null) {
+        // Approximate-numeric (exponent) literal — emits as a CEL double, so an
+        // out-of-range magnitude would overflow to ±Infinity (silently
+        // always-false). Reject it.
+        String text = lit.doubleLiteral().getText();
         try {
           double v = Double.parseDouble(text);
           if (Double.isInfinite(v) || Double.isNaN(v)) {
@@ -1310,6 +1313,15 @@ final class ConstraintValidator {
           }
         } catch (NumberFormatException e) {
           throw locatedError(lit, "Malformed float literal: " + text);
+        }
+      } else if (lit.decimalLiteral() != null) {
+        // Exact-numeric literal — carried as an arbitrary-precision BigDecimal at
+        // runtime, so any magnitude is fine; only check well-formedness.
+        String text = lit.decimalLiteral().getText();
+        try {
+          Double.parseDouble(text);
+        } catch (NumberFormatException e) {
+          throw locatedError(lit, "Malformed decimal literal: " + text);
         }
       } else if (lit.intLiteral() != null) {
         String text = lit.intLiteral().getText();

@@ -412,7 +412,8 @@ qualifiedName
 
 literal
     : intLiteral
-    | floatLiteral
+    | decimalLiteral
+    | doubleLiteral
     | stringLiteral
     | bytesLiteral
     | boolLiteral
@@ -425,8 +426,12 @@ intLiteral
     : '-'? INT_LITERAL
     ;
 
-floatLiteral
-    : '-'? FLOAT_LITERAL
+decimalLiteral
+    : '-'? DECIMAL_LITERAL
+    ;
+
+doubleLiteral
+    : '-'? DOUBLE_LITERAL
     ;
 
 stringLiteral
@@ -545,11 +550,15 @@ INT_LITERAL
     : [0-9]+
     ;
 
-FLOAT_LITERAL
+// Exact numeric (no exponent) → DECIMAL; approximate (with exponent) → DOUBLE.
+// Mirrors Calcite's DECIMAL_NUMERIC_LITERAL vs APPROX_NUMERIC_LITERAL split.
+DECIMAL_LITERAL
     : [0-9]+ '.' [0-9]*
     | '.' [0-9]+
-    | [0-9]+ '.' [0-9]* E [+-]? [0-9]+
-    | [0-9]+             E [+-]? [0-9]+
+    ;
+
+DOUBLE_LITERAL
+    : ( [0-9]+ ( '.' [0-9]* )? | '.' [0-9]+ ) E [+-]? [0-9]+
     ;
 
 STRING_LITERAL

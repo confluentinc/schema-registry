@@ -1009,8 +1009,11 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     if (ctx.intLiteral() != null) {
       return Integer.parseInt(ctx.intLiteral().getText());
     }
-    if (ctx.floatLiteral() != null) {
-      return Double.parseDouble(ctx.floatLiteral().getText());
+    if (ctx.decimalLiteral() != null) {
+      return Double.parseDouble(ctx.decimalLiteral().getText());
+    }
+    if (ctx.doubleLiteral() != null) {
+      return Double.parseDouble(ctx.doubleLiteral().getText());
     }
     if (ctx.stringLiteral() != null) {
       return stripStringLiteral(ctx.stringLiteral().getText());
@@ -1078,7 +1081,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
         return varbinaryDefault(ctx, targetType);
       case DECIMAL: {
         java.math.BigDecimal value;
-        if (ctx.intLiteral() != null || ctx.floatLiteral() != null) {
+        if (ctx.intLiteral() != null || ctx.decimalLiteral() != null
+            || ctx.doubleLiteral() != null) {
           value = new java.math.BigDecimal(ctx.getText());
         } else if (ctx.stringLiteral() != null) {
           value = new java.math.BigDecimal(
@@ -1270,8 +1274,11 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     if (ctx.intLiteral() != null) {
       return Double.parseDouble(ctx.intLiteral().getText());
     }
-    if (ctx.floatLiteral() != null) {
-      return Double.parseDouble(ctx.floatLiteral().getText());
+    if (ctx.decimalLiteral() != null) {
+      return Double.parseDouble(ctx.decimalLiteral().getText());
+    }
+    if (ctx.doubleLiteral() != null) {
+      return Double.parseDouble(ctx.doubleLiteral().getText());
     }
     throw typeMismatch(type, ctx);
   }

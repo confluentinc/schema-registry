@@ -430,21 +430,16 @@ final class ConstraintFunctions {
           "COALESCE() expects at least 2 arguments, got " + args.size());
     }
     int n = args.size();
-    // If any branch is decimal, emit every returned branch as a Decimal value
-    // so the ternary branches unify (mixed decimal/double would otherwise fail
-    // the strict checker). Null checks still use the native emit so the has()
-    // guard sees a field selection.
-    boolean decimal = false;
-    boolean temporal = false;
-    for (int i = 0; i < n; i++) {
-      if (argIsDecimal(args.get(i))) {
-        decimal = true;
-        break;
-      }
-      if (argIsTemporal(args.get(i))) {
-        temporal = true;
-      }
-    }
+    // The COALESCE branches unify to their common type. Numeric branches
+    // coerce to the common numeric type (DECIMAL → Decimal values, DOUBLE →
+    // double-cast values) so the ternary branches type-unify under the strict
+    // checker. Temporal branches normalize to CEL timestamps. Null checks still
+    // use the native emit so the has() guard sees a field selection.
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    String common = (vctx != null) ? ConstraintEmitter.numericCommonOf(args, vctx) : null;
+    boolean decimal = "decimal".equals(common);
+    boolean dbl = "double".equals(common);
+    boolean temporal = !decimal && !dbl && argsHaveTemporal(args);
     String[] nativeEmit = new String[n];
     String[] valueEmit = new String[n];
     for (int i = 0; i < n; i++) {
@@ -455,6 +450,10 @@ final class ConstraintFunctions {
         StringBuilder dec = new StringBuilder();
         ConstraintEmitter.emitDecimalValue(args.get(i), dec);
         valueEmit[i] = dec.toString();
+      } else if (dbl) {
+        StringBuilder d = new StringBuilder();
+        ConstraintEmitter.emitNumericAs(args.get(i), "double", d);
+        valueEmit[i] = d.toString();
       } else if (temporal) {
         // Normalize each branch so the COALESCE result is a CEL timestamp.
         StringBuilder ts = new StringBuilder();
@@ -535,15 +534,23 @@ final class ConstraintFunctions {
       throw locatedError(fctx,
           "NULLIF() expects 2 arguments, got " + args.size());
     }
-    boolean temporal = argIsTemporal(args.get(0)) || argIsTemporal(args.get(1));
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    String common = (vctx != null)
+        ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
+    boolean temporal = !ConstraintResolver.isNumericCategory(common)
+        && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
     sb.append('(');
-    if (argIsDecimal(args.get(0)) || argIsDecimal(args.get(1))) {
+    if ("decimal".equals(common)) {
       // Opaque Decimal has no native `==`.
       sb.append("decimals.eq(");
       ConstraintEmitter.emitDecimalValue(args.get(0), sb);
       sb.append(", ");
       ConstraintEmitter.emitDecimalValue(args.get(1), sb);
       sb.append(')');
+    } else if ("double".equals(common)) {
+      ConstraintEmitter.emitNumericAs(args.get(0), "double", sb);
+      sb.append(" == ");
+      ConstraintEmitter.emitNumericAs(args.get(1), "double", sb);
     } else if (temporal) {
       // Native `==`, operands timestamp-normalized.
       ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
@@ -584,6 +591,16 @@ final class ConstraintFunctions {
     return vctx != null && ConstraintResolver.subtreeHasTemporal(arg, vctx);
   }
 
+  /** True if any argument's subtree is temporal. */
+  private static boolean argsHaveTemporal(List<LogicalTypesParser.Check_exprContext> args) {
+    for (LogicalTypesParser.Check_exprContext arg : args) {
+      if (argIsTemporal(arg)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * GREATEST(a, b) / LEAST(a, b) — emit a NULL-skipping comparison.
    * Limited to 2 arguments in v1. Per-arg null guards use
@@ -600,10 +617,16 @@ final class ConstraintFunctions {
               + ". For more, nest calls: " + sqlName + "(a, " + sqlName + "(b, c))");
     }
     // Null checks use the native emit (so the has() guard sees a field
-    // selection); the comparison and returned values use the Decimal emit when
-    // either operand is decimal, since the opaque Decimal has no native >/<.
-    boolean decimal = argIsDecimal(args.get(0)) || argIsDecimal(args.get(1));
-    boolean temporal = !decimal && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
+    // selection); numeric coercion routes the comparison and returned values by the common
+    // numeric type — DECIMAL uses decimals.gt/lt (opaque Decimal has no native
+    // >/<), DOUBLE casts both operands to double, temporal normalizes.
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    String common = (vctx != null)
+        ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
+    boolean decimal = "decimal".equals(common);
+    boolean dbl = "double".equals(common);
+    boolean temporal = !decimal && !dbl
+        && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
     StringBuilder bufA = new StringBuilder();
     StringBuilder bufB = new StringBuilder();
     visitCheckExpr(args.get(0), bufA);
@@ -619,6 +642,13 @@ final class ConstraintFunctions {
       ConstraintEmitter.emitDecimalValue(args.get(1), decB);
       a = decA.toString();
       b = decB.toString();
+    } else if (dbl) {
+      StringBuilder dblA = new StringBuilder();
+      StringBuilder dblB = new StringBuilder();
+      ConstraintEmitter.emitNumericAs(args.get(0), "double", dblA);
+      ConstraintEmitter.emitNumericAs(args.get(1), "double", dblB);
+      a = dblA.toString();
+      b = dblB.toString();
     } else if (temporal) {
       // Native >/< on timestamps; operands and returned values normalized.
       StringBuilder tsA = new StringBuilder();
