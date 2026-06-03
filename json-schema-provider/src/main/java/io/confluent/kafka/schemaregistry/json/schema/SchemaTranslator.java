@@ -110,10 +110,19 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   private final Map<Schema, org.everit.json.schema.Schema.Builder<?>> schemaMapping;
   private final Deque<Pair<org.everit.json.schema.ReferenceSchema, Schema>> refMapping;
+  // Tracks the jsonsKema schema each everit ReferenceSchema refers to, so a ReferenceSchema
+  // that is rebuilt (e.g. via schemaToBuilder) can be re-registered for deferred resolution.
+  private final Map<org.everit.json.schema.ReferenceSchema, Schema> refReferred;
 
   public SchemaTranslator() {
     this.schemaMapping = new IdentityHashMap<>();
     this.refMapping = new ArrayDeque<>();
+    this.refReferred = new IdentityHashMap<>();
+  }
+
+  private void offerRef(org.everit.json.schema.ReferenceSchema ref, Schema referredSchema) {
+    this.refMapping.offer(new Pair<>(ref, referredSchema));
+    this.refReferred.put(ref, referredSchema);
   }
 
   @Override
@@ -193,8 +202,18 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
       if (combinedSchema.getSubschemas().isEmpty()) {
         ctx = new SchemaContext(ctx.source(), EmptySchema.builder());
       } else if (combinedSchema.getSubschemas().size() == 1) {
-        ctx = new SchemaContext(ctx.source(),
-            schemaToBuilder(combinedSchema.getSubschemas().iterator().next()));
+        org.everit.json.schema.Schema subschema = combinedSchema.getSubschemas().iterator().next();
+        org.everit.json.schema.Schema.Builder<?> subBuilder = schemaToBuilder(subschema);
+        if (subschema instanceof org.everit.json.schema.ReferenceSchema) {
+          // schemaToBuilder rebuilds the ReferenceSchema into a fresh instance that is not
+          // registered for deferred $ref resolution; re-register the rebuilt instance so its
+          // referredSchema gets set when refMapping is drained.
+          Schema referred = this.refReferred.get(subschema);
+          if (referred != null) {
+            offerRef((org.everit.json.schema.ReferenceSchema) subBuilder.build(), referred);
+          }
+        }
+        ctx = new SchemaContext(ctx.source(), subBuilder);
       }
     }
     if (schema.getId() != null) {
@@ -504,7 +523,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
     org.everit.json.schema.ReferenceSchema.Builder ref =
         org.everit.json.schema.ReferenceSchema.builder()
             .refValue(refValue);
-    this.refMapping.offer(new Pair<>(ref.build(), referredSchema));
+    offerRef(ref.build(), referredSchema);
     return new SchemaContext(schema, ref);
   }
 
