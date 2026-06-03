@@ -223,16 +223,14 @@ class CheckConstraintTest {
 
   @Test
   void moduloRejectsDoubleLiteralOperand() {
-    // CEL `%` is integer-only — no double-modulo overload. SQL accepts
-    // numeric `%`. Reject at parse so the user gets a clear message
-    // instead of a runtime "no matching overload" from CEL. Uses a
-    // float literal because the test fixture has no DOUBLE column;
-    // the validator resolves both column refs and literals.
+    // `1.5` is a DECIMAL literal (no exponent), so `1.5 % 2` coerces to the
+    // common type DECIMAL — and CEL has no decimals.* modulo function, so the
+    // emitter rejects `%` on a decimal operand at parse time.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> translateCheck("1.5 % 2 = 0.5"));
-    assertTrue(t.getMessage().contains("strict type-check"),
-        "expected modulo-int-only error, got: " + t.getMessage());
+    assertTrue(t.getMessage().contains("modulo"),
+        "expected modulo rejection, got: " + t.getMessage());
   }
 
   @Test
@@ -800,15 +798,13 @@ class CheckConstraintTest {
 
   @Test
   void moduloRejectsParenWrappedDoubleLiteral() {
-    // Regression: validateModuloOperands now descends into paren-wrapped
-    // expressions whose inner type is resolvable. `(1.5)` resolves to
-    // DOUBLE, so `(1.5) % 2` is rejected at parse instead of silently
-    // deferring to a runtime "no matching overload" from CEL.
+    // `(1.5)` is a paren-wrapped DECIMAL literal, so `(1.5) % 2` coerces to
+    // DECIMAL — rejected because there is no decimals.* modulo function.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> translateCheck("(1.5) % 2 = 0.5"));
-    assertTrue(t.getMessage().contains("strict type-check"),
-        "expected modulo-int-only error inside paren, got: " + t.getMessage());
+    assertTrue(t.getMessage().contains("modulo"),
+        "expected modulo rejection inside paren, got: " + t.getMessage());
   }
 
   @Test
@@ -2560,14 +2556,12 @@ class CheckConstraintTest {
   }
 
   @Test
-  void rejectsCaseResultMixedNumeric() {
-    // H-1: CASE result type now tracked through resolver. `(CASE ... END) > 1.5`
-    // where the CASE returns int can detect int-vs-double mismatch.
-    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
-        ValidationException.class,
-        () -> translateCheck("(CASE WHEN active THEN 1 ELSE 2 END) > 1.5"));
-    assertTrue(t.getMessage().contains("strict type-check"),
-        "expected CASE-result-vs-literal mismatch, got: " + t.getMessage());
+  void caseResultMixedNumericCoerced() {
+    // CASE returns int (1/2); compared to 1.5 (decimal) → common DECIMAL,
+    // so the int CASE result is wrapped with decimal() (no longer rejected).
+    String cel = translateCheck("(CASE WHEN active THEN 1 ELSE 2 END) > 1.5");
+    assertTrue(cel.startsWith("decimals.gt(") && cel.contains("decimal(\"1.5\")"),
+        "expected decimal-coerced CASE comparison, got: " + cel);
   }
 
   @Test
@@ -2636,27 +2630,19 @@ class CheckConstraintTest {
   }
 
   @Test
-  void rejectsArithmeticResultInComparison() {
-    // H-A3: comparison validator now sees the arithmetic result type.
-    // `ratio + 1 > 0.0` — the `+` itself is rejected first as mixed
-    // numeric (int + double).
-    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
-        ValidationException.class,
-        () -> translateCheck("ratio + 1 > 0.0"));
-    assertTrue(t.getMessage().contains("mixed numeric")
-            || t.getMessage().contains("strict type-check")
-            || t.getMessage().contains("strict type-check"),
-        "expected type-mismatch rejection, got: " + t.getMessage());
+  void doubleArithmeticResultCoerced() {
+    // ratio (double) + 1 (int) → DOUBLE; compared to 0.0 (decimal literal)
+    // → common DOUBLE. The int operand emits as `1.0`.
+    assertEquals("this.ratio + 1.0 > 0.0", translateCheck("ratio + 1 > 0.0"));
   }
 
   @Test
-  void rejectsMixedNumericArithmetic() {
-    // H-A4: int + double is not allowed (CEL has no implicit promotion).
-    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
-        ValidationException.class,
-        () -> translateCheck("x + 1.5 > 0"));
-    assertTrue(t.getMessage().contains("strict type-check"),
-        "expected mixed-numeric rejection, got: " + t.getMessage());
+  void mixedIntDecimalArithmeticCoerced() {
+    // x (int) + 1.5 (decimal) → common DECIMAL; compared to 0 (int) →
+    // DECIMAL. Both int operands are wrapped with decimal().
+    assertEquals(
+        "decimals.gt(decimals.add(decimal(this.x), decimal(\"1.5\")), decimal(\"0\"))",
+        translateCheck("x + 1.5 > 0"));
   }
 
   @Test
@@ -2721,18 +2707,93 @@ class CheckConstraintTest {
   }
 
   @Test
-  void rejectsIntVsDoubleComparison() {
-    // INT vs DOUBLE — CEL has no implicit int↔double promotion, cel-java's
-    // strict checker rejects `int > double`. Reject at parse time.
-    String script = "ROW T ("
-        + "a INT, b DOUBLE,"
-        + "CHECK (a < b)"
-        + ");";
-    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
-        ValidationException.class,
-        () -> parseScript(script));
-    assertTrue(t.getMessage().contains("strict type-check") || t.getMessage().contains("Cannot compare"),
-        "expected category-mismatch rejection, got: " + t.getMessage());
+  void intVsDoubleComparisonCoerced() {
+    // int vs double now coerces to the common type (double) — the int side
+    // is cast with double() (Flink-faithful; no longer rejected).
+    assertEquals("double(this.x) < this.ratio", translateCheck("x < ratio"));
+  }
+
+  // ---- numeric coercion: common-type comparison ----
+
+  @Test
+  void doubleVsIntComparisonCoerced() {
+    // DOUBLE vs INT → common DOUBLE; the int literal emits as 5.0.
+    assertEquals("this.ratio == 5.0", translateCheck("ratio = 5"));
+  }
+
+  @Test
+  void intVsDecimalLiteralComparisonIsDecimal() {
+    // INT vs DECIMAL literal (no exponent) → common DECIMAL.
+    assertEquals("decimals.gt(decimal(this.qty), decimal(\"1.5\"))",
+        translateCheck("qty > 1.5"));
+  }
+
+  @Test
+  void intVsDecimalLiteralEqualityIsDecimal() {
+    // 12.34 is a DECIMAL literal → INT coerces up to DECIMAL.
+    assertEquals("decimals.eq(decimal(this.x), decimal(\"12.34\"))",
+        translateCheck("x = 12.34"));
+  }
+
+  @Test
+  void decimalColVsDecimalLiteralIsDecimal() {
+    assertEquals("decimals.eq(this.amount, decimal(\"12.34\"))",
+        translateCheck("amount = 12.34"));
+  }
+
+  @Test
+  void decimalColVsDoubleColIsDouble() {
+    // DECIMAL vs DOUBLE → common DOUBLE (Flink-faithful) via the
+    // double(Decimal) overload — not an exact-decimal compare.
+    assertEquals("double(this.amount) == this.ratio",
+        translateCheck("amount = ratio"));
+  }
+
+  @Test
+  void decimalColVsExponentLiteralIsDouble() {
+    // An exponent literal (1.5e2) is approximate → DOUBLE; DECIMAL coerces up.
+    assertEquals("double(this.amount) == 1.5e2",
+        translateCheck("amount = 1.5e2"));
+  }
+
+  @Test
+  void intArithmeticWithExponentLiteralIsDouble() {
+    // x (int) + 1.5e0 (double) → DOUBLE; > 10 (int) → DOUBLE.
+    assertEquals("double(this.x) + 1.5e0 > 10.0",
+        translateCheck("x + 1.5e0 > 10"));
+  }
+
+  // ---- numeric coercion: BETWEEN / IN ----
+
+  @Test
+  void betweenIntDoubleCoercesToDouble() {
+    // x (int) BETWEEN ratio (double) AND 5 (int) → common DOUBLE.
+    assertEquals(
+        "this.ratio <= double(this.x) && double(this.x) <= 5.0",
+        translateCheck("x BETWEEN ratio AND 5"));
+  }
+
+  @Test
+  void betweenDecimalDoubleCoercesToDouble() {
+    // DECIMAL subject with a DOUBLE bound → common DOUBLE (not decimal).
+    assertEquals(
+        "this.ratio <= double(this.amount) && double(this.amount) <= 5.0",
+        translateCheck("amount BETWEEN ratio AND 5"));
+  }
+
+  @Test
+  void inListDoubleCoercion() {
+    // ratio (double) IN (1, 2) → common DOUBLE; int elements emit as doubles.
+    assertEquals("this.ratio in [1.0, 2.0]", translateCheck("ratio IN (1, 2)"));
+  }
+
+  @Test
+  void inListIntDecimalCoercion() {
+    // qty (int) IN (1.5, 2.5) → common DECIMAL → OR of decimals.eq.
+    assertEquals(
+        "(decimals.eq(decimal(this.qty), decimal(\"1.5\")) "
+            + "|| decimals.eq(decimal(this.qty), decimal(\"2.5\")))",
+        translateCheck("qty IN (1.5, 2.5)"));
   }
 
   @Test
