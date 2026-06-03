@@ -83,11 +83,14 @@ final class BuiltinDeclarations {
     decls.add(binaryDecimal("decimals.gt", SimpleType.BOOL));
     decls.add(binaryDecimal("decimals.ge", SimpleType.BOOL));
 
-    // Arithmetic: decimals.add/sub/mul/div
+    // Arithmetic: decimals.add/sub/mul/div/mod
     decls.add(binaryDecimal("decimals.add", DECIMAL));
     decls.add(binaryDecimal("decimals.sub", DECIMAL));
     decls.add(binaryDecimal("decimals.mul", DECIMAL));
     decls.add(binaryDecimal("decimals.div", DECIMAL));
+    // Modulo: remainder with the sign of the dividend (BigDecimal.remainder),
+    // matching SQL MOD. Throws on a zero divisor.
+    decls.add(binaryDecimal("decimals.mod", DECIMAL));
 
     // Square root: decimals.sqrt — MathContext(38, HALF_UP), like div. Throws on
     // negative input (no complex result).
