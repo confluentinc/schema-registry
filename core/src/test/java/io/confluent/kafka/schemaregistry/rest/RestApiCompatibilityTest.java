@@ -879,6 +879,54 @@ public class RestApiCompatibilityTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGlobalNormalizeInheritedWhenSubjectConfigSet() throws Exception {
+    String subject = "testSubject";
+
+    // Set global normalize = true
+    ConfigUpdateRequest globalConfig = new ConfigUpdateRequest();
+    globalConfig.setNormalize(true);
+    assertEquals("Setting global normalize config should succeed",
+        globalConfig,
+        restApp.restClient.updateConfig(globalConfig, null));
+
+    // Set a subject-level config that does NOT explicitly set normalize.
+    ConfigUpdateRequest subjectConfig = new ConfigUpdateRequest();
+    subjectConfig.setCompatibilityLevel(CompatibilityLevel.BACKWARD.name);
+    assertEquals("Setting subject-level compatibility should succeed",
+        subjectConfig,
+        restApp.restClient.updateConfig(subjectConfig, subject));
+
+    // A schema whose int field has a string default is only rejected when
+    // normalization (and the strict validation it triggers) is active. If
+    // normalize is inherited correctly from the global config, registration
+    // and compatibility check should fail with INVALID_SCHEMA_ERROR_CODE.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"int\",\"default\":\"foo\",\"name\":"
+        + "\"f" + "\"}]}";
+    String schema = AvroUtils.parseSchema(schemaString).canonicalString();
+
+    try {
+      restApp.restClient.testCompatibility(schema, subject, "latest");
+      fail("Testing compatibility for schema with invalid default should fail with "
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " when normalize is inherited from the global config");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+
+    try {
+      restApp.restClient.registerSchema(schema, subject);
+      fail("Registering schema with invalid default should fail with "
+          + Errors.INVALID_SCHEMA_ERROR_CODE
+          + " when normalize is inherited from the global config");
+    } catch (RestClientException rce) {
+      assertEquals("Invalid schema", Errors.INVALID_SCHEMA_ERROR_CODE, rce.getErrorCode());
+    }
+  }
+
+  @Test
   public void testSubjectAlias() throws Exception {
     String subject = "testSubject";
 
