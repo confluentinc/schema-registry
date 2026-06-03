@@ -192,6 +192,12 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "decimal_to_string", BigDecimal.class,
         BigDecimal::toPlainString));
+    // double(Decimal) — extension overload on stdlib `double(...)`. Narrowing:
+    // BigDecimal.doubleValue() returns the closest double (±Infinity if the
+    // magnitude is out of range).
+    out.add(CelFunctionBinding.from(
+        "decimal_to_double", BigDecimal.class,
+        BigDecimal::doubleValue));
 
     // Rounding family — Flink-aligned. Negative scale rounds left of the decimal.
     out.add(decimalsUnary(
