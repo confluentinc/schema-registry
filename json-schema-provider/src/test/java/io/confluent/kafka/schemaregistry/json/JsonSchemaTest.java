@@ -571,6 +571,36 @@ public class JsonSchemaTest {
   }
 
   @Test
+  public void testRefWithReadOnly() {
+    String schema = "{\n"
+        + "    \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n"
+        + "    \"type\": \"object\",\n"
+        + "    \"properties\": { \"incidentContext\": { \"$ref\": \"#/$defs/IncidentContext\" } },\n"
+        + "    \"$defs\": {\n"
+        + "      \"IncidentContext\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": { \"incidentInvolvedParties\": {\n"
+        + "          \"type\": \"array\", \"items\": { \"$ref\": \"#/$defs/RelatedPerson\" } } }\n"
+        + "      },\n"
+        + "      \"RelatedPerson\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": { \"sanctionsCheckResult\": { \"readOnly\": true, \"$ref\": \"#/$defs/SanctionsCheckResult\" } },\n"
+        + "        \"discriminator\": {\n"
+        + "          \"propertyName\": \"relatedPersonType\",\n"
+        + "          \"mapping\": { \"NaturalPerson\": \"#/$defs/NaturalPerson\", \"LegalPerson\": \"#/$defs/LegalPerson\" }\n"
+        + "        }\n"
+        + "      },\n"
+        + "      \"NaturalPerson\": { \"type\": \"object\", \"allOf\": [], \"properties\": {} },\n"
+        + "      \"LegalPerson\":   { \"type\": \"object\", \"allOf\": [], \"properties\": {} },\n"
+        + "      \"SanctionsCheckResult\": { \"type\": \"object\", \"properties\": {} }\n"
+        + "    }\n"
+        + "  }";
+    JsonSchema jsonSchema = new JsonSchema(schema);
+    List<Difference> diff = SchemaDiff.compare(jsonSchema.rawSchema(), jsonSchema.rawSchema());
+    assertEquals(0, diff.size());
+  }
+
+  @Test
   public void testParseSchema() {
     SchemaProvider jsonSchemaProvider = new JsonSchemaProvider();
     ParsedSchema parsedSchema = jsonSchemaProvider.parseSchemaOrElseThrow(
