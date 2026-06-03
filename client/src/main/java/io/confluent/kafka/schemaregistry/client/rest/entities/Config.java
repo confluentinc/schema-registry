@@ -206,12 +206,20 @@ public class Config {
     Boolean normalize = subjectConfig.isNormalize() != null
         ? subjectConfig.isNormalize()
         : globalConfig.isNormalize();
+    Boolean validateFields = subjectConfig.isValidateFields() != null
+        ? subjectConfig.isValidateFields()
+        : globalConfig.isValidateFields();
+    Boolean validateRules = subjectConfig.isValidateRules() != null
+        ? subjectConfig.isValidateRules()
+        : globalConfig.isValidateRules();
     String compatibilityGroup = subjectConfig.getCompatibilityGroup() != null
         ? subjectConfig.getCompatibilityGroup()
         : globalConfig.getCompatibilityGroup();
     return new Config(
         subjectConfig.getAlias(),
         normalize,
+        validateFields,
+        validateRules,
         subjectConfig.getCompatibilityLevel(),
         compatibilityGroup,
         subjectConfig.getDefaultMetadata(),
