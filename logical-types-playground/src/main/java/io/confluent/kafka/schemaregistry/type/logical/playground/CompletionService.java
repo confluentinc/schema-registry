@@ -703,7 +703,8 @@ public class CompletionService {
 
   private static final Set<Integer> VALUE_LIKE_LITERAL_TYPES = Set.of(
       LogicalTypesLexer.ID, LogicalTypesLexer.QUOTED_ID,
-      LogicalTypesLexer.INT_LITERAL, LogicalTypesLexer.FLOAT_LITERAL,
+      LogicalTypesLexer.INT_LITERAL,
+      LogicalTypesLexer.DECIMAL_LITERAL, LogicalTypesLexer.DOUBLE_LITERAL,
       LogicalTypesLexer.STRING_LITERAL, LogicalTypesLexer.BYTES_LITERAL);
 
   private static final Set<Integer> EXPRESSION_START_KEYWORD_TYPES = Set.of(
