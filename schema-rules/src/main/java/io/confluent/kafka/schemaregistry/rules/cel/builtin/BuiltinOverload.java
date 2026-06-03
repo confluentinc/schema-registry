@@ -190,6 +190,11 @@ final class BuiltinOverload {
       return d.sqrt(DIV_MC);
     }));
 
+    // Selection: BigDecimal.min/max return the smaller/larger operand (the
+    // receiver on a numeric tie).
+    out.add(decimalsBinary("decimals_min_decimal_decimal", BigDecimal::min));
+    out.add(decimalsBinary("decimals_max_decimal_decimal", BigDecimal::max));
+
     // Unary
     out.add(decimalsUnary("decimals_neg_decimal", BigDecimal::negate));
     out.add(decimalsUnary("decimals_abs_decimal", BigDecimal::abs));

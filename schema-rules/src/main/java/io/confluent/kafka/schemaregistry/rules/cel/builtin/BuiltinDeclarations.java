@@ -96,6 +96,10 @@ final class BuiltinDeclarations {
     // negative input (no complex result).
     decls.add(unaryDecimal("decimals.sqrt", DECIMAL));
 
+    // Selection: decimals.min/max return the smaller/larger operand.
+    decls.add(binaryDecimal("decimals.min", DECIMAL));
+    decls.add(binaryDecimal("decimals.max", DECIMAL));
+
     // Unary numeric: decimals.neg/abs/sign.
     decls.add(unaryDecimal("decimals.neg", DECIMAL));
     decls.add(unaryDecimal("decimals.abs", DECIMAL));

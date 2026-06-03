@@ -196,6 +196,30 @@ public class CelValidatorDecimalTest {
   }
 
   @Test
+  void decimalMaxMin() {
+    // max(2.50, 9.99) == 9.99 and min(2.50, 9.99) == 2.50.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.eq(decimals.max(decimal(this), decimal(\\\"9.99\\\")),"
+        + "                                 decimal(\\\"9.99\\\"))"
+        + "                    && decimals.eq(decimals.min(decimal(this), decimal(\\\"9.99\\\")),"
+        + "                                   decimal(this))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "2.50"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
   void decimalRound_halfUpDefault() {
     // 33.337 round to 2 dp = 33.34 (HALF_UP). Verifies decimals.round(d, scale).
     String s = "syntax = \"proto3\";\n"
