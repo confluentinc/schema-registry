@@ -196,8 +196,8 @@ public class CelValidatorDecimalTest {
   }
 
   @Test
-  void decimalMaxMin() {
-    // max(2.50, 9.99) == 9.99 and min(2.50, 9.99) == 2.50.
+  void decimalGreatestLeast() {
+    // greatest(2.50, 9.99) == 9.99 and least(2.50, 9.99) == 2.50.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
@@ -205,9 +205,9 @@ public class CelValidatorDecimalTest {
         + "message X {\n"
         + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"decimals.eq(decimals.max(decimal(this), decimal(\\\"9.99\\\")),"
+        + "             expr: \"decimals.eq(decimals.greatest(decimal(this), decimal(\\\"9.99\\\")),"
         + "                                 decimal(\\\"9.99\\\"))"
-        + "                    && decimals.eq(decimals.min(decimal(this), decimal(\\\"9.99\\\")),"
+        + "                    && decimals.eq(decimals.least(decimal(this), decimal(\\\"9.99\\\")),"
         + "                                   decimal(this))\"}]\n"
         + "  }];\n"
         + "}\n";
