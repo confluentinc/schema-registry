@@ -329,9 +329,9 @@ final class BuiltinOverload {
           return result == null ? NullValue.NULL_VALUE : result;
         }));
     out.add(CelFunctionBinding.from(
-        "variants_elem_dyn_int", Object.class, Long.class,
+        "variants_index_dyn_int", Object.class, Long.class,
         (Object o, Long idx) -> {
-          Variant v = requireVariantOrNull(o, "variants.elem");
+          Variant v = requireVariantOrNull(o, "variants.index");
           if (v == null || v.getType() != Variant.Type.ARRAY
               || idx < 0 || idx > Integer.MAX_VALUE) {
             return NullValue.NULL_VALUE;
@@ -375,7 +375,7 @@ final class BuiltinOverload {
    *  is i64; BigDecimal scale is i32. Using {@code Long.intValue()} directly
    *  would silently take the lower 32 bits (e.g., {@code 2^32 → 0}), yielding
    *  a wildly wrong Decimal. Mirrors the range-check pattern in
-   *  {@code variants.elem}. */
+   *  {@code variants.index}. */
   private static int requireIntScale(long scale, String functionName) {
     try {
       return Math.toIntExact(scale);
@@ -433,7 +433,7 @@ final class BuiltinOverload {
 
   /**
    * Runtime dispatch for {@code variants.as(v, typeStr[, nullOnError])} and the
-   * 3-arg / 4-arg navigation+extraction overloads ({@code variants.path/field/elem}).
+   * 3-arg / 4-arg navigation+extraction overloads ({@code variants.path/field/index}).
    *
    * <p>Accepted type strings match the {@code variants.type(v)} output for
    * extractable scalar types: {@code "string"}, {@code "int"}, {@code "double"},
@@ -502,7 +502,7 @@ final class BuiltinOverload {
       case "uuid":
         throw new IllegalArgumentException(
             "variants.as: type '" + typeStr + "' is not supported for extraction"
-                + " (use variants.type/variants.path/variants.field/variants.elem instead)");
+                + " (use variants.type/variants.path/variants.field/variants.index instead)");
       default:
         if (nullOnError) {
           return NullValue.NULL_VALUE;
