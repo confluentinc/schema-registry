@@ -255,9 +255,9 @@ final class BuiltinDeclarations {
                 + " variant-null.",
             VARIANT, ImmutableList.of(VARIANT, SimpleType.STRING))));
     decls.add(CelFunctionDecl.newFunctionDeclaration(
-        "variants.elem",
+        "variants.index",
         CelOverloadDecl.newGlobalOverload(
-            "variants_elem_dyn_int",
+            "variants_index_dyn_int",
             "Array element by index; out-of-bounds → CEL null; explicit JSON"
                 + " null at index → variant-null.",
             VARIANT, ImmutableList.of(VARIANT, SimpleType.INT))));
