@@ -127,6 +127,13 @@ public class SchemaDiff {
       ctx.addDifference(Type.SCHEMA_REMOVED);
       return;
     }
+    
+    if (isUnresolvedRef(original) || isUnresolvedRef(update)) {
+      if (!Objects.equals(referenceValue(original), referenceValue(update))) {
+        ctx.addDifference(Type.TYPE_CHANGED);
+      }
+      return;
+    }
 
     original = normalizeSchema(original);
     update = normalizeSchema(update);
@@ -241,7 +248,22 @@ public class SchemaDiff {
     }
   }
 
+  private static boolean isUnresolvedRef(final Schema schema) {
+    return schema instanceof ReferenceSchema
+        && ((ReferenceSchema) schema).getReferredSchema() == null;
+  }
+
+  private static String referenceValue(final Schema schema) {
+    return schema instanceof ReferenceSchema
+        ? ((ReferenceSchema) schema).getReferenceValue() : null;
+  }
+
   public static boolean schemaTypesEqual(final Schema schema1, final Schema schema2) {
+    // an unresolved ReferenceSchema can normalize to null (see
+    // isUnresolvedRef handling in compare). guarding so null wont NPE
+    if (schema1 == null || schema2 == null) {
+      return schema1 == schema2;
+    }
     return (schema1.getClass().equals(schema2.getClass()))
         // to handle CombinedSchema and CombinedSchemaExt comparisons
         || (schema1 instanceof CombinedSchema && schema2 instanceof CombinedSchema);
