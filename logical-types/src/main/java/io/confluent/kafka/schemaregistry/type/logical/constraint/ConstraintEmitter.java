@@ -1391,11 +1391,11 @@ final class ConstraintEmitter {
         return;
       }
       if (lit.decimalLiteral() != null) {
-        sb.append(ConstraintPatterns.normalizeFloatLiteral(lit.decimalLiteral().getText()));
+        sb.append(ConstraintPatterns.normalizeNumericLiteral(lit.decimalLiteral().getText()));
         return;
       }
       if (lit.doubleLiteral() != null) {
-        sb.append(ConstraintPatterns.normalizeFloatLiteral(lit.doubleLiteral().getText()));
+        sb.append(ConstraintPatterns.normalizeNumericLiteral(lit.doubleLiteral().getText()));
         return;
       }
       sb.append("double(");
@@ -1779,9 +1779,9 @@ final class ConstraintEmitter {
     } else if (ctx.intLiteral() != null) {
       sb.append(ctx.intLiteral().getText());
     } else if (ctx.decimalLiteral() != null) {
-      sb.append(ConstraintPatterns.normalizeFloatLiteral(ctx.decimalLiteral().getText()));
+      sb.append(ConstraintPatterns.normalizeNumericLiteral(ctx.decimalLiteral().getText()));
     } else if (ctx.doubleLiteral() != null) {
-      sb.append(ConstraintPatterns.normalizeFloatLiteral(ctx.doubleLiteral().getText()));
+      sb.append(ConstraintPatterns.normalizeNumericLiteral(ctx.doubleLiteral().getText()));
     } else if (ctx.TIMESTAMP() != null) {
       // TIMESTAMP '2020-01-01 00:00:00' → timestamp("2020-01-01T00:00:00Z")
       // (CEL stdlib RFC-3339 constructor; zoneless literal assumed UTC).
