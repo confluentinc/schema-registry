@@ -435,10 +435,14 @@ final class ConstraintFunctions {
     // the strict checker). Null checks still use the native emit so the has()
     // guard sees a field selection.
     boolean decimal = false;
+    boolean temporal = false;
     for (int i = 0; i < n; i++) {
       if (argIsDecimal(args.get(i))) {
         decimal = true;
         break;
+      }
+      if (argIsTemporal(args.get(i))) {
+        temporal = true;
       }
     }
     String[] nativeEmit = new String[n];
@@ -451,6 +455,11 @@ final class ConstraintFunctions {
         StringBuilder dec = new StringBuilder();
         ConstraintEmitter.emitDecimalValue(args.get(i), dec);
         valueEmit[i] = dec.toString();
+      } else if (temporal) {
+        // Normalize each branch so the COALESCE result is a CEL timestamp.
+        StringBuilder ts = new StringBuilder();
+        ConstraintEmitter.emitTimestampValueCheckExpr(args.get(i), ts);
+        valueEmit[i] = ts.toString();
       } else {
         valueEmit[i] = nativeEmit[i];
       }
@@ -526,6 +535,7 @@ final class ConstraintFunctions {
       throw locatedError(fctx,
           "NULLIF() expects 2 arguments, got " + args.size());
     }
+    boolean temporal = argIsTemporal(args.get(0)) || argIsTemporal(args.get(1));
     sb.append('(');
     if (argIsDecimal(args.get(0)) || argIsDecimal(args.get(1))) {
       // Opaque Decimal has no native `==`.
@@ -534,13 +544,24 @@ final class ConstraintFunctions {
       sb.append(", ");
       ConstraintEmitter.emitDecimalValue(args.get(1), sb);
       sb.append(')');
+    } else if (temporal) {
+      // Native `==`, operands timestamp-normalized.
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
+      sb.append(" == ");
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), sb);
     } else {
       visitCheckExpr(args.get(0), sb);
       sb.append(" == ");
       visitCheckExpr(args.get(1), sb);
     }
     sb.append(" ? dyn(null) : dyn(");
-    visitCheckExpr(args.get(0), sb);
+    // Normalize the returned value too (so a temporal NULLIF result is a CEL
+    // timestamp), keeping the decimal/native paths unchanged.
+    if (temporal) {
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), sb);
+    } else {
+      visitCheckExpr(args.get(0), sb);
+    }
     sb.append("))");
   }
 
@@ -552,6 +573,15 @@ final class ConstraintFunctions {
     return vctx != null
         && ConstraintResolver.isDecimal(
             ConstraintResolver.tryResolveCheckExprType(arg, vctx));
+  }
+
+  /**
+   * True if {@code arg}'s subtree involves a timestamp column or a
+   * TIMESTAMP/INTERVAL literal.
+   */
+  private static boolean argIsTemporal(LogicalTypesParser.Check_exprContext arg) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    return vctx != null && ConstraintResolver.subtreeHasTemporal(arg, vctx);
   }
 
   /**
@@ -573,6 +603,7 @@ final class ConstraintFunctions {
     // selection); the comparison and returned values use the Decimal emit when
     // either operand is decimal, since the opaque Decimal has no native >/<.
     boolean decimal = argIsDecimal(args.get(0)) || argIsDecimal(args.get(1));
+    boolean temporal = !decimal && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
     StringBuilder bufA = new StringBuilder();
     StringBuilder bufB = new StringBuilder();
     visitCheckExpr(args.get(0), bufA);
@@ -588,6 +619,14 @@ final class ConstraintFunctions {
       ConstraintEmitter.emitDecimalValue(args.get(1), decB);
       a = decA.toString();
       b = decB.toString();
+    } else if (temporal) {
+      // Native >/< on timestamps; operands and returned values normalized.
+      StringBuilder tsA = new StringBuilder();
+      StringBuilder tsB = new StringBuilder();
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), tsA);
+      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), tsB);
+      a = tsA.toString();
+      b = tsB.toString();
     }
     sb.append('(');
     emitIsNullCheck(args.get(0), nativeA, sb);
@@ -734,39 +773,44 @@ final class ConstraintFunctions {
     }
   }
 
-  /** EXTRACT(field FROM ts) → ts.getXxx(). */
+  /**
+   * EXTRACT(field FROM ts) → ts.getXxx(). The receiver is normalized via
+   * {@code timestamp.of(...)} when it's an instant-timestamp column so the
+   * runtime value (Instant / RFC-3339 string) coerces to a CEL timestamp;
+   * {@code now} (CURRENT_TIMESTAMP) is left unwrapped.
+   */
   private static void visitExtract(
       LogicalTypesParser.FuncExtractContext ctx, StringBuilder sb) {
     String field = ctx.identifier().getText().toUpperCase(java.util.Locale.ROOT);
     switch (field) {
       case "YEAR":
-        emitWrappedReceiver(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(".getFullYear()");
         break;
       case "MONTH":
         sb.append('(');
-        emitWrappedReceiver(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(".getMonth() + 1)");
         break;
       case "DAY":
-        emitWrappedReceiver(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(".getDate()");
         break;
       case "HOUR":
-        emitWrappedReceiver(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(".getHours()");
         break;
       case "MINUTE":
-        emitWrappedReceiver(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(".getMinutes()");
         break;
       case "SECOND":
-        emitWrappedReceiver(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(".getSeconds()");
         break;
       case "EPOCH":
         sb.append("int(");
-        visitCheckExpr(ctx.check_expr(), sb);
+        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
         sb.append(')');
         break;
       default:
