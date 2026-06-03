@@ -152,6 +152,50 @@ public class CelValidatorDecimalTest {
   }
 
   @Test
+  void decimalMod_remainder() {
+    // 10 mod 3 == 1. Verifies decimals.mod (BigDecimal.remainder, SQL MOD).
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.eq(decimals.mod(decimal(this), decimal(\\\"3\\\")),"
+        + "                                 decimal(\\\"1\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "10"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
+  void decimalMod_signOfDividend() {
+    // Remainder takes the sign of the dividend: -10 mod 3 == -1.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"decimals.eq(decimals.mod(decimal(this), decimal(\\\"3\\\")),"
+        + "                                 decimal(\\\"-1\\\"))\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "-10"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
   void decimalRound_halfUpDefault() {
     // 33.337 round to 2 dp = 33.34 (HALF_UP). Verifies decimals.round(d, scale).
     String s = "syntax = \"proto3\";\n"
@@ -321,6 +365,28 @@ public class CelValidatorDecimalTest {
         + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
         + "             expr: \"string(decimal(this)) == \\\"100.50\\\"\"}]\n"
+        + "  }];\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(s);
+    Descriptor xDesc = schema.toDescriptor("test.X");
+    DynamicMessage msg = DynamicMessage.newBuilder(xDesc)
+        .setField(xDesc.findFieldByName("d"), decimal(xDesc, "d", "100.50"))
+        .build();
+    assertTrue(schema.validateMessage(new CelValidator(), msg).isEmpty());
+  }
+
+  @Test
+  void doubleDecimal_extendsStdlib() {
+    // CEL stdlib double(...) is extended with a (Decimal) -> double overload.
+    // Verifies the extension registers cleanly and uses BigDecimal.doubleValue.
+    String s = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/decimal.proto\";\n"
+        + "message X {\n"
+        + "  confluent.type.Decimal d = 1 [(confluent.field_meta) = {\n"
+        + "    rules: [{name: \"r\","
+        + "             expr: \"double(decimal(this)) == 100.5\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
