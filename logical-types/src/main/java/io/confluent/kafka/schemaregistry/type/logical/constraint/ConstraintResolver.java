@@ -148,7 +148,13 @@ final class ConstraintResolver {
       if (lit.intLiteral() != null) {
         return Schema.create(Schema.Type.BIGINT);
       }
-      if (lit.floatLiteral() != null) {
+      if (lit.decimalLiteral() != null) {
+        // A decimal-point literal (no exponent) is DECIMAL, per Flink/Calcite
+        // exact-numeric typing.
+        return decimalLiteralSchema(lit.decimalLiteral());
+      }
+      if (lit.doubleLiteral() != null) {
+        // An exponent literal (1.5e3) is approximate numeric → DOUBLE.
         return Schema.create(Schema.Type.DOUBLE);
       }
       // TIMESTAMP/INTERVAL literals also carry a stringLiteral child, so they
@@ -470,7 +476,13 @@ final class ConstraintResolver {
       if (lit.intLiteral() != null) {
         return Schema.create(Schema.Type.BIGINT);
       }
-      if (lit.floatLiteral() != null) {
+      if (lit.decimalLiteral() != null) {
+        // A decimal-point literal (no exponent) is DECIMAL, per Flink/Calcite
+        // exact-numeric typing.
+        return decimalLiteralSchema(lit.decimalLiteral());
+      }
+      if (lit.doubleLiteral() != null) {
+        // An exponent literal (1.5e3) is approximate numeric → DOUBLE.
         return Schema.create(Schema.Type.DOUBLE);
       }
       // TIMESTAMP/INTERVAL literals carry a stringLiteral child — check first.
@@ -657,14 +669,6 @@ final class ConstraintResolver {
     return t == Schema.Type.TIMESTAMP || t == Schema.Type.TIMESTAMP_LTZ;
   }
 
-  static boolean likeHasDecimal(
-      LogicalTypesParser.Check_expr_likeContext like, ConstraintValidationContext vctx) {
-    if (like.LIKE() != null) {
-      return false;  // LIKE yields bool, never decimal
-    }
-    return concatHasDecimal(like.check_expr_concat(), vctx);
-  }
-
   static boolean concatHasDecimal(
       LogicalTypesParser.Check_expr_concatContext concat, ConstraintValidationContext vctx) {
     for (LogicalTypesParser.Check_expr_addContext add : concat.check_expr_add()) {
@@ -720,6 +724,119 @@ final class ConstraintResolver {
       }
     }
     return false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Numeric coercion: least-restrictive common type INT < DECIMAL < DOUBLE.
+  // -------------------------------------------------------------------------
+
+  /** Sentinel: a subtree leaf is non-numeric (poisons the whole expression). */
+  private static final String NOT_NUMERIC = "!";
+
+  static boolean isNumericCategory(String category) {
+    return "int".equals(category) || "double".equals(category) || "decimal".equals(category);
+  }
+
+  private static int numericPrecedence(String category) {
+    switch (category == null ? "" : category) {
+      case "int": return 0;
+      case "decimal": return 1;
+      case "double": return 2;
+      default: return -1;
+    }
+  }
+
+  /** Common type of two numeric categories (the higher precedence); null if either non-numeric. */
+  static String numericCommon(String a, String b) {
+    int pa = numericPrecedence(a);
+    int pb = numericPrecedence(b);
+    if (pa < 0 || pb < 0) {
+      return null;
+    }
+    return pa >= pb ? a : b;
+  }
+
+  /**
+   * The coerced numeric category of an expression — the highest-precedence
+   * numeric type among its leaves (`int`/`double`/`decimal`), or {@code null}
+   * if the subtree has a non-numeric/unresolved leaf (so it isn't a pure
+   * numeric expression). Functions/CASE are treated as leaves (by result type);
+   * timestamp/string/bytes/bool leaves poison it.
+   */
+  static String coercedNumericCategory(ParseTree node, ConstraintValidationContext vctx) {
+    String c = coercedNumericRaw(node, vctx);
+    return isNumericCategory(c) ? c : null;
+  }
+
+  private static String coercedNumericRaw(ParseTree node, ConstraintValidationContext vctx) {
+    if (node instanceof LogicalTypesParser.CheckColumnRefContext) {
+      return numericLeaf(resolveColumnRefType(
+          ((LogicalTypesParser.CheckColumnRefContext) node).columnref(), vctx));
+    }
+    if (node instanceof LogicalTypesParser.LiteralContext) {
+      return literalNumericCategory((LogicalTypesParser.LiteralContext) node);
+    }
+    if (node instanceof LogicalTypesParser.CheckFuncContext) {
+      return numericLeaf(tryResolveFuncReturnType(
+          ((LogicalTypesParser.CheckFuncContext) node).func_expr(), vctx));
+    }
+    if (node instanceof LogicalTypesParser.CheckCaseContext) {
+      return numericLeaf(tryResolveCaseExprType(
+          ((LogicalTypesParser.CheckCaseContext) node).case_expr(), vctx));
+    }
+    // Internal node: fold children. A NOT_NUMERIC leaf poisons; operator
+    // terminals and empty branches are neutral (null).
+    String acc = null;
+    for (int i = 0; i < node.getChildCount(); i++) {
+      String c = coercedNumericRaw(node.getChild(i), vctx);
+      if (NOT_NUMERIC.equals(c)) {
+        return NOT_NUMERIC;
+      }
+      if (c != null) {
+        acc = acc == null ? c : numericCommon(acc, c);
+      }
+    }
+    return acc;
+  }
+
+  /** A leaf's category if numeric; NOT_NUMERIC otherwise (incl. unresolved). */
+  private static String numericLeaf(Schema s) {
+    String cat = s == null ? null : categoryOf(s.getType());
+    return isNumericCategory(cat) ? cat : NOT_NUMERIC;
+  }
+
+  /**
+   * Infer a {@link Schema#createDecimal(int, int) DECIMAL(precision, scale)} from
+   * a decimal-point literal's text (e.g. {@code 12.34} → DECIMAL(4,2),
+   * {@code .5} → DECIMAL(1,1)). Scale = fractional digit count; precision =
+   * significant-digit count (leading zeros stripped, both at least 1).
+   */
+  private static Schema decimalLiteralSchema(LogicalTypesParser.DecimalLiteralContext dec) {
+    String text = dec.getText();
+    if (text.startsWith("-")) {
+      text = text.substring(1);
+    }
+    int dot = text.indexOf('.');
+    String intPart = dot >= 0 ? text.substring(0, dot) : text;
+    String fracPart = dot >= 0 ? text.substring(dot + 1) : "";
+    int scale = fracPart.length();
+    String digits = (intPart + fracPart).replaceFirst("^0+(?=.)", "");
+    int precision = Math.max(Math.max(digits.length(), scale), 1);
+    return Schema.createDecimal(precision, scale);
+  }
+
+  private static String literalNumericCategory(LogicalTypesParser.LiteralContext lit) {
+    if (lit.intLiteral() != null) {
+      return "int";
+    }
+    if (lit.decimalLiteral() != null) {
+      return "decimal";
+    }
+    if (lit.doubleLiteral() != null) {
+      return "double";
+    }
+    // string/bytes/bool/TIMESTAMP/INTERVAL/NULL — non-numeric leaf.
+    return NOT_NUMERIC;
   }
 
   /**
@@ -838,16 +955,11 @@ final class ConstraintResolver {
     if (ca.equals(cb)) {
       return true;
     }
-    // DECIMAL coerces a numeric counterpart (int/double) via decimal(...) at
-    // emit, so decimal-vs-int and decimal-vs-double are comparable. int-vs-double
-    // stays incomparable — CEL has no implicit int↔double promotion and the
-    // emitted native operators would fail the strict checker.
-    return ("decimal".equals(ca) && isNumericCategory(cb))
-        || ("decimal".equals(cb) && isNumericCategory(ca));
-  }
-
-  private static boolean isNumericCategory(String category) {
-    return "int".equals(category) || "double".equals(category) || "decimal".equals(category);
+    // Any two numeric categories are comparable — the coercion layer casts
+    // to their common type (decimal(...), double(...), or a double literal), so
+    // int/double/decimal mix freely (CEL's lack of implicit promotion is handled
+    // by the emitted casts).
+    return isNumericCategory(ca) && isNumericCategory(cb);
   }
 
   static String categoryOf(Schema.Type t) {

@@ -106,10 +106,16 @@ final class ConstraintEmitter {
     boolean negated = ctx.NOT() != null;
     boolean symmetric = ctx.SYMMETRIC() != null;
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    if (vctx != null
-        && (inHasDecimal(ins.get(0), vctx) || inHasDecimal(ins.get(1), vctx)
-            || inHasDecimal(ins.get(2), vctx))) {
+    // Numeric coercion: route by the common type over all three operands.
+    // DECIMAL → decimals.le cascade; DOUBLE → native <= with operands cast to
+    // double; INT (or non-numeric) → fall through to temporal/native below.
+    String common = (vctx != null) ? numericCommonOf(ins, vctx) : null;
+    if ("decimal".equals(common)) {
       emitBetweenDecimal(ins, negated, symmetric, sb);
+      return;
+    }
+    if ("double".equals(common)) {
+      emitBetweenDouble(ins, negated, symmetric, sb);
       return;
     }
     if (vctx != null
@@ -213,6 +219,50 @@ final class ConstraintEmitter {
   }
 
   /**
+   * Double BETWEEN: {@code lo <= a && a <= hi} with native {@code <=}, each
+   * operand cast to double (int → {@code double(x)}, decimal → {@code double(x)}
+   * / plain double literal). Mirrors {@link #emitBetweenDecimal}'s structure.
+   */
+  private static void emitBetweenDouble(
+      List<LogicalTypesParser.Check_expr_inContext> ins,
+      boolean negated, boolean symmetric, StringBuilder sb) {
+    if (negated) {
+      sb.append("!(");
+    }
+    if (symmetric) {
+      sb.append('(');
+      emitDoubleLe(ins.get(1), ins.get(2), sb);   // lo <= hi ?
+      sb.append(" ? (");
+      emitDoubleLe(ins.get(1), ins.get(0), sb);
+      sb.append(" && ");
+      emitDoubleLe(ins.get(0), ins.get(2), sb);
+      sb.append(") : (");
+      emitDoubleLe(ins.get(2), ins.get(0), sb);
+      sb.append(" && ");
+      emitDoubleLe(ins.get(0), ins.get(1), sb);
+      sb.append("))");
+    } else {
+      emitDoubleLe(ins.get(1), ins.get(0), sb);
+      sb.append(" && ");
+      emitDoubleLe(ins.get(0), ins.get(2), sb);
+    }
+    if (negated) {
+      sb.append(")");
+    }
+  }
+
+  /**
+   * {@code a <= b} over two BETWEEN operands, both cast to double.
+   */
+  private static void emitDoubleLe(
+      LogicalTypesParser.Check_expr_inContext a,
+      LogicalTypesParser.Check_expr_inContext b, StringBuilder sb) {
+    emitNumericInAs(a, "double", sb);
+    sb.append(" <= ");
+    emitNumericInAs(b, "double", sb);
+  }
+
+  /**
    * Emit a {@code check_expr_in} wrapped in {@code (...)}. Used by
    * {@link #visitBetween} so each BETWEEN operand is precedence-safe in the
    * surrounding {@code <=} chain. Skips the wrap when the operand is a
@@ -246,11 +296,27 @@ final class ConstraintEmitter {
     }
     boolean negated = ctx.NOT() != null;
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    // Decimal LHS: CEL's `in` does element equality with no Decimal overload,
-    // so rewrite the value-list form to an OR of decimals.eq.
-    if (vctx != null && isnullHasDecimal(ctx.check_expr_isnull(), vctx)) {
-      emitInDecimal(ctx, negated, sb);
-      return;
+    if (vctx != null) {
+      LogicalTypesParser.In_targetContext target = ctx.in_target();
+      if (target instanceof LogicalTypesParser.InTargetParenListContext) {
+        // Numeric coercion over LHS + value-list elements. DECIMAL: CEL's
+        // `in` has no Decimal overload, so emit an OR of decimals.eq. DOUBLE:
+        // `double(lhs) in [double(e), …]`. INT/non-numeric falls through.
+        String common = inListCommon(ctx, vctx);
+        if ("decimal".equals(common)) {
+          emitInDecimal(ctx, negated, sb);
+          return;
+        }
+        if ("double".equals(common)) {
+          emitInDouble(ctx, negated, sb);
+          return;
+        }
+      } else if (isnullHasDecimal(ctx.check_expr_isnull(), vctx)) {
+        // Decimal LHS against a list-typed operand: emitInDecimal raises the
+        // (unsupported) located error, preserving the prior clear message.
+        emitInDecimal(ctx, negated, sb);
+        return;
+      }
     }
     // Timestamp: CEL's native `in` works on timestamps once the column LHS and
     // any column elements are normalized — emit the same `x in [...]` shape via
@@ -352,6 +418,33 @@ final class ConstraintEmitter {
       sb.append(')');
     }
     sb.append(')');
+    if (negated) {
+      sb.append(")");
+    }
+  }
+
+  /**
+   * Double IN: {@code double(lhs) in [double(e1), double(e2), …]}. CEL's native
+   * {@code in} does element equality, which works for double once every element
+   * is cast to double.
+   */
+  private static void emitInDouble(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+    final List<LogicalTypesParser.Check_exprContext> items =
+        ((LogicalTypesParser.InTargetParenListContext) ctx.in_target())
+            .check_expr_list().check_expr();
+    if (negated) {
+      sb.append("!(");
+    }
+    emitDoubleValueIsnull(ctx.check_expr_isnull(), sb);
+    sb.append(" in [");
+    for (int i = 0; i < items.size(); i++) {
+      if (i > 0) {
+        sb.append(", ");
+      }
+      emitDoubleValueCheckExpr(items.get(i), sb);
+    }
+    sb.append("]");
     if (negated) {
       sb.append(")");
     }
@@ -495,20 +588,27 @@ final class ConstraintEmitter {
       // two check_expr_like). Find it as the only TerminalNode child.
       String celOp = translateCompareOp(findComparisonOp(ctx));
       ConstraintValidationContext vctx = EMIT_VCTX.get();
-      // Decimal dispatch: if either side is decimal, the opaque Decimal type
-      // has no native CEL comparison overload — emit decimals.eq/lt/le/gt/ge
-      // (and !decimals.eq for !=) with both operands coerced to Decimal.
-      if (vctx != null
-          && (ConstraintResolver.likeHasDecimal(likes.get(0), vctx)
-              || ConstraintResolver.likeHasDecimal(likes.get(1), vctx))) {
-        emitDecimalCompare(likes.get(0), celOp, likes.get(1), sb);
-        return;
+      // Numeric coercion: if both sides are pure numeric, compute the
+      // common type and emit at it. common=DECIMAL → decimals.* (no native
+      // overload on the opaque type); common=DOUBLE/INT → native operator with
+      // operands cast to the common type (double()/double literal as needed).
+      if (vctx != null) {
+        String lc = ConstraintResolver.coercedNumericCategory(likes.get(0), vctx);
+        String rc = ConstraintResolver.coercedNumericCategory(likes.get(1), vctx);
+        if (lc != null && rc != null) {
+          String common = ConstraintResolver.numericCommon(lc, rc);
+          if ("decimal".equals(common)) {
+            emitDecimalCompare(likes.get(0), celOp, likes.get(1), sb);
+          } else {
+            emitNumericLikeAs(likes.get(0), common, sb);
+            sb.append(' ').append(celOp).append(' ');
+            emitNumericLikeAs(likes.get(1), common, sb);
+          }
+          return;
+        }
       }
-      // Timestamp normalization: the CEL comparison operator stays native, but
-      // each instant-timestamp operand is wrapped in timestamp.of(...) so the
-      // runtime value (Instant / proto Timestamp / RFC-3339 string) coerces to
-      // a CEL timestamp. CURRENT_TIMESTAMP (→ now) is already a CEL timestamp
-      // and is left unwrapped.
+      // Non-numeric: timestamp normalization (instant-timestamp operands wrapped
+      // in timestamp.of(...); CURRENT_TIMESTAMP stays `now`) or plain native.
       emitCompareOperand(likes.get(0), vctx, sb);
       sb.append(' ').append(celOp).append(' ');
       emitCompareOperand(likes.get(1), vctx, sb);
@@ -873,8 +973,12 @@ final class ConstraintEmitter {
         sb.append("decimal(\"").append(lit.intLiteral().getText()).append("\")");
         return;
       }
-      if (lit.floatLiteral() != null) {
-        sb.append("decimal(\"").append(lit.floatLiteral().getText()).append("\")");
+      if (lit.decimalLiteral() != null) {
+        sb.append("decimal(\"").append(lit.decimalLiteral().getText()).append("\")");
+        return;
+      }
+      if (lit.doubleLiteral() != null) {
+        sb.append("decimal(\"").append(lit.doubleLiteral().getText()).append("\")");
         return;
       }
       // Non-numeric literal in a decimal context — let decimal(dyn) reject it
@@ -977,12 +1081,6 @@ final class ConstraintEmitter {
     }
   }
 
-  private static boolean inHasDecimal(
-      LogicalTypesParser.Check_expr_inContext in, ConstraintValidationContext vctx) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
-    return concat != null && ConstraintResolver.concatHasDecimal(concat, vctx);
-  }
-
   private static boolean isnullHasDecimal(
       LogicalTypesParser.Check_expr_isnullContext is, ConstraintValidationContext vctx) {
     LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
@@ -1051,6 +1149,264 @@ final class ConstraintEmitter {
       return null;
     }
     return like.check_expr_concat();
+  }
+
+  // -------------------------------------------------------------------------
+  // Numeric coercion emit: emit a numeric expression cast to a common
+  // type. DECIMAL → the decimal cascade (decimals.* + decimal()); DOUBLE → the
+  // double cascade below (native operators + double()/double-literal casts);
+  // INT → native (no casts, both operands already int).
+  // -------------------------------------------------------------------------
+
+  /**
+   * Emit a comparison/operand value cast to {@code common} ("int"/"double"/"decimal").
+   */
+  static void emitNumericAs(
+      LogicalTypesParser.Check_exprContext ctx, String common, StringBuilder sb) {
+    if ("decimal".equals(common)) {
+      emitDecimalValue(ctx, sb);
+    } else if ("double".equals(common)) {
+      emitDoubleValueCheckExpr(ctx, sb);
+    } else {
+      visitCheckExpr(ctx, sb);
+    }
+  }
+
+  private static void emitNumericLikeAs(
+      LogicalTypesParser.Check_expr_likeContext like, String common, StringBuilder sb) {
+    if ("decimal".equals(common)) {
+      emitConcatAsDecimal(like.check_expr_concat(), sb);
+    } else if ("double".equals(common)) {
+      emitDoubleValueConcat(like.check_expr_concat(), sb);
+    } else {
+      visitLike(like, sb);
+    }
+  }
+
+  private static void emitNumericInAs(
+      LogicalTypesParser.Check_expr_inContext in, String common, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
+    if (concat == null) {
+      // not a bare value (defensive) — native
+      emitParenIn(in, sb);
+      return;
+    }
+    if ("decimal".equals(common)) {
+      emitConcatAsDecimal(concat, sb);
+    } else if ("double".equals(common)) {
+      emitDoubleValueConcat(concat, sb);
+    } else {
+      emitParenIn(in, sb);
+    }
+  }
+
+  /**
+   * Common numeric type ("int"/"double"/"decimal") over a set of operand
+   * subtrees, or {@code null} if any operand is non-numeric (so the construct
+   * isn't a pure numeric one and should defer to its temporal/native path).
+   */
+  static String numericCommonOf(
+      List<? extends ParseTree> nodes, ConstraintValidationContext vctx) {
+    String acc = null;
+    for (ParseTree n : nodes) {
+      String c = ConstraintResolver.coercedNumericCategory(n, vctx);
+      if (c == null) {
+        return null;
+      }
+      acc = acc == null ? c : ConstraintResolver.numericCommon(acc, c);
+    }
+    return acc;
+  }
+
+  /**
+   * Two-operand {@link #numericCommonOf}: common type of {@code a} and {@code b}.
+   */
+  static String numericCommonOf(ParseTree a, ParseTree b, ConstraintValidationContext vctx) {
+    String ca = ConstraintResolver.coercedNumericCategory(a, vctx);
+    String cb = ConstraintResolver.coercedNumericCategory(b, vctx);
+    if (ca == null || cb == null) {
+      return null;
+    }
+    return ConstraintResolver.numericCommon(ca, cb);
+  }
+
+  /**
+   * Common numeric type over an IN's left operand and its value-list elements
+   * (paren-list form only), or {@code null} if any is non-numeric.
+   */
+  private static String inListCommon(
+      LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
+    String acc = ConstraintResolver.coercedNumericCategory(ctx.check_expr_isnull(), vctx);
+    if (acc == null) {
+      return null;
+    }
+    List<LogicalTypesParser.Check_exprContext> items =
+        ((LogicalTypesParser.InTargetParenListContext) ctx.in_target())
+            .check_expr_list().check_expr();
+    for (LogicalTypesParser.Check_exprContext item : items) {
+      String c = ConstraintResolver.coercedNumericCategory(item, vctx);
+      if (c == null) {
+        return null;
+      }
+      acc = ConstraintResolver.numericCommon(acc, c);
+    }
+    return acc;
+  }
+
+  // ---- double cascade: native operators, int/decimal leaves cast to double ----
+
+  /**
+   * Emit a {@code check_expr_isnull} (an IN left operand) as a double value.
+   */
+  private static void emitDoubleValueIsnull(
+      LogicalTypesParser.Check_expr_isnullContext is, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
+    if (concat != null) {
+      emitDoubleValueConcat(concat, sb);
+    } else {
+      sb.append("double((");
+      visitIs(is, sb);
+      sb.append("))");
+    }
+  }
+
+  private static void emitDoubleValueCheckExpr(
+      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfOr(ctx.check_expr_or());
+    if (concat != null) {
+      emitDoubleValueConcat(concat, sb);
+    } else {
+      sb.append("double((");
+      visitCheckExpr(ctx, sb);
+      sb.append("))");
+    }
+  }
+
+  private static void emitDoubleValueConcat(
+      LogicalTypesParser.Check_expr_concatContext concat, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_addContext> adds = concat.check_expr_add();
+    emitDoubleValueAdd(adds.get(0), sb);
+    for (int i = 1; i < adds.size(); i++) {
+      sb.append(" + ");  // `||` — not expected for numeric
+      emitDoubleValueAdd(adds.get(i), sb);
+    }
+  }
+
+  private static void emitDoubleValueAdd(
+      LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
+    emitDoubleValueMul(muls.get(0), sb);
+    int mulIdx = 1;
+    for (int i = 0; i < add.getChildCount(); i++) {
+      ParseTree child = add.getChild(i);
+      if (child instanceof TerminalNode) {
+        sb.append(' ').append(child.getText()).append(' ');
+        emitDoubleValueMul(muls.get(mulIdx++), sb);
+      }
+    }
+  }
+
+  private static void emitDoubleValueMul(
+      LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
+    emitDoubleValueSign(signs.get(0), sb);
+    int signIdx = 1;
+    for (int i = 0; i < mul.getChildCount(); i++) {
+      ParseTree child = mul.getChild(i);
+      if (child instanceof TerminalNode) {
+        sb.append(' ').append(child.getText()).append(' ');
+        emitDoubleValueSign(signs.get(signIdx++), sb);
+      }
+    }
+  }
+
+  private static void emitDoubleValueSign(
+      LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+    for (int i = 0; i < sign.getChildCount(); i++) {
+      ParseTree child = sign.getChild(i);
+      if (child instanceof TerminalNode && "-".equals(child.getText())) {
+        sb.append('-');
+      }
+    }
+    emitDoubleValueCExpr(sign.c_expr(), sb);
+  }
+
+  private static void emitDoubleValueCExpr(
+      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
+      LogicalTypesParser.ColumnrefContext cr =
+          ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
+      if (isDoubleCategory(ConstraintResolver.resolveColumnRefType(cr, vctx))) {
+        visitColumnRef(cr, sb);
+      } else {
+        sb.append("double(");
+        visitColumnRef(cr, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckLiteralContext) {
+      LogicalTypesParser.LiteralContext lit =
+          ((LogicalTypesParser.CheckLiteralContext) ctx).literal();
+      if (lit.intLiteral() != null) {
+        // int literal → double literal (5 → 5.0).
+        sb.append(lit.intLiteral().getText()).append(".0");
+        return;
+      }
+      if (lit.decimalLiteral() != null) {
+        sb.append(ConstraintPatterns.normalizeFloatLiteral(lit.decimalLiteral().getText()));
+        return;
+      }
+      if (lit.doubleLiteral() != null) {
+        sb.append(ConstraintPatterns.normalizeFloatLiteral(lit.doubleLiteral().getText()));
+        return;
+      }
+      sb.append("double(");
+      visitLiteral(lit, sb);
+      sb.append(')');
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckParenContext) {
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
+      if (paren.indirection() == null) {
+        sb.append('(');
+        emitDoubleValueCheckExpr(paren.check_expr(), sb);
+        sb.append(')');
+        return;
+      }
+    }
+    if (ctx instanceof LogicalTypesParser.CheckFuncContext) {
+      LogicalTypesParser.Func_exprContext fe =
+          ((LogicalTypesParser.CheckFuncContext) ctx).func_expr();
+      if (isDoubleCategory(ConstraintResolver.tryResolveFuncReturnType(fe, vctx))) {
+        ConstraintFunctions.visitFuncExpr(fe, sb);
+      } else {
+        sb.append("double(");
+        ConstraintFunctions.visitFuncExpr(fe, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckCaseContext) {
+      LogicalTypesParser.Case_exprContext ce =
+          ((LogicalTypesParser.CheckCaseContext) ctx).case_expr();
+      if (isDoubleCategory(ConstraintResolver.tryResolveCaseExprType(ce, vctx))) {
+        visitCase(ce, sb);
+      } else {
+        sb.append("double(");
+        visitCase(ce, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    sb.append("double(");
+    visitCExpr(ctx, sb);
+    sb.append(')');
+  }
+
+  private static boolean isDoubleCategory(io.confluent.kafka.schemaregistry.type.logical.Schema s) {
+    return s != null && "double".equals(ConstraintResolver.categoryOf(s.getType()));
   }
 
   /**
@@ -1396,8 +1752,10 @@ final class ConstraintEmitter {
       sb.append(ctx.boolLiteral().getText().toLowerCase(java.util.Locale.ROOT));
     } else if (ctx.intLiteral() != null) {
       sb.append(ctx.intLiteral().getText());
-    } else if (ctx.floatLiteral() != null) {
-      sb.append(ConstraintPatterns.normalizeFloatLiteral(ctx.floatLiteral().getText()));
+    } else if (ctx.decimalLiteral() != null) {
+      sb.append(ConstraintPatterns.normalizeFloatLiteral(ctx.decimalLiteral().getText()));
+    } else if (ctx.doubleLiteral() != null) {
+      sb.append(ConstraintPatterns.normalizeFloatLiteral(ctx.doubleLiteral().getText()));
     } else if (ctx.TIMESTAMP() != null) {
       // TIMESTAMP '2020-01-01 00:00:00' → timestamp("2020-01-01T00:00:00Z")
       // (CEL stdlib RFC-3339 constructor; zoneless literal assumed UTC).
@@ -1427,7 +1785,7 @@ final class ConstraintEmitter {
    * Normalize a SQL {@code TIMESTAMP '…'} literal body to an RFC-3339 string for
    * CEL's {@code timestamp(...)} constructor: replace the date/time space with
    * {@code T} and, when the literal carries no zone offset, append {@code Z}
-   * (UTC) — matching the §12 stance that a zoneless value is treated as UTC.
+   * (UTC) — a zoneless value is treated as UTC.
    * Rejects malformed datetimes at parse time.
    */
   private static String normalizeSqlTimestamp(LogicalTypesParser.LiteralContext ctx) {
@@ -1550,15 +1908,11 @@ final class ConstraintEmitter {
       // refs, literals, function calls, already-paren'd) emit unwrapped.
       if (caseArg != null) {
         ConstraintValidationContext vctx = EMIT_VCTX.get();
-        boolean decimal = vctx != null
-            && (ConstraintResolver.isDecimal(
-                    ConstraintResolver.tryResolveCheckExprType(caseArg, vctx))
-                || ConstraintResolver.isDecimal(
-                    ConstraintResolver.tryResolveCheckExprType(when.check_expr(0), vctx)));
-        boolean temporal = vctx != null
-            && (ConstraintResolver.subtreeHasTemporal(caseArg, vctx)
-                || ConstraintResolver.subtreeHasTemporal(when.check_expr(0), vctx));
-        if (decimal) {
+        // The implicit `caseArg == whenValue` comparison coerces to the
+        // common numeric type of the two operands.
+        String common = (vctx != null)
+            ? numericCommonOf(caseArg, when.check_expr(0), vctx) : null;
+        if ("decimal".equals(common)) {
           // Opaque Decimal has no native `==`; use decimals.eq for the implicit
           // simple-CASE subject comparison.
           sb.append("decimals.eq(");
@@ -1566,7 +1920,13 @@ final class ConstraintEmitter {
           sb.append(", ");
           emitDecimalValue(when.check_expr(0), sb);
           sb.append(')');
-        } else if (temporal) {
+        } else if ("double".equals(common)) {
+          emitNumericAs(caseArg, "double", sb);
+          sb.append(" == ");
+          emitNumericAs(when.check_expr(0), "double", sb);
+        } else if (vctx != null
+            && (ConstraintResolver.subtreeHasTemporal(caseArg, vctx)
+                || ConstraintResolver.subtreeHasTemporal(when.check_expr(0), vctx))) {
           // Native `==`, operands timestamp-normalized.
           emitTimestampValueCheckExpr(caseArg, sb);
           sb.append(" == ");
