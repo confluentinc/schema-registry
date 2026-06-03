@@ -187,102 +187,6 @@
       ]
     },
     {
-      "type": "com.sun.crypto.provider.RSACipher",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "com.sun.crypto.provider.DHKeyAgreement",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "com.sun.crypto.provider.DHKeyFactory",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "com.sun.crypto.provider.DHKeyPairGenerator",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "com.sun.crypto.provider.DHParameterGenerator",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECKeyFactory",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECKeyPairGenerator",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDHKeyAgreement",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$Raw",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA1",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA224",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA256",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA384",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA512",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA256inP1363Format",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA384inP1363Format",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.ECDSASignature$SHA512inP1363Format",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.XDHKeyFactory$X25519",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.XDHKeyFactory$X448",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.XDHKeyPairGenerator$X25519",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.XDHKeyPairGenerator$X448",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.XDHKeyAgreement$X25519",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ec.XDHKeyAgreement$X448",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
-      "type": "sun.security.ssl.KeyManagerFactoryImpl$PKIX",
-      "methods": [{ "name": "<init>", "parameterTypes": [] }]
-    },
-    {
       "type": "com.sun.crypto.provider.AESKeyGenerator",
       "methods": [
         {
@@ -350,7 +254,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["javax.crypto.KDFParameters"]
+          "parameterTypes": [
+            "javax.crypto.KDFParameters"
+          ]
         }
       ]
     },
@@ -486,6 +392,59 @@
       "type": "int[]"
     },
     {
+      "type": "io.confluent.kafka.schemaregistry.client.rest.entities.Config",
+      "methods": [
+        {
+          "name": "getAlias",
+          "parameterTypes": []
+        },
+        {
+          "name": "getCompatibilityGroup",
+          "parameterTypes": []
+        },
+        {
+          "name": "getCompatibilityLevel",
+          "parameterTypes": []
+        },
+        {
+          "name": "getCompatibilityPolicy",
+          "parameterTypes": []
+        },
+        {
+          "name": "getDefaultMetadata",
+          "parameterTypes": []
+        },
+        {
+          "name": "getDefaultRuleSet",
+          "parameterTypes": []
+        },
+        {
+          "name": "getOverrideMetadata",
+          "parameterTypes": []
+        },
+        {
+          "name": "getOverrideRuleSet",
+          "parameterTypes": []
+        },
+        {
+          "name": "isNormalize",
+          "parameterTypes": []
+        },
+        {
+          "name": "isValidateFields",
+          "parameterTypes": []
+        },
+        {
+          "name": "isValidateNewSchemas",
+          "parameterTypes": []
+        },
+        {
+          "name": "isValidateRules",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.confluent.kafka.schemaregistry.client.rest.entities.ExecutionEnvironment"
     },
     {
@@ -569,6 +528,59 @@
       "type": "io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference"
     },
     {
+      "type": "io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString",
+      "methods": [
+        {
+          "name": "getDeleted",
+          "parameterTypes": []
+        },
+        {
+          "name": "getGuid",
+          "parameterTypes": []
+        },
+        {
+          "name": "getMaxId",
+          "parameterTypes": []
+        },
+        {
+          "name": "getMetadata",
+          "parameterTypes": []
+        },
+        {
+          "name": "getReferences",
+          "parameterTypes": []
+        },
+        {
+          "name": "getRuleSet",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSchemaString",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSchemaTags",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSchemaType",
+          "parameterTypes": []
+        },
+        {
+          "name": "getSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "getTimestamp",
+          "parameterTypes": []
+        },
+        {
+          "name": "getVersion",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags"
     },
     {
@@ -580,11 +592,15 @@
         },
         {
           "name": "setSchema",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         },
         {
           "name": "setSchemaType",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     },
@@ -679,7 +695,9 @@
       "methods": [
         {
           "name": "main",
-          "parameterTypes": ["java.lang.String[]"]
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
         }
       ]
     },
@@ -725,7 +743,22 @@
       "type": "io.confluent.kafka.schemaregistry.rest.resources.CompatibilityResource"
     },
     {
-      "type": "io.confluent.kafka.schemaregistry.rest.resources.ConfigResource"
+      "type": "io.confluent.kafka.schemaregistry.rest.resources.ConfigResource",
+      "methods": [
+        {
+          "name": "getSubjectLevelConfig",
+          "parameterTypes": [
+            "java.lang.String",
+            "boolean"
+          ]
+        },
+        {
+          "name": "getTopLevelConfig",
+          "parameterTypes": [
+            "boolean"
+          ]
+        }
+      ]
     },
     {
       "type": "io.confluent.kafka.schemaregistry.rest.resources.ContextsResource"
@@ -743,6 +776,17 @@
       "type": "io.confluent.kafka.schemaregistry.rest.resources.SchemasResource",
       "methods": [
         {
+          "name": "getSchema",
+          "parameterTypes": [
+            "java.lang.Integer",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.util.List",
+            "boolean"
+          ]
+        },
+        {
           "name": "getSchemaTypes",
           "parameterTypes": []
         }
@@ -754,6 +798,28 @@
     {
       "type": "io.confluent.kafka.schemaregistry.rest.resources.SubjectVersionsResource",
       "methods": [
+        {
+          "name": "getSchemaByVersion",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "boolean",
+            "java.util.List"
+          ]
+        },
+        {
+          "name": "listVersions",
+          "parameterTypes": [
+            "java.lang.String",
+            "boolean",
+            "boolean",
+            "boolean",
+            "int",
+            "int"
+          ]
+        },
         {
           "name": "register",
           "parameterTypes": [
@@ -770,6 +836,16 @@
     {
       "type": "io.confluent.kafka.schemaregistry.rest.resources.SubjectsResource",
       "methods": [
+        {
+          "name": "list",
+          "parameterTypes": [
+            "java.lang.String",
+            "int",
+            "int",
+            "boolean",
+            "boolean"
+          ]
+        },
         {
           "name": "lookUpSchemaUnderSubject",
           "parameterTypes": [
@@ -815,7 +891,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.String", "int"]
+          "parameterTypes": [
+            "java.lang.String",
+            "int"
+          ]
         },
         {
           "name": "getVersion",
@@ -864,11 +943,15 @@
         },
         {
           "name": "setLeader",
-          "parameterTypes": ["java.lang.Boolean"]
+          "parameterTypes": [
+            "java.lang.Boolean"
+          ]
         },
         {
           "name": "setVersion",
-          "parameterTypes": ["java.lang.Integer"]
+          "parameterTypes": [
+            "java.lang.Integer"
+          ]
         }
       ]
     },
@@ -891,7 +974,9 @@
         },
         {
           "name": "setMagicByte",
-          "parameterTypes": ["int"]
+          "parameterTypes": [
+            "int"
+          ]
         }
       ]
     },
@@ -1001,13 +1086,32 @@
       "type": "io.confluent.rest.annotations.PerformanceMetric"
     },
     {
+      "type": "io.confluent.rest.entities.ErrorMessage",
+      "methods": [
+        {
+          "name": "getErrorCode",
+          "parameterTypes": []
+        },
+        {
+          "name": "getMessage",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "io.confluent.rest.errorhandlers.StackTraceErrorHandler"
     },
     {
       "type": "io.confluent.rest.errorhandlers.jmx.StackTraceErrorHandlerMBean"
     },
     {
-      "type": "io.confluent.rest.exceptions.ConstraintViolationExceptionMapper"
+      "type": "io.confluent.rest.exceptions.ConstraintViolationExceptionMapper",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "io.confluent.rest.exceptions.DebuggableExceptionMapper",
@@ -1021,10 +1125,22 @@
       "type": "io.confluent.rest.exceptions.GenericExceptionMapper"
     },
     {
-      "type": "io.confluent.rest.exceptions.JsonMappingExceptionMapper"
+      "type": "io.confluent.rest.exceptions.JsonMappingExceptionMapper",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
     },
     {
-      "type": "io.confluent.rest.exceptions.JsonParseExceptionMapper"
+      "type": "io.confluent.rest.exceptions.JsonParseExceptionMapper",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "io.confluent.rest.exceptions.WebApplicationExceptionMapper",
@@ -1206,11 +1322,15 @@
       "methods": [
         {
           "name": "getBoolean",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         },
         {
           "name": "valueOf",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     },
@@ -1221,6 +1341,9 @@
           "name": "TYPE"
         }
       ]
+    },
+    {
+      "type": "java.lang.CharSequence"
     },
     {
       "type": "java.lang.Character",
@@ -1277,7 +1400,9 @@
       "methods": [
         {
           "name": "valueOf",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     },
@@ -1326,7 +1451,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     },
@@ -1372,6 +1499,12 @@
           "name": "TYPE"
         }
       ]
+    },
+    {
+      "type": "java.lang.constant.Constable"
+    },
+    {
+      "type": "java.lang.constant.ConstantDesc"
     },
     {
       "type": "java.lang.jmx.AutoCloseableMBean"
@@ -1500,7 +1633,9 @@
       "methods": [
         {
           "name": "doPrivileged",
-          "parameterTypes": ["java.security.PrivilegedAction"]
+          "parameterTypes": [
+            "java.security.PrivilegedAction"
+          ]
         }
       ]
     },
@@ -1543,7 +1678,9 @@
       "methods": [
         {
           "name": "asList",
-          "parameterTypes": ["java.lang.Object[]"]
+          "parameterTypes": [
+            "java.lang.Object[]"
+          ]
         }
       ]
     },
@@ -1578,6 +1715,9 @@
       ]
     },
     {
+      "type": "java.util.LinkedHashSet"
+    },
+    {
       "type": "java.util.List"
     },
     {
@@ -1585,6 +1725,9 @@
     },
     {
       "type": "java.util.SequencedCollection"
+    },
+    {
+      "type": "java.util.SequencedSet"
     },
     {
       "type": "java.util.Set"
@@ -1600,7 +1743,9 @@
       "methods": [
         {
           "name": "newThreadPerTaskExecutor",
-          "parameterTypes": ["java.util.concurrent.ThreadFactory"]
+          "parameterTypes": [
+            "java.util.concurrent.ThreadFactory"
+          ]
         }
       ]
     },
@@ -1682,7 +1827,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.rmi.server.RemoteRef"]
+          "parameterTypes": [
+            "java.rmi.server.RemoteRef"
+          ]
         }
       ]
     },
@@ -1802,7 +1949,9 @@
         },
         {
           "name": "removeEmitWhenNonDefaultMetricSensor",
-          "parameterTypes": ["java.lang.String"]
+          "parameterTypes": [
+            "java.lang.String"
+          ]
         }
       ]
     },
@@ -2226,7 +2375,9 @@
       "methods": [
         {
           "name": "createAppenders",
-          "parameterTypes": ["org.apache.logging.log4j.core.Appender[]"]
+          "parameterTypes": [
+            "org.apache.logging.log4j.core.Appender[]"
+          ]
         }
       ]
     },
@@ -3037,7 +3188,9 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": ["java.lang.String[]"]
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
         }
       ]
     },
@@ -3076,7 +3229,9 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": ["java.lang.String[]"]
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
         }
       ]
     },
@@ -3088,7 +3243,9 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": ["java.lang.String[]"]
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
         }
       ]
     },
@@ -3100,7 +3257,9 @@
       "methods": [
         {
           "name": "newInstance",
-          "parameterTypes": ["java.lang.String[]"]
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
         }
       ]
     },
@@ -3208,7 +3367,10 @@
       "methods": [
         {
           "name": "loadLibrary",
-          "parameterTypes": ["java.lang.String", "boolean"]
+          "parameterTypes": [
+            "java.lang.String",
+            "boolean"
+          ]
         }
       ]
     },
@@ -3286,7 +3448,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3295,7 +3459,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3322,7 +3488,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3346,7 +3514,9 @@
       "methods": [
         {
           "name": "filterReturnType",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3550,7 +3720,10 @@
         },
         {
           "name": "logLiteral",
-          "parameterTypes": ["java.lang.String", "java.lang.StringBuilder"]
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.StringBuilder"
+          ]
         },
         {
           "name": "logNothing",
@@ -3723,7 +3896,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3747,7 +3922,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3789,7 +3966,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3852,7 +4031,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -3978,19 +4159,27 @@
       "methods": [
         {
           "name": "getClassLoaderLocation",
-          "parameterTypes": ["java.lang.Class"]
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
         },
         {
           "name": "getCodeSourceLocation",
-          "parameterTypes": ["java.lang.Class"]
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
         },
         {
           "name": "getModuleLocation",
-          "parameterTypes": ["java.lang.Class"]
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
         },
         {
           "name": "getSystemClassLoaderLocation",
-          "parameterTypes": ["java.lang.Class"]
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
         }
       ]
     },
@@ -4528,7 +4717,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["jakarta.inject.Provider"]
+          "parameterTypes": [
+            "jakarta.inject.Provider"
+          ]
         }
       ]
     },
@@ -4537,7 +4728,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["jakarta.inject.Provider"]
+          "parameterTypes": [
+            "jakarta.inject.Provider"
+          ]
         }
       ]
     },
@@ -4591,6 +4784,15 @@
     },
     {
       "type": "org.glassfish.jersey.server.ChunkedResponseWriter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.glassfish.jersey.server.DefaultExceptionMapper",
       "methods": [
         {
           "name": "<init>",
@@ -4810,6 +5012,23 @@
       ]
     },
     {
+      "type": "org.glassfish.jersey.server.validation.internal.ValidationExceptionMapper",
+      "fields": [
+        {
+          "name": "config"
+        },
+        {
+          "name": "request"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "org.glassfish.jersey.server.wadl.WadlFeature",
       "methods": [
         {
@@ -4901,7 +5120,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["org.jboss.logging.Logger"]
+          "parameterTypes": [
+            "org.jboss.logging.Logger"
+          ]
         }
       ]
     },
@@ -4933,7 +5154,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["org.glassfish.hk2.api.ServiceLocator"]
+          "parameterTypes": [
+            "org.glassfish.hk2.api.ServiceLocator"
+          ]
         }
       ]
     },
@@ -4942,7 +5165,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["org.glassfish.hk2.api.ServiceLocator"]
+          "parameterTypes": [
+            "org.glassfish.hk2.api.ServiceLocator"
+          ]
         }
       ]
     },
@@ -4978,7 +5203,11 @@
       "methods": [
         {
           "name": "checkAndLoadMain",
-          "parameterTypes": ["boolean", "int", "java.lang.String"]
+          "parameterTypes": [
+            "boolean",
+            "int",
+            "java.lang.String"
+          ]
         },
         {
           "name": "getApplicationClass",
@@ -4986,7 +5215,10 @@
         },
         {
           "name": "makePlatformString",
-          "parameterTypes": ["boolean", "byte[]"]
+          "parameterTypes": [
+            "boolean",
+            "byte[]"
+          ]
         }
       ]
     },
@@ -5078,7 +5310,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.rmi.server.RemoteRef"]
+          "parameterTypes": [
+            "java.rmi.server.RemoteRef"
+          ]
         }
       ]
     },
@@ -5141,7 +5375,9 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.security.SecureRandomParameters"]
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
         }
       ]
     },
@@ -5294,7 +5530,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5303,7 +5542,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5312,7 +5554,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5321,7 +5566,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5330,7 +5578,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5339,7 +5590,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5348,7 +5602,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5357,7 +5614,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5366,7 +5626,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5375,7 +5638,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5384,7 +5650,10 @@
       "methods": [
         {
           "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
         }
       ]
     },
@@ -5430,7 +5699,9 @@
       "type": {
         "lambda": {
           "declaringClass": "io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry",
-          "interfaces": ["com.github.benmanes.caffeine.cache.CacheLoader"]
+          "interfaces": [
+            "com.github.benmanes.caffeine.cache.CacheLoader"
+          ]
         }
       }
     }
