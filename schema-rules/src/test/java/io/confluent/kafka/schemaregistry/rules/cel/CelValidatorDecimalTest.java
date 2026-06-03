@@ -455,7 +455,7 @@ public class CelValidatorDecimalTest {
     // CEL int is i64; BigDecimal scale is int32. A scale value outside int
     // range must throw with a clear message rather than silently truncating
     // via Long.intValue() (which would take the lower 32 bits and produce a
-    // completely wrong scale). Mirrors variants.elem's int-overflow check.
+    // completely wrong scale). Mirrors variants.index's int-overflow check.
     String s = "syntax = \"proto3\";\n"
         + "package test;\n"
         + "import \"confluent/meta.proto\";\n"
