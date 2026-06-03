@@ -170,6 +170,14 @@ final class BuiltinOverload {
             e.getMessage() != null ? e.getMessage() : "decimals.div: arithmetic error", e);
       }
     }));
+    // Modulo: BigDecimal.remainder — remainder has the sign of the dividend,
+    // matching SQL MOD. Throws on a zero divisor.
+    out.add(decimalsBinary("decimals_mod_decimal_decimal", (a, b) -> {
+      if (b.signum() == 0) {
+        throw new IllegalArgumentException("decimals.mod: division by zero");
+      }
+      return a.remainder(b);
+    }));
 
     // Square root — MathContext(38, HALF_UP), same precision/rounding as div.
     // BigDecimal.sqrt throws ArithmeticException on a negative value; re-emit
@@ -182,6 +190,11 @@ final class BuiltinOverload {
       return d.sqrt(DIV_MC);
     }));
 
+    // Selection: decimals.greatest/least return the larger/smaller operand
+    // (BigDecimal.max/min — the receiver on a numeric tie).
+    out.add(decimalsBinary("decimals_greatest_decimal_decimal", BigDecimal::max));
+    out.add(decimalsBinary("decimals_least_decimal_decimal", BigDecimal::min));
+
     // Unary
     out.add(decimalsUnary("decimals_neg_decimal", BigDecimal::negate));
     out.add(decimalsUnary("decimals_abs_decimal", BigDecimal::abs));
@@ -192,6 +205,12 @@ final class BuiltinOverload {
     out.add(CelFunctionBinding.from(
         "decimal_to_string", BigDecimal.class,
         BigDecimal::toPlainString));
+    // double(Decimal) — extension overload on stdlib `double(...)`. Narrowing:
+    // BigDecimal.doubleValue() returns the closest double (±Infinity if the
+    // magnitude is out of range).
+    out.add(CelFunctionBinding.from(
+        "decimal_to_double", BigDecimal.class,
+        BigDecimal::doubleValue));
 
     // Rounding family — Flink-aligned. Negative scale rounds left of the decimal.
     out.add(decimalsUnary(
