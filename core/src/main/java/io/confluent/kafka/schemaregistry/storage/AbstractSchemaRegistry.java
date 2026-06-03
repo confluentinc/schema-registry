@@ -1405,7 +1405,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Config getConfigInScope(String subject)
           throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
+      Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
+      if (subject == null) {
+        return lookupCache.config(null, true, defaultForTopLevel);
+      }
+      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
+      if (subjectConfig == null) {
+        return lookupCache.config(subject, true, defaultForTopLevel);
+      }
+      Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
+      return Config.mergeConfigs(globalConfig, subjectConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException(
           "Failed to get config in scope for " + subject, e);
