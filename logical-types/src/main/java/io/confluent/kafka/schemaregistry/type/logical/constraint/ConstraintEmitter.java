@@ -32,14 +32,15 @@ import java.util.List;
  * Cascade visitors for the CHECK→CEL translator. Each visitor walks one
  * level of the postgres-derived CHECK grammar and emits the equivalent CEL
  * fragment into the caller's {@link StringBuilder}. The cascade reflects
- * SQL operator precedence — top to bottom: OR, AND, NOT, BETWEEN, IN,
- * IS NULL, comparison, LIKE, concat, additive, multiplicative, unary sign,
- * c_expr (column ref / literal / paren / case / func).
+ * SQL operator precedence — top to bottom: OR, AND, NOT, IS NULL,
+ * comparison, BETWEEN, IN, LIKE, additive, multiplicative ({@code ||}
+ * concat lives here), unary sign, c_expr (column ref / literal / paren /
+ * case / func).
  *
  * <p>Visitors run after the validator suite has accepted the parse tree,
  * so they can assume well-formed input — no {@code null} guards, no
  * shape-checking past what's needed for the emit decision (e.g. wrap vs.
- * pass-through). Cross-cascade jumps (e.g. {@code visitConcat} called
+ * pass-through). Cross-cascade jumps (e.g. value-cascade emitters called
  * directly from {@link ConstraintFunctions}'s function-arg emit) keep
  * package-private visibility.
  *
@@ -291,7 +292,7 @@ final class ConstraintEmitter {
   private static void visitIn(
       LogicalTypesParser.Check_expr_inContext ctx, StringBuilder sb) {
     if (ctx.IN() == null) {
-      visitIs(ctx.check_expr_isnull(), sb);
+      visitLike(ctx.check_expr_like(), sb);
       return;
     }
     boolean negated = ctx.NOT() != null;
@@ -311,7 +312,7 @@ final class ConstraintEmitter {
           emitInDouble(ctx, negated, sb);
           return;
         }
-      } else if (isnullHasDecimal(ctx.check_expr_isnull(), vctx)) {
+      } else if (likeHasDecimal(ctx.check_expr_like(), vctx)) {
         // Decimal LHS against a list-typed operand: emitInDecimal raises the
         // (unsupported) located error, preserving the prior clear message.
         emitInDecimal(ctx, negated, sb);
@@ -325,7 +326,7 @@ final class ConstraintEmitter {
       if (negated) {
         sb.append("!(");
       }
-      emitTimestampValueIsnull(ctx.check_expr_isnull(), sb);
+      emitTimestampValueLike(ctx.check_expr_like(), sb);
       sb.append(" in ");
       emitTimestampInTarget(ctx.in_target(), sb);
       if (negated) {
@@ -336,7 +337,7 @@ final class ConstraintEmitter {
     if (negated) {
       sb.append("!(");
     }
-    visitIs(ctx.check_expr_isnull(), sb);
+    visitLike(ctx.check_expr_like(), sb);
     sb.append(" in ");
     visitInTarget(ctx.in_target(), sb);
     if (negated) {
@@ -347,7 +348,7 @@ final class ConstraintEmitter {
   /** True if the IN LHS or any value-list element is temporal. */
   private static boolean inTargetHasTemporal(
       LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
-    if (ConstraintResolver.subtreeHasTemporal(ctx.check_expr_isnull(), vctx)) {
+    if (ConstraintResolver.subtreeHasTemporal(ctx.check_expr_like(), vctx)) {
       return true;
     }
     LogicalTypesParser.In_targetContext target = ctx.in_target();
@@ -372,18 +373,17 @@ final class ConstraintEmitter {
     } else {
       // IN <list-field>: the field is a list of timestamps; CEL `in` handles it
       // natively. The receiver still normalizes via the cascade (field ref).
-      emitTimestampValueIsnull(
-          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_isnull(), sb);
+      emitTimestampValueLike(
+          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), sb);
     }
   }
 
-  static void emitTimestampValueIsnull(
-      LogicalTypesParser.Check_expr_isnullContext is, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
-    if (concat != null) {
-      emitTimestampValueConcat(concat, sb);
+  static void emitTimestampValueLike(
+      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
+    if (like.LIKE() == null) {
+      emitTimestampValueAdd(like.check_expr_add(), sb);
     } else {
-      visitIs(is, sb);
+      visitLike(like, sb);  // not a bare value (defensive); emit native
     }
   }
 
@@ -403,7 +403,7 @@ final class ConstraintEmitter {
     final List<LogicalTypesParser.Check_exprContext> items =
         ((LogicalTypesParser.InTargetParenListContext) target).check_expr_list().check_expr();
     StringBuilder lhsBuf = new StringBuilder();
-    emitIsnullAsDecimal(ctx.check_expr_isnull(), lhsBuf);
+    emitLikeAsDecimalValue(ctx.check_expr_like(), lhsBuf);
     String lhs = lhsBuf.toString();
     if (negated) {
       sb.append("!(");
@@ -436,7 +436,7 @@ final class ConstraintEmitter {
     if (negated) {
       sb.append("!(");
     }
-    emitDoubleValueIsnull(ctx.check_expr_isnull(), sb);
+    emitDoubleValueLike(ctx.check_expr_like(), sb);
     sb.append(" in [");
     for (int i = 0; i < items.size(); i++) {
       if (i > 0) {
@@ -465,8 +465,8 @@ final class ConstraintEmitter {
       }
       sb.append("]");
     } else if (ctx instanceof LogicalTypesParser.InTargetExprContext) {
-      visitIs(
-          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_isnull(), sb);
+      visitLike(
+          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), sb);
     } else {
       throw new ValidationException(
           "Unrecognized in_target subtype: " + ctx.getClass().getSimpleName());
@@ -502,8 +502,8 @@ final class ConstraintEmitter {
         sb.append(')');
       }
     } else if (ctx instanceof LogicalTypesParser.CheckExprNotPassContext) {
-      visitBetween(
-          ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_between(), sb);
+      visitIs(
+          ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_isnull(), sb);
     } else {
       throw new ValidationException(
           "Unrecognized check_expr_unary_not subtype: " + ctx.getClass().getSimpleName());
@@ -582,10 +582,10 @@ final class ConstraintEmitter {
 
   private static void visitCompare(
       LogicalTypesParser.Check_expr_compareContext ctx, StringBuilder sb) {
-    List<LogicalTypesParser.Check_expr_likeContext> likes = ctx.check_expr_like();
-    if (likes.size() == 2) {
+    List<LogicalTypesParser.Check_expr_betweenContext> betweens = ctx.check_expr_between();
+    if (betweens.size() == 2) {
       // The comparison operator is the second child of the rule (between the
-      // two check_expr_like). Find it as the only TerminalNode child.
+      // two check_expr_between). Find it as the only TerminalNode child.
       String celOp = translateCompareOp(findComparisonOp(ctx));
       ConstraintValidationContext vctx = EMIT_VCTX.get();
       // Numeric coercion: if both sides are pure numeric, compute the
@@ -593,28 +593,28 @@ final class ConstraintEmitter {
       // overload on the opaque type); common=DOUBLE/INT → native operator with
       // operands cast to the common type (double()/double literal as needed).
       if (vctx != null) {
-        String lc = ConstraintResolver.coercedNumericCategory(likes.get(0), vctx);
-        String rc = ConstraintResolver.coercedNumericCategory(likes.get(1), vctx);
+        String lc = ConstraintResolver.coercedNumericCategory(betweens.get(0), vctx);
+        String rc = ConstraintResolver.coercedNumericCategory(betweens.get(1), vctx);
         if (lc != null && rc != null) {
           String common = ConstraintResolver.numericCommon(lc, rc);
           if ("decimal".equals(common)) {
-            emitDecimalCompare(likes.get(0), celOp, likes.get(1), sb);
+            emitDecimalCompare(betweens.get(0), celOp, betweens.get(1), sb);
           } else {
-            emitNumericLikeAs(likes.get(0), common, sb);
+            emitNumericBetweenAs(betweens.get(0), common, sb);
             sb.append(' ').append(celOp).append(' ');
-            emitNumericLikeAs(likes.get(1), common, sb);
+            emitNumericBetweenAs(betweens.get(1), common, sb);
           }
           return;
         }
       }
       // Non-numeric: timestamp normalization (instant-timestamp operands wrapped
       // in timestamp.of(...); CURRENT_TIMESTAMP stays `now`) or plain native.
-      emitCompareOperand(likes.get(0), vctx, sb);
+      emitCompareOperandWrapped(betweens.get(0), vctx, sb);
       sb.append(' ').append(celOp).append(' ');
-      emitCompareOperand(likes.get(1), vctx, sb);
+      emitCompareOperandWrapped(betweens.get(1), vctx, sb);
       return;
     }
-    visitLike(likes.get(0), sb);
+    visitBetween(betweens.get(0), sb);
   }
 
   // -------------------------------------------------------------------------
@@ -631,17 +631,55 @@ final class ConstraintEmitter {
    * wrapped in {@code timestamp.of(...)}, literals as {@code timestamp(...)}/
    * {@code duration(...)}, operators native); otherwise emit natively.
    */
-  private static void emitCompareOperand(
-      LogicalTypesParser.Check_expr_likeContext like,
+  /**
+   * Emit a comparison operand, parenthesizing it when it is itself a compound
+   * predicate. Since BETWEEN/IN now bind tighter than comparison, an operand
+   * like {@code x BETWEEN 0 AND 10} (emits {@code lo <= a && a <= hi}) or
+   * {@code x IN (...)} (emits {@code a in [...]}) would otherwise mis-bind
+   * under CEL, where {@code ==} binds tighter than {@code &&} and {@code in}
+   * shares precedence with {@code ==}.
+   */
+  private static void emitCompareOperandWrapped(
+      LogicalTypesParser.Check_expr_betweenContext between,
       ConstraintValidationContext vctx, StringBuilder sb) {
-    // Guard LIKE: the cascade descends straight to the concat, so a LIKE clause
-    // would be dropped. A LIKE operand is boolean (and invalid on a timestamp),
-    // so emit it natively and let the strict checker reject the type error.
-    if (vctx != null && like.LIKE() == null
-        && ConstraintResolver.subtreeHasTemporal(like, vctx)) {
-      emitTimestampValueConcat(like.check_expr_concat(), sb);
+    boolean wrap = compareOperandNeedsParens(between);
+    if (wrap) {
+      sb.append('(');
+    }
+    emitCompareOperand(between, vctx, sb);
+    if (wrap) {
+      sb.append(')');
+    }
+  }
+
+  /**
+   * True if a comparison operand emits a BETWEEN ({@code &&}) or IN ({@code in}).
+   */
+  private static boolean compareOperandNeedsParens(
+      LogicalTypesParser.Check_expr_betweenContext between) {
+    if (between.BETWEEN() != null) {
+      return true;
+    }
+    return between.check_expr_in().size() == 1
+        && between.check_expr_in(0).IN() != null;
+  }
+
+  private static void emitCompareOperand(
+      LogicalTypesParser.Check_expr_betweenContext between,
+      ConstraintValidationContext vctx, StringBuilder sb) {
+    // Guard LIKE: the cascade descends straight to the add value root, so a LIKE
+    // clause would be dropped. A LIKE operand is boolean (and invalid on a
+    // timestamp), so emit it natively and let the strict checker reject the type
+    // error. Only a bare value (no BETWEEN/IN/LIKE) goes through the timestamp
+    // cascade; anything else falls back to the native between emit.
+    LogicalTypesParser.Check_expr_addContext add =
+        between.BETWEEN() == null && between.check_expr_in().size() == 1
+            ? bareAddOfIn(between.check_expr_in(0)) : null;
+    if (vctx != null && add != null
+        && ConstraintResolver.subtreeHasTemporal(between, vctx)) {
+      emitTimestampValueAdd(add, sb);
     } else {
-      visitLike(like, sb);
+      visitBetween(between, sb);
     }
   }
 
@@ -713,9 +751,9 @@ final class ConstraintEmitter {
 
   static void emitTimestampValueIn(
       LogicalTypesParser.Check_expr_inContext in, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
-    if (concat != null) {
-      emitTimestampValueConcat(concat, sb);
+    LogicalTypesParser.Check_expr_addContext add = bareAddOfIn(in);
+    if (add != null) {
+      emitTimestampValueAdd(add, sb);
     } else {
       visitIn(in, sb);  // not a bare value (defensive); emit native
     }
@@ -723,21 +761,11 @@ final class ConstraintEmitter {
 
   static void emitTimestampValueCheckExpr(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfOr(ctx.check_expr_or());
-    if (concat != null) {
-      emitTimestampValueConcat(concat, sb);
+    LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
+    if (add != null) {
+      emitTimestampValueAdd(add, sb);
     } else {
       visitCheckExpr(ctx, sb);  // not a bare value (defensive)
-    }
-  }
-
-  private static void emitTimestampValueConcat(
-      LogicalTypesParser.Check_expr_concatContext concat, StringBuilder sb) {
-    List<LogicalTypesParser.Check_expr_addContext> adds = concat.check_expr_add();
-    emitTimestampValueAdd(adds.get(0), sb);
-    for (int i = 1; i < adds.size(); i++) {
-      sb.append(" + ");  // SQL || (string/bytes concat) — not expected for temporal
-      emitTimestampValueAdd(adds.get(i), sb);
     }
   }
 
@@ -763,7 +791,9 @@ final class ConstraintEmitter {
     for (int i = 0; i < mul.getChildCount(); i++) {
       ParseTree child = mul.getChild(i);
       if (child instanceof TerminalNode) {
-        sb.append(' ').append(child.getText()).append(' ');
+        String op = child.getText();
+        // `||` (string concat) → CEL `+`; not expected for temporal values.
+        sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
         emitTimestampValueSign(signs.get(signIdx++), sb);
       }
     }
@@ -837,8 +867,8 @@ final class ConstraintEmitter {
    * {@code a <op> b} where a/b are decimal → {@code decimals.<fn>(a, b)}.
    */
   private static void emitDecimalCompare(
-      LogicalTypesParser.Check_expr_likeContext lhs, String celOp,
-      LogicalTypesParser.Check_expr_likeContext rhs, StringBuilder sb) {
+      LogicalTypesParser.Check_expr_betweenContext lhs, String celOp,
+      LogicalTypesParser.Check_expr_betweenContext rhs, StringBuilder sb) {
     String fn;
     boolean negate = false;
     switch (celOp) {
@@ -868,23 +898,37 @@ final class ConstraintEmitter {
       sb.append('!');
     }
     sb.append(fn).append('(');
-    emitLikeAsDecimal(lhs, sb);
+    emitBetweenAsDecimal(lhs, sb);
     sb.append(", ");
-    emitLikeAsDecimal(rhs, sb);
+    emitBetweenAsDecimal(rhs, sb);
     sb.append(')');
   }
 
-  private static void emitLikeAsDecimal(
-      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
-    // A decimal operand never carries LIKE (that yields bool); detection
-    // guarantees the concat form here.
-    emitConcatAsDecimal(like.check_expr_concat(), sb);
+  /**
+   * Emit a {@code check_expr_between} comparison operand as a Decimal value. A
+   * decimal operand is a bare value (no BETWEEN/IN/LIKE), so it descends
+   * between → in → like → add.
+   */
+  private static void emitBetweenAsDecimal(
+      LogicalTypesParser.Check_expr_betweenContext between, StringBuilder sb) {
+    emitLikeAsDecimalValue(between.check_expr_in(0).check_expr_like(), sb);
   }
 
-  private static void emitConcatAsDecimal(
-      LogicalTypesParser.Check_expr_concatContext concat, StringBuilder sb) {
-    // `||` is string/bytes concat — a decimal value has exactly one add.
-    emitAddAsDecimal(concat.check_expr_add(0), sb);
+  /**
+   * Emit a {@code check_expr_like} (an IN left operand or comparison operand) as
+   * a Decimal value. A decimal operand never carries LIKE (that yields bool);
+   * detection guarantees the add value root in normal use, with a defensive
+   * {@code decimal((...))} coercion fallback if a LIKE somehow reaches here.
+   */
+  private static void emitLikeAsDecimalValue(
+      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
+    if (like.LIKE() == null) {
+      emitAddAsDecimal(like.check_expr_add(), sb);
+    } else {
+      sb.append("decimal((");
+      visitLike(like, sb);
+      sb.append("))");
+    }
   }
 
   /** Fold an additive chain left-associatively into decimals.add/sub calls. */
@@ -925,8 +969,12 @@ final class ConstraintEmitter {
           fn = "decimals.mul";
         } else if ("/".equals(op)) {
           fn = "decimals.div";
+        } else if ("||".equals(op)) {
+          // `||` is string/bytes concat — never valid on a DECIMAL value.
+          throw locatedError(mul,
+              "Operator '||' (string concat) is not supported on DECIMAL operands.");
         } else {
-          // '%' / MOD has no decimals.* equivalent (see cel-functions.md).
+          // '%' / MOD has no decimals.* equivalent.
           throw locatedError(mul,
               "Operator '" + op + "' (modulo) is not supported on DECIMAL operands; "
                   + "there is no decimals.* modulo function.");
@@ -1056,9 +1104,9 @@ final class ConstraintEmitter {
    */
   private static void emitCheckExprAsDecimal(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfOr(ctx.check_expr_or());
-    if (concat != null) {
-      emitConcatAsDecimal(concat, sb);
+    LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
+    if (add != null) {
+      emitAddAsDecimal(add, sb);
     } else {
       sb.append("decimal((");
       visitCheckExpr(ctx, sb);
@@ -1071,9 +1119,9 @@ final class ConstraintEmitter {
    */
   private static void emitInAsDecimal(
       LogicalTypesParser.Check_expr_inContext in, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
-    if (concat != null) {
-      emitConcatAsDecimal(concat, sb);
+    LogicalTypesParser.Check_expr_addContext add = bareAddOfIn(in);
+    if (add != null) {
+      emitAddAsDecimal(add, sb);
     } else {
       sb.append("decimal((");
       visitIn(in, sb);
@@ -1081,32 +1129,20 @@ final class ConstraintEmitter {
     }
   }
 
-  private static boolean isnullHasDecimal(
-      LogicalTypesParser.Check_expr_isnullContext is, ConstraintValidationContext vctx) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
-    return concat != null && ConstraintResolver.concatHasDecimal(concat, vctx);
-  }
-
-  /**
-   * Emit a {@code check_expr_isnull} (an IN left operand) as a Decimal value.
-   */
-  private static void emitIsnullAsDecimal(
-      LogicalTypesParser.Check_expr_isnullContext is, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
-    if (concat != null) {
-      emitConcatAsDecimal(concat, sb);
-    } else {
-      sb.append("decimal((");
-      visitIs(is, sb);
-      sb.append("))");
+  private static boolean likeHasDecimal(
+      LogicalTypesParser.Check_expr_likeContext like, ConstraintValidationContext vctx) {
+    if (like.LIKE() != null) {
+      return false;
     }
+    return ConstraintResolver.addHasDecimal(like.check_expr_add(), vctx);
   }
 
-  // Walk the single-child cascade down to the check_expr_concat leaf; return
-  // null at any level that branches (operator present), meaning the node is a
-  // boolean predicate rather than a bare arithmetic/decimal value.
+  // Walk the single-child cascade down to the check_expr_add value root; return
+  // null at any level that branches (operator/keyword present), meaning the node
+  // is a boolean predicate rather than a bare arithmetic/decimal value. Follows
+  // the precedence chain or → and → not → isnull → compare → between → in → like.
 
-  private static LogicalTypesParser.Check_expr_concatContext bareConcatOfOr(
+  private static LogicalTypesParser.Check_expr_addContext bareAddOfOr(
       LogicalTypesParser.Check_expr_orContext or) {
     if (or.check_expr_and().size() != 1) {
       return null;
@@ -1119,36 +1155,37 @@ final class ConstraintEmitter {
     if (!(notNode instanceof LogicalTypesParser.CheckExprNotPassContext)) {
       return null;
     }
-    LogicalTypesParser.Check_expr_betweenContext between =
-        ((LogicalTypesParser.CheckExprNotPassContext) notNode).check_expr_between();
-    if (between.BETWEEN() != null || between.check_expr_in().size() != 1) {
-      return null;
-    }
-    return bareConcatOfIn(between.check_expr_in(0));
+    LogicalTypesParser.Check_expr_isnullContext isnull =
+        ((LogicalTypesParser.CheckExprNotPassContext) notNode).check_expr_isnull();
+    return bareAddOfIsnull(isnull);
   }
 
-  private static LogicalTypesParser.Check_expr_concatContext bareConcatOfIn(
-      LogicalTypesParser.Check_expr_inContext in) {
-    if (in.IN() != null) {
-      return null;
-    }
-    return bareConcatOfIsnull(in.check_expr_isnull());
-  }
-
-  private static LogicalTypesParser.Check_expr_concatContext bareConcatOfIsnull(
+  private static LogicalTypesParser.Check_expr_addContext bareAddOfIsnull(
       LogicalTypesParser.Check_expr_isnullContext is) {
     if (is.IS() != null) {
       return null;
     }
     LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_like().size() != 1) {
+    if (compare.check_expr_between().size() != 1) {
       return null;
     }
-    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
+    if (between.BETWEEN() != null || between.check_expr_in().size() != 1) {
+      return null;
+    }
+    return bareAddOfIn(between.check_expr_in(0));
+  }
+
+  private static LogicalTypesParser.Check_expr_addContext bareAddOfIn(
+      LogicalTypesParser.Check_expr_inContext in) {
+    if (in.IN() != null) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_likeContext like = in.check_expr_like();
     if (like.LIKE() != null) {
       return null;
     }
-    return like.check_expr_concat();
+    return like.check_expr_add();
   }
 
   // -------------------------------------------------------------------------
@@ -1172,29 +1209,32 @@ final class ConstraintEmitter {
     }
   }
 
-  private static void emitNumericLikeAs(
-      LogicalTypesParser.Check_expr_likeContext like, String common, StringBuilder sb) {
+  private static void emitNumericBetweenAs(
+      LogicalTypesParser.Check_expr_betweenContext between, String common, StringBuilder sb) {
+    // A pure-numeric comparison operand is a bare value (no BETWEEN/IN/LIKE), so
+    // it descends between → in → like → add.
+    LogicalTypesParser.Check_expr_likeContext like = between.check_expr_in(0).check_expr_like();
     if ("decimal".equals(common)) {
-      emitConcatAsDecimal(like.check_expr_concat(), sb);
+      emitAddAsDecimal(like.check_expr_add(), sb);
     } else if ("double".equals(common)) {
-      emitDoubleValueConcat(like.check_expr_concat(), sb);
+      emitDoubleValueAdd(like.check_expr_add(), sb);
     } else {
-      visitLike(like, sb);
+      visitBetween(between, sb);
     }
   }
 
   private static void emitNumericInAs(
       LogicalTypesParser.Check_expr_inContext in, String common, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
-    if (concat == null) {
+    LogicalTypesParser.Check_expr_addContext add = bareAddOfIn(in);
+    if (add == null) {
       // not a bare value (defensive) — native
       emitParenIn(in, sb);
       return;
     }
     if ("decimal".equals(common)) {
-      emitConcatAsDecimal(concat, sb);
+      emitAddAsDecimal(add, sb);
     } else if ("double".equals(common)) {
-      emitDoubleValueConcat(concat, sb);
+      emitDoubleValueAdd(add, sb);
     } else {
       emitParenIn(in, sb);
     }
@@ -1236,7 +1276,7 @@ final class ConstraintEmitter {
    */
   private static String inListCommon(
       LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
-    String acc = ConstraintResolver.coercedNumericCategory(ctx.check_expr_isnull(), vctx);
+    String acc = ConstraintResolver.coercedNumericCategory(ctx.check_expr_like(), vctx);
     if (acc == null) {
       return null;
     }
@@ -1256,39 +1296,28 @@ final class ConstraintEmitter {
   // ---- double cascade: native operators, int/decimal leaves cast to double ----
 
   /**
-   * Emit a {@code check_expr_isnull} (an IN left operand) as a double value.
+   * Emit a {@code check_expr_like} (an IN left operand) as a double value.
    */
-  private static void emitDoubleValueIsnull(
-      LogicalTypesParser.Check_expr_isnullContext is, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
-    if (concat != null) {
-      emitDoubleValueConcat(concat, sb);
+  private static void emitDoubleValueLike(
+      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
+    if (like.LIKE() == null) {
+      emitDoubleValueAdd(like.check_expr_add(), sb);
     } else {
       sb.append("double((");
-      visitIs(is, sb);
+      visitLike(like, sb);
       sb.append("))");
     }
   }
 
   private static void emitDoubleValueCheckExpr(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfOr(ctx.check_expr_or());
-    if (concat != null) {
-      emitDoubleValueConcat(concat, sb);
+    LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
+    if (add != null) {
+      emitDoubleValueAdd(add, sb);
     } else {
       sb.append("double((");
       visitCheckExpr(ctx, sb);
       sb.append("))");
-    }
-  }
-
-  private static void emitDoubleValueConcat(
-      LogicalTypesParser.Check_expr_concatContext concat, StringBuilder sb) {
-    List<LogicalTypesParser.Check_expr_addContext> adds = concat.check_expr_add();
-    emitDoubleValueAdd(adds.get(0), sb);
-    for (int i = 1; i < adds.size(); i++) {
-      sb.append(" + ");  // `||` — not expected for numeric
-      emitDoubleValueAdd(adds.get(i), sb);
     }
   }
 
@@ -1314,7 +1343,9 @@ final class ConstraintEmitter {
     for (int i = 0; i < mul.getChildCount(); i++) {
       ParseTree child = mul.getChild(i);
       if (child instanceof TerminalNode) {
-        sb.append(' ').append(child.getText()).append(' ');
+        String op = child.getText();
+        // `||` (string concat) → CEL `+`; not expected for double values.
+        sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
         emitDoubleValueSign(signs.get(signIdx++), sb);
       }
     }
@@ -1425,7 +1456,7 @@ final class ConstraintEmitter {
   private static void visitLike(
       LogicalTypesParser.Check_expr_likeContext ctx, StringBuilder sb) {
     if (ctx.LIKE() == null) {
-      visitConcat(ctx.check_expr_concat(), sb);
+      visitAdd(ctx.check_expr_add(), sb);
       return;
     }
     boolean negated = ctx.NOT() != null;
@@ -1437,11 +1468,11 @@ final class ConstraintEmitter {
     // like `a || b` or `a + b` would mis-bind: `a + b.matches(...)` parses
     // as `a + (b.matches(...))`. Simple primaries (column refs, literals,
     // function calls, already-paren'd expressions) emit unwrapped.
-    boolean wrap = !ConstraintResolver.isSimplePrimaryConcat(ctx.check_expr_concat());
+    boolean wrap = !ConstraintResolver.isSimplePrimaryAdd(ctx.check_expr_add());
     if (wrap) {
       sb.append('(');
     }
-    visitConcat(ctx.check_expr_concat(), sb);
+    visitAdd(ctx.check_expr_add(), sb);
     if (wrap) {
       sb.append(')');
     }
@@ -1490,23 +1521,6 @@ final class ConstraintEmitter {
         "Internal: comparison op not found in check_expr_compare");
   }
 
-  /**
-   * Concat level (between LIKE and additive). SQL {@code ||} maps to CEL
-   * {@code +} — string and bytes concat. {@code ||} sits at its own
-   * precedence level so it binds looser than {@code +}/{@code -} (matching
-   * PG and antlr/grammars-v4); see grammar comment on
-   * {@code check_expr_concat}.
-   */
-  static void visitConcat(
-      LogicalTypesParser.Check_expr_concatContext ctx, StringBuilder sb) {
-    List<LogicalTypesParser.Check_expr_addContext> adds = ctx.check_expr_add();
-    visitAdd(adds.get(0), sb);
-    for (int i = 1; i < adds.size(); i++) {
-      sb.append(" + ");
-      visitAdd(adds.get(i), sb);
-    }
-  }
-
   private static void visitAdd(
       LogicalTypesParser.Check_expr_addContext ctx, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = ctx.check_expr_mul();
@@ -1523,6 +1537,11 @@ final class ConstraintEmitter {
     }
   }
 
+  /**
+   * Multiplicative level: {@code * / %} plus SQL {@code ||} (string/bytes
+   * concat). {@code ||} maps to CEL {@code +}; the others pass through
+   * unchanged.
+   */
   private static void visitMul(
       LogicalTypesParser.Check_expr_mulContext ctx, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = ctx.check_expr_unary_sign();
@@ -1531,7 +1550,9 @@ final class ConstraintEmitter {
     for (int i = 0; i < ctx.getChildCount(); i++) {
       ParseTree child = ctx.getChild(i);
       if (child instanceof TerminalNode) {
-        sb.append(' ').append(child.getText()).append(' ');
+        String op = child.getText();
+        // SQL `||` is string/bytes concat → CEL `+`; `* / %` emit verbatim.
+        sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
         visitUnarySign(signs.get(signIdx++), sb);
       }
     }

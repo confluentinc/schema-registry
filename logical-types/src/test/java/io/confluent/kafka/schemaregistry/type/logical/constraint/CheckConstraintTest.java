@@ -2796,6 +2796,33 @@ class CheckConstraintTest {
         translateCheck("qty IN (1.5, 2.5)"));
   }
 
+  // ---- Calcite/Flink operator precedence ----
+
+  @Test
+  void concatStillEmitsPlus() {
+    // `||` (now at the multiplicative level) still maps to CEL `+`.
+    assertEquals("this.name + this.last_name == 'foo'",
+        translateCheck("name || last_name = 'foo'"));
+  }
+
+  @Test
+  void betweenBindsTighterThanComparison() {
+    // BETWEEN binds tighter than `=`, so `x BETWEEN 0 AND 10 = active` groups
+    // as `(x BETWEEN 0 AND 10) = active` (bool = bool). Under the old
+    // Postgres precedence this parsed the upper bound as `10 = active` and was
+    // rejected.
+    assertEquals("(0 <= this.x && this.x <= 10) == this.active",
+        translateCheck("x BETWEEN 0 AND 10 = active"));
+  }
+
+  @Test
+  void inBindsTighterThanComparison() {
+    // IN binds tighter than `=`, so `x IN (1, 2) = active` groups as
+    // `(x IN (1, 2)) = active`. Under the old precedence this was a parse error.
+    assertEquals("(this.x in [1, 2]) == this.active",
+        translateCheck("x IN (1, 2) = active"));
+  }
+
   @Test
   void errorIncludesSourcePosition() {
     String script = "ROW T (x INT, CHECK (foo > 0));";

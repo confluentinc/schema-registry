@@ -172,12 +172,12 @@ messageClause
     : MESSAGE stringLiteral
     ;
 
-// Mirrors antlr/grammars-v4 PostgreSQL's `a_expr` cascade naming, with one
-// deliberate deviation: `check_expr_unary_not` is placed ABOVE the qualifier
-// family (between/in/isnull/compare/like) so prefix `NOT` scopes over them
-// (matching real PG's bison `%right NOT` precedence). antlr/grammars-v4 PG
-// inherits a precedence bug where `NOT x BETWEEN 1 AND 10` parses as
-// `(NOT x) BETWEEN 1 AND 10`; we don't reproduce it.
+// Expression precedence cascade, ordered to match Apache Calcite / Flink SQL
+// (loosest to tightest): OR < AND < NOT < IS NULL < comparison <
+// {BETWEEN, IN, LIKE} < additive < {multiplicative, ||} < unary sign < primary.
+// Prefix `NOT` sits above the predicate family so it scopes over a whole
+// comparison/BETWEEN/IN/LIKE, e.g. `NOT x BETWEEN 1 AND 10` is
+// `NOT (x BETWEEN 1 AND 10)`.
 check_expr
     : check_expr_or
     ;
@@ -190,25 +190,10 @@ check_expr_and
     : check_expr_unary_not ( AND check_expr_unary_not )*
     ;
 
-// Recursive form admits chained `NOT NOT x` (real PG accepts this via its
-// `NOT a_expr` bison rule). antlr/grammars-v4 PG uses `NOT? a_expr_isnull`
-// (non-recursive) which can't express it; we deviate to preserve PG behavior.
+// Recursive form admits chained `NOT NOT x`.
 check_expr_unary_not
     : NOT check_expr_unary_not                                     # CheckExprNot
-    | check_expr_between                                           # CheckExprNotPass
-    ;
-
-check_expr_between
-    : check_expr_in ( NOT? BETWEEN SYMMETRIC? check_expr_in AND check_expr_in )?
-    ;
-
-check_expr_in
-    : check_expr_isnull ( NOT? IN in_target )?
-    ;
-
-in_target
-    : '(' check_expr_list ')'                                      # InTargetParenList
-    | check_expr_isnull                                            # InTargetExpr
+    | check_expr_isnull                                            # CheckExprNotPass
     ;
 
 check_expr_isnull
@@ -216,33 +201,40 @@ check_expr_isnull
     ;
 
 check_expr_compare
-    : check_expr_like ( ( '=' | '<>' | '!=' | '<' | '<=' | '>' | '>=' ) check_expr_like )?
+    : check_expr_between ( ( '=' | '<>' | '!=' | '<' | '<=' | '>' | '>=' ) check_expr_between )?
+    ;
+
+// BETWEEN / IN / LIKE bind tighter than comparison (Calcite precedence 32 vs
+// 30), so e.g. `(x BETWEEN 0 AND 10) = active` groups the predicate first.
+check_expr_between
+    : check_expr_in ( NOT? BETWEEN SYMMETRIC? check_expr_in AND check_expr_in )?
+    ;
+
+check_expr_in
+    : check_expr_like ( NOT? IN in_target )?
+    ;
+
+in_target
+    : '(' check_expr_list ')'                                      # InTargetParenList
+    | check_expr_like                                              # InTargetExpr
     ;
 
 check_expr_like
-    : check_expr_concat ( NOT? LIKE stringLiteral escape_clause? )?
+    : check_expr_add ( NOT? LIKE stringLiteral escape_clause? )?
     ;
 
 escape_clause
     : ESCAPE stringLiteral
     ;
 
-// `||` is its own precedence level between LIKE and additive — looser than
-// `+`/`-` (matches both PG Table 4.2 where `||` is "any other operator" #10
-// and `+/-` is #9, and matches the antlr/grammars-v4 PostgreSQL grammar
-// where `||` lives in `a_expr_qual_op` above `a_expr_add`). Without this
-// separation, `'x' || 'y' + 'z'` would left-associate as `('x' || 'y') + 'z'`
-// instead of PG's `'x' || ('y' + 'z')`.
-check_expr_concat
-    : check_expr_add ( '||' check_expr_add )*
-    ;
-
 check_expr_add
     : check_expr_mul ( ( '+' | '-' ) check_expr_mul )*
     ;
 
+// `||` (string/bytes concat) binds at the multiplicative level — tighter than
+// `+`/`-` — matching Calcite/Flink, where `||` and `*` share precedence 60.
 check_expr_mul
-    : check_expr_unary_sign ( ( '*' | '/' | '%' ) check_expr_unary_sign )*
+    : check_expr_unary_sign ( ( '*' | '/' | '%' | '||' ) check_expr_unary_sign )*
     ;
 
 check_expr_unary_sign
