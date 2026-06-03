@@ -642,10 +642,15 @@ final class ConstraintValidator {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
-    if (!"int".equals(cat) && !"double".equals(cat) && !"decimal".equals(cat)) {
+    // "datetime" is allowed for +/- to support timestamp arithmetic
+    // (timestamp ± interval, timestamp − timestamp); the strict cel-java
+    // checker validates the specific temporal overload (rejecting e.g.
+    // timestamp + timestamp). Interval operands resolve to null and are skipped.
+    if (!"int".equals(cat) && !"double".equals(cat) && !"decimal".equals(cat)
+        && !"datetime".equals(cat)) {
       throw locatedError(mul,
           "Operator " + opLabel + " operand must be numeric (int/double/"
-              + "decimal); got " + t.getType()
+              + "decimal) or a timestamp (± interval); got " + t.getType()
               + ". For string/bytes concatenation use ||.");
     }
   }
