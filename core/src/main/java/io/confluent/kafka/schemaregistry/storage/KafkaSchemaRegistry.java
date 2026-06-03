@@ -2054,7 +2054,13 @@ public class KafkaSchemaRegistry implements SchemaRegistry, LeaderAwareSchemaReg
   public Config getConfigInScope(String subject)
       throws SchemaRegistryStoreException {
     try {
-      return lookupCache.config(subject, true, new Config(defaultCompatibilityLevel.name));
+      Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
+      Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
+      if (subjectConfig == null) {
+        return lookupCache.config(subject, true, defaultForTopLevel);
+      }
+      Config globalConfig = lookupCache.config(null, false, defaultForTopLevel);
+      return Config.mergeConfigs(globalConfig, subjectConfig);
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Failed to write new config value to the store", e);
     }
