@@ -222,15 +222,31 @@ class CheckConstraintTest {
   }
 
   @Test
-  void moduloRejectsDoubleLiteralOperand() {
+  void moduloOnDecimalEmitsDecimalsMod() {
     // `1.5` is a DECIMAL literal (no exponent), so `1.5 % 2` coerces to the
-    // common type DECIMAL — and CEL has no decimals.* modulo function, so the
-    // emitter rejects `%` on a decimal operand at parse time.
+    // common type DECIMAL and modulo emits decimals.mod.
+    assertEquals(
+        "decimals.eq(decimals.mod(decimal(\"1.5\"), decimal(\"2\")), decimal(\"0.5\"))",
+        translateCheck("1.5 % 2 = 0.5"));
+  }
+
+  @Test
+  void moduloOnDecimalColumnEmitsDecimalsMod() {
+    // amount is a DECIMAL column; `amount % 100 = 0` → decimals.mod.
+    assertEquals(
+        "decimals.eq(decimals.mod(this.amount, decimal(\"100\")), decimal(\"0\"))",
+        translateCheck("amount % 100 = 0"));
+  }
+
+  @Test
+  void moduloRejectsDoubleOperand() {
+    // No double-modulo operator exists; `ratio % 2` coerces to DOUBLE and is
+    // rejected at parse time with a clear message.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("1.5 % 2 = 0.5"));
-    assertTrue(t.getMessage().contains("modulo"),
-        "expected modulo rejection, got: " + t.getMessage());
+        () -> translateCheck("ratio % 2 = 0"));
+    assertTrue(t.getMessage().contains("modulo") && t.getMessage().contains("DOUBLE"),
+        "expected DOUBLE-modulo rejection, got: " + t.getMessage());
   }
 
   @Test
@@ -797,14 +813,12 @@ class CheckConstraintTest {
   }
 
   @Test
-  void moduloRejectsParenWrappedDoubleLiteral() {
+  void moduloOnParenWrappedDecimalEmitsDecimalsMod() {
     // `(1.5)` is a paren-wrapped DECIMAL literal, so `(1.5) % 2` coerces to
-    // DECIMAL — rejected because there is no decimals.* modulo function.
-    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
-        ValidationException.class,
-        () -> translateCheck("(1.5) % 2 = 0.5"));
-    assertTrue(t.getMessage().contains("modulo"),
-        "expected modulo rejection inside paren, got: " + t.getMessage());
+    // DECIMAL and modulo emits decimals.mod (the parens collapse in the value).
+    assertEquals(
+        "decimals.eq(decimals.mod(decimal(\"1.5\"), decimal(\"2\")), decimal(\"0.5\"))",
+        translateCheck("(1.5) % 2 = 0.5"));
   }
 
   @Test
@@ -1666,13 +1680,11 @@ class CheckConstraintTest {
   }
 
   @Test
-  void decimalModuloRejected() {
-    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
-        ValidationException.class,
-        () -> translateCheck("amount % 2 = 0"));
-    org.junit.jupiter.api.Assertions.assertTrue(
-        t.getMessage().contains("modulo"),
-        "expected decimal modulo rejection; got: " + t.getMessage());
+  void decimalModuloEmitsDecimalsMod() {
+    // amount is DECIMAL; `amount % 2` → decimals.mod (remainder, sign of dividend).
+    assertEquals(
+        "decimals.eq(decimals.mod(this.amount, decimal(\"2\")), decimal(\"0\"))",
+        translateCheck("amount % 2 = 0"));
   }
 
   @Test
@@ -3436,8 +3448,8 @@ class CheckConstraintTest {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> translateCheck("EVERY(tags, true, true)"));
-    assertTrue(t.getMessage().contains("CEL reserved word"),
-        "expected CEL-reserved-word message, got: " + t.getMessage());
+    assertTrue(t.getMessage().contains("reserved word"),
+        "expected reserved-word message, got: " + t.getMessage());
   }
 
   @Test

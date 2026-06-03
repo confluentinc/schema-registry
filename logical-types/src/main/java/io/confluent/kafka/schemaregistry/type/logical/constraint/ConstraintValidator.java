@@ -417,7 +417,7 @@ final class ConstraintValidator {
             throw locatedError(el,
                 "ARRAY/MULTISET indexing is 1-based in SQL; got literal "
                     + literal + " for '" + pathSoFar + "[...]' which would "
-                    + "translate to a negative CEL index (`[" + (literal - 1)
+                    + "translate to a negative index (`[" + (literal - 1)
                     + "]`) and crash at runtime. Use a positive index.");
           }
         }
@@ -530,7 +530,7 @@ final class ConstraintValidator {
         || ConstraintResolver.isLiteralNullBetweenChild(rhs)) {
       throw locatedError(cmp,
           "Comparison " + op + " against NULL is always UNKNOWN in SQL "
-              + "but would emit CEL that fails for non-null rows; "
+              + "but would emit an expression that fails for non-null rows; "
               + "use IS NULL or IS NOT NULL instead.");
     }
     Schema lhsType = ConstraintResolver.tryResolveCompareOperandType(lhs, vctx);
@@ -545,7 +545,7 @@ final class ConstraintValidator {
         && !ConstraintResolver.areComparable(lhsType.getType(), rhsType.getType())) {
       throw locatedError(cmp,
           "Cannot compare " + lhsType.getType() + " with " + rhsType.getType()
-              + " using " + op + " — CEL evaluates equality across types as "
+              + " using " + op + " — equality across types evaluates as "
               + "always-false. Use explicit CAST to align types, or IS NULL "
               + "if testing for null.");
     }
@@ -795,9 +795,9 @@ final class ConstraintValidator {
     // explicit ELSE.
     if (findElseBranch(ctx) == null) {
       throw locatedError(ctx,
-          "CASE expression is missing an ELSE branch — CEL ternaries require "
-              + "both branches to share a type. Add an explicit "
-              + "`ELSE <default>` (or use COALESCE for nullable defaults).");
+          "CASE expression is missing an ELSE branch — the generated "
+              + "conditional requires both branches to share a type. Add an "
+              + "explicit `ELSE <default>` (or use COALESCE for nullable defaults).");
     }
     // Two checks per case_expr:
     //  1. All WHEN/THEN result expressions plus any ELSE share a category
@@ -835,7 +835,7 @@ final class ConstraintValidator {
                     + " is incompatible with WHEN value type "
                     + whenValType.getType()
                     + ". The translator emits `subject == value` per WHEN, "
-                    + "which CEL rejects across categories.");
+                    + "which is rejected across categories.");
           }
         }
       }
@@ -855,10 +855,10 @@ final class ConstraintValidator {
     for (LogicalTypesParser.Check_exprContext branch : branches) {
       if (ConstraintResolver.isLiteralNull(branch)) {
         throw locatedError(branch,
-            "CASE branch result cannot be a literal NULL — CEL ternary "
-                + "branches must share a type, and bare `null` doesn't "
-                + "unify with the other branch type. Use COALESCE or an "
-                + "explicit typed default.");
+            "CASE branch result cannot be a literal NULL — the generated "
+                + "conditional branches must share a type, and bare `null` "
+                + "doesn't unify with the other branch type. Use COALESCE or "
+                + "an explicit typed default.");
       }
     }
     // Cross-category branches (e.g. WHEN ... THEN 1 ELSE 'a') are caught
@@ -975,7 +975,7 @@ final class ConstraintValidator {
         && ConstraintResolver.NULL_RETURNING_FUNCS.contains(funcName)) {
       throw locatedError(operand,
           "BETWEEN " + role + " cannot be " + funcName
-              + "(...) — the function can return null, and CEL has no "
+              + "(...) — the function can return null, and there is no "
               + "comparison overload taking null. Use COALESCE to provide "
               + "an explicit fallback value.");
     }
@@ -985,7 +985,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_inContext bound, String role) {
     if (ConstraintResolver.isBoundLiteralNull(bound)) {
       throw locatedError(bound,
-          "BETWEEN " + role + " bound cannot be NULL — CEL has no `<=` "
+          "BETWEEN " + role + " bound cannot be NULL — there is no `<=` "
               + "overload taking null. Use IS NULL or COALESCE to handle "
               + "missing bounds explicitly.");
     }
@@ -1158,9 +1158,9 @@ final class ConstraintValidator {
     for (LogicalTypesParser.Check_exprContext arg : args) {
       if (ConstraintResolver.isLiteralNull(arg)) {
         throw locatedError(arg,
-            name + "() cannot take a literal NULL — the emit applies CEL "
+            name + "() cannot take a literal NULL — the emit applies "
                 + "operators that have no null overload (or, for COALESCE, "
-                + "produces a ternary whose branches don't type-unify). "
+                + "produces a conditional whose branches don't type-unify). "
                 + "Drop the NULL argument or use IS NULL to test for null.");
       }
     }
@@ -1334,7 +1334,7 @@ final class ConstraintValidator {
           if (Double.isInfinite(v) || Double.isNaN(v)) {
             throw locatedError(lit,
                 "Float literal " + text + " is out of range (overflows to "
-                    + (Double.isNaN(v) ? "NaN" : "Infinity") + " in CEL); "
+                    + (Double.isNaN(v) ? "NaN" : "Infinity") + " at runtime); "
                     + "constraint would be silently always-false.");
           }
         } catch (NumberFormatException e) {
@@ -1355,8 +1355,8 @@ final class ConstraintValidator {
           Long.parseLong(text);
         } catch (NumberFormatException e) {
           throw locatedError(lit,
-              "Integer literal " + text + " is out of range for CEL int "
-                  + "(64-bit signed). Maximum: 9223372036854775807.");
+              "Integer literal " + text + " is out of range for a 64-bit "
+                  + "signed integer. Maximum: 9223372036854775807.");
         }
       }
     }

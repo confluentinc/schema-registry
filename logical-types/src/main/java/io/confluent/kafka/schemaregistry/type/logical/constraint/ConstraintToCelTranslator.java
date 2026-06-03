@@ -76,7 +76,7 @@ public final class ConstraintToCelTranslator {
       ConstraintValidationContext validationContext) {
     if (validationContext == null) {
       throw new IllegalArgumentException(
-          "validationContext is required — the translator emits CEL using a "
+          "validationContext is required — the translator emits a "
               + "validation-context-aware shape (this/this.x prefixing) and "
               + "cannot run without one.");
     }
