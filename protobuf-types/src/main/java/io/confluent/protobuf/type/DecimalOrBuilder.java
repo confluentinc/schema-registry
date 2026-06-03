@@ -20,7 +20,7 @@ public interface DecimalOrBuilder extends
 
   /**
    * <pre>
-   * The precision (zero indicates unlimited precision)
+   * The precision
    * </pre>
    *
    * <code>uint32 precision = 2;</code>
