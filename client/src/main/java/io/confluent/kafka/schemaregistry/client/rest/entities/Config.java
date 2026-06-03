@@ -168,6 +168,22 @@ public class Config {
         || overrideRuleSet != null;
   }
 
+  public static Config mergeConfigs(Config subjectConfig, Config globalConfig) {
+    if (subjectConfig == null) {
+      return globalConfig;
+    }
+    if (globalConfig == null || globalConfig == subjectConfig) {
+      return subjectConfig;
+    }
+    if (subjectConfig.isNormalize() == null) {
+      subjectConfig.setNormalize(globalConfig.isNormalize());
+    }
+    if (subjectConfig.getCompatibilityGroup() == null) {
+      subjectConfig.setCompatibilityGroup(globalConfig.getCompatibilityGroup());
+    }
+    return subjectConfig;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
