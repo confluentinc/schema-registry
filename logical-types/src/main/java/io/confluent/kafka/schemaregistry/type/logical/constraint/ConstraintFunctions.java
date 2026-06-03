@@ -144,6 +144,33 @@ final class ConstraintFunctions {
         emitGreatestLeast(ctx, args, "<", sb, name);
         break;
 
+      // Numeric math — dispatch on argument type: DECIMAL operands route to the
+      // opaque-Decimal decimals.* surface (exact), all other numerics to the
+      // CEL math.* extension. All single-arg except ROUND/TRUNCATE, which also
+      // accept a 2-arg scale form on DECIMAL only.
+      case "ABS":
+        emitNumericFunc(ctx, args, "abs", sb, name);
+        break;
+      case "SIGN":
+        emitNumericFunc(ctx, args, "sign", sb, name);
+        break;
+      case "FLOOR":
+        emitNumericFunc(ctx, args, "floor", sb, name);
+        break;
+      case "CEIL":
+      case "CEILING":
+        emitNumericFunc(ctx, args, "ceil", sb, name);
+        break;
+      case "SQRT":
+        emitNumericFunc(ctx, args, "sqrt", sb, name);
+        break;
+      case "ROUND":
+        emitRoundTrunc(ctx, args, "round", sb, name);
+        break;
+      case "TRUNCATE":
+        emitRoundTrunc(ctx, args, "trunc", sb, name);
+        break;
+
       // CEL macros (sugar)
       case "EVERY":
         emitMacro(ctx, args, "all", sb, name);
@@ -161,7 +188,8 @@ final class ConstraintFunctions {
                 + "'. Allowed functions: LENGTH, UPPER, LOWER, STARTS_WITH, "
                 + "ENDS_WITH, CONTAINS, REPLACE, MATCHES, COALESCE, NULLIF, "
                 + "GREATEST, LEAST, EVERY, ANY, ONE, IS_EMAIL, IS_HOSTNAME, "
-                + "IS_IPV4, IS_IPV6, IS_URI, IS_URI_REF, IS_UUID, plus the "
+                + "IS_IPV4, IS_IPV6, IS_URI, IS_URI_REF, IS_UUID, ABS, SIGN, "
+                + "FLOOR, CEIL/CEILING, ROUND, TRUNCATE, SQRT, plus the "
                 + "special-syntax forms CAST, EXTRACT, SUBSTRING, POSITION, "
                 + "TRIM, CURRENT_TIMESTAMP.");
     }
@@ -285,6 +313,79 @@ final class ConstraintFunctions {
   }
 
   /**
+   * Single-argument numeric function: {@code ABS/SIGN/FLOOR/CEILING/SQRT}.
+   * DECIMAL argument → {@code decimals.<fn>(...)} (the argument emitted via the
+   * decimal cascade); any other numeric → {@code math.<fn>(...)}.
+   *
+   * <p>For non-decimal operands, {@code abs}/{@code sign}/{@code sqrt} have
+   * int/uint/double overloads in the CEL math extension, but
+   * {@code ceil}/{@code floor} are double-only — applying them to an INT
+   * column surfaces as a "no matching overload" error from the strict checker
+   * (rather than a silent no-op), which is the intended signal.
+   */
+  private static void emitNumericFunc(
+      LogicalTypesParser.Func_applicationContext fctx,
+      List<LogicalTypesParser.Check_exprContext> args, String shortName,
+      StringBuilder sb, String sqlName) {
+    if (args.size() != 1) {
+      throw locatedError(fctx,
+          sqlName + "() expects exactly 1 argument, got " + args.size());
+    }
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    Schema t = vctx == null ? null
+        : ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx);
+    if (ConstraintResolver.isDecimal(t)) {
+      sb.append("decimals.").append(shortName).append('(');
+      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
+      sb.append(')');
+    } else {
+      sb.append("math.").append(shortName).append('(');
+      visitCheckExpr(args.get(0), sb);
+      sb.append(')');
+    }
+  }
+
+  /**
+   * {@code ROUND}/{@code TRUNCATE}: 1-arg for any numeric ({@code math.round}/
+   * {@code math.trunc} or {@code decimals.round}/{@code decimals.trunc}); the
+   * 2-arg scale form is DECIMAL-only ({@code decimals.round(d, n)} /
+   * {@code decimals.trunc(d, n)}) — CEL {@code math.round}/{@code math.trunc}
+   * have no scale parameter, so 2-arg on a non-decimal operand is rejected.
+   */
+  private static void emitRoundTrunc(
+      LogicalTypesParser.Func_applicationContext fctx,
+      List<LogicalTypesParser.Check_exprContext> args, String shortName,
+      StringBuilder sb, String sqlName) {
+    if (args.size() != 1 && args.size() != 2) {
+      throw locatedError(fctx,
+          sqlName + "() expects 1 or 2 arguments, got " + args.size());
+    }
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    Schema t = vctx == null ? null
+        : ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx);
+    boolean decimal = ConstraintResolver.isDecimal(t);
+    if (args.size() == 2 && !decimal) {
+      throw locatedError(fctx,
+          sqlName + "() with a scale argument is only supported on DECIMAL "
+              + "operands; for INT/DOUBLE only the single-argument form is "
+              + "available (CEL math." + shortName + " has no scale parameter).");
+    }
+    if (decimal) {
+      sb.append("decimals.").append(shortName).append('(');
+      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
+      if (args.size() == 2) {
+        sb.append(", ");
+        visitCheckExpr(args.get(1), sb);
+      }
+      sb.append(')');
+    } else {
+      sb.append("math.").append(shortName).append('(');
+      visitCheckExpr(args.get(0), sb);
+      sb.append(')');
+    }
+  }
+
+  /**
    * Emit CEL receiver-style call: arg[receiverIdx].method(other args). Wraps
    * the receiver in parens only when needed — compound receivers like
    * {@code a || b} or {@code -x} would otherwise mis-bind under CEL's tight
@@ -329,18 +430,37 @@ final class ConstraintFunctions {
           "COALESCE() expects at least 2 arguments, got " + args.size());
     }
     int n = args.size();
-    String[] emitted = new String[n];
+    // If any branch is decimal, emit every returned branch as a Decimal value
+    // so the ternary branches unify (mixed decimal/double would otherwise fail
+    // the strict checker). Null checks still use the native emit so the has()
+    // guard sees a field selection.
+    boolean decimal = false;
+    for (int i = 0; i < n; i++) {
+      if (argIsDecimal(args.get(i))) {
+        decimal = true;
+        break;
+      }
+    }
+    String[] nativeEmit = new String[n];
+    String[] valueEmit = new String[n];
     for (int i = 0; i < n; i++) {
       StringBuilder buf = new StringBuilder();
       visitCheckExpr(args.get(i), buf);
-      emitted[i] = buf.toString();
+      nativeEmit[i] = buf.toString();
+      if (decimal) {
+        StringBuilder dec = new StringBuilder();
+        ConstraintEmitter.emitDecimalValue(args.get(i), dec);
+        valueEmit[i] = dec.toString();
+      } else {
+        valueEmit[i] = nativeEmit[i];
+      }
     }
     for (int i = 0; i < n - 1; i++) {
       sb.append('(');
-      emitIsNotNullCheck(args.get(i), emitted[i], sb);
-      sb.append(" ? ").append(emitted[i]).append(" : ");
+      emitIsNotNullCheck(args.get(i), nativeEmit[i], sb);
+      sb.append(" ? ").append(valueEmit[i]).append(" : ");
     }
-    sb.append(emitted[n - 1]);
+    sb.append(valueEmit[n - 1]);
     for (int i = 0; i < n - 1; i++) {
       sb.append(')');
     }
@@ -407,12 +527,31 @@ final class ConstraintFunctions {
           "NULLIF() expects 2 arguments, got " + args.size());
     }
     sb.append('(');
-    visitCheckExpr(args.get(0), sb);
-    sb.append(" == ");
-    visitCheckExpr(args.get(1), sb);
+    if (argIsDecimal(args.get(0)) || argIsDecimal(args.get(1))) {
+      // Opaque Decimal has no native `==`.
+      sb.append("decimals.eq(");
+      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
+      sb.append(", ");
+      ConstraintEmitter.emitDecimalValue(args.get(1), sb);
+      sb.append(')');
+    } else {
+      visitCheckExpr(args.get(0), sb);
+      sb.append(" == ");
+      visitCheckExpr(args.get(1), sb);
+    }
     sb.append(" ? dyn(null) : dyn(");
     visitCheckExpr(args.get(0), sb);
     sb.append("))");
+  }
+
+  /**
+   * True if {@code arg} statically resolves to the DECIMAL category.
+   */
+  private static boolean argIsDecimal(LogicalTypesParser.Check_exprContext arg) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    return vctx != null
+        && ConstraintResolver.isDecimal(
+            ConstraintResolver.tryResolveCheckExprType(arg, vctx));
   }
 
   /**
@@ -430,18 +569,37 @@ final class ConstraintFunctions {
           sqlName + "() supports exactly 2 arguments in v1, got " + args.size()
               + ". For more, nest calls: " + sqlName + "(a, " + sqlName + "(b, c))");
     }
+    // Null checks use the native emit (so the has() guard sees a field
+    // selection); the comparison and returned values use the Decimal emit when
+    // either operand is decimal, since the opaque Decimal has no native >/<.
+    boolean decimal = argIsDecimal(args.get(0)) || argIsDecimal(args.get(1));
     StringBuilder bufA = new StringBuilder();
     StringBuilder bufB = new StringBuilder();
     visitCheckExpr(args.get(0), bufA);
     visitCheckExpr(args.get(1), bufB);
-    String a = bufA.toString();
-    String b = bufB.toString();
+    String nativeA = bufA.toString();
+    String nativeB = bufB.toString();
+    String a = nativeA;
+    String b = nativeB;
+    if (decimal) {
+      StringBuilder decA = new StringBuilder();
+      StringBuilder decB = new StringBuilder();
+      ConstraintEmitter.emitDecimalValue(args.get(0), decA);
+      ConstraintEmitter.emitDecimalValue(args.get(1), decB);
+      a = decA.toString();
+      b = decB.toString();
+    }
     sb.append('(');
-    emitIsNullCheck(args.get(0), a, sb);
+    emitIsNullCheck(args.get(0), nativeA, sb);
     sb.append(" ? ").append(b).append(" : (");
-    emitIsNullCheck(args.get(1), b, sb);
+    emitIsNullCheck(args.get(1), nativeB, sb);
     sb.append(" ? ").append(a).append(" : (");
-    sb.append(a).append(' ').append(op).append(' ').append(b);
+    if (decimal) {
+      String fn = ">".equals(op) ? "decimals.gt" : "decimals.lt";
+      sb.append(fn).append('(').append(a).append(", ").append(b).append(')');
+    } else {
+      sb.append(a).append(' ').append(op).append(' ').append(b);
+    }
     sb.append(" ? ").append(a).append(" : ").append(b);
     sb.append(")))");
   }
@@ -473,13 +631,68 @@ final class ConstraintFunctions {
     }
   }
 
-  /** CAST(x AS T) → int(x) / double(x) / string(x) / bool(x) / bytes(x). */
+  /**
+   * CAST(x AS T) → int(x) / double(x) / string(x) / bool(x) / bytes(x), with
+   * two decimal-specific forms:
+   * <ul>
+   *   <li><b>To decimal:</b> {@code CAST(x AS DECIMAL(p,s))} →
+   *       {@code decimals.round(decimal(x), s)} — applies the scale (HALF_UP),
+   *       faithful to SQL CAST; scale defaults to 0 when absent. Precision
+   *       {@code p} is not enforced.</li>
+   *   <li><b>From decimal to string:</b> {@code CAST(decimalExpr AS STRING)} →
+   *       {@code string(<decimal value>)} via the {@code (Decimal) -> string}
+   *       overload. Other CAST targets from a decimal source (INT/DOUBLE/
+   *       BOOLEAN/BYTES) have no CEL conversion and are rejected.</li>
+   * </ul>
+   */
   private static void visitCast(
       LogicalTypesParser.FuncCastContext ctx, StringBuilder sb) {
-    String celFn = celTypeFor(ctx.castType().primitiveType());
+    LogicalTypesParser.PrimitiveTypeContext pt = ctx.castType().primitiveType();
+    LogicalTypesParser.Check_exprContext arg = ctx.check_expr();
+    boolean argDecimal = argIsDecimal(arg);
+
+    if (isDecimalCastTarget(pt)) {
+      int scale = ConstraintResolver.parseDecimalCastParams(pt.getText())[1];
+      sb.append("decimals.round(");
+      if (argDecimal) {
+        ConstraintEmitter.emitDecimalValue(arg, sb);
+      } else {
+        sb.append("decimal(");
+        visitCheckExpr(arg, sb);
+        sb.append(')');
+      }
+      sb.append(", ").append(scale).append(')');
+      return;
+    }
+
+    String celFn = celTypeFor(pt);
+    if (argDecimal) {
+      if ("string".equals(celFn)) {
+        // (Decimal) -> string overload; the arg must be emitted as a Decimal.
+        sb.append("string(");
+        ConstraintEmitter.emitDecimalValue(arg, sb);
+        sb.append(')');
+        return;
+      }
+      throw locatedError(ctx,
+          "CAST from DECIMAL to " + pt.getText().toUpperCase(java.util.Locale.ROOT)
+              + " is not supported. From a DECIMAL source only CAST(... AS STRING) "
+              + "and CAST(... AS DECIMAL(p,s)) are available.");
+    }
     sb.append(celFn).append('(');
-    visitCheckExpr(ctx.check_expr(), sb);
+    visitCheckExpr(arg, sb);
     sb.append(')');
+  }
+
+  /** True if the CAST target type is DECIMAL / DEC / NUMERIC. */
+  private static boolean isDecimalCastTarget(
+      LogicalTypesParser.PrimitiveTypeContext pt) {
+    String head = pt.getText().toUpperCase(java.util.Locale.ROOT);
+    int paren = head.indexOf('(');
+    if (paren >= 0) {
+      head = head.substring(0, paren);
+    }
+    return "DECIMAL".equals(head) || "DEC".equals(head) || "NUMERIC".equals(head);
   }
 
   static String celTypeFor(LogicalTypesParser.PrimitiveTypeContext pt) {

@@ -294,6 +294,32 @@ final class ConstraintResolver {
           }
         }
         return null;
+      case "ABS":
+      case "FLOOR":
+      case "CEIL":
+      case "CEILING":
+      case "ROUND":
+      case "TRUNCATE":
+        // Magnitude/rounding preserve the operand's numeric type (decimal stays
+        // decimal via decimals.*, double stays double via math.*).
+        return (args == null || args.isEmpty())
+            ? null : tryResolveCheckExprType(args.get(0), vctx);
+      case "SQRT": {
+        // decimals.sqrt → Decimal; math.sqrt → double.
+        if (args == null || args.isEmpty()) {
+          return null;
+        }
+        Schema at = tryResolveCheckExprType(args.get(0), vctx);
+        return isDecimal(at) ? at : Schema.create(Schema.Type.DOUBLE);
+      }
+      case "SIGN": {
+        // decimals.sign → int; math.sign preserves the operand type.
+        if (args == null || args.isEmpty()) {
+          return null;
+        }
+        Schema at = tryResolveCheckExprType(args.get(0), vctx);
+        return isDecimal(at) ? Schema.create(Schema.Type.BIGINT) : at;
+      }
       default:
         return null;
     }
@@ -355,7 +381,42 @@ final class ConstraintResolver {
     if (text.startsWith("BOOLEAN")) {
       return Schema.create(Schema.Type.BOOLEAN);
     }
+    if (text.startsWith("DEC") || text.startsWith("NUMERIC")) {
+      // CAST(... AS DECIMAL(p,s)) yields a Decimal (the emit applies the scale
+      // via decimals.round). startsWith("DEC") covers both DEC and DECIMAL.
+      int[] ps = parseDecimalCastParams(text);
+      return Schema.createDecimal(ps[0], ps[1]);
+    }
     return null;
+  }
+
+  /**
+   * Parse {@code (precision, scale)} from a DECIMAL cast-type text such as
+   * {@code DECIMAL(10,2)} / {@code DEC(10)} / {@code NUMERIC} (any case).
+   * Absent precision → {@link Schema#NO_PARAM} (factory applies the default);
+   * absent scale → {@link Schema#DEFAULT_DECIMAL_SCALE} (0), matching SQL.
+   */
+  static int[] parseDecimalCastParams(String castTypeText) {
+    int precision = Schema.NO_PARAM;
+    int scale = Schema.DEFAULT_DECIMAL_SCALE;
+    int lp = castTypeText.indexOf('(');
+    if (lp >= 0) {
+      int rp = castTypeText.indexOf(')', lp);
+      String inner = castTypeText.substring(lp + 1, rp < 0 ? castTypeText.length() : rp);
+      String[] parts = inner.split(",");
+      try {
+        if (parts.length >= 1 && !parts[0].trim().isEmpty()) {
+          precision = Integer.parseInt(parts[0].trim());
+        }
+        if (parts.length >= 2) {
+          scale = Integer.parseInt(parts[1].trim());
+        }
+      } catch (NumberFormatException e) {
+        // Malformed params — fall back to defaults; the grammar normally
+        // prevents this from being reached.
+      }
+    }
+    return new int[]{precision, scale};
   }
 
   /**
@@ -548,6 +609,60 @@ final class ConstraintResolver {
         add -> tryResolveAddType(add, vctx));
   }
 
+  // -------------------------------------------------------------------------
+  // Decimal detection for the emitter's decimals.* dispatch.
+  //
+  // Unlike the unify-or-null resolvers above (which return null on mixed
+  // categories), these answer "does this node have ANY decimal operand?" —
+  // because a mixed chain like `decimalCol + intCol` must still dispatch to
+  // decimals.* (the non-decimal operand is coerced with decimal(...) at emit).
+  // -------------------------------------------------------------------------
+
+  /**
+   * True if {@code s} resolves to the DECIMAL category.
+   */
+  static boolean isDecimal(Schema s) {
+    return s != null && "decimal".equals(categoryOf(s.getType()));
+  }
+
+  static boolean likeHasDecimal(
+      LogicalTypesParser.Check_expr_likeContext like, ConstraintValidationContext vctx) {
+    if (like.LIKE() != null) {
+      return false;  // LIKE yields bool, never decimal
+    }
+    return concatHasDecimal(like.check_expr_concat(), vctx);
+  }
+
+  static boolean concatHasDecimal(
+      LogicalTypesParser.Check_expr_concatContext concat, ConstraintValidationContext vctx) {
+    for (LogicalTypesParser.Check_expr_addContext add : concat.check_expr_add()) {
+      if (addHasDecimal(add, vctx)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static boolean addHasDecimal(
+      LogicalTypesParser.Check_expr_addContext add, ConstraintValidationContext vctx) {
+    for (LogicalTypesParser.Check_expr_mulContext mul : add.check_expr_mul()) {
+      if (mulHasDecimal(mul, vctx)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static boolean mulHasDecimal(
+      LogicalTypesParser.Check_expr_mulContext mul, ConstraintValidationContext vctx) {
+    for (LogicalTypesParser.Check_expr_unary_signContext sign : mul.check_expr_unary_sign()) {
+      if (isDecimal(resolveSingleSignType(sign, vctx))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * If {@code s} is a {@code NAMED_TYPE_REF}, resolve it via the validation
    * context's named-type table. Returns null if the ref can't be resolved
@@ -656,7 +771,24 @@ final class ConstraintResolver {
     if (a == b) {
       return true;
     }
-    return categoryOf(a) != null && categoryOf(a).equals(categoryOf(b));
+    String ca = categoryOf(a);
+    String cb = categoryOf(b);
+    if (ca == null || cb == null) {
+      return false;
+    }
+    if (ca.equals(cb)) {
+      return true;
+    }
+    // DECIMAL coerces a numeric counterpart (int/double) via decimal(...) at
+    // emit, so decimal-vs-int and decimal-vs-double are comparable. int-vs-double
+    // stays incomparable — CEL has no implicit int↔double promotion and the
+    // emitted native operators would fail the strict checker.
+    return ("decimal".equals(ca) && isNumericCategory(cb))
+        || ("decimal".equals(cb) && isNumericCategory(ca));
+  }
+
+  private static boolean isNumericCategory(String category) {
+    return "int".equals(category) || "double".equals(category) || "decimal".equals(category);
   }
 
   static String categoryOf(Schema.Type t) {

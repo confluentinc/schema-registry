@@ -63,6 +63,7 @@ class CheckConstraintTest {
         + "needle STRING, haystack STRING, filename STRING,"
         + "lo INT, hi INT, age INT,"
         + "ratio DOUBLE,"
+        + "amount DECIMAL(10, 2), price DECIMAL(12, 4), discount DECIMAL(10, 2),"
         + "blob BYTES,"
         + "ts TIMESTAMP_LTZ, created_at TIMESTAMP_LTZ,"
         + "first_name STRING, last_name STRING, type STRING,"
@@ -1496,9 +1497,194 @@ class CheckConstraintTest {
   }
 
   @Test
-  void castDecimalIgnoresParams() {
-    assertEquals("double(this.x) > 1.5",
+  void castDecimalAppliesScale() {
+    // CAST(x AS DECIMAL(p,s)) now applies the scale via decimals.round and
+    // yields a real Decimal; the comparison routes through decimals.gt with
+    // the double literal coerced to decimal("1.5").
+    assertEquals(
+        "decimals.gt(decimals.round(decimal(this.x), 2), decimal(\"1.5\"))",
         translateCheck("CAST(x AS DECIMAL(10, 2)) > 1.5"));
+  }
+
+  // ---------------------------------------------------------------------
+  // Decimal (opaque confluent.type.Decimal) — operator + function dispatch.
+  // `amount`/`price`/`discount` are DECIMAL columns; `x` is INT, `ratio`
+  // DOUBLE. Each assertion also passes the strict cel-java checker via
+  // translateCheck (so the emitted decimals.*/math.* type-checks).
+  // ---------------------------------------------------------------------
+
+  @Test
+  void decimalCompareIntLiteralCoerced() {
+    assertEquals("decimals.gt(this.amount, decimal(\"0\"))", translateCheck("amount > 0"));
+  }
+
+  @Test
+  void decimalCompareDecimalLiteral() {
+    assertEquals("decimals.ge(this.amount, decimal(\"9.99\"))", translateCheck("amount >= 9.99"));
+  }
+
+  @Test
+  void decimalEquality() {
+    assertEquals("decimals.eq(this.amount, this.price)", translateCheck("amount = price"));
+  }
+
+  @Test
+  void decimalNotEqual() {
+    assertEquals("!decimals.eq(this.amount, this.price)", translateCheck("amount <> price"));
+  }
+
+  @Test
+  void decimalAdd() {
+    assertEquals("decimals.gt(decimals.add(this.amount, this.discount), this.price)",
+        translateCheck("amount + discount > price"));
+  }
+
+  @Test
+  void decimalMulLiteralCoerced() {
+    assertEquals("decimals.lt(decimals.mul(this.price, decimal(\"2\")), this.amount)",
+        translateCheck("price * 2 < amount"));
+  }
+
+  @Test
+  void decimalUnaryNeg() {
+    assertEquals("decimals.lt(decimals.neg(this.amount), decimal(\"0\"))",
+        translateCheck("-amount < 0"));
+  }
+
+  @Test
+  void decimalAbs() {
+    assertEquals("decimals.lt(decimals.abs(this.amount), decimal(\"100\"))",
+        translateCheck("ABS(amount) < 100"));
+  }
+
+  @Test
+  void decimalSignReturnsInt() {
+    // decimals.sign returns int, so the surrounding compare stays native.
+    assertEquals("decimals.sign(this.amount) == -1", translateCheck("SIGN(amount) = -1"));
+  }
+
+  @Test
+  void decimalFloor() {
+    assertEquals("decimals.ge(decimals.floor(this.amount), decimal(\"0\"))",
+        translateCheck("FLOOR(amount) >= 0"));
+  }
+
+  @Test
+  void decimalCeiling() {
+    assertEquals("decimals.le(decimals.ceil(this.amount), decimal(\"100\"))",
+        translateCheck("CEILING(amount) <= 100"));
+  }
+
+  @Test
+  void decimalRoundWithScale() {
+    assertEquals("decimals.eq(decimals.round(this.amount, 1), this.amount)",
+        translateCheck("ROUND(amount, 1) = amount"));
+  }
+
+  @Test
+  void decimalTruncate() {
+    assertEquals("decimals.le(decimals.trunc(this.price), this.price)",
+        translateCheck("TRUNCATE(price) <= price"));
+  }
+
+  @Test
+  void decimalSqrt() {
+    assertEquals("decimals.lt(decimals.sqrt(this.amount), decimal(\"10\"))",
+        translateCheck("SQRT(amount) < 10"));
+  }
+
+  @Test
+  void decimalCastToString() {
+    assertEquals("string(this.amount) == '1.50'",
+        translateCheck("CAST(amount AS STRING) = '1.50'"));
+  }
+
+  @Test
+  void decimalBetween() {
+    assertEquals(
+        "decimals.le(decimal(\"0\"), this.amount) && decimals.le(this.amount, decimal(\"100\"))",
+        translateCheck("amount BETWEEN 0 AND 100"));
+  }
+
+  @Test
+  void decimalInValueList() {
+    assertEquals(
+        "(decimals.eq(this.amount, decimal(\"1.0\")) "
+            + "|| decimals.eq(this.amount, decimal(\"2.5\")))",
+        translateCheck("amount IN (1.0, 2.5)"));
+  }
+
+  @Test
+  void decimalNestedArithmetic() {
+    // (amount + price) * 2 > discount  → exercises paren re-entry into the
+    // decimal cascade and chain folding.
+    assertEquals(
+        "decimals.gt(decimals.mul(decimals.add(this.amount, this.price), decimal(\"2\")), "
+            + "this.discount)",
+        translateCheck("(amount + price) * 2 > discount"));
+  }
+
+  // Non-decimal numerics route to the CEL math.* extension (same SQL).
+
+  @Test
+  void mathAbsOnInt() {
+    assertEquals("math.abs(this.x) < 5", translateCheck("ABS(x) < 5"));
+  }
+
+  @Test
+  void mathSqrtOnDouble() {
+    assertEquals("math.sqrt(this.ratio) < 2.0", translateCheck("SQRT(ratio) < 2.0"));
+  }
+
+  @Test
+  void roundWithScaleOnNonDecimalRejected() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("ROUND(ratio, 2) > 0.0"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("scale argument is only supported on DECIMAL"),
+        "expected scale-on-non-decimal rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void decimalInListFieldRejected() {
+    // No Decimal-aware `in` over a list-typed operand.
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("amount IN ages"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("not supported for DECIMAL")
+            || t.getMessage().toLowerCase(java.util.Locale.ROOT).contains("comparable"),
+        "expected decimal IN list-field rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void decimalGreatestProducesDecimalCompare() {
+    // GREATEST/CASE/NULLIF emit gnarly ternaries; assert the decimal dispatch
+    // markers rather than the exact string (still strict-checked end-to-end).
+    String cel = translateCheck("GREATEST(amount, price) > 0");
+    org.junit.jupiter.api.Assertions.assertTrue(
+        cel.contains("decimals.gt(this.amount, this.price)")
+            && cel.startsWith("decimals.gt("),
+        "expected decimal GREATEST + outer decimal compare; got: " + cel);
+  }
+
+  @Test
+  void decimalModuloRejected() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("amount % 2 = 0"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("modulo"),
+        "expected decimal modulo rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void decimalCaseSimpleFormUsesDecimalsEq() {
+    String cel = translateCheck("CASE amount WHEN 0 THEN 1 ELSE 0 END = 1");
+    org.junit.jupiter.api.Assertions.assertTrue(
+        cel.contains("decimals.eq(this.amount, decimal(\"0\"))"),
+        "expected simple-CASE decimal subject equality; got: " + cel);
   }
 
   @Test

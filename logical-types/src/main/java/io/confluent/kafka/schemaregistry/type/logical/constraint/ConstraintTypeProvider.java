@@ -25,6 +25,7 @@ import dev.cel.common.types.MapType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructType;
 import dev.cel.common.types.StructTypeReference;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelTypeLabels;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -157,8 +158,13 @@ final class ConstraintTypeProvider implements CelTypeProvider {
         return SimpleType.INT;
       case FLOAT:
       case DOUBLE:
-      case DECIMAL:
         return SimpleType.DOUBLE;
+      case DECIMAL:
+        // DECIMAL rides as the opaque confluent.type.Decimal CEL type (the same
+        // label BuiltinDeclarations declares decimal()/decimals.* against), not
+        // CEL double — so the emitter's decimals.* dispatch type-checks and we
+        // keep exact-decimal semantics rather than degrading to double.
+        return CelTypeLabels.DECIMAL;
       case CHAR:
       case VARCHAR:
         return SimpleType.STRING;
