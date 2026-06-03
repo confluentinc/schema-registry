@@ -83,15 +83,22 @@ final class BuiltinDeclarations {
     decls.add(binaryDecimal("decimals.gt", SimpleType.BOOL));
     decls.add(binaryDecimal("decimals.ge", SimpleType.BOOL));
 
-    // Arithmetic: decimals.add/sub/mul/div
+    // Arithmetic: decimals.add/sub/mul/div/mod
     decls.add(binaryDecimal("decimals.add", DECIMAL));
     decls.add(binaryDecimal("decimals.sub", DECIMAL));
     decls.add(binaryDecimal("decimals.mul", DECIMAL));
     decls.add(binaryDecimal("decimals.div", DECIMAL));
+    // Modulo: remainder with the sign of the dividend (BigDecimal.remainder),
+    // matching SQL MOD. Throws on a zero divisor.
+    decls.add(binaryDecimal("decimals.mod", DECIMAL));
 
     // Square root: decimals.sqrt — MathContext(38, HALF_UP), like div. Throws on
     // negative input (no complex result).
     decls.add(unaryDecimal("decimals.sqrt", DECIMAL));
+
+    // Selection: decimals.min/max return the smaller/larger operand.
+    decls.add(binaryDecimal("decimals.min", DECIMAL));
+    decls.add(binaryDecimal("decimals.max", DECIMAL));
 
     // Unary numeric: decimals.neg/abs/sign.
     decls.add(unaryDecimal("decimals.neg", DECIMAL));
@@ -108,6 +115,18 @@ final class BuiltinDeclarations {
             "decimal_to_string",
             "Convert a Decimal to its plain-string form (no scientific notation)",
             SimpleType.STRING, ImmutableList.of(DECIMAL))));
+
+    // Double coercion via CEL built-in: extend stdlib `double(...)` with a
+    // (Decimal) -> double overload. No overlap with the existing
+    // double(int/uint/string/double) overloads because our opaque Decimal type
+    // isn't assignable to any of them. Narrowing conversion (may lose precision;
+    // out-of-range magnitudes become ±Infinity).
+    decls.add(CelFunctionDecl.newFunctionDeclaration(
+        "double",
+        CelOverloadDecl.newGlobalOverload(
+            "decimal_to_double",
+            "Convert a Decimal to a 64-bit double (narrowing; may lose precision)",
+            SimpleType.DOUBLE, ImmutableList.of(DECIMAL))));
 
     // Rounding family: decimals.round/trunc accept either 1 or 2 args; floor/ceil unary.
     decls.add(CelFunctionDecl.newFunctionDeclaration(
