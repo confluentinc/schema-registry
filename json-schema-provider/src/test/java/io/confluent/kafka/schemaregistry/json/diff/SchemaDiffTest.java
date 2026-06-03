@@ -28,7 +28,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import org.everit.json.schema.ReferenceSchema;
 import org.everit.json.schema.Schema;
+import org.everit.json.schema.StringSchema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -115,6 +117,50 @@ public class SchemaDiffTest {
     final Schema second = SchemaLoader.load(new JSONObject(secondSchema));
     final List<Difference> changes = SchemaDiff.compare(first, second);
     Assert.assertTrue(changes.isEmpty());
+  }
+
+  private static boolean hasIncompatibleChange(final List<Difference> changes) {
+    return changes.stream().anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES.contains(d.getType()));
+  }
+
+  @Test
+  public void testUnresolvedRefSameTargetIsCompatible() {
+    final ReferenceSchema a = ReferenceSchema.builder().refValue("#/$defs/Foo").build();
+    final ReferenceSchema b = ReferenceSchema.builder().refValue("#/$defs/Foo").build();
+    Assert.assertNull(a.getReferredSchema()); // precondition: unresolved
+    // Must not throw, and identical targets are compatible (no differences).
+    Assert.assertTrue(SchemaDiff.compare(a, b).isEmpty());
+  }
+
+  @Test
+  public void testUnresolvedRefDifferentTargetIsIncompatible() {
+    final ReferenceSchema a = ReferenceSchema.builder().refValue("#/$defs/Foo").build();
+    final ReferenceSchema b = ReferenceSchema.builder().refValue("#/$defs/Bar").build();
+    Assert.assertTrue(hasIncompatibleChange(SchemaDiff.compare(a, b)));
+  }
+
+  @Test
+  public void testUnresolvedRefVsConcreteSchemaIsIncompatible() {
+    final ReferenceSchema a = ReferenceSchema.builder().refValue("#/$defs/Foo").build();
+    Assert.assertTrue(hasIncompatibleChange(SchemaDiff.compare(a, StringSchema.builder().build())));
+  }
+
+  @Test
+  public void testSchemaTypesEqualToleratesNull() {
+    final Schema s = StringSchema.builder().build();
+    Assert.assertFalse(SchemaDiff.schemaTypesEqual(null, s));
+    Assert.assertFalse(SchemaDiff.schemaTypesEqual(s, null));
+    Assert.assertTrue(SchemaDiff.schemaTypesEqual(null, null));
+  }
+
+  @Test
+  public void testIncompatibleChangeBehindResolvedRefIsDetected() {
+    final String v1 = "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\",\"properties\":{\"child\":{\"$ref\":\"#/$defs/C\"}},"
+        + "\"$defs\":{\"C\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"string\"}}}}}";
+    final String v2 = v1.replace("\"type\":\"string\"", "\"type\":\"number\"");
+    Assert.assertTrue(hasIncompatibleChange(
+        SchemaDiff.compare(new JsonSchema(v1).rawSchema(), new JsonSchema(v2).rawSchema())));
   }
 
   public static String readFile(String fileName) {
