@@ -105,6 +105,13 @@ final class ConstraintEmitter {
     // Three operands: subject, lower, upper
     boolean negated = ctx.NOT() != null;
     boolean symmetric = ctx.SYMMETRIC() != null;
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (vctx != null
+        && (inHasDecimal(ins.get(0), vctx) || inHasDecimal(ins.get(1), vctx)
+            || inHasDecimal(ins.get(2), vctx))) {
+      emitBetweenDecimal(ins, negated, symmetric, sb);
+      return;
+    }
     if (negated) {
       sb.append("!(");
     }
@@ -153,6 +160,52 @@ final class ConstraintEmitter {
   }
 
   /**
+   * Decimal BETWEEN: {@code lo <= a && a <= hi} becomes
+   * {@code decimals.le(lo, a) && decimals.le(a, hi)} (SYMMETRIC orders the
+   * bounds with a decimals.le test). Operands emitted via the decimal cascade.
+   */
+  private static void emitBetweenDecimal(
+      List<LogicalTypesParser.Check_expr_inContext> ins,
+      boolean negated, boolean symmetric, StringBuilder sb) {
+    if (negated) {
+      sb.append("!(");
+    }
+    if (symmetric) {
+      sb.append('(');
+      emitDecimalLe(ins.get(1), ins.get(2), sb);   // lo <= hi ?
+      sb.append(" ? (");
+      emitDecimalLe(ins.get(1), ins.get(0), sb);
+      sb.append(" && ");
+      emitDecimalLe(ins.get(0), ins.get(2), sb);
+      sb.append(") : (");
+      emitDecimalLe(ins.get(2), ins.get(0), sb);
+      sb.append(" && ");
+      emitDecimalLe(ins.get(0), ins.get(1), sb);
+      sb.append("))");
+    } else {
+      emitDecimalLe(ins.get(1), ins.get(0), sb);
+      sb.append(" && ");
+      emitDecimalLe(ins.get(0), ins.get(2), sb);
+    }
+    if (negated) {
+      sb.append(")");
+    }
+  }
+
+  /**
+   * {@code decimals.le(a, b)} over two BETWEEN operands.
+   */
+  private static void emitDecimalLe(
+      LogicalTypesParser.Check_expr_inContext a,
+      LogicalTypesParser.Check_expr_inContext b, StringBuilder sb) {
+    sb.append("decimals.le(");
+    emitInAsDecimal(a, sb);
+    sb.append(", ");
+    emitInAsDecimal(b, sb);
+    sb.append(')');
+  }
+
+  /**
    * Emit a {@code check_expr_in} wrapped in {@code (...)}. Used by
    * {@link #visitBetween} so each BETWEEN operand is precedence-safe in the
    * surrounding {@code <=} chain. Skips the wrap when the operand is a
@@ -185,12 +238,55 @@ final class ConstraintEmitter {
       return;
     }
     boolean negated = ctx.NOT() != null;
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    // Decimal LHS: CEL's `in` does element equality with no Decimal overload,
+    // so rewrite the value-list form to an OR of decimals.eq.
+    if (vctx != null && isnullHasDecimal(ctx.check_expr_isnull(), vctx)) {
+      emitInDecimal(ctx, negated, sb);
+      return;
+    }
     if (negated) {
       sb.append("!(");
     }
     visitIs(ctx.check_expr_isnull(), sb);
     sb.append(" in ");
     visitInTarget(ctx.in_target(), sb);
+    if (negated) {
+      sb.append(")");
+    }
+  }
+
+  /**
+   * Decimal {@code a IN (x, y, …)} → {@code (decimals.eq(a, x) || decimals.eq(a, y) || …)}
+   * (negated wraps with {@code !}). The {@code IN <list-field>} form has no
+   * Decimal-aware equivalent and is rejected.
+   */
+  private static void emitInDecimal(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+    LogicalTypesParser.In_targetContext target = ctx.in_target();
+    if (!(target instanceof LogicalTypesParser.InTargetParenListContext)) {
+      throw locatedError(ctx,
+          "IN against a list-typed operand is not supported for DECIMAL; use an "
+              + "explicit value list, e.g. amount IN (1.0, 2.5, 9.99).");
+    }
+    final List<LogicalTypesParser.Check_exprContext> items =
+        ((LogicalTypesParser.InTargetParenListContext) target).check_expr_list().check_expr();
+    StringBuilder lhsBuf = new StringBuilder();
+    emitIsnullAsDecimal(ctx.check_expr_isnull(), lhsBuf);
+    String lhs = lhsBuf.toString();
+    if (negated) {
+      sb.append("!(");
+    }
+    sb.append('(');
+    for (int i = 0; i < items.size(); i++) {
+      if (i > 0) {
+        sb.append(" || ");
+      }
+      sb.append("decimals.eq(").append(lhs).append(", ");
+      emitDecimalValue(items.get(i), sb);
+      sb.append(')');
+    }
+    sb.append(')');
     if (negated) {
       sb.append(")");
     }
@@ -329,14 +425,369 @@ final class ConstraintEmitter {
   private static void visitCompare(
       LogicalTypesParser.Check_expr_compareContext ctx, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_likeContext> likes = ctx.check_expr_like();
-    visitLike(likes.get(0), sb);
     if (likes.size() == 2) {
       // The comparison operator is the second child of the rule (between the
       // two check_expr_like). Find it as the only TerminalNode child.
-      String op = findComparisonOp(ctx);
-      sb.append(' ').append(translateCompareOp(op)).append(' ');
+      String celOp = translateCompareOp(findComparisonOp(ctx));
+      ConstraintValidationContext vctx = EMIT_VCTX.get();
+      // Decimal dispatch: if either side is decimal, the opaque Decimal type
+      // has no native CEL comparison overload — emit decimals.eq/lt/le/gt/ge
+      // (and !decimals.eq for !=) with both operands coerced to Decimal.
+      if (vctx != null
+          && (ConstraintResolver.likeHasDecimal(likes.get(0), vctx)
+              || ConstraintResolver.likeHasDecimal(likes.get(1), vctx))) {
+        emitDecimalCompare(likes.get(0), celOp, likes.get(1), sb);
+        return;
+      }
+      visitLike(likes.get(0), sb);
+      sb.append(' ').append(celOp).append(' ');
       visitLike(likes.get(1), sb);
+      return;
     }
+    visitLike(likes.get(0), sb);
+  }
+
+  // -------------------------------------------------------------------------
+  // Decimal emit cascade — parallels the native add/mul/sign/c_expr cascade
+  // but emits the opaque-Decimal function forms (decimals.add/sub/mul/div/neg)
+  // and coerces leaves to Decimal. Entered only when a comparison (or, in
+  // Phase C, BETWEEN/IN/CASE/COALESCE/NULLIF/GREATEST/LEAST) has a decimal
+  // operand; the native cascade is left untouched for non-decimal numerics.
+  //
+  // decimal(dyn) is idempotent on Decimal values, so coercion is only emitted
+  // where the operand is *not* already Decimal-typed (keeps output clean:
+  // `decimals.lt(this.x, decimal("5"))`, not `decimals.lt(decimal(this.x), …)`).
+  // -------------------------------------------------------------------------
+
+  /**
+   * Emit a {@code check_expr} known to resolve to decimal as a Decimal CEL
+   * value (column ref as-is, literal as {@code decimal("…")}, arithmetic as
+   * folded {@code decimals.*} calls). Used by {@link ConstraintFunctions} to
+   * emit the argument of {@code decimals.abs/floor/ceil/round/trunc/sqrt/...}.
+   */
+  static void emitDecimalValue(
+      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
+    emitCheckExprAsDecimal(ctx, sb);
+  }
+
+  /**
+   * {@code a <op> b} where a/b are decimal → {@code decimals.<fn>(a, b)}.
+   */
+  private static void emitDecimalCompare(
+      LogicalTypesParser.Check_expr_likeContext lhs, String celOp,
+      LogicalTypesParser.Check_expr_likeContext rhs, StringBuilder sb) {
+    String fn;
+    boolean negate = false;
+    switch (celOp) {
+      case "==":
+        fn = "decimals.eq";
+        break;
+      case "!=":
+        fn = "decimals.eq";
+        negate = true;
+        break;
+      case "<":
+        fn = "decimals.lt";
+        break;
+      case "<=":
+        fn = "decimals.le";
+        break;
+      case ">":
+        fn = "decimals.gt";
+        break;
+      case ">=":
+        fn = "decimals.ge";
+        break;
+      default:
+        throw new ValidationException("Internal: unexpected decimal compare op " + celOp);
+    }
+    if (negate) {
+      sb.append('!');
+    }
+    sb.append(fn).append('(');
+    emitLikeAsDecimal(lhs, sb);
+    sb.append(", ");
+    emitLikeAsDecimal(rhs, sb);
+    sb.append(')');
+  }
+
+  private static void emitLikeAsDecimal(
+      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
+    // A decimal operand never carries LIKE (that yields bool); detection
+    // guarantees the concat form here.
+    emitConcatAsDecimal(like.check_expr_concat(), sb);
+  }
+
+  private static void emitConcatAsDecimal(
+      LogicalTypesParser.Check_expr_concatContext concat, StringBuilder sb) {
+    // `||` is string/bytes concat — a decimal value has exactly one add.
+    emitAddAsDecimal(concat.check_expr_add(0), sb);
+  }
+
+  /** Fold an additive chain left-associatively into decimals.add/sub calls. */
+  private static void emitAddAsDecimal(
+      LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
+    StringBuilder acc = new StringBuilder();
+    emitMulAsDecimal(muls.get(0), acc);
+    int mulIdx = 1;
+    for (int i = 0; i < add.getChildCount(); i++) {
+      ParseTree child = add.getChild(i);
+      if (child instanceof TerminalNode) {
+        String op = child.getText();
+        String fn = "-".equals(op) ? "decimals.sub" : "decimals.add";
+        StringBuilder rhs = new StringBuilder();
+        emitMulAsDecimal(muls.get(mulIdx++), rhs);
+        String folded = fn + "(" + acc + ", " + rhs + ")";
+        acc.setLength(0);
+        acc.append(folded);
+      }
+    }
+    sb.append(acc);
+  }
+
+  /** Fold a multiplicative chain left-associatively into decimals.mul/div calls. */
+  private static void emitMulAsDecimal(
+      LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
+    StringBuilder acc = new StringBuilder();
+    emitSignAsDecimal(signs.get(0), acc);
+    int signIdx = 1;
+    for (int i = 0; i < mul.getChildCount(); i++) {
+      ParseTree child = mul.getChild(i);
+      if (child instanceof TerminalNode) {
+        String op = child.getText();
+        String fn;
+        if ("*".equals(op)) {
+          fn = "decimals.mul";
+        } else if ("/".equals(op)) {
+          fn = "decimals.div";
+        } else {
+          // '%' / MOD has no decimals.* equivalent (see cel-functions.md).
+          throw locatedError(mul,
+              "Operator '" + op + "' (modulo) is not supported on DECIMAL operands; "
+                  + "there is no decimals.* modulo function.");
+        }
+        StringBuilder rhs = new StringBuilder();
+        emitSignAsDecimal(signs.get(signIdx++), rhs);
+        String folded = fn + "(" + acc + ", " + rhs + ")";
+        acc.setLength(0);
+        acc.append(folded);
+      }
+    }
+    sb.append(acc);
+  }
+
+  private static void emitSignAsDecimal(
+      LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+    boolean negate = false;
+    for (int i = 0; i < sign.getChildCount(); i++) {
+      ParseTree child = sign.getChild(i);
+      if (child instanceof TerminalNode && "-".equals(child.getText())) {
+        negate = !negate;  // parity: `--x` cancels, matching the native path; '+' dropped
+      }
+    }
+    if (negate) {
+      sb.append("decimals.neg(");
+      emitCExprAsDecimal(sign.c_expr(), sb);
+      sb.append(')');
+    } else {
+      emitCExprAsDecimal(sign.c_expr(), sb);
+    }
+  }
+
+  /** Emit a leaf as a Decimal value, coercing non-Decimal operands. */
+  private static void emitCExprAsDecimal(
+      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (ctx instanceof LogicalTypesParser.CheckLiteralContext) {
+      LogicalTypesParser.LiteralContext lit =
+          ((LogicalTypesParser.CheckLiteralContext) ctx).literal();
+      // Numeric literal → decimal("<exact original text>"): preserve the
+      // written value exactly rather than routing through a double literal,
+      // which would bake in binary-float imprecision.
+      if (lit.intLiteral() != null) {
+        sb.append("decimal(\"").append(lit.intLiteral().getText()).append("\")");
+        return;
+      }
+      if (lit.floatLiteral() != null) {
+        sb.append("decimal(\"").append(lit.floatLiteral().getText()).append("\")");
+        return;
+      }
+      // Non-numeric literal in a decimal context — let decimal(dyn) reject it
+      // at runtime / the checker reject it; emit the coercion form.
+      sb.append("decimal(");
+      visitLiteral(lit, sb);
+      sb.append(')');
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
+      LogicalTypesParser.ColumnrefContext cr =
+          ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
+      if (ConstraintResolver.isDecimal(ConstraintResolver.resolveColumnRefType(cr, vctx))) {
+        visitColumnRef(cr, sb);
+      } else {
+        sb.append("decimal(");
+        visitColumnRef(cr, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckFuncContext) {
+      LogicalTypesParser.Func_exprContext fe =
+          ((LogicalTypesParser.CheckFuncContext) ctx).func_expr();
+      if (ConstraintResolver.isDecimal(
+          ConstraintResolver.tryResolveFuncReturnType(fe, vctx))) {
+        ConstraintFunctions.visitFuncExpr(fe, sb);
+      } else {
+        sb.append("decimal(");
+        ConstraintFunctions.visitFuncExpr(fe, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckParenContext) {
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
+      if (paren.indirection() == null
+          && ConstraintResolver.isDecimal(
+              ConstraintResolver.tryResolveCheckExprType(paren.check_expr(), vctx))) {
+        // Decimal sub-expression: re-enter the decimal cascade (no SQL parens
+        // needed — we're already inside a function-call argument position).
+        emitCheckExprAsDecimal(paren.check_expr(), sb);
+      } else {
+        // Non-decimal numeric (or unresolved): coerce the native emit.
+        sb.append("decimal(");
+        visitCExpr(ctx, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckCaseContext) {
+      LogicalTypesParser.Case_exprContext ce =
+          ((LogicalTypesParser.CheckCaseContext) ctx).case_expr();
+      if (ConstraintResolver.isDecimal(
+          ConstraintResolver.tryResolveCaseExprType(ce, vctx))) {
+        visitCase(ce, sb);
+      } else {
+        sb.append("decimal(");
+        visitCase(ce, sb);
+        sb.append(')');
+      }
+      return;
+    }
+    // Fallback: coerce whatever the native path emits.
+    sb.append("decimal(");
+    visitCExpr(ctx, sb);
+    sb.append(')');
+  }
+
+  /**
+   * Re-enter the decimal cascade from a {@code check_expr} known to resolve to
+   * decimal (used for paren-wrapped decimal sub-expressions). The boolean
+   * cascade levels are all single-child pass-throughs for a decimal value;
+   * if any branches unexpectedly, fall back to coercing the native emit.
+   */
+  private static void emitCheckExprAsDecimal(
+      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfOr(ctx.check_expr_or());
+    if (concat != null) {
+      emitConcatAsDecimal(concat, sb);
+    } else {
+      sb.append("decimal((");
+      visitCheckExpr(ctx, sb);
+      sb.append("))");
+    }
+  }
+
+  /**
+   * Emit a {@code check_expr_in} (a BETWEEN operand) as a Decimal value.
+   */
+  private static void emitInAsDecimal(
+      LogicalTypesParser.Check_expr_inContext in, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
+    if (concat != null) {
+      emitConcatAsDecimal(concat, sb);
+    } else {
+      sb.append("decimal((");
+      visitIn(in, sb);
+      sb.append("))");
+    }
+  }
+
+  private static boolean inHasDecimal(
+      LogicalTypesParser.Check_expr_inContext in, ConstraintValidationContext vctx) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
+    return concat != null && ConstraintResolver.concatHasDecimal(concat, vctx);
+  }
+
+  private static boolean isnullHasDecimal(
+      LogicalTypesParser.Check_expr_isnullContext is, ConstraintValidationContext vctx) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
+    return concat != null && ConstraintResolver.concatHasDecimal(concat, vctx);
+  }
+
+  /**
+   * Emit a {@code check_expr_isnull} (an IN left operand) as a Decimal value.
+   */
+  private static void emitIsnullAsDecimal(
+      LogicalTypesParser.Check_expr_isnullContext is, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
+    if (concat != null) {
+      emitConcatAsDecimal(concat, sb);
+    } else {
+      sb.append("decimal((");
+      visitIs(is, sb);
+      sb.append("))");
+    }
+  }
+
+  // Walk the single-child cascade down to the check_expr_concat leaf; return
+  // null at any level that branches (operator present), meaning the node is a
+  // boolean predicate rather than a bare arithmetic/decimal value.
+
+  private static LogicalTypesParser.Check_expr_concatContext bareConcatOfOr(
+      LogicalTypesParser.Check_expr_orContext or) {
+    if (or.check_expr_and().size() != 1) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
+    if (and.check_expr_unary_not().size() != 1) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_unary_notContext notNode = and.check_expr_unary_not(0);
+    if (!(notNode instanceof LogicalTypesParser.CheckExprNotPassContext)) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_betweenContext between =
+        ((LogicalTypesParser.CheckExprNotPassContext) notNode).check_expr_between();
+    if (between.BETWEEN() != null || between.check_expr_in().size() != 1) {
+      return null;
+    }
+    return bareConcatOfIn(between.check_expr_in(0));
+  }
+
+  private static LogicalTypesParser.Check_expr_concatContext bareConcatOfIn(
+      LogicalTypesParser.Check_expr_inContext in) {
+    if (in.IN() != null) {
+      return null;
+    }
+    return bareConcatOfIsnull(in.check_expr_isnull());
+  }
+
+  private static LogicalTypesParser.Check_expr_concatContext bareConcatOfIsnull(
+      LogicalTypesParser.Check_expr_isnullContext is) {
+    if (is.IS() != null) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
+    if (compare.check_expr_like().size() != 1) {
+      return null;
+    }
+    LogicalTypesParser.Check_expr_likeContext like = compare.check_expr_like(0);
+    if (like.LIKE() != null) {
+      return null;
+    }
+    return like.check_expr_concat();
   }
 
   /**
@@ -735,9 +1186,25 @@ final class ConstraintEmitter {
       // (`==` binds tighter than `||`/`&&`). Simple primaries (column
       // refs, literals, function calls, already-paren'd) emit unwrapped.
       if (caseArg != null) {
-        emitWrappedReceiver(caseArg, sb);
-        sb.append(" == ");
-        emitWrappedReceiver(when.check_expr(0), sb);
+        ConstraintValidationContext vctx = EMIT_VCTX.get();
+        boolean decimal = vctx != null
+            && (ConstraintResolver.isDecimal(
+                    ConstraintResolver.tryResolveCheckExprType(caseArg, vctx))
+                || ConstraintResolver.isDecimal(
+                    ConstraintResolver.tryResolveCheckExprType(when.check_expr(0), vctx)));
+        if (decimal) {
+          // Opaque Decimal has no native `==`; use decimals.eq for the implicit
+          // simple-CASE subject comparison.
+          sb.append("decimals.eq(");
+          emitDecimalValue(caseArg, sb);
+          sb.append(", ");
+          emitDecimalValue(when.check_expr(0), sb);
+          sb.append(')');
+        } else {
+          emitWrappedReceiver(caseArg, sb);
+          sb.append(" == ");
+          emitWrappedReceiver(when.check_expr(0), sb);
+        }
       } else {
         emitWrappedReceiver(when.check_expr(0), sb);
       }
