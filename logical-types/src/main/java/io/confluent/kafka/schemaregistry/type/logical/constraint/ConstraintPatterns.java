@@ -33,7 +33,7 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
  *       anchored regex string.</li>
  *   <li>{@link #escapeForCelStringLiteral(String)} — escape a regex (or any
  *       string) for embedding inside a CEL single-quoted literal.</li>
- *   <li>{@link #normalizeFloatLiteral(String)} — pad trailing/leading dot
+ *   <li>{@link #normalizeNumericLiteral(String)} — pad trailing/leading dot
  *       to satisfy CEL's float-literal grammar.</li>
  * </ul>
  */
@@ -153,10 +153,10 @@ final class ConstraintPatterns {
    * digit on the absent side. Returns the input unchanged when the form
    * is already two-sided (e.g. {@code 1.5}, {@code 1.0e10}).
    */
-  static String normalizeFloatLiteral(String text) {
+  static String normalizeNumericLiteral(String text) {
     int dot = text.indexOf('.');
     if (dot < 0) {
-      return text;  // shouldn't happen for FLOAT_LITERAL, defensive
+      return text;  // shouldn't happen for a decimal/double literal, defensive
     }
     int afterDot = dot + 1;
     boolean trailingDot = afterDot >= text.length()

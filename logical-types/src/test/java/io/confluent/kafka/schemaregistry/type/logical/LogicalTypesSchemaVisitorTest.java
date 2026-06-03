@@ -1184,7 +1184,7 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
-  void testDefaultFloatFromFloatLiteral() {
+  void testDefaultFloatFromDecimalLiteral() {
     assertEquals(1.5f, firstField("FLOAT DEFAULT 1.5").getDefaultValue());
   }
 

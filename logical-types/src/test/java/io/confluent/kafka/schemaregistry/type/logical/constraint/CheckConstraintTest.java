@@ -438,12 +438,12 @@ class CheckConstraintTest {
   }
 
   @Test
-  void floatLiteral() {
+  void decimalPointLiteral() {
     assertEquals("this.ratio == 3.14", translateCheck("ratio = 3.14"));
   }
 
   @Test
-  void floatLiteralTrailingDotNormalized() {
+  void decimalPointLiteralTrailingDotNormalized() {
     // Grammar accepts `1.` (trailing dot) but CEL requires digits on
     // both sides. Translator normalizes to `1.0` so the emitted CEL
     // compiles cleanly.
@@ -451,7 +451,7 @@ class CheckConstraintTest {
   }
 
   @Test
-  void floatLiteralLeadingDotNormalized() {
+  void decimalPointLiteralLeadingDotNormalized() {
     // Same for `.5` → `0.5`. (SQL accepts both forms; CEL requires both
     // sides.)
     assertEquals("this.ratio == 0.5", translateCheck("ratio = .5"));
@@ -3265,13 +3265,14 @@ class CheckConstraintTest {
   }
 
   @Test
-  void floatLiteralOverflowRejected() {
-    // 1e500 parses as +Infinity in CEL — silently always-false constraint.
+  void doubleLiteralOverflowRejected() {
+    // 1e500 is an exponent (double) literal that parses as +Infinity — a
+    // silently always-false constraint.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> translateCheck("x > 1e500"));
     assertTrue(t.getMessage().contains("out of range"),
-        "expected float-overflow rejection, got: " + t.getMessage());
+        "expected double-overflow rejection, got: " + t.getMessage());
   }
 
   @Test
