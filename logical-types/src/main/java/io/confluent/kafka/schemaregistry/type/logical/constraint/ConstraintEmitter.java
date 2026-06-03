@@ -953,7 +953,7 @@ final class ConstraintEmitter {
     sb.append(acc);
   }
 
-  /** Fold a multiplicative chain left-associatively into decimals.mul/div calls. */
+  /** Fold a multiplicative chain left-associatively into decimals.mul/div/mod calls. */
   private static void emitMulAsDecimal(
       LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
@@ -969,15 +969,13 @@ final class ConstraintEmitter {
           fn = "decimals.mul";
         } else if ("/".equals(op)) {
           fn = "decimals.div";
-        } else if ("||".equals(op)) {
+        } else if ("%".equals(op)) {
+          // Modulo → decimals.mod (remainder with the sign of the dividend).
+          fn = "decimals.mod";
+        } else {
           // `||` is string/bytes concat — never valid on a DECIMAL value.
           throw locatedError(mul,
               "Operator '||' (string concat) is not supported on DECIMAL operands.");
-        } else {
-          // '%' / MOD has no decimals.* equivalent.
-          throw locatedError(mul,
-              "Operator '" + op + "' (modulo) is not supported on DECIMAL operands; "
-                  + "there is no decimals.* modulo function.");
         }
         StringBuilder rhs = new StringBuilder();
         emitSignAsDecimal(signs.get(signIdx++), rhs);
@@ -1344,7 +1342,14 @@ final class ConstraintEmitter {
       ParseTree child = mul.getChild(i);
       if (child instanceof TerminalNode) {
         String op = child.getText();
-        // `||` (string concat) → CEL `+`; not expected for double values.
+        if ("%".equals(op)) {
+          // No double-modulo operator is available; modulo needs integer or
+          // decimal operands.
+          throw locatedError(mul,
+              "Operator '%' (modulo) is not supported on DOUBLE operands; "
+                  + "use integer or decimal operands.");
+        }
+        // `||` (string concat) → `+`; not expected for double values.
         sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
         emitDoubleValueSign(signs.get(signIdx++), sb);
       }
@@ -1865,7 +1870,7 @@ final class ConstraintEmitter {
       case "MONTH":
       case "MONTHS":
         throw locatedError(ctx,
-            "INTERVAL " + unit + " is not supported: CEL durations have no fixed "
+            "INTERVAL " + unit + " is not supported: durations have no fixed "
                 + "calendar length. Use DAY, HOUR, MINUTE, or SECOND.");
       default:
         throw locatedError(ctx,

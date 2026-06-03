@@ -100,7 +100,7 @@ final class ConstraintCelChecker {
       compiler.compile(cel).getAst();
     } catch (CelValidationException e) {
       throw new ValidationException(
-          "Emitted CEL fails strict type-check. "
+          "Emitted expression fails strict type-check. "
               + sourceContext(sourceSql, cel) + e.getMessage());
     }
   }
@@ -110,7 +110,7 @@ final class ConstraintCelChecker {
     if (sourceSql != null) {
       sb.append("SQL: ").append(sourceSql).append("\n  ");
     }
-    sb.append("CEL: ").append(cel).append("\n  ");
+    sb.append("Expr: ").append(cel).append("\n  ");
     return sb.toString();
   }
 

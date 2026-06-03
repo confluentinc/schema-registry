@@ -219,7 +219,7 @@ final class ConstraintFunctions {
     } catch (com.google.re2j.PatternSyntaxException e) {
       throw locatedError(args.get(1),
           "MATCHES() regex is invalid (RE2 syntax): " + e.getDescription()
-              + " in pattern '" + pattern + "'. Note: CEL's matches() uses "
+              + " in pattern '" + pattern + "'. Note: matches() uses "
               + "Google RE2 syntax — named groups (?<name>...), possessive "
               + "quantifiers (*+, ++, ?+), and backreferences (\\1) are not "
               + "supported.");
@@ -280,9 +280,9 @@ final class ConstraintFunctions {
     }
     if (Schema.isCelReservedName(text)) {
       throw locatedError(ctx,
-          sqlName + "() iteration variable name '" + text + "' is a CEL "
+          sqlName + "() iteration variable name '" + text + "' is a "
               + "reserved word; choose a different identifier (the macro "
-              + "binding emits as a bare identifier in CEL).");
+              + "binding emits as a bare identifier).");
     }
     return text;
   }
@@ -368,7 +368,7 @@ final class ConstraintFunctions {
       throw locatedError(fctx,
           sqlName + "() with a scale argument is only supported on DECIMAL "
               + "operands; for INT/DOUBLE only the single-argument form is "
-              + "available (CEL math." + shortName + " has no scale parameter).");
+              + "available (math." + shortName + " has no scale parameter).");
     }
     if (decimal) {
       sb.append("decimals.").append(shortName).append('(');
@@ -896,7 +896,7 @@ final class ConstraintFunctions {
       throw locatedError(startExpr,
           "SUBSTRING start index must be ≥ 1 (SQL is 1-indexed); got "
               + literal + ". Postgres clamps non-positive starts to 1, but "
-              + "this translator targets CEL which has no clamping; rewrite "
+              + "the generated expression performs no clamping; rewrite "
               + "the expression to use a positive start.");
     }
   }
@@ -909,8 +909,8 @@ final class ConstraintFunctions {
       throw locatedError(lengthExpr,
           "SUBSTRING length must be ≥ 0; got " + literal
               + ". Postgres returns an empty string for negative lengths, "
-              + "but our CEL emit would throw at runtime; rewrite the "
-              + "expression to use a non-negative length.");
+              + "but the generated expression would throw at runtime; rewrite "
+              + "the expression to use a non-negative length.");
     }
   }
 
@@ -930,13 +930,13 @@ final class ConstraintFunctions {
     if (ctx.LEADING() != null || ctx.TRAILING() != null) {
       String mode = ctx.LEADING() != null ? "LEADING" : "TRAILING";
       throw locatedError(ctx,
-          "TRIM " + mode + " is not supported. CEL has no directional trim; "
+          "TRIM " + mode + " is not supported. There is no directional trim; "
               + "use TRIM(x) (whitespace, both ends).");
     }
     List<LogicalTypesParser.Check_exprContext> exprs = ctx.check_expr();
     if (exprs.size() != 1) {
       throw locatedError(ctx,
-          "TRIM with a character set is not supported. CEL's trim() removes "
+          "TRIM with a character set is not supported. The generated trim() removes "
               + "leading/trailing whitespace only and has no chars overload. "
               + "Use TRIM(x) (whitespace, both ends), or for character-set "
               + "trimming, use MATCHES(x, '<regex>') with an anchored pattern.");
