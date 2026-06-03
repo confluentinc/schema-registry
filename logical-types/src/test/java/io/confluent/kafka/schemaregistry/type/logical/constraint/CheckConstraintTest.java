@@ -1351,7 +1351,7 @@ class CheckConstraintTest {
     assertEquals(
         "((!has(this.a) || dyn(this.a) == null) ? this.b : "
             + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
-            + "(this.a > this.b ? this.a : this.b))) > 10",
+            + "math.greatest(this.a, this.b))) > 10",
         translateCheck("GREATEST(a, b) > 10"));
   }
 
@@ -1360,8 +1360,17 @@ class CheckConstraintTest {
     assertEquals(
         "((!has(this.a) || dyn(this.a) == null) ? this.b : "
             + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
-            + "(this.a < this.b ? this.a : this.b))) > 0",
+            + "math.least(this.a, this.b))) > 0",
         translateCheck("LEAST(a, b) > 0"));
+  }
+
+  @Test
+  void greatestDoubleCoercesToMathExt() {
+    // ratio (double) + x (int) → common DOUBLE; the int operand is cast and the
+    // inner selection uses math.greatest on two doubles.
+    String cel = translateCheck("GREATEST(ratio, x) > 0.0");
+    assertTrue(cel.contains("math.greatest(this.ratio, double(this.x))"),
+        "expected double-coerced math.greatest; got: " + cel);
   }
 
   @Test
@@ -1674,7 +1683,7 @@ class CheckConstraintTest {
     // markers rather than the exact string (still strict-checked end-to-end).
     String cel = translateCheck("GREATEST(amount, price) > 0");
     org.junit.jupiter.api.Assertions.assertTrue(
-        cel.contains("decimals.gt(this.amount, this.price)")
+        cel.contains("decimals.greatest(this.amount, this.price)")
             && cel.startsWith("decimals.gt("),
         "expected decimal GREATEST + outer decimal compare; got: " + cel);
   }
