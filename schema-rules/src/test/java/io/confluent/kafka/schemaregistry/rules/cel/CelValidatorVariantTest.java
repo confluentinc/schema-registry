@@ -271,7 +271,7 @@ public class CelValidatorVariantTest {
     //
     //   variants.field   — chained navigation (3-deep)
     //   variants.path    — JSONPath on null
-    //   variants.elem    — array indexing on null
+    //   variants.index    — array indexing on null
     //   variants.tryAs   — soft extraction, propagates to CEL null
     //
     // variants.type and variants.toJson are NOT included — they return
@@ -293,7 +293,7 @@ public class CelValidatorVariantTest {
         + "                     \\\"x\\\") == null"
         + "      && variants.path(variants.field(variant(this), \\\"missing\\\"),"
         + "                       \\\"$.x\\\") == null"
-        + "      && variants.elem(variants.field(variant(this), \\\"missing\\\"),"
+        + "      && variants.index(variants.field(variant(this), \\\"missing\\\"),"
         + "                       0) == null"
         + "      && variants.tryAs(variants.field(variant(this), \\\"missing\\\"),"
         + "                        \\\"string\\\") == null"
@@ -340,7 +340,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.elem(variant(this), 0) == null\"}]\n"
+        + "             expr: \"variants.index(variant(this), 0) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -363,7 +363,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.elem(variant(this), 4294967296) == null\"}]\n"
+        + "             expr: \"variants.index(variant(this), 4294967296) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
@@ -385,7 +385,7 @@ public class CelValidatorVariantTest {
         + "message Doc {\n"
         + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = {\n"
         + "    rules: [{name: \"r\","
-        + "             expr: \"variants.elem(variant(this), 99) == null\"}]\n"
+        + "             expr: \"variants.index(variant(this), 99) == null\"}]\n"
         + "  }];\n"
         + "}\n";
     ProtobufSchema schema = new ProtobufSchema(s);
