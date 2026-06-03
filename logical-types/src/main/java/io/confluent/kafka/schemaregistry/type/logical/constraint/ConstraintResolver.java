@@ -151,6 +151,16 @@ final class ConstraintResolver {
       if (lit.floatLiteral() != null) {
         return Schema.create(Schema.Type.DOUBLE);
       }
+      // TIMESTAMP/INTERVAL literals also carry a stringLiteral child, so they
+      // must be checked before the stringLiteral arm below.
+      if (lit.TIMESTAMP() != null) {
+        return Schema.createTimestampLtz(Schema.NO_PARAM);
+      }
+      if (lit.INTERVAL() != null) {
+        // Duration has no LT Schema type; emit is duration(...) and the strict
+        // CEL checker validates duration usage (e.g. timestamp ± interval).
+        return null;
+      }
       if (lit.stringLiteral() != null) {
         return Schema.createString();
       }
@@ -463,6 +473,13 @@ final class ConstraintResolver {
       if (lit.floatLiteral() != null) {
         return Schema.create(Schema.Type.DOUBLE);
       }
+      // TIMESTAMP/INTERVAL literals carry a stringLiteral child — check first.
+      if (lit.TIMESTAMP() != null) {
+        return Schema.createTimestampLtz(Schema.NO_PARAM);
+      }
+      if (lit.INTERVAL() != null) {
+        return null;  // duration: no LT type; strict CEL checker validates
+      }
       if (lit.stringLiteral() != null) {
         return Schema.createString();
       }
@@ -625,6 +642,21 @@ final class ConstraintResolver {
     return s != null && "decimal".equals(categoryOf(s.getType()));
   }
 
+  /**
+   * True if {@code s} is an instant-bearing timestamp ({@code TIMESTAMP} or
+   * {@code TIMESTAMP_LTZ}). These are the temporal types the emitter normalizes
+   * with {@code timestamp.of(...)} (DATE/TIME are partial temporals and out of
+   * scope). The runtime surfaces these as Instant/proto Timestamp/RFC-3339
+   * string, none of which CEL's native timestamp ops accept un-normalized.
+   */
+  static boolean isInstantTimestamp(Schema s) {
+    if (s == null) {
+      return false;
+    }
+    Schema.Type t = s.getType();
+    return t == Schema.Type.TIMESTAMP || t == Schema.Type.TIMESTAMP_LTZ;
+  }
+
   static boolean likeHasDecimal(
       LogicalTypesParser.Check_expr_likeContext like, ConstraintValidationContext vctx) {
     if (like.LIKE() != null) {
@@ -657,6 +689,33 @@ final class ConstraintResolver {
       LogicalTypesParser.Check_expr_mulContext mul, ConstraintValidationContext vctx) {
     for (LogicalTypesParser.Check_expr_unary_signContext sign : mul.check_expr_unary_sign()) {
       if (isDecimal(resolveSingleSignType(sign, vctx))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * True if {@code node}'s subtree contains an instant-timestamp column
+   * reference or a TIMESTAMP/INTERVAL literal — i.e. the expression needs the
+   * timestamp-value emit (column leaves wrapped in {@code timestamp.of(...)},
+   * literals as {@code timestamp("…")}/{@code duration("…")}).
+   *
+   * <p>A generic parse-tree walk rather than a per-level cascade: over-detection
+   * is harmless because the timestamp-value emitter reproduces the native output
+   * exactly except at timestamp-column leaves (which are always correct to wrap).
+   */
+  static boolean subtreeHasTemporal(ParseTree node, ConstraintValidationContext vctx) {
+    if (node instanceof LogicalTypesParser.CheckColumnRefContext) {
+      return isInstantTimestamp(resolveColumnRefType(
+          ((LogicalTypesParser.CheckColumnRefContext) node).columnref(), vctx));
+    }
+    if (node instanceof LogicalTypesParser.LiteralContext) {
+      LogicalTypesParser.LiteralContext lit = (LogicalTypesParser.LiteralContext) node;
+      return lit.TIMESTAMP() != null || lit.INTERVAL() != null;
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      if (subtreeHasTemporal(node.getChild(i), vctx)) {
         return true;
       }
     }

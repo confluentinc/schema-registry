@@ -417,6 +417,8 @@ literal
     | bytesLiteral
     | boolLiteral
     | NULL
+    | TIMESTAMP stringLiteral             // typed timestamp literal: TIMESTAMP '2020-01-01 00:00:00'
+    | INTERVAL stringLiteral identifier   // INTERVAL '7' DAY (unit is an identifier, validated at emit)
     ;
 
 intLiteral
@@ -450,6 +452,7 @@ identifier
 
 nonReservedKeyword
     : ENUM
+    | INTERVAL
     | MAP
     | NAMESPACE
     | TAGS
@@ -495,6 +498,7 @@ FROM            : F R O M ;
 IN              : I N ;
 INT             : I N T ;
 INTEGER         : I N T E G E R ;
+INTERVAL        : I N T E R V A L ;
 IS              : I S ;
 LEADING         : L E A D I N G ;
 LIKE            : L I K E ;

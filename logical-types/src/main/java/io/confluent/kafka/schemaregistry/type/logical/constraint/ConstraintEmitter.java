@@ -112,6 +112,13 @@ final class ConstraintEmitter {
       emitBetweenDecimal(ins, negated, symmetric, sb);
       return;
     }
+    if (vctx != null
+        && (ConstraintResolver.subtreeHasTemporal(ins.get(0), vctx)
+            || ConstraintResolver.subtreeHasTemporal(ins.get(1), vctx)
+            || ConstraintResolver.subtreeHasTemporal(ins.get(2), vctx))) {
+      emitBetweenTimestamp(ins, negated, symmetric, sb);
+      return;
+    }
     if (negated) {
       sb.append("!(");
     }
@@ -245,6 +252,21 @@ final class ConstraintEmitter {
       emitInDecimal(ctx, negated, sb);
       return;
     }
+    // Timestamp: CEL's native `in` works on timestamps once the column LHS and
+    // any column elements are normalized — emit the same `x in [...]` shape via
+    // the timestamp-value cascade (no per-element rewrite needed, unlike decimal).
+    if (vctx != null && inTargetHasTemporal(ctx, vctx)) {
+      if (negated) {
+        sb.append("!(");
+      }
+      emitTimestampValueIsnull(ctx.check_expr_isnull(), sb);
+      sb.append(" in ");
+      emitTimestampInTarget(ctx.in_target(), sb);
+      if (negated) {
+        sb.append(")");
+      }
+      return;
+    }
     if (negated) {
       sb.append("!(");
     }
@@ -253,6 +275,49 @@ final class ConstraintEmitter {
     visitInTarget(ctx.in_target(), sb);
     if (negated) {
       sb.append(")");
+    }
+  }
+
+  /** True if the IN LHS or any value-list element is temporal. */
+  private static boolean inTargetHasTemporal(
+      LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
+    if (ConstraintResolver.subtreeHasTemporal(ctx.check_expr_isnull(), vctx)) {
+      return true;
+    }
+    LogicalTypesParser.In_targetContext target = ctx.in_target();
+    return target instanceof LogicalTypesParser.InTargetParenListContext
+        && ConstraintResolver.subtreeHasTemporal(target, vctx);
+  }
+
+  /** Emit an IN value list (or list-field) with each element timestamp-normalized. */
+  private static void emitTimestampInTarget(
+      LogicalTypesParser.In_targetContext ctx, StringBuilder sb) {
+    if (ctx instanceof LogicalTypesParser.InTargetParenListContext) {
+      List<LogicalTypesParser.Check_exprContext> items =
+          ((LogicalTypesParser.InTargetParenListContext) ctx).check_expr_list().check_expr();
+      sb.append('[');
+      for (int i = 0; i < items.size(); i++) {
+        if (i > 0) {
+          sb.append(", ");
+        }
+        emitTimestampValueCheckExpr(items.get(i), sb);
+      }
+      sb.append(']');
+    } else {
+      // IN <list-field>: the field is a list of timestamps; CEL `in` handles it
+      // natively. The receiver still normalizes via the cascade (field ref).
+      emitTimestampValueIsnull(
+          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_isnull(), sb);
+    }
+  }
+
+  static void emitTimestampValueIsnull(
+      LogicalTypesParser.Check_expr_isnullContext is, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIsnull(is);
+    if (concat != null) {
+      emitTimestampValueConcat(concat, sb);
+    } else {
+      visitIs(is, sb);
     }
   }
 
@@ -439,12 +504,210 @@ final class ConstraintEmitter {
         emitDecimalCompare(likes.get(0), celOp, likes.get(1), sb);
         return;
       }
-      visitLike(likes.get(0), sb);
+      // Timestamp normalization: the CEL comparison operator stays native, but
+      // each instant-timestamp operand is wrapped in timestamp.of(...) so the
+      // runtime value (Instant / proto Timestamp / RFC-3339 string) coerces to
+      // a CEL timestamp. CURRENT_TIMESTAMP (→ now) is already a CEL timestamp
+      // and is left unwrapped.
+      emitCompareOperand(likes.get(0), vctx, sb);
       sb.append(' ').append(celOp).append(' ');
-      visitLike(likes.get(1), sb);
+      emitCompareOperand(likes.get(1), vctx, sb);
       return;
     }
     visitLike(likes.get(0), sb);
+  }
+
+  // -------------------------------------------------------------------------
+  // Timestamp normalization — wrap instant-timestamp operands in
+  // timestamp.of(...) so Avro (Instant) / JSON (RFC-3339 string) values coerce
+  // to a CEL timestamp; proto Timestamp is identity. The comparison/BETWEEN
+  // operators stay native (CEL has first-class timestamp comparison).
+  // CURRENT_TIMESTAMP (→ now) is already a CEL timestamp and is left unwrapped.
+  // -------------------------------------------------------------------------
+
+  /**
+   * A comparison operand. If it involves a timestamp column or a TIMESTAMP/
+   * INTERVAL literal, emit it via the timestamp-value cascade (column leaves
+   * wrapped in {@code timestamp.of(...)}, literals as {@code timestamp(...)}/
+   * {@code duration(...)}, operators native); otherwise emit natively.
+   */
+  private static void emitCompareOperand(
+      LogicalTypesParser.Check_expr_likeContext like,
+      ConstraintValidationContext vctx, StringBuilder sb) {
+    // Guard LIKE: the cascade descends straight to the concat, so a LIKE clause
+    // would be dropped. A LIKE operand is boolean (and invalid on a timestamp),
+    // so emit it natively and let the strict checker reject the type error.
+    if (vctx != null && like.LIKE() == null
+        && ConstraintResolver.subtreeHasTemporal(like, vctx)) {
+      emitTimestampValueConcat(like.check_expr_concat(), sb);
+    } else {
+      visitLike(like, sb);
+    }
+  }
+
+  /**
+   * Emit an EXTRACT receiver. Temporal receivers go through the timestamp-value
+   * cascade (so {@code ts} → {@code timestamp.of(this.ts)}); {@code now} and
+   * non-temporal receivers emit natively. Compound receivers are parenthesized
+   * so the trailing {@code .getXxx()} binds to the whole receiver.
+   */
+  static void emitTimestampReceiver(
+      LogicalTypesParser.Check_exprContext receiver, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (vctx != null && ConstraintResolver.subtreeHasTemporal(receiver, vctx)) {
+      if (ConstraintResolver.isSimplePrimary(receiver)) {
+        emitTimestampValueCheckExpr(receiver, sb);
+      } else {
+        sb.append('(');
+        emitTimestampValueCheckExpr(receiver, sb);
+        sb.append(')');
+      }
+    } else {
+      emitWrappedReceiver(receiver, sb);
+    }
+  }
+
+  /**
+   * Timestamp BETWEEN: native {@code <=} chain with each operand emitted via
+   * the timestamp-value cascade.
+   */
+  private static void emitBetweenTimestamp(
+      List<LogicalTypesParser.Check_expr_inContext> ins,
+      boolean negated, boolean symmetric, StringBuilder sb) {
+    if (negated) {
+      sb.append("!(");
+    }
+    if (symmetric) {
+      sb.append('(');
+      emitTimestampLe(ins.get(1), ins.get(2), sb);   // lo <= hi ?
+      sb.append(" ? (");
+      emitTimestampLe(ins.get(1), ins.get(0), sb);
+      sb.append(" && ");
+      emitTimestampLe(ins.get(0), ins.get(2), sb);
+      sb.append(") : (");
+      emitTimestampLe(ins.get(2), ins.get(0), sb);
+      sb.append(" && ");
+      emitTimestampLe(ins.get(0), ins.get(1), sb);
+      sb.append("))");
+    } else {
+      emitTimestampLe(ins.get(1), ins.get(0), sb);
+      sb.append(" && ");
+      emitTimestampLe(ins.get(0), ins.get(2), sb);
+    }
+    if (negated) {
+      sb.append(")");
+    }
+  }
+
+  private static void emitTimestampLe(
+      LogicalTypesParser.Check_expr_inContext a,
+      LogicalTypesParser.Check_expr_inContext b, StringBuilder sb) {
+    emitTimestampValueIn(a, sb);
+    sb.append(" <= ");
+    emitTimestampValueIn(b, sb);
+  }
+
+  // ---- timestamp-value cascade: native emit, but instant-timestamp column
+  // leaves wrapped in timestamp.of(...). Reused by comparison, BETWEEN, EXTRACT,
+  // and the Phase B constructs. ----
+
+  static void emitTimestampValueIn(
+      LogicalTypesParser.Check_expr_inContext in, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfIn(in);
+    if (concat != null) {
+      emitTimestampValueConcat(concat, sb);
+    } else {
+      visitIn(in, sb);  // not a bare value (defensive); emit native
+    }
+  }
+
+  static void emitTimestampValueCheckExpr(
+      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
+    LogicalTypesParser.Check_expr_concatContext concat = bareConcatOfOr(ctx.check_expr_or());
+    if (concat != null) {
+      emitTimestampValueConcat(concat, sb);
+    } else {
+      visitCheckExpr(ctx, sb);  // not a bare value (defensive)
+    }
+  }
+
+  private static void emitTimestampValueConcat(
+      LogicalTypesParser.Check_expr_concatContext concat, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_addContext> adds = concat.check_expr_add();
+    emitTimestampValueAdd(adds.get(0), sb);
+    for (int i = 1; i < adds.size(); i++) {
+      sb.append(" + ");  // SQL || (string/bytes concat) — not expected for temporal
+      emitTimestampValueAdd(adds.get(i), sb);
+    }
+  }
+
+  private static void emitTimestampValueAdd(
+      LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
+    emitTimestampValueMul(muls.get(0), sb);
+    int mulIdx = 1;
+    for (int i = 0; i < add.getChildCount(); i++) {
+      ParseTree child = add.getChild(i);
+      if (child instanceof TerminalNode) {
+        sb.append(' ').append(child.getText()).append(' ');
+        emitTimestampValueMul(muls.get(mulIdx++), sb);
+      }
+    }
+  }
+
+  private static void emitTimestampValueMul(
+      LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
+    emitTimestampValueSign(signs.get(0), sb);
+    int signIdx = 1;
+    for (int i = 0; i < mul.getChildCount(); i++) {
+      ParseTree child = mul.getChild(i);
+      if (child instanceof TerminalNode) {
+        sb.append(' ').append(child.getText()).append(' ');
+        emitTimestampValueSign(signs.get(signIdx++), sb);
+      }
+    }
+  }
+
+  private static void emitTimestampValueSign(
+      LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+    for (int i = 0; i < sign.getChildCount(); i++) {
+      ParseTree child = sign.getChild(i);
+      if (child instanceof TerminalNode && "-".equals(child.getText())) {
+        sb.append('-');  // '+' dropped, matching native visitUnarySign
+      }
+    }
+    emitTimestampValueCExpr(sign.c_expr(), sb);
+  }
+
+  private static void emitTimestampValueCExpr(
+      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+    if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
+      LogicalTypesParser.ColumnrefContext cr =
+          ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
+      if (ConstraintResolver.isInstantTimestamp(
+          ConstraintResolver.resolveColumnRefType(cr, EMIT_VCTX.get()))) {
+        sb.append("timestamp.of(");
+        visitColumnRef(cr, sb);
+        sb.append(')');
+      } else {
+        visitColumnRef(cr, sb);
+      }
+      return;
+    }
+    if (ctx instanceof LogicalTypesParser.CheckParenContext) {
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
+      if (paren.indirection() == null) {
+        sb.append('(');
+        emitTimestampValueCheckExpr(paren.check_expr(), sb);
+        sb.append(')');
+        return;
+      }
+    }
+    // Literal (TIMESTAMP/INTERVAL → timestamp(...)/duration(...)), function
+    // (self-normalizing, incl. Phase B constructs), case, or paren+indirection:
+    // emit natively.
+    visitCExpr(ctx, sb);
   }
 
   // -------------------------------------------------------------------------
@@ -1135,6 +1398,20 @@ final class ConstraintEmitter {
       sb.append(ctx.intLiteral().getText());
     } else if (ctx.floatLiteral() != null) {
       sb.append(ConstraintPatterns.normalizeFloatLiteral(ctx.floatLiteral().getText()));
+    } else if (ctx.TIMESTAMP() != null) {
+      // TIMESTAMP '2020-01-01 00:00:00' → timestamp("2020-01-01T00:00:00Z")
+      // (CEL stdlib RFC-3339 constructor; zoneless literal assumed UTC).
+      // Checked before stringLiteral: this literal also has a stringLiteral child.
+      sb.append("timestamp(\"")
+          .append(normalizeSqlTimestamp(ctx))
+          .append("\")");
+    } else if (ctx.INTERVAL() != null) {
+      // INTERVAL '7' DAY → duration("604800s") (CEL stdlib duration; reject
+      // calendar units YEAR/MONTH which have no fixed length). Also checked
+      // before stringLiteral.
+      sb.append("duration(\"")
+          .append(intervalSeconds(ctx))
+          .append("s\")");
     } else if (ctx.stringLiteral() != null) {
       sb.append(ConstraintPatterns.translateStringLiteral(ctx.stringLiteral().getText()));
     } else if (ctx.bytesLiteral() != null) {
@@ -1143,6 +1420,92 @@ final class ConstraintEmitter {
     } else {
       throw new ValidationException(
           "Unrecognized literal: " + ctx.getText());
+    }
+  }
+
+  /**
+   * Normalize a SQL {@code TIMESTAMP '…'} literal body to an RFC-3339 string for
+   * CEL's {@code timestamp(...)} constructor: replace the date/time space with
+   * {@code T} and, when the literal carries no zone offset, append {@code Z}
+   * (UTC) — matching the §12 stance that a zoneless value is treated as UTC.
+   * Rejects malformed datetimes at parse time.
+   */
+  private static String normalizeSqlTimestamp(LogicalTypesParser.LiteralContext ctx) {
+    String content = ConstraintPatterns.extractSqlStringContent(
+        ctx.stringLiteral().getText()).trim().replace(' ', 'T');
+    if (content.length() == 10) {
+      // date-only "YYYY-MM-DD" → midnight
+      content = content + "T00:00:00";
+    }
+    try {
+      // Explicit offset (…+02:00 / …Z) → valid RFC-3339 as-is.
+      java.time.OffsetDateTime.parse(content);
+      return content;
+    } catch (java.time.format.DateTimeParseException withOffset) {
+      try {
+        // Zoneless local datetime → assume UTC.
+        java.time.LocalDateTime.parse(content);
+        return content + "Z";
+      } catch (java.time.format.DateTimeParseException zoneless) {
+        throw locatedError(ctx,
+            "Invalid TIMESTAMP literal " + ctx.stringLiteral().getText()
+                + ". Expected 'YYYY-MM-DD HH:MM:SS[.fff]' (optionally with a zone "
+                + "offset); zoneless values are treated as UTC.");
+      }
+    }
+  }
+
+  /**
+   * Convert a SQL {@code INTERVAL '<n>' <unit>} literal to whole seconds for
+   * CEL's {@code duration(...)} constructor. Supports the fixed-length units
+   * DAY / HOUR / MINUTE / SECOND; rejects YEAR / MONTH (no fixed length in CEL
+   * duration) and non-integer values.
+   */
+  private static long intervalSeconds(LogicalTypesParser.LiteralContext ctx) {
+    String unit = ctx.identifier().getText().toUpperCase(java.util.Locale.ROOT);
+    long multiplier;
+    switch (unit) {
+      case "DAY":
+      case "DAYS":
+        multiplier = 86400L;
+        break;
+      case "HOUR":
+      case "HOURS":
+        multiplier = 3600L;
+        break;
+      case "MINUTE":
+      case "MINUTES":
+        multiplier = 60L;
+        break;
+      case "SECOND":
+      case "SECONDS":
+        multiplier = 1L;
+        break;
+      case "YEAR":
+      case "YEARS":
+      case "MONTH":
+      case "MONTHS":
+        throw locatedError(ctx,
+            "INTERVAL " + unit + " is not supported: CEL durations have no fixed "
+                + "calendar length. Use DAY, HOUR, MINUTE, or SECOND.");
+      default:
+        throw locatedError(ctx,
+            "Unsupported INTERVAL unit '" + ctx.identifier().getText()
+                + "'. Supported units: DAY, HOUR, MINUTE, SECOND.");
+    }
+    String valueStr = ConstraintPatterns.extractSqlStringContent(
+        ctx.stringLiteral().getText()).trim();
+    long value;
+    try {
+      value = Long.parseLong(valueStr);
+    } catch (NumberFormatException e) {
+      throw locatedError(ctx,
+          "INTERVAL value '" + valueStr + "' must be an integer.");
+    }
+    try {
+      return Math.multiplyExact(value, multiplier);
+    } catch (ArithmeticException overflow) {
+      throw locatedError(ctx, "INTERVAL value '" + valueStr + " " + unit + "' overflows.");
     }
   }
 
@@ -1192,6 +1555,9 @@ final class ConstraintEmitter {
                     ConstraintResolver.tryResolveCheckExprType(caseArg, vctx))
                 || ConstraintResolver.isDecimal(
                     ConstraintResolver.tryResolveCheckExprType(when.check_expr(0), vctx)));
+        boolean temporal = vctx != null
+            && (ConstraintResolver.subtreeHasTemporal(caseArg, vctx)
+                || ConstraintResolver.subtreeHasTemporal(when.check_expr(0), vctx));
         if (decimal) {
           // Opaque Decimal has no native `==`; use decimals.eq for the implicit
           // simple-CASE subject comparison.
@@ -1200,6 +1566,11 @@ final class ConstraintEmitter {
           sb.append(", ");
           emitDecimalValue(when.check_expr(0), sb);
           sb.append(')');
+        } else if (temporal) {
+          // Native `==`, operands timestamp-normalized.
+          emitTimestampValueCheckExpr(caseArg, sb);
+          sb.append(" == ");
+          emitTimestampValueCheckExpr(when.check_expr(0), sb);
         } else {
           emitWrappedReceiver(caseArg, sb);
           sb.append(" == ");

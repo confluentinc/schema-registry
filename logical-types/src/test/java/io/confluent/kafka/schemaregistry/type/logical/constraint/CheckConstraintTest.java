@@ -1702,37 +1702,39 @@ class CheckConstraintTest {
 
   @Test
   void extractYear() {
-    assertEquals("this.ts.getFullYear() == 2026",
+    // The receiver is normalized via timestamp.of(...) (ts is TIMESTAMP_LTZ).
+    assertEquals("timestamp.of(this.ts).getFullYear() == 2026",
         translateCheck("EXTRACT(YEAR FROM ts) = 2026"));
   }
 
   @Test
   void extractMonth() {
     // CEL getMonth() is 0-based; SQL MONTH is 1-based. Translator adds 1.
-    assertEquals("(this.ts.getMonth() + 1) < 12",
+    assertEquals("(timestamp.of(this.ts).getMonth() + 1) < 12",
         translateCheck("EXTRACT(MONTH FROM ts) < 12"));
   }
 
   @Test
   void extractMonthIsOneBased() {
     // Lock in SQL semantics: January is month 1, not 0.
-    assertEquals("(this.ts.getMonth() + 1) == 1",
+    assertEquals("(timestamp.of(this.ts).getMonth() + 1) == 1",
         translateCheck("EXTRACT(MONTH FROM ts) = 1"));
   }
 
   @Test
   void extractDay() {
-    assertEquals("this.ts.getDate() <= 31", translateCheck("EXTRACT(DAY FROM ts) <= 31"));
+    assertEquals("timestamp.of(this.ts).getDate() <= 31",
+        translateCheck("EXTRACT(DAY FROM ts) <= 31"));
   }
 
   @Test
   void extractEpoch() {
-    assertEquals("int(this.ts) > 0", translateCheck("EXTRACT(EPOCH FROM ts) > 0"));
+    assertEquals("int(timestamp.of(this.ts)) > 0", translateCheck("EXTRACT(EPOCH FROM ts) > 0"));
   }
 
   @Test
   void extractCaseInsensitiveField() {
-    assertEquals("this.ts.getFullYear() == 2026",
+    assertEquals("timestamp.of(this.ts).getFullYear() == 2026",
         translateCheck("EXTRACT(year FROM ts) = 2026"));
   }
 
@@ -1905,13 +1907,191 @@ class CheckConstraintTest {
 
   @Test
   void currentTimestamp() {
-    assertEquals("this.created_at <= now", translateCheck("created_at <= CURRENT_TIMESTAMP"));
+    // created_at (TIMESTAMP_LTZ) is normalized; CURRENT_TIMESTAMP (now) is
+    // already a CEL timestamp and stays unwrapped.
+    assertEquals("timestamp.of(this.created_at) <= now",
+        translateCheck("created_at <= CURRENT_TIMESTAMP"));
   }
 
   @Test
   void currentTimestampWithExtract() {
+    // EXTRACT receiver is CURRENT_TIMESTAMP (now) — left unwrapped.
     assertEquals("now.getFullYear() >= 2026",
         translateCheck("EXTRACT(YEAR FROM CURRENT_TIMESTAMP) >= 2026"));
+  }
+
+  @Test
+  void timestampColumnVsColumn() {
+    // Both operands are TIMESTAMP_LTZ → both normalized; operator stays native.
+    assertEquals("timestamp.of(this.ts) < timestamp.of(this.created_at)",
+        translateCheck("ts < created_at"));
+  }
+
+  @Test
+  void timestampBetween() {
+    assertEquals(
+        "timestamp.of(this.created_at) <= timestamp.of(this.ts) "
+            + "&& timestamp.of(this.ts) <= now",
+        translateCheck("ts BETWEEN created_at AND CURRENT_TIMESTAMP"));
+  }
+
+  @Test
+  void extractHour() {
+    assertEquals("timestamp.of(this.ts).getHours() >= 0",
+        translateCheck("EXTRACT(HOUR FROM ts) >= 0"));
+  }
+
+  // ---------------------------------------------------------------------
+  // Temporal literals (TIMESTAMP '…') + INTERVAL arithmetic. `ts`/`created_at`
+  // are TIMESTAMP_LTZ columns. All assertions also pass the strict cel-java
+  // checker via translateCheck.
+  // ---------------------------------------------------------------------
+
+  @Test
+  void timestampLiteralComparison() {
+    assertEquals(
+        "timestamp.of(this.ts) >= timestamp(\"2020-01-01T00:00:00Z\")",
+        translateCheck("ts >= TIMESTAMP '2020-01-01 00:00:00'"));
+  }
+
+  @Test
+  void timestampLiteralWithOffsetPassesThrough() {
+    assertEquals(
+        "timestamp.of(this.ts) < timestamp(\"2020-01-01T00:00:00+02:00\")",
+        translateCheck("ts < TIMESTAMP '2020-01-01T00:00:00+02:00'"));
+  }
+
+  @Test
+  void intervalRelativeWindow() {
+    // The dominant idiom: "within the last 7 days".
+    assertEquals(
+        "timestamp.of(this.created_at) > now - duration(\"604800s\")",
+        translateCheck("created_at > CURRENT_TIMESTAMP - INTERVAL '7' DAY"));
+  }
+
+  @Test
+  void intervalPlusTimestampCommutative() {
+    assertEquals(
+        "duration(\"86400s\") + timestamp.of(this.created_at) > timestamp.of(this.ts)",
+        translateCheck("INTERVAL '1' DAY + created_at > ts"));
+  }
+
+  @Test
+  void intervalOnTimestampColumn() {
+    // Full arithmetic: interval applied to a column (not just CURRENT_TIMESTAMP).
+    assertEquals(
+        "timestamp.of(this.created_at) - duration(\"86400s\") < timestamp.of(this.ts)",
+        translateCheck("created_at - INTERVAL '1' DAY < ts"));
+  }
+
+  @Test
+  void timestampMinusTimestampYieldsDuration() {
+    // T - T → duration; compared against an INTERVAL (elapsed-time check).
+    assertEquals(
+        "timestamp.of(this.ts) - timestamp.of(this.created_at) > duration(\"3600s\")",
+        translateCheck("ts - created_at > INTERVAL '1' HOUR"));
+  }
+
+  @Test
+  void intervalUnitsConvertToSeconds() {
+    assertEquals("timestamp.of(this.ts) > now - duration(\"90s\")",
+        translateCheck("ts > CURRENT_TIMESTAMP - INTERVAL '90' SECOND"));
+    assertEquals("timestamp.of(this.ts) > now - duration(\"120s\")",
+        translateCheck("ts > CURRENT_TIMESTAMP - INTERVAL '2' MINUTE"));
+  }
+
+  @Test
+  void intervalYearRejected() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("created_at > CURRENT_TIMESTAMP - INTERVAL '1' YEAR"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("INTERVAL YEAR is not supported"),
+        "expected YEAR rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void intervalBadUnitRejected() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("ts > CURRENT_TIMESTAMP - INTERVAL '1' FORTNIGHT"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("Unsupported INTERVAL unit"),
+        "expected bad-unit rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void intervalNonIntegerRejected() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("ts > CURRENT_TIMESTAMP - INTERVAL '1.5' DAY"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("must be an integer"),
+        "expected non-integer rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void timestampLiteralMalformedRejected() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("ts >= TIMESTAMP 'not-a-date'"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        t.getMessage().contains("Invalid TIMESTAMP literal"),
+        "expected malformed-timestamp rejection; got: " + t.getMessage());
+  }
+
+  @Test
+  void timestampPlusTimestampRejectedByChecker() {
+    // T + T has no CEL overload — caught at strict-check (registration) time.
+    org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("ts + created_at <= CURRENT_TIMESTAMP"));
+  }
+
+  @Test
+  void timestampLiteralBetween() {
+    assertEquals(
+        "timestamp(\"2020-01-01T00:00:00Z\") <= timestamp.of(this.ts) "
+            + "&& timestamp.of(this.ts) <= now",
+        translateCheck("ts BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND CURRENT_TIMESTAMP"));
+  }
+
+  // Phase B: temporal operands in IN / CASE / COALESCE / NULLIF / GREATEST / LEAST.
+
+  @Test
+  void timestampInValueList() {
+    assertEquals(
+        "timestamp.of(this.ts) in [timestamp(\"2020-01-01T00:00:00Z\"), "
+            + "timestamp(\"2021-01-01T00:00:00Z\")]",
+        translateCheck("ts IN (TIMESTAMP '2020-01-01 00:00:00', TIMESTAMP '2021-01-01 00:00:00')"));
+  }
+
+  @Test
+  void timestampGreatest() {
+    String cel = translateCheck("GREATEST(ts, created_at) <= CURRENT_TIMESTAMP");
+    org.junit.jupiter.api.Assertions.assertTrue(
+        cel.contains("timestamp.of(this.ts) > timestamp.of(this.created_at)")
+            && cel.contains("<= now"),
+        "expected timestamp GREATEST; got: " + cel);
+  }
+
+  @Test
+  void timestampCoalesce() {
+    String cel = translateCheck("COALESCE(ts, created_at) <= CURRENT_TIMESTAMP");
+    org.junit.jupiter.api.Assertions.assertTrue(
+        cel.contains("timestamp.of(this.ts)")
+            && cel.contains("timestamp.of(this.created_at)")
+            && cel.contains("<= now"),
+        "expected timestamp COALESCE; got: " + cel);
+  }
+
+  @Test
+  void timestampCaseSubject() {
+    String cel = translateCheck(
+        "CASE ts WHEN TIMESTAMP '2020-01-01 00:00:00' THEN 1 ELSE 0 END = 1");
+    org.junit.jupiter.api.Assertions.assertTrue(
+        cel.contains("timestamp.of(this.ts) == timestamp(\"2020-01-01T00:00:00Z\")"),
+        "expected timestamp simple-CASE; got: " + cel);
   }
 
   // ---------------------------------------------------------------------
@@ -2574,7 +2754,7 @@ class CheckConstraintTest {
         + "CHECK (ts <= CURRENT_TIMESTAMP)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
-    assertEquals("this.ts <= now", schema.getRules().get(0).getExpr());
+    assertEquals("timestamp.of(this.ts) <= now", schema.getRules().get(0).getExpr());
   }
 
   // ---------------------------------------------------------------------
