@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.8-0</version>
+        <version>8.0.6-0</version>
     </parent>
 
     <licenses>
@@ -22,6 +22,10 @@
     <packaging>jar</packaging>
     <name>kafka-schema-rules</name>
 
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.confluent</groupId>
@@ -30,20 +34,17 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>kafka-schema-serializer</artifactId>
+            <artifactId>kafka-schema-types</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.antlr</groupId>
-            <artifactId>antlr4-runtime</artifactId>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-protobuf-types</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.projectnessie.cel</groupId>
-            <artifactId>cel-jackson</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.projectnessie.cel</groupId>
-            <artifactId>cel-tools</artifactId>
+            <groupId>dev.cel</groupId>
+            <artifactId>cel</artifactId>
         </dependency>
         <dependency>
             <groupId>commons-validator</groupId>
@@ -83,6 +84,13 @@
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-server-common</artifactId>
+            <version>${kafka.version}</version>
+            <classifier>test</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
@@ -101,12 +109,6 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
-            <artifactId>kafka-protobuf-types</artifactId>
-            <version>${io.confluent.schema-registry.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.confluent</groupId>
             <artifactId>kafka-protobuf-serializer</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
             <scope>test</scope>
@@ -119,6 +121,16 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -141,8 +153,8 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>com.github.os72</groupId>
-                <artifactId>protoc-jar-maven-plugin</artifactId>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
             </plugin>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
@@ -157,6 +169,7 @@
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/NewWidgetProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/PiiProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/SpecificWidgetProto.java</exclude>
+                            <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/ValidationWidgetProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetProto2.java</exclude>
                             <exclude>src/test/java/io/confluent/kafka/schemaregistry/rules/WidgetWithRefProto.java</exclude>
