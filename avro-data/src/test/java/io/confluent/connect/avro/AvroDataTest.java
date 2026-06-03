@@ -2066,6 +2066,182 @@ public class AvroDataTest {
         avroData.toConnectData(avroSchema, date.getTime()));
   }
 
+  @Test
+  public void testToConnectTimestampMicrosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS);
+    long microseconds = 1_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, microseconds),
+        avroData.toConnectData(avroSchema, microseconds));
+  }
+
+  @Test
+  public void testToConnectTimestampMicrosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(
+            org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS);
+
+    long microseconds = 1_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", microseconds);
+
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_MICROS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    Struct resultStruct = (Struct) result.value();
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(microseconds, resultStruct.get("ts"));
+  }
+
+  @Test
+  public void testToConnectTimestampNanosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS);
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, nanoseconds),
+        avroData.toConnectData(avroSchema, nanoseconds));
+  }
+
+  @Test
+  public void testToConnectTimestampNanosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(
+            org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS);
+
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", nanoseconds);
+
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIMESTAMP_NANOS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    Struct resultStruct = (Struct) result.value();
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(nanoseconds, resultStruct.get("ts"));
+  }
+
+  @Test
+  public void testToConnectTimeMicrosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MICROS);
+    long microseconds = 43_200_000_000L; // noon in microseconds
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIME_MICROS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, microseconds),
+        avroData.toConnectData(avroSchema, microseconds));
+  }
+
+  @Test
+  public void testToConnectTimeMicrosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("t").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("t").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_TIME_MICROS);
+    long microseconds = 43_200_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("t", microseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_TIME_MICROS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("t").schema());
+    assertEquals(microseconds, ((Struct) result.value()).get("t"));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMillisAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS);
+    long milliseconds = 1_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, milliseconds),
+        avroData.toConnectData(avroSchema, milliseconds));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMillisAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS);
+    long milliseconds = 1_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", milliseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(milliseconds, ((Struct) result.value()).get("ts"));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMicrosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS);
+    long microseconds = 1_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, microseconds),
+        avroData.toConnectData(avroSchema, microseconds));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampMicrosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS);
+    long microseconds = 1_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", microseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(microseconds, ((Struct) result.value()).get("ts"));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampNanosAvro() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.builder().longType();
+    avroSchema.addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS);
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    Schema expectedSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS).build();
+    assertEquals(new SchemaAndValue(expectedSchema, nanoseconds),
+        avroData.toConnectData(avroSchema, nanoseconds));
+  }
+
+  @Test
+  public void testToConnectLocalTimestampNanosAvroInRecord() {
+    org.apache.avro.Schema avroSchema = org.apache.avro.SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("ts").type(org.apache.avro.SchemaBuilder.builder().longType()).noDefault()
+        .endRecord();
+    avroSchema.getField("ts").schema()
+        .addProp(AvroData.AVRO_LOGICAL_TYPE_PROP, AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS);
+    long nanoseconds = 1_000_000_000_000_000_000L;
+    org.apache.avro.generic.GenericRecord record =
+        new org.apache.avro.generic.GenericData.Record(avroSchema);
+    record.put("ts", nanoseconds);
+    Schema expectedFieldSchema = SchemaBuilder.int64().name(AvroData.AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS).build();
+    SchemaAndValue result = avroData.toConnectData(avroSchema, record);
+    assertEquals(expectedFieldSchema, result.schema().field("ts").schema());
+    assertEquals(nanoseconds, ((Struct) result.value()).get("ts"));
+  }
+
   // Avro -> Connect: Connect types with no corresponding Avro type
 
   @Test

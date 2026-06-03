@@ -265,12 +265,19 @@ public class AvroData {
         return Timestamp.toLogical(schema, (long) value);
       }
     });
+
   }
 
   static final String AVRO_PROP = "avro";
   static final String AVRO_LOGICAL_TYPE_PROP = "logicalType";
   static final String AVRO_LOGICAL_TIMESTAMP_MILLIS = "timestamp-millis";
+  static final String AVRO_LOGICAL_TIMESTAMP_MICROS = "timestamp-micros";
+  static final String AVRO_LOGICAL_TIMESTAMP_NANOS = "timestamp-nanos";
+  static final String AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS = "local-timestamp-millis";
+  static final String AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS = "local-timestamp-micros";
+  static final String AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS = "local-timestamp-nanos";
   static final String AVRO_LOGICAL_TIME_MILLIS = "time-millis";
+  static final String AVRO_LOGICAL_TIME_MICROS = "time-micros";
   static final String AVRO_LOGICAL_DATE = "date";
   static final String AVRO_LOGICAL_DECIMAL = "decimal";
   static final String AVRO_LOGICAL_DECIMAL_SCALE_PROP = "scale";
@@ -1857,6 +1864,18 @@ public class AvroData {
       case LONG:
         if (AVRO_LOGICAL_TIMESTAMP_MILLIS.equalsIgnoreCase(logicalType)) {
           builder = Timestamp.builder();
+        } else if (AVRO_LOGICAL_TIMESTAMP_MICROS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_TIMESTAMP_MICROS);
+        } else if (AVRO_LOGICAL_TIMESTAMP_NANOS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_TIMESTAMP_NANOS);
+        } else if (AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS);
+        } else if (AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS);
+        } else if (AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS);
+        } else if (AVRO_LOGICAL_TIME_MICROS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_TIME_MICROS);
         } else {
           builder = SchemaBuilder.int64();
         }
