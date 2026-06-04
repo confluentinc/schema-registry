@@ -1556,6 +1556,16 @@ final class ConstraintResolver {
               "IS_URI", "IS_URI_REF", "IS_UUID",
               "EVERY", "ANY", "ONE",
               "GREATEST", "LEAST",
+              // Numeric scalar functions — always yield a number for a
+              // present operand (same non-null rationale as the string funcs).
+              "ABS", "SIGN", "FLOOR", "CEIL", "CEILING", "SQRT",
+              "ROUND", "TRUNCATE",
+              // Variant funcs whose result is non-null by construction:
+              // TO_JSON always produces a string; TYPE_OF_VARIANT a type label;
+              // VARIANT_IS_NULL a bool. (PARSE_JSON is excluded — its VARIANT
+              // result is used with IS [NOT] NULL as a "does it parse" idiom;
+              // TRY_PARSE_JSON / VARIANT_GET / TRY_VARIANT_GET can also be null.)
+              "TO_JSON", "TYPE_OF_VARIANT", "VARIANT_IS_NULL",
               // Special-syntax forms:
               "CAST", "EXTRACT", "SUBSTRING", "POSITION", "TRIM",
               "CURRENT_TIMESTAMP")));
@@ -1564,11 +1574,14 @@ final class ConstraintResolver {
    * Functions that CAN return null. Used by the BETWEEN-bound validator
    * to reject {@code x BETWEEN NULLIF(a,b) AND 10} — the emit produces a
    * valid CEL ternary but a runtime null result hits a comparison op
-   * with no null overload.
+   * with no null overload. TRY_VARIANT_GET returns null on a type/path
+   * mismatch (it emits {@code variants.tryAs(...)}), the same hazard as a
+   * bound — and unlike its VARIANT result siblings (TRY_PARSE_JSON) its
+   * RETURNING type is a comparable scalar, so strict-check does not catch it.
    */
   static final java.util.Set<String> NULL_RETURNING_FUNCS =
       java.util.Collections.unmodifiableSet(new java.util.HashSet<>(
-          java.util.Arrays.asList("NULLIF")));
+          java.util.Arrays.asList("NULLIF", "TRY_VARIANT_GET")));
 
   /**
    * If {@code ctx} is a pass-through cascade ending in a single function-
@@ -1713,6 +1726,12 @@ final class ConstraintResolver {
     }
     if (sub instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       return "CURRENT_TIMESTAMP";
+    }
+    if (sub instanceof LogicalTypesParser.FuncVariantGetContext) {
+      return "VARIANT_GET";
+    }
+    if (sub instanceof LogicalTypesParser.FuncTryVariantGetContext) {
+      return "TRY_VARIANT_GET";
     }
     return null;
   }
