@@ -171,6 +171,24 @@ final class ConstraintFunctions {
         emitRoundTrunc(ctx, args, "trunc", sb, name);
         break;
 
+      // Variant: parse / serialize / inspect. (Navigation+extraction is the
+      // VARIANT_GET / TRY_VARIANT_GET special form, see visitFuncCommonSubexpr.)
+      case "PARSE_JSON":
+        emitVariantUnary(ctx, args, "variants.parseJson", sb, name);
+        break;
+      case "TRY_PARSE_JSON":
+        emitVariantUnary(ctx, args, "variants.tryParseJson", sb, name);
+        break;
+      case "TO_JSON":
+        emitVariantUnary(ctx, args, "variants.toJson", sb, name);
+        break;
+      case "TYPE_OF_VARIANT":
+        emitVariantUnary(ctx, args, "variants.type", sb, name);
+        break;
+      case "VARIANT_IS_NULL":
+        emitVariantUnary(ctx, args, "variants.isNull", sb, name);
+        break;
+
       // CEL macros (sugar)
       case "EVERY":
         emitMacro(ctx, args, "all", sb, name);
@@ -189,9 +207,11 @@ final class ConstraintFunctions {
                 + "ENDS_WITH, CONTAINS, REPLACE, MATCHES, COALESCE, NULLIF, "
                 + "GREATEST, LEAST, EVERY, ANY, ONE, IS_EMAIL, IS_HOSTNAME, "
                 + "IS_IPV4, IS_IPV6, IS_URI, IS_URI_REF, IS_UUID, ABS, SIGN, "
-                + "FLOOR, CEIL/CEILING, ROUND, TRUNCATE, SQRT, plus the "
-                + "special-syntax forms CAST, EXTRACT, SUBSTRING, POSITION, "
-                + "TRIM, CURRENT_TIMESTAMP.");
+                + "FLOOR, CEIL/CEILING, ROUND, TRUNCATE, SQRT, PARSE_JSON, "
+                + "TRY_PARSE_JSON, TO_JSON, TYPE_OF_VARIANT, VARIANT_IS_NULL, "
+                + "plus the special-syntax forms CAST, EXTRACT, SUBSTRING, "
+                + "POSITION, TRIM, CURRENT_TIMESTAMP, VARIANT_GET, "
+                + "TRY_VARIANT_GET.");
     }
   }
 
@@ -699,10 +719,116 @@ final class ConstraintFunctions {
       visitTrim((LogicalTypesParser.FuncTrimContext) ctx, sb);
     } else if (ctx instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       sb.append("now");
+    } else if (ctx instanceof LogicalTypesParser.FuncVariantGetContext) {
+      visitVariantGet((LogicalTypesParser.FuncVariantGetContext) ctx, sb);
+    } else if (ctx instanceof LogicalTypesParser.FuncTryVariantGetContext) {
+      visitTryVariantGet((LogicalTypesParser.FuncTryVariantGetContext) ctx, sb);
     } else {
       throw new ValidationException(
           "Unrecognized func_expr_common_subexpr subtype: "
               + ctx.getClass().getSimpleName());
+    }
+  }
+
+  /**
+   * Single-arg variant function: {@code celFn(<arg>)}.
+   */
+  private static void emitVariantUnary(
+      LogicalTypesParser.Func_applicationContext ctx,
+      List<LogicalTypesParser.Check_exprContext> args, String celFn,
+      StringBuilder sb, String sqlName) {
+    if (args.size() != 1) {
+      throw locatedError(ctx, sqlName + "() expects 1 argument, got " + args.size());
+    }
+    sb.append(celFn).append('(');
+    visitCheckExpr(args.get(0), sb);
+    sb.append(')');
+  }
+
+  /**
+   * VARIANT_GET(v, path [RETURNING T]) → {@code variants.path(v, path)} (returns
+   * the sub-variant) when no RETURNING; {@code variants.as(variants.path(v,
+   * path), "label")} (extract + cast) when a return type is given.
+   */
+  private static void visitVariantGet(
+      LogicalTypesParser.FuncVariantGetContext ctx, StringBuilder sb) {
+    if (ctx.castType() == null) {
+      sb.append("variants.path(");
+      visitCheckExpr(ctx.check_expr(0), sb);
+      sb.append(", ");
+      visitCheckExpr(ctx.check_expr(1), sb);
+      sb.append(')');
+    } else {
+      emitVariantPathAs("variants.as", ctx.check_expr(0), ctx.check_expr(1),
+          ctx.castType(), sb);
+    }
+  }
+
+  /**
+   * TRY_VARIANT_GET(v, path RETURNING T) →
+   * {@code variants.tryAs(variants.path(v, path), "label")} (null on type
+   * mismatch).
+   */
+  private static void visitTryVariantGet(
+      LogicalTypesParser.FuncTryVariantGetContext ctx, StringBuilder sb) {
+    emitVariantPathAs("variants.tryAs", ctx.check_expr(0), ctx.check_expr(1),
+        ctx.castType(), sb);
+  }
+
+  private static void emitVariantPathAs(
+      String asFn, LogicalTypesParser.Check_exprContext v,
+      LogicalTypesParser.Check_exprContext path,
+      LogicalTypesParser.CastTypeContext castType, StringBuilder sb) {
+    final String label = variantTypeLabel(castType.primitiveType());
+    sb.append(asFn).append("(variants.path(");
+    visitCheckExpr(v, sb);
+    sb.append(", ");
+    visitCheckExpr(path, sb);
+    sb.append("), \"").append(label).append("\")");
+  }
+
+  /**
+   * Map a VARIANT_GET RETURNING type to the {@code variants.as} extraction label.
+   */
+  private static String variantTypeLabel(LogicalTypesParser.PrimitiveTypeContext pt) {
+    String text = pt.getText().toUpperCase(java.util.Locale.ROOT);
+    int paren = text.indexOf('(');
+    String head = paren >= 0 ? text.substring(0, paren) : text;
+    switch (head) {
+      case "INT":
+      case "INTEGER":
+      case "TINYINT":
+      case "SMALLINT":
+      case "BIGINT":
+        return "int";
+      case "FLOAT":
+      case "REAL":
+      case "DOUBLE":
+        return "double";
+      case "DECIMAL":
+      case "DEC":
+      case "NUMERIC":
+        return "decimal";
+      case "STRING":
+      case "VARCHAR":
+      case "CHAR":
+      case "CHARACTER":
+        return "string";
+      case "BOOLEAN":
+        return "boolean";
+      case "BYTES":
+      case "BINARY":
+      case "VARBINARY":
+        return "bytes";
+      case "TIMESTAMP":
+      case "TIMESTAMP_LTZ":
+        return "timestamp";
+      default:
+        throw locatedError(pt,
+            "VARIANT_GET RETURNING type '" + text + "' is not supported. "
+                + "Extractable types: INT/INTEGER/TINYINT/SMALLINT/BIGINT, "
+                + "FLOAT/REAL/DOUBLE, DECIMAL, STRING/VARCHAR/CHAR, BOOLEAN, "
+                + "BYTES/BINARY/VARBINARY, TIMESTAMP.");
     }
   }
 

@@ -276,6 +276,10 @@ func_expr_common_subexpr
     | POSITION '(' check_expr IN check_expr ')'                            # FuncPosition
     | TRIM '(' ( BOTH | LEADING | TRAILING )? check_expr ( FROM check_expr )? ')'  # FuncTrim
     | CURRENT_TIMESTAMP                                                    # FuncCurrentTimestamp
+    // Variant path access. The optional RETURNING clause extracts and casts the
+    // value at the path to a scalar type; without it, the sub-variant is returned.
+    | VARIANT_GET '(' check_expr ',' check_expr ( RETURNING castType )? ')'     # FuncVariantGet
+    | TRY_VARIANT_GET '(' check_expr ',' check_expr RETURNING castType ')'      # FuncTryVariantGet
     ;
 
 // Type name accepted by CAST. Reuses the LT primitive type rule with its
@@ -511,6 +515,7 @@ OR              : O R ;
 POSITION        : P O S I T I O N ;
 PRECISION       : P R E C I S I O N ;
 REAL            : R E A L ;
+RETURNING       : R E T U R N I N G ;
 ROW             : R O W ;
 SMALLINT        : S M A L L I N T ;
 STRING          : S T R I N G ;
@@ -525,11 +530,13 @@ TINYINT         : T I N Y I N T ;
 TRAILING        : T R A I L I N G ;
 TRIM            : T R I M ;
 TRUE            : T R U E ;
+TRY_VARIANT_GET : T R Y '_' V A R I A N T '_' G E T ;
 TYPE            : T Y P E ;
 UNION           : U N I O N ;
 VARBINARY       : V A R B I N A R Y ;
 VARCHAR         : V A R C H A R ;
 VARYING         : V A R Y I N G ;
+VARIANT_GET     : V A R I A N T '_' G E T ;
 VARIANT         : V A R I A N T ;
 WHEN            : W H E N ;
 WITH            : W I T H ;

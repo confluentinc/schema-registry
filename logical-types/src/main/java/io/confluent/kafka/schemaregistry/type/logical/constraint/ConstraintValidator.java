@@ -243,6 +243,7 @@ final class ConstraintValidator {
       case "EVERY":
       case "ANY":
       case "ONE":
+      case "VARIANT_IS_NULL":
         return true;
       default:
         return false;
