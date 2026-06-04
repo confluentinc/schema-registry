@@ -73,6 +73,7 @@ class CheckConstraintTest {
         + "matrix INT ARRAY ARRAY,"
         + "addresses STRING ARRAY, emails STRING ARRAY,"
         + "addr_struct ROW(zip INT) NOT NULL,"
+        + "data VARIANT,"
         + "CHECK (" + checkExpr + ")"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -2850,6 +2851,82 @@ class CheckConstraintTest {
     // `(x IN (1, 2)) = active`. Under the old precedence this was a parse error.
     assertEquals("(this.x in [1, 2]) == this.active",
         translateCheck("x IN (1, 2) = active"));
+  }
+
+  // ---- Variant CHECK functions (Tier 1/2 + TYPE_OF_VARIANT/VARIANT_IS_NULL) ----
+
+  @Test
+  void variantParseJson() {
+    assertEquals("dyn(variants.parseJson(this.value)) != null",
+        translateCheck("PARSE_JSON(value) IS NOT NULL"));
+  }
+
+  @Test
+  void variantTryParseJson() {
+    assertEquals("dyn(variants.tryParseJson(this.value)) != null",
+        translateCheck("TRY_PARSE_JSON(value) IS NOT NULL"));
+  }
+
+  @Test
+  void variantGetUntyped() {
+    // 2-arg VARIANT_GET returns a sub-variant; IS NOT NULL is the existence test.
+    assertEquals("dyn(variants.path(this.data, '$.addr')) != null",
+        translateCheck("VARIANT_GET(data, '$.addr') IS NOT NULL"));
+  }
+
+  @Test
+  void variantGetReturning() {
+    assertEquals(
+        "variants.as(variants.path(this.data, '$.age'), \"int\") > 18",
+        translateCheck("VARIANT_GET(data, '$.age' RETURNING INT) > 18"));
+  }
+
+  @Test
+  void tryVariantGetReturning() {
+    assertEquals(
+        "variants.tryAs(variants.path(this.data, '$.age'), \"int\") > 18",
+        translateCheck("TRY_VARIANT_GET(data, '$.age' RETURNING INT) > 18"));
+  }
+
+  @Test
+  void variantGetReturningDecimal() {
+    assertEquals(
+        "decimals.gt(variants.as(variants.path(this.data, '$.amt'), \"decimal\"), decimal(\"0\"))",
+        translateCheck("VARIANT_GET(data, '$.amt' RETURNING DECIMAL(10,2)) > 0"));
+  }
+
+  @Test
+  void variantGetOverParseJson() {
+    assertEquals(
+        "variants.as(variants.path(variants.parseJson(this.value), '$.x'), \"string\") == 'ok'",
+        translateCheck("VARIANT_GET(PARSE_JSON(value), '$.x' RETURNING STRING) = 'ok'"));
+  }
+
+  @Test
+  void variantToJson() {
+    assertEquals("variants.toJson(this.data) == '{}'",
+        translateCheck("TO_JSON(data) = '{}'"));
+  }
+
+  @Test
+  void typeOfVariant() {
+    assertEquals("variants.type(this.data) == 'OBJECT'",
+        translateCheck("TYPE_OF_VARIANT(data) = 'OBJECT'"));
+  }
+
+  @Test
+  void variantIsNull() {
+    assertEquals("variants.isNull(this.data)",
+        translateCheck("VARIANT_IS_NULL(data)"));
+  }
+
+  @Test
+  void variantGetRejectsUnsupportedReturnType() {
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("VARIANT_GET(data, '$.d' RETURNING DATE) > 0"));
+    assertTrue(t.getMessage().contains("not supported"),
+        "expected unsupported-return-type rejection, got: " + t.getMessage());
   }
 
   @Test

@@ -336,6 +336,14 @@ final class ConstraintResolver {
         Schema at = tryResolveCheckExprType(args.get(0), vctx);
         return isDecimal(at) ? Schema.create(Schema.Type.BIGINT) : at;
       }
+      case "PARSE_JSON":
+      case "TRY_PARSE_JSON":
+        return Schema.create(Schema.Type.VARIANT);
+      case "TO_JSON":
+      case "TYPE_OF_VARIANT":
+        return Schema.createString();
+      case "VARIANT_IS_NULL":
+        return Schema.create(Schema.Type.BOOLEAN);
       default:
         return null;
     }
@@ -364,6 +372,17 @@ final class ConstraintResolver {
     }
     if (fctx instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       return Schema.createTimestampLtz(Schema.NO_PARAM);
+    }
+    if (fctx instanceof LogicalTypesParser.FuncVariantGetContext) {
+      // RETURNING T → the extracted scalar's type (so DECIMAL routes through
+      // decimals.*, etc.); no RETURNING → the sub-variant.
+      LogicalTypesParser.CastTypeContext ct =
+          ((LogicalTypesParser.FuncVariantGetContext) fctx).castType();
+      return ct == null ? Schema.create(Schema.Type.VARIANT) : celTypeFromCastType(ct);
+    }
+    if (fctx instanceof LogicalTypesParser.FuncTryVariantGetContext) {
+      return celTypeFromCastType(
+          ((LogicalTypesParser.FuncTryVariantGetContext) fctx).castType());
     }
     return null;
   }
