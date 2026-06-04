@@ -70,6 +70,7 @@ class CheckConstraintTest {
         + "size STRING, qty INT, status STRING, active BOOLEAN,"
         + "a INT, b INT, c INT,"
         + "tags STRING ARRAY, ages INT ARRAY,"
+        + "dprices DECIMAL(10, 2) ARRAY, dprices_ms DECIMAL(10, 2) MULTISET,"
         + "matrix INT ARRAY ARRAY,"
         + "addresses STRING ARRAY, emails STRING ARRAY,"
         + "addr_struct ROW(zip INT) NOT NULL,"
@@ -4385,5 +4386,100 @@ class CheckConstraintTest {
         () -> translateCheck("NULLIF(x, 0) BETWEEN 1 AND 10"));
     assertTrue(t.getMessage().contains("NULLIF"),
         "expected NULLIF subject rejection, got: " + t.getMessage());
+  }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 12)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void numericInPredicateComparedToInPredicateKeepsParens() {
+    // Bug #1: a numeric-but-boolean-shaped operand (`age IN (1,2)`) was
+    // classified as numeric (all leaves numeric), taking the coercion path
+    // which assumes a bare value and dropped the IN list / mis-grouped the
+    // operators. Such operands must fall through to the wrapped native path.
+    // INT common type previously emitted unparenthesized
+    // `age in [...] == qty in [...]` (mis-binds under CEL, caught only by
+    // strict-check); now each side is parenthesized.
+    assertEquals(
+        "(this.age in [1, 2]) == (this.qty in [3, 4])",
+        translateCheck("age IN (1, 2) = qty IN (3, 4)"));
+  }
+
+  @Test
+  void numericBetweenPredicateComparedKeepsBounds() {
+    // Bug #1 (double/decimal variant was the silent one): the bounds of a
+    // numeric BETWEEN operand were dropped entirely (emitNumericBetweenAs
+    // read only the BETWEEN subject), yielding well-typed but wrong CEL.
+    // Both bounds must survive.
+    assertEquals(
+        "(1.0 <= this.ratio && this.ratio <= 10.0) "
+            + "== (2.0 <= this.ratio && this.ratio <= 5.0)",
+        translateCheck("(ratio BETWEEN 1.0 AND 10.0) = (ratio BETWEEN 2.0 AND 5.0)"));
+  }
+
+  @Test
+  void variantGetReturningBooleanAcceptedAtBooleanRoot() {
+    // Bug #2: isBooleanFunc only treated CAST(x AS BOOLEAN) as a boolean
+    // special-form; VARIANT_GET/TRY_VARIANT_GET ... RETURNING BOOLEAN are
+    // boolean too, so a top-level CHECK over one was wrongly rejected.
+    String cel = translateCheck("VARIANT_GET(data, '$.active' RETURNING BOOLEAN)");
+    assertTrue(cel.contains("variants.as") && cel.contains("\"boolean\""),
+        "expected variants.as(..., \"boolean\"), got: " + cel);
+    String tryCel =
+        translateCheck("TRY_VARIANT_GET(data, '$.active' RETURNING BOOLEAN)");
+    assertTrue(tryCel.contains("\"boolean\""),
+        "expected boolean extraction, got: " + tryCel);
+  }
+
+  @Test
+  void multisetOfDecimalElementRoutesThroughDecimals() {
+    // Bug #3: resolveColumnRefType handled ARRAY/MAP indexing but not
+    // MULTISET, so a multiset element's type came back null and the
+    // comparison took the native path (opaque-decimal vs double → strict
+    // fail). It must resolve to decimal and route through decimals.*, the
+    // same as the ARRAY-of-decimal equivalent.
+    String multiset = translateCheck("dprices_ms[1] > 5.0");
+    String array = translateCheck("dprices[1] > 5.0");
+    assertTrue(multiset.contains("decimals.gt("),
+        "multiset element should route through decimals.*, got: " + multiset);
+    assertEquals(array.replace("dprices", "X"),
+        multiset.replace("dprices_ms", "X"),
+        "MULTISET and ARRAY decimal-element emit should match");
+  }
+
+  @Test
+  void castAsRealResolvesToDoubleAndCoercesOperand() {
+    // Bug #5: celTypeFromCastType matched FLOAT/DOUBLE but not REAL, so
+    // CAST(x AS REAL) resolved to null — the other operand was not coerced
+    // to double (double vs int → strict fail). REAL must resolve to double.
+    String cel = translateCheck("CAST(amount AS REAL) > age");
+    assertTrue(cel.contains("double(this.age)"),
+        "int operand must be coerced to double, got: " + cel);
+  }
+
+  @Test
+  void nestedStructReservedFieldNameStrictChecks() {
+    // Bug #4: the bracket-access `_[_]` overload was declared only for the
+    // root struct type, so a CEL-reserved field name on a *nested* struct
+    // (`parent.in`, emitted as `this.parent["in"]`) failed strict-check.
+    // The overload is now declared for every synthetic struct type.
+    Schema inner = Schema.createStruct(java.util.Arrays.asList(
+        new Schema.Field("in", Schema.create(Schema.Type.INT), 0)));
+    Schema rootStruct = Schema.createStruct(java.util.Arrays.asList(
+        new Schema.Field("parent", inner, 0)));
+    ConstraintValidationContext vctx = ConstraintValidationContext.tableLevel(
+        rootStruct.getFields());
+    io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser
+        .ScriptContext scriptCtx = io.confluent.kafka.schemaregistry.type.logical
+            .LogicalTypesParserFactory.parse(
+                "ROW __T (__x INT, CHECK (parent.`in` > 0));");
+    io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser
+        .Check_exprContext checkCtx = findFirstCheckExpr(scriptCtx);
+    String cel = ConstraintToCelTranslator.translate(checkCtx, vctx);
+    assertTrue(cel.contains("this.parent[\"in\"]"),
+        "expected nested index syntax, got: " + cel);
+    // Before the fix this threw (no _[_] overload for the nested struct type).
+    CelValidator.assertValidStrict(cel, rootStruct);
   }
 }
