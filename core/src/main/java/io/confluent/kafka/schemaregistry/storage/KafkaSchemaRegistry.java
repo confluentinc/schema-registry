@@ -2357,6 +2357,9 @@ public class KafkaSchemaRegistry implements SchemaRegistry,
       throws SchemaRegistryStoreException {
     try {
       Config defaultForTopLevel = new Config(defaultCompatibilityLevel.name);
+      if (subject == null) {
+        return lookupCache.config(null, true, defaultForTopLevel);
+      }
       Config subjectConfig = lookupCache.config(subject, false, defaultForTopLevel);
       if (subjectConfig == null) {
         return lookupCache.config(subject, true, defaultForTopLevel);
