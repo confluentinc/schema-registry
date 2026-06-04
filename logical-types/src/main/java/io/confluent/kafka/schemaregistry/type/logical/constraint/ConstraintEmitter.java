@@ -1730,6 +1730,19 @@ final class ConstraintEmitter {
   }
 
   /**
+   * Resolve a {@code NAMED_TYPE_REF} receiver to its underlying schema via the
+   * per-translation context, so the indirection walk discriminates STRUCT
+   * field access and MAP-vs-ARRAY indexing through named-type chains the same
+   * way {@link ConstraintResolver}/{@link ConstraintValidator} do. A null
+   * context (the no-validation translate entry) or a non-ref schema is
+   * returned unchanged.
+   */
+  private static Schema resolveRef(Schema s) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    return vctx == null ? s : ConstraintResolver.resolveIfNamedRef(s, vctx);
+  }
+
+  /**
    * Emit a bracket-form indirection. MAP → pass the key expression through
    * verbatim ({@code [expr]}). Otherwise — ARRAY/MULTISET, or unknown
    * receiver (paren-form, no validation context) — apply the SQL→CEL index
@@ -1740,6 +1753,7 @@ final class ConstraintEmitter {
   private static void emitBracketIndex(
       LogicalTypesParser.Indirection_elContext el,
       Schema receiver, StringBuilder sb) {
+    receiver = resolveRef(receiver);
     boolean isMap = receiver != null && receiver.getType() == Schema.Type.MAP;
     if (isMap) {
       sb.append('[');
@@ -1753,6 +1767,7 @@ final class ConstraintEmitter {
   }
 
   private static Schema stepStructField(Schema receiver, String fieldName) {
+    receiver = resolveRef(receiver);
     if (receiver == null || receiver.getType() != Schema.Type.STRUCT) {
       return null;
     }
@@ -1761,6 +1776,7 @@ final class ConstraintEmitter {
   }
 
   private static Schema stepBracketElement(Schema receiver) {
+    receiver = resolveRef(receiver);
     if (receiver == null) {
       return null;
     }
