@@ -4546,4 +4546,42 @@ class CheckConstraintTest {
             && cel.contains("now"),
         "got: " + cel);
   }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 14)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void comparisonOfBooleanPredicatesNotCoercedAsNumeric() {
+    // Completes the round-12 fix: coercedNumericRaw classified BETWEEN/IN/LIKE
+    // as boolean but missed the comparison and logical operators (>, =, AND,
+    // OR, NOT, IS NULL). So `(a > 0.0) = (b > 0.0)` — a legitimate "same sign"
+    // constraint — was folded to a numeric value and emitted `double((..))`,
+    // a strict-check false-rejection for double/decimal leaves. Now each side
+    // falls to the native path.
+    assertEquals(
+        "(this.ratio > 0.5) == (this.ratio < 0.3)",
+        translateCheck("(ratio > 0.5) = (ratio < 0.3)"));
+  }
+
+  @Test
+  void castDoublePrecisionAlias() {
+    // celTypeFromCastType accepted DOUBLE PRECISION (startsWith DOUBLE) but the
+    // emit mappers exact-matched the head and threw — a false rejection of the
+    // ANSI spelling. Now consistent.
+    assertEquals("double(this.x) > 0.5",
+        translateCheck("CAST(x AS DOUBLE PRECISION) > 0.5"));
+  }
+
+  @Test
+  void castCharacterVaryingAlias() {
+    assertEquals("string(this.value) == 'a'",
+        translateCheck("CAST(value AS CHARACTER VARYING) = 'a'"));
+  }
+
+  @Test
+  void castBinaryVaryingAlias() {
+    assertEquals("bytes(this.name) == b\"\\x00\"",
+        translateCheck("CAST(name AS BINARY VARYING) = x'00'"));
+  }
 }
