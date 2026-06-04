@@ -404,7 +404,8 @@ final class ConstraintResolver {
         || text.startsWith("SMALLINT") || text.startsWith("TINYINT")) {
       return Schema.create(Schema.Type.BIGINT);
     }
-    if (text.startsWith("FLOAT") || text.startsWith("DOUBLE")) {
+    if (text.startsWith("FLOAT") || text.startsWith("REAL")
+        || text.startsWith("DOUBLE")) {
       return Schema.create(Schema.Type.DOUBLE);
     }
     if (text.startsWith("STRING") || text.startsWith("VARCHAR")
@@ -798,6 +799,23 @@ final class ConstraintResolver {
       return numericLeaf(tryResolveCaseExprType(
           ((LogicalTypesParser.CheckCaseContext) node).case_expr(), vctx));
     }
+    // BETWEEN / IN / LIKE yield a boolean, not a number, even though all
+    // their operands may be numeric. Classify them as non-numeric so a
+    // boolean-shaped comparison operand (e.g. `x IN (1,2)` or, parenthesized,
+    // `(x BETWEEN 1 AND 10)`) is not mistaken for a value and routed through
+    // the numeric-coercion emit (which would drop its bounds/elements).
+    if (node instanceof LogicalTypesParser.Check_expr_betweenContext
+        && ((LogicalTypesParser.Check_expr_betweenContext) node).BETWEEN() != null) {
+      return NOT_NUMERIC;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_inContext
+        && ((LogicalTypesParser.Check_expr_inContext) node).IN() != null) {
+      return NOT_NUMERIC;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_likeContext
+        && ((LogicalTypesParser.Check_expr_likeContext) node).LIKE() != null) {
+      return NOT_NUMERIC;
+    }
     // Internal node: fold children. A NOT_NUMERIC leaf poisons; operator
     // terminals and empty branches are neutral (null).
     String acc = null;
@@ -889,7 +907,9 @@ final class ConstraintResolver {
           return null;
         }
         current = resolveIfNamedRef(nested.getSchema(), vctx);
-      } else if (el.check_expr() != null && current.getType() == Schema.Type.ARRAY) {
+      } else if (el.check_expr() != null
+          && (current.getType() == Schema.Type.ARRAY
+              || current.getType() == Schema.Type.MULTISET)) {
         current = current.getElementType();
       } else if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
         current = current.getValueType();

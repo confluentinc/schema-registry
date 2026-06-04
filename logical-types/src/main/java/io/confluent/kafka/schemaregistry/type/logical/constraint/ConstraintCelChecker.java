@@ -34,6 +34,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Strict Google cel-java type-checker for emitted CEL expressions. Used as
@@ -144,22 +145,29 @@ final class ConstraintCelChecker {
     varDecls.add(CelVarDecl.newVarDeclaration("this", thisType));
     varDecls.add(CelVarDecl.newVarDeclaration("now", SimpleType.TIMESTAMP));
     List<CelFunctionDecl> funcDecls = new ArrayList<>(BuiltinDeclarations.create());
-    // Bracket-access overload: emit uses `this["fieldname"]` for fields whose
-    // names are CEL-reserved words (`in`, `null`, etc.). Standard `_[_]` is
-    // declared for map and list only; declare a permissive overload that
-    // accepts our synthetic root type indexed by string and returns dyn.
-    // Strict-check only — no runtime binding (production evaluates against
-    // the actual data value, which supports bracket-access natively for
-    // maps/messages in cel-go).
-    if (!vctx.isColumnLevel()) {
+    // Bracket-access overloads: emit uses `recv["fieldname"]` for fields whose
+    // names are CEL-reserved words (`in`, `null`, etc.) — at the root and at
+    // any nested struct depth. Standard `_[_]` is declared for map and list
+    // only; declare a permissive `struct[string] -> dyn` overload for every
+    // synthetic struct type (root + nested) so nested reserved-name field
+    // access type-checks. Targeting the concrete struct types (rather than a
+    // blanket `dyn[string]`) keeps the standard list/map index strictness
+    // intact. Strict-check only — no runtime binding (production evaluates
+    // against the actual data value, which supports bracket-access natively
+    // for maps/messages in cel-go).
+    Set<String> structTypeNames = provider.registerAllStructTypes();
+    if (!structTypeNames.isEmpty()) {
+      List<CelOverloadDecl> bracketOverloads = new ArrayList<>();
+      for (String structName : structTypeNames) {
+        bracketOverloads.add(CelOverloadDecl.newGlobalOverload(
+            "index_" + structName + "_string",
+            SimpleType.DYN,
+            ImmutableList.of(
+                StructTypeReference.create(structName),
+                SimpleType.STRING)));
+      }
       funcDecls.add(CelFunctionDecl.newFunctionDeclaration(
-          "_[_]",
-          CelOverloadDecl.newGlobalOverload(
-              "index_lt_root_string",
-              SimpleType.DYN,
-              ImmutableList.of(
-                  StructTypeReference.create(ConstraintTypeProvider.ROOT_TYPE_NAME),
-                  SimpleType.STRING))));
+          "_[_]", bracketOverloads));
     }
     // STANDARD_MACROS enables has(), all(), exists(), exists_one(), map(),
     // filter() — without it, has(this.x) fails as an undeclared reference.

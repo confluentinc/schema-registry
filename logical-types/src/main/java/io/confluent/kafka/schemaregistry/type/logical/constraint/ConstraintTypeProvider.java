@@ -27,12 +27,15 @@ import dev.cel.common.types.StructType;
 import dev.cel.common.types.StructTypeReference;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelTypeLabels;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Google cel-java {@link CelTypeProvider} that surfaces a logical-type
@@ -110,6 +113,64 @@ final class ConstraintTypeProvider implements CelTypeProvider {
     typeNames.put(ROOT_TYPE_NAME, rootStruct);
     nameByStruct.put(rootStruct, ROOT_TYPE_NAME);
     structTypes.put(ROOT_TYPE_NAME, buildStructType(ROOT_TYPE_NAME, rootStruct));
+  }
+
+  /**
+   * Eagerly register every STRUCT type transitively reachable from the
+   * already-registered types (root and/or column structs) and return all
+   * synthetic STRUCT type names. {@link #buildStructType}'s field resolver is
+   * lazy, so a nested struct is otherwise only registered when the checker
+   * first dereferences it — too late for {@link ConstraintCelChecker} to
+   * declare bracket-access ({@code _[_]}) overloads against it. Cycle-safe via
+   * an identity worklist ({@link #resolveNamedType}-equivalent refs resolve to
+   * the same cached Schema instance, so recursive named types terminate).
+   *
+   * @return synthetic type names of every reachable STRUCT (root + nested).
+   */
+  Set<String> registerAllStructTypes() {
+    Deque<Schema> work = new ArrayDeque<>(typeNames.values());
+    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    while (!work.isEmpty()) {
+      Schema struct = work.poll();
+      if (struct.getType() != Schema.Type.STRUCT || !seen.add(struct)) {
+        continue;
+      }
+      structTypeName(struct);
+      for (Schema.Field f : struct.getFields()) {
+        collectStructs(f.getSchema(), work);
+      }
+    }
+    return new LinkedHashSet<>(structTypes.keySet());
+  }
+
+  /**
+   * Add any STRUCT schemas reachable through containers/named refs to
+   * {@code work}.
+   */
+  private void collectStructs(Schema s, Deque<Schema> work) {
+    if (s == null) {
+      return;
+    }
+    Schema resolved = s.getType() == Schema.Type.NAMED_TYPE_REF
+        ? vctx.resolveNamedType(s) : s;
+    if (resolved == null) {
+      return;
+    }
+    switch (resolved.getType()) {
+      case STRUCT:
+        work.add(resolved);
+        break;
+      case ARRAY:
+      case MULTISET:
+        collectStructs(resolved.getElementType(), work);
+        break;
+      case MAP:
+        collectStructs(resolved.getKeyType(), work);
+        collectStructs(resolved.getValueType(), work);
+        break;
+      default:
+        break;
+    }
   }
 
   // ---------------------------------------------------------------------

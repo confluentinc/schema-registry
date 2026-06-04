@@ -219,13 +219,24 @@ final class ConstraintValidator {
    */
   private static boolean isBooleanFunc(LogicalTypesParser.Func_exprContext fctx) {
     if (fctx.func_application() == null) {
-      // Special-syntax forms: only CAST(x AS BOOLEAN) returns boolean;
-      // EXTRACT, SUBSTRING, POSITION, TRIM, CURRENT_TIMESTAMP all return
-      // non-boolean types.
+      // Special-syntax forms: CAST(x AS BOOLEAN) and VARIANT_GET/TRY_VARIANT_GET
+      // with RETURNING BOOLEAN are the boolean-returning ones; EXTRACT,
+      // SUBSTRING, POSITION, TRIM, CURRENT_TIMESTAMP all return non-boolean
+      // types.
       LogicalTypesParser.Func_expr_common_subexprContext sub =
           fctx.func_expr_common_subexpr();
-      return sub instanceof LogicalTypesParser.FuncCastContext
-          && isCastToBoolean((LogicalTypesParser.FuncCastContext) sub);
+      if (sub instanceof LogicalTypesParser.FuncCastContext) {
+        return isCastToBoolean((LogicalTypesParser.FuncCastContext) sub);
+      }
+      LogicalTypesParser.CastTypeContext returning = null;
+      if (sub instanceof LogicalTypesParser.FuncVariantGetContext) {
+        returning = ((LogicalTypesParser.FuncVariantGetContext) sub).castType();
+      } else if (sub instanceof LogicalTypesParser.FuncTryVariantGetContext) {
+        returning = ((LogicalTypesParser.FuncTryVariantGetContext) sub).castType();
+      }
+      Schema ret = returning == null ? null
+          : ConstraintResolver.celTypeFromCastType(returning);
+      return ret != null && ret.getType() == Schema.Type.BOOLEAN;
     }
     String name = fctx.func_application().identifier().getText().toUpperCase(java.util.Locale.ROOT);
     switch (name) {

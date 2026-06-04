@@ -592,6 +592,11 @@ final class ConstraintEmitter {
       // common type and emit at it. common=DECIMAL → decimals.* (no native
       // overload on the opaque type); common=DOUBLE/INT → native operator with
       // operands cast to the common type (double()/double literal as needed).
+      //
+      // coercedNumericCategory classifies a boolean-shaped operand (BETWEEN/
+      // IN/LIKE, even parenthesized) as non-numeric, so this path only sees
+      // bare numeric values — the assumption emitNumericBetweenAs relies on.
+      // Boolean predicate operands fall through to the wrapped native path.
       if (vctx != null) {
         String lc = ConstraintResolver.coercedNumericCategory(betweens.get(0), vctx);
         String rc = ConstraintResolver.coercedNumericCategory(betweens.get(1), vctx);
