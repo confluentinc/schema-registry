@@ -4482,4 +4482,68 @@ class CheckConstraintTest {
     // Before the fix this threw (no _[_] overload for the nested struct type).
     CelValidator.assertValidStrict(cel, rootStruct);
   }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 13)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void namedRefStructMapIndexEmitsMapKeyNotArrayIndex() {
+    // HIGH: the emitter's indirection walk didn't resolve NAMED_TYPE_REF, so a
+    // MAP field reached through a named-type struct was mistaken for an ARRAY
+    // and emitted `[(key) - 1]` (1-based→0-based) instead of `[key]`. For a
+    // string-keyed map that failed strict-check (`string - int`); for an
+    // int-keyed map it was a silent off-by-one. The visitor strict-checks
+    // during visit(), so before the fix this script threw.
+    String script = "ROW Addr (tags MAP<STRING, STRING>); "
+        + "ROW Person (addr Addr, CHECK (addr.tags['home'] = 'x'));"
+        + "TYPE Person";
+    LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
+    v.visit(LogicalTypesParserFactory.parse(script));
+    String cel = v.getNamedTypes().get("Person").getRules().get(0).getExpr();
+    assertEquals("this.addr.tags['home'] == 'x'", cel);
+  }
+
+  @Test
+  void tryVariantGetAsBetweenBoundRejected() {
+    // MEDIUM: TRY_VARIANT_GET(... RETURNING T) returns null on a type/path
+    // mismatch (emits variants.tryAs(...)) — the same null-bound crash hazard
+    // NULLIF is rejected for. Unlike its VARIANT-result siblings, RETURNING a
+    // comparable scalar means strict-check does not catch it.
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck(
+            "x BETWEEN TRY_VARIANT_GET(data, '$.lo' RETURNING INT) AND 10"));
+    assertTrue(t.getMessage().contains("TRY_VARIANT_GET"),
+        "expected TRY_VARIANT_GET-bound rejection, got: " + t.getMessage());
+  }
+
+  @Test
+  void isNullOnNumericAndVariantNeverNullFuncsRejected() {
+    // LOW parity: numeric scalar funcs and the never-null variant funcs joined
+    // NEVER_NULL_FUNCS, so `f(x) IS NULL` is rejected as dead code, consistent
+    // with LENGTH/UPPER/etc.
+    for (String expr : new String[] {"ABS(x) IS NULL", "TYPE_OF_VARIANT(data) IS NULL"}) {
+      Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+          ValidationException.class,
+          () -> translateCheck(expr),
+          "expected dead-code rejection for: " + expr);
+      assertTrue(t.getMessage().contains("dead code"),
+          "expected dead-code rejection, got: " + t.getMessage());
+    }
+  }
+
+  @Test
+  void variantGetReturningTimestampComparisonTypeChecks() {
+    // Confirms the deferred LOW item is a non-bug: subtreeHasTemporal not
+    // flagging VARIANT_GET RETURNING TIMESTAMP / CURRENT_TIMESTAMP is harmless,
+    // because both already emit CEL timestamps — the native comparison path
+    // produces correct, well-typed CEL without the timestamp.of() wrap (which
+    // is only needed for timestamp COLUMNS and TIMESTAMP/INTERVAL literals).
+    String cel = translateCheck(
+        "VARIANT_GET(data, '$.a' RETURNING TIMESTAMP) > CURRENT_TIMESTAMP");
+    assertTrue(cel.contains("variants.as") && cel.contains("\"timestamp\"")
+            && cel.contains("now"),
+        "got: " + cel);
+  }
 }
