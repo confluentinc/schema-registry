@@ -804,6 +804,7 @@ final class ConstraintFunctions {
       case "FLOAT":
       case "REAL":
       case "DOUBLE":
+      case "DOUBLEPRECISION":
         return "double";
       case "DECIMAL":
       case "DEC":
@@ -813,12 +814,14 @@ final class ConstraintFunctions {
       case "VARCHAR":
       case "CHAR":
       case "CHARACTER":
+      case "CHARACTERVARYING":
         return "string";
       case "BOOLEAN":
         return "boolean";
       case "BYTES":
       case "BINARY":
       case "VARBINARY":
+      case "BINARYVARYING":
         return "bytes";
       case "TIMESTAMP":
       case "TIMESTAMP_LTZ":
@@ -920,6 +923,7 @@ final class ConstraintFunctions {
       case "FLOAT":
       case "REAL":
       case "DOUBLE":
+      case "DOUBLEPRECISION":
       case "DECIMAL":
       case "DEC":
       case "NUMERIC":
@@ -928,12 +932,14 @@ final class ConstraintFunctions {
       case "VARCHAR":
       case "CHAR":
       case "CHARACTER":
+      case "CHARACTERVARYING":
         return "string";
       case "BOOLEAN":
         return "bool";
       case "BYTES":
       case "BINARY":
       case "VARBINARY":
+      case "BINARYVARYING":
         return "bytes";
       default:
         throw locatedError(pt,
