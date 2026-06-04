@@ -2896,6 +2896,16 @@ class CheckConstraintTest {
   }
 
   @Test
+  void variantGetReturningTimestamp() {
+    // RETURNING TIMESTAMP resolves to a timestamp, so it composes with a
+    // timestamp column (which normalizes via timestamp.of).
+    assertEquals(
+        "variants.as(variants.path(this.data, '$.ts'), \"timestamp\") "
+            + "> timestamp.of(this.created_at)",
+        translateCheck("VARIANT_GET(data, '$.ts' RETURNING TIMESTAMP) > created_at"));
+  }
+
+  @Test
   void variantGetOverParseJson() {
     assertEquals(
         "variants.as(variants.path(variants.parseJson(this.value), '$.x'), \"string\") == 'ok'",

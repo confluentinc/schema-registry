@@ -389,8 +389,10 @@ final class ConstraintResolver {
 
   /**
    * Best-effort: derive a schema from a {@code castType} parse-tree node.
-   * Mirrors the CAST emit path's recognized targets. Returns null for
-   * types our cast emit doesn't support.
+   * Covers the CAST emit path's recognized targets plus TIMESTAMP (used by the
+   * VARIANT_GET RETURNING path, which can extract a timestamp even though
+   * CAST(... AS TIMESTAMP) itself isn't an emittable cast). Returns null for
+   * types we don't recognize.
    */
   static Schema celTypeFromCastType(
       LogicalTypesParser.CastTypeContext castType) {
@@ -421,6 +423,10 @@ final class ConstraintResolver {
       // via decimals.round). startsWith("DEC") covers both DEC and DECIMAL.
       int[] ps = parseDecimalCastParams(text);
       return Schema.createDecimal(ps[0], ps[1]);
+    }
+    if (text.startsWith("TIMESTAMP")) {
+      // Covers TIMESTAMP and TIMESTAMP_LTZ (VARIANT_GET ... RETURNING TIMESTAMP).
+      return Schema.createTimestampLtz(Schema.NO_PARAM);
     }
     return null;
   }
