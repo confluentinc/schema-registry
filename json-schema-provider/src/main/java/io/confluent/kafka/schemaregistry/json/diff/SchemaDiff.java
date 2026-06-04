@@ -262,7 +262,13 @@ public class SchemaDiff {
 
   private static Schema normalizeSchema(final Schema schema) {
     if (schema instanceof ReferenceSchema) {
-      return ((ReferenceSchema) schema).getReferredSchema();
+      ReferenceSchema referenceSchema = (ReferenceSchema) schema;
+      Schema referredSchema = referenceSchema.getReferredSchema();
+      if (referredSchema == null) {
+        throw new IllegalStateException(
+            "Unresolved $ref '" + referenceSchema.getReferenceValue() + "'");
+      }
+      return referredSchema;
     } else {
       return schema;
     }
