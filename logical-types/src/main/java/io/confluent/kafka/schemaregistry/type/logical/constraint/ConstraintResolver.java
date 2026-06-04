@@ -799,21 +799,13 @@ final class ConstraintResolver {
       return numericLeaf(tryResolveCaseExprType(
           ((LogicalTypesParser.CheckCaseContext) node).case_expr(), vctx));
     }
-    // BETWEEN / IN / LIKE yield a boolean, not a number, even though all
-    // their operands may be numeric. Classify them as non-numeric so a
-    // boolean-shaped comparison operand (e.g. `x IN (1,2)` or, parenthesized,
-    // `(x BETWEEN 1 AND 10)`) is not mistaken for a value and routed through
-    // the numeric-coercion emit (which would drop its bounds/elements).
-    if (node instanceof LogicalTypesParser.Check_expr_betweenContext
-        && ((LogicalTypesParser.Check_expr_betweenContext) node).BETWEEN() != null) {
-      return NOT_NUMERIC;
-    }
-    if (node instanceof LogicalTypesParser.Check_expr_inContext
-        && ((LogicalTypesParser.Check_expr_inContext) node).IN() != null) {
-      return NOT_NUMERIC;
-    }
-    if (node instanceof LogicalTypesParser.Check_expr_likeContext
-        && ((LogicalTypesParser.Check_expr_likeContext) node).LIKE() != null) {
+    // A boolean-producing operator level (OR/AND/NOT/IS NULL/comparison/
+    // BETWEEN/IN/LIKE) yields a boolean even when all its leaves are numeric.
+    // Classify it as non-numeric so a boolean-shaped comparison operand — e.g.
+    // `x IN (1,2)`, `(x BETWEEN 1 AND 10)`, or `(a > 0.0) = (b > 0.0)` — is not
+    // mistaken for a value and routed through the numeric-coercion emit (which
+    // would drop its structure or wrap it in double()/decimal()).
+    if (producesBoolean(node)) {
       return NOT_NUMERIC;
     }
     // Internal node: fold children. A NOT_NUMERIC leaf poisons; operator
@@ -829,6 +821,44 @@ final class ConstraintResolver {
       }
     }
     return acc;
+  }
+
+  /**
+   * True if {@code node} is a boolean-producing operator level whose operator
+   * is actually present — OR / AND / NOT / IS [NOT] NULL / comparison /
+   * BETWEEN / IN / LIKE. Such a node yields a boolean even when all its leaves
+   * are numeric, so {@link #coercedNumericRaw} must not fold it into a numeric
+   * category. Pass-through levels (operator absent) return false so the fold
+   * recurses into the single child as usual.
+   */
+  private static boolean producesBoolean(ParseTree node) {
+    if (node instanceof LogicalTypesParser.Check_expr_orContext) {
+      return ((LogicalTypesParser.Check_expr_orContext) node).check_expr_and().size() > 1;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_andContext) {
+      return ((LogicalTypesParser.Check_expr_andContext) node)
+          .check_expr_unary_not().size() > 1;
+    }
+    if (node instanceof LogicalTypesParser.CheckExprNotContext) {
+      return true;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_isnullContext) {
+      return ((LogicalTypesParser.Check_expr_isnullContext) node).IS() != null;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_compareContext) {
+      return ((LogicalTypesParser.Check_expr_compareContext) node)
+          .check_expr_between().size() == 2;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_betweenContext) {
+      return ((LogicalTypesParser.Check_expr_betweenContext) node).BETWEEN() != null;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_inContext) {
+      return ((LogicalTypesParser.Check_expr_inContext) node).IN() != null;
+    }
+    if (node instanceof LogicalTypesParser.Check_expr_likeContext) {
+      return ((LogicalTypesParser.Check_expr_likeContext) node).LIKE() != null;
+    }
+    return false;
   }
 
   /** A leaf's category if numeric; NOT_NUMERIC otherwise (incl. unresolved). */
