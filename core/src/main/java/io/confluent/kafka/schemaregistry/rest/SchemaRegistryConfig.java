@@ -168,6 +168,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
   public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
   /**
+   * <code>associations.enable</code>*
+   */
+  public static final String ASSOCIATIONS_ENABLE = "associations.enable";
+  public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -190,6 +195,12 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
+
+  public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
+  public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
+
+  public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
+  public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
 
   /**
    * <code>schema.cache.size</code>
@@ -276,6 +287,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
+
+  public static final String METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG =
+      "metadata.encoder.secret.strict.validation";
+  public static final boolean METADATA_ENCODER_SECRET_STRICT_VALIDATION_DEFAULT = false;
 
   public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
   public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
@@ -420,6 +435,12 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
+  protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
+      + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
+  protected static final String REJECT_EMPTY_SUBJECT_DOC =
+      "If true, reject schema registration requests whose subject name is the empty string. "
+      + "Defaults to false to preserve backward compatibility with existing deployments that "
+      + "may have schemas registered under an empty subject.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -457,6 +478,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "old secret and re-encrypted using the new secret.";
   protected static final String METADATA_ENCODER_TOPIC_DOC =
       "The durable single partition topic that acts as the durable log for the encoder keysets.";
+  protected static final String METADATA_ENCODER_SECRET_STRICT_VALIDATION_DOC =
+      "When true, treat an empty encoder secret the same as a missing secret (disable the encoder "
+      + "service). This prevents silent data corruption when the secret file is not yet mounted "
+      + "at startup.";
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
@@ -469,6 +494,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELECTION_STICKY_DOC =
       "If true, leader election will prefer to keep the current leader if possible. This is a "
       + "cluster wide setting i.e all nodes should have either true or false.";
+  protected static final String ASSOCIATIONS_ENABLE_DOC =
+      "If true, enable support for associations between resources and subjects.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -652,6 +679,14 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
     )
+    .define(SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
+    )
+    .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
+        ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
@@ -709,6 +744,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(METADATA_ENCODER_TOPIC_CONFIG, ConfigDef.Type.STRING, METADATA_ENCODER_TOPIC_DEFAULT,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_TOPIC_DOC
     )
+    .define(METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN,
+        METADATA_ENCODER_SECRET_STRICT_VALIDATION_DEFAULT,
+        ConfigDef.Importance.LOW, METADATA_ENCODER_SECRET_STRICT_VALIDATION_DOC
+    )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
     )
@@ -726,6 +765,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
             ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
+    )
+    .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
+        ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -1024,6 +1066,10 @@ public class SchemaRegistryConfig extends RestConfig {
       }
     }
     return overridden;
+  }
+
+  public boolean enableAssociations() {
+    return getBoolean(ASSOCIATIONS_ENABLE);
   }
 
   public static void main(String[] args) {

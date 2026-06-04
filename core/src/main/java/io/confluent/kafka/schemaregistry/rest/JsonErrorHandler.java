@@ -17,46 +17,43 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.Charset;
+import java.util.List;
 import org.eclipse.jetty.http.HttpMethod;
 import org.eclipse.jetty.http.HttpStatus;
-import org.eclipse.jetty.http.MimeTypes;
+import org.eclipse.jetty.http.MimeTypes.Type;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.handler.ErrorHandler;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.Writer;
+import org.eclipse.jetty.util.Callback;
 
 public class JsonErrorHandler extends ErrorHandler {
   @Override
-  public void handle(final String target,
-                     final Request baseRequest,
-                     final HttpServletRequest request,
-                     final HttpServletResponse response) throws IOException {
+  public boolean handle(Request request, Response response, Callback callback) throws Exception {
 
     final String method = request.getMethod();
     if (!HttpMethod.GET.is(method) && !HttpMethod.POST.is(method) && !HttpMethod.PUT.is(method)
         && !HttpMethod.HEAD.is(method)) {
-      baseRequest.setHandled(true);
-      return;
+      callback.succeeded();
+      return true;
     }
 
-    response.setContentType(MimeTypes.Type.APPLICATION_JSON.asString());
-
-    final String reason = (response instanceof Response) ? ((Response) response).getReason() : null;
-
-    handleErrorPage(request, getAcceptableWriter(baseRequest, request, response), response
-        .getStatus(), reason);
-
-    baseRequest.setHandled(true);
-    baseRequest.getResponse().closeOutput();
+    return super.handle(request, response, callback);
   }
 
   @Override
-  protected void writeErrorPage(HttpServletRequest request, Writer writer, int code, String
-      message, boolean showStacks) throws IOException {
+  protected boolean generateAcceptableResponse(Request request, Response response,
+      Callback callback, String contentType, List<Charset> charsets, int code,
+      String message, Throwable cause) throws IOException {
+    return super.generateAcceptableResponse(request, response, callback,
+        Type.APPLICATION_JSON.asString(), charsets, code, message, cause);
+  }
+
+  @Override
+  protected void writeErrorJson(Request request, PrintWriter writer, int code,
+      String message, Throwable cause, boolean showStacks) {
     final String error = message == null ? HttpStatus.getMessage(code) : message;
     JsonNodeFactory factory = JsonNodeFactory.instance;
     ObjectNode root = factory.objectNode();

@@ -16,8 +16,9 @@
 
 package io.confluent.kafka.serializers;
 
-import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
+
+import org.apache.kafka.tools.api.Decoder;
 
 /**
  * Decode JSON data to an Object.

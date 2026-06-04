@@ -15,13 +15,17 @@
 
 package io.confluent.schemaregistry.benchmark;
 
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaUtils;
 import io.confluent.kafka.schemaregistry.tools.SchemaRegistryPerformance;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -85,7 +89,9 @@ public class SerdeBenchmark {
 
     @Setup(Level.Iteration)
     public void setUp() throws IOException {
-      final SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+      final SchemaRegistryClient schemaRegistryClient =
+          new MockSchemaRegistryClient(ImmutableList.of(
+              new AvroSchemaProvider(), new ProtobufSchemaProvider(), new JsonSchemaProvider()));
       final ImmutableMap<String, Object> configs = ImmutableMap.of(
           AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, true,
           AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, ""

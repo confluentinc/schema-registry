@@ -23,10 +23,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -45,7 +49,6 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 
@@ -55,6 +58,7 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   protected String typeProperty;
   protected List<String> allowedTypePackages = Collections.singletonList("*");
   protected boolean validate;
+  protected boolean validateBeforeDomainRules;
 
   /**
    * Sets properties for this deserializer without overriding the schema registry client itself.
@@ -71,6 +75,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         failUnknownProperties
     );
     this.validate = config.getBoolean(KafkaJsonSchemaDeserializerConfig.FAIL_INVALID_SCHEMA);
+    this.validateBeforeDomainRules =
+        config.getBoolean(KafkaJsonSchemaDeserializerConfig.VALIDATE_BEFORE_DOMAIN_RULES);
     this.typeProperty = config.getString(KafkaJsonSchemaDeserializerConfig.TYPE_PROPERTY);
     this.allowedTypePackages =
         config.getList(KafkaJsonSchemaDeserializerConfig.TYPE_ALLOWED_PACKAGES);
@@ -112,10 +118,17 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
     return deserialize(includeSchemaAndVersion, topic, isKey, null, payload);
   }
 
+  protected Object deserialize(
+      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
+  ) throws SerializationException, InvalidConfigurationException {
+    return deserialize(includeSchemaAndVersion, topic, isKey, headers, payload, null);
+  }
+
   // The Object return type is a bit messy, but this is the simplest way to have
   // flexible decoding and not duplicate deserialization code multiple times for different variants.
   protected Object deserialize(
-      boolean includeSchemaAndVersion, String topic, Boolean isKey, Headers headers, byte[] payload
+      boolean includeSchemaAndVersion, String topic, Boolean key, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
   ) throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       throw new InvalidConfigurationException(
@@ -128,34 +141,44 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       return null;
     }
 
-    int id = -1;
-    try {
-      ByteBuffer buffer = getByteBuffer(payload);
-      id = buffer.getInt();
-      String subject = isKey == null || strategyUsesSchema(isKey)
+    boolean isKey = key != null ? key : this.isKey;
+    SchemaId schemaId = new SchemaId(JsonSchema.TYPE);
+    try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
+      ByteBuffer buffer =
+          schemaIdDeserializer.deserialize(topic, isKey, headers, payload, schemaId);
+      String subject = strategyUsesSchema(isKey)
           ? getContextName(topic) : subjectName(topic, isKey, null);
-      JsonSchema schema = ((JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id));
-      if (isKey != null && strategyUsesSchema(isKey)) {
+      JsonSchema schema = (JsonSchema) getSchemaBySchemaId(subject, schemaId);
+      if (subject == null || strategyUsesSchema(isKey)) {
         subject = subjectName(topic, isKey, schema);
-        schema = schemaForDeserialize(id, schema, subject, isKey);
+        schema = schemaForDeserialize(schemaId, schema, subject, isKey);
       }
+      Object buf = executeRules(
+          subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
+          schema, buffer
+      );
+      buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
 
-      ParsedSchema readerSchema = null;
-      if (metadata != null) {
-        readerSchema = getLatestWithMetadata(subject).getSchema();
-      } else if (useLatestVersion) {
-        readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
-      }
-      if (includeSchemaAndVersion || readerSchema != null) {
-        Integer version = schemaVersion(topic, isKey, id, subject, schema, null);
-        schema = schema.copy(version);
-      }
       List<Migration> migrations = Collections.emptyList();
-      if (readerSchema != null) {
-        migrations = getMigrations(subject, schema, readerSchema);
+      ParsedSchema readerSchema = writerToReaderSchemaFunc != null
+          ? writerToReaderSchemaFunc.apply(schema)
+          : null;
+      if (readerSchema == null) {
+        if (metadata != null) {
+          readerSchema = getLatestWithMetadata(subject).getSchema();
+        } else if (useLatestVersion) {
+          readerSchema = lookupLatestVersion(subject, schema, false).getSchema();
+        }
+        if (includeSchemaAndVersion || readerSchema != null) {
+          Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
+          schema = schema.copy(version);
+        }
+        if (readerSchema != null) {
+          migrations = getMigrations(subject, schema, readerSchema);
+        }
       }
 
-      int length = buffer.limit() - 1 - idSize;
+      int length = buffer.remaining();
       int start = buffer.position() + buffer.arrayOffset();
 
       JsonNode jsonNode = null;
@@ -167,7 +190,10 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
       if (readerSchema != null) {
         schema = (JsonSchema) readerSchema;
       }
-      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RuleMode.READ)) {
+      if (validate && validateBeforeDomainRules) {
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
+      }
+      if (schema.ruleSet() != null && schema.ruleSet().hasRules(RulePhase.DOMAIN, RuleMode.READ)) {
         if (jsonNode == null) {
           jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
         }
@@ -176,18 +202,8 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
         );
       }
 
-      if (validate) {
-        try {
-          if (jsonNode == null) {
-            jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
-          }
-          jsonNode = schema.validate(jsonNode);
-        } catch (JsonProcessingException | ValidationException e) {
-          throw new SerializationException("JSON "
-              + jsonNode
-              + " does not match schema "
-              + schema.canonicalString(), e);
-        }
+      if (validate && !validateBeforeDomainRules) {
+        jsonNode = validateJson(jsonNode, buffer, start, length, schema);
       }
 
       Object value;
@@ -237,11 +253,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
 
       return value;
     } catch (InterruptedIOException e) {
-      throw new TimeoutException("Error deserializing JSON message for id " + id, e);
+      throw new TimeoutException("Error deserializing JSON message for id " + schemaId, e);
     } catch (IOException | RuntimeException e) {
-      throw new SerializationException("Error deserializing JSON message for id " + id, e);
+      throw new SerializationException("Error deserializing JSON message for id " + schemaId, e);
     } catch (RestClientException e) {
-      throw toKafkaException(e, "Error retrieving JSON schema for id " + id);
+      throw toKafkaException(e, "Error retrieving JSON schema for id " + schemaId);
     } finally {
       postOp(payload);
     }
@@ -327,13 +343,11 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private Integer schemaVersion(
-      String topic, boolean isKey, int id, String subject, JsonSchema schema, Object value
+      String topic, boolean isKey, SchemaId schemaId,
+      String subject, JsonSchema schema, Object value
   ) throws IOException, RestClientException {
     Integer version = null;
-    if (isDeprecatedSubjectNameStrategy(isKey)) {
-      subject = getSubjectName(topic, isKey, value, schema);
-    }
-    JsonSchema subjectSchema = (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    JsonSchema subjectSchema = (JsonSchema) getSchemaBySchemaId(subject, schemaId);
     Metadata metadata = subjectSchema.metadata();
     if (metadata != null) {
       version = metadata.getConfluentVersionNumber();
@@ -345,22 +359,39 @@ public abstract class AbstractKafkaJsonSchemaDeserializer<T> extends AbstractKaf
   }
 
   private String subjectName(String topic, boolean isKey, JsonSchema schemaFromRegistry) {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? null
-           : getSubjectName(topic, isKey, null, schemaFromRegistry);
+    return getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   private JsonSchema schemaForDeserialize(
-      int id, JsonSchema schemaFromRegistry, String subject, boolean isKey
+      SchemaId schemaId, JsonSchema schemaFromRegistry, String subject, boolean isKey
   ) throws IOException, RestClientException {
-    return isDeprecatedSubjectNameStrategy(isKey)
-           ? JsonSchemaUtils.copyOf(schemaFromRegistry)
-           : (JsonSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+    return (JsonSchema) getSchemaBySchemaId(subject, schemaId);
   }
 
   protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload
   ) throws SerializationException {
     return (JsonSchemaAndValue) deserialize(true, topic, isKey, headers, payload);
+  }
+
+  protected JsonSchemaAndValue deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc
+  ) throws SerializationException {
+    return (JsonSchemaAndValue) deserialize(
+        true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
+  }
+
+  protected JsonNode validateJson(JsonNode jsonNode, ByteBuffer buffer, int start, int length,
+      JsonSchema schema) throws IOException {
+    try {
+      if (jsonNode == null) {
+        jsonNode = objectMapper.readValue(buffer.array(), start, length, JsonNode.class);
+      }
+      return schema.validate(jsonNode);
+    } catch (JsonProcessingException | ValidationException e) {
+      throw new SerializationException("JSON does not match schema of type "
+          + schema.schemaType(), e);
+    }
   }
 }

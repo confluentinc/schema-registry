@@ -431,4 +431,12 @@ public class DekRegistryRestService extends RestService implements Configurable 
 
     httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
   }
+
+  public void testKek(Map<String, String> requestProperties, String name)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/test");
+    String path = builder.build(name).toString();
+
+    httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
+  }
 }
