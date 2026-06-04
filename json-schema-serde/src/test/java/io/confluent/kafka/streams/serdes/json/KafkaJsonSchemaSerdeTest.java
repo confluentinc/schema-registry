@@ -18,7 +18,9 @@ package io.confluent.kafka.streams.serdes.json;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -95,7 +97,8 @@ public class KafkaJsonSchemaSerdeTest {
   }
 
   private static KafkaJsonSchemaSerde<Object> createConfiguredSerdeForRecordValues() {
-    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     KafkaJsonSchemaSerde<Object> serde = new KafkaJsonSchemaSerde<>(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
@@ -104,7 +107,8 @@ public class KafkaJsonSchemaSerdeTest {
   }
 
   private static KafkaJsonSchemaSerde<SomeTestRecord> createConfiguredSerdeForRecordValuesWithClass() {
-    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
+    SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient(
+        ImmutableList.of(new JsonSchemaProvider()));
     KafkaJsonSchemaSerde<SomeTestRecord> serde = new KafkaJsonSchemaSerde<>(schemaRegistryClient, SomeTestRecord.class);
     Map<String, Object> serdeConfig = new HashMap<>();
     serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");

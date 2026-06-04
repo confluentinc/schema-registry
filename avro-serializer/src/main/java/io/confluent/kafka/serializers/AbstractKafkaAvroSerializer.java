@@ -23,11 +23,16 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -50,10 +55,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean propagateSchemaTags;
   protected boolean removeJavaProperties;
   protected int useSchemaId = -1;
+  protected String useSchemaGuid = null;
   protected boolean idCompatStrict;
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
+  protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
   private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
@@ -73,12 +80,22 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     removeJavaProperties =
         config.getBoolean(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG);
     useSchemaId = config.useSchemaId();
+    useSchemaGuid = config.useSchemaGuid();
     idCompatStrict = config.getIdCompatibilityStrict();
     latestCompatStrict = config.getLatestCompatibilityStrict();
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
             .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    validationRulesExecution = AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.valueOf(
+        config.getString(KafkaAvroSerializerConfig.VALIDATION_RULES_EXECUTION)
+            .toUpperCase(Locale.ROOT));
+    if (validationRulesExecution
+        != AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.DISABLED) {
+      // Eagerly load the validator class so a missing schema-rules dep fails at
+      // serializer construction rather than at the first record.
+      initValidationRuleExecutor();
+    }
   }
 
   protected KafkaAvroSerializerConfig serializerConfig(Map<String, ?> props) {
@@ -91,11 +108,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
   protected byte[] serializeImpl(String subject, Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
-    return serializeImpl(subject, null, null, object, schema);
+    return serializeImpl(subject, null, null, null, object, schema);
   }
 
   protected byte[] serializeImpl(
-      String subject, String topic, Headers headers, Object object, AvroSchema schema)
+      String subject, String topic, Boolean key, Headers headers,
+      Object object, AvroSchema schema)
       throws SerializationException, InvalidConfigurationException {
     if (schemaRegistry == null) {
       StringBuilder userFriendlyMsgBuilder = new StringBuilder();
@@ -111,9 +129,10 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
     if (object == null) {
       return null;
     }
+    boolean isKey = key != null ? key : this.isKey;
     String restClientErrorMsg = "";
     try {
-      int id;
+      SchemaId schemaId;
       if (autoRegisterSchema) {
         restClientErrorMsg = "Error registering Avro schema";
         io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
@@ -125,25 +144,45 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
             schema = schema.copy(s.getVersion());
           }
         }
-        id = s.getId();
+        schemaId = new SchemaId(AvroSchema.TYPE, s.getId(), s.getGuid());
       } else if (useSchemaId >= 0) {
         restClientErrorMsg = "Error retrieving schema ID";
-        schema = (AvroSchema)
-            lookupSchemaBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
-        id = useSchemaId;
+        io.confluent.kafka.schemaregistry.client.rest.entities.Schema s =
+            lookupSchemaEntityBySubjectAndId(subject, useSchemaId, schema, idCompatStrict);
+        schema = (AvroSchema) schemaRegistry.parseSchemaOrElseThrow(s);
+        schemaId = new SchemaId(AvroSchema.TYPE, useSchemaId, s.getGuid());
+      } else if (useSchemaGuid != null) {
+        restClientErrorMsg = "Error retrieving schema GUID";
+        schema = (AvroSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
+        int id = schemaRegistry.getId(subject, schema);
+        schemaId = new SchemaId(AvroSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
         restClientErrorMsg = "Error retrieving latest with metadata '" + metadata + "'";
         ExtendedSchema extendedSchema = getLatestWithMetadata(subject);
         schema = (AvroSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            AvroSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else if (useLatestVersion) {
         restClientErrorMsg = "Error retrieving latest version of Avro schema";
         ExtendedSchema extendedSchema = lookupLatestVersion(subject, schema, latestCompatStrict);
         schema = (AvroSchema) extendedSchema.getSchema();
-        id = extendedSchema.getId();
+        schemaId = new SchemaId(
+            AvroSchema.TYPE, extendedSchema.getId(), extendedSchema.getGuid());
       } else {
         restClientErrorMsg = "Error retrieving Avro schema";
-        id = schemaRegistry.getId(subject, schema, normalizeSchema);
+        RegisterSchemaResponse response =
+            schemaRegistry.getIdWithResponse(subject, schema, normalizeSchema);
+        schemaId = new SchemaId(AvroSchema.TYPE, response.getId(), response.getGuid());
+      }
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.BEFORE_DOMAIN_RULES) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeValidationRules(subject, topic, headers, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
+        }
       }
       if (schema.ruleSet() != null && !schema.ruleSet().getDomainRules().isEmpty()) {
         AvroSchemaUtils.setThreadLocalData(
@@ -154,29 +193,42 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
           AvroSchemaUtils.clearThreadLocalData();
         }
       }
-
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      out.write(MAGIC_BYTE);
-      out.write(ByteBuffer.allocate(idSize).putInt(id).array());
-      Object value = object instanceof NonRecordContainer
-          ? ((NonRecordContainer) object).getValue()
-          : object;
-      Schema rawSchema = schema.rawSchema();
-      if (rawSchema.getType().equals(Type.BYTES)) {
-        if (value instanceof byte[]) {
-          out.write((byte[]) value);
-        } else if (value instanceof ByteBuffer) {
-          out.write(((ByteBuffer) value).array());
-        } else {
-          throw new SerializationException(
-              "Unrecognized bytes object of type: " + value.getClass().getName());
+      if (validationRulesExecution
+          == AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution.AFTER_DOMAIN_RULES) {
+        AvroSchemaUtils.setThreadLocalData(
+            schema.rawSchema(), avroUseLogicalTypeConverters, avroReflectionAllowNull);
+        try {
+          object = executeValidationRules(subject, topic, headers, schema, object);
+        } finally {
+          AvroSchemaUtils.clearThreadLocalData();
         }
-      } else {
-        writeDatum(out, value, rawSchema);
       }
-      byte[] bytes = out.toByteArray();
-      out.close();
-      return bytes;
+
+      try (SchemaIdSerializer schemaIdSerializer = schemaIdSerializer(isKey);
+          ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+        Object value = object instanceof NonRecordContainer
+            ? ((NonRecordContainer) object).getValue()
+            : object;
+        Schema rawSchema = schema.rawSchema();
+        if (rawSchema.getType().equals(Type.BYTES)) {
+          if (value instanceof byte[]) {
+            baos.write((byte[]) value);
+          } else if (value instanceof ByteBuffer) {
+            baos.write(((ByteBuffer) value).array());
+          } else {
+            throw new SerializationException(
+                "Unrecognized bytes object of type: " + value.getClass().getName());
+          }
+        } else {
+          writeDatum(baos, value, rawSchema);
+        }
+        byte[] payload = baos.toByteArray();
+        payload = (byte[]) executeRules(
+            subject, topic, headers, payload, RulePhase.ENCODING, RuleMode.WRITE, null,
+            schema, payload
+        );
+        return schemaIdSerializer.serialize(topic, isKey, headers, payload, schemaId);
+      }
     } catch (ExecutionException ex) {
       throw new SerializationException("Error serializing Avro message", ex.getCause());
     } catch (InterruptedIOException e) {
@@ -199,10 +251,15 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
 
     DatumWriter<Object> writer;
     writer = datumWriterCache.get(rawSchema,
-        () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
+        () -> (DatumWriter<Object>) getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
     writer.write(value, encoder);
     encoder.flush();
+  }
+
+  protected DatumWriter<?> getDatumWriter(
+      Object value, Schema schema, boolean useLogicalTypes, boolean allowNull) {
+    return AvroSchemaUtils.getDatumWriter(value, schema, useLogicalTypes, allowNull);
   }
 }

@@ -58,9 +58,6 @@ public class RestApp {
       prop.putAll(schemaRegistryProps);
     }
     prop.setProperty(SchemaRegistryConfig.PORT_CONFIG, ((Integer) port).toString());
-    if (zkConnect != null) {
-      prop.setProperty(SchemaRegistryConfig.KAFKASTORE_CONNECTION_URL_CONFIG, zkConnect);
-    }
     if (bootstrapBrokers != null) {
       prop.setProperty(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
     }
@@ -77,6 +74,8 @@ public class RestApp {
     restConnect = restServer.getURI().toString();
     if (restConnect.endsWith("/"))
       restConnect = restConnect.substring(0, restConnect.length()-1);
+    // For testing with Apache Http Client
+    // restClient = new RestService(restConnect, false, true);
     restClient = new RestService(restConnect);
   }
 

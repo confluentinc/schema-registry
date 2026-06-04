@@ -15,16 +15,27 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
-import java.util.Properties;
-import org.junit.Test;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
-public class RestApiSchemaTooLargeTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiSchemaTooLargeTest {
+
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
 
   private static final String schema =
       "{\"namespace\": \"namespace\",\n"
@@ -51,27 +62,15 @@ public class RestApiSchemaTooLargeTest extends ClusterTestHarness {
           + "]\n"
           + "}";
 
-  public RestApiSchemaTooLargeTest() {
-    super(1, true);
-  }
-
   @Test
   public void testSchemaTooLarge() throws Exception {
     String subject = "testTopic1";
     try {
       restApp.restClient.registerSchema(schema, subject);
-      fail("Registering a schema should return " + Errors.SUBJECT_NOT_FOUND_ERROR_CODE);
+      fail("Registering a schema should return " + Errors.SCHEMA_TOO_LARGE_ERROR_CODE);
     } catch (RestClientException e) {
       assertEquals(422, e.getStatus());
       assertEquals(Errors.SCHEMA_TOO_LARGE_ERROR_CODE, e.getErrorCode());
     }
   }
-
-  @Override
-  protected void injectProperties(Properties props) {
-    super.injectProperties(props);
-    // Lower the message max bytes to induce schema too large exception
-    props.setProperty("message.max.bytes", "900");
-  }
 }
-

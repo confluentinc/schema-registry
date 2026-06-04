@@ -127,6 +127,16 @@ public class KeyEncryptionKey extends EncryptionKey {
   }
 
   @Override
+  public String toString() {
+    return "KEK{name=" + name
+        + ", kmsType=" + kmsType
+        + ", shared=" + shared
+        + ", deleted=" + deleted
+        + ", offset=" + offset
+        + ", ts=" + timestamp + '}';
+  }
+
+  @Override
   public KeyEncryptionKeyId toKey(String tenant) {
     return new KeyEncryptionKeyId(tenant, name);
   }
