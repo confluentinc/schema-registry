@@ -73,6 +73,7 @@ import kafka.utils.VerifiableProperties;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1520,6 +1521,34 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerReflectionInstantLogicalType() {
+    byte[] bytes;
+    Object obj;
+
+    Map configs = ImmutableMap.of(
+        KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus",
+        AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, true,
+        KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true
+    );
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, configs);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(schemaRegistry, configs);
+
+    EventWithInstant event = new EventWithInstant(Instant.ofEpochMilli(1_460_000_000_000L));
+    Schema schema = AvroSchemaUtils.getReflectData(true, false).getSchema(EventWithInstant.class);
+    assertEquals("timestamp-millis", schema.getField("ts").schema().getLogicalType().getName());
+
+    RecordHeaders headers = new RecordHeaders();
+    bytes = serializer.serialize(topic, headers, event);
+
+    obj = deserializer.deserialize(topic, headers, bytes, schema);
+    assertTrue(
+        "Returned object should be an EventWithInstant",
+        EventWithInstant.class.isInstance(obj)
+    );
+    assertEquals(event, obj);
+  }
+
+  @Test
   public void testKafkaAvroSerializerReflectionRecordWithNullField() {
     byte[] bytes;
     Object obj;
@@ -1827,6 +1856,33 @@ public class KafkaAvroSerializerTest {
         + ",{\"type\":\"record\",\"name\":\"Account\",\"namespace\":\"example.avro\","
         + "\"fields\":[{\"name\":\"accountNumber\",\"type\":\"string\"}]}]";
     assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
+  }
+
+  static class EventWithInstant {
+    Instant ts;
+
+    EventWithInstant() {
+    }
+
+    EventWithInstant(Instant ts) {
+      this.ts = ts;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(ts);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof EventWithInstant)) {
+        return false;
+      }
+      return Objects.equals(this.ts, ((EventWithInstant) obj).ts);
+    }
   }
 
   static class RecordWithUUID {
