@@ -293,6 +293,13 @@ final class ConstraintFunctions {
               + "naming the iteration variable, got: '" + text + "'. "
               + "Example: " + sqlName + "(tags, t, LENGTH(t) > 0)");
     }
+    if ("this".equals(text)) {
+      throw locatedError(ctx,
+          sqlName + "() iteration variable name 'this' shadows the implicit "
+              + "row/root reference (the macro binds it as the loop variable, "
+              + "hiding the row so the body can no longer reach its columns); "
+              + "choose a different identifier.");
+    }
     if (ConstraintValidationContext.isRuntimeVar(text)) {
       throw locatedError(ctx,
           sqlName + "() iteration variable name '" + text + "' shadows a "
