@@ -485,7 +485,13 @@ final class ConstraintFunctions {
     }
     for (int i = 0; i < n - 1; i++) {
       sb.append('(');
-      emitIsNotNullCheck(args.get(i), nativeEmit[i], sb);
+      // has() requires a bare field selection (nativeEmit); a non-selection
+      // branch (e.g. mixed-numeric arithmetic, whose native emit is an
+      // un-coercible int+Decimal add) uses the type-coerced valueEmit so the
+      // null check itself type-checks.
+      String nullCheck = ConstraintResolver.isHasCompatible(args.get(i), vctx)
+          ? nativeEmit[i] : valueEmit[i];
+      emitIsNotNullCheck(args.get(i), nullCheck, sb);
       sb.append(" ? ").append(valueEmit[i]).append(" : ");
     }
     sb.append(valueEmit[n - 1]);
@@ -680,10 +686,17 @@ final class ConstraintFunctions {
       a = tsA.toString();
       b = tsB.toString();
     }
+    // has() requires a bare field selection (nativeA/B); a non-selection
+    // operand (e.g. mixed-numeric arithmetic) uses the type-coerced value so
+    // the null check type-checks.
+    final String nullA =
+        ConstraintResolver.isHasCompatible(args.get(0), vctx) ? nativeA : a;
+    final String nullB =
+        ConstraintResolver.isHasCompatible(args.get(1), vctx) ? nativeB : b;
     sb.append('(');
-    emitIsNullCheck(args.get(0), nativeA, sb);
+    emitIsNullCheck(args.get(0), nullA, sb);
     sb.append(" ? ").append(b).append(" : (");
-    emitIsNullCheck(args.get(1), nativeB, sb);
+    emitIsNullCheck(args.get(1), nullB, sb);
     sb.append(" ? ").append(a).append(" : ");
     if (decimal) {
       sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")

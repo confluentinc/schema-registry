@@ -4617,4 +4617,81 @@ class CheckConstraintTest {
         ValidationException.class,
         () -> translateCheck("CASE WHEN x > 0 THEN 1 ELSE name END = 1"));
   }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 16)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void coalesceReturnTypeIsCommonNotFirstArg() {
+    // COALESCE/GREATEST/LEAST resolved their return type to the FIRST arg's
+    // type, but the emit coerces all branches to the common type — so a wider
+    // arg in a non-first position made the surrounding context coerce against
+    // the wrong (narrow) type and fail strict-check. The result type is now
+    // the common type, regardless of arg order.
+    String a = translateCheck("COALESCE(amount, x) = 1");
+    String b = translateCheck("COALESCE(x, amount) = 1");
+    assertTrue(a.startsWith("decimals.eq(") && b.startsWith("decimals.eq("),
+        "both arg orders should route through decimals.eq, got:\n  " + a + "\n  " + b);
+  }
+
+  @Test
+  void greatestReturnTypeIsCommonNotFirstArg() {
+    // Same order-independence for GREATEST (and LEAST).
+    String a = translateCheck("GREATEST(amount, x) > 1");
+    String b = translateCheck("GREATEST(x, amount) > 1");
+    assertTrue(a.startsWith("decimals.gt(") && b.startsWith("decimals.gt("),
+        "both arg orders should route through decimals.gt, got:\n  " + a + "\n  " + b);
+  }
+
+  @Test
+  void coalesceDoubleCommonRegardlessOfOrder() {
+    // int-first with a double later arg resolves to double (was int → wrong).
+    assertEquals(
+        "((has(this.x) && dyn(this.x) != null) ? double(this.x) : this.ratio) > 1.0",
+        translateCheck("COALESCE(x, ratio) > 1.0"));
+  }
+
+  @Test
+  void mixedNumericArithmeticResolvesToCommonType() {
+    // unifyOperandTypes returned null for mixed numeric arithmetic, so
+    // `x + amount` (INT + DECIMAL) had an unknown type. A parenthesized
+    // occurrence then emitted `decimal((int + Decimal))` — a native int+Decimal
+    // add with no CEL overload. It now resolves to DECIMAL and re-enters the
+    // decimal cascade.
+    assertEquals(
+        "decimals.gt(decimals.add(decimal(this.x), this.amount), decimal(\"0\"))",
+        translateCheck("(x + amount) > 0"));
+    // (Bare, non-parenthesized form already worked — kept as a guard.)
+    assertEquals(
+        "decimals.gt(decimals.add(decimal(this.x), this.amount), decimal(\"0\"))",
+        translateCheck("x + amount > 0"));
+  }
+
+  @Test
+  void mixedNumericArithmeticInsideCaseResolves() {
+    // The unknown arithmetic type also poisoned CASE/COALESCE/GREATEST return
+    // types (the arithmetic branch was skipped in the common-type fold), so the
+    // outer comparison stayed native and hit a Decimal-vs-int mismatch. With the
+    // arithmetic now resolving to DECIMAL, the CASE resolves to DECIMAL and the
+    // whole construct routes through decimals.*.
+    String cel = translateCheck("CASE WHEN x > 0 THEN x + amount ELSE x END = 1");
+    assertTrue(cel.startsWith("decimals.eq("),
+        "expected decimals.eq, got: " + cel);
+  }
+
+  @Test
+  void mixedNumericArithmeticInsideCoalesceAndGreatestResolves() {
+    // COALESCE/GREATEST/LEAST null checks used the native emit of each branch;
+    // for a mixed-numeric arithmetic branch that native emit is an
+    // un-coercible int+Decimal add. The null check now uses the coerced value
+    // for non-field-selection branches, while plain column branches still use
+    // has(). Both arg orders work.
+    String c = translateCheck("COALESCE(x + amount, x) = 1");
+    assertTrue(c.startsWith("decimals.eq(") && c.contains("dyn(decimals.add("),
+        "got: " + c);
+    String g = translateCheck("GREATEST(x + amount, x) > 1");
+    assertTrue(g.startsWith("decimals.gt(") && g.contains("dyn(decimals.add("),
+        "got: " + g);
+  }
 }
