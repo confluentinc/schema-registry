@@ -4694,4 +4694,34 @@ class CheckConstraintTest {
     assertTrue(g.startsWith("decimals.gt(") && g.contains("dyn(decimals.add("),
         "got: " + g);
   }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 17)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void inListAllowsMixedNumericElementCategories() {
+    // validateInParenList required all elements to share an exact category, so
+    // a mixed-numeric list like (1, 2.5) was wrongly rejected — even though the
+    // emit coerces subject and elements to their common numeric type. INT
+    // subject with a DECIMAL element now coerces to decimal.
+    assertEquals(
+        "(decimals.eq(decimal(this.x), decimal(\"1\")) "
+            + "|| decimals.eq(decimal(this.x), decimal(\"2.5\")))",
+        translateCheck("x IN (1, 2.5)"));
+    // INT subject, DECIMAL + DOUBLE elements → common double, native `in`.
+    assertEquals(
+        "double(this.x) in [double(this.amount), this.ratio]",
+        translateCheck("x IN (amount, ratio)"));
+  }
+
+  @Test
+  void inListStillRejectsNumericVsStringElements() {
+    // Genuinely incompatible element categories remain rejected.
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("x IN (1, name)"));
+    assertTrue(t.getMessage().contains("not comparable"),
+        "expected incompatible-element rejection, got: " + t.getMessage());
+  }
 }
