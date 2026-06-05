@@ -247,7 +247,6 @@ public class AvroSchemaUtils {
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
-    avroData.addLogicalTypeConversion(new TimeConversions.TimestampNanosConversion());
 
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
     avroData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
