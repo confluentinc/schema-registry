@@ -98,9 +98,13 @@ final class ConstraintResolver {
   }
 
   /**
-   * Unify a list of operand types: if all resolve and share a category,
-   * return the first type; if any is unresolvable or categories differ,
-   * return null. Pure helper used by the arithmetic/concat/multiplicative
+   * Unify a list of operand types: identical category keeps the first; mixed
+   * numeric categories unify to their common type (int&lt;decimal&lt;double) —
+   * matching the arithmetic emit, which coerces operands to that common type,
+   * so e.g. {@code x + amount} (INT + DECIMAL) resolves to DECIMAL rather than
+   * null. Any unresolvable operand, or a mixed non-numeric pair (e.g. a
+   * string-concat with a numeric operand), yields null (deferred to the
+   * validator / strict checker). Used by the arithmetic/concat/multiplicative
    * cascade resolvers.
    */
   private static <T> Schema unifyOperandTypes(
@@ -108,8 +112,7 @@ final class ConstraintResolver {
     if (operands.size() == 1) {
       return resolveOne.apply(operands.get(0));
     }
-    Schema first = null;
-    String firstCategory = null;
+    Schema acc = null;
     for (T operand : operands) {
       Schema t = resolveOne.apply(operand);
       if (t == null) {
@@ -119,14 +122,23 @@ final class ConstraintResolver {
       if (cat == null) {
         return null;
       }
-      if (first == null) {
-        first = t;
-        firstCategory = cat;
-      } else if (!firstCategory.equals(cat)) {
-        return null;  // mixed categories — validator catches
+      if (acc == null) {
+        acc = t;
+        continue;
+      }
+      String accCat = categoryOf(acc.getType());
+      if (accCat.equals(cat)) {
+        continue;
+      }
+      if (isNumericCategory(accCat) && isNumericCategory(cat)) {
+        if (numericCommon(accCat, cat).equals(cat)) {
+          acc = t;  // t is the wider numeric type
+        }
+      } else {
+        return null;  // mixed non-numeric — validator catches
       }
     }
-    return first;
+    return acc;
   }
 
   /**
@@ -224,14 +236,26 @@ final class ConstraintResolver {
         break;
       }
     }
-    // Fold the branch types to a common type. Same category keeps the first;
-    // mixed numeric categories unify to their common type (int<decimal<double)
-    // — matching the emit, which coerces the branches — so the CASE has a known
-    // numeric type for the surrounding context. Genuinely incompatible pairs
-    // (e.g. numeric vs string) return null and are caught by the strict checker.
+    return commonBranchType(results, vctx);
+  }
+
+  /**
+   * Fold a set of branch/argument expressions into a single common result
+   * type, the way the emit coerces them: identical category keeps the first;
+   * mixed numeric categories unify to their common type (int&lt;decimal&lt;double);
+   * a genuinely incompatible pair (e.g. numeric vs string) yields null (the
+   * strict checker rejects it). Shared by CASE branches and the
+   * COALESCE/GREATEST/LEAST arguments, so the surrounding context coerces
+   * against the same type the emit actually produces (otherwise a wider arg in
+   * a non-first position, e.g. {@code COALESCE(intCol, decimalCol)}, would
+   * report the narrow type while the emit produces the wide one).
+   */
+  static Schema commonBranchType(
+      List<LogicalTypesParser.Check_exprContext> branches,
+      ConstraintValidationContext vctx) {
     Schema acc = null;
-    for (LogicalTypesParser.Check_exprContext r : results) {
-      Schema t = tryResolveCheckExprType(r, vctx);
+    for (LogicalTypesParser.Check_exprContext b : branches) {
+      Schema t = tryResolveCheckExprType(b, vctx);
       if (t == null) {
         continue;
       }
@@ -301,8 +325,13 @@ final class ConstraintResolver {
       case "GREATEST":
       case "LEAST":
       case "COALESCE":
+        // Result is the common type of ALL arguments — the emit coerces every
+        // branch to it — so a wider arg in a non-first position must widen the
+        // reported type (e.g. COALESCE(intCol, decimalCol) is decimal, not int).
+        return args == null ? null : commonBranchType(args, vctx);
       case "NULLIF":
-        // Result type matches the (first non-null-resolvable) argument type.
+        // NULLIF(a, b) returns `a` (or null), so its type is the first
+        // resolvable argument's type — not the common type of a and b.
         if (args == null) {
           return null;
         }
