@@ -1060,7 +1060,6 @@ final class ConstraintValidator {
                 + "to test for null membership separately.");
       }
     }
-    String firstCategory = null;
     Schema.Type firstType = null;
     for (LogicalTypesParser.Check_exprContext item : items) {
       Schema t = ConstraintResolver.tryResolveCheckExprType(item, vctx);
@@ -1071,12 +1070,15 @@ final class ConstraintValidator {
       if (cat == null) {
         continue;
       }
-      if (firstCategory == null) {
-        firstCategory = cat;
+      if (firstType == null) {
         firstType = t.getType();
         continue;
       }
-      if (!firstCategory.equals(cat)) {
+      // areComparable treats any two numeric categories as comparable (the IN
+      // emit coerces subject and elements to their common numeric type), so a
+      // mixed-numeric list like (1, 2.5) is allowed; only genuinely
+      // incompatible categories (e.g. numeric vs string) are rejected.
+      if (!ConstraintResolver.areComparable(firstType, t.getType())) {
         throw locatedError(item,
             "IN list element type " + t.getType() + " is not comparable "
                 + "with the earlier element type " + firstType
