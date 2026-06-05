@@ -3163,10 +3163,6 @@ class CheckConstraintTest {
     assertEquals(null, r.getDoc());
   }
 
-  // ---------------------------------------------------------------------
-  // Audit round 8 regressions
-  // ---------------------------------------------------------------------
-
   @Test
   void schemaSetRulesOnNonStructRejected() {
     // H2: rules attached to non-STRUCT schemas were silently dropped on the
@@ -3283,10 +3279,6 @@ class CheckConstraintTest {
     assertEquals("!(this.x in [1, 2, 3])",
         translateCheck("x NOT IN (1, 2, 3)"));
   }
-
-  // ---------------------------------------------------------------------
-  // Audit round 9 regressions
-  // ---------------------------------------------------------------------
 
   @Test
   void greatestMixedTypesRejected() {
@@ -3525,10 +3517,6 @@ class CheckConstraintTest {
     assertTrue(r.contains(".matches('^[a-z]+$')"), "got: " + r);
   }
 
-  // ---------------------------------------------------------------------
-  // Audit round 10 regressions
-  // ---------------------------------------------------------------------
-
   @Test
   void matchesBackrefRejected() {
     // RE2 doesn't support backreferences. Java's regex does — using RE2J
@@ -3580,10 +3568,6 @@ class CheckConstraintTest {
     Schema.EnumValue v = new Schema.EnumValue("null");
     assertEquals("null", v.getSymbol());
   }
-
-  // ---------------------------------------------------------------------
-  // Audit round 11 regressions
-  // ---------------------------------------------------------------------
 
   @Test
   void avroReaderAcceptsCelReservedFieldName() {
@@ -3677,10 +3661,6 @@ class CheckConstraintTest {
         "expected DECIMAL precision error, got: " + t.getMessage());
   }
 
-  // ---------------------------------------------------------------------
-  // Audit round 13 regressions
-  // ---------------------------------------------------------------------
-
   @Test
   void binaryFixedLengthExactRequired() {
     // H1: BINARY(N) is fixed-length — default must be exactly N bytes.
@@ -3730,10 +3710,6 @@ class CheckConstraintTest {
         () -> translateCheck("STARTS_WITH(x, 'a')"));
     assertTrue(t.getMessage().contains("Cannot compare") || t.getMessage().contains("incompatible") || t.getMessage().contains("not comparable") || t.getMessage().contains("strict type-check") || t.getMessage().contains("relational operator") || t.getMessage().contains("argument must be") || t.getMessage().contains("must be string") || t.getMessage().contains("LENGTH() argument") || t.getMessage().contains("STARTS_WITH(") || t.getMessage().contains("UPPER("));
   }
-
-  // ---------------------------------------------------------------------
-  // Audit round 12 regressions
-  // ---------------------------------------------------------------------
 
   @Test
   void ddlEmitQuotesReservedFieldName() {
@@ -4723,5 +4699,28 @@ class CheckConstraintTest {
         () -> translateCheck("x IN (1, name)"));
     assertTrue(t.getMessage().contains("not comparable"),
         "expected incompatible-element rejection, got: " + t.getMessage());
+  }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 18)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void macroIterationVariableNamedThisRejected() {
+    // The macro iteration variable is bound as a CEL macro var; naming it
+    // `this` shadows the implicit row/root reference, so the body can no
+    // longer reach the row's columns (e.g. EVERY(tags, this, this = name)
+    // emitted `this.name` against the loop element and failed strict-check).
+    // It's now rejected up front with a clear message, like `now` and CEL
+    // reserved words already were.
+    Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("EVERY(tags, this, this = 'x')"));
+    assertTrue(t.getMessage().contains("this")
+            && t.getMessage().toLowerCase(java.util.Locale.ROOT).contains("shadow"),
+        "expected 'this' shadow rejection, got: " + t.getMessage());
+    // A normal iteration variable name still works.
+    assertEquals("this.tags.all(t, t == 'x')",
+        translateCheck("EVERY(tags, t, t = 'x')"));
   }
 }
