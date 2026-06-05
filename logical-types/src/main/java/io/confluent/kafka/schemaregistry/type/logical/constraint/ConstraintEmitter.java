@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -1943,6 +1944,29 @@ final class ConstraintEmitter {
     }
 
     List<LogicalTypesParser.When_clauseContext> whens = ctx.when_clause();
+
+    // The THEN/ELSE result branches unify to their common type, exactly like
+    // COALESCE: numeric branches coerce to the common numeric type (DECIMAL →
+    // Decimal values, DOUBLE → double-cast values) and temporal branches
+    // normalize to CEL timestamps, so the emitted ternary's branches type-check
+    // under the strict checker. Without this, `CASE WHEN c THEN intCol ELSE
+    // decimalCol END` would emit `c ? int : Decimal`, which has no common CEL
+    // type. (Non-numeric/mixed-incompatible branches yield common=null and emit
+    // natively, leaving genuine mismatches for the strict checker to reject.)
+    ConstraintValidationContext resultVctx = EMIT_VCTX.get();
+    List<LogicalTypesParser.Check_exprContext> resultBranches = new ArrayList<>();
+    for (LogicalTypesParser.When_clauseContext when : whens) {
+      resultBranches.add(when.check_expr(1));
+    }
+    if (elseExpr != null) {
+      resultBranches.add(elseExpr);
+    }
+    String resultCommon =
+        (resultVctx != null) ? numericCommonOf(resultBranches, resultVctx) : null;
+    boolean resultTemporal = resultVctx != null
+        && !"decimal".equals(resultCommon) && !"double".equals(resultCommon)
+        && resultBranchesHaveTemporal(resultBranches, resultVctx);
+
     sb.append("(");
     for (int i = 0; i < whens.size(); i++) {
       LogicalTypesParser.When_clauseContext when = whens.get(i);
@@ -1987,14 +2011,14 @@ final class ConstraintEmitter {
         emitWrappedReceiver(when.check_expr(0), sb);
       }
       sb.append(" ? ");
-      visitCheckExpr(when.check_expr(1), sb);
+      emitCaseResult(when.check_expr(1), resultCommon, resultTemporal, sb);
       sb.append(" : ");
       if (i < whens.size() - 1) {
         sb.append("(");
       }
     }
     if (elseExpr != null) {
-      visitCheckExpr(elseExpr, sb);
+      emitCaseResult(elseExpr, resultCommon, resultTemporal, sb);
     } else {
       // Postgres CASE without ELSE returns NULL on no match.
       sb.append("null");
@@ -2004,5 +2028,37 @@ final class ConstraintEmitter {
       sb.append(")");
     }
     sb.append(")");
+  }
+
+  /**
+   * Emit a CASE THEN/ELSE result coerced to the branches' common type, so the
+   * ternary's branches type-unify. Mirrors {@code emitCoalesce}'s per-branch
+   * coercion: DECIMAL common → Decimal value, DOUBLE common → double-cast,
+   * temporal → CEL-timestamp normalization, otherwise native.
+   */
+  private static void emitCaseResult(
+      LogicalTypesParser.Check_exprContext branch, String common,
+      boolean temporal, StringBuilder sb) {
+    if ("decimal".equals(common)) {
+      emitDecimalValue(branch, sb);
+    } else if ("double".equals(common)) {
+      emitNumericAs(branch, "double", sb);
+    } else if (temporal) {
+      emitTimestampValueCheckExpr(branch, sb);
+    } else {
+      visitCheckExpr(branch, sb);
+    }
+  }
+
+  /** True if any of the CASE result branches has a temporal subtree. */
+  private static boolean resultBranchesHaveTemporal(
+      List<LogicalTypesParser.Check_exprContext> branches,
+      ConstraintValidationContext vctx) {
+    for (LogicalTypesParser.Check_exprContext b : branches) {
+      if (ConstraintResolver.subtreeHasTemporal(b, vctx)) {
+        return true;
+      }
+    }
+    return false;
   }
 }
