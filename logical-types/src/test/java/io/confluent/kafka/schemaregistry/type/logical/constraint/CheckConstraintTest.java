@@ -4584,4 +4584,37 @@ class CheckConstraintTest {
     assertEquals("bytes(this.name) == b\"\\x00\"",
         translateCheck("CAST(name AS BINARY VARYING) = x'00'"));
   }
+
+  // ---------------------------------------------------------------------
+  // Deep-review regressions (audit round 15)
+  // ---------------------------------------------------------------------
+
+  @Test
+  void caseResultBranchesCoerceToCommonNumericLikeCoalesce() {
+    // CASE result branches were emitted without coercion, so mixed numeric
+    // branches (THEN amount DECIMAL, ELSE x INT) emitted `c ? Decimal : int`
+    // and failed strict-check — while the sibling COALESCE coerces. Now CASE
+    // coerces its branches AND resolves to the common numeric type, so the
+    // surrounding comparison coerces too.
+    assertEquals(
+        "decimals.eq(((this.x > 0) ? this.amount : decimal(this.x)), decimal(\"1\"))",
+        translateCheck("CASE WHEN x > 0 THEN amount ELSE x END = 1"));
+  }
+
+  @Test
+  void caseResultBranchesCoerceToDouble() {
+    // THEN ratio (DOUBLE), ELSE x (INT) → x coerced to double in both branches.
+    String cel = translateCheck("CASE WHEN x > 0 THEN ratio ELSE x END > 0.0");
+    assertTrue(cel.contains("double(this.x)"),
+        "int branch should coerce to double, got: " + cel);
+  }
+
+  @Test
+  void caseWithStringAndNumericBranchesStillRejected() {
+    // Genuinely incompatible branches (numeric vs string) remain rejected —
+    // the common-type fold only unifies numeric categories.
+    org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheck("CASE WHEN x > 0 THEN 1 ELSE name END = 1"));
+  }
 }

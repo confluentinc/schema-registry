@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -207,12 +208,30 @@ final class ConstraintResolver {
    */
   static Schema tryResolveCaseExprType(
       LogicalTypesParser.Case_exprContext ctx, ConstraintValidationContext vctx) {
-    Schema first = null;
-    String firstCategory = null;
+    // Collect the result branches: each WHEN's THEN (check_expr index 1) plus
+    // the optional ELSE (an untagged check_expr after the ELSE terminal).
+    List<LogicalTypesParser.Check_exprContext> results = new ArrayList<>();
     for (LogicalTypesParser.When_clauseContext when : ctx.when_clause()) {
-      // when_clause has two check_expr children: condition (or value for
-      // simple-CASE) and the THEN result. Result is index 1.
-      Schema t = tryResolveCheckExprType(when.check_expr(1), vctx);
+      results.add(when.check_expr(1));
+    }
+    boolean afterElse = false;
+    for (int i = 0; i < ctx.getChildCount(); i++) {
+      ParseTree child = ctx.getChild(i);
+      if (child instanceof TerminalNode && "ELSE".equalsIgnoreCase(child.getText())) {
+        afterElse = true;
+      } else if (afterElse && child instanceof LogicalTypesParser.Check_exprContext) {
+        results.add((LogicalTypesParser.Check_exprContext) child);
+        break;
+      }
+    }
+    // Fold the branch types to a common type. Same category keeps the first;
+    // mixed numeric categories unify to their common type (int<decimal<double)
+    // — matching the emit, which coerces the branches — so the CASE has a known
+    // numeric type for the surrounding context. Genuinely incompatible pairs
+    // (e.g. numeric vs string) return null and are caught by the strict checker.
+    Schema acc = null;
+    for (LogicalTypesParser.Check_exprContext r : results) {
+      Schema t = tryResolveCheckExprType(r, vctx);
       if (t == null) {
         continue;
       }
@@ -220,39 +239,23 @@ final class ConstraintResolver {
       if (cat == null) {
         continue;
       }
-      if (first == null) {
-        first = t;
-        firstCategory = cat;
-      } else if (!firstCategory.equals(cat)) {
-        return null;  // mixed — validator catches
+      if (acc == null) {
+        acc = t;
+        continue;
       }
-    }
-    // Walk the ELSE expression too. Grammar exposes it as a check_expr that
-    // appears after the ELSE keyword as an untagged child of case_expr.
-    boolean afterElse = false;
-    for (int i = 0; i < ctx.getChildCount(); i++) {
-      org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
-      if (child instanceof TerminalNode
-          && "ELSE".equalsIgnoreCase(child.getText())) {
-        afterElse = true;
-      } else if (afterElse
-          && child instanceof LogicalTypesParser.Check_exprContext) {
-        Schema t = tryResolveCheckExprType(
-            (LogicalTypesParser.Check_exprContext) child, vctx);
-        if (t != null) {
-          String cat = categoryOf(t.getType());
-          if (cat != null) {
-            if (first == null) {
-              first = t;
-            } else if (!firstCategory.equals(cat)) {
-              return null;
-            }
-          }
+      String accCat = categoryOf(acc.getType());
+      if (accCat.equals(cat)) {
+        continue;
+      }
+      if (isNumericCategory(accCat) && isNumericCategory(cat)) {
+        if (numericCommon(accCat, cat).equals(cat)) {
+          acc = t;  // t is the wider numeric type
         }
-        break;
+      } else {
+        return null;  // genuinely incompatible — validator/strict-check catches
       }
     }
-    return first;
+    return acc;
   }
 
   /**
