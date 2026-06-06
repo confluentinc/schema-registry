@@ -208,6 +208,7 @@
                                 <buildArg>--verbose</buildArg>
                                 <buildArg>--enable-http</buildArg>
                                 <buildArg>--enable-https</buildArg>
+                                <buildArg>--enable-all-security-services</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
