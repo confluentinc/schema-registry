@@ -132,7 +132,7 @@
                             >io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
                             <classpath>
                                 <param
-                                >${project.basedir}/target/kafka-schema-registry-package-8.2.0-standalone.jar</param>
+                                >${project.basedir}/target/kafka-schema-registry-package-8.2.0-0-standalone.jar</param>
                                 <param>path/to/classes</param>
                             </classpath>
                             <buildArgs>

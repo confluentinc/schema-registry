@@ -486,4 +486,114 @@
             </resource>
         </resources>
     </build>
+
+    <profiles>
+      <profile>
+        <id>native</id>
+        <build>
+          <plugins>
+            <plugin>
+              <groupId>org.graalvm.buildtools</groupId>
+              <artifactId>native-maven-plugin</artifactId>
+              <version>1.1.1</version>
+              <extensions>true</extensions>
+              <executions>
+                <execution>
+                  <id>build-native</id>
+                  <goals>
+                    <goal>compile-no-fork</goal>
+                  </goals>
+                  <phase>package</phase>
+                </execution>
+                <execution>
+                  <id>test-native</id>
+                  <goals>
+                    <goal>test</goal>
+                  </goals>
+                  <phase>test</phase>
+                </execution>
+              </executions>
+              <configuration>
+                <mainClass>io.confluent.kafka.schemaregistry.rest.SchemaRegistryMain</mainClass>
+                <buildArgs>
+                    <buildArg
+                    >--trace-object-instantiation=org.apache.logging.slf4j.Log4jLogger</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioByteChannel</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.channel.epoll</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.channel.kqueue</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker</buildArg>
+                    <buildArg
+                    >--initialize-at-build-time=com.fasterxml.jackson.databind.ObjectWriter$GeneratorSettings</buildArg>
+                    <buildArg
+                    >--trace-object-instantiation=com.fasterxml.jackson.databind.ObjectWriter$Prefetch</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.handler.codec.CodecOutputList</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.handler.ssl.util.ThreadLocalInsecureRandom,io.netty.channel.unix,io.netty.channel.epoll,io.netty.channel.kqueue</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.util.internal.logging.InternalLoggerFactory</buildArg>
+                    <buildArg
+                    >--trace-object-instantiation=io.netty.util.internal.logging.Slf4JLoggerFactory</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.buffer.AbstractByteBuf</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.channel</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.util.internal</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.netty.buffer</buildArg>
+                    <!-- Step 2 -->
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.channel.epoll</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.channel.kqueue</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.handler.codec.CodecOutputList</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.handler.ssl.util.ThreadLocalInsecureRandom,io.grpc.netty.shaded.io.netty.channel.unix,io.grpc.netty.shaded.io.netty.channel.epoll,io.grpc.netty.shaded.io.netty.channel.kqueue</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.internal.logging.InternalLoggerFactory</buildArg>
+                    <buildArg
+                    >--trace-object-instantiation=io.grpc.netty.shaded.io.netty.util.internal.logging.Slf4JLoggerFactory</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.buffer.AbstractByteBuf</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.channel</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.internal</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.buffer</buildArg>
+                    <!-- Step 3 -->
+                    <buildArg
+                    >--trace-object-instantiation=io.grpc.netty.shaded.io.netty.util.internal.logging.LocationAwareSlf4JLogger</buildArg>
+                    <buildArg
+                    >--initialize-at-build-time=io.grpc.netty.shaded.io.netty.util.internal.logging.LocationAwareSlf4JLogger</buildArg>
+                    <buildArg
+                    >--trace-object-instantiation=org.apache.logging.slf4j.Log4jLogger</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=org.apache.logging.log4j.core.Logger</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.NetUtil</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.NetUtilInitializations</buildArg>
+                    <buildArg
+                    >--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.ResourceLeakDetectorFactory</buildArg>
+                    <!-- Tests -->
+                    <buildArg>--initialize-at-run-time=io.grpc.netty.shaded.io.netty.internal.tcnative,io.grpc.netty.shaded.io.netty.handler.ssl</buildArg>
+
+                    <!-- Step 4: where the hell is my instrumented logic! -->
+                    <buildArg>--verbose</buildArg>
+                </buildArgs>
+              </configuration>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+    </profiles>
 </project>

@@ -1,0 +1,4619 @@
+{
+  "reflection": [
+    {
+      "type": "android.app.Application"
+    },
+    {
+      "type": "byte[]",
+      "jniAccessible": true
+    },
+    {
+      "type": "com.fasterxml.jackson.core.JsonParser"
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.JsonNode"
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.ObjectMapper"
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.deser.Deserializers[]"
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.ser.Serializers[]"
+    },
+    {
+      "type": "com.fasterxml.jackson.dataformat.yaml.YAMLFactory"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorMessageInfoFactory",
+      "methods": [
+        {
+          "name": "getInstance",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$EnumOptions"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$EnumOptions$Builder"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$EnumValueOptions"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$EnumValueOptions$Builder"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FeatureSet"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$Builder"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$CType"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$EditionDefault"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$FeatureSupport"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$JSType"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$OptionRetention"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FieldOptions$OptionTargetType"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FileOptions"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FileOptions$Builder"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$FileOptions$OptimizeMode"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$MessageOptions"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$MessageOptions$Builder"
+    },
+    {
+      "type": "com.google.protobuf.DescriptorProtos$UninterpretedOption"
+    },
+    {
+      "type": "com.google.protobuf.Extension"
+    },
+    {
+      "type": "com.google.protobuf.ExtensionRegistry",
+      "methods": [
+        {
+          "name": "add",
+          "parameterTypes": [
+            "com.google.protobuf.Extension"
+          ]
+        },
+        {
+          "name": "getEmptyRegistry",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.google.protobuf.GeneratedMessage$ExtendableMessage",
+      "methods": [
+        {
+          "name": "getExtensionFields",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.crypto.provider.GaloisCounterMode$AESGCM",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.ClusterTestHarness"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.ClusterTestHarness$AddKraftQuorum",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.LeaderElectorTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.SASLClusterTestHarness"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.SSLClusterTestHarness"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.SchemaRegistryTestHarness"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.avro.AvroCompatibilityTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBadDefaultNull",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBasicBackwardsCompatibility",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBasicBackwardsTransitiveCompatibility",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBasicForwardsCompatibility",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBasicForwardsTransitiveCompatibility",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBasicFullCompatibility",
+          "parameterTypes": []
+        },
+        {
+          "name": "testBasicFullTransitiveCompatibility",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClientTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClientTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.client.SchemaRegistryClient"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.leaderelector.kafka.SchemaRegistryCoordinatorTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setup",
+          "parameterTypes": []
+        },
+        {
+          "name": "teardown",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCoordinatorDuringRoll",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCoordinatorDuringRollWithStickyLeaderElection",
+          "parameterTypes": []
+        },
+        {
+          "name": "testJoinGroupLeaderDuplicateUrls",
+          "parameterTypes": []
+        },
+        {
+          "name": "testJoinGroupLeaderNoneEligible",
+          "parameterTypes": []
+        },
+        {
+          "name": "testMetadata",
+          "parameterTypes": []
+        },
+        {
+          "name": "testNormalJoinGroupFollower",
+          "parameterTypes": []
+        },
+        {
+          "name": "testNormalJoinGroupLeader",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.leaderelector.kafka.SchemaRegistryProtocol$Assignment",
+      "fields": [
+        {
+          "name": "version"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "short",
+            "java.lang.String",
+            "io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity"
+          ]
+        },
+        {
+          "name": "error",
+          "parameterTypes": []
+        },
+        {
+          "name": "leader",
+          "parameterTypes": []
+        },
+        {
+          "name": "leaderIdentity",
+          "parameterTypes": []
+        },
+        {
+          "name": "version",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.leaderelector.kafka.SchemaRegistryProtocolTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testDeserializeWithUnknownProperties",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.metrics.CustomSchemaProviderMetricTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.metrics.MetricsTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.MutableHttpServletRequestTest",
+      "fields": [
+        {
+          "name": "httpServletRequest"
+        },
+        {
+          "name": "mutableRequest"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setup",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetAndPutWithInitialHeaders",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetAndPutWithNoInitialHeaders",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetWithNoInitialHeaders",
+          "parameterTypes": []
+        },
+        {
+          "name": "testPutHeaderOverwritesInGetHeaders",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RequestHeaderBuilderTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testDoNotForwardHeaders",
+          "parameterTypes": []
+        },
+        {
+          "name": "testEmptyProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testForwardMultipleHeaders",
+          "parameterTypes": []
+        },
+        {
+          "name": "testForwardOneHeader",
+          "parameterTypes": []
+        },
+        {
+          "name": "testHeaderProperties",
+          "parameterTypes": []
+        },
+        {
+          "name": "testMissingProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testNullWhitelist",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RequestHeaderHandler"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RequestHeaderHandlerTest",
+      "fields": [
+        {
+          "name": "callback"
+        },
+        {
+          "name": "request"
+        },
+        {
+          "name": "requestHeaderHandler"
+        },
+        {
+          "name": "response"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setup",
+          "parameterTypes": []
+        },
+        {
+          "name": "testAddXForwardedForToRequest",
+          "parameterTypes": []
+        },
+        {
+          "name": "testAddXForwardedForToRequestOverridesHeader",
+          "parameterTypes": []
+        },
+        {
+          "name": "testAddXRequestIdToRequest",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetRequestIdWith1RequestId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetRequestIdWithBlankRequestId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetRequestIdWithMultipleRequestId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetRequestIdWithoutRequestId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testRequestHandlerWith1RequestId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testRequestHandlerWithMultipleRequestId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testRequestHandlerWithoutRequestId",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiAssociationTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiCompatibilityClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiCompatibilityTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiContextClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiContextTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiMetadataEncoderClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiMetadataEncoderTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiModeClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiModeTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiRegisterSchemaTagsClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiRegisterSchemaTagsTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiSchemaTooLargeClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiSchemaTooLargeTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiSslClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiSslTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiTransitiveCompatibilityClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.RestApiTransitiveCompatibilityTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfigTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "defaultAssociationsEnable",
+          "parameterTypes": []
+        },
+        {
+          "name": "defaultInterInstanceProtocol",
+          "parameterTypes": []
+        },
+        {
+          "name": "defaultMutabilityMode",
+          "parameterTypes": []
+        },
+        {
+          "name": "testFilterBrokerEndpointsSinglePlaintext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetBrokerEndpointsEmpty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetBrokerEndpointsMixed",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetBrokerEndpointsNoSecurityProtocolMatches",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetBrokerEndpointsUnsupportedSecurityProtocol",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSslConfigOverride",
+          "parameterTypes": []
+        },
+        {
+          "name": "unprefixedInterInstanceProtocol",
+          "parameterTypes": []
+        },
+        {
+          "name": "useDeprecatedInterInstanceProtocolIfDefined",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.SchemaRegistryErrorHandlerTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.SchemaRegistryExtensionTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.client.LocalSchemaRegistryClientTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionMapperTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setUp",
+          "parameterTypes": []
+        },
+        {
+          "name": "testToResponse",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.exceptions.JettyEofExceptionWriterInterceptorTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testAroundWriteToNoExceptionThrown",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.filters.AliasFilterTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setUp",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigUriWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testDekPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testModeUriWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testNoSubjectDefaultContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testRoot",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriEndsWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithEncodedSlash",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithIds",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithIdsAndSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithoutModification",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.filters.AliasNonDefaultTenantFilterTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setUp",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigUriWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testDekPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testModeUriWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testNoSubjectDefaultContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testRoot",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriEndsWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithEncodedSlash",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithIds",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithIdsAndSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithoutModification",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.filters.ContextFilterTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testAssociationsContextQueryParam",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigNotRoot",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigUriWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigUriWithoutSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testContextAlreadyExists",
+          "parameterTypes": []
+        },
+        {
+          "name": "testContextsRoot",
+          "parameterTypes": []
+        },
+        {
+          "name": "testDekPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testInvalidContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testKekPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testMissingLeadingDotInContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testModeUriWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testModeUriWithoutSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testModeUriWithoutSubjectDefaultContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testNoSubjectDefaultContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testPatchAssociationsContextQueryParam",
+          "parameterTypes": []
+        },
+        {
+          "name": "testPutAssociationsContextQueryParam",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSpecificContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectNamedContexts",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectNamedFoo",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectNamedSubjects",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectPartOfUri",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSubjectPartOfUriDefaultContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriEndsWithSubject",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithEncodedContext",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithEncodedSlash",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithIds",
+          "parameterTypes": []
+        },
+        {
+          "name": "testUriWithoutModification",
+          "parameterTypes": []
+        },
+        {
+          "name": "testWildcardContextUnmodified",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.json.RestApiClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.json.RestApiTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.protobuf.RestApiClusterTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.rest.protobuf.RestApiTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.ConfigKey",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.ExecutionEnvironment"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistryTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.KafkaStoreReaderThreadTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.KafkaStoreSASLTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.KafkaStoreSSLAuthTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.KafkaStoreSSLNoAuthTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.KafkaStoreTest"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.Metadata"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.OffsetCheckpointTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "shouldNotWriteCheckpointWhenNoOffsets",
+          "parameterTypes": []
+        },
+        {
+          "name": "testReadOnly",
+          "parameterTypes": []
+        },
+        {
+          "name": "testReadWrite",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.Rule"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.RuleKind"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.RuleMode"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.RuleSet"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaKey",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "int"
+          ]
+        },
+        {
+          "name": "getVersion",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaMD5RegressionTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGoldenMD5Consistency",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaReference"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaRegistry"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.Integer",
+            "java.lang.Boolean",
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "getHost",
+          "parameterTypes": []
+        },
+        {
+          "name": "getLeaderEligibility",
+          "parameterTypes": []
+        },
+        {
+          "name": "getPort",
+          "parameterTypes": []
+        },
+        {
+          "name": "getScheme",
+          "parameterTypes": []
+        },
+        {
+          "name": "getVersion",
+          "parameterTypes": []
+        },
+        {
+          "name": "isLeader",
+          "parameterTypes": []
+        },
+        {
+          "name": "setLeader",
+          "parameterTypes": [
+            "java.lang.Boolean"
+          ]
+        },
+        {
+          "name": "setVersion",
+          "parameterTypes": [
+            "java.lang.Integer"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaRegistryKey",
+      "methods": [
+        {
+          "name": "getKeyType",
+          "parameterTypes": []
+        },
+        {
+          "name": "getMagicByte",
+          "parameterTypes": []
+        },
+        {
+          "name": "setKeyType",
+          "parameterTypes": [
+            "io.confluent.kafka.schemaregistry.storage.SchemaRegistryKeyType"
+          ]
+        },
+        {
+          "name": "setMagicByte",
+          "parameterTypes": [
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaRegistryKeyType"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaRegistryKeysTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigKeyComparator",
+          "parameterTypes": []
+        },
+        {
+          "name": "testConfigKeySerde",
+          "parameterTypes": []
+        },
+        {
+          "name": "testKeyComparator",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaKeyComparator",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaKeySerdeForMagicByte0",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaKeySerdeForMagicByte1",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaKeySerdeForUnSupportedMagicByte",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaRegistryValue",
+      "methods": [
+        {
+          "name": "setOffset",
+          "parameterTypes": [
+            "java.lang.Long"
+          ]
+        },
+        {
+          "name": "setTimestamp",
+          "parameterTypes": [
+            "java.lang.Long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaValue",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.Integer",
+            "java.lang.Integer",
+            "java.lang.String",
+            "java.lang.String",
+            "java.util.List",
+            "io.confluent.kafka.schemaregistry.storage.Metadata",
+            "io.confluent.kafka.schemaregistry.storage.RuleSet",
+            "java.lang.String",
+            "boolean"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SchemaValuesTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueCanonicalize",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueComplexJsonMD5",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueComplexMD5",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueComplexProtobufMD5",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueDeserializeForMagicByte0",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueDeserializeForMagicByte1WithDeleteFlagFalse",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueDeserializeForMagicByte1WithDeleteFlagTrue",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueDeserializeForOffsetTimestamp",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueDeserializeForUnSupportedMagicByte",
+          "parameterTypes": []
+        },
+        {
+          "name": "testSchemaValueMD5",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SubjectKey",
+      "methods": [
+        {
+          "name": "getSubject",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.SubjectValue"
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.encoder.KafkaMetadataEncoderServiceTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderServiceTest",
+      "methods": [
+        {
+          "name": "setup",
+          "parameterTypes": []
+        },
+        {
+          "name": "teardown",
+          "parameterTypes": []
+        },
+        {
+          "name": "testEncoding",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistryTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testDropScope",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetClient",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSameClient",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.tools.CheckSchemaCompatibilityTest",
+      "fields": [
+        {
+          "name": "SCHEMA_STRING_1"
+        },
+        {
+          "name": "SCHEMA_STRING_2"
+        },
+        {
+          "name": "SCHEMA_STRING_TEMPLATE"
+        },
+        {
+          "name": "SUBJECT_NAME"
+        },
+        {
+          "name": "sourceClient"
+        },
+        {
+          "name": "targetClient"
+        },
+        {
+          "name": "tool"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "setUp",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_DifferentVersionNumbers",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_IdenticalSchemas",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_MultipleVersionsOneFails",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_MultipleVersionsSuccess",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_NoCommonVersions",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_ParseFailure",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_SchemaMismatch",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_SourceHasMoreVersions",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_TargetHasMoreVersions",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubject_VersionNumberMismatch",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_EmptyRegistries",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_OnlySourceEmpty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_OnlyTargetEmpty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_PerfectMatch",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_SourceHasExtraVersionWithDuplicateSchemaId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_SourceHasMoreSubjects",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_SubjectComparisonFails",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_TargetHasMoreSubjects",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareSubjects_withMismatchId",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_DifferentMetadata",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_DifferentRuleSet",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_DifferentSchemaIds",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_DifferentSchemas",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_IdenticalMetadataRuleSetReferences",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_IdenticalVersions",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_OneWithMetadataOneWithout",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_OneWithRuleSetOneWithout",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_SourceParseFailure",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_TargetParseFailure",
+          "parameterTypes": []
+        },
+        {
+          "name": "testCompareVersion_VersionNumberMismatch",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.utils.PropsTest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentTrims",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithBooleanInList",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithBooleanProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithComplexObjects",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithEmptyList",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithEmptyStrings",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithExplicitNullProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithIntegerInList",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithIntegerProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithListContainingNulls",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithMixedCaseStrings",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithNonListProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithNullProperty",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithSingleStringInList",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithValidStringList",
+          "parameterTypes": []
+        },
+        {
+          "name": "testGetSchemaRegistryDeploymentWithWhitespaceStrings",
+          "parameterTypes": []
+        },
+        {
+          "name": "testPropertyConstantValue",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "io.confluent.kafka.schemaregistry.utils.TestUtils"
+    },
+    {
+      "type": "io.confluent.log4j2.redactor.RedactorPolicy"
+    },
+    {
+      "type": "jakarta.servlet.Servlet"
+    },
+    {
+      "type": "jakarta.ws.rs.ext.InterceptorContext"
+    },
+    {
+      "type": "jakarta.ws.rs.ext.WriterInterceptorContext"
+    },
+    {
+      "type": "java.io.Closeable"
+    },
+    {
+      "type": "java.io.InputStream",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "read",
+          "parameterTypes": [
+            "byte[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.io.OutputStream",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "flush",
+          "parameterTypes": []
+        },
+        {
+          "name": "write",
+          "parameterTypes": [
+            "byte[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.io.Serializable"
+    },
+    {
+      "type": "java.lang.AutoCloseable"
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Class",
+      "methods": [
+        {
+          "name": "getModule",
+          "parameterTypes": []
+        },
+        {
+          "name": "isSealed",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.ClassLoader",
+      "methods": [
+        {
+          "name": "registerAsParallelCapable",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Comparable"
+    },
+    {
+      "type": "java.lang.Deprecated",
+      "methods": [
+        {
+          "name": "forRemoval",
+          "parameterTypes": []
+        },
+        {
+          "name": "since",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Integer",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "valueOf",
+          "parameterTypes": [
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Module",
+      "methods": [
+        {
+          "name": "isExported",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "isOpen",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.Module"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object[]",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.lang.Runtime",
+      "methods": [
+        {
+          "name": "version",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Runtime$Version",
+      "methods": [
+        {
+          "name": "major",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.String",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.lang.System",
+      "methods": [
+        {
+          "name": "getSecurityManager",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.annotation.Retention",
+      "methods": [
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.annotation.RetentionPolicy"
+    },
+    {
+      "type": "java.lang.annotation.Target"
+    },
+    {
+      "type": "java.lang.invoke.MethodHandle"
+    },
+    {
+      "type": "java.lang.invoke.MethodHandles",
+      "methods": [
+        {
+          "name": "lookup",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.invoke.MethodHandles$Lookup",
+      "methods": [
+        {
+          "name": "findVirtual",
+          "parameterTypes": [
+            "java.lang.Class",
+            "java.lang.String",
+            "java.lang.invoke.MethodType"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.invoke.MethodType",
+      "methods": [
+        {
+          "name": "methodType",
+          "parameterTypes": [
+            "java.lang.Class",
+            "java.lang.Class[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.AnnotatedArrayType",
+      "methods": [
+        {
+          "name": "getAnnotatedGenericComponentType",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.AnnotatedParameterizedType",
+      "methods": [
+        {
+          "name": "getAnnotatedActualTypeArguments",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.AnnotatedType",
+      "methods": [
+        {
+          "name": "getType",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.AnnotatedTypeVariable"
+    },
+    {
+      "type": "java.lang.reflect.AnnotatedWildcardType",
+      "methods": [
+        {
+          "name": "getAnnotatedUpperBounds",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.Executable",
+      "methods": [
+        {
+          "name": "getAnnotatedExceptionTypes",
+          "parameterTypes": []
+        },
+        {
+          "name": "getAnnotatedParameterTypes",
+          "parameterTypes": []
+        },
+        {
+          "name": "getAnnotatedReceiverType",
+          "parameterTypes": []
+        },
+        {
+          "name": "getParameterCount",
+          "parameterTypes": []
+        },
+        {
+          "name": "getParameters",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.Method",
+      "methods": [
+        {
+          "name": "getAnnotatedReturnType",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.Parameter",
+      "methods": [
+        {
+          "name": "getModifiers",
+          "parameterTypes": []
+        },
+        {
+          "name": "isNamePresent",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.reflect.TypeVariable",
+      "methods": [
+        {
+          "name": "getAnnotatedBounds",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.Buffer",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "address"
+        }
+      ],
+      "methods": [
+        {
+          "name": "limit",
+          "parameterTypes": []
+        },
+        {
+          "name": "position",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.ByteBuffer",
+      "jniAccessible": true
+    },
+    {
+      "type": "java.security.AccessController"
+    },
+    {
+      "type": "java.security.MessageDigestSpi"
+    },
+    {
+      "type": "java.security.interfaces.RSAPrivateKey"
+    },
+    {
+      "type": "java.security.interfaces.RSAPublicKey"
+    },
+    {
+      "type": "java.security.spec.ECParameterSpec"
+    },
+    {
+      "type": "java.sql.Date"
+    },
+    {
+      "type": "java.sql.Time"
+    },
+    {
+      "type": "java.sql.Timestamp"
+    },
+    {
+      "type": "java.util.Calendar",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "set",
+          "parameterTypes": [
+            "int",
+            "int",
+            "int",
+            "int",
+            "int",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.util.Optional",
+      "methods": [
+        {
+          "name": "empty",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "javax.servlet.Servlet"
+    },
+    {
+      "type": "kotlin.jvm.JvmInline"
+    },
+    {
+      "type": "libcore.io.Memory"
+    },
+    {
+      "type": "net.bytebuddy.description.method.MethodDescription$InDefinedShape$AbstractBase$Executable"
+    },
+    {
+      "type": "net.bytebuddy.description.method.ParameterDescription$ForLoadedParameter$Parameter"
+    },
+    {
+      "type": "net.bytebuddy.description.method.ParameterList$ForLoadedExecutable$Executable"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDefinition$Sort$AnnotatedType"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$ForLoadedType$Dispatcher"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$Delegator$ForLoadedExecutableExceptionType$Dispatcher"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$Delegator$ForLoadedExecutableParameterType$Dispatcher"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$Delegator$ForLoadedMethodReturnType$Dispatcher"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForComponentType$AnnotatedParameterizedType"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForTypeArgument$AnnotatedParameterizedType"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForTypeVariableBoundType$AnnotatedTypeVariable"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForTypeVariableBoundType$OfFormalTypeVariable$FormalTypeVariable"
+    },
+    {
+      "type": "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForWildcardUpperBoundType$AnnotatedWildcardType"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.AllArguments",
+      "methods": [
+        {
+          "name": "includeSelf",
+          "parameterTypes": []
+        },
+        {
+          "name": "nullIfEmpty",
+          "parameterTypes": []
+        },
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.Argument",
+      "methods": [
+        {
+          "name": "bindingMechanic",
+          "parameterTypes": []
+        },
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.Argument$BindingMechanic"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.BindingPriority",
+      "methods": [
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.Default"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.DefaultCall"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.DefaultMethod"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.FieldValue",
+      "methods": [
+        {
+          "name": "declaringType",
+          "parameterTypes": []
+        },
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.Origin",
+      "methods": [
+        {
+          "name": "cache",
+          "parameterTypes": []
+        },
+        {
+          "name": "privileged",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.StubValue"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.Super"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.SuperCall",
+      "methods": [
+        {
+          "name": "fallbackToDefault",
+          "parameterTypes": []
+        },
+        {
+          "name": "nullIfImpossible",
+          "parameterTypes": []
+        },
+        {
+          "name": "serializableProxy",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.SuperMethod"
+    },
+    {
+      "type": "net.bytebuddy.implementation.bind.annotation.This",
+      "methods": [
+        {
+          "name": "optional",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.utility.Invoker"
+    },
+    {
+      "type": "net.bytebuddy.utility.Invoker$Dispatcher",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "net.bytebuddy.utility.JavaModule$Module"
+    },
+    {
+      "type": "net.bytebuddy.utility.JavaModule$Resolver"
+    },
+    {
+      "type": "org.apache.avro.reflect.Nullable"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.AsyncAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.ConsoleAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.DailyRollingFileAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.EnhancedRollingFileAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.FileAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.NullAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.RewriteAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.RollingFileAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.SocketAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.appender.SyslogAppenderBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.filter.DenyAllFilterBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.filter.LevelMatchFilterBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.filter.LevelRangeFilterBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.filter.StringMatchFilterBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.layout.HtmlLayoutBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.layout.PatternLayoutBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.layout.SimpleLayoutBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.layout.TTCCLayoutBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.layout.XmlLayoutBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.rolling.CompositeTriggeringPolicyBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.rolling.SizeBasedTriggeringPolicyBuilder"
+    },
+    {
+      "type": "org.apache.log4j.builders.rolling.TimeBasedRollingPolicyBuilder"
+    },
+    {
+      "type": "org.apache.log4j.config.PropertiesConfigurationFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.log4j.layout.Log4j1SyslogLayout"
+    },
+    {
+      "type": "org.apache.log4j.layout.Log4j1XmlLayout"
+    },
+    {
+      "type": "org.apache.log4j.pattern.Log4j1LevelPatternConverter"
+    },
+    {
+      "type": "org.apache.log4j.pattern.Log4j1MdcPatternConverter"
+    },
+    {
+      "type": "org.apache.log4j.pattern.Log4j1NdcPatternConverter"
+    },
+    {
+      "type": "org.apache.log4j.xml.XmlConfigurationFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.Appender[]"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.AbstractAppender$Builder",
+      "fields": [
+        {
+          "name": "configuration"
+        },
+        {
+          "name": "ignoreExceptions"
+        },
+        {
+          "name": "layout"
+        },
+        {
+          "name": "name"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.AbstractOutputStreamAppender$Builder",
+      "fields": [
+        {
+          "name": "bufferSize"
+        },
+        {
+          "name": "bufferedIo"
+        },
+        {
+          "name": "immediateFlush"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.AppenderSet"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.AsyncAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.ConsoleAppender",
+      "methods": [
+        {
+          "name": "newBuilder",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.ConsoleAppender$Builder",
+      "fields": [
+        {
+          "name": "direct"
+        },
+        {
+          "name": "follow"
+        },
+        {
+          "name": "target"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.CountingNoOpAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.FailoverAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.FailoversPlugin"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.FileAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.HttpAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.MemoryMappedFileAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.NullAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.OutputStreamAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.RandomAccessFileAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.RollingFileAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.RollingRandomAccessFileAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.ScriptAppenderSelector"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.SmtpAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.SocketAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.SyslogAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.WriterAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.db.ColumnMapping"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.db.jdbc.ColumnConfig"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.db.jdbc.DataSourceConnectionSource"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.db.jdbc.DriverManagerConnectionSource"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.db.jdbc.FactoryMethodConnectionSource"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.db.jdbc.JdbcAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.mom.JmsAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.mom.jeromq.JeroMqAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.mom.kafka.KafkaAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.nosql.NoSqlAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rewrite.LoggerNameLevelRewritePolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rewrite.MapRewritePolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rewrite.PropertiesRewritePolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rewrite.RewriteAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.CompositeTriggeringPolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.CronTriggeringPolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.DefaultRolloverStrategy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.DirectWriteRolloverStrategy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.NoOpTriggeringPolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.OnStartupTriggeringPolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.SizeBasedTriggeringPolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.TimeBasedTriggeringPolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.DeleteAction"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfAccumulatedFileCount"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfAccumulatedFileSize"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfAll"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfAny"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfFileName"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfLastModified"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.IfNot"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.PathSortByModificationTime"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.PosixViewAttributeAction"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.rolling.action.ScriptCondition"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.routing.IdlePurgePolicy"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.routing.Route"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.routing.Routes"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.appender.routing.RoutingAppender"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.ArrayBlockingQueueFactory"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.AsyncLoggerConfig"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.AsyncLoggerConfig$RootLogger"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.AsyncWaitStrategyFactoryConfig"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.DisruptorBlockingQueueFactory"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.JCToolsBlockingQueueFactory"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.async.LinkedTransferQueueFactory"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.AppenderControlArraySet"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.AppenderRef",
+      "methods": [
+        {
+          "name": "createAppenderRef",
+          "parameterTypes": [
+            "java.lang.String",
+            "org.apache.logging.log4j.Level",
+            "org.apache.logging.log4j.core.Filter"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.AppenderRef[]"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.AppendersPlugin",
+      "methods": [
+        {
+          "name": "createAppenders",
+          "parameterTypes": [
+            "org.apache.logging.log4j.core.Appender[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.CustomLevelConfig"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.CustomLevels"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.DefaultAdvertiser"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.HttpWatcher"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.LoggerConfig",
+      "methods": [
+        {
+          "name": "newBuilder",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.LoggerConfig$Builder",
+      "fields": [
+        {
+          "name": "additivity"
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "filter"
+        },
+        {
+          "name": "includeLocation"
+        },
+        {
+          "name": "level"
+        },
+        {
+          "name": "levelAndRefs"
+        },
+        {
+          "name": "loggerName"
+        },
+        {
+          "name": "properties"
+        },
+        {
+          "name": "refs"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.LoggerConfig$RootLogger",
+      "methods": [
+        {
+          "name": "newRootBuilder",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.LoggerConfig$RootLogger$Builder",
+      "fields": [
+        {
+          "name": "additivity"
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "filter"
+        },
+        {
+          "name": "includeLocation"
+        },
+        {
+          "name": "level"
+        },
+        {
+          "name": "levelAndRefs"
+        },
+        {
+          "name": "properties"
+        },
+        {
+          "name": "refs"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.LoggerConfig[]"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.LoggersPlugin",
+      "methods": [
+        {
+          "name": "createLoggers",
+          "parameterTypes": [
+            "org.apache.logging.log4j.core.config.LoggerConfig[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.MonitorResource"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.MonitorResources"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.PropertiesPlugin"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.Property"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.Property[]"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.ScriptsPlugin"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.arbiters.ClassArbiter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.arbiters.DefaultArbiter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.arbiters.EnvironmentArbiter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.arbiters.ScriptArbiter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.arbiters.SelectArbiter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.arbiters.SystemPropertyArbiter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.json.JsonConfigurationFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$BigDecimalConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$BigIntegerConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$BooleanConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ByteArrayConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ByteConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CharArrayConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CharacterConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CharsetConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ClassConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CronExpressionConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$DoubleConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$DurationConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$FileConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$FloatConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$InetAddressConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$IntegerConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$LevelConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$LongConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$PathConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$PatternConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$SecurityProviderConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ShortConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$StringConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$UriConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$UrlConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$UuidConverter",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.validation.validators.RequiredValidator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.visitors.PluginAttributeVisitor",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.visitors.PluginBuilderAttributeVisitor",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.visitors.PluginConfigurationVisitor",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.plugins.visitors.PluginElementVisitor",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.properties.PropertiesConfigurationFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.xml.XmlConfigurationFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.config.yaml.YamlConfigurationFactory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.AbstractFilterable$Builder",
+      "fields": [
+        {
+          "name": "filter"
+        },
+        {
+          "name": "propertyArray"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.BurstFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.CompositeFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.DenyAllFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.DynamicThresholdFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.LevelMatchFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.LevelRangeFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.MapFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.MarkerFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.MutableThreadContextMapFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.NoMarkerFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.RegexFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.ScriptFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.StringMatchFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.StructuredDataFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.ThreadContextMapFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.ThresholdFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.filter.TimeFilter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.impl.Log4jProvider"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.impl.ThreadContextDataProvider"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.CsvLogEventLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.CsvParameterLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.GelfLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.HtmlLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.JsonLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.LevelPatternSelector"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.LoggerFields"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.MarkerPatternSelector"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.MessageLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.PatternLayout",
+      "methods": [
+        {
+          "name": "newBuilder",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.PatternLayout$Builder",
+      "fields": [
+        {
+          "name": "alwaysWriteExceptions"
+        },
+        {
+          "name": "charset"
+        },
+        {
+          "name": "configuration"
+        },
+        {
+          "name": "disableAnsi"
+        },
+        {
+          "name": "footer"
+        },
+        {
+          "name": "header"
+        },
+        {
+          "name": "noConsoleNoAnsi"
+        },
+        {
+          "name": "pattern"
+        },
+        {
+          "name": "patternSelector"
+        },
+        {
+          "name": "regexReplacement"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.PatternMatch"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.Rfc5424Layout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.ScriptPatternSelector"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.SerializedLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.SyslogLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.XmlLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.layout.YamlLayout"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.ContextMapLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.DateLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.EnvironmentLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.EventLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.JavaLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.JmxRuntimeInputArgumentsLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.JndiLookup"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.Log4jLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.LowerLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.MainMapLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.MapLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.MarkerLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.ResourceBundleLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.StructuredDataLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.SystemPropertiesLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.lookup.UpperLookup",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.MulticastDnsAdvertiser"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.SocketAddress"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.SocketOptions"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.SocketPerformancePreferences"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.ssl.KeyStoreConfiguration"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.ssl.SslConfiguration"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.net.ssl.TrustStoreConfiguration"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Black"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Blue"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Cyan"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Green"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Magenta"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Red"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$White"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Yellow"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ClassNamePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.DatePatternConverter",
+      "methods": [
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.EncodingPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.EndOfBatchPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.EqualsIgnoreCaseReplacementConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.EqualsReplacementConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ExtendedThrowablePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.FileDatePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.FileLocationPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.FullLocationPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.HighlightConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.IntegerPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.LevelPatternConverter",
+      "methods": [
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.LineLocationPatternConverter",
+      "methods": [
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.LineSeparatorPatternConverter",
+      "methods": [
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.LoggerFqcnPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.LoggerPatternConverter",
+      "methods": [
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MapPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MarkerPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MarkerSimpleNamePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MaxLengthConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MdcPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MessagePatternConverter",
+      "methods": [
+        {
+          "name": "newInstance",
+          "parameterTypes": [
+            "org.apache.logging.log4j.core.config.Configuration",
+            "java.lang.String[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.MethodLocationPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.NanoTimePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.NdcPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ProcessIdPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.RegexReplacement"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.RegexReplacementConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.RelativeTimePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.RepeatPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.RootThrowablePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.SequenceNumberPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.StyleConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ThreadIdPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ThreadNamePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ThreadPriorityPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.ThrowablePatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.UuidPatternConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.pattern.VariablesNotEmptyReplacementConverter"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.script.Script"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.script.ScriptFile"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.script.ScriptRef"
+    },
+    {
+      "type": "org.apache.logging.log4j.core.util.KeyValuePair"
+    },
+    {
+      "type": "org.apache.logging.log4j.util.EnvironmentPropertySource"
+    },
+    {
+      "type": "org.apache.logging.log4j.util.SystemPropertiesPropertySource"
+    },
+    {
+      "type": "org.apache.maven.surefire.booter.spi.LegacyMasterProcessChannelProcessorFactory"
+    },
+    {
+      "type": "org.apache.maven.surefire.booter.spi.SurefireMasterProcessChannelProcessorFactory"
+    },
+    {
+      "type": "org.apache.maven.surefire.junitplatform.JUnitPlatformProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "org.apache.maven.surefire.api.provider.ProviderParameters"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apiguardian.api.API"
+    },
+    {
+      "type": "org.conscrypt.Conscrypt",
+      "methods": [
+        {
+          "name": "newProvider",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.conscrypt.CryptoUpcalls",
+      "jniAccessible": true
+    },
+    {
+      "type": "org.conscrypt.NativeCrypto",
+      "jniAccessible": true
+    },
+    {
+      "type": "org.conscrypt.NativeLibraryUtil",
+      "methods": [
+        {
+          "name": "loadLibrary",
+          "parameterTypes": [
+            "java.lang.String",
+            "boolean"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.conscrypt.NativeRef",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "address"
+        }
+      ]
+    },
+    {
+      "type": "org.conscrypt.OpenSSLBIOInputStream",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "gets",
+          "parameterTypes": [
+            "byte[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.conscrypt.OpenSSLRandom",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.http.Http10FieldPreEncoder"
+    },
+    {
+      "type": "org.eclipse.jetty.http.Http11FieldPreEncoder"
+    },
+    {
+      "type": "org.eclipse.jetty.http2.hpack.HpackFieldPreEncoder"
+    },
+    {
+      "type": "org.eclipse.jetty.io.Content$Sink"
+    },
+    {
+      "type": "org.eclipse.jetty.io.Content$Source"
+    },
+    {
+      "type": "org.eclipse.jetty.io.EofException",
+      "serializable": true
+    },
+    {
+      "type": "org.eclipse.jetty.server.Handler"
+    },
+    {
+      "type": "org.eclipse.jetty.server.Handler$Abstract",
+      "fields": [
+        {
+          "name": "_invocationType"
+        },
+        {
+          "name": "_server"
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.server.Handler$AbstractContainer",
+      "fields": [
+        {
+          "name": "_dynamic"
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.server.Handler$Container"
+    },
+    {
+      "type": "org.eclipse.jetty.server.Handler$Singleton"
+    },
+    {
+      "type": "org.eclipse.jetty.server.Handler$Wrapper",
+      "fields": [
+        {
+          "name": "_handler"
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.server.Request"
+    },
+    {
+      "type": "org.eclipse.jetty.server.Request$Handler"
+    },
+    {
+      "type": "org.eclipse.jetty.server.Response"
+    },
+    {
+      "type": "org.eclipse.jetty.util.Attributes"
+    },
+    {
+      "type": "org.eclipse.jetty.util.Blocker$Callback"
+    },
+    {
+      "type": "org.eclipse.jetty.util.Callback"
+    },
+    {
+      "type": "org.eclipse.jetty.util.TypeUtil",
+      "methods": [
+        {
+          "name": "getClassLoaderLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "getCodeSourceLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "getModuleLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "getSystemClassLoaderLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.util.annotation.ManagedAttribute",
+      "methods": [
+        {
+          "name": "name",
+          "parameterTypes": []
+        },
+        {
+          "name": "proxied",
+          "parameterTypes": []
+        },
+        {
+          "name": "readonly",
+          "parameterTypes": []
+        },
+        {
+          "name": "setter",
+          "parameterTypes": []
+        },
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.util.annotation.ManagedOperation",
+      "methods": [
+        {
+          "name": "impact",
+          "parameterTypes": []
+        },
+        {
+          "name": "proxied",
+          "parameterTypes": []
+        },
+        {
+          "name": "value",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.AbstractLifeCycle",
+      "fields": [
+        {
+          "name": "_eventListeners"
+        },
+        {
+          "name": "_lock"
+        },
+        {
+          "name": "_state"
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.Container"
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.ContainerLifeCycle",
+      "fields": [
+        {
+          "name": "_beans"
+        },
+        {
+          "name": "_destroyed"
+        },
+        {
+          "name": "_doStarted"
+        },
+        {
+          "name": "_listeners"
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.Destroyable"
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.Dumpable"
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.Dumpable$DumpableContainer"
+    },
+    {
+      "type": "org.eclipse.jetty.util.component.LifeCycle"
+    },
+    {
+      "type": "org.eclipse.jetty.util.thread.Invocable"
+    },
+    {
+      "type": "org.glassfish.jersey.internal.RuntimeDelegateImpl"
+    },
+    {
+      "type": "org.junit.internal.AssumptionViolatedException"
+    },
+    {
+      "type": "org.junit.jupiter.api.DisplayNameGeneration"
+    },
+    {
+      "type": "org.junit.jupiter.api.Test"
+    },
+    {
+      "type": "org.junit.jupiter.engine.JupiterTestEngine"
+    },
+    {
+      "type": "org.junit.platform.commons.annotation.Testable"
+    },
+    {
+      "type": "org.junit.platform.launcher.LauncherSession",
+      "methods": [
+        {
+          "name": "getLauncher",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.junit.platform.launcher.TestIdentifier$SerializedForm",
+      "serializable": true
+    },
+    {
+      "type": "org.junit.platform.launcher.core.LauncherFactory",
+      "methods": [
+        {
+          "name": "openSession",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.junit.platform.launcher.listeners.UniqueIdTrackingListener"
+    },
+    {
+      "type": "org.junit.runner.Description",
+      "fields": [
+        {
+          "name": "fUniqueId"
+        }
+      ]
+    },
+    {
+      "type": "org.junit.runner.Result$SerializedForm",
+      "serializable": true
+    },
+    {
+      "type": "org.junit.vintage.engine.VintageTestEngine"
+    },
+    {
+      "type": "org.mockito.Mock"
+    },
+    {
+      "type": "org.mockito.codegen.Callback$MockitoMock$q02bi72op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.Callback$MockitoMock$q02bi72op99200N$auxiliary$4cscpe1S"
+    },
+    {
+      "type": "org.mockito.codegen.Callback$MockitoMock$q02bi72op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.codegen.Request$MockitoMock$5viael3op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.Request$MockitoMock$5viael3op99200N$auxiliary$4cscpe1S"
+    },
+    {
+      "type": "org.mockito.codegen.Request$MockitoMock$5viael3op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$02bk651S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$05i5bq3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$16kvlp2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$1e6p0h0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$1ome0s0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$232g401S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$3d934g1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$3dvt1e0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$3j97fc1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$3kingv0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$44bgck3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$50sgah2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$535vbj1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$57a9a91S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$5ik3m11S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$63i8a91S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$6qt44l1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$8avn1t3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$8q2hk22S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$8v6d780S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$93a6j52S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$9a0jpq2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$abke5e0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$ac6a6f1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$b0ann31S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$bo37dc3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$dioooq0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$dkpspl3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$dmonqr3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$dmr8gq3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$erl9eu0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$ftnl671S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$g3ktfq3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$g7m0341S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$gpkg8t1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$h4ai7f3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$hbudek0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$hes1mr2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$hh3vk42S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$hi77l62S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$j34om60S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$j7bltk1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$jm9c1l0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$jt8ruo2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$k5ofil0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$l7djl20S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$ld1rak3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$lot2sc2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$m778pb0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$me443l3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$mp83ll3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$nj4mk40S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$os7b2g2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$p8rkuq0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$pbnmfj2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$pj1mkr1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$q9b53h3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$qj46vj2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$qjuilc1S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$qpkf0u3S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$qth2st0S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$sfp2913S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$stvlf43S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$t2rso52S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$t9ce3a2S"
+    },
+    {
+      "type": "org.mockito.codegen.RequestHeaderHandler$MockitoMock$of8g5t0op99200N$auxiliary$vlf26n3S"
+    },
+    {
+      "type": "org.mockito.codegen.Response$MockitoMock$bdpneq1op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.Response$MockitoMock$bdpneq1op99200N$auxiliary$4cscpe1S"
+    },
+    {
+      "type": "org.mockito.codegen.Response$MockitoMock$bdpneq1op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.codegen.SchemaRegistry$MockitoMock$156vr91op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.SchemaRegistry$MockitoMock$156vr91op99200N$auxiliary$4cscpe1S"
+    },
+    {
+      "type": "org.mockito.codegen.SchemaRegistry$MockitoMock$156vr91op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.codegen.SchemaRegistryClient$MockitoMock$sohihj0op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.SchemaRegistryClient$MockitoMock$sohihj0op99200N$auxiliary$4cscpe1S"
+    },
+    {
+      "type": "org.mockito.codegen.SchemaRegistryClient$MockitoMock$sohihj0op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.codegen.WriterInterceptorContext$MockitoMock$1rb14f1op99200N",
+      "serializable": true
+    },
+    {
+      "type": "org.mockito.codegen.WriterInterceptorContext$MockitoMock$1rb14f1op99200N$auxiliary$4cscpe1S"
+    },
+    {
+      "type": "org.mockito.codegen.WriterInterceptorContext$MockitoMock$1rb14f1op99200N$auxiliary$7m9oaq0S"
+    },
+    {
+      "type": "org.mockito.configuration.MockitoConfiguration"
+    },
+    {
+      "type": "org.mockito.internal.configuration.DefaultDoNotMockEnforcer",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.configuration.InjectingAnnotationEngine",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.configuration.plugins.DefaultPluginSwitch",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.creation.bytebuddy.ByteBuddyMockMaker",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.creation.bytebuddy.MockAccess"
+    },
+    {
+      "type": "org.mockito.internal.creation.bytebuddy.MockMethodInterceptor$DispatcherDefaultingToRealMethod"
+    },
+    {
+      "type": "org.mockito.internal.creation.bytebuddy.MockMethodInterceptor$ForEquals"
+    },
+    {
+      "type": "org.mockito.internal.creation.bytebuddy.MockMethodInterceptor$ForHashCode"
+    },
+    {
+      "type": "org.mockito.internal.creation.bytebuddy.MockMethodInterceptor$ForWriteReplace"
+    },
+    {
+      "type": "org.mockito.internal.creation.instance.DefaultInstantiatorProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.exceptions.stacktrace.DefaultStackTraceCleanerProvider",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.matchers.Equals"
+    },
+    {
+      "type": "org.mockito.internal.matchers.InstanceOf$VarArgAware"
+    },
+    {
+      "type": "org.mockito.internal.runners.DefaultInternalRunner",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Class",
+            "org.mockito.internal.util.Supplier"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.util.ConsoleMockitoLogger",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.internal.util.reflection.ReflectionMemberAccessor",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.mockito.junit.MockitoJUnitRunner",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.osgi.framework.BundleReference"
+    },
+    {
+      "type": "org.osgi.framework.FrameworkUtil"
+    },
+    {
+      "type": "org.robolectric.Robolectric"
+    },
+    {
+      "type": "short"
+    },
+    {
+      "type": "sun.management.VMManagementImpl",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "compTimeMonitoringSupport"
+        },
+        {
+          "name": "currentThreadCpuTimeSupport"
+        },
+        {
+          "name": "objectMonitorUsageSupport"
+        },
+        {
+          "name": "otherThreadCpuTimeSupport"
+        },
+        {
+          "name": "remoteDiagnosticCommandsSupport"
+        },
+        {
+          "name": "synchronizerUsageSupport"
+        },
+        {
+          "name": "threadAllocatedMemorySupport"
+        },
+        {
+          "name": "threadContentionMonitoringSupport"
+        }
+      ]
+    },
+    {
+      "type": "sun.misc.SharedSecrets"
+    },
+    {
+      "type": "sun.misc.Unsafe",
+      "fields": [
+        {
+          "name": "theUnsafe"
+        }
+      ]
+    },
+    {
+      "type": "sun.reflect.ReflectionFactory",
+      "methods": [
+        {
+          "name": "getReflectionFactory",
+          "parameterTypes": []
+        },
+        {
+          "name": "newConstructorForSerialization",
+          "parameterTypes": [
+            "java.lang.Class",
+            "java.lang.reflect.Constructor"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.MD5",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA2$SHA256",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.X509Factory",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSAKeyFactory$Legacy",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.rsa.RSASignature$SHA256withRSA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.AuthorityKeyIdentifierExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.BasicConstraintsExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.ExtendedKeyUsageExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.KeyUsageExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.x509.SubjectKeyIdentifierExtension",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.Boolean",
+            "java.lang.Object"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en_US"
+    },
+    {
+      "type": "sun.util.resources.cldr.CalendarData"
+    },
+    {
+      "type": {
+        "proxy": [
+          "jakarta.ws.rs.core.HttpHeaders"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.method.MethodDescription$InDefinedShape$AbstractBase$Executable"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.method.ParameterDescription$ForLoadedParameter$Parameter"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.method.ParameterList$ForLoadedExecutable$Executable"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDefinition$Sort$AnnotatedType"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$ForLoadedType$Dispatcher"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$Delegator$ForLoadedExecutableExceptionType$Dispatcher"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$Delegator$ForLoadedExecutableParameterType$Dispatcher"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$Delegator$ForLoadedMethodReturnType$Dispatcher"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForComponentType$AnnotatedParameterizedType"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForTypeArgument$AnnotatedParameterizedType"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForTypeVariableBoundType$AnnotatedTypeVariable"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForTypeVariableBoundType$OfFormalTypeVariable$FormalTypeVariable"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.description.type.TypeDescription$Generic$AnnotationReader$ForWildcardUpperBoundType$AnnotatedWildcardType"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.utility.JavaModule$Module"
+        ]
+      }
+    },
+    {
+      "type": {
+        "proxy": [
+          "net.bytebuddy.utility.JavaModule$Resolver"
+        ]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "glob": "META-INF/log4j-provider.properties"
+    },
+    {
+      "glob": "META-INF/native/libconscrypt_openjdk_jni-linux-x86_64.so"
+    },
+    {
+      "glob": "META-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat"
+    },
+    {
+      "glob": "META-INF/services/jakarta.ws.rs.ext.RuntimeDelegate"
+    },
+    {
+      "glob": "META-INF/services/java.net.spi.InetAddressResolverProvider"
+    },
+    {
+      "glob": "META-INF/services/java.net.spi.URLStreamHandlerProvider"
+    },
+    {
+      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
+      "glob": "META-INF/services/java.util.spi.ResourceBundleControlProvider"
+    },
+    {
+      "glob": "META-INF/services/org.apache.avro.LogicalTypes$LogicalTypeFactory"
+    },
+    {
+      "glob": "META-INF/services/org.apache.logging.log4j.core.util.ContextDataProvider"
+    },
+    {
+      "glob": "META-INF/services/org.apache.logging.log4j.core.util.WatchEventService"
+    },
+    {
+      "glob": "META-INF/services/org.apache.logging.log4j.spi.Provider"
+    },
+    {
+      "glob": "META-INF/services/org.apache.logging.log4j.util.PropertySource"
+    },
+    {
+      "glob": "META-INF/services/org.apache.maven.surefire.spi.MasterProcessChannelProcessorFactory"
+    },
+    {
+      "glob": "META-INF/services/org.eclipse.jetty.http.HttpFieldPreEncoder"
+    },
+    {
+      "glob": "META-INF/services/org.glassfish.jersey.spi.HeaderDelegateProvider"
+    },
+    {
+      "glob": "META-INF/services/org.junit.platform.engine.TestEngine"
+    },
+    {
+      "glob": "META-INF/services/org.junit.platform.launcher.LauncherDiscoveryListener"
+    },
+    {
+      "glob": "META-INF/services/org.junit.platform.launcher.LauncherSessionListener"
+    },
+    {
+      "glob": "META-INF/services/org.junit.platform.launcher.PostDiscoveryFilter"
+    },
+    {
+      "glob": "META-INF/services/org.junit.platform.launcher.TestExecutionListener"
+    },
+    {
+      "glob": "easymock.properties"
+    },
+    {
+      "glob": "junit-platform.properties"
+    },
+    {
+      "glob": "log4j2-test.jsn"
+    },
+    {
+      "glob": "log4j2-test.json"
+    },
+    {
+      "glob": "log4j2-test.properties"
+    },
+    {
+      "glob": "log4j2-test.xml"
+    },
+    {
+      "glob": "log4j2-test.yaml"
+    },
+    {
+      "glob": "log4j2-test.yml"
+    },
+    {
+      "glob": "log4j2-test14dad5dc.jsn"
+    },
+    {
+      "glob": "log4j2-test14dad5dc.json"
+    },
+    {
+      "glob": "log4j2-test14dad5dc.properties"
+    },
+    {
+      "glob": "log4j2-test14dad5dc.xml"
+    },
+    {
+      "glob": "log4j2-test14dad5dc.yaml"
+    },
+    {
+      "glob": "log4j2-test14dad5dc.yml"
+    },
+    {
+      "glob": "log4j2.StatusLogger.properties"
+    },
+    {
+      "glob": "log4j2.component.properties"
+    },
+    {
+      "glob": "log4j2.properties"
+    },
+    {
+      "glob": "log4j2.system.properties"
+    },
+    {
+      "glob": "log4j2.yaml"
+    },
+    {
+      "glob": "log4j2.yml"
+    },
+    {
+      "glob": "log4j214dad5dc.jsn"
+    },
+    {
+      "glob": "log4j214dad5dc.json"
+    },
+    {
+      "glob": "log4j214dad5dc.properties"
+    },
+    {
+      "glob": "log4j214dad5dc.xml"
+    },
+    {
+      "glob": "log4j214dad5dc.yaml"
+    },
+    {
+      "glob": "log4j214dad5dc.yml"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.AnnotationEngine"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.DoNotMockEnforcer"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.InstantiatorProvider2"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.MemberAccessor"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.MockMaker"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.MockResolver"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.MockitoLogger"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.PluginSwitch"
+    },
+    {
+      "glob": "mockito-extensions/org.mockito.plugins.StackTraceCleanerProvider"
+    },
+    {
+      "glob": "org/conscrypt/conscrypt.properties"
+    },
+    {
+      "glob": "org/glassfish/jersey/internal/localization.properties"
+    },
+    {
+      "glob": "org/glassfish/jersey/internal/localization_en.properties"
+    },
+    {
+      "glob": "org/glassfish/jersey/internal/localization_en_US.properties"
+    },
+    {
+      "glob": "org/slf4j/impl/StaticLoggerBinder.class"
+    },
+    {
+      "glob": "schema-md5-golden-data.json"
+    },
+    {
+      "glob": "schema-registry-app.properties"
+    },
+    {
+      "module": "java.base",
+      "glob": "jdk/internal/icu/impl/data/icudt76b/nfkc.nrm"
+    },
+    {
+      "bundle": "org.glassfish.jersey.internal.localization"
+    }
+  ]
+}

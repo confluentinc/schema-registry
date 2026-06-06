@@ -24,7 +24,10 @@
         <fileSet>
             <directory>${project.basedir}/src/main/resources/META-INF/native-image</directory>
             <outputDirectory>META-INF/native-image</outputDirectory>
-            <includes><include>*</include></includes>
+            <includes>
+                <include>*</include>
+                <include>test/*</include>
+            </includes>
         </fileSet>
     </fileSets>
     <dependencySets>
