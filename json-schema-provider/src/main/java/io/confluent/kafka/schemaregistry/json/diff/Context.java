@@ -27,10 +27,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class Context {
-  // Safety backstop (DGS-24489): a compatibility check can never run unbounded and starve the
-  // registry. A deterministic call budget bounds total work (and, since per-call cost is bounded
-  // by schema size, wall time too). Overridable via system property; the default is generous so
-  // only pathological schemas trip it.
   static final String MAX_CALLS_PROP = "schema.registry.json.diff.max.calls";
   static final long DEFAULT_MAX_CALLS = 50_000_000L;
 
@@ -39,14 +35,8 @@ public class Context {
   private final Deque<String> jsonPath;
   private final List<Difference> diffs;
   private final long maxCalls;
-  // Single shared counter across all subcontexts of one top-level comparison.
   private final long[] callCount;
-  // Memoization of compare(original, update) results, keyed by object identity, shared across
-  // all subcontexts of a single top-level comparison. Collapses the exponential re-computation
-  // that recursive schemas with large oneOf/anyOf unions otherwise trigger (DGS-24489).
   private final Map<Schema, Map<Schema, List<Difference>>> resultCache;
-  // Pairs currently being computed on the call stack — re-entry means a reference cycle, handled
-  // identically to the path-based schema guard below (contributes no differences).
   private final Map<Schema, Set<Schema>> inProgress;
 
   public Context(Set<Difference.Type> compatibleChanges) {

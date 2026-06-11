@@ -132,17 +132,12 @@ public class SchemaDiff {
     original = normalizeSchema(original);
     update = normalizeSchema(update);
 
-    // Reuse a previously computed result for this (original, update) pair if we have one.
-    // Recursive schemas reach the same pair of subschemas along exponentially many paths;
-    // memoizing keeps the total work bounded by the number of distinct pairs (DGS-24489).
+    // reuse a result if we have one
     List<Difference> cached = ctx.getCachedResult(original, update);
     if (cached != null) {
       ctx.addDifferences(cached);
       return;
     }
-    // Re-entry of a pair already on the stack is a reference cycle; contribute nothing, matching
-    // the path-based schema guard in enterSchema(). Do not cache: this empty result is only
-    // valid within the enclosing computation of the same pair.
     if (ctx.isInProgress(original, update)) {
       return;
     }
