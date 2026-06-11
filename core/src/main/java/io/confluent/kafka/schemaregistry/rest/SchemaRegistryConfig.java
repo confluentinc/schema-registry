@@ -586,6 +586,17 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
 
+  // rest-utils request.timeout.ms: blanket wall-clock cap after which a request is aborted with
+  // an HTTP 504. Defaulted here (overridable) so a single slow request cannot hold a Jetty
+  // worker thread indefinitely (see INC-11350). The key is referenced as a literal so this
+  // compiles against rest-utils versions that predate the config; it is honored once rest-utils
+  // is upgraded to a version that defines it. The default is injected only into the config
+  // passed up to RestConfig (so the Jetty layer sees it); it is deliberately kept out of
+  // originalProperties so it never reaches Kafka clients, where "request.timeout.ms" is a
+  // distinct client setting.
+  private static final String REQUEST_TIMEOUT_MS_CONFIG = "request.timeout.ms";
+  private static final String REQUEST_TIMEOUT_MS_DEFAULT = "600000"; // 10 minutes
+
   private static final ConfigDef config;
 
   public static final String HTTPS = "https";
@@ -912,7 +923,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
-    super(configDef, props);
+    super(configDef, applyRequestTimeoutDefault(props));
     this.originalProperties = props;
     String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
     if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
@@ -923,6 +934,20 @@ public class SchemaRegistryConfig extends RestConfig {
       throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
     buildMetricsContextLabels();
+  }
+
+  // Returns a copy of the supplied properties with the blanket request.timeout.ms default
+  // applied (unless the operator set it explicitly). A copy is used so the default is visible
+  // to the rest-utils/Jetty layer via RestConfig without polluting originalProperties, which is
+  // forwarded to Kafka clients.
+  private static Properties applyRequestTimeoutDefault(Properties props) {
+    if (props.containsKey(REQUEST_TIMEOUT_MS_CONFIG)) {
+      return props;
+    }
+    Properties merged = new Properties();
+    merged.putAll(props);
+    merged.setProperty(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS_DEFAULT);
+    return merged;
   }
 
   private static String getDefaultHost() {
