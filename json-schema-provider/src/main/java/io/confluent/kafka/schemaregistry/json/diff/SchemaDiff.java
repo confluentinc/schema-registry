@@ -118,6 +118,7 @@ public class SchemaDiff {
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, Schema original, Schema update) {
+    ctx.checkBudget();
     if (original == null && update == null) {
       return;
     } else if (original == null) {
@@ -131,6 +132,34 @@ public class SchemaDiff {
     original = normalizeSchema(original);
     update = normalizeSchema(update);
 
+    // Reuse a previously computed result for this (original, update) pair if we have one.
+    // Recursive schemas reach the same pair of subschemas along exponentially many paths;
+    // memoizing keeps the total work bounded by the number of distinct pairs (DGS-24489).
+    List<Difference> cached = ctx.getCachedResult(original, update);
+    if (cached != null) {
+      ctx.addDifferences(cached);
+      return;
+    }
+    // Re-entry of a pair already on the stack is a reference cycle; contribute nothing, matching
+    // the path-based schema guard in enterSchema(). Do not cache: this empty result is only
+    // valid within the enclosing computation of the same pair.
+    if (ctx.isInProgress(original, update)) {
+      return;
+    }
+
+    ctx.enterPair(original, update);
+    int mark = ctx.differencesSize();
+    try {
+      compareInternal(ctx, original, update);
+    } finally {
+      ctx.exitPair(original, update);
+    }
+    ctx.cacheResult(original, update, ctx.differencesSince(mark));
+  }
+
+  @SuppressWarnings("ConstantConditions")
+  private static void compareInternal(
+      final Context ctx, final Schema original, final Schema update) {
     if (!(original instanceof CombinedSchema) && update instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) update;
       // Special case of singleton unions
