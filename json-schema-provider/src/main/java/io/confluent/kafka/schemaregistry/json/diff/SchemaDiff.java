@@ -118,6 +118,7 @@ public class SchemaDiff {
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, Schema original, Schema update) {
+    ctx.checkBudget();
     if (original == null && update == null) {
       return;
     } else if (original == null) {
@@ -131,6 +132,29 @@ public class SchemaDiff {
     original = normalizeSchema(original);
     update = normalizeSchema(update);
 
+    // reuse a result if we have one
+    List<Difference> cached = ctx.getCachedResult(original, update);
+    if (cached != null) {
+      ctx.addDifferences(cached);
+      return;
+    }
+    if (ctx.isInProgress(original, update)) {
+      return;
+    }
+
+    ctx.enterPair(original, update);
+    int mark = ctx.differencesSize();
+    try {
+      compareInternal(ctx, original, update);
+    } finally {
+      ctx.exitPair(original, update);
+    }
+    ctx.cacheResult(original, update, ctx.differencesSince(mark));
+  }
+
+  @SuppressWarnings("ConstantConditions")
+  private static void compareInternal(
+      final Context ctx, final Schema original, final Schema update) {
     if (!(original instanceof CombinedSchema) && update instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) update;
       // Special case of singleton unions

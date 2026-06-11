@@ -23,26 +23,97 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class Context {
+  static final String MAX_CALLS_PROP = "schema.registry.json.diff.max.calls";
+  static final long DEFAULT_MAX_CALLS = 50_000_000L;
+
   private final Set<Difference.Type> compatibleChanges;
   private final Set<Schema> schemas;
   private final Deque<String> jsonPath;
   private final List<Difference> diffs;
+  private final long maxCalls;
+  private final long[] callCount;
+  private final Map<Schema, Map<Schema, List<Difference>>> resultCache;
+  private final Map<Schema, Set<Schema>> inProgress;
 
   public Context(Set<Difference.Type> compatibleChanges) {
     this.compatibleChanges = compatibleChanges;
     this.schemas = Collections.newSetFromMap(new IdentityHashMap<>());
     this.jsonPath = new ArrayDeque<>();
     this.diffs = new ArrayList<>();
+    this.resultCache = new IdentityHashMap<>();
+    this.inProgress = new IdentityHashMap<>();
+    this.maxCalls = Long.getLong(MAX_CALLS_PROP, DEFAULT_MAX_CALLS);
+    this.callCount = new long[] {0L};
+  }
+
+  private Context(Context parent) {
+    this.compatibleChanges = parent.compatibleChanges;
+    this.schemas = Collections.newSetFromMap(new IdentityHashMap<>());
+    this.jsonPath = new ArrayDeque<>();
+    this.diffs = new ArrayList<>();
+    // Cache, in-progress set, and the call budget are shared by reference across the comparison.
+    this.resultCache = parent.resultCache;
+    this.inProgress = parent.inProgress;
+    this.maxCalls = parent.maxCalls;
+    this.callCount = parent.callCount;
+  }
+
+  /**
+   * Records one comparison call and enforces the call budget. Throws {@link IllegalStateException}
+   * (the same hard-stop signal used for unresolved {@code $ref}s) if the comparison has made too
+   * many calls, aborting a pathological check rather than letting it starve the registry.
+   */
+  public void checkBudget() {
+    if (++callCount[0] > maxCalls) {
+      throw new IllegalStateException(
+          "Compatibility check exceeded the limit of " + maxCalls + " schema comparisons");
+    }
   }
 
   public Context getSubcontext() {
-    Context ctx = new Context(this.compatibleChanges);
+    Context ctx = new Context(this);
     ctx.schemas.addAll(this.schemas);
     ctx.jsonPath.addAll(this.jsonPath);
     return ctx;
+  }
+
+  public List<Difference> getCachedResult(final Schema original, final Schema update) {
+    Map<Schema, List<Difference>> byUpdate = resultCache.get(original);
+    return byUpdate == null ? null : byUpdate.get(update);
+  }
+
+  public void cacheResult(
+      final Schema original, final Schema update, final List<Difference> result) {
+    resultCache.computeIfAbsent(original, k -> new IdentityHashMap<>()).put(update, result);
+  }
+
+  public boolean isInProgress(final Schema original, final Schema update) {
+    Set<Schema> updates = inProgress.get(original);
+    return updates != null && updates.contains(update);
+  }
+
+  public void enterPair(final Schema original, final Schema update) {
+    inProgress.computeIfAbsent(original, k -> Collections.newSetFromMap(new IdentityHashMap<>()))
+        .add(update);
+  }
+
+  public void exitPair(final Schema original, final Schema update) {
+    Set<Schema> updates = inProgress.get(original);
+    if (updates != null) {
+      updates.remove(update);
+    }
+  }
+
+  public int differencesSize() {
+    return diffs.size();
+  }
+
+  public List<Difference> differencesSince(final int mark) {
+    return new ArrayList<>(diffs.subList(mark, diffs.size()));
   }
 
   public SchemaScope enterSchema(final Schema schema) {
