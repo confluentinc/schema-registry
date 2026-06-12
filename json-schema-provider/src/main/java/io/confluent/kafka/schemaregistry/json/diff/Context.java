@@ -39,20 +39,38 @@ public class Context {
   // progress is a recursive cycle; it is treated as compatible (no differences) and is not cached,
   // since its truncated result is only valid within the enclosing comparison.
   private final Set<SchemaPair> inProgress;
+  // Pairs known (from a previous fixpoint pass) to be incompatible, mapped to their pair-relative
+  // differences. When a recursive cycle re-enters such a pair, its real differences are propagated
+  // instead of optimistically assuming the cycle compatible. Iterating this seed to a fixpoint is
+  // what makes cross-branch memoization sound. See SchemaDiff#compare.
+  private final Map<SchemaPair, List<Difference>> incompatibleSeed;
+  // Set to true (in the shared holder) whenever a recursive cycle is optimistically assumed
+  // compatible. If a pass never does this, its result does not depend on any assumption and the
+  // fixpoint iteration can stop immediately.
+  private final boolean[] optimismUsed;
   private final Deque<String> jsonPath;
   private final List<Difference> diffs;
 
   public Context(Set<Difference.Type> compatibleChanges) {
-    this(compatibleChanges, new HashMap<>(), new HashSet<>());
+    this(compatibleChanges, Collections.emptyMap());
+  }
+
+  public Context(Set<Difference.Type> compatibleChanges,
+      Map<SchemaPair, List<Difference>> incompatibleSeed) {
+    this(compatibleChanges, new HashMap<>(), new HashSet<>(), incompatibleSeed, new boolean[1]);
   }
 
   private Context(
       Set<Difference.Type> compatibleChanges,
       Map<SchemaPair, List<Difference>> memo,
-      Set<SchemaPair> inProgress) {
+      Set<SchemaPair> inProgress,
+      Map<SchemaPair, List<Difference>> incompatibleSeed,
+      boolean[] optimismUsed) {
     this.compatibleChanges = compatibleChanges;
     this.memo = memo;
     this.inProgress = inProgress;
+    this.incompatibleSeed = incompatibleSeed;
+    this.optimismUsed = optimismUsed;
     this.jsonPath = new ArrayDeque<>();
     this.diffs = new ArrayList<>();
   }
@@ -60,7 +78,8 @@ public class Context {
   public Context getSubcontext() {
     // The memo and in-progress set are shared by reference so that caching and cycle detection
     // span the whole comparison, not just a single branch.
-    Context ctx = new Context(this.compatibleChanges, this.memo, this.inProgress);
+    Context ctx = new Context(this.compatibleChanges, this.memo, this.inProgress,
+        this.incompatibleSeed, this.optimismUsed);
     ctx.jsonPath.addAll(this.jsonPath);
     return ctx;
   }
@@ -80,11 +99,19 @@ public class Context {
       return cached;
     }
     if (!inProgress.add(key)) {
-      // Recursive cycle: assume compatible and do not cache the truncated result.
+      // Recursive cycle. If this pair is already known to be incompatible (from a prior fixpoint
+      // pass), propagate its differences rather than optimistically assuming compatibility.
+      List<Difference> seeded = incompatibleSeed.get(key);
+      if (seeded != null) {
+        return seeded;
+      }
+      // Otherwise assume compatible (greatest fixed point) and do not cache the truncated result.
+      optimismUsed[0] = true;
       return Collections.emptyList();
     }
     try {
-      Context subctx = new Context(this.compatibleChanges, this.memo, this.inProgress);
+      Context subctx = new Context(this.compatibleChanges, this.memo, this.inProgress,
+          this.incompatibleSeed, this.optimismUsed);
       comparator.compare(subctx);
       // Cache an immutable snapshot so the memoized value cannot be corrupted by a caller (or a
       // future refactor) mutating the list returned from getDifferences().
@@ -139,6 +166,28 @@ public class Context {
     return !notCompatible;
   }
 
+  /**
+   * Returns the memoized pairs whose differences make them incompatible, mapped to those
+   * (pair-relative) differences. Used by {@link SchemaDiff#compare} to grow the incompatible seed
+   * between fixpoint passes.
+   */
+  public Map<SchemaPair, List<Difference>> collectIncompatiblePairs() {
+    Map<SchemaPair, List<Difference>> incompatible = new HashMap<>();
+    for (Map.Entry<SchemaPair, List<Difference>> entry : memo.entrySet()) {
+      boolean entryIncompatible = entry.getValue().stream()
+          .anyMatch(d -> !compatibleChanges.contains(d.getType()));
+      if (entryIncompatible) {
+        incompatible.put(entry.getKey(), entry.getValue());
+      }
+    }
+    return incompatible;
+  }
+
+  /** Whether this comparison optimistically assumed any recursive cycle compatible. */
+  public boolean usedOptimisticTruncation() {
+    return optimismUsed[0];
+  }
+
   public List<Difference> getDifferences() {
     return diffs;
   }
@@ -173,7 +222,7 @@ public class Context {
   // Identity-based key over a pair of schemas. Two distinct Java objects are never equal even if
   // structurally identical, which is what allows a genuine change deep in a recursive structure to
   // be detected rather than masked by the cache.
-  private static final class SchemaPair {
+  static final class SchemaPair {
     private final Schema original;
     private final Schema update;
 

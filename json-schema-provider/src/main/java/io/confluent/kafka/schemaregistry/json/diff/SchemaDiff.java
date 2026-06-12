@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.everit.json.schema.ArraySchema;
@@ -111,9 +112,26 @@ public class SchemaDiff {
   }
 
   public static List<Difference> compare(final Schema original, final Schema update) {
-    final Context ctx = new Context(COMPATIBLE_CHANGES);
-    compare(ctx, original, update);
-    return ctx.getDifferences();
+    // Cross-branch memoization optimistically truncates recursive cycles as compatible. A pair can
+    // therefore be cached compatible under an assumption about an in-progress ancestor that later
+    // proves incompatible, and reusing that cached result in a sibling branch could mask a real
+    // incompatibility. To remain sound we iterate to a fixpoint: each pass feeds back the pairs
+    // found incompatible so that, when a cycle re-enters one of them, its real differences are
+    // propagated instead of an optimistic "compatible". The incompatible set grows monotonically
+    // and is bounded by the number of distinct schema pairs, so this converges; a pass that never
+    // truncated a cycle optimistically is already exact and ends the loop immediately (the common,
+    // non-recursive case costs a single pass).
+    Map<Context.SchemaPair, List<Difference>> incompatibleSeed = Collections.emptyMap();
+    while (true) {
+      final Context ctx = new Context(COMPATIBLE_CHANGES, incompatibleSeed);
+      compare(ctx, original, update);
+      Map<Context.SchemaPair, List<Difference>> incompatible = ctx.collectIncompatiblePairs();
+      if (!ctx.usedOptimisticTruncation()
+          || incompatible.keySet().equals(incompatibleSeed.keySet())) {
+        return ctx.getDifferences();
+      }
+      incompatibleSeed = incompatible;
+    }
   }
 
   @SuppressWarnings("ConstantConditions")
