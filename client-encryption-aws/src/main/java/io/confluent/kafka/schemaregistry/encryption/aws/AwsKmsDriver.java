@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
@@ -54,6 +56,25 @@ public class AwsKmsDriver implements KmsDriver {
   @Override
   public String getKeyUrlPrefix() {
     return AwsKmsClient.PREFIX;
+  }
+
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    if (!(t instanceof AwsServiceException)) {
+      return false;
+    }
+    AwsServiceException e = (AwsServiceException) t;
+    if (e.statusCode() == 401 || e.statusCode() == 403) {
+      return true;
+    }
+    // KMS returns IAM authorization failures as AccessDeniedException with HTTP 400, so the
+    // status code alone is not enough; also inspect the service error code.
+    AwsErrorDetails details = e.awsErrorDetails();
+    if (details != null && details.errorCode() != null) {
+      String code = details.errorCode();
+      return code.contains("AccessDenied") || code.contains("Unauthorized");
+    }
+    return false;
   }
 
   private AwsCredentialsProvider getCredentials(Map<String, ?> configs, Optional<String> kekUrl)
