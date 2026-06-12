@@ -96,6 +96,56 @@ public class SchemaDiffTest {
   }
 
   @Test
+  public void testRecursiveOneOfUnionTerminates() {
+    final Schema original = SchemaLoader.load(recursiveOneOfTradeSchema());
+    final Schema update = SchemaLoader.load(recursiveOneOfTradeSchema());
+    Assert.assertTrue(SchemaDiff.compare(original, update).isEmpty());
+  }
+
+  // Memoization must not mask real differences in the recursive structure: a type change deep in
+  // one product type is still detected as incompatible.
+  @Test
+  public void testRecursiveOneOfUnionDetectsIncompatibleChange() {
+    final Schema original = SchemaLoader.load(recursiveOneOfTradeSchema());
+    final JSONObject changed = recursiveOneOfTradeSchema();
+    changed.getJSONObject("definitions").getJSONObject("Asset")
+        .getJSONObject("properties").getJSONObject("id").put("type", "number");
+    final Schema update = SchemaLoader.load(changed);
+    Assert.assertFalse(SchemaDiff.compare(original, update).isEmpty());
+  }
+
+  private static JSONObject recursiveOneOfTradeSchema() {
+    final String[] types = {"Asset", "Basket", "Swap", "Bond", "Option", "Future",
+        "Forward", "Loan", "Repo", "Equity", "Index", "CommodityLeg"};
+    final JSONObject definitions = new JSONObject();
+    for (String type : types) {
+      JSONObject properties = new JSONObject();
+      properties.put("id", new JSONObject().put("type", "string"));
+      properties.put("underlying", inlineUnion(types));
+      properties.put("referenceProduct", inlineUnion(types));
+      definitions.put(type, new JSONObject().put("type", "object").put("properties", properties));
+    }
+    JSONObject rootProperties = new JSONObject();
+    rootProperties.put("tradeId", new JSONObject().put("type", "string"));
+    rootProperties.put("product", inlineUnion(types));
+    return new JSONObject()
+        .put("$schema", "http://json-schema.org/draft-07/schema#")
+        .put("title", "Trade")
+        .put("type", "object")
+        .put("additionalProperties", true)
+        .put("definitions", definitions)
+        .put("properties", rootProperties);
+  }
+
+  private static JSONObject inlineUnion(final String[] types) {
+    JSONArray oneOf = new JSONArray();
+    for (String type : types) {
+      oneOf.put(new JSONObject().put("$ref", "#/definitions/" + type));
+    }
+    return new JSONObject().put("oneOf", oneOf);
+  }
+
+  @Test
   public void testSchemaAddsProperties() {
     final Schema first = SchemaLoader.load(new JSONObject("{}"));
 
