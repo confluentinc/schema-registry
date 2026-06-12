@@ -55,7 +55,9 @@ public class Context {
     this(compatibleChanges, Collections.emptyMap());
   }
 
-  public Context(Set<Difference.Type> compatibleChanges,
+  // Package-private: the incompatible seed (a fixpoint detail keyed on the package-private
+  // SchemaPair) is only supplied by SchemaDiff.
+  Context(Set<Difference.Type> compatibleChanges,
       Map<SchemaPair, List<Difference>> incompatibleSeed) {
     this(compatibleChanges, new HashMap<>(), new HashSet<>(), incompatibleSeed, new boolean[1]);
   }
@@ -171,7 +173,7 @@ public class Context {
    * (pair-relative) differences. Used by {@link SchemaDiff#compare} to grow the incompatible seed
    * between fixpoint passes.
    */
-  public Map<SchemaPair, List<Difference>> collectIncompatiblePairs() {
+  Map<SchemaPair, List<Difference>> collectIncompatiblePairs() {
     Map<SchemaPair, List<Difference>> incompatible = new HashMap<>();
     for (Map.Entry<SchemaPair, List<Difference>> entry : memo.entrySet()) {
       boolean entryIncompatible = entry.getValue().stream()
@@ -184,7 +186,7 @@ public class Context {
   }
 
   /** Whether this comparison optimistically assumed any recursive cycle compatible. */
-  public boolean usedOptimisticTruncation() {
+  boolean usedOptimisticTruncation() {
     return optimismUsed[0];
   }
 
