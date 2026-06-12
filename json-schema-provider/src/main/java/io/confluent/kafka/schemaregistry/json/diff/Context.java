@@ -86,7 +86,10 @@ public class Context {
     try {
       Context subctx = new Context(this.compatibleChanges, this.memo, this.inProgress);
       comparator.compare(subctx);
-      List<Difference> result = subctx.getDifferences();
+      // Cache an immutable snapshot so the memoized value cannot be corrupted by a caller (or a
+      // future refactor) mutating the list returned from getDifferences().
+      List<Difference> result =
+          Collections.unmodifiableList(new ArrayList<>(subctx.getDifferences()));
       memo.put(key, result);
       return result;
     } finally {

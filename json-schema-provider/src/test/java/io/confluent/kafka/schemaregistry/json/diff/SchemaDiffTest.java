@@ -95,7 +95,7 @@ public class SchemaDiffTest {
     Assert.assertTrue(SchemaDiff.compare(original, newOne).isEmpty());
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void testRecursiveOneOfUnionTerminates() {
     final Schema original = SchemaLoader.load(recursiveOneOfTradeSchema());
     final Schema update = SchemaLoader.load(recursiveOneOfTradeSchema());
@@ -104,7 +104,7 @@ public class SchemaDiffTest {
 
   // Memoization must not mask real differences in the recursive structure: a type change deep in
   // one product type is still detected as incompatible.
-  @Test
+  @Test(timeout = 10000)
   public void testRecursiveOneOfUnionDetectsIncompatibleChange() {
     final Schema original = SchemaLoader.load(recursiveOneOfTradeSchema());
     final JSONObject changed = recursiveOneOfTradeSchema();
