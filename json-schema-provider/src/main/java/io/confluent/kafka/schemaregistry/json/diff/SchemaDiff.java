@@ -19,6 +19,7 @@ import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.everit.json.schema.ArraySchema;
@@ -111,9 +112,26 @@ public class SchemaDiff {
   }
 
   public static List<Difference> compare(final Schema original, final Schema update) {
-    final Context ctx = new Context(COMPATIBLE_CHANGES);
-    compare(ctx, original, update);
-    return ctx.getDifferences();
+    // Cross-branch memoization optimistically truncates recursive cycles as compatible. A pair can
+    // therefore be cached compatible under an assumption about an in-progress ancestor that later
+    // proves incompatible, and reusing that cached result in a sibling branch could mask a real
+    // incompatibility. To remain sound we iterate to a fixpoint: each pass feeds back the pairs
+    // found incompatible so that, when a cycle re-enters one of them, its real differences are
+    // propagated instead of an optimistic "compatible". The incompatible set grows monotonically
+    // and is bounded by the number of distinct schema pairs, so this converges; a pass that never
+    // truncated a cycle optimistically is already exact and ends the loop immediately (the common,
+    // non-recursive case costs a single pass).
+    Map<Context.SchemaPair, List<Difference>> incompatibleSeed = Collections.emptyMap();
+    while (true) {
+      final Context ctx = new Context(COMPATIBLE_CHANGES, incompatibleSeed);
+      compare(ctx, original, update);
+      Map<Context.SchemaPair, List<Difference>> incompatible = ctx.collectIncompatiblePairs();
+      if (!ctx.usedOptimisticTruncation()
+          || incompatible.keySet().equals(incompatibleSeed.keySet())) {
+        return ctx.getDifferences();
+      }
+      incompatibleSeed = incompatible;
+    }
   }
 
   @SuppressWarnings("ConstantConditions")
@@ -128,9 +146,18 @@ public class SchemaDiff {
       return;
     }
 
-    original = normalizeSchema(original);
-    update = normalizeSchema(update);
+    final Schema normalizedOriginal = normalizeSchema(original);
+    final Schema normalizedUpdate = normalizeSchema(update);
 
+    // Compare the pair through the memoization layer to bound recursion over schemas where many
+    // definitions refer to one another, then rebase the (pair-relative) result onto the current
+    // path. The memo also breaks cycles: a pair already on the stack is treated as compatible.
+    List<Difference> diffs = ctx.compareMemoized(normalizedOriginal, normalizedUpdate,
+        subctx -> compareTypes(subctx, normalizedOriginal, normalizedUpdate));
+    ctx.addDifferencesRebased(diffs);
+  }
+
+  private static void compareTypes(final Context ctx, final Schema original, final Schema update) {
     if (!(original instanceof CombinedSchema) && update instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) update;
       // Special case of singleton unions
@@ -197,39 +224,35 @@ public class SchemaDiff {
       return;
     }
 
-    try (Context.SchemaScope schemaScope = ctx.enterSchema(original)) {
-      if (schemaScope != null) {
-        if (!Objects.equals(original.getId(), update.getId())) {
-          ctx.addDifference(Type.ID_CHANGED);
-        }
-        if (!Objects.equals(original.getTitle(), update.getTitle())) {
-          ctx.addDifference(Type.TITLE_CHANGED);
-        }
-        if (!Objects.equals(original.getDescription(), update.getDescription())) {
-          ctx.addDifference(Type.DESCRIPTION_CHANGED);
-        }
-        if (!Objects.equals(original.getDefaultValue(), update.getDefaultValue())) {
-          ctx.addDifference(Type.DEFAULT_CHANGED);
-        }
+    if (!Objects.equals(original.getId(), update.getId())) {
+      ctx.addDifference(Type.ID_CHANGED);
+    }
+    if (!Objects.equals(original.getTitle(), update.getTitle())) {
+      ctx.addDifference(Type.TITLE_CHANGED);
+    }
+    if (!Objects.equals(original.getDescription(), update.getDescription())) {
+      ctx.addDifference(Type.DESCRIPTION_CHANGED);
+    }
+    if (!Objects.equals(original.getDefaultValue(), update.getDefaultValue())) {
+      ctx.addDifference(Type.DEFAULT_CHANGED);
+    }
 
-        if (original instanceof StringSchema) {
-          StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
-        } else if (original instanceof NumberSchema) {
-          NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
-        } else if (original instanceof ConstSchema) {
-          ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
-        } else if (original instanceof EnumSchema) {
-          EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
-        } else if (original instanceof CombinedSchema) {
-          CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
-        } else if (original instanceof NotSchema) {
-          NotSchemaDiff.compare(ctx, (NotSchema) original, (NotSchema) update);
-        } else if (original instanceof ObjectSchema) {
-          ObjectSchemaDiff.compare(ctx, (ObjectSchema) original, (ObjectSchema) update);
-        } else if (original instanceof ArraySchema) {
-          ArraySchemaDiff.compare(ctx, (ArraySchema) original, (ArraySchema) update);
-        }
-      }
+    if (original instanceof StringSchema) {
+      StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
+    } else if (original instanceof NumberSchema) {
+      NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
+    } else if (original instanceof ConstSchema) {
+      ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
+    } else if (original instanceof EnumSchema) {
+      EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
+    } else if (original instanceof CombinedSchema) {
+      CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
+    } else if (original instanceof NotSchema) {
+      NotSchemaDiff.compare(ctx, (NotSchema) original, (NotSchema) update);
+    } else if (original instanceof ObjectSchema) {
+      ObjectSchemaDiff.compare(ctx, (ObjectSchema) original, (ObjectSchema) update);
+    } else if (original instanceof ArraySchema) {
+      ArraySchemaDiff.compare(ctx, (ArraySchema) original, (ArraySchema) update);
     }
   }
 
