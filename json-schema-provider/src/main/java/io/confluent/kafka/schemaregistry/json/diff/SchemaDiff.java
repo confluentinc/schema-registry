@@ -128,9 +128,18 @@ public class SchemaDiff {
       return;
     }
 
-    original = normalizeSchema(original);
-    update = normalizeSchema(update);
+    final Schema normalizedOriginal = normalizeSchema(original);
+    final Schema normalizedUpdate = normalizeSchema(update);
 
+    // Compare the pair through the memoization layer to bound recursion over schemas where many
+    // definitions refer to one another, then rebase the (pair-relative) result onto the current
+    // path. The memo also breaks cycles: a pair already on the stack is treated as compatible.
+    List<Difference> diffs = ctx.compareMemoized(normalizedOriginal, normalizedUpdate,
+        subctx -> compareTypes(subctx, normalizedOriginal, normalizedUpdate));
+    ctx.addDifferencesRebased(diffs);
+  }
+
+  private static void compareTypes(final Context ctx, final Schema original, final Schema update) {
     if (!(original instanceof CombinedSchema) && update instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) update;
       // Special case of singleton unions
@@ -197,39 +206,35 @@ public class SchemaDiff {
       return;
     }
 
-    try (Context.SchemaScope schemaScope = ctx.enterSchema(original)) {
-      if (schemaScope != null) {
-        if (!Objects.equals(original.getId(), update.getId())) {
-          ctx.addDifference(Type.ID_CHANGED);
-        }
-        if (!Objects.equals(original.getTitle(), update.getTitle())) {
-          ctx.addDifference(Type.TITLE_CHANGED);
-        }
-        if (!Objects.equals(original.getDescription(), update.getDescription())) {
-          ctx.addDifference(Type.DESCRIPTION_CHANGED);
-        }
-        if (!Objects.equals(original.getDefaultValue(), update.getDefaultValue())) {
-          ctx.addDifference(Type.DEFAULT_CHANGED);
-        }
+    if (!Objects.equals(original.getId(), update.getId())) {
+      ctx.addDifference(Type.ID_CHANGED);
+    }
+    if (!Objects.equals(original.getTitle(), update.getTitle())) {
+      ctx.addDifference(Type.TITLE_CHANGED);
+    }
+    if (!Objects.equals(original.getDescription(), update.getDescription())) {
+      ctx.addDifference(Type.DESCRIPTION_CHANGED);
+    }
+    if (!Objects.equals(original.getDefaultValue(), update.getDefaultValue())) {
+      ctx.addDifference(Type.DEFAULT_CHANGED);
+    }
 
-        if (original instanceof StringSchema) {
-          StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
-        } else if (original instanceof NumberSchema) {
-          NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
-        } else if (original instanceof ConstSchema) {
-          ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
-        } else if (original instanceof EnumSchema) {
-          EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
-        } else if (original instanceof CombinedSchema) {
-          CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
-        } else if (original instanceof NotSchema) {
-          NotSchemaDiff.compare(ctx, (NotSchema) original, (NotSchema) update);
-        } else if (original instanceof ObjectSchema) {
-          ObjectSchemaDiff.compare(ctx, (ObjectSchema) original, (ObjectSchema) update);
-        } else if (original instanceof ArraySchema) {
-          ArraySchemaDiff.compare(ctx, (ArraySchema) original, (ArraySchema) update);
-        }
-      }
+    if (original instanceof StringSchema) {
+      StringSchemaDiff.compare(ctx, (StringSchema) original, (StringSchema) update);
+    } else if (original instanceof NumberSchema) {
+      NumberSchemaDiff.compare(ctx, (NumberSchema) original, (NumberSchema) update);
+    } else if (original instanceof ConstSchema) {
+      ConstSchemaDiff.compare(ctx, (ConstSchema) original, (ConstSchema) update);
+    } else if (original instanceof EnumSchema) {
+      EnumSchemaDiff.compare(ctx, (EnumSchema) original, (EnumSchema) update);
+    } else if (original instanceof CombinedSchema) {
+      CombinedSchemaDiff.compare(ctx, (CombinedSchema) original, (CombinedSchema) update);
+    } else if (original instanceof NotSchema) {
+      NotSchemaDiff.compare(ctx, (NotSchema) original, (NotSchema) update);
+    } else if (original instanceof ObjectSchema) {
+      ObjectSchemaDiff.compare(ctx, (ObjectSchema) original, (ObjectSchema) update);
+    } else if (original instanceof ArraySchema) {
+      ArraySchemaDiff.compare(ctx, (ArraySchema) original, (ArraySchema) update);
     }
   }
 
