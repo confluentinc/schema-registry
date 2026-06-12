@@ -153,7 +153,8 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           true,
           new ApiVersions(),
           logContext,
-          MetadataRecoveryStrategy.NONE);
+          MetadataRecoveryStrategy.NONE,
+          false);
 
       this.client = new ConsumerNetworkClient(
           logContext,
