@@ -114,13 +114,12 @@ public class SchemaDiffTest {
     Assert.assertFalse(SchemaDiff.compare(original, update).isEmpty());
   }
 
-  // A deterministic reproducer (originally surfaced by SchemaDiffMemoizationDifferentialTest, fuzz
-  // seed 637) for cross-branch memoization masking a real incompatibility. The genuine type changes
-  // to T0.id and T1.id sit behind a recursive oneOf cycle (T0 -> T2 -> T0). A single memoized pass
-  // caches the (T0,T0) sub-comparison as compatible while the cycle back into it is optimistically
-  // truncated, then the root oneOf[T0,T1] matching reuses that cached edge and wrongly reports the
-  // evolution compatible. The greatest-fixed-point iteration in SchemaDiff.compare corrects this;
-  // without it this assertion fails (the comparison returns no incompatible differences).
+  // A deterministic reproducer for cross-branch memoization. The genuine type changes to T0.id and
+  // T1.id sit behind a recursive oneOf cycle (T0 -> T2 -> T0). A single memoized pass caches the
+  // (T0,T0) sub-comparison as compatible while the cycle back into it is optimistically truncated,
+  // then the root oneOf[T0,T1] matching reuses that cached edge and wrongly reports the evolution
+  // compatible. The greatest-fixed-point iteration in SchemaDiff.compare corrects this; without it
+  // this assertion fails (the comparison returns no incompatible differences).
   @Test(timeout = 10000)
   public void testRecursiveOneOfMemoizationDoesNotMaskIncompatibility() {
     final Schema original = SchemaLoader.load(memoMaskingSchema("integer", "boolean"));
