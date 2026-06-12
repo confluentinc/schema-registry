@@ -234,7 +234,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       }
       return key.toDekEntity();
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving key", e);
     }
@@ -333,7 +333,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       }
       return key.toDekEntity();
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException("Error while retrieving key", e);
     }
@@ -423,7 +423,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       dekRegistry.testKek(kek);
       asyncResponse.resume(kek);
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (InvalidKeyException e) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (SchemaRegistryException e) {
@@ -505,7 +505,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (DekGenerationException e) {
-      throw DekRegistryErrors.dekGenerationException(e.getMessage());
+      throw DekRegistryErrors.dekGenerationException(e);
     } catch (InvalidKeyException e) {
       throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (TooManyKeysException e) {

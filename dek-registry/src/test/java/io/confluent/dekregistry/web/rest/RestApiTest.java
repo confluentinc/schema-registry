@@ -586,5 +586,28 @@ public abstract class RestApiTest {
         newParams.get("encrypt.kek.name"));
     assertEquals("aws-kms", newParams.get("encrypt.kms.type"));
   }
+
+  // A KMS authentication/authorization failure must surface as HTTP 403, not 500.
+  @Test
+  public void testDekGenerationForbiddenWhenKmsDeniesAccess() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-access-denied";
+    String subject = "access-denied-subject";
+    String failKmsType = "test-fail-decrypt-kms";
+    // The "access-denied" marker drives the test KMS to fail decrypt with an access-denied error.
+    String failKmsKeyId = "test-fail-decrypt-kms://access-denied";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    client.createKek(headers, kekName, failKmsType, failKmsKeyId, null, null, true, false);
+
+    try {
+      client.createDek(headers, kekName, subject, null, algorithm, null, false);
+      fail("Expected a 403 DekGenerationException when the KMS denies access");
+    } catch (RestClientException e) {
+      assertEquals(403, e.getStatus());
+      assertEquals(DekRegistryErrors.DEK_GENERATION_FORBIDDEN_ERROR_CODE, e.getErrorCode());
+    }
+  }
 }
 

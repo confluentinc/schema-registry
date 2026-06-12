@@ -16,9 +16,18 @@
 
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.azure.core.exception.HttpResponseException;
+import com.azure.core.http.HttpResponse;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
+import java.security.GeneralSecurityException;
 import java.util.List;
+import org.junit.Test;
 
 public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -30,6 +39,37 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
     return new AzureEncryptionProperties(ruleNames, ruleExecutor);
+  }
+
+  private static HttpResponseException httpException(int statusCode) {
+    HttpResponse response = mock(HttpResponse.class);
+    when(response.getStatusCode()).thenReturn(statusCode);
+    return new HttpResponseException("denied", response);
+  }
+
+  @Test
+  public void testIsAccessDeniedForForbiddenAndUnauthorized() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertTrue(driver.isAccessDeniedException(httpException(403)));
+    assertTrue(driver.isAccessDeniedException(httpException(401)));
+  }
+
+  @Test
+  public void testIsNotAccessDeniedForOtherErrors() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertFalse(driver.isAccessDeniedException(httpException(404)));
+    assertFalse(driver.isAccessDeniedException(httpException(500)));
+    assertFalse(driver.isAccessDeniedException(new RuntimeException("not azure")));
+  }
+
+  @Test
+  public void testIsAccessDeniedWalksCauseChain() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertTrue(driver.isAccessDenied(
+        new GeneralSecurityException("encryption failed", httpException(403))));
+    assertFalse(driver.isAccessDenied(
+        new GeneralSecurityException("encryption failed", httpException(503))));
+    assertFalse(driver.isAccessDenied(null));
   }
 }
 
