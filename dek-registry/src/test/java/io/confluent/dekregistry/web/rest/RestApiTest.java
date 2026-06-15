@@ -19,6 +19,7 @@ import static io.confluent.dekregistry.storage.AbstractDekRegistry.X_FORWARD_HEA
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -51,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 @Tag("IntegrationTest")
 public abstract class RestApiTest {
@@ -278,6 +280,18 @@ public abstract class RestApiTest {
     List<Integer> versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1, 2), versions);
 
+    Dek subject2Version1 = client.getDekVersion(kekName, subject2, 1, algorithm, false);
+    assertEquals(1, subject2Version1.getVersion());
+    Dek subject2Version2 = client.getDekVersion(kekName, subject2, 2, algorithm, false);
+    assertEquals(2, subject2Version2.getVersion());
+
+    try {
+      client.getDekVersion(kekName, subject2, 99, algorithm, false);
+      fail();
+    } catch (RestClientException e) {
+      assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
+    }
+
     versions = client.listDekVersionsWithPagination(kekName, subject2, null, false, 0, 1);
     assertEquals(ImmutableList.of(1), versions);
 
@@ -338,6 +352,9 @@ public abstract class RestApiTest {
 
     versions = client.listDekVersions(kekName, subject2, null, false);
     assertEquals(ImmutableList.of(1), versions);
+
+    versions = client.listDekVersionsWithPagination(kekName, subject2, null, true, 0, 2);
+    assertEquals(ImmutableList.of(1, 2), versions);
 
     client.undeleteDekVersion(headers, kekName, subject2, 2, null);
 
@@ -585,6 +602,27 @@ public abstract class RestApiTest {
     assertEquals("aws-kms-us-west-2-111122223333-key-1234abcd-12ab-34cd-56ef-1234567890ab",
         newParams.get("encrypt.kek.name"));
     assertEquals("aws-kms", newParams.get("encrypt.kms.type"));
+  }
+
+  @Test
+  public void testNotFoundErrorPaths() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String missingKek = "missing-kek";
+    String missingSubject = "missing-subject";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    assertKeyNotFound(() -> client.getKek(missingKek, false));
+    assertKeyNotFound(() -> client.testKek(missingKek));
+    assertKeyNotFound(() -> client.undeleteKek(headers, missingKek));
+    assertKeyNotFound(() -> client.getDek(missingKek, missingSubject, algorithm, false));
+    assertKeyNotFound(() -> client.getDekVersion(missingKek, missingSubject, 1, algorithm, false));
+    assertKeyNotFound(() -> client.undeleteDek(headers, missingKek, missingSubject, algorithm));
+  }
+
+  private void assertKeyNotFound(Executable op) {
+    RestClientException e = assertThrows(RestClientException.class, op);
+    assertEquals(DekRegistryErrors.KEY_NOT_FOUND_ERROR_CODE, e.getErrorCode());
   }
 }
 
