@@ -19,7 +19,6 @@ import com.google.protobuf.Message;
 import io.confluent.connect.schema.backup.BackupReferenceResolver;
 import io.confluent.connect.schema.backup.BackupSchemaFetcher;
 import io.confluent.connect.schema.backup.BackupSchemaFetcher.BackupSchemaInfo;
-import io.confluent.connect.schema.backup.BackupSchemaFetcher.RefTreeEntry;
 import io.confluent.connect.schema.backup.BackupWrapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -48,7 +47,6 @@ import org.apache.kafka.connect.storage.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -60,7 +58,11 @@ import java.util.Map;
 public class ProtobufConverter implements Converter {
 
   private static final Logger log = LoggerFactory.getLogger(ProtobufConverter.class);
-  public static final String BACKUP_MODE_CONFIG = "backup.mode";
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory PROTOBUF_SCHEMA_FACTORY =
+      (raw, refs, resolvedSchemas) -> !refs.isEmpty()
+          ? new ProtobufSchema(raw, refs, resolvedSchemas, null, null)
+          : new ProtobufSchema(raw);
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -85,11 +87,10 @@ public class ProtobufConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-    Object backupMode = configs.get(BACKUP_MODE_CONFIG);
-    this.backupEnvelopeMode = "envelope".equalsIgnoreCase(
-        backupMode != null ? backupMode.toString() : null);
-    log.info("ProtobufConverter backup.mode={}, envelope={}, isKey={}",
-        backupMode, backupEnvelopeMode, isKey);
+    Object schemaBackup = configs.get(BackupWrapper.SCHEMA_BACKUP_ENABLED_CONFIG);
+    this.backupEnvelopeMode = "true".equalsIgnoreCase(
+        schemaBackup != null ? schemaBackup.toString() : null);
+    log.info("ProtobufConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     ProtobufConverterConfig protobufConverterConfig = new ProtobufConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -169,28 +170,8 @@ public class ProtobufConverter implements Converter {
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
 
-      String treeJson = wrapperSchema.field(BackupWrapper.FIELD_REFERENCE_TREE) != null
-          ? wrapper.getString(BackupWrapper.FIELD_REFERENCE_TREE) : null;
-      String directRefsJson = wrapperSchema.field(BackupWrapper.FIELD_DIRECT_REFS) != null
-          ? wrapper.getString(BackupWrapper.FIELD_DIRECT_REFS) : null;
-
-      Map<String, RefTreeEntry> refTree =
-          BackupReferenceResolver.parseReferenceTree(treeJson);
-      List<SchemaReference> directRefs =
-          BackupReferenceResolver.parseDirectRefs(directRefsJson);
-      List<SchemaReference> remappedRefs = Collections.emptyList();
-      Map<String, String> resolvedTexts = Collections.emptyMap();
-
-      if (!refTree.isEmpty() && !directRefs.isEmpty()) {
-        remappedRefs = new ArrayList<>();
-        resolvedTexts = new HashMap<>();
-        BackupReferenceResolver.ParsedSchemaFactory factory =
-            (raw, refs, resolved) -> !refs.isEmpty()
-                ? new ProtobufSchema(raw, refs, resolved, null, null)
-                : new ProtobufSchema(raw);
-        referenceResolver.registerRefsRecursive(
-            directRefs, refTree, factory, remappedRefs, resolvedTexts);
-      }
+      BackupReferenceResolver.ResolutionResult resolved =
+          referenceResolver.resolveFromWrapper(wrapperSchema, wrapper, PROTOBUF_SCHEMA_FACTORY);
 
       ProtobufSchemaAndValue schemaAndValue =
           protobufData.fromConnectData(actualConnectSchema, actualData);
@@ -198,12 +179,10 @@ public class ProtobufConverter implements Converter {
 
       ProtobufSchema serializeSchema;
       if (rawSchema != null) {
-        if (!remappedRefs.isEmpty()) {
-          serializeSchema = new ProtobufSchema(
-              rawSchema, remappedRefs, resolvedTexts, null, null);
-        } else {
-          serializeSchema = new ProtobufSchema(rawSchema);
-        }
+        serializeSchema = resolved.hasReferences()
+            ? new ProtobufSchema(rawSchema, resolved.getTargetRefs(),
+                resolved.getResolvedSchemas(), null, null)
+            : new ProtobufSchema(rawSchema);
       } else {
         serializeSchema = schemaAndValue.getSchema();
       }
@@ -299,7 +278,19 @@ public class ProtobufConverter implements Converter {
       io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException {
     BackupSchemaInfo info = schemaFetcher.fetchSchemaInfo(schemaId);
     String rawSchema = info.getRawSchema();
-    ProtobufSchema parsed = new ProtobufSchema(rawSchema);
+
+    ProtobufSchema parsed;
+    if (!info.getDirectReferences().isEmpty()) {
+      java.util.Map<String, String> resolved = new java.util.HashMap<>();
+      for (java.util.Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
+          : info.getReferenceTree().entrySet()) {
+        resolved.put(e.getKey(), e.getValue().getSchema());
+      }
+      parsed = new ProtobufSchema(rawSchema,
+          info.getDirectReferences(), resolved, null, null);
+    } else {
+      parsed = new ProtobufSchema(rawSchema);
+    }
     String subject = serializer.computeSubjectName(topic, isKey, parsed);
 
     Integer schemaVersion = info.getVersionForSubject(subject);

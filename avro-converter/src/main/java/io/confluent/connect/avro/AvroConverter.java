@@ -19,7 +19,6 @@ package io.confluent.connect.avro;
 import io.confluent.connect.schema.backup.BackupReferenceResolver;
 import io.confluent.connect.schema.backup.BackupSchemaFetcher;
 import io.confluent.connect.schema.backup.BackupSchemaFetcher.BackupSchemaInfo;
-import io.confluent.connect.schema.backup.BackupSchemaFetcher.RefTreeEntry;
 import io.confluent.connect.schema.backup.BackupWrapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -55,7 +54,6 @@ import org.apache.kafka.connect.storage.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -67,7 +65,11 @@ import java.util.Map;
 public class AvroConverter implements Converter {
 
   private static final Logger log = LoggerFactory.getLogger(AvroConverter.class);
-  public static final String BACKUP_MODE_CONFIG = "backup.mode";
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory AVRO_SCHEMA_FACTORY =
+      (raw, refs, resolvedSchemas) -> !refs.isEmpty()
+          ? new AvroSchema(raw, refs, resolvedSchemas, null)
+          : new AvroSchema(raw);
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -93,11 +95,10 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-    Object backupMode = configs.get(BACKUP_MODE_CONFIG);
-    this.backupEnvelopeMode = "envelope".equalsIgnoreCase(
-        backupMode != null ? backupMode.toString() : null);
-    log.info("AvroConverter backup.mode={}, envelope={}, isKey={}",
-        backupMode, backupEnvelopeMode, isKey);
+    Object schemaBackup = configs.get(BackupWrapper.SCHEMA_BACKUP_ENABLED_CONFIG);
+    this.backupEnvelopeMode = "true".equalsIgnoreCase(
+        schemaBackup != null ? schemaBackup.toString() : null);
+    log.info("AvroConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -116,13 +117,7 @@ public class AvroConverter implements Converter {
 
     schemaFetcher = new BackupSchemaFetcher(schemaRegistry);
     referenceResolver = new BackupReferenceResolver(schemaRegistry);
-    if (backupEnvelopeMode) {
-      Map<String, Object> restoreConfigs = new HashMap<>(configs);
-      restoreConfigs.put("enhanced.avro.schema.support", "true");
-      restoreAvroData = new AvroData(new AvroDataConfig(restoreConfigs));
-    } else {
-      restoreAvroData = avroData;
-    }
+    restoreAvroData = avroData;
   }
 
   @Override
@@ -176,28 +171,8 @@ public class AvroConverter implements Converter {
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
 
-      String treeJson = wrapperSchema.field(BackupWrapper.FIELD_REFERENCE_TREE) != null
-          ? wrapper.getString(BackupWrapper.FIELD_REFERENCE_TREE) : null;
-      String directRefsJson = wrapperSchema.field(BackupWrapper.FIELD_DIRECT_REFS) != null
-          ? wrapper.getString(BackupWrapper.FIELD_DIRECT_REFS) : null;
-
-      Map<String, RefTreeEntry> refTree =
-          BackupReferenceResolver.parseReferenceTree(treeJson);
-      List<SchemaReference> directRefs =
-          BackupReferenceResolver.parseDirectRefs(directRefsJson);
-      List<SchemaReference> remappedRefs = Collections.emptyList();
-      Map<String, String> resolvedTexts = Collections.emptyMap();
-
-      if (!refTree.isEmpty() && !directRefs.isEmpty()) {
-        remappedRefs = new ArrayList<>();
-        resolvedTexts = new HashMap<>();
-        BackupReferenceResolver.ParsedSchemaFactory factory =
-            (raw, refs, resolved) -> !refs.isEmpty()
-                ? new AvroSchema(raw, refs, resolved, null)
-                : new AvroSchema(raw);
-        referenceResolver.registerRefsRecursive(
-            directRefs, refTree, factory, remappedRefs, resolvedTexts);
-      }
+      BackupReferenceResolver.ResolutionResult resolved =
+          referenceResolver.resolveFromWrapper(wrapperSchema, wrapper, AVRO_SCHEMA_FACTORY);
 
       org.apache.avro.Schema avroSchema =
           restoreAvroData.fromConnectSchema(actualConnectSchema);
@@ -206,11 +181,15 @@ public class AvroConverter implements Converter {
 
       AvroSchema serializeSchema;
       if (rawSchema != null) {
-        if (!remappedRefs.isEmpty()) {
-          serializeSchema = new AvroSchema(rawSchema, remappedRefs, resolvedTexts, null);
-        } else {
-          serializeSchema = new AvroSchema(rawSchema);
-        }
+        log.info("restoreFromWrapper: hasRefs={}, targetRefs={}, resolvedKeys={}, rawSchema={}",
+            resolved.hasReferences(),
+            resolved.hasReferences() ? resolved.getTargetRefs() : "[]",
+            resolved.hasReferences() ? resolved.getResolvedSchemas().keySet() : "[]",
+            rawSchema.substring(0, Math.min(100, rawSchema.length())));
+        serializeSchema = resolved.hasReferences()
+            ? new AvroSchema(rawSchema, resolved.getTargetRefs(),
+                resolved.getResolvedSchemas(), null)
+            : new AvroSchema(rawSchema);
       } else {
         serializeSchema = new AvroSchema(avroSchema);
       }
@@ -302,7 +281,19 @@ public class AvroConverter implements Converter {
       io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException {
     BackupSchemaInfo info = schemaFetcher.fetchSchemaInfo(schemaId);
     String rawSchema = info.getRawSchema();
-    AvroSchema parsed = new AvroSchema(rawSchema);
+
+    AvroSchema parsed;
+    if (!info.getDirectReferences().isEmpty()) {
+      Map<String, String> resolved = new HashMap<>();
+      for (Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
+          : info.getReferenceTree().entrySet()) {
+        resolved.put(e.getKey(), e.getValue().getSchema());
+      }
+      parsed = new AvroSchema(rawSchema,
+          info.getDirectReferences(), resolved, null);
+    } else {
+      parsed = new AvroSchema(rawSchema);
+    }
     String subject = serializer.computeSubjectName(topic, isKey, parsed);
 
     Integer schemaVersion = info.getVersionForSubject(subject);

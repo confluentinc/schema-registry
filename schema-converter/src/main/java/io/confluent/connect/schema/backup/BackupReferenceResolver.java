@@ -22,6 +22,8 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +37,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolves and registers schema references during backup restore.
+ *
+ * <p>Handles depth-first registration of transitive reference chains
+ * (e.g., User→Address→Country). Each reference is registered in the target
+ * Schema Registry before its parent, ensuring the parent can reference it
+ * by the correct target version.
  */
 public class BackupReferenceResolver {
 
@@ -45,10 +52,106 @@ public class BackupReferenceResolver {
   private final SchemaRegistryClient schemaRegistry;
   private final Map<String, Integer> registrationCache = new ConcurrentHashMap<>();
 
+  /**
+   * Creates a resolver that registers references in the given Schema Registry.
+   */
   public BackupReferenceResolver(SchemaRegistryClient schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
   }
 
+  /**
+   * Result of reference resolution: the target references (direct only)
+   * and all resolved schema texts (direct + transitive).
+   *
+   * <p>{@code targetRefs} contains only DIRECT references with versions
+   * remapped to the target Schema Registry — used for schema registration.
+   *
+   * <p>{@code resolvedSchemas} contains ALL schema texts (direct and
+   * transitive) — used by schema parsers to resolve nested type references.
+   */
+  public static class ResolutionResult {
+    private final List<SchemaReference> targetRefs;
+    private final Map<String, String> resolvedSchemas;
+
+    private ResolutionResult(List<SchemaReference> targetRefs,
+        Map<String, String> resolvedSchemas) {
+      this.targetRefs = targetRefs;
+      this.resolvedSchemas = resolvedSchemas;
+    }
+
+    static ResolutionResult of(List<SchemaReference> targetRefs,
+        Map<String, String> resolvedSchemas) {
+      return new ResolutionResult(targetRefs, resolvedSchemas);
+    }
+
+    public List<SchemaReference> getTargetRefs() {
+      return targetRefs;
+    }
+
+    public Map<String, String> getResolvedSchemas() {
+      return resolvedSchemas;
+    }
+
+    public boolean hasReferences() {
+      return targetRefs != null && !targetRefs.isEmpty();
+    }
+
+    private static final ResolutionResult EMPTY =
+        new ResolutionResult(Collections.emptyList(), Collections.emptyMap());
+
+    public static ResolutionResult empty() {
+      return EMPTY;
+    }
+  }
+
+  /**
+   * Resolves schema references from a BackupWrapper struct.
+   *
+   * <p>Extracts referenceTree and directRefs from the wrapper, registers all
+   * referenced schemas depth-first in the target Schema Registry, and returns
+   * the resolution result for constructing the main schema.
+   *
+   * <p>Returns {@link ResolutionResult#empty()} if the schema has no SR references
+   * (i.e., only inline types).
+   *
+   * @param wrapperSchema the wrapper's Connect Schema
+   * @param wrapper       the wrapper Struct containing reference metadata
+   * @param factory       schema-type-specific factory for creating ParsedSchema instances
+   * @return resolution result with target refs and resolved schema texts
+   */
+  public ResolutionResult resolveFromWrapper(
+      Schema wrapperSchema, Struct wrapper, ParsedSchemaFactory factory) {
+    String treeJson = wrapperSchema.field(BackupWrapper.FIELD_REFERENCE_TREE) != null
+        ? wrapper.getString(BackupWrapper.FIELD_REFERENCE_TREE) : null;
+    String directRefsJson = wrapperSchema.field(BackupWrapper.FIELD_DIRECT_REFS) != null
+        ? wrapper.getString(BackupWrapper.FIELD_DIRECT_REFS) : null;
+
+    Map<String, BackupSchemaFetcher.RefTreeEntry> refTree =
+        parseReferenceTree(treeJson);
+    List<SchemaReference> directRefs =
+        parseDirectRefs(directRefsJson);
+
+    if (refTree.isEmpty() || directRefs.isEmpty()) {
+      return ResolutionResult.empty();
+    }
+
+    List<SchemaReference> targetRefs = new ArrayList<>();
+    // LinkedHashMap preserves insertion order (depth-first = leaves first)
+    // which is required by schema parsers that iterate resolvedSchemas.values()
+    // and need transitive dependencies parsed before their dependents
+    Map<String, String> resolvedSchemas = new java.util.LinkedHashMap<>();
+    registerRefsRecursive(
+        directRefs, refTree, factory, targetRefs, resolvedSchemas);
+    return ResolutionResult.of(targetRefs, resolvedSchemas);
+  }
+
+  /**
+   * Parses a reference tree JSON string into a map of reference name to tree entry.
+   *
+   * @param json the reference tree JSON, or null/empty for no references
+   * @return parsed reference tree, empty map if input is null/empty
+   * @throws DataException if the JSON is malformed
+   */
   @SuppressWarnings("unchecked")
   public static Map<String, BackupSchemaFetcher.RefTreeEntry> parseReferenceTree(String json) {
     if (json == null || json.isEmpty()) {
@@ -94,6 +197,13 @@ public class BackupReferenceResolver {
     }
   }
 
+  /**
+   * Parses a direct references JSON array into a list of SchemaReference.
+   *
+   * @param json the direct references JSON array, or null/empty for no references
+   * @return parsed references, empty list if input is null/empty
+   * @throws DataException if the JSON is malformed
+   */
   public static List<SchemaReference> parseDirectRefs(String json) {
     if (json == null || json.isEmpty()) {
       return Collections.emptyList();
@@ -107,22 +217,27 @@ public class BackupReferenceResolver {
     }
   }
 
+  /**
+   * Registers schema references depth-first in the target Schema Registry.
+   * Populates {@code targetRefsOut} with direct references (version-remapped)
+   * and {@code resolvedSchemasOut} with all schema texts (direct + transitive).
+   */
   public void registerRefsRecursive(
       List<SchemaReference> refs,
       Map<String, BackupSchemaFetcher.RefTreeEntry> tree,
       ParsedSchemaFactory factory,
-      List<SchemaReference> remappedOut,
-      Map<String, String> resolvedOut) {
+      List<SchemaReference> targetRefsOut,
+      Map<String, String> resolvedSchemasOut) {
     registerRefsRecursive(
-        refs, tree, factory, remappedOut, resolvedOut, 0);
+        refs, tree, factory, targetRefsOut, resolvedSchemasOut, 0);
   }
 
   private void registerRefsRecursive(
       List<SchemaReference> refs,
       Map<String, BackupSchemaFetcher.RefTreeEntry> tree,
       ParsedSchemaFactory factory,
-      List<SchemaReference> remappedOut,
-      Map<String, String> resolvedOut,
+      List<SchemaReference> targetRefsOut,
+      Map<String, String> resolvedSchemasOut,
       int depth) {
     if (refs == null) {
       return;
@@ -136,11 +251,11 @@ public class BackupReferenceResolver {
       String cacheKey = ref.getSubject() + ":" + ref.getVersion();
       Integer targetVersion = registrationCache.get(cacheKey);
       if (targetVersion != null) {
-        remappedOut.add(new SchemaReference(
+        targetRefsOut.add(new SchemaReference(
             ref.getName(), ref.getSubject(), targetVersion));
         BackupSchemaFetcher.RefTreeEntry entry = tree.get(ref.getName());
         if (entry != null) {
-          resolvedOut.put(ref.getName(), entry.getSchema());
+          addTransitiveSchemas(ref.getName(), entry, tree, resolvedSchemasOut);
         }
         continue;
       }
@@ -155,22 +270,26 @@ public class BackupReferenceResolver {
             + "Backup may be incomplete.");
       }
 
-      List<SchemaReference> childRemapped = new ArrayList<>();
-      Map<String, String> childResolved = new HashMap<>();
+      List<SchemaReference> childTargetRefs = new ArrayList<>();
+      Map<String, String> childResolvedSchemas = new java.util.LinkedHashMap<>();
       if (!entry.getReferences().isEmpty()) {
         registerRefsRecursive(
             entry.getReferences(), tree, factory,
-            childRemapped, childResolved, depth + 1);
+            childTargetRefs, childResolvedSchemas, depth + 1);
       }
+
+      // Propagate transitive schema texts to the output so parent schemas
+      // can resolve nested type references (e.g., Address→Country)
+      resolvedSchemasOut.putAll(childResolvedSchemas);
 
       try {
         ParsedSchema refSchema = factory.create(
-            entry.getSchema(), childRemapped, childResolved);
+            entry.getSchema(), childTargetRefs, childResolvedSchemas);
         schemaRegistry.register(ref.getSubject(), refSchema);
         targetVersion = schemaRegistry.getVersion(
             ref.getSubject(), refSchema);
         registrationCache.put(cacheKey, targetVersion);
-        log.debug("Pre-registered reference: subject={}, "
+        log.debug("Registered reference: subject={}, "
             + "srcVersion={}, targetVersion={}",
             ref.getSubject(), ref.getVersion(), targetVersion);
       } catch (IOException | RestClientException e) {
@@ -180,15 +299,31 @@ public class BackupReferenceResolver {
             + "'. Schema references must be resolvable for "
             + "correct backup/restore fidelity.", e);
       }
-      remappedOut.add(new SchemaReference(
+      targetRefsOut.add(new SchemaReference(
           ref.getName(), ref.getSubject(), targetVersion));
-      resolvedOut.put(ref.getName(), entry.getSchema());
+      resolvedSchemasOut.put(ref.getName(), entry.getSchema());
     }
+  }
+
+  private void addTransitiveSchemas(
+      String refName,
+      BackupSchemaFetcher.RefTreeEntry entry,
+      Map<String, BackupSchemaFetcher.RefTreeEntry> tree,
+      Map<String, String> resolvedSchemasOut) {
+    if (entry.getReferences() != null) {
+      for (SchemaReference childRef : entry.getReferences()) {
+        BackupSchemaFetcher.RefTreeEntry childEntry = tree.get(childRef.getName());
+        if (childEntry != null && !resolvedSchemasOut.containsKey(childRef.getName())) {
+          addTransitiveSchemas(childRef.getName(), childEntry, tree, resolvedSchemasOut);
+        }
+      }
+    }
+    resolvedSchemasOut.put(refName, entry.getSchema());
   }
 
   @FunctionalInterface
   public interface ParsedSchemaFactory {
     ParsedSchema create(String rawSchema, List<SchemaReference> refs,
-        Map<String, String> resolvedTexts);
+        Map<String, String> resolvedSchemas);
   }
 }

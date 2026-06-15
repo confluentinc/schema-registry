@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.connect.schema.backup.BackupReferenceResolver;
 import io.confluent.connect.schema.backup.BackupSchemaFetcher;
 import io.confluent.connect.schema.backup.BackupSchemaFetcher.BackupSchemaInfo;
-import io.confluent.connect.schema.backup.BackupSchemaFetcher.RefTreeEntry;
 import io.confluent.connect.schema.backup.BackupWrapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -50,7 +49,6 @@ import org.apache.kafka.connect.storage.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -62,7 +60,11 @@ import java.util.Map;
 public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Converter {
 
   private static final Logger log = LoggerFactory.getLogger(JsonSchemaConverter.class);
-  public static final String BACKUP_MODE_CONFIG = "backup.mode";
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory JSON_SCHEMA_FACTORY =
+      (raw, refs, resolvedSchemas) -> !refs.isEmpty()
+          ? new JsonSchema(raw, refs, resolvedSchemas, null)
+          : new JsonSchema(raw);
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -87,11 +89,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-    Object backupMode = configs.get(BACKUP_MODE_CONFIG);
-    this.backupEnvelopeMode = "envelope".equalsIgnoreCase(
-        backupMode != null ? backupMode.toString() : null);
-    log.info("JsonSchemaConverter backup.mode={}, envelope={}, isKey={}",
-        backupMode, backupEnvelopeMode, isKey);
+    Object schemaBackup = configs.get(BackupWrapper.SCHEMA_BACKUP_ENABLED_CONFIG);
+    this.backupEnvelopeMode = "true".equalsIgnoreCase(
+        schemaBackup != null ? schemaBackup.toString() : null);
+    log.info("JsonSchemaConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     JsonSchemaConverterConfig jsonSchemaConverterConfig = new JsonSchemaConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -167,36 +168,15 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
 
-      String treeJson = wrapperSchema.field(BackupWrapper.FIELD_REFERENCE_TREE) != null
-          ? wrapper.getString(BackupWrapper.FIELD_REFERENCE_TREE) : null;
-      String directRefsJson = wrapperSchema.field(BackupWrapper.FIELD_DIRECT_REFS) != null
-          ? wrapper.getString(BackupWrapper.FIELD_DIRECT_REFS) : null;
-
-      Map<String, RefTreeEntry> refTree =
-          BackupReferenceResolver.parseReferenceTree(treeJson);
-      List<SchemaReference> directRefs =
-          BackupReferenceResolver.parseDirectRefs(directRefsJson);
-      List<SchemaReference> remappedRefs = Collections.emptyList();
-      Map<String, String> resolvedTexts = Collections.emptyMap();
-
-      if (!refTree.isEmpty() && !directRefs.isEmpty()) {
-        remappedRefs = new ArrayList<>();
-        resolvedTexts = new HashMap<>();
-        BackupReferenceResolver.ParsedSchemaFactory factory =
-            (raw, refs, resolved) -> !refs.isEmpty()
-                ? new JsonSchema(raw, refs, resolved, null)
-                : new JsonSchema(raw);
-        referenceResolver.registerRefsRecursive(
-            directRefs, refTree, factory, remappedRefs, resolvedTexts);
-      }
+      BackupReferenceResolver.ResolutionResult resolved =
+          referenceResolver.resolveFromWrapper(wrapperSchema, wrapper, JSON_SCHEMA_FACTORY);
 
       JsonSchema jsonSchema;
       if (rawSchema != null) {
-        if (!remappedRefs.isEmpty()) {
-          jsonSchema = new JsonSchema(rawSchema, remappedRefs, resolvedTexts, null);
-        } else {
-          jsonSchema = new JsonSchema(rawSchema);
-        }
+        jsonSchema = resolved.hasReferences()
+            ? new JsonSchema(rawSchema, resolved.getTargetRefs(),
+                resolved.getResolvedSchemas(), null)
+            : new JsonSchema(rawSchema);
       } else {
         jsonSchema = jsonSchemaData.fromConnectSchema(actualConnectSchema);
       }
@@ -285,7 +265,19 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException {
     BackupSchemaInfo info = schemaFetcher.fetchSchemaInfo(schemaId);
     String rawSchema = info.getRawSchema();
-    JsonSchema parsed = new JsonSchema(rawSchema);
+
+    JsonSchema parsed;
+    if (!info.getDirectReferences().isEmpty()) {
+      java.util.Map<String, String> resolved = new java.util.HashMap<>();
+      for (java.util.Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
+          : info.getReferenceTree().entrySet()) {
+        resolved.put(e.getKey(), e.getValue().getSchema());
+      }
+      parsed = new JsonSchema(rawSchema,
+          info.getDirectReferences(), resolved, null);
+    } else {
+      parsed = new JsonSchema(rawSchema);
+    }
     String subject = serializer.computeSubjectName(topic, isKey, parsed);
 
     Integer schemaVersion = info.getVersionForSubject(subject);

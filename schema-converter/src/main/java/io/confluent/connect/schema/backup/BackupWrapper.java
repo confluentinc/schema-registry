@@ -43,6 +43,17 @@ public final class BackupWrapper {
   public static final String FIELD_REFERENCE_TREE = "referenceTree";
   public static final String FIELD_DIRECT_REFS = "directRefs";
 
+  /**
+   * Converter config key that enables schema backup metadata wrapping.
+   * Set by the connector via taskConfigs() propagation
+   * (e.g., {@code value.converter.schema.backup.enabled=true}).
+   *
+   * <p>When enabled, the converter captures schema ID, version, subject,
+   * raw schema text, and reference metadata in a Wrapper struct so the
+   * envelope layer can back them up to object storage.
+   */
+  public static final String SCHEMA_BACKUP_ENABLED_CONFIG = "schema.backup.enabled";
+
   private static final byte MAGIC_BYTE = 0x0;
 
   private BackupWrapper() {
