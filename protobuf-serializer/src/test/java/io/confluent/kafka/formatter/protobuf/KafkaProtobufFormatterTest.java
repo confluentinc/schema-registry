@@ -17,7 +17,9 @@
 package io.confluent.kafka.formatter.protobuf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import java.io.InputStream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -31,6 +33,7 @@ import org.junit.Test;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Optional;
 import java.util.Properties;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -70,7 +73,8 @@ public class KafkaProtobufFormatterTest {
     String snakeCaseSchema = "syntax = \"proto3\"; message Foo { string first_field = 1;"
             + "string second_field = 2; }";
     this.snakeCaseSchema = new ProtobufSchema(snakeCaseSchema);
-    schemaRegistry = MockSchemaRegistry.getClientForScope("test");
+    schemaRegistry = MockSchemaRegistry.getClientForScope("test",
+        ImmutableList.of(new ProtobufSchemaProvider()));
     formatter = new ProtobufMessageFormatter(url, null);
   }
 
@@ -94,8 +98,8 @@ public class KafkaProtobufFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -119,8 +123,8 @@ public class KafkaProtobufFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -144,8 +148,8 @@ public class KafkaProtobufFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-            "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-            null, serializedValue);
+            "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+            null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -171,8 +175,8 @@ public class KafkaProtobufFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedKey.length,
-        serializedValue.length, serializedKey, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, serializedKey.length,
+        serializedValue.length, serializedKey, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 
@@ -212,8 +216,8 @@ public class KafkaProtobufFormatterTest {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream ps = new PrintStream(baos);
     ConsumerRecord<byte[], byte[]> crecord = new ConsumerRecord<>(
-        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, 0, serializedValue.length,
-        null, serializedValue);
+        "topic1", 0, 200, 1000, TimestampType.LOG_APPEND_TIME, 0, serializedValue.length,
+        null, serializedValue, message.headers(), Optional.empty());
     formatter.writeTo(crecord, ps);
     String outputJson = baos.toString();
 

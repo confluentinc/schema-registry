@@ -17,7 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.gcp;
 
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import java.util.List;
 
 public class GcpFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
@@ -27,9 +27,9 @@ public class GcpFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new GcpFieldEncryptionProperties(ruleNames, ruleExecutor);
+    return new GcpEncryptionProperties(ruleNames, ruleExecutor);
   }
 }
 

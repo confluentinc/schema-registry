@@ -36,7 +36,8 @@ import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
 
 public class SchemaDiff {
-  public static final Set<Difference.Type> COMPATIBLE_CHANGES;
+  public static final Set<Difference.Type> COMPATIBLE_CHANGES_LENIENT;
+  public static final Set<Difference.Type> COMPATIBLE_CHANGES_STRICT;
 
   private static final String CONNECT_TYPE_PROP = "connect.type";
   private static final String BYTES_VAL = "bytes";
@@ -79,6 +80,8 @@ public class SchemaDiff {
     changes.add(Type.MIN_PROPERTIES_REMOVED);
     changes.add(Type.ADDITIONAL_PROPERTIES_ADDED);
     changes.add(Type.ADDITIONAL_PROPERTIES_EXTENDED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_ADDED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_EXTENDED);
     changes.add(Type.PROPERTY_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
     changes.add(Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_UNOPEN_CONTENT_MODEL);
     changes.add(Type.OPTIONAL_PROPERTY_ADDED_TO_UNOPEN_CONTENT_MODEL);
@@ -91,9 +94,15 @@ public class SchemaDiff {
     changes.add(Type.MAX_ITEMS_REMOVED);
     changes.add(Type.MIN_ITEMS_DECREASED);
     changes.add(Type.MIN_ITEMS_REMOVED);
+    changes.add(Type.MAX_CONTAINS_INCREASED);
+    changes.add(Type.MAX_CONTAINS_REMOVED);
+    changes.add(Type.MIN_CONTAINS_DECREASED);
+    changes.add(Type.MIN_CONTAINS_REMOVED);
     changes.add(Type.UNIQUE_ITEMS_REMOVED);
     changes.add(Type.ADDITIONAL_ITEMS_ADDED);
     changes.add(Type.ADDITIONAL_ITEMS_EXTENDED);
+    changes.add(Type.UNEVALUATED_ITEMS_ADDED);
+    changes.add(Type.UNEVALUATED_ITEMS_EXTENDED);
     changes.add(Type.ITEM_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL);
     changes.add(Type.ITEM_ADDED_TO_CLOSED_CONTENT_MODEL);
     changes.add(Type.ITEM_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL);
@@ -108,10 +117,24 @@ public class SchemaDiff {
     changes.add(Type.SUM_TYPE_EXTENDED);
     changes.add(Type.NOT_TYPE_NARROWED);
 
-    COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
+    COMPATIBLE_CHANGES_STRICT = Collections.unmodifiableSet(new HashSet<>(changes));
+
+    changes.add(Type.ADDITIONAL_PROPERTIES_NARROWED);
+    changes.add(Type.ADDITIONAL_PROPERTIES_REMOVED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_NARROWED);
+    changes.add(Type.UNEVALUATED_PROPERTIES_REMOVED);
+    changes.add(Type.REQUIRED_PROPERTY_WITH_DEFAULT_ADDED_TO_OPEN_CONTENT_MODEL);
+    changes.add(Type.OPTIONAL_PROPERTY_ADDED_TO_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_FROM_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_FROM_CLOSED_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_ADDED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+    changes.add(Type.PROPERTY_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL);
+
+    COMPATIBLE_CHANGES_LENIENT = Collections.unmodifiableSet(new HashSet<>(changes));
   }
 
-  public static List<Difference> compare(final Schema original, final Schema update) {
+  public static List<Difference> compare(
+      Set<Difference.Type> compatibleChanges, final Schema original, final Schema update) {
     // Cross-branch memoization optimistically truncates recursive cycles as compatible. A pair can
     // therefore be cached compatible under an assumption about an in-progress ancestor that later
     // proves incompatible, and reusing that cached result in a sibling branch could mask a real
@@ -123,7 +146,7 @@ public class SchemaDiff {
     // non-recursive case costs a single pass).
     Map<Context.SchemaPair, List<Difference>> incompatibleSeed = Collections.emptyMap();
     while (true) {
-      final Context ctx = new Context(COMPATIBLE_CHANGES, incompatibleSeed);
+      final Context ctx = new Context(compatibleChanges, incompatibleSeed);
       compare(ctx, original, update);
       Map<Context.SchemaPair, List<Difference>> incompatible = ctx.collectIncompatiblePairs();
       if (!ctx.usedOptimisticTruncation()
@@ -132,6 +155,10 @@ public class SchemaDiff {
       }
       incompatibleSeed = incompatible;
     }
+  }
+
+  public static List<Difference> compare(final Schema original, final Schema update) {
+    return compare(COMPATIBLE_CHANGES_STRICT, original, update);
   }
 
   @SuppressWarnings("ConstantConditions")

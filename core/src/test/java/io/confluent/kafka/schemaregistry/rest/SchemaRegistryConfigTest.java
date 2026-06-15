@@ -15,13 +15,12 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import kafka.Kafka;
 import kafka.cluster.Broker;
 
 import org.apache.kafka.common.config.ConfigException;
@@ -30,8 +29,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -189,6 +186,13 @@ public class SchemaRegistryConfigTest {
   }
 
   @Test
+  public void defaultAssociationsEnable() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    assertEquals(true, config.getBoolean(SchemaRegistryConfig.ASSOCIATIONS_ENABLE));
+  }
+
+  @Test
   public void defaultMutabilityMode() throws RestConfigException {
     Properties props = new Properties();
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
@@ -206,7 +210,7 @@ public class SchemaRegistryConfigTest {
     props.setProperty("listener.name.alice." + RestConfig.SSL_KEYSTORE_LOCATION_CONFIG , "/mnt/keystore/internal/keystore.jks");
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
-    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = AbstractSchemaRegistry.getInterInstanceListener(config.getListeners(),
       config.getString(SchemaRegistryConfig.INTER_INSTANCE_LISTENER_NAME_CONFIG),
       SchemaRegistryConfig.HTTPS);
     Map<String, Object> overrides = config.getOverriddenSslConfigs(internalListener);

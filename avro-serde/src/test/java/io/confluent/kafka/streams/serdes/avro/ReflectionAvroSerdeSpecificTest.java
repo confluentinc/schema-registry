@@ -23,7 +23,7 @@ import static org.junit.Assert.assertThat;
 import io.confluent.kafka.example.Widget;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
@@ -37,7 +37,7 @@ public class ReflectionAvroSerdeSpecificTest {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
     ReflectionAvroSerde<T> serde = new ReflectionAvroSerde<>(schemaRegistryClient, type);
     Map<String, Object> serdeConfig = new HashMap<>();
-    serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
+    serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
     serde.configure(serdeConfig, false);
     return serde;
   }
@@ -47,7 +47,7 @@ public class ReflectionAvroSerdeSpecificTest {
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
     ReflectionAvroSerde<T> serde = new ReflectionAvroSerde<>(schemaRegistryClient);
     Map<String, Object> serdeConfig = new HashMap<>();
-    serdeConfig.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
+    serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "fake");
     serde.configure(serdeConfig, false);
     return serde;
   }

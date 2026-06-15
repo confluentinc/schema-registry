@@ -18,11 +18,14 @@ package io.confluent.connect.protobuf;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos;
+import com.google.protobuf.DescriptorProtos.Edition;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Descriptors.OneofDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.DynamicMessage;
@@ -32,12 +35,14 @@ import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.util.Timestamps;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
+import io.confluent.connect.schema.ConnectVariant;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema.ProtobufMeta;
 import io.confluent.kafka.schemaregistry.protobuf.diff.Context;
 import io.confluent.kafka.schemaregistry.protobuf.dynamic.FieldDefinition;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import io.confluent.protobuf.MetaProto;
 import io.confluent.protobuf.MetaProto.Meta;
 import io.confluent.protobuf.type.utils.DecimalUtils;
@@ -103,6 +108,8 @@ public class ProtobufData {
   public static final String PROTOBUF_SCALE_PROP = "scale";
   public static final String PROTOBUF_DECIMAL_LOCATION = "confluent/type/decimal.proto";
   public static final String PROTOBUF_DECIMAL_TYPE = "confluent.type.Decimal";
+  public static final String PROTOBUF_VARIANT_LOCATION = "confluent/type/variant.proto";
+  public static final String PROTOBUF_VARIANT_TYPE = "confluent.type.Variant";
   public static final String PROTOBUF_DATE_LOCATION = "google/type/date.proto";
   public static final String PROTOBUF_DATE_TYPE = "google.type.Date";
   public static final String PROTOBUF_TIME_LOCATION = "google/type/timeofday.proto";
@@ -292,8 +299,8 @@ public class ProtobufData {
     });
   }
 
-  private final Map<Schema, ProtobufSchema> fromConnectSchemaCache;
-  private final Map<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
+  private final Cache<Schema, ProtobufSchema> fromConnectSchemaCache;
+  private final Cache<Pair<String, ProtobufSchema>, Schema> toConnectSchemaCache;
   private boolean generalizedSumTypeSupport;
   private boolean ignoreDefaultForNullables;
   private boolean enhancedSchemaSupport;
@@ -319,8 +326,12 @@ public class ProtobufData {
   }
 
   public ProtobufData(ProtobufDataConfig protobufDataConfig) {
-    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
-    toConnectSchemaCache = new BoundedConcurrentHashMap<>(protobufDataConfig.schemaCacheSize());
+    fromConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(protobufDataConfig.schemaCacheSize())
+        .build();
+    toConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(protobufDataConfig.schemaCacheSize())
+        .build();
     this.generalizedSumTypeSupport = protobufDataConfig.isGeneralizedSumTypeSupport();
     this.ignoreDefaultForNullables = protobufDataConfig.ignoreDefaultForNullables();
     this.enhancedSchemaSupport = protobufDataConfig.isEnhancedProtobufSchemaSupport();
@@ -464,7 +475,7 @@ public class ProtobufData {
           for (Map.Entry<?, ?> mapEntry : mapValue.entrySet()) {
             DynamicMessage.Builder mapBuilder = protobufSchema.newMessageBuilder(scopedMapName);
             if (mapBuilder == null) {
-              throw new IllegalStateException("Invalid message name: " + scopedMapName);
+              throw new IllegalArgumentException("Invalid message name: " + scopedMapName);
             }
             Descriptor mapDescriptor = mapBuilder.getDescriptorForType();
             final FieldDescriptor keyDescriptor = mapDescriptor.findFieldByName(KEY_FIELD);
@@ -650,7 +661,7 @@ public class ProtobufData {
     if (schema == null) {
       return null;
     }
-    ProtobufSchema cachedSchema = fromConnectSchemaCache.get(schema);
+    ProtobufSchema cachedSchema = fromConnectSchemaCache.getIfPresent(schema);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -714,7 +725,8 @@ public class ProtobufData {
       schema.addMessageDefinition(messageDefinitionFromConnectSchema(ctx, schema, name, rootElem));
       return schema.build();
     } catch (Descriptors.DescriptorValidationException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalArgumentException(
+          "Invalid protobuf schema definition: " + e.getMessage(), e);
     }
   }
 
@@ -872,6 +884,10 @@ public class ProtobufData {
         dep = new ProtobufSchema(
             io.confluent.protobuf.type.Decimal.getDescriptor());
         return dep.toDynamicSchema(PROTOBUF_DECIMAL_LOCATION);
+      case PROTOBUF_VARIANT_TYPE:
+        dep = new ProtobufSchema(
+            io.confluent.protobuf.type.Variant.getDescriptor());
+        return dep.toDynamicSchema(PROTOBUF_VARIANT_LOCATION);
       case PROTOBUF_DATE_TYPE:
         dep = new ProtobufSchema(com.google.type.Date.getDescriptor());
         return dep.toDynamicSchema(PROTOBUF_DATE_LOCATION);
@@ -976,6 +992,8 @@ public class ProtobufData {
       return PROTOBUF_TIME_TYPE;
     } else if (isTimestampSchema(schema)) {
       return PROTOBUF_TIMESTAMP_TYPE;
+    } else if (ConnectVariant.isVariant(schema)) {
+      return PROTOBUF_VARIANT_TYPE;
     }
     String defaultType;
     switch (schema.type()) {
@@ -1307,7 +1325,27 @@ public class ProtobufData {
 
   private boolean isOptional(FieldDescriptor fieldDescriptor) {
     return fieldDescriptor.toProto().getProto3Optional()
-        || (supportOptionalForProto2 && fieldDescriptor.hasOptionalKeyword());
+        || (supportOptionalForProto2 && hasOptionalKeyword(fieldDescriptor));
+  }
+
+  // copied from Descriptors.java since it is not public
+  private boolean hasOptionalKeyword(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.toProto().getProto3Optional()
+        || (getEdition(fieldDescriptor.getFile()) == Edition.EDITION_PROTO2
+        && fieldDescriptor.isOptional()
+        && fieldDescriptor.getContainingOneof() == null);
+  }
+
+  // copied from Descriptors.java since it is not public
+  private DescriptorProtos.Edition getEdition(FileDescriptor file) {
+    switch (file.toProto().getSyntax()) {
+      case "editions":
+        return file.toProto().getEdition();
+      case "proto3":
+        return Edition.EDITION_PROTO3;
+      default:
+        return Edition.EDITION_PROTO2;
+    }
   }
 
   private boolean isProto3Optional(FieldDescriptor fieldDescriptor) {
@@ -1319,7 +1357,7 @@ public class ProtobufData {
       return null;
     }
     Pair<String, ProtobufSchema> cacheKey = new Pair<>(schema.name(), schema);
-    Schema cachedSchema = toConnectSchemaCache.get(cacheKey);
+    Schema cachedSchema = toConnectSchemaCache.getIfPresent(cacheKey);
     if (cachedSchema != null) {
       return cachedSchema;
     }
@@ -1510,6 +1548,9 @@ public class ProtobufData {
           case PROTOBUF_TIMESTAMP_TYPE:
             builder = Timestamp.builder();
             break;
+          case PROTOBUF_VARIANT_TYPE:
+            builder = ConnectVariant.builder();
+            break;
           default:
             builder = toUnwrappedOrStructSchema(ctx, descriptor);
             break;
@@ -1529,7 +1570,7 @@ public class ProtobufData {
     }
 
     if (useOptionalForNullables) {
-      if (descriptor.hasOptionalKeyword()) {
+      if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }
     } else if (!useWrapperForNullables) {

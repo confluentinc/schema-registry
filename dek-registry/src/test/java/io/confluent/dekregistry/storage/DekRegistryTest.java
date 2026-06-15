@@ -22,32 +22,44 @@ import io.confluent.dekregistry.client.rest.entities.CreateKekRequest;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
 import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.metrics.MetricsManager;
+import io.confluent.dekregistry.storage.exceptions.InvalidKeyException;
 import io.confluent.dekregistry.testutil.TestKmsDriver;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.kcache.KeyValue;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
 
-import java.util.*;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Tag("IntegrationTest")
 public class DekRegistryTest extends ClusterTestHarness {
 
-    private KafkaSchemaRegistry schemaRegistry;
+    private SchemaRegistry schemaRegistry;
 
-    private MetricsManager metricsManager;
-
-    private DekRegistry dekRegistry;
+  private AbstractDekRegistry dekRegistry;
 
     private KeyEncryptionKey kek;
 
-    @Before
+    @Override
+    @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
         Properties props = new Properties();
@@ -56,8 +68,8 @@ public class DekRegistryTest extends ClusterTestHarness {
         props.put(SchemaRegistryConfig.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
         SchemaRegistryConfig config = new SchemaRegistryConfig(props);
         schemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
-        metricsManager = new MetricsManager(schemaRegistry);
-        dekRegistry = new DekRegistry(schemaRegistry, metricsManager);
+        MetricsManager metricsManager = new MetricsManager(schemaRegistry);
+        dekRegistry = new KafkaDekRegistry(schemaRegistry, metricsManager);
         dekRegistry.init();
 
         CreateKekRequest request = CreateKekRequest.fromJson("{\"name\": \"kekName1\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": true, \"deleted\": false}");
@@ -65,14 +77,14 @@ public class DekRegistryTest extends ClusterTestHarness {
         TestKmsDriver t = new TestKmsDriver();
         KmsClient client = t.newKmsClient(null, Optional.of("test-kms://kmsId"));
         Aead aead = client.getAead("test-kms://kmsId");
-        byte[] encryptedDek = aead.encrypt("rawDek1".getBytes(), DekRegistry.EMPTY_AAD);
+        byte[] encryptedDek = aead.encrypt("rawDek1".getBytes(), AbstractDekRegistry.EMPTY_AAD);
         String encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
         CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject1\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": true}", encryptedKeyMaterial));
         dekRegistry.createDek(kek.getName(), false, dekRequest);
     }
 
     @Test
-    public void testCreateKek() throws Exception {
+    public void testCreateKek() {
         assertNotNull(kek);
         assertFalse(kek.isDeleted());
         assertEquals("kekName1", kek.getName());
@@ -89,25 +101,25 @@ public class DekRegistryTest extends ClusterTestHarness {
         KeyEncryptionKey kek2 = dekRegistry.createKek(kRequest2);
         // Test get without a subject prefix.
         // Includes deleted ones.
-        assertEquals(Arrays.asList("kekName1", "kekName2"), dekRegistry.getKekNames(null, true));
+        assertEquals(List.of("kekName1", "kekName2"), dekRegistry.getKekNames(null, true));
         // Ignores deleted ones.
-        assertEquals(Collections.singletonList("kekName1"), dekRegistry.getKekNames(Collections.emptyList(), false));
+        assertEquals(List.of("kekName1"), dekRegistry.getKekNames(List.of(), false));
 
         // Test get with a non-existing subject prefix.
-        assertEquals(Collections.emptyList(), dekRegistry.getKekNames(Collections.singletonList("non_exist_prefix"), false));
+        assertEquals(List.of(), dekRegistry.getKekNames(List.of("non_exist_prefix"), false));
 
         // Test get by subject prefix with Dek.
         TestKmsDriver t = new TestKmsDriver();
         KmsClient client = t.newKmsClient(null, Optional.of("test-kms://kmsId"));
         Aead aead = client.getAead("test-kms://kmsId");
-        byte[] encryptedDek = aead.encrypt("rawDek2".getBytes(), DekRegistry.EMPTY_AAD);
+        byte[] encryptedDek = aead.encrypt("rawDek2".getBytes(), AbstractDekRegistry.EMPTY_AAD);
         String encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
         CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
         );
         dekRegistry.createDek(kek2.getName(), false, dekRequest);
-        assertEquals(Arrays.asList("kekName1", "kekName2"), dekRegistry.getKekNames(Collections.singletonList("sub"), true));
-        assertEquals(Collections.singletonList("kekName1"), dekRegistry.getKekNames(Collections.singletonList("subject1"), true));
-        assertEquals(Collections.emptyList(), dekRegistry.getKekNames(Collections.singletonList("subject1"), false));
+        assertEquals(List.of("kekName1", "kekName2"), dekRegistry.getKekNames(List.of("sub"), true));
+        assertEquals(List.of("kekName1"), dekRegistry.getKekNames(List.of("subject1"), true));
+        assertEquals(List.of(), dekRegistry.getKekNames(List.of("subject1"), false));
     }
 
     @Test
@@ -127,7 +139,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         TestKmsDriver t = new TestKmsDriver();
         KmsClient client = t.newKmsClient(null, Optional.of("test-kms://kmsId"));
         Aead aead = client.getAead("test-kms://kmsId");
-        byte[] encryptedDek = aead.encrypt("rawDek2".getBytes(), DekRegistry.EMPTY_AAD);
+        byte[] encryptedDek = aead.encrypt("rawDek2".getBytes(), AbstractDekRegistry.EMPTY_AAD);
         String encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
         CreateDekRequest dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
         );
@@ -135,7 +147,7 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals(encryptedKeyMaterial, dek.getEncryptedKeyMaterial());
 
         // Rewrap DEK
-        encryptedDek = aead.encrypt("rawDek3".getBytes(), DekRegistry.EMPTY_AAD);
+        encryptedDek = aead.encrypt("rawDek3".getBytes(), AbstractDekRegistry.EMPTY_AAD);
         encryptedKeyMaterial = Base64.getEncoder().encodeToString(encryptedDek);
         dekRequest = CreateDekRequest.fromJson(String.format("{\"subject\": \"subject2\", \"version\": \"2\", \"algorithm\": \"AES256_GCM\", \"encryptedKeyMaterial\": \"%s\", \"deleted\": false}", encryptedKeyMaterial)
         );
@@ -196,7 +208,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetKeks() throws Exception {
+    public void testGetKeks() throws SchemaRegistryException {
         List<KeyValue<EncryptionKeyId, EncryptionKey>> keks = dekRegistry.getKeks(schemaRegistry.tenant(), true);
         assertEquals(1, keks.size());
         KeyValue<EncryptionKeyId, EncryptionKey> kv = keks.get(0);
@@ -207,7 +219,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetDekSubjects() throws Exception {
+    public void testGetDekSubjects() throws SchemaRegistryException {
         List<String> subjects = dekRegistry.getDekSubjects("kekName1", true);
         assertEquals(1, subjects.size());
         String subject = subjects.get(0);
@@ -215,7 +227,7 @@ public class DekRegistryTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testGetDekVersions() {
+    public void testGetDekVersions() throws SchemaRegistryException {
         List<Integer> versions = dekRegistry.getDekVersions("kekName1", "subject1", DekFormat.AES256_GCM, true);
         assertEquals(1, versions.size());
         assertEquals(2, (int)versions.get(0));
@@ -307,5 +319,20 @@ public class DekRegistryTest extends ClusterTestHarness {
         assertEquals("kekName1", dek.getKekName());
         assertEquals(KeyType.DEK, dek.getType());
         assertEquals(2, dek.getVersion());
+    }
+
+    @Test
+    public void testTestKek() throws Exception {
+        // Test that a shared KEK can be successfully tested
+        dekRegistry.testKek(kek);
+        
+        // Verify the test passes without throwing an exception for shared KEK
+        assertNotNull(kek);
+        assertEquals("kekName1", kek.getName());
+
+        // Test that a non-shared KEK cannot be tested
+        CreateKekRequest k2 = CreateKekRequest.fromJson("{\"name\": \"kekName2\", \"kmsType\": \"test-kms\", \"kmsKeyId\": \"kmsId\", \"kmsProps\": {\"property1\": \"value1\", \"property2\": \"value2\"}, \"doc\": \"Test Documentation\", \"shared\": false, \"deleted\": false}");
+        KeyEncryptionKey kek2 = dekRegistry.createKek(k2);
+        assertThrows(InvalidKeyException.class, () -> dekRegistry.testKek(kek2));
     }
 }
