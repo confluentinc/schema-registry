@@ -64,6 +64,14 @@ public interface KmsDriver {
     return false;
   }
 
+  /**
+   * Returns true if the given HTTP status code denotes an authentication/authorization failure
+   * (401 or 403). Single source of truth for the access-denied status set shared by drivers.
+   */
+  default boolean isAccessDeniedStatus(int statusCode) {
+    return statusCode == 401 || statusCode == 403;
+  }
+
   default KmsClient getKmsClient(String kekUrl) throws GeneralSecurityException {
     return KmsClients.get(kekUrl);
   }

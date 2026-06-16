@@ -18,7 +18,6 @@ package io.confluent.dekregistry.web.rest.exceptions;
 import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
 import io.confluent.rest.exceptions.RestException;
 import io.confluent.rest.exceptions.RestNotFoundException;
-import jakarta.ws.rs.core.Response;
 
 public class DekRegistryErrors {
 
@@ -91,8 +90,7 @@ public class DekRegistryErrors {
 
   public static RestException dekGenerationException(DekGenerationException e) {
     if (e.isAccessDenied()) {
-      return new RestException(e.getMessage(),
-          Response.Status.FORBIDDEN.getStatusCode(), DEK_GENERATION_FORBIDDEN_ERROR_CODE);
+      return new RestDekGenerationForbiddenException(e.getMessage());
     }
     return new RestDekGenerationException(e.getMessage());
   }

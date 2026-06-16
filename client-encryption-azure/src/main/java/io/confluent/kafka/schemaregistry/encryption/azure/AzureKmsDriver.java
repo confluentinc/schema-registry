@@ -47,11 +47,7 @@ public class AzureKmsDriver implements KmsDriver {
       return false;
     }
     HttpResponseException e = (HttpResponseException) t;
-    if (e.getResponse() == null) {
-      return false;
-    }
-    int status = e.getResponse().getStatusCode();
-    return status == 401 || status == 403;
+    return e.getResponse() != null && isAccessDeniedStatus(e.getResponse().getStatusCode());
   }
 
   private TokenCredential getCredentials(Map<String, ?> configs) {

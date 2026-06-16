@@ -64,7 +64,7 @@ public class AwsKmsDriver implements KmsDriver {
       return false;
     }
     AwsServiceException e = (AwsServiceException) t;
-    if (e.statusCode() == 401 || e.statusCode() == 403) {
+    if (isAccessDeniedStatus(e.statusCode())) {
       return true;
     }
     // KMS returns IAM authorization failures as AccessDeniedException with HTTP 400, so the

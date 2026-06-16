@@ -50,8 +50,7 @@ public class GcpKmsDriver implements KmsDriver {
     if (!(t instanceof HttpResponseException)) {
       return false;
     }
-    int status = ((HttpResponseException) t).getStatusCode();
-    return status == 401 || status == 403;
+    return isAccessDeniedStatus(((HttpResponseException) t).getStatusCode());
   }
 
   private GoogleCredentials getCredentials(Map<String, ?> configs)

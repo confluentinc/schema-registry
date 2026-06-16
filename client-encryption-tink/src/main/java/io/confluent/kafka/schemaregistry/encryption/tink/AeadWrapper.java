@@ -47,6 +47,8 @@ public class AeadWrapper implements Aead {
   @Override
   public byte[] encrypt(byte[] plaintext, byte[] associatedData)
       throws GeneralSecurityException {
+    Exception lastException = null;
+    Exception accessDeniedException = null;
     for (int i = 0; i < kmsKeyIds.size(); i++) {
       try {
         Aead aead = getAead(configs, kmsType, kmsKeyIds.get(i));
@@ -54,17 +56,24 @@ public class AeadWrapper implements Aead {
       } catch (Exception e) {
         log.warn("Failed to encrypt with kms key id {}: {}",
             kmsKeyIds.get(i), e.getMessage());
-        if (i == kmsKeyIds.size() - 1) {
-          throw toGeneralSecurityException(e, kmsKeyIds.get(i), "Failed to encrypt with all KEKs");
+        lastException = e;
+        if (accessDeniedException == null && isAccessDenied(e, kmsKeyIds.get(i))) {
+          accessDeniedException = e;
         }
       }
     }
-    throw new GeneralSecurityException("No KMS key IDs available for encryption");
+    if (lastException == null) {
+      throw new GeneralSecurityException("No KMS key IDs available for encryption");
+    }
+    throw toGeneralSecurityException(
+        accessDeniedException, lastException, "Failed to encrypt with all KEKs");
   }
 
   @Override
   public byte[] decrypt(byte[] ciphertext, byte[] associatedData)
       throws GeneralSecurityException {
+    Exception lastException = null;
+    Exception accessDeniedException = null;
     for (int i = 0; i < kmsKeyIds.size(); i++) {
       try {
         Aead aead = getAead(configs, kmsType, kmsKeyIds.get(i));
@@ -72,35 +81,50 @@ public class AeadWrapper implements Aead {
       } catch (Exception e) {
         log.warn("Failed to decrypt with kms key id {}: {}",
             kmsKeyIds.get(i), e.getMessage());
-        if (i == kmsKeyIds.size() - 1) {
-          throw toGeneralSecurityException(e, kmsKeyIds.get(i), "Failed to decrypt with all KEKs");
+        lastException = e;
+        if (accessDeniedException == null && isAccessDenied(e, kmsKeyIds.get(i))) {
+          accessDeniedException = e;
         }
       }
     }
-    throw new GeneralSecurityException("No KMS key IDs available for decryption");
+    if (lastException == null) {
+      throw new GeneralSecurityException("No KMS key IDs available for decryption");
+    }
+    throw toGeneralSecurityException(
+        accessDeniedException, lastException, "Failed to decrypt with all KEKs");
   }
 
   /**
-   * Converts the exception thrown for a single KMS key id into a {@link GeneralSecurityException},
-   * preserving an access-denied classification (401/403) as a {@link KmsAccessDeniedException} so
-   * that callers can map it to a 4xx response.
+   * Builds the exception to throw after every KMS key id has failed. Access-denied is aggregated
+   * across all keys, not just the last one: if any key failed with an access-denied error
+   * (401/403) it is preferred and surfaced as a {@link KmsAccessDeniedException} so callers can map
+   * it to a 4xx — even when a later key failed for an unrelated reason. Otherwise the last failure
+   * is propagated as-is.
    */
   private GeneralSecurityException toGeneralSecurityException(
-      Exception e, String kmsKeyId, String fallbackMessage) {
-    if (isAccessDenied(e, kmsKeyId)) {
-      String message = e.getMessage() != null ? e.getMessage() : fallbackMessage;
-      return new KmsAccessDeniedException(message, e);
+      Exception accessDeniedException, Exception lastException, String fallbackMessage) {
+    if (accessDeniedException != null) {
+      String message = accessDeniedException.getMessage() != null
+          ? accessDeniedException.getMessage() : fallbackMessage;
+      return new KmsAccessDeniedException(message, accessDeniedException);
     }
-    return e instanceof GeneralSecurityException
-        ? (GeneralSecurityException) e
-        : new GeneralSecurityException(fallbackMessage, e);
+    if (lastException != null) {
+      return lastException instanceof GeneralSecurityException
+          ? (GeneralSecurityException) lastException
+          : new GeneralSecurityException(fallbackMessage, lastException);
+    }
+    return new GeneralSecurityException(fallbackMessage);
   }
 
   private boolean isAccessDenied(Throwable t, String kmsKeyId) {
+    String kekUrl = kmsType + KmsDriver.KMS_TYPE_SUFFIX + kmsKeyId;
     try {
-      String kekUrl = kmsType + KmsDriver.KMS_TYPE_SUFFIX + kmsKeyId;
       return KmsDriverManager.getDriver(kekUrl).isAccessDenied(t);
     } catch (GeneralSecurityException e) {
+      // The driver already resolved during the failed crypto attempt, so this is unexpected; log it
+      // because it means a potential access-denied (4xx) will fall through to a 5xx.
+      log.warn("Could not resolve KMS driver for {} to classify failure; "
+          + "treating as non-access-denied", kekUrl, e);
       return false;
     }
   }

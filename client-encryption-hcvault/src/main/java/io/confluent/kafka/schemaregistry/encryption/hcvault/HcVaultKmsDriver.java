@@ -60,8 +60,7 @@ public class HcVaultKmsDriver implements KmsDriver {
     if (!(t instanceof VaultException)) {
       return false;
     }
-    int status = ((VaultException) t).getHttpStatusCode();
-    return status == 401 || status == 403;
+    return isAccessDeniedStatus(((VaultException) t).getHttpStatusCode());
   }
 
   private SslConfig getSslConfig(Map<String, ?> configs) throws GeneralSecurityException {
