@@ -71,7 +71,10 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.exceptions.RestException;
+import io.confluent.srj.spire.SpireX509Client;
+import io.confluent.srj.spire.exceptions.SpiffeX509SourceProviderException;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -87,6 +90,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
+import javax.net.ssl.SSLSocketFactory;
 
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -112,6 +116,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private RestService leaderRestService;
   private final int leaderConnectTimeoutMs;
   private final int leaderReadTimeoutMs;
+  // SPIRE mTLS for the follower->leader forwarding client; null when SPIRE is disabled.
+  private final SpireX509Client spireX509Client;
+  private final SSLSocketFactory spireSslSocketFactory;
   private final IdGenerator idGenerator;
   private LeaderElector leaderElector = null;
   private final String kafkaClusterId;
@@ -141,6 +148,20 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
+    if (config.getBoolean(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_ENABLED_CONFIG)) {
+      this.spireX509Client = createSpireX509Client(config);
+      try {
+        this.spireSslSocketFactory =
+            spireX509Client.getHttpSSLContextForMtls().getSocketFactory();
+      } catch (GeneralSecurityException e) {
+        throw new SchemaRegistryInitializationException(
+            "Failed to create SPIRE mTLS context for inter-instance forwarding", e);
+      }
+      log.info("SPIRE mTLS enabled for inter-instance forwarding to the leader");
+    } else {
+      this.spireX509Client = null;
+      this.spireSslSocketFactory = null;
+    }
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -162,6 +183,28 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       SchemaRegistryConfig config,
       String kafkaClusterId) {
     return new MetricsContainer(config, kafkaClusterId);
+  }
+
+  private static SpireX509Client createSpireX509Client(SchemaRegistryConfig config)
+      throws SchemaRegistryInitializationException {
+    String agentUrl = config.getString(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG);
+    String authorizedIdPatterns =
+        config.getString(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG);
+    SpireX509Client.SpireX509ClientBuilder builder = new SpireX509Client.SpireX509ClientBuilder();
+    // Empty agent URL falls back to the SPIFFE_ENDPOINT_SOCKET environment variable.
+    if (agentUrl != null && !agentUrl.isEmpty()) {
+      builder.setSpireAgentURL(agentUrl);
+    }
+    // Empty patterns accept any SPIFFE ID.
+    if (authorizedIdPatterns != null && !authorizedIdPatterns.isEmpty()) {
+      builder.setAuthorizedSpiffeIdPatterns(authorizedIdPatterns, ',');
+    }
+    try {
+      return builder.build();
+    } catch (SpiffeX509SourceProviderException e) {
+      throw new SchemaRegistryInitializationException(
+          "Failed to initialize SPIRE X509 source for inter-instance forwarding", e);
+    }
   }
 
   @VisibleForTesting
@@ -337,7 +380,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
-        if (sslFactory != null && sslFactory.sslContext() != null) {
+        if (spireSslSocketFactory != null) {
+          // SPIFFE IDs are not DNS names, so the leader is authorized by SPIFFE ID, not hostname.
+          leaderRestService.setSslSocketFactory(spireSslSocketFactory);
+          leaderRestService.setHostnameVerifier((hostname, session) -> true);
+        } else if (sslFactory != null && sslFactory.sslContext() != null) {
           leaderRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
           leaderRestService.setHostnameVerifier(getHostnameVerifier());
         }
@@ -1359,6 +1406,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
     if (leaderRestService != null) {
       leaderRestService.close();
+    }
+    if (spireX509Client != null) {
+      spireX509Client.close();
     }
     kafkaStore.close();
     metadataEncoder.close();
