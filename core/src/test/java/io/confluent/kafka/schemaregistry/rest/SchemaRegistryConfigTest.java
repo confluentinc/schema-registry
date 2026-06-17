@@ -228,4 +228,35 @@ public class SchemaRegistryConfigTest {
 
   }
 
+  @Test
+  public void requestTimeoutDefaultExposedToRestLayerOnly() throws RestConfigException {
+    Properties props = new Properties();
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    // The 10-minute blanket default is passed up to RestConfig so the Jetty layer enforces it...
+    assertEquals("600000", config.originals().get("request.timeout.ms"));
+    // ...but it is deliberately kept out of the properties forwarded to Kafka clients, where
+    // "request.timeout.ms" is a distinct client setting.
+    assertEquals(null, config.originalProperties().getProperty("request.timeout.ms"));
+
+    // Interrupt-on-timeout is enabled by default (so timed-out work can be reclaimed), and is
+    // likewise kept out of the Kafka-client properties.
+    assertEquals("true", config.originals().get("request.timeout.interrupt.enable"));
+    assertEquals(null,
+        config.originalProperties().getProperty("request.timeout.interrupt.enable"));
+  }
+
+  @Test
+  public void requestTimeoutOperatorOverrideRespected() throws RestConfigException {
+    Properties props = new Properties();
+    props.setProperty("request.timeout.ms", "1000");
+    props.setProperty("request.timeout.interrupt.enable", "false");
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    // Explicit operator values are honored and left untouched (including in originalProperties).
+    assertEquals("1000", config.originals().get("request.timeout.ms"));
+    assertEquals("1000", config.originalProperties().getProperty("request.timeout.ms"));
+    assertEquals("false", config.originals().get("request.timeout.interrupt.enable"));
+    assertEquals("false",
+        config.originalProperties().getProperty("request.timeout.interrupt.enable"));
+  }
+
 }
