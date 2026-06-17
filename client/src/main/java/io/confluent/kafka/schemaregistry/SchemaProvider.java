@@ -37,6 +37,8 @@ public interface SchemaProvider extends Configurable {
 
   String SCHEMA_VERSION_FETCHER_CONFIG = "schemaVersionFetcher";
 
+  String SCHEMA_PROVIDERS_PREFIX = "schema.providers";
+
   default void configure(Map<String, ?> configs) {
   }
 

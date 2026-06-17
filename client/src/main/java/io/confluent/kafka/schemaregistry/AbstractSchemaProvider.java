@@ -20,7 +20,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,16 +28,24 @@ import java.util.Map;
 import io.confluent.kafka.schemaregistry.client.SchemaVersionFetcher;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
-import java.util.Set;
 
 public abstract class AbstractSchemaProvider implements SchemaProvider {
 
+  public static final String REFERENCE_VERSIONS_STRICT_CONFIG = "reference.versions.strict";
+
   private SchemaVersionFetcher schemaVersionFetcher;
+  private boolean referenceVersionsStrict = false;
 
   @Override
   public void configure(Map<String, ?> configs) {
     schemaVersionFetcher =
         (SchemaVersionFetcher) configs.get(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG);
+    Object strict = configs.get(REFERENCE_VERSIONS_STRICT_CONFIG);
+    if (strict instanceof Boolean) {
+      referenceVersionsStrict = (Boolean) strict;
+    } else if (strict instanceof String) {
+      referenceVersionsStrict = Boolean.parseBoolean((String) strict);
+    }
   }
 
   public SchemaVersionFetcher schemaVersionFetcher() {
@@ -54,13 +62,14 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       return Collections.emptyMap();
     }
     Map<String, String> result = new LinkedHashMap<>();
-    Set<String> visited = new HashSet<>();
+    Map<String, Integer> visited = new HashMap<>();
     resolveReferences(schema, result, visited, validateAsNew);
     return result;
   }
 
   private void resolveReferences(
-      Schema schema, Map<String, String> schemas, Set<String> visited, boolean validateAsNew) {
+      Schema schema, Map<String, String> schemas, Map<String, Integer> visited,
+      boolean validateAsNew) {
     boolean lookupDeletedSchema = !validateAsNew;
     List<SchemaReference> references = schema.getReferences();
     for (SchemaReference reference : references) {
@@ -83,10 +92,19 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
         // Update the version with the latest
         reference.setVersion(s.getVersion());
       }
-      if (visited.contains(reference.getName())) {
+      if (visited.containsKey(reference.getName())) {
+        if (referenceVersionsStrict) {
+          Integer previousVersion = visited.get(reference.getName());
+          if (!previousVersion.equals(reference.getVersion())) {
+            throw new IllegalStateException(
+                "Conflicting reference versions for \"" + reference.getName()
+                + "\": version " + previousVersion
+                + " and version " + reference.getVersion());
+          }
+        }
         continue;
       } else {
-        visited.add(reference.getName());
+        visited.put(reference.getName(), reference.getVersion());
       }
       if (!schemas.containsKey(reference.getName())) {
         resolveReferences(s, schemas, visited, validateAsNew);

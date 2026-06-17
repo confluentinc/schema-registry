@@ -15,7 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
@@ -184,7 +186,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String HOST_PORT_CONFIG = "host.port";
 
-  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+  public static final String SCHEMA_PROVIDERS_CONFIG = SchemaProvider.SCHEMA_PROVIDERS_PREFIX;
 
   /**
    * <code>schema.compatibility.level</code>
@@ -201,6 +203,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
   public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
+
+  public static final String REFERENCE_VERSIONS_STRICT_CONFIG =
+      SCHEMA_PROVIDERS_CONFIG + "." + AbstractSchemaProvider.REFERENCE_VERSIONS_STRICT_CONFIG;
+  public static final boolean REFERENCE_VERSIONS_STRICT_DEFAULT = false;
 
   /**
    * <code>schema.cache.size</code>
@@ -441,6 +447,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "If true, reject schema registration requests whose subject name is the empty string. "
       + "Defaults to false to preserve backward compatibility with existing deployments that "
       + "may have schemas registered under an empty subject.";
+  protected static final String REFERENCE_VERSIONS_STRICT_DOC =
+      "If true, reject schema registration when the reference graph contains the same "
+      + "reference name at different versions. This prevents conflicting type definitions "
+      + "from coexisting in the resolved schema graph. Defaults to false.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -686,6 +696,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
         SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
         ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
+    )
+    .define(REFERENCE_VERSIONS_STRICT_CONFIG, ConfigDef.Type.BOOLEAN,
+        REFERENCE_VERSIONS_STRICT_DEFAULT,
+        ConfigDef.Importance.LOW, REFERENCE_VERSIONS_STRICT_DOC
     )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
