@@ -24,9 +24,8 @@ import java.util.UUID;
 /**
  * This Variant class holds the Variant-encoded value and metadata binary values.
  *
- * <p>Concurrency: the byte buffers are read-only and all lazy caches are idempotent,
- * so concurrent reads are safe - the worst outcome is a redundant decode. The metadata
- * dictionary cache is {@code volatile} for safe publication to child Variants.
+ * <p>Concurrency: the byte buffers are read-only and the lazy header caches are idempotent,
+ * so concurrent reads are safe - the worst outcome is a redundant decode.
  */
 public final class Variant {
   /**
@@ -38,16 +37,6 @@ public final class Variant {
    * The buffer that contains the Variant metadata.
    */
   final ByteBuffer metadata;
-
-  /**
-   * Pre-computed metadata dictionary size.
-   */
-  private final int dictSize;
-
-  /**
-   * Lazy cache for metadata dictionary strings, shared with child Variants.
-   */
-  private volatile String[] metadataCache;
 
   /**
    * Lazy cache for the parsed object header.
@@ -92,35 +81,6 @@ public final class Variant {
           "Unsupported variant metadata version: %d",
           metadata.get(metadata.position()) & VariantFormat.VERSION_MASK));
     }
-
-    // Pre-compute dictionary size for lazy metadata cache allocation.
-    int pos = this.metadata.position();
-    int metaOffsetSize = ((this.metadata.get(pos) >> 6) & 0x3) + 1;
-    if (this.metadata.remaining() > 1) {
-      if (this.metadata.remaining() < 1 + metaOffsetSize) {
-        throw new IllegalArgumentException(
-            "variant metadata truncated: offsetSize=" + metaOffsetSize);
-      }
-      this.dictSize = VariantFormat.readUnsignedLittleEndian(this.metadata, pos + 1, metaOffsetSize);
-      long dictTableEnd = 1L + metaOffsetSize + ((long) this.dictSize + 1) * metaOffsetSize;
-      if (dictTableEnd > this.metadata.remaining()) {
-        throw new IllegalArgumentException(
-            "variant metadata dictionary extends past buffer: dictSize=" + this.dictSize);
-      }
-    } else {
-      this.dictSize = 0;
-    }
-    this.metadataCache = null;
-  }
-
-  /**
-   * Package-private constructor that shares pre-parsed metadata state from a parent Variant.
-   */
-  Variant(ByteBuffer value, ByteBuffer metadata, String[] metadataCache, int dictSize) {
-    this.value = value.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    this.metadata = metadata.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    this.metadataCache = metadataCache;
-    this.dictSize = dictSize;
   }
 
   public ByteBuffer getValueBuffer() {
@@ -271,11 +231,11 @@ public final class Variant {
       for (int i = 0; i < info.numElements; ++i) {
         int id = VariantFormat.readUnsignedLittleEndian(
             value, idStart + info.idSize * i, info.idSize);
-        String fieldKey = getMetadataKeyCached(id);
+        String fieldKey = VariantFormat.getMetadataKey(metadata, id);
         if (fieldKey.equals(key)) {
           int offset = VariantFormat.readUnsignedLittleEndian(
               value, offsetStart + info.offsetSize * i, info.offsetSize);
-          return childVariant(VariantFormat.slice(value, dataStart + offset));
+          return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
         }
       }
     } else {
@@ -288,7 +248,7 @@ public final class Variant {
         int mid = (low + high) >>> 1;
         int midId = VariantFormat.readUnsignedLittleEndian(
             value, idStart + info.idSize * mid, info.idSize);
-        String midKey = getMetadataKeyCached(midId);
+        String midKey = VariantFormat.getMetadataKey(metadata, midId);
         int cmp = midKey.compareTo(key);
         if (cmp < 0) {
           low = mid + 1;
@@ -297,7 +257,7 @@ public final class Variant {
         } else {
           int offset = VariantFormat.readUnsignedLittleEndian(
               value, offsetStart + info.offsetSize * mid, info.offsetSize);
-          return childVariant(VariantFormat.slice(value, dataStart + offset));
+          return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
         }
       }
     }
@@ -332,8 +292,8 @@ public final class Variant {
     int id = VariantFormat.readUnsignedLittleEndian(value, idStart + info.idSize * idx, info.idSize);
     int offset = VariantFormat.readUnsignedLittleEndian(
         value, offsetStart + info.offsetSize * idx, info.offsetSize);
-    String key = getMetadataKeyCached(id);
-    Variant v = childVariant(VariantFormat.slice(value, dataStart + offset));
+    String key = VariantFormat.getMetadataKey(metadata, id);
+    Variant v = new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
     return new ObjectField(key, v);
   }
 
@@ -362,35 +322,7 @@ public final class Variant {
     int dataStart = value.position() + info.dataStartOffset;
     int offset = VariantFormat.readUnsignedLittleEndian(
         value, offsetStart + info.offsetSize * index, info.offsetSize);
-    return childVariant(VariantFormat.slice(value, dataStart + offset));
-  }
-
-  /**
-   * Creates a child Variant that shares this instance's metadata cache.
-   */
-  private Variant childVariant(ByteBuffer childValue) {
-    return new Variant(childValue, metadata, metadataCache, dictSize);
-  }
-
-  /**
-   * Returns the metadata dictionary string for the given ID, caching the result.
-   */
-  String getMetadataKeyCached(int id) {
-    if (id < 0 || id >= dictSize) {
-      return VariantFormat.getMetadataKey(metadata, id);
-    }
-    // Demand-create shared dictionary cache.
-    String[] cache = metadataCache;
-    if (cache == null) {
-      cache = new String[dictSize];
-      metadataCache = cache;
-    }
-    String key = cache[id];
-    if (key == null) {
-      key = VariantFormat.getMetadataKey(metadata, id);
-      cache[id] = key;
-    }
-    return key;
+    return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
   }
 
   /**
