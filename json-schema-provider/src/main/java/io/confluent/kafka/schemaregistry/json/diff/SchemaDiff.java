@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConstSchema;
@@ -145,6 +146,15 @@ public class SchemaDiff {
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, Schema original, Schema update) {
+    // Cooperative cancellation: this method is the recursion hub for the (potentially
+    // exponential) compatibility diff over oneOf/anyOf/$ref schemas. If the worker thread has
+    // been interrupted (e.g. by the rest-utils request timeout with interrupt enabled), abort
+    // the whole computation so the thread can be reclaimed instead of burning CPU to completion.
+    // Thread.interrupted() also clears the flag so the pooled thread returns clean.
+    if (Thread.interrupted()) {
+      throw new CancellationException(
+          "JSON schema compatibility check was interrupted (likely a request timeout)");
+    }
     if (original == null && update == null) {
       return;
     } else if (original == null) {

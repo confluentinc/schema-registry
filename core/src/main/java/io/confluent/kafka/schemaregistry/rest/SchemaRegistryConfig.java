@@ -597,6 +597,14 @@ public class SchemaRegistryConfig extends RestConfig {
   private static final String REQUEST_TIMEOUT_MS_CONFIG = "request.timeout.ms";
   private static final String REQUEST_TIMEOUT_MS_DEFAULT = "600000"; // 10 minutes
 
+  // rest-utils request.timeout.interrupt.enable: on timeout, also interrupt the worker thread.
+  // Enabled here so a timed-out request (e.g. a slow leader-forward or a runaway JSON schema
+  // compatibility check) can be reclaimed, not just abandoned. Same literal-key / inject-only-
+  // into-RestConfig handling as request.timeout.ms above.
+  private static final String REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG =
+      "request.timeout.interrupt.enable";
+  private static final String REQUEST_TIMEOUT_INTERRUPT_ENABLE_DEFAULT = "true";
+
   private static final ConfigDef config;
 
   public static final String HTTPS = "https";
@@ -923,7 +931,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
-    super(configDef, applyRequestTimeoutDefault(props));
+    super(configDef, applyRequestTimeoutDefaults(props));
     this.originalProperties = props;
     String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
     if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
@@ -936,17 +944,20 @@ public class SchemaRegistryConfig extends RestConfig {
     buildMetricsContextLabels();
   }
 
-  // Returns a copy of the supplied properties with the blanket request.timeout.ms default
-  // applied (unless the operator set it explicitly). A copy is used so the default is visible
-  // to the rest-utils/Jetty layer via RestConfig without polluting originalProperties, which is
-  // forwarded to Kafka clients.
-  private static Properties applyRequestTimeoutDefault(Properties props) {
-    if (props.containsKey(REQUEST_TIMEOUT_MS_CONFIG)) {
+  // Returns a copy of the supplied properties with the blanket request-timeout defaults applied
+  // (each only if the operator has not set it explicitly). A copy is used so the defaults are
+  // visible to the rest-utils/Jetty layer via RestConfig without polluting originalProperties,
+  // which is forwarded to Kafka clients.
+  private static Properties applyRequestTimeoutDefaults(Properties props) {
+    if (props.containsKey(REQUEST_TIMEOUT_MS_CONFIG)
+        && props.containsKey(REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG)) {
       return props;
     }
     Properties merged = new Properties();
     merged.putAll(props);
-    merged.setProperty(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS_DEFAULT);
+    merged.putIfAbsent(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS_DEFAULT);
+    merged.putIfAbsent(REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG,
+        REQUEST_TIMEOUT_INTERRUPT_ENABLE_DEFAULT);
     return merged;
   }
 

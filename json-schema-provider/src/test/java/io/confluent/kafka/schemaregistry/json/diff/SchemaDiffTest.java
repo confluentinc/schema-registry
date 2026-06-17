@@ -20,8 +20,11 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+import static org.junit.Assert.assertFalse;
+
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.io.BufferedReader;
+import java.util.concurrent.CancellationException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
@@ -58,6 +61,28 @@ public class SchemaDiffTest {
   public void checkJsonSchemaCompatibilityForCombinedSchemas_2020_12() {
     final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples-2020-12.json")));
     checkJsonSchemaCompatibility(testCases);
+  }
+
+  @Test
+  public void interruptedThreadAbortsComparison() {
+    final JsonSchema original = new JsonSchema("{\"type\":\"object\"}");
+    final JsonSchema update =
+        new JsonSchema("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+
+    // Simulate the request-timeout interrupt arriving mid-comparison: an interrupted thread must
+    // abort the (potentially exponential) diff so it can be reclaimed.
+    Thread.currentThread().interrupt();
+    try {
+      SchemaDiff.compare(original.rawSchema(), update.rawSchema());
+      Assert.fail("expected CancellationException when the worker thread is interrupted");
+    } catch (CancellationException expected) {
+      // expected
+    } finally {
+      Thread.interrupted(); // ensure no interrupt status leaks to other tests
+    }
+
+    // The diff clears the interrupt status as it aborts, so the (pooled) thread returns clean.
+    assertFalse(Thread.currentThread().isInterrupted());
   }
 
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
