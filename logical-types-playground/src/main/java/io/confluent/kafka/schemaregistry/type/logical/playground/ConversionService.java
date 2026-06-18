@@ -201,7 +201,7 @@ public class ConversionService {
           transitiveResolved, transitiveRefs);
       // Render the named type itself as the root, not the dep's rootSchema.
       // The dep's rootSchema may be a *nullable* NAMED_TYPE_REF (e.g. a
-      // bare `ROW T (...)` defaults to nullable), which would emit Avro as
+      // bare `STRUCT T (...)` defaults to nullable), which would emit Avro as
       // ["null", record]. A union can't carry the record's name through
       // AvroSchema.canonicalString()'s `referencedSchemas` dedup, so the
       // active doc would inline the record. Rendering the named type directly
@@ -385,7 +385,7 @@ public class ConversionService {
 
     /**
      * ANTLR's {@link NoViableAltException} message embeds the offending input as
-     * a concatenation of token text — so {@code "ROW MyRecord ("} renders as
+     * a concatenation of token text — so {@code "STRUCT MyRecord ("} renders as
      * {@code "ROWxMyRecordx("}. Rebuild the quoted span by extracting the
      * original characters (including whitespace) from the underlying input.
      */

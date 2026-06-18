@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.playground;
 
-import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.ALIAS;
+import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.DECLARE;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.AND;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.ARRAY;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.AS;
@@ -62,7 +62,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTy
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.POSITION;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.PRECISION;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.REAL;
-import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.ROW;
+import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.STRUCT;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.SMALLINT;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.STRING;
 import static io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer.SUBSTRING;
@@ -117,13 +117,13 @@ public class CompletionService {
   private static final int[] TYPE_POSITION;
 
   static {
-    int[] extra = {VARIANT, ROW, UNION, MAP, ARRAY, MULTISET};
+    int[] extra = {VARIANT, STRUCT, UNION, MAP, ARRAY, MULTISET};
     TYPE_POSITION = concat(PRIMITIVES, extra);
   }
 
-  // Statement-leading keywords: `NAMESPACE`, `ALIAS`, `ROW`, `ENUM`, and bare
+  // Statement-leading keywords: `NAMESPACE`, `DECLARE`, `STRUCT`, `ENUM`, and bare
   // `TYPE` (trailing root-registration form).
-  private static final int[] STMT_START = {NAMESPACE, ALIAS, ROW, ENUM, TYPE};
+  private static final int[] STMT_START = {NAMESPACE, DECLARE, STRUCT, ENUM, TYPE};
 
   // Map from "previous keyword token type" → allowed next keyword token types.
   // Misses fall through to ALL_KEYWORDS, so the table only needs entries
@@ -133,9 +133,9 @@ public class CompletionService {
   static {
     // After NAMESPACE the user types a free-form qualifiedName; no keywords legal.
     FOLLOW.put(NAMESPACE, new int[0]);
-    // After ALIAS the user types `<qualifiedName> FOR '<uri>'`; no keywords
+    // After DECLARE the user types `<qualifiedName> FOR '<uri>'`; no keywords
     // legal until FOR, which is a token but isn't predicted positionally here.
-    FOLLOW.put(ALIAS, new int[0]);
+    FOLLOW.put(DECLARE, new int[0]);
     // `AS` only appears in `CAST(x AS castType)` — offer the primitive-type
     // set so the user can pick a cast target.
     FOLLOW.put(AS, PRIMITIVES);
@@ -522,7 +522,7 @@ public class CompletionService {
    *
    * <p>Scope resolution (Tier 1 best-effort):
    * <ul>
-   *   <li>Table-level: the most recent ROW declaration that contains the
+   *   <li>Table-level: the most recent STRUCT declaration that contains the
    *     caret defines the field set.</li>
    *   <li>Column-level: the most recent ID before the CHECK keyword, when
    *     it appears immediately after `,` or `(`, names the attached field.
@@ -585,7 +585,7 @@ public class CompletionService {
     if (prevType == AS) {
       // The only AS inside a CHECK expression is CAST's. Suggest
       // primitive type names — same as the DDL TYPE_POSITION set, minus
-      // composite types (CAST AS ROW/ARRAY etc. is not in our whitelist).
+      // composite types (CAST AS STRUCT/ARRAY etc. is not in our whitelist).
       return CheckCandidates.of(PRIMITIVES, false, false);
     }
 
@@ -1300,9 +1300,9 @@ public class CompletionService {
   /**
    * Collects names that can be referenced as types in this doc:
    * <ul>
-   *   <li>{@code ROW <qualifiedName> (...)} — local declaration</li>
+   *   <li>{@code STRUCT <qualifiedName> (...)} — local declaration</li>
    *   <li>{@code ENUM <qualifiedName> (...)} — local declaration</li>
-   *   <li>{@code ALIAS <qualifiedName> FOR '<uri>'} — external with URI
+   *   <li>{@code DECLARE <qualifiedName> FOR '<uri>'} — external with URI
    *       binding (bare externals have no syntactic marker; their names
    *       appear inline as field types and aren't enumerable from tokens
    *       alone)</li>
@@ -1320,10 +1320,10 @@ public class CompletionService {
     while (i < n) {
       Token a = tokens.get(i);
       int kind = a.getType();
-      // Statement-leading ROW or ENUM at statement-start position opens a
+      // Statement-leading STRUCT or ENUM at statement-start position opens a
       // named-type declaration. Statement-start = either the first token,
       // or a token immediately after a `;`.
-      if ((kind == ROW || kind == ENUM) && isStatementStart(tokens, i)) {
+      if ((kind == STRUCT || kind == ENUM) && isStatementStart(tokens, i)) {
         int[] consumed = new int[1];
         String name = readQualifiedName(tokens, i + 1, consumed);
         if (name != null && i + 1 + consumed[0] < n
@@ -1332,7 +1332,7 @@ public class CompletionService {
           i += 1 + consumed[0];
           continue;
         }
-      } else if (kind == ALIAS && isStatementStart(tokens, i)) {
+      } else if (kind == DECLARE && isStatementStart(tokens, i)) {
         int[] consumed = new int[1];
         String name = readQualifiedName(tokens, i + 1, consumed);
         if (name != null) {
