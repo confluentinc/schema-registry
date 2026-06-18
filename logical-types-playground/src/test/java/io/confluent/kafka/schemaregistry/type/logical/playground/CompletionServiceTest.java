@@ -57,7 +57,7 @@ class CompletionServiceTest {
     // (right after `(`). Tier 2 narrows the keyword set to expression-
     // openers — AND/OR/IS only appear AFTER a value, so they shouldn't
     // be here. Columns + functions + expression-start keywords should.
-    String src = "ROW T (a INT, b STRING, lo INT, hi INT, CHECK (|));";
+    String src = "STRUCT T (a INT, b STRING, lo INT, hi INT, CHECK (|));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("a"), "missing column 'a': " + got);
     assertTrue(got.contains("b"), "missing column 'b': " + got);
@@ -77,7 +77,7 @@ class CompletionServiceTest {
   void columnLevelCheckScopesToAttachedFieldOnly() {
     // Column-level CHECK on `x INT CHECK (|)`. Only `x` is in scope; other
     // fields of the surrounding struct are NOT.
-    String src = "ROW T (a INT, x INT CHECK (|), b STRING);";
+    String src = "STRUCT T (a INT, x INT CHECK (|), b STRING);";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("x"), "missing attached field 'x': " + got);
     assertFalse(got.contains("a"), "should not include sibling 'a': " + got);
@@ -86,7 +86,7 @@ class CompletionServiceTest {
 
   @Test
   void columnLevelCheckWithConstraintNameStillScopesToField() {
-    String src = "ROW T (a INT, x INT CONSTRAINT positive_x CHECK (|));";
+    String src = "STRUCT T (a INT, x INT CONSTRAINT positive_x CHECK (|));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("x"), "missing 'x': " + got);
     assertFalse(got.contains("a"), "should not include 'a': " + got);
@@ -95,7 +95,7 @@ class CompletionServiceTest {
   @Test
   void prefixFiltersFunctionsAndColumns() {
     // Caret right after `IS_E` — expect IS_EMAIL filtered in, AND filtered out.
-    String src = "ROW T (email STRING, CHECK (IS_E|));";
+    String src = "STRUCT T (email STRING, CHECK (IS_E|));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("IS_EMAIL"), "missing IS_EMAIL: " + got);
     assertFalse(got.contains("AND"), "AND should be filtered by prefix: " + got);
@@ -104,7 +104,7 @@ class CompletionServiceTest {
   @Test
   void outsideCheckClauseReturnsDdlKeywords() {
     // Caret at a DDL position — old keyword path still runs.
-    String src = "ROW T (x |);";
+    String src = "STRUCT T (x |);";
     Set<String> got = labels(completeAt(src));
     // After a fieldName the existing service suggests TYPE_POSITION
     // primitives; INT/STRING are concrete examples.
@@ -120,7 +120,7 @@ class CompletionServiceTest {
   @Test
   void nestedParensDoNotEscapeCheckScope() {
     // Caret is inside a paren NESTED within the CHECK — still CHECK mode.
-    String src = "ROW T (a INT, CHECK ((a + |)));";
+    String src = "STRUCT T (a INT, CHECK ((a + |)));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("a"), "missing 'a' in nested-paren CHECK: " + got);
     assertTrue(got.contains("LENGTH"), "missing LENGTH in nested-paren CHECK");
@@ -129,7 +129,7 @@ class CompletionServiceTest {
   @Test
   void closedCheckDoesNotLeakIntoNextField() {
     // Caret AFTER a closed CHECK clause — should be back in DDL mode, not CHECK.
-    String src = "ROW T (a INT CHECK (a > 0), |);";
+    String src = "STRUCT T (a INT CHECK (a > 0), |);";
     Set<String> got = labels(completeAt(src));
     assertFalse(got.contains("LENGTH"),
         "LENGTH should not leak past closed CHECK: " + got);
@@ -144,7 +144,7 @@ class CompletionServiceTest {
     // Caret right after a column name → expect AND/OR/IS/IN/BETWEEN/NOT/LIKE,
     // NOT columns or functions (those would chain weirdly: `x LENGTH(...)`
     // is invalid).
-    String src = "ROW T (x INT, CHECK (x |));";
+    String src = "STRUCT T (x INT, CHECK (x |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("IS"), "missing IS after column: " + got);
     assertTrue(got.contains("AND"), "missing AND after column: " + got);
@@ -158,7 +158,7 @@ class CompletionServiceTest {
 
   @Test
   void afterIsSuggestsNotAndNull() {
-    String src = "ROW T (x INT, CHECK (x IS |));";
+    String src = "STRUCT T (x INT, CHECK (x IS |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("NULL"), "missing NULL after IS: " + got);
     assertTrue(got.contains("NOT"), "missing NOT after IS: " + got);
@@ -170,7 +170,7 @@ class CompletionServiceTest {
 
   @Test
   void afterIsNotSuggestsOnlyNull() {
-    String src = "ROW T (x INT, CHECK (x IS NOT |));";
+    String src = "STRUCT T (x INT, CHECK (x IS NOT |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("NULL"), "missing NULL after IS NOT: " + got);
     assertFalse(got.contains("LENGTH"));
@@ -179,7 +179,7 @@ class CompletionServiceTest {
 
   @Test
   void afterExtractParenSuggestsFieldNames() {
-    String src = "ROW T (ts TIMESTAMP, CHECK (EXTRACT(|));";
+    String src = "STRUCT T (ts TIMESTAMP, CHECK (EXTRACT(|));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("YEAR"));
     assertTrue(got.contains("MONTH"));
@@ -190,7 +190,7 @@ class CompletionServiceTest {
 
   @Test
   void afterExtractFieldSuggestsFrom() {
-    String src = "ROW T (ts TIMESTAMP, CHECK (EXTRACT(YEAR |));";
+    String src = "STRUCT T (ts TIMESTAMP, CHECK (EXTRACT(YEAR |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("FROM"), "missing FROM after EXTRACT field");
     assertFalse(got.contains("LENGTH"));
@@ -199,7 +199,7 @@ class CompletionServiceTest {
 
   @Test
   void afterCastAsSuggestsTypes() {
-    String src = "ROW T (x INT, CHECK (CAST(x AS |));";
+    String src = "STRUCT T (x INT, CHECK (CAST(x AS |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("INT"), "missing INT after CAST AS");
     assertTrue(got.contains("STRING"), "missing STRING after CAST AS");
@@ -210,7 +210,7 @@ class CompletionServiceTest {
 
   @Test
   void afterBetweenSuggestsSymmetricAndExpressionStart() {
-    String src = "ROW T (x INT, CHECK (x BETWEEN |));";
+    String src = "STRUCT T (x INT, CHECK (x BETWEEN |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("SYMMETRIC"));
     assertTrue(got.contains("CURRENT_TIMESTAMP"));
@@ -221,7 +221,7 @@ class CompletionServiceTest {
   @Test
   void afterNotPostValueSuggestsPostfixPredicates() {
     // `x NOT |` → user is heading toward NOT IN / NOT BETWEEN / NOT LIKE.
-    String src = "ROW T (x INT, CHECK (x NOT |));";
+    String src = "STRUCT T (x INT, CHECK (x NOT |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("IN"));
     assertTrue(got.contains("BETWEEN"));
@@ -234,7 +234,7 @@ class CompletionServiceTest {
   void afterAndSuggestsExpressionStart() {
     // `x > 0 AND |` → fresh sub-expression. Should offer columns + functions
     // + NOT/CASE etc., NOT operators (which would be a syntax error).
-    String src = "ROW T (x INT, CHECK (x > 0 AND |));";
+    String src = "STRUCT T (x INT, CHECK (x > 0 AND |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("x"));
     assertTrue(got.contains("LENGTH"));
@@ -246,7 +246,7 @@ class CompletionServiceTest {
 
   @Test
   void afterCaseWhenValueSuggestsThen() {
-    String src = "ROW T (x INT, CHECK (CASE WHEN x > 0 |));";
+    String src = "STRUCT T (x INT, CHECK (CASE WHEN x > 0 |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("THEN"), "missing THEN after WHEN expr");
     assertFalse(got.contains("ELSE"),
@@ -255,7 +255,7 @@ class CompletionServiceTest {
 
   @Test
   void afterCaseThenValueSuggestsWhenElseEnd() {
-    String src = "ROW T (x INT, CHECK (CASE WHEN x > 0 THEN 1 |));";
+    String src = "STRUCT T (x INT, CHECK (CASE WHEN x > 0 THEN 1 |));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("WHEN"));
     assertTrue(got.contains("ELSE"));
@@ -266,7 +266,7 @@ class CompletionServiceTest {
   void macroBodyIncludesIterVarAsColumn() {
     // Inside `EVERY(tags, t, |)` the iter-var `t` should appear in the
     // column list alongside the schema columns.
-    String src = "ROW T (tags STRING ARRAY, "
+    String src = "STRUCT T (tags STRING ARRAY, "
         + "CHECK (EVERY(tags, t, |)));";
     Set<String> got = labels(completeAt(src));
     assertTrue(got.contains("t"), "missing iter-var 't' inside macro body");

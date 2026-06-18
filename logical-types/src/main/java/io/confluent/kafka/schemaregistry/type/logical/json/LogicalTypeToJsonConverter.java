@@ -464,7 +464,7 @@ public class LogicalTypeToJsonConverter {
         }
         throw new ValidationException(
             "Unknown named type reference: '" + name + "'. Either define it "
-                + "as a local ROW/ENUM declaration, or place it as a $defs "
+                + "as a local STRUCT/ENUM declaration, or place it as a $defs "
                 + "(or definitions) entry in an external schema in "
                 + "resolvedReferences.");
       }

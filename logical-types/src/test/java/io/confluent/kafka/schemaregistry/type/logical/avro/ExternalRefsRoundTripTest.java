@@ -104,7 +104,7 @@ class ExternalRefsRoundTripTest {
     // syntactic marker (re-inferred from usage on read-back) and Person
     // becomes the registered root.
     assertEquals(
-        "ROW acme.Person (home com.example.Outer NOT NULL,"
+        "STRUCT acme.Person (home com.example.Outer NOT NULL,"
             + " thing com.example.Stuff NOT NULL);\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 

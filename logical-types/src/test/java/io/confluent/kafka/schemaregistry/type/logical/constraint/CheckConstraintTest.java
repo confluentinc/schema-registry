@@ -57,7 +57,7 @@ class CheckConstraintTest {
    * each time.
    */
   private String translateCheck(String checkExpr) {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT, value STRING, name STRING, id STRING, email STRING,"
         + "phone STRING, digits STRING, u STRING, h STRING, addr STRING,"
         + "needle STRING, haystack STRING, filename STRING,"
@@ -73,7 +73,7 @@ class CheckConstraintTest {
         + "dprices DECIMAL(10, 2) ARRAY, dprices_ms DECIMAL(10, 2) MULTISET,"
         + "matrix INT ARRAY ARRAY,"
         + "addresses STRING ARRAY, emails STRING ARRAY,"
-        + "addr_struct ROW(zip INT) NOT NULL,"
+        + "addr_struct STRUCT(zip INT) NOT NULL,"
         + "data VARIANT,"
         + "CHECK (" + checkExpr + ")"
         + ");";
@@ -103,7 +103,7 @@ class CheckConstraintTest {
    * is the column's primitive CEL type, not the surrounding struct.
    */
   private String translateColumnCheck(String columnDecl, String checkExpr) {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + columnDecl + " CHECK (" + checkExpr + ")"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -321,7 +321,7 @@ class CheckConstraintTest {
     // `binData` is BYTES — || on bytes is allowed (CEL `+` does bytes concat).
     // Verify the EMITTED CEL is well-formed: SQL `x'00'` must become CEL
     // `b"\x00"`, not pass through verbatim (CEL has no `x'...'` literal).
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "binData BYTES,"
         + "CHECK (binData || x'00' = x'01')"
         + ");";
@@ -334,7 +334,7 @@ class CheckConstraintTest {
   void bytesLiteralMultiByte() {
     // Multi-byte literal: each hex pair becomes one \xNN escape; case-folded
     // to upper for stability.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "binData BYTES,"
         + "CHECK (binData = x'deadbeef')"
         + ");";
@@ -345,7 +345,7 @@ class CheckConstraintTest {
 
   @Test
   void bytesLiteralOddLengthRejected() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "binData BYTES,"
         + "CHECK (binData = x'A')"
         + ");";
@@ -358,7 +358,7 @@ class CheckConstraintTest {
 
   @Test
   void bytesLiteralNonHexRejected() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "binData BYTES,"
         + "CHECK (binData = x'ZZ')"
         + ");";
@@ -375,7 +375,7 @@ class CheckConstraintTest {
     // so `n || 1` is the same silent-numeric-add hazard as `x || 1` at
     // table scope. The validator should reject it inside the macro body
     // too — not just at top level.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "ages INT ARRAY,"
         + "CHECK (EVERY(ages, n, n || 1 = 5))"
         + ");";
@@ -389,7 +389,7 @@ class CheckConstraintTest {
   @Test
   void concatAcceptsStringMacroBinding() {
     // Same shape but `tags` is STRING ARRAY, so `t` is STRING — `||` is OK.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t, t || 'suffix' = 'foosuffix'))"
         + ");";
@@ -400,7 +400,7 @@ class CheckConstraintTest {
   void castBoolRejectedInsideMacro() {
     // `validateCasts` must thread the macro iter-var binding so a non-string
     // source gets rejected even when bound by an iteration variable.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "ages INT ARRAY,"
         + "CHECK (EVERY(ages, n, CAST(n AS BOOLEAN)))"
         + ");";
@@ -420,7 +420,7 @@ class CheckConstraintTest {
     // column refs (not column-vs-literal) because the comparison validator
     // only resolves column-ref operands today; the iter-var `n` is INT
     // (from `ages`), and `name` is STRING — a string-vs-numeric reject.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "name STRING, ages INT ARRAY,"
         + "CHECK (EVERY(ages, n, n = name))"
         + ");";
@@ -466,7 +466,7 @@ class CheckConstraintTest {
     // field name `type` (stored unquoted) failed → "Unknown column" or
     // emit produced invalid CEL. After the fix, the translator unquotes
     // the colid before lookup and emit.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT,"
         + "CHECK (`x` > 0)"  // backticked column ref to existing field `x`
         + ");";
@@ -479,7 +479,7 @@ class CheckConstraintTest {
   void quotedColumnRefForReservedKeywordNameWorks() {
     // Field name `type` is a non-reserved keyword the user might quote
     // defensively. Both quoted and unquoted CHECK refs should work.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "type STRING,"
         + "CHECK (`type` = 'A')"
         + ");";
@@ -543,7 +543,7 @@ class CheckConstraintTest {
 
   @Test
   void columnRef() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT,"
         + "CHECK (x > 0)"  // table-level so it can reference x
         + ");";
@@ -555,8 +555,8 @@ class CheckConstraintTest {
   @Test
   void nestedFieldAccess() {
     // Table-level CHECK referencing a struct field's nested member
-    String script = "ROW T ("
-        + "addr ROW(zip INT) NOT NULL,"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT) NOT NULL,"
         + "CHECK (addr.zip > 0)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -567,7 +567,7 @@ class CheckConstraintTest {
   @Test
   void arrayIndexing() {
     // Postgres convention: 1-indexed at the SQL surface; translator subtracts 1
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (tags[1] = 'first')"
         + ");";
@@ -581,7 +581,7 @@ class CheckConstraintTest {
     // MAP keying is NOT 1-indexed — keys are arbitrary values, not
     // positions. The translator must pass `m['k']` through as `m['k']`,
     // not as `m['k'] - 1` (which is a CEL type error).
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "props MAP<STRING, STRING>,"
         + "CHECK (props['name'] = 'alice')"
         + ");";
@@ -593,7 +593,7 @@ class CheckConstraintTest {
   @Test
   void mapIndexingWithIntKeyPassesThrough() {
     // Same for int-keyed maps — the key is a key, not a 1-based position.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "scores MAP<INT, INT>,"
         + "CHECK (scores[42] > 0)"
         + ");";
@@ -608,7 +608,7 @@ class CheckConstraintTest {
     // to the array convention so common `(arr)[1]` access still works.
     // (Maps used through paren forms would mistranslate — known limitation
     // documented in visitIndirection.)
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK ((tags)[1] = 'first')"
         + ");";
@@ -745,7 +745,7 @@ class CheckConstraintTest {
   @Test
   void macroBodyBooleanShapeAccepted() {
     // Body is a comparison — boolean-shaped. Should pass.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "ages INT ARRAY,"
         + "CHECK (EVERY(ages, n, n > 0))"
         + ");";
@@ -759,7 +759,7 @@ class CheckConstraintTest {
     // CAST inside BETWEEN inside macro predicate. Iter-var `n` is INT
     // (from `ages`); CAST(n AS DOUBLE) → DOUBLE; bounds are DOUBLE
     // literals → numeric category — should accept.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "ages INT ARRAY,"
         + "CHECK (EVERY(ages, n, CAST(n AS DOUBLE) BETWEEN 0.0 AND 100.0))"
         + ");";
@@ -772,7 +772,7 @@ class CheckConstraintTest {
     // outer scope, the iter-var should win inside the body. Without the
     // EMIT_VCTX push, `name` in the body would emit as `this.name` (the
     // outer column) instead of bare `name` (the iter-var).
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "name STRING ARRAY,"
         + "CHECK (EVERY(name, name, LENGTH(name) > 0))"
         + ");";
@@ -790,7 +790,7 @@ class CheckConstraintTest {
     // (a single MAP element), not the outer column. visitIndirection's
     // receiver-type lookup must see the binding, not the outer column,
     // so it correctly emits MAP-style `[expr]` (no -1).
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "meta MAP<STRING, STRING> ARRAY,"
         + "CHECK (EVERY(meta, meta, meta['k'] = 'v'))"
         + ");";
@@ -860,7 +860,7 @@ class CheckConstraintTest {
 
   @Test
   void multipleChecksOnField() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x > 0) CHECK (x < 100)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -872,7 +872,7 @@ class CheckConstraintTest {
 
   @Test
   void constraintName() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -884,7 +884,7 @@ class CheckConstraintTest {
 
   @Test
   void messageClause() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x > 0) MESSAGE 'must be positive'"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -895,7 +895,7 @@ class CheckConstraintTest {
 
   @Test
   void constraintNameAndMessage() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -911,7 +911,7 @@ class CheckConstraintTest {
 
   @Test
   void tableConstraint() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "lo INT,"
         + "hi INT,"
         + "CONSTRAINT bounds CHECK (lo < hi) MESSAGE 'lo must be < hi'"
@@ -929,7 +929,7 @@ class CheckConstraintTest {
 
   @Test
   void mixedFieldsAndTableConstraints() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "lo INT CHECK (lo >= 0),"
         + "hi INT CHECK (hi <= 100),"
         + "CHECK (lo <= hi)"
@@ -947,7 +947,7 @@ class CheckConstraintTest {
 
   @Test
   void logicalFieldHoldsOriginalSql() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x > 0 AND x < 100)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -962,7 +962,7 @@ class CheckConstraintTest {
   void sqlPreservesUnusualWhitespace() {
     // Tabs, multiple spaces, and a newline inside the expression all
     // survive verbatim in Rule.sql.
-    String script = "ROW T (x INT CHECK (x  >\t0\nAND  x<100));";
+    String script = "STRUCT T (x INT CHECK (x  >\t0\nAND  x<100));";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     Rule r = schema.getField("x").getRules().get(0);
     assertEquals("x  >\t0\nAND  x<100", r.getSql());
@@ -972,7 +972,7 @@ class CheckConstraintTest {
   void sqlPreservesOriginalCasing() {
     // SQL keywords are case-insensitive; we should preserve whatever the
     // user wrote (lower-case `and` here) rather than normalize.
-    String script = "ROW T (x INT CHECK (x > 0 and x < 100));";
+    String script = "STRUCT T (x INT CHECK (x > 0 and x < 100));";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     Rule r = schema.getField("x").getRules().get(0);
     assertEquals("x > 0 and x < 100", r.getSql());
@@ -980,7 +980,7 @@ class CheckConstraintTest {
 
   @Test
   void rulesAreNonNullEvenWhenAbsent() {
-    String script = "ROW T (x INT);";
+    String script = "STRUCT T (x INT);";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     assertNotNull(schema.getField("x").getRules());
     assertTrue(schema.getField("x").getRules().isEmpty());
@@ -1010,8 +1010,8 @@ class CheckConstraintTest {
 
   @Test
   void isNullOnFieldRef() {
-    String script = "ROW T ("
-        + "addr ROW(zip INT) NOT NULL,"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT) NOT NULL,"
         + "CHECK (addr.zip IS NOT NULL)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -1052,7 +1052,7 @@ class CheckConstraintTest {
   @Test
   void inListField() {
     // x IN <field-name> — parses as InTargetExpr (no parens)
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "value STRING,"
         + "tags STRING ARRAY,"
         + "CHECK (value IN tags)"
@@ -1063,7 +1063,7 @@ class CheckConstraintTest {
 
   @Test
   void notInListField() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "value STRING,"
         + "tags STRING ARRAY,"
         + "CHECK (value NOT IN tags)"
@@ -2127,7 +2127,7 @@ class CheckConstraintTest {
 
   @Test
   void everyAllPositive() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t, LENGTH(t) > 0))"
         + ");";
@@ -2137,7 +2137,7 @@ class CheckConstraintTest {
 
   @Test
   void anyExists() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (ANY(tags, t, t = 'admin'))"
         + ");";
@@ -2147,7 +2147,7 @@ class CheckConstraintTest {
 
   @Test
   void oneExistsOne() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "addresses STRING ARRAY,"
         + "CHECK (ONE(addresses, a, STARTS_WITH(a, 'primary:')))"
         + ");";
@@ -2158,7 +2158,7 @@ class CheckConstraintTest {
 
   @Test
   void macroCaseInsensitive() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (every(tags, t, LENGTH(t) > 0))"
         + ");";
@@ -2168,8 +2168,8 @@ class CheckConstraintTest {
 
   @Test
   void macroNested() {
-    // Iteration var can't be `row` — ROW is a reserved type keyword
-    String script = "ROW T ("
+    // Iteration var can't be `row` — STRUCT is a reserved type keyword
+    String script = "STRUCT T ("
         + "matrix INT ARRAY ARRAY,"
         + "CHECK (EVERY(matrix, r, EVERY(r, cell, cell > 0)))"
         + ");";
@@ -2180,7 +2180,7 @@ class CheckConstraintTest {
 
   @Test
   void macroWithComplexPredicate() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "ages INT ARRAY,"
         + "CHECK (ANY(ages, a, a BETWEEN 18 AND 65))"
         + ");";
@@ -2191,7 +2191,7 @@ class CheckConstraintTest {
 
   @Test
   void macroWithFormatValidator() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "emails STRING ARRAY,"
         + "CHECK (EVERY(emails, e, IS_EMAIL(e)))"
         + ");";
@@ -2202,7 +2202,7 @@ class CheckConstraintTest {
 
   @Test
   void macroRejectsExpressionAsIterVar() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t.name, LENGTH(t) > 0))"
         + ");";
@@ -2214,7 +2214,7 @@ class CheckConstraintTest {
 
   @Test
   void macroRejectsArithmeticAsIterVar() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t + 1, LENGTH(t) > 0))"
         + ");";
@@ -2229,7 +2229,7 @@ class CheckConstraintTest {
     // 2-arg EVERY is rejected — either by arity check or because `t` (the
     // would-be iter var) isn't a valid column ref. Either error is acceptable;
     // both correctly reject the expression.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t))"
         + ");";
@@ -2244,7 +2244,7 @@ class CheckConstraintTest {
 
   @Test
   void rejectsUnknownColumn() {
-    String script = "ROW T (x INT, CHECK (foo > 0));";
+    String script = "STRUCT T (x INT, CHECK (foo > 0));";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> parseScript(script));
@@ -2256,7 +2256,7 @@ class CheckConstraintTest {
   @Test
   void rejectsColumnLevelReferenceToOtherField() {
     // Column-level CHECK on `a` can only reference `a`; `b` is out of scope
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "a INT CHECK (a < b),"
         + "b INT"
         + ");";
@@ -2270,8 +2270,8 @@ class CheckConstraintTest {
   @Test
   void columnLevelAllowsSubAccess() {
     // Column-level CHECK on a struct field can navigate into its sub-fields
-    String script = "ROW T ("
-        + "addr ROW(zip INT) NOT NULL CHECK (addr.zip > 0)"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT) NOT NULL CHECK (addr.zip > 0)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     assertEquals("this.zip > 0",
@@ -2284,7 +2284,7 @@ class CheckConstraintTest {
     // the CEL is never invoked when the column value is null/missing, so
     // `this` is guaranteed non-null at evaluation time. A bare `<col> IS
     // NULL` test can therefore never fire and is rejected as dead code.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x IS NULL)"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -2298,7 +2298,7 @@ class CheckConstraintTest {
   void columnLevelBareIsNotNullRejected() {
     // Symmetric case — IS NOT NULL on the bare column is unconditionally
     // true under skip-on-null.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x IS NOT NULL)"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -2310,7 +2310,7 @@ class CheckConstraintTest {
 
   @Test
   void tableLevelAllowsAnyField() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "a INT, b INT,"
         + "CHECK (a < b)"
         + ");";
@@ -2320,7 +2320,7 @@ class CheckConstraintTest {
 
   @Test
   void rejectsNonBooleanRoot() {
-    String script = "ROW T (x INT, CHECK (x + 1));";
+    String script = "STRUCT T (x INT, CHECK (x + 1));";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> parseScript(script));
@@ -2329,7 +2329,7 @@ class CheckConstraintTest {
 
   @Test
   void rejectsNonBooleanLiteralRoot() {
-    String script = "ROW T (x INT, CHECK ('foo'));";
+    String script = "STRUCT T (x INT, CHECK ('foo'));";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> parseScript(script));
@@ -2338,21 +2338,21 @@ class CheckConstraintTest {
 
   @Test
   void acceptsBooleanColumnRef() {
-    String script = "ROW T (active BOOLEAN, CHECK (active));";
+    String script = "STRUCT T (active BOOLEAN, CHECK (active));";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     assertEquals("this.active", schema.getRules().get(0).getExpr());
   }
 
   @Test
   void acceptsBooleanLiteralRoot() {
-    String script = "ROW T (x INT, CHECK (TRUE));";
+    String script = "STRUCT T (x INT, CHECK (TRUE));";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     assertEquals("true", schema.getRules().get(0).getExpr());
   }
 
   @Test
   void rejectsOrderingOnBoolean() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "a BOOLEAN, b BOOLEAN,"
         + "CHECK (a < b)"
         + ");";
@@ -2365,7 +2365,7 @@ class CheckConstraintTest {
 
   @Test
   void rejectsCrossCategoryComparison() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "s STRING, b BYTES,"
         + "CHECK (s = b)"
         + ");";
@@ -2942,7 +2942,7 @@ class CheckConstraintTest {
 
   @Test
   void errorIncludesSourcePosition() {
-    String script = "ROW T (x INT, CHECK (foo > 0));";
+    String script = "STRUCT T (x INT, CHECK (foo > 0));";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> parseScript(script));
@@ -2954,7 +2954,7 @@ class CheckConstraintTest {
   void allowsRuntimeNowVariable() {
     // CURRENT_TIMESTAMP introduces 'now' into the runtime scope; comparing
     // a timestamp field to it is allowed.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "ts TIMESTAMP_LTZ,"
         + "CHECK (ts <= CURRENT_TIMESTAMP)"
         + ");";
@@ -2975,7 +2975,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlEmitsColumnLevelCheck() {
-    String script = "ROW T (x INT CHECK (x > 0)); TYPE T;";
+    String script = "STRUCT T (x INT CHECK (x > 0)); TYPE T;";
     LogicalType orig = parseScript(script).toLogicalType();
     String emitted = LogicalTypeToDdlConverter.toDdl(orig);
     assertTrue(emitted.contains("CHECK (x > 0)"),
@@ -2984,7 +2984,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlEmitsConstraintNameAndMessage() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
         + "); TYPE T;";
     LogicalType orig = parseScript(script).toLogicalType();
@@ -2996,7 +2996,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlEmitsTableLevelCheck() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "lo INT, hi INT,"
         + "CONSTRAINT bounds CHECK (lo < hi)"
         + "); TYPE T;";
@@ -3008,7 +3008,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlEmitsMultipleChecksOnField() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x > 0) CHECK (x < 100)"
         + "); TYPE T;";
     LogicalType orig = parseScript(script).toLogicalType();
@@ -3019,7 +3019,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlRoundTripPreservesColumnCheck() {
-    String script = "ROW T (x INT CHECK (x > 0)); TYPE T;";
+    String script = "STRUCT T (x INT CHECK (x > 0)); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
     Schema struct = after.getNamedTypes().get("T");
     List<Rule> rules = struct.getField("x").getRules();
@@ -3029,7 +3029,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlRoundTripPreservesAllRuleFields() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
         + "); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
@@ -3044,34 +3044,34 @@ class CheckConstraintTest {
   void ddlEmitsCheckInsideInlineRow() {
     // Regression: rowExpr used to emit only `name typeExpr` per field,
     // dropping CHECK rules / DEFAULT / COMMENT / TAGS / WITH on inline
-    // ROW(...) field types. Now reuses appendField so inline rows
+    // STRUCT(...) field types. Now reuses appendField so inline rows
     // preserve full per-field metadata.
-    String script = "ROW T ("
-        + "addr ROW(zip INT CHECK (zip > 0)) NOT NULL"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT CHECK (zip > 0)) NOT NULL"
         + "); TYPE T;";
     LogicalType orig = parseScript(script).toLogicalType();
     String emitted = LogicalTypeToDdlConverter.toDdl(orig);
     assertTrue(emitted.contains("CHECK (zip > 0)"),
-        "expected emitted DDL to preserve inline ROW field's CHECK, got:\n"
+        "expected emitted DDL to preserve inline STRUCT field's CHECK, got:\n"
             + emitted);
   }
 
   @Test
   void ddlRoundTripPreservesCheckInsideInlineRow() {
-    String script = "ROW T ("
-        + "addr ROW(zip INT CHECK (zip > 0)) NOT NULL"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT CHECK (zip > 0)) NOT NULL"
         + "); TYPE T;";
     LogicalType after = ddlRoundTrip(script);
     Schema addr = after.getNamedTypes().get("T").getField("addr").getSchema();
     Schema.Field zip = addr.getField("zip");
     List<Rule> rules = zip.getRules();
-    assertEquals(1, rules.size(), "inline ROW field rule should round-trip");
+    assertEquals(1, rules.size(), "inline STRUCT field rule should round-trip");
     assertEquals("this > 0", rules.get(0).getExpr());
   }
 
   @Test
   void ddlRoundTripPreservesTableConstraint() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "lo INT, hi INT,"
         + "CHECK (lo < hi)"
         + "); TYPE T;";
@@ -3083,7 +3083,7 @@ class CheckConstraintTest {
 
   @Test
   void ddlRoundTripPreservesMultipleChecks() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x > 0) CHECK (x < 100),"
         + "y INT,"
         + "CONSTRAINT cross CHECK (x + y > 0) MESSAGE 'sum must be positive'"
@@ -3109,7 +3109,7 @@ class CheckConstraintTest {
     // would insert a token and continue, yielding a malformed CHECK tree.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> parseScript("ROW T (x INT, CHECK (x +)); TYPE T;"));
+        () -> parseScript("STRUCT T (x INT, CHECK (x +)); TYPE T;"));
     assertTrue(t.getMessage().startsWith("Parse error at line "),
         "expected located parse error, got: " + t.getMessage());
   }
@@ -3118,7 +3118,7 @@ class CheckConstraintTest {
   void parseErrorReportsLineAndColumn() {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> parseScript("ROW T (x INT, CHECK ()); TYPE T;"));
+        () -> parseScript("STRUCT T (x INT, CHECK ()); TYPE T;"));
     assertTrue(t.getMessage().contains("line 1, col"),
         "expected line/col info, got: " + t.getMessage());
   }
@@ -3133,7 +3133,7 @@ class CheckConstraintTest {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
         () -> parseScript(
-            "ROW T (x INT CHECK (x >), y INT); TYPE T;"));
+            "STRUCT T (x INT CHECK (x >), y INT); TYPE T;"));
     assertTrue(t.getMessage().startsWith("Parse error at line "),
         "expected located parse error, got: " + t.getMessage());
   }
@@ -3605,8 +3605,8 @@ class CheckConstraintTest {
     // H2: `addr.zip` where `addr` is typed as a named ref to a STRUCT was
     // wrongly rejected. Validator now resolves NAMED_TYPE_REF before
     // checking field access.
-    String script = "ROW Addr (zip INT); "
-        + "ROW Person (a Addr, CHECK (a.zip > 0));"
+    String script = "STRUCT Addr (zip INT); "
+        + "STRUCT Person (a Addr, CHECK (a.zip > 0));"
         + "TYPE Person";
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
@@ -3617,8 +3617,8 @@ class CheckConstraintTest {
   @Test
   void namedTypeRefIndirectionStillRejectsInvalidField() {
     // Sanity: invalid field through a named-ref still rejected.
-    String script = "ROW Addr (zip INT); "
-        + "ROW Person (a Addr, CHECK (a.bogus > 0));"
+    String script = "STRUCT Addr (zip INT); "
+        + "STRUCT Person (a Addr, CHECK (a.bogus > 0));"
         + "TYPE Person";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
@@ -3638,7 +3638,7 @@ class CheckConstraintTest {
         () -> {
           LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
           v.visit(LogicalTypesParserFactory.parse(
-              "ROW T (x VARCHAR(2) DEFAULT 'too long'); "
+              "STRUCT T (x VARCHAR(2) DEFAULT 'too long'); "
                   + "TYPE T"));
         });
     assertTrue(t.getMessage().contains("exceeds the declared length"),
@@ -3653,7 +3653,7 @@ class CheckConstraintTest {
         () -> {
           LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
           v.visit(LogicalTypesParserFactory.parse(
-              "ROW T (x DECIMAL(3, 1) DEFAULT 999.5); "
+              "STRUCT T (x DECIMAL(3, 1) DEFAULT 999.5); "
                   + "TYPE T"));
         });
     assertTrue(t.getMessage().contains("DECIMAL")
@@ -3669,7 +3669,7 @@ class CheckConstraintTest {
         () -> {
           LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
           v.visit(LogicalTypesParserFactory.parse(
-              "ROW T (b BINARY(2) DEFAULT x''); TYPE T"));
+              "STRUCT T (b BINARY(2) DEFAULT x''); TYPE T"));
         });
     assertTrue(t.getMessage().contains("must be exactly 2"),
         "expected exact-length error, got: " + t.getMessage());
@@ -3682,7 +3682,7 @@ class CheckConstraintTest {
         () -> {
           LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
           v.visit(LogicalTypesParserFactory.parse(
-              "ROW T (c CHAR(3) DEFAULT 'ab'); TYPE T"));
+              "STRUCT T (c CHAR(3) DEFAULT 'ab'); TYPE T"));
         });
     assertTrue(t.getMessage().contains("must be exactly 3"),
         "expected exact-length error, got: " + t.getMessage());
@@ -3745,7 +3745,7 @@ class CheckConstraintTest {
   void visitorAcceptsBacktickedReservedName() {
     // H1: visitor and API are now symmetric — backtick-quoted CEL reserved
     // names parse cleanly.
-    String script = "ROW T (`null` INT, x INT); TYPE T";
+    String script = "STRUCT T (`null` INT, x INT); TYPE T";
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
     assertEquals("null", v.getNamedTypes().get("T").getFields().get(0).getName());
@@ -3759,7 +3759,7 @@ class CheckConstraintTest {
         () -> {
           LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
           v.visit(LogicalTypesParserFactory.parse(
-              "ROW T (t TIME(2) DEFAULT '12:34:56.123456789'); "
+              "STRUCT T (t TIME(2) DEFAULT '12:34:56.123456789'); "
                   + "TYPE T"));
         });
     assertTrue(t.getMessage().contains("fractional-second digits"),
@@ -3773,7 +3773,7 @@ class CheckConstraintTest {
         () -> {
           LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
           v.visit(LogicalTypesParserFactory.parse(
-              "ROW T (ts TIMESTAMP(3) DEFAULT '2026-01-01T00:00:00.123456789'); "
+              "STRUCT T (ts TIMESTAMP(3) DEFAULT '2026-01-01T00:00:00.123456789'); "
                   + "TYPE T"));
         });
     assertTrue(t.getMessage().contains("fractional-second digits"),
@@ -3795,7 +3795,7 @@ class CheckConstraintTest {
     io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser
         .ScriptContext scriptCtx = io.confluent.kafka.schemaregistry.type.logical
             .LogicalTypesParserFactory.parse(
-                "ROW __T (__x INT, CHECK (`in` > 0));");
+                "STRUCT __T (__x INT, CHECK (`in` > 0));");
     io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser
         .Check_exprContext checkCtx = findFirstCheckExpr(scriptCtx);
     String cel = ConstraintToCelTranslator.translate(checkCtx, vctx);
@@ -3864,7 +3864,7 @@ class CheckConstraintTest {
     // the ARRAY 1-to-0 conversion `[('k') - 1]`. The user's outer parens
     // around `m` are preserved verbatim. Uses a custom script because the
     // shared fixture has no MAP column.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "m MAP<STRING, STRING>,"
         + "CHECK ((m)['k'] = 'v')"
         + ");";
@@ -3941,7 +3941,7 @@ class CheckConstraintTest {
     // Column-level STRUCT: `this` is the struct, `this.zip` resolves
     // through the column-level branch in ConstraintTypeProvider.
     String result = translateColumnCheck(
-        "addr ROW(zip INT) NOT NULL", "addr.zip > 0");
+        "addr STRUCT(zip INT) NOT NULL", "addr.zip > 0");
     assertEquals("this.zip > 0", result);
   }
 
@@ -3969,8 +3969,8 @@ class CheckConstraintTest {
     // Field type is a NAMED_TYPE_REF to a previously-defined STRUCT.
     // ConstraintTypeProvider must resolve the ref to its target so the
     // strict checker can look up `addr.zip`.
-    String script = "ROW Address (zip INT, city STRING);"
-        + "ROW Person ("
+    String script = "STRUCT Address (zip INT, city STRING);"
+        + "STRUCT Person ("
         + "  name STRING,"
         + "  addr Address NOT NULL,"
         + "  CHECK (addr.zip > 0)"
@@ -3983,8 +3983,8 @@ class CheckConstraintTest {
   void namedTypeRefColumnLevelCheckAccepted() {
     // Column-level CHECK on a NAMED_TYPE_REF column — `this` is the
     // resolved struct, accessed directly.
-    String script = "ROW Address (zip INT);"
-        + "ROW Person ("
+    String script = "STRUCT Address (zip INT);"
+        + "STRUCT Person ("
         + "  addr Address NOT NULL CHECK (addr.zip > 0)"
         + ");";
     Schema person = parseScript(script).getNamedTypes().get("Person");
@@ -3998,7 +3998,7 @@ class CheckConstraintTest {
     // falls back to dyn so the CHECK still translates (any field accesses
     // type-check as dyn). Externals are inferred from usage; the bare
     // reference `Address` is sufficient to make Address external.
-    String script = "ROW Person ("
+    String script = "STRUCT Person ("
         + "  addr Address NOT NULL,"
         + "  CHECK (addr.zip > 0)"
         + ");";
@@ -4078,7 +4078,7 @@ class CheckConstraintTest {
   @Test
   void isNullOnLengthInsideMacroRejected() {
     // The pass threads through macro bodies via recurseIntoMacro.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t, LENGTH(t) IS NULL))"
         + ");";
@@ -4097,7 +4097,7 @@ class CheckConstraintTest {
   void isNullOnNotNullColumnRejected() {
     // Bare NOT NULL column ref. Strict accepts the well-typed CEL emit
     // but the comparison is unconditionally false.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "zip INT NOT NULL,"
         + "CHECK (zip IS NULL)"
         + ");";
@@ -4112,7 +4112,7 @@ class CheckConstraintTest {
   @Test
   void isNotNullOnNotNullColumnRejected() {
     // Same class — IS NOT NULL on a NOT NULL column is unconditionally true.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "zip INT NOT NULL,"
         + "CHECK (zip IS NOT NULL)"
         + ");";
@@ -4127,7 +4127,7 @@ class CheckConstraintTest {
   @Test
   void isNullOnNullableColumnAccepted() {
     // A nullable column ref → IS NULL is meaningful.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "zip INT,"
         + "CHECK (zip IS NULL)"
         + ");";
@@ -4140,8 +4140,8 @@ class CheckConstraintTest {
   void isNullOnNestedNotNullFieldRejected() {
     // Both the parent struct and the nested field are NOT NULL — the path
     // is wholly non-null, so IS NULL is dead.
-    String script = "ROW T ("
-        + "addr ROW(zip INT NOT NULL) NOT NULL,"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT NOT NULL) NOT NULL,"
         + "CHECK (addr.zip IS NULL)"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -4156,8 +4156,8 @@ class CheckConstraintTest {
   void isNullOnNullableNestedFieldAccepted() {
     // Parent is NOT NULL but the leaf field is nullable — IS NULL is
     // meaningful. Validator must defer.
-    String script = "ROW T ("
-        + "addr ROW(zip INT) NOT NULL,"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT) NOT NULL,"
         + "CHECK (addr.zip IS NULL)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -4169,8 +4169,8 @@ class CheckConstraintTest {
   void isNullThroughNullableParentAccepted() {
     // Parent struct is nullable — even a NOT NULL leaf field can effectively
     // be unreachable, so IS NULL is meaningful. Validator must defer.
-    String script = "ROW T ("
-        + "addr ROW(zip INT NOT NULL),"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT NOT NULL),"
         + "CHECK (addr.zip IS NULL)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -4182,7 +4182,7 @@ class CheckConstraintTest {
   void isNullOnArrayIndexedAccepted() {
     // Indexing into an ARRAY can produce missing values regardless of
     // element nullability — defer.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY,"
         + "CHECK (tags[1] IS NULL)"
         + ");";
@@ -4195,7 +4195,7 @@ class CheckConstraintTest {
   void isNullOnNotNullColumnInsideMacroRejected() {
     // The pass threads through macro bodies via recurseIntoMacro. The
     // outer NOT NULL column reference is what's dead, not the iter-var.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "zip INT NOT NULL,"
         + "tags STRING ARRAY,"
         + "CHECK (EVERY(tags, t, zip IS NULL))"
@@ -4216,7 +4216,7 @@ class CheckConstraintTest {
     // Even when the column is declared NULLABLE, the runtime skip-on-null
     // contract makes column-level `<col> IS NULL` dead code — the CEL is
     // never invoked when the value is null/missing.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (x IS NULL)"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -4231,8 +4231,8 @@ class CheckConstraintTest {
     // The skip-on-null contract applies to the bare column, not to nested
     // struct fields. Nested fields can still be null even when the
     // outer column is non-null at evaluation time.
-    String script = "ROW T ("
-        + "addr ROW(zip INT) CHECK (addr.zip IS NULL)"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT) CHECK (addr.zip IS NULL)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     String cel = schema.getField("addr").getRules().get(0).getExpr();
@@ -4243,7 +4243,7 @@ class CheckConstraintTest {
   void columnLevelCoalesceBareColRejected() {
     // COALESCE(<bare-col>, fallback) at column level: `this` is guaranteed
     // non-null under skip-on-null, so the fallback never runs. Dead code.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (COALESCE(x, 0) > 0)"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -4258,8 +4258,8 @@ class CheckConstraintTest {
   void columnLevelCoalesceNestedFieldStillAllowed() {
     // COALESCE on a nested field is fine — the nested field can still be
     // null even with the outer column guaranteed non-null.
-    String script = "ROW T ("
-        + "addr ROW(zip INT) CHECK (COALESCE(addr.zip, 0) > 0)"
+    String script = "STRUCT T ("
+        + "addr STRUCT(zip INT) CHECK (COALESCE(addr.zip, 0) > 0)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
     String cel = schema.getField("addr").getRules().get(0).getExpr();
@@ -4270,7 +4270,7 @@ class CheckConstraintTest {
   void columnLevelNullifBareColStillAllowed() {
     // NULLIF can return null when the two args compare equal — that's
     // meaningful regardless of input nullability. Don't reject.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT CHECK (NULLIF(x, 0) > 0)"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -4283,7 +4283,7 @@ class CheckConstraintTest {
   void tableLevelBareIsNullStillAllowed() {
     // Table-level CHECK is unaffected by the column-level rule —
     // `has(this.x)` works for format-aware presence at table level.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "x INT,"
         + "CHECK (x IS NULL)"
         + ");";
@@ -4298,7 +4298,7 @@ class CheckConstraintTest {
     // NOT to macro iter-var bindings. `t IS NULL` inside the body of a
     // column-level macro must NOT be rejected — `t` is the binding, not
     // the column.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY CHECK (EVERY(tags, t, t IS NULL))"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -4308,7 +4308,7 @@ class CheckConstraintTest {
 
   @Test
   void columnLevelMacroIterVarIsNotNullAllowed() {
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY CHECK (EVERY(tags, t, t IS NOT NULL))"
         + ");";
     Schema schema = parseScript(script).getNamedTypes().get("T");
@@ -4320,7 +4320,7 @@ class CheckConstraintTest {
   void columnLevelMacroIterVarInCoalesceAllowed() {
     // Same regression class — COALESCE(t, x) inside a column-level macro
     // must NOT be rejected; `t` is the iter-var binding, not the column.
-    String script = "ROW T ("
+    String script = "STRUCT T ("
         + "tags STRING ARRAY CHECK ("
         + "EVERY(tags, t, COALESCE(t, 'x') = 'x'))"
         + ");";
@@ -4449,7 +4449,7 @@ class CheckConstraintTest {
     io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser
         .ScriptContext scriptCtx = io.confluent.kafka.schemaregistry.type.logical
             .LogicalTypesParserFactory.parse(
-                "ROW __T (__x INT, CHECK (parent.`in` > 0));");
+                "STRUCT __T (__x INT, CHECK (parent.`in` > 0));");
     io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser
         .Check_exprContext checkCtx = findFirstCheckExpr(scriptCtx);
     String cel = ConstraintToCelTranslator.translate(checkCtx, vctx);
@@ -4471,8 +4471,8 @@ class CheckConstraintTest {
     // string-keyed map that failed strict-check (`string - int`); for an
     // int-keyed map it was a silent off-by-one. The visitor strict-checks
     // during visit(), so before the fix this script threw.
-    String script = "ROW Addr (tags MAP<STRING, STRING>); "
-        + "ROW Person (addr Addr, CHECK (addr.tags['home'] = 'x'));"
+    String script = "STRUCT Addr (tags MAP<STRING, STRING>); "
+        + "STRUCT Person (addr Addr, CHECK (addr.tags['home'] = 'x'));"
         + "TYPE Person";
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));

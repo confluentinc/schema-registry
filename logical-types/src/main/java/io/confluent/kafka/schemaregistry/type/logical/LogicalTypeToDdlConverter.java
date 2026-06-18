@@ -32,10 +32,10 @@ import java.util.Set;
  * <p><b>Lossy points</b> (intentional, matching visitor capability):
  * <ul>
  *   <li>External references have no syntactic marker — they're inferred on
- *       read-back from usage. {@code ALIAS} statements survive (carrying the
+ *       read-back from usage. {@code DECLARE} statements survive (carrying the
  *       wire-format URI binding) but bare externals (no URI) are implicit,
  *       identified by appearing in a type position without a matching local
- *       {@code ROW}/{@code ENUM}.</li>
+ *       {@code STRUCT}/{@code ENUM}.</li>
  *   <li>Path-keyed {@code defaultValues} aren't re-emitted; field-level
  *       defaults survive via {@link Schema.Field#getDefaultValue()}.</li>
  *   <li>The single-root sugar is detected and the trailing root-registration
@@ -77,7 +77,7 @@ public final class LogicalTypeToDdlConverter {
             .append(";\n");
       }
 
-      // ALIAS declarations: external-ness is inferred on read-back from
+      // DECLARE declarations: external-ness is inferred on read-back from
       // usage, so bare externals don't need a syntactic marker. Only the
       // URI bindings (synthetic-wrapper $ref / import targets) need to be
       // emitted so they survive DDL → LT → DDL round-trip. Restrict to FQNs
@@ -88,12 +88,12 @@ public final class LogicalTypeToDdlConverter {
         if (!externalRefs.contains(e.getKey())) {
           continue;
         }
-        sb.append("ALIAS ").append(qualifiedName(e.getKey()))
+        sb.append("DECLARE ").append(qualifiedName(e.getKey()))
             .append(" FOR ").append(stringLiteral(e.getValue()))
             .append(";\n");
       }
 
-      // Named-type declarations (`ROW <name> (...)` / `ENUM <name> (...)`) in
+      // Named-type declarations (`STRUCT <name> (...)` / `ENUM <name> (...)`) in
       // declaration order, LOCAL types only. Externals' bodies are also in
       // namedTypes (lazy-promoted by the reader from resolvedReferences),
       // but they're external by inference on read-back — must NOT be
@@ -121,7 +121,7 @@ public final class LogicalTypeToDdlConverter {
     private void printCreateType(String name, Schema body) {
       switch (body.getType()) {
         case STRUCT:
-          sb.append("ROW ").append(qualifiedName(name)).append(" ");
+          sb.append("STRUCT ").append(qualifiedName(name)).append(" ");
           appendStructBody(body, /*indent=*/"");
           break;
         case ENUM:
@@ -295,7 +295,7 @@ public final class LogicalTypeToDdlConverter {
     /**
      * DDL form of {@code schema} as a type expression suitable for use in a
      * field, branch, or trailing root-registration position. STRUCTs render
-     * as {@code ROW(...)}; everything else delegates to {@link Schema#toDdl}
+     * as {@code STRUCT(...)}; everything else delegates to {@link Schema#toDdl}
      * and adds richer metadata-aware nesting only where needed.
      */
     private String typeExpr(Schema schema) {
@@ -315,7 +315,7 @@ public final class LogicalTypeToDdlConverter {
         case NAMED_TYPE_REF:
           // Schema.toDdl returns the bare qualified name without identifier
           // quoting — collides with reserved words (e.g., a type literally
-          // named "Row" would lex as the ROW keyword). Quote per-segment.
+          // named "Row" would lex as the STRUCT keyword). Quote per-segment.
           return wrapNullable(qualifiedName(schema.getQualifiedName()), schema);
         default:
           // Primitive / decimal / parametric / ENUM — Schema.toDdl already
@@ -326,12 +326,12 @@ public final class LogicalTypeToDdlConverter {
     }
 
     private String rowExpr(Schema struct) {
-      // Reuse appendField so inline ROW(...) emission preserves all
+      // Reuse appendField so inline STRUCT(...) emission preserves all
       // per-field metadata (defaults, CHECK rules, doc, tags, params) —
       // matching what the grammar's `rowType` accepts via `fieldDef`.
-      // Without this, e.g. `addr ROW(zip INT CHECK (zip > 0))` would
-      // round-trip to `addr ROW(zip INT)`, silently dropping the rule.
-      StringBuilder local = new StringBuilder("ROW(");
+      // Without this, e.g. `addr STRUCT(zip INT CHECK (zip > 0))` would
+      // round-trip to `addr STRUCT(zip INT)`, silently dropping the rule.
+      StringBuilder local = new StringBuilder("STRUCT(");
       StringBuilder outer = sb;
       sb = local;
       try {
@@ -384,7 +384,7 @@ public final class LogicalTypeToDdlConverter {
      * {@link Schema.Type#NAMED_TYPE_REF} FQN. Intersect with
      * {@link LogicalType#getExternalTypes} to find externals that local code
      * actually references. Returns the FQNs eligible to receive a
-     * {@code ALIAS} statement (when a URI binding exists).
+     * {@code DECLARE} statement (when a URI binding exists).
      *
      * <p>Walking only LOCAL bodies (not external-promoted ones) avoids
      * surfacing transitive externals in the emitted DDL — only the externals

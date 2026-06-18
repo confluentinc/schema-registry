@@ -157,7 +157,7 @@ public final class JsonMappingsV1 {
             "{\"type\":\"number\",\"connect.type\":\"int64\","
                 + "\"flink.version\":\"1\",\"flink.precision\":2,"
                 + "\"flink.type\":\"timestamp\"}"),
-        // ROW with mixed nullability.
+        // STRUCT with mixed nullability.
         new TypeMapping("ROW_int8_string",
             struct(
                 f(0, "int8",
@@ -172,7 +172,7 @@ public final class JsonMappingsV1 {
                 + "\"connect.index\":1,\"description\":\"string field\"}},"
                 + "\"required\":[\"string\"],\"additionalProperties\":false,"
                 + "\"title\":\"io.confluent.row\"}"),
-        // ROW with a nullable DECIMAL — exercises the "decimalSchema" SQL-1593 path.
+        // STRUCT with a nullable DECIMAL — exercises the "decimalSchema" SQL-1593 path.
         new TypeMapping("ROW_decimal",
             struct(
                 f(0, "decimal",

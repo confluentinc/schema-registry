@@ -213,7 +213,7 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testRowFieldNullability() {
-    Schema s = parseTypeExpr("ROW(id BIGINT NOT NULL, name STRING)");
+    Schema s = parseTypeExpr("STRUCT(id BIGINT NOT NULL, name STRING)");
     List<Schema.Field> fields = s.getFields();
     assertFalse(fields.get(0).getSchema().isNullable());
     assertTrue(fields.get(1).getSchema().isNullable());
@@ -452,7 +452,7 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testRow() {
-    Schema s = parseTypeExpr("ROW(name STRING, age INT)");
+    Schema s = parseTypeExpr("STRUCT(name STRING, age INT)");
     assertEquals(Schema.Type.STRUCT, s.getType());
     List<Schema.Field> fields = s.getFields();
     assertEquals(2, fields.size());
@@ -466,14 +466,14 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testRowAngleBrackets() {
-    Schema s = parseTypeExpr("ROW<name STRING, age INT>");
+    Schema s = parseTypeExpr("STRUCT<name STRING, age INT>");
     assertEquals(Schema.Type.STRUCT, s.getType());
     assertEquals(2, s.getFields().size());
   }
 
   @Test
   void testRowWithDefault() {
-    Schema s = parseTypeExpr("ROW(status STRING DEFAULT 'active')");
+    Schema s = parseTypeExpr("STRUCT(status STRING DEFAULT 'active')");
     Schema.Field f = s.getFields().get(0);
     assertTrue(f.hasDefaultValue());
     assertEquals("active", f.getDefaultValue());
@@ -481,19 +481,19 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testRowWithComment() {
-    Schema s = parseTypeExpr("ROW(id INT COMMENT 'primary key')");
+    Schema s = parseTypeExpr("STRUCT(id INT COMMENT 'primary key')");
     assertEquals("primary key", s.getFields().get(0).getDoc());
   }
 
   @Test
   void testRowWithShortComment() {
-    Schema s = parseTypeExpr("ROW(id INT 'primary key')");
+    Schema s = parseTypeExpr("STRUCT(id INT 'primary key')");
     assertEquals("primary key", s.getFields().get(0).getDoc());
   }
 
   @Test
   void testRowWithTags() {
-    Schema s = parseTypeExpr("ROW(email STRING TAGS('PII', 'SENSITIVE'))");
+    Schema s = parseTypeExpr("STRUCT(email STRING TAGS('PII', 'SENSITIVE'))");
     List<String> tags = s.getFields().get(0).getTags();
     assertEquals(2, tags.size());
     assertEquals("PII", tags.get(0));
@@ -503,7 +503,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testRowWithParams() {
     Schema s = parseTypeExpr(
-        "ROW(data BYTES WITH('encoding' = 'base64', 'maxSize' = '1024'))");
+        "STRUCT(data BYTES WITH('encoding' = 'base64', 'maxSize' = '1024'))");
     Map<String, Object> props = s.getFields().get(0).getParams();
     assertEquals("base64", props.get("encoding"));
     assertEquals("1024", props.get("maxSize"));
@@ -525,7 +525,7 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testUnionAngleBracketSyntax() {
-    // Mirrors ROW<...> — UNION accepts both <...> and (...) delimiter forms.
+    // Mirrors STRUCT<...> — UNION accepts both <...> and (...) delimiter forms.
     Schema s = parseTypeExpr("UNION<text STRING, number INT, flag BOOLEAN>");
     assertEquals(Schema.Type.UNION, s.getType());
     List<Schema.UnionBranch> branches = s.getBranches();
@@ -561,7 +561,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testCreateTypeStruct() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Address ("
+        "STRUCT Address ("
         + "  street VARCHAR(200),"
         + "  city STRING,"
         + "  zip CHAR(5)"
@@ -581,7 +581,7 @@ class LogicalTypesSchemaVisitorTest {
     // Externals are inferred from usage — any NAMED_TYPE_REF FQN not declared
     // locally is treated as external. No syntactic marker needed.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW MyOrder ("
+        "STRUCT MyOrder ("
         + "  amount com.example.Money,"
         + "  addr com.example.Address"
         + ");"
@@ -593,7 +593,7 @@ class LogicalTypesSchemaVisitorTest {
         order.getField("amount").getSchema().getType());
     assertEquals("com.example.Money",
         order.getField("amount").getSchema().getQualifiedName());
-    // No ALIAS clauses → externalImports stays empty.
+    // No DECLARE clauses → externalImports stays empty.
     assertTrue(v.getExternalImports().isEmpty());
 
     LogicalType lt = v.toLogicalType();
@@ -603,11 +603,11 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testAlias() {
-    // ALIAS attaches a URI binding to a (necessarily external) FQN.
+    // DECLARE attaches a URI binding to a (necessarily external) FQN.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ALIAS Ref1 FOR 'ext.Outer';"
-        + "ALIAS Ref2 FOR 'https://example.com/foo#/properties/bar';"
-        + "ROW Holder ("
+        "DECLARE Ref1 FOR 'ext.Outer';"
+        + "DECLARE Ref2 FOR 'https://example.com/foo#/properties/bar';"
+        + "STRUCT Holder ("
         + "  i Inner,"
         + "  one Ref1,"
         + "  two Ref2"
@@ -620,7 +620,7 @@ class LogicalTypesSchemaVisitorTest {
     assertEquals("https://example.com/foo#/properties/bar", imports.get("Ref2"));
 
     // The bundled LT carries the bindings; externals are inferred (Inner has
-    // no ALIAS but is still external because it isn't locally declared).
+    // no DECLARE but is still external because it isn't locally declared).
     LogicalType lt = v.toLogicalType();
     assertEquals(imports, lt.getExternalImports());
     assertTrue(lt.isExternal("Inner"));
@@ -631,41 +631,41 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testAliasEmptyStringRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "ALIAS Ref1 FOR '';"
-        + "ROW H (one Ref1);"
+        "DECLARE Ref1 FOR '';"
+        + "STRUCT H (one Ref1);"
         + "TYPE H"
     ));
   }
 
   @Test
   void testDuplicateAliasRejected() {
-    // Two ALIAS declarations for the same name. Last-write-wins would hide
+    // Two DECLARE declarations for the same name. Last-write-wins would hide
     // the user's mistake — reject explicitly.
     assertThrows(ValidationException.class, () -> parseScript(
-        "ALIAS Foo FOR 'a';"
-        + "ALIAS Foo FOR 'b';"
-        + "ROW H (f Foo);"
+        "DECLARE Foo FOR 'a';"
+        + "DECLARE Foo FOR 'b';"
+        + "STRUCT H (f Foo);"
         + "TYPE H"
     ));
   }
 
   @Test
   void testDanglingAliasRejected() {
-    // ALIAS whose FQN isn't referenced anywhere — visitor rejects since
+    // DECLARE whose FQN isn't referenced anywhere — visitor rejects since
     // externals are inferred from usage and an unused alias has no effect.
     assertThrows(ValidationException.class, () -> parseScript(
-        "ALIAS Foo FOR 'a';"
+        "DECLARE Foo FOR 'a';"
         + "TYPE INT"
     ));
   }
 
   @Test
   void testShadowedAliasRejected() {
-    // ALIAS for a name that's also a local ROW declaration. The ALIAS's URI
+    // DECLARE for a name that's also a local STRUCT declaration. The DECLARE's URI
     // binding can't apply to a local type; reject the collision.
     assertThrows(ValidationException.class, () -> parseScript(
-        "ALIAS Foo FOR 'a';"
-        + "ROW Foo (x INT);"
+        "DECLARE Foo FOR 'a';"
+        + "STRUCT Foo (x INT);"
         + "TYPE Foo"
     ));
   }
@@ -689,7 +689,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testCreateTypeStructWithDoc() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Address (street STRING, city STRING)"
+        "STRUCT Address (street STRING, city STRING)"
         + " COMMENT 'a postal address';"
         + "TYPE INT"
     );
@@ -700,7 +700,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testCreateTypeStructWithTags() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Person (name STRING)"
+        "STRUCT Person (name STRING)"
         + " TAGS('PII', 'SENSITIVE');"
         + "TYPE INT"
     );
@@ -713,7 +713,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testCreateTypeStructWithParams() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Config (key STRING, value STRING)"
+        "STRUCT Config (key STRING, value STRING)"
         + " WITH('version' = '2', 'format' = 'json');"
         + "TYPE INT"
     );
@@ -734,13 +734,13 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   // =========================================================================
-  // ROW/ENUM declarations + trailing TYPE — named-type registration
+  // STRUCT/ENUM declarations + trailing TYPE — named-type registration
   // =========================================================================
 
   @Test
   void testRegisterTypeNamedStruct() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Person (id BIGINT NOT NULL, name STRING);"
+        "STRUCT Person (id BIGINT NOT NULL, name STRING);"
         + "TYPE Person"
     );
     // Named type registered.
@@ -772,7 +772,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testRegisterTypeNamedStructWithMetadata() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Person (name STRING)"
+        "STRUCT Person (name STRING)"
         + " COMMENT 'a person'"
         + " TAGS('PII')"
         + " WITH('owner' = 'team-x');"
@@ -802,7 +802,7 @@ class LogicalTypesSchemaVisitorTest {
   void testRegisterTypeNamedStructInNamespace() {
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Person (name STRING);"
+        + "STRUCT Person (name STRING);"
         + "TYPE Person"
     );
     // Name is qualified by the declared namespace.
@@ -814,8 +814,8 @@ class LogicalTypesSchemaVisitorTest {
   void testCreateTypeDuplicate() {
     assertThrows(ValidationException.class, () -> {
         parseScript(
-            "ROW Foo (x INT);"
-            + "ROW Foo (y STRING);"
+            "STRUCT Foo (x INT);"
+            + "STRUCT Foo (y STRING);"
             + "TYPE Foo"
         );
     });
@@ -823,11 +823,11 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testCreateTypePrimitiveIsParseError() {
-    // Named-type declarations are limited to ROW / ENUM. Naming a primitive
+    // Named-type declarations are limited to STRUCT / ENUM. Naming a primitive
     // (e.g. trying to give INT an alias) has no grammar shape and is a parse
     // error.
     try {
-      parseScript("ROW Foo INT; TYPE Foo");
+      parseScript("STRUCT Foo INT; TYPE Foo");
       assertTrue(false, "Expected parse error for named primitive");
     } catch (RuntimeException expected) {
       // ok — ANTLR throws on parse failure
@@ -837,7 +837,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testRegisterTypeNotNull() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Person (name STRING);"
+        "STRUCT Person (name STRING);"
         + "TYPE Person NOT NULL"
     );
     Schema root = v.getRootSchema();
@@ -864,7 +864,7 @@ class LogicalTypesSchemaVisitorTest {
   void testRegisterTypeDefaultNullable() {
     // Explicit TYPE without nullability marker → root nullable by default.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Person (name STRING);"
+        "STRUCT Person (name STRING);"
         + "TYPE Person"
     );
     assertTrue(v.getRootSchema().isNullable());
@@ -873,7 +873,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testRegisterTypeAnonymousRow() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "TYPE ROW(id BIGINT NOT NULL, name STRING)"
+        "TYPE STRUCT(id BIGINT NOT NULL, name STRING)"
     );
     Schema root = v.getRootSchema();
     assertNotNull(root);
@@ -886,8 +886,8 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testNamedTypeRefInStruct() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Address (street STRING, city STRING);"
-        + "TYPE ROW(name STRING, addr Address)"
+        "STRUCT Address (street STRING, city STRING);"
+        + "TYPE STRUCT(name STRING, addr Address)"
     );
     Schema root = v.getRootSchema();
     Schema.Field addrField = root.getField("addr");
@@ -905,7 +905,7 @@ class LogicalTypesSchemaVisitorTest {
         + "  'INACTIVE',"
         + "  'PENDING'"
         + ");"
-        + "ROW UserProfile ("
+        + "STRUCT UserProfile ("
         + "  id BIGINT NOT NULL,"
         + "  name VARCHAR(100) COMMENT 'full name',"
         + "  email STRING TAGS('PII'),"
@@ -976,7 +976,7 @@ class LogicalTypesSchemaVisitorTest {
   void testNamespaceQualifiesCreateType() {
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW Foo (x INT);"
+        + "STRUCT Foo (x INT);"
         + "TYPE Foo");
     assertNotNull(v.getNamedTypes().get("a.b.Foo"));
   }
@@ -986,7 +986,7 @@ class LogicalTypesSchemaVisitorTest {
     // Idempotent: a name already qualified with the same namespace stays as-is.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW a.b.Foo (x INT);"
+        + "STRUCT a.b.Foo (x INT);"
         + "TYPE a.b.Foo");
     assertNotNull(v.getNamedTypes().get("a.b.Foo"));
     assertEquals(1, v.getNamedTypes().size());
@@ -997,7 +997,7 @@ class LogicalTypesSchemaVisitorTest {
     // A different qualified name overrides the namespace.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW x.y.Foo (n INT);"
+        + "STRUCT x.y.Foo (n INT);"
         + "TYPE x.y.Foo");
     assertNotNull(v.getNamedTypes().get("x.y.Foo"));
   }
@@ -1009,8 +1009,8 @@ class LogicalTypesSchemaVisitorTest {
     // qualification.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW Inner (x INT);"
-        + "ROW Outer (inner Inner);"
+        + "STRUCT Inner (x INT);"
+        + "STRUCT Outer (inner Inner);"
         + "TYPE Outer");
     Schema outer = v.getNamedTypes().get("a.b.Outer");
     Schema.Field innerField = outer.getField("inner");
@@ -1026,7 +1026,7 @@ class LogicalTypesSchemaVisitorTest {
     // `a.b.Money`, which has no local declaration, so it's inferred external.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW Holder (amount Money);"
+        + "STRUCT Holder (amount Money);"
         + "TYPE Holder");
     Schema holder = v.getNamedTypes().get("a.b.Holder");
     Schema.Field amount = holder.getField("amount");
@@ -1039,7 +1039,7 @@ class LogicalTypesSchemaVisitorTest {
   void testQualifiedFieldRefIsAlwaysUnchanged() {
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW Holder (cur x.y.Currency);"
+        + "STRUCT Holder (cur x.y.Currency);"
         + "TYPE Holder");
     Schema holder = v.getNamedTypes().get("a.b.Holder");
     assertEquals("x.y.Currency",
@@ -1049,7 +1049,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testNoNamespaceLeavesNamesUnchanged() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Holder (amount Money, name STRING);"
+        "STRUCT Holder (amount Money, name STRING);"
         + "TYPE Holder");
     assertNotNull(v.getNamedTypes().get("Holder"));
     assertEquals("Money",
@@ -1074,8 +1074,8 @@ class LogicalTypesSchemaVisitorTest {
     // it doesn't, the field is inferred external.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE a.b;"
-        + "ROW Foo (x INT);"
-        + "ROW Holder ("
+        + "STRUCT Foo (x INT);"
+        + "STRUCT Holder ("
         + "  localFoo Foo,"
         + "  externalFoo other.Foo"
         + ");"
@@ -1138,7 +1138,7 @@ class LogicalTypesSchemaVisitorTest {
   // =========================================================================
 
   private Schema.Field firstField(String typeAndDefault) {
-    Schema s = parseTypeExpr("ROW(f " + typeAndDefault + ")");
+    Schema s = parseTypeExpr("STRUCT(f " + typeAndDefault + ")");
     return s.getFields().get(0);
   }
 
@@ -1353,7 +1353,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testNonReservedKeywordsAsFieldNames() {
     Schema s = parseTypeExpr(
-        "ROW("
+        "STRUCT("
             + "enum INT, "
             + "map STRING, "
             + "namespace STRING, "
@@ -1391,7 +1391,7 @@ class LogicalTypesSchemaVisitorTest {
    */
   @Test
   void testValidationErrorCarriesPosition_outOfRangeTinyInt() {
-    String sql = "TYPE ROW(\n"
+    String sql = "TYPE STRUCT(\n"
         + "  bad TINYINT NOT NULL DEFAULT 999\n"
         + ")";
     LocatedValidationException e = assertThrows(
@@ -1409,26 +1409,26 @@ class LogicalTypesSchemaVisitorTest {
   /** A duplicate-named-type error should point at the duplicated name token. */
   @Test
   void testValidationErrorCarriesPosition_duplicateNamedType() {
-    String sql = "ROW Foo (a INT);\n"
-        + "ROW Foo (b STRING);\n"
+    String sql = "STRUCT Foo (a INT);\n"
+        + "STRUCT Foo (b STRING);\n"
         + "TYPE Foo";
     LocatedValidationException e = assertThrows(
         LocatedValidationException.class, () -> parseScript(sql));
     assertEquals(2, e.getLine(), "should point at the duplicating declaration");
-    int fooStartCol = "ROW ".length();
+    int fooStartCol = "STRUCT ".length();
     assertEquals(fooStartCol, e.getColumn(),
         "column should land on the duplicated name");
     assertEquals(fooStartCol + "Foo".length(), e.getEndColumn());
   }
 
   // =========================================================================
-  // Sugar: ROW/ENUM declarations auto-register the unique root as ... NOT NULL
+  // Sugar: STRUCT/ENUM declarations auto-register the unique root as ... NOT NULL
   // =========================================================================
 
   @Test
   void testSugarSingleTypeRegistersAsNotNull() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x INT)"
+        "STRUCT Foo (x INT)"
     );
     Schema root = v.getRootSchema();
     assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
@@ -1440,9 +1440,9 @@ class LogicalTypesSchemaVisitorTest {
   void testSugarVsExplicitDifferInRootNullability() {
     // The sugar bakes in NOT NULL. Manually expanding to "TYPE Foo"
     // (no marker) gives a nullable root. They are intentionally different.
-    LogicalTypesSchemaVisitor sugar = parseScript("ROW Foo (x INT)");
+    LogicalTypesSchemaVisitor sugar = parseScript("STRUCT Foo (x INT)");
     LogicalTypesSchemaVisitor explicit = parseScript(
-        "ROW Foo (x INT); TYPE Foo");
+        "STRUCT Foo (x INT); TYPE Foo");
     assertFalse(sugar.getRootSchema().isNullable());
     assertTrue(explicit.getRootSchema().isNullable());
   }
@@ -1451,8 +1451,8 @@ class LogicalTypesSchemaVisitorTest {
   void testSugarMultiTypeUniqueRootInferred() {
     // Address is referenced by User; only User is unreferenced → User is the root.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Address (street STRING, city STRING);"
-        + "ROW User (name STRING, addr Address)"
+        "STRUCT Address (street STRING, city STRING);"
+        + "STRUCT User (name STRING, addr Address)"
     );
     Schema root = v.getRootSchema();
     assertEquals(Schema.Type.NAMED_TYPE_REF, root.getType());
@@ -1465,7 +1465,7 @@ class LogicalTypesSchemaVisitorTest {
     // Ext is referenced but not locally declared → inferred external; Foo is
     // the unique defined root.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x Ext)"
+        "STRUCT Foo (x Ext)"
     );
     Schema root = v.getRootSchema();
     assertEquals("Foo", root.getQualifiedName());
@@ -1479,8 +1479,8 @@ class LogicalTypesSchemaVisitorTest {
     // emit this as a tagged union; the proto writer detects the shape and
     // treats it as a multi-message file.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x INT);"
-        + "ROW Bar (y INT)");
+        "STRUCT Foo (x INT);"
+        + "STRUCT Bar (y INT)");
     Schema root = v.getRootSchema();
     assertEquals(Schema.Type.UNION, root.getType());
     assertFalse(root.isNullable(), "sugar root must be NOT NULL");
@@ -1501,8 +1501,8 @@ class LogicalTypesSchemaVisitorTest {
     // member NAMED_TYPE_REFs carry the qualified key.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Foo (x INT);"
-        + "ROW Bar (y INT)");
+        + "STRUCT Foo (x INT);"
+        + "STRUCT Bar (y INT)");
     Schema root = v.getRootSchema();
     assertEquals(Schema.Type.UNION, root.getType());
     assertEquals("Foo", root.getBranches().get(0).getName());
@@ -1518,8 +1518,8 @@ class LogicalTypesSchemaVisitorTest {
     LocatedValidationException e = assertThrows(
         LocatedValidationException.class,
         () -> parseScript(
-            "ROW A (b B);"
-            + "ROW B (a A)"));
+            "STRUCT A (b B);"
+            + "STRUCT B (a A)"));
     assertTrue(e.getMessage().contains("dependency cycle"),
         () -> "expected cycle message, got: " + e.getMessage());
   }
@@ -1538,8 +1538,8 @@ class LogicalTypesSchemaVisitorTest {
     // Two unrelated types — would be a multi-root error under sugar.
     // Explicit TYPE disambiguates without complaint.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x INT);"
-        + "ROW Bar (y INT);"
+        "STRUCT Foo (x INT);"
+        + "STRUCT Bar (y INT);"
         + "TYPE Bar"
     );
     assertEquals("Bar", v.getRootSchema().getQualifiedName());
@@ -1563,7 +1563,7 @@ class LogicalTypesSchemaVisitorTest {
   void testRegisterTypeWithExplicitNullKeepsNullable() {
     // TYPE Foo NULL → nullable, even though sugar would have forced NOT NULL.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x INT);"
+        "STRUCT Foo (x INT);"
         + "TYPE Foo NULL"
     );
     assertTrue(v.getRootSchema().isNullable());
@@ -1573,9 +1573,9 @@ class LogicalTypesSchemaVisitorTest {
   void testOrphanNamedTypes() {
     // Foo is reachable from Bar (the registered root). Baz is orphan.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x INT);"
-        + "ROW Baz (y INT);"
-        + "ROW Bar (foo Foo);"
+        "STRUCT Foo (x INT);"
+        + "STRUCT Baz (y INT);"
+        + "STRUCT Bar (foo Foo);"
         + "TYPE Bar"
     );
     java.util.Set<String> orphans = v.toLogicalType().findOrphanNamedTypes();
@@ -1585,8 +1585,8 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testNoOrphansWhenAllReachable() {
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Foo (x INT);"
-        + "ROW Bar (foo Foo)"
+        "STRUCT Foo (x INT);"
+        + "STRUCT Bar (foo Foo)"
     );
     assertTrue(v.toLogicalType().findOrphanNamedTypes().isEmpty());
   }
@@ -1606,8 +1606,8 @@ class LogicalTypesSchemaVisitorTest {
     // expansion) → nested → stored as com.example.Outer.Inner.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Outer (x INT);"
-        + "ROW Outer.Inner (y STRING);"
+        + "STRUCT Outer (x INT);"
+        + "STRUCT Outer.Inner (y STRING);"
         + "TYPE Outer"
     );
     assertNotNull(v.getNamedTypes().get("com.example.Outer"));
@@ -1621,7 +1621,7 @@ class LogicalTypesSchemaVisitorTest {
     // (top-level type in namespace Other), stored verbatim.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Other.Bar (x INT);"
+        + "STRUCT Other.Bar (x INT);"
         + "TYPE Other.Bar"
     );
     assertNotNull(v.getNamedTypes().get("Other.Bar"));
@@ -1632,9 +1632,9 @@ class LogicalTypesSchemaVisitorTest {
   void testDeeplyNestedTypes() {
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Outer (x INT);"
-        + "ROW Outer.Mid (y INT);"
-        + "ROW Outer.Mid.Inner (z INT);"
+        + "STRUCT Outer (x INT);"
+        + "STRUCT Outer.Mid (y INT);"
+        + "STRUCT Outer.Mid.Inner (z INT);"
         + "TYPE Outer"
     );
     assertNotNull(v.getNamedTypes().get("com.example.Outer"));
@@ -1650,8 +1650,8 @@ class LogicalTypesSchemaVisitorTest {
         LocatedValidationException.class,
         () -> parseScript(
             "NAMESPACE com.example;"
-            + "ROW Outer (x INT);"
-            + "ROW Outer.Mid.Inner (z INT);"
+            + "STRUCT Outer (x INT);"
+            + "STRUCT Outer.Mid.Inner (z INT);"
             + "TYPE Outer"));
     assertTrue(e.getMessage().contains("missing"),
         () -> "expected missing-intermediate message, got: " + e.getMessage());
@@ -1663,8 +1663,8 @@ class LogicalTypesSchemaVisitorTest {
     LocatedValidationException e = assertThrows(
         LocatedValidationException.class,
         () -> parseScript(
-            "ROW Outer (x INT);"
-            + "ROW Outer.Inner (y INT);"
+            "STRUCT Outer (x INT);"
+            + "STRUCT Outer.Inner (y INT);"
             + "TYPE Outer.Inner"));
     assertTrue(e.getMessage().contains("Cannot register nested type"),
         () -> "expected nested-root rejection, got: " + e.getMessage());
@@ -1678,8 +1678,8 @@ class LogicalTypesSchemaVisitorTest {
     // would also count as a "root candidate" and we'd hit a multi-root error.
     // With nesting awareness, only Outer is a candidate → unique root.
     LogicalTypesSchemaVisitor v = parseScript(
-        "ROW Outer (x INT);"
-        + "ROW Outer.Inner (y INT)"
+        "STRUCT Outer (x INT);"
+        + "STRUCT Outer.Inner (y INT)"
     );
     assertEquals("Outer", v.getRootSchema().getQualifiedName());
   }
@@ -1690,9 +1690,9 @@ class LogicalTypesSchemaVisitorTest {
     // nested key `com.example.Outer.Inner`.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Outer (x INT);"
-        + "ROW Outer.Inner (y INT);"
-        + "ROW Holder (inner Outer.Inner);"
+        + "STRUCT Outer (x INT);"
+        + "STRUCT Outer.Inner (y INT);"
+        + "STRUCT Holder (inner Outer.Inner);"
         + "TYPE Holder"
     );
     Schema holder = v.getNamedTypes().get("com.example.Holder");
@@ -1708,8 +1708,8 @@ class LogicalTypesSchemaVisitorTest {
     // namespace-qualified ref (left as-written).
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Other.Bar (x INT);"
-        + "ROW Holder (b Other.Bar);"
+        + "STRUCT Other.Bar (x INT);"
+        + "STRUCT Holder (b Other.Bar);"
         + "TYPE Holder"
     );
     Schema holder = v.getNamedTypes().get("com.example.Holder");
@@ -1722,7 +1722,7 @@ class LogicalTypesSchemaVisitorTest {
     // are stored verbatim and used verbatim — no namespace prefix is applied.
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW Holder (inner com.other.Outer.Inner);"
+        + "STRUCT Holder (inner com.other.Outer.Inner);"
         + "TYPE Holder"
     );
     Schema holder = v.getNamedTypes().get("com.example.Holder");
@@ -1737,8 +1737,8 @@ class LogicalTypesSchemaVisitorTest {
     // exactly (no double-namespacing).
     LogicalTypesSchemaVisitor v = parseScript(
         "NAMESPACE com.example;"
-        + "ROW com.example.Outer (x INT);"
-        + "ROW com.example.Outer.Inner (y INT);"
+        + "STRUCT com.example.Outer (x INT);"
+        + "STRUCT com.example.Outer.Inner (y INT);"
         + "TYPE com.example.Outer"
     );
     assertNotNull(v.getNamedTypes().get("com.example.Outer"));

@@ -365,13 +365,13 @@ public abstract class Schema {
    */
   private static final java.util.Set<String> SQL_KEYWORDS_NEEDING_QUOTING =
       Collections.unmodifiableSet(new java.util.HashSet<>(java.util.Arrays.asList(
-          "ALIAS", "AND", "ARRAY", "AS", "BETWEEN", "BIGINT", "BINARY", "BOOLEAN", "BOTH",
+          "DECLARE", "AND", "ARRAY", "AS", "BETWEEN", "BIGINT", "BINARY", "BOOLEAN", "BOTH",
           "BYTES", "CASE", "CAST", "CHARACTER", "CHAR", "CHECK", "COMMENT",
           "CONSTRAINT", "CREATE", "CURRENT_TIMESTAMP", "DATE", "DEC", "DECIMAL",
           "DECLARE", "DEFAULT", "DOUBLE", "ELSE", "END", "ESCAPE", "EXTRACT",
           "FALSE", "FLOAT", "FOR", "FROM", "IN", "INT", "INTEGER", "IS",
           "LEADING", "LIKE", "LOCAL", "MESSAGE", "MULTISET", "NOT", "NULL",
-          "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "ROW", "SMALLINT",
+          "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "STRUCT", "SMALLINT",
           "STRING", "SUBSTRING", "SYMMETRIC", "THEN", "TIME",
           "TIMESTAMP", "TIMESTAMP_LTZ", "TINYINT", "TRAILING", "TRIM", "TRUE",
           "UNION", "VARBINARY", "VARCHAR", "VARYING", "WHEN", "WITH", "WITHOUT")));
@@ -715,7 +715,7 @@ public abstract class Schema {
       super(Type.STRUCT);
       // Empty STRUCT is intentionally allowed: real-world proto schemas use
       // `message Empty {}` and the converter must round-trip those. Note
-      // that `Schema.toDdl()` would emit `ROW()` which the visitor rejects;
+      // that `Schema.toDdl()` would emit `STRUCT()` which the visitor rejects;
       // callers programmatically working with empty structs shouldn't
       // expect a DDL round-trip.
       this.fields = Collections.unmodifiableList(fields);
@@ -739,7 +739,7 @@ public abstract class Schema {
 
     @Override
     public String toDdl() {
-      StringBuilder sb = new StringBuilder("ROW(");
+      StringBuilder sb = new StringBuilder("STRUCT(");
       for (int i = 0; i < fields.size(); i++) {
         if (i > 0) {
           sb.append(", ");

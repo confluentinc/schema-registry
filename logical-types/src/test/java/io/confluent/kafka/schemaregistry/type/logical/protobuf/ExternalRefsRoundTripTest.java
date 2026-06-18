@@ -95,7 +95,7 @@ class ExternalRefsRoundTripTest {
     // package becomes a namespace.
     assertEquals(
         "NAMESPACE acme;\n"
-            + "TYPE ROW(a com.example.M1, b com.example.M2) NOT NULL;\n",
+            + "TYPE STRUCT(a com.example.M1, b com.example.M2) NOT NULL;\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
     // Reverse: LT -> Proto. The result must be a valid (parseable) proto

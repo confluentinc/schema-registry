@@ -7,7 +7,7 @@ require(['vs/editor/editor.main'], function () {
     'ARRAY','AS','BIGINT','BINARY','BOOLEAN','BYTES','CHAR','CHARACTER','COMMENT',
     'DATE','DEC','DECIMAL','DEFAULT','DOUBLE','ENUM','FALSE',
     'FLOAT','INT','INTEGER','LOCAL','MAP','MULTISET','NAMESPACE','NOT','NULL',
-    'NUMERIC','PRECISION','REAL','REFERENCE','ROW','SCHEMA','SMALLINT','STRING',
+    'NUMERIC','PRECISION','REAL','REFERENCE','STRUCT','SCHEMA','SMALLINT','STRING',
     'TAGS','TIME','TIMESTAMP','TIMESTAMP_LTZ','TINYINT','TRUE','TYPE','UNION',
     'VARBINARY','VARCHAR','VARIANT','VARYING','WITH','WITHOUT','ZONE'
   ];
@@ -194,10 +194,10 @@ require(['vs/editor/editor.main'], function () {
     const qualify = n => (!namespace || n.includes('.')) ? n : namespace + '.' + n;
     const out = [];
     let m;
-    // `ROW <name> (` and `ENUM <name> (` are the two declaration shapes. The
-    // lead anchor (start of doc or `;`) keeps us from matching ROW/ENUM that
-    // appear elsewhere (e.g., a `ROW(...)` type expression at field position).
-    const re = /(?:^|;)\s*(?:ROW|ENUM)\s+([a-zA-Z_][\w.]*)\s*\(/gi;
+    // `STRUCT <name> (` and `ENUM <name> (` are the two declaration shapes. The
+    // lead anchor (start of doc or `;`) keeps us from matching STRUCT/ENUM that
+    // appear elsewhere (e.g., a `STRUCT(...)` type expression at field position).
+    const re = /(?:^|;)\s*(?:STRUCT|ENUM)\s+([a-zA-Z_][\w.]*)\s*\(/gi;
     while ((m = re.exec(stripped)) !== null) out.push(qualify(m[1]));
     return out;
   }
@@ -372,7 +372,7 @@ require(['vs/editor/editor.main'], function () {
   /**
    * Derive a tab name from the DDL: prefer the qualified name of the type
    * named by the trailing root-registration {@code TYPE <name>;} statement,
-   * then fall back to the name defined by the last {@code ROW <name>} or
+   * then fall back to the name defined by the last {@code STRUCT <name>} or
    * {@code ENUM <name>} declaration. Returns null if nothing's derivable.
    */
   function deriveTabName(ddl) {
@@ -390,7 +390,7 @@ require(['vs/editor/editor.main'], function () {
     // Trailing root-registration form: `TYPE <name> [NOT NULL|NULL]? (;|$)`.
     let m = /(?:^|;)\s*TYPE\s+([a-zA-Z_][\w.]*)\s*(?:NOT\s+NULL|NULL)?\s*(?:;|$)/i.exec(stripped);
     if (m) return qualify(m[1]);
-    m = /(?:^|;)\s*(?:ROW|ENUM)\s+([a-zA-Z_][\w.]*)\s*\(/i.exec(stripped);
+    m = /(?:^|;)\s*(?:STRUCT|ENUM)\s+([a-zA-Z_][\w.]*)\s*\(/i.exec(stripped);
     if (m) return qualify(m[1]);
     return null;
   }
@@ -506,9 +506,9 @@ require(['vs/editor/editor.main'], function () {
     },
     {
       label: 'Basic struct',
-      desc: 'A simple ROW with primitive fields',
+      desc: 'A simple STRUCT with primitive fields',
       ddl:
-`ROW Person (
+`STRUCT Person (
   id STRING NOT NULL,
   name STRING NOT NULL,
   age INT,
@@ -520,7 +520,7 @@ require(['vs/editor/editor.main'], function () {
       label: 'Logical & temporal types',
       desc: 'DATE, TIMESTAMP, DECIMAL, VARCHAR, BINARY',
       ddl:
-`ROW Person (
+`STRUCT Person (
   id STRING NOT NULL,
   amount DECIMAL(12, 2) NOT NULL,
   occurred_at TIMESTAMP_LTZ(6) NOT NULL,
@@ -532,16 +532,16 @@ require(['vs/editor/editor.main'], function () {
     },
     {
       label: 'Nested + collections',
-      desc: 'Nested ROW, ARRAY, MAP, MULTISET',
+      desc: 'Nested STRUCT, ARRAY, MAP, MULTISET',
       ddl:
-`ROW Collections (
-  user ROW(
+`STRUCT Collections (
+  user STRUCT(
     id STRING NOT NULL,
     email STRING NOT NULL
   ) NOT NULL,
   tags ARRAY<STRING NOT NULL> NOT NULL,
   attributes MAP<STRING NOT NULL, STRING NOT NULL>,
-  events MULTISET<ROW(
+  events MULTISET<STRUCT(
     kind STRING NOT NULL,
     at TIMESTAMP_LTZ(3) NOT NULL
   ) NOT NULL>
@@ -550,19 +550,19 @@ require(['vs/editor/editor.main'], function () {
     },
     {
       label: 'Named types, enums, defaults',
-      desc: 'ROW, ENUM, DEFAULT values',
+      desc: 'STRUCT, ENUM, DEFAULT values',
       ddl:
 `NAMESPACE com.example.demo;
 
 ENUM Status ('ACTIVE', 'PAUSED', 'CANCELLED');
 
-ROW Address (
+STRUCT Address (
   street STRING NOT NULL,
   city STRING NOT NULL,
   postal_code VARCHAR(16)
 );
 
-ROW Order (
+STRUCT Order (
   id STRING NOT NULL,
   retries INT NOT NULL DEFAULT 0,
   status Status NOT NULL,
@@ -575,7 +575,7 @@ ROW Order (
       label: 'Union & variant',
       desc: 'UNION branches and the VARIANT type',
       ddl:
-`ROW UnionAndVariant (
+`STRUCT UnionAndVariant (
   id STRING NOT NULL,
   payload UNION<
     text STRING NOT NULL,
@@ -592,13 +592,13 @@ ROW Order (
       ddl:
 `NAMESPACE com.example.demo;
 
-ROW Outer (
+STRUCT Outer (
   name STRING NOT NULL,
   inner Outer.Inner NOT NULL,
   tag Outer.Status NOT NULL
 );
 
-ROW Outer.Inner (
+STRUCT Outer.Inner (
   x INT NOT NULL,
   y INT NOT NULL
 );
@@ -610,7 +610,7 @@ ENUM Outer.Status ('ACTIVE', 'INACTIVE');
       label: 'CHECK constraints',
       desc: 'Column-level and table-level CHECKs translated to CEL rules',
       ddl:
-`ROW Order (
+`STRUCT Order (
   id STRING NOT NULL CHECK (LENGTH(id) > 0),
   email STRING NOT NULL CHECK (IS_EMAIL(email)),
   quantity INT NOT NULL CHECK (quantity BETWEEN 1 AND 100),
@@ -621,7 +621,7 @@ ENUM Outer.Status ('ACTIVE', 'INACTIVE');
     CHECK (promo_code LIKE 'PROMO-%'),
   tags ARRAY<STRING NOT NULL>
     CHECK (EVERY(tags, t, LENGTH(t) > 0)),
-  shipping_address ROW(
+  shipping_address STRUCT(
     street STRING NOT NULL,
     city STRING NOT NULL,
     postal_code VARCHAR(10) NOT NULL
@@ -651,7 +651,7 @@ ENUM Outer.Status ('ACTIVE', 'INACTIVE');
           ddl:
 `NAMESPACE com.example.demo;
 
-ROW Address (
+STRUCT Address (
   street STRING NOT NULL,
   city STRING NOT NULL,
   postal_code VARCHAR(16)
@@ -663,7 +663,7 @@ ROW Address (
           ddl:
 `NAMESPACE com.example.demo;
 
-ROW Order (
+STRUCT Order (
   id STRING NOT NULL,
   amount DECIMAL(12, 2) NOT NULL,
   shipping com.example.demo.Address NOT NULL,

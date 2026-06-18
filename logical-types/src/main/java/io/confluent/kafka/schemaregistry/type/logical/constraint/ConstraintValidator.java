@@ -396,7 +396,7 @@ final class ConstraintValidator {
           }
           throw locatedError(el,
               "Cannot access field '" + fieldName + "' on '" + pathSoFar
-                  + "' (type " + current.getType() + ") — only STRUCT/ROW "
+                  + "' (type " + current.getType() + ") — only STRUCT "
                   + "supports field access.");
         }
         Schema.Field nested = current.getField(fieldName);

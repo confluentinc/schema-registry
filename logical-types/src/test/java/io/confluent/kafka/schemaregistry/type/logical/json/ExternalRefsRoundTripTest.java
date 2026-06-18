@@ -99,12 +99,12 @@ class ExternalRefsRoundTripTest {
 
     // Pin the DDL projection — bare externals have no syntactic marker (they
     // re-infer from usage on read-back). The synthesized Ref1 stands in for
-    // the whole-doc ext.Outer URI and is emitted as an ALIAS statement;
-    // Inner extracted from the canonical /$defs/Inner ref needs no ALIAS
+    // the whole-doc ext.Outer URI and is emitted as an DECLARE statement;
+    // Inner extracted from the canonical /$defs/Inner ref needs no DECLARE
     // (its source is discoverable via resolvedReferences).
     assertEquals(
-        "ALIAS Ref1 FOR 'ext.Outer';\n"
-            + "TYPE ROW(inner Inner, outer Ref1) NOT NULL;\n",
+        "DECLARE Ref1 FOR 'ext.Outer';\n"
+            + "TYPE STRUCT(inner Inner, outer Ref1) NOT NULL;\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
     // Reverse: LT -> JSON. Result must be parseable and carry references.
@@ -218,18 +218,18 @@ class ExternalRefsRoundTripTest {
     assertEquals("ext.Doc#/properties/foo/items",
         lt.getExternalImports().get(subName));
 
-    // DDL projects clean: Local is local (ROW declaration — backticked because
-    // "Local" is a reserved word); the synthesized names appear as ALIAS
+    // DDL projects clean: Local is local (STRUCT declaration — backticked because
+    // "Local" is a reserved word); the synthesized names appear as DECLARE
     // statements carrying their URI bindings.
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
     assertTrue(
-        ddl.contains("ALIAS " + wholeName + " FOR 'ext.Doc';"),
+        ddl.contains("DECLARE " + wholeName + " FOR 'ext.Doc';"),
         ddl);
     assertTrue(
-        ddl.contains("ALIAS " + subName
+        ddl.contains("DECLARE " + subName
             + " FOR 'ext.Doc#/properties/foo/items';"),
         ddl);
-    assertTrue(ddl.contains("ROW `Local` ("), ddl);
+    assertTrue(ddl.contains("STRUCT `Local` ("), ddl);
 
     // Round trip writes back, re-reads, structure preserved.
     JsonSchema rebuilt = LogicalTypeToJsonConverter.fromLogicalType(lt, "Holder");

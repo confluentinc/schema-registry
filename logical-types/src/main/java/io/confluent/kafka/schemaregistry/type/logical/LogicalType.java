@@ -38,7 +38,7 @@ import static java.util.Objects.requireNonNull;
  *
  * <p>Default-value path semantics (matching the Flink converters):
  * the key is a list of indices that walks from the root into the field.
- * For {@code ROW(a INT, b ROW(b1 STRING))}, {@code a}'s default is at
+ * For {@code STRUCT(a INT, b STRUCT(b1 STRING))}, {@code a}'s default is at
  * {@code [0]} and {@code b.b1}'s is at {@code [1, 0]}. ARRAY elements use
  * index {@code 0}; MAP key/value use {@code 0}/{@code 1}.
  */
@@ -184,7 +184,7 @@ public class LogicalType {
    * synthesizes {@code Ref<N>}-style names for non-canonical $refs (whole-doc,
    * arbitrary JSON Pointers, and other shapes that don't extract cleanly to a
    * {@code $defs} key), and by the DDL visitor when it parses
-   * {@code ALIAS x FOR '<uri>'} statements.
+   * {@code DECLARE x FOR '<uri>'} statements.
    *
    * <p>The JSON writer consults this map to emit those externals as a local
    * {@code #/$defs/<name>} reference whose body is a single
@@ -200,7 +200,7 @@ public class LogicalType {
    * carries wire-format binding (typeName → URI used in {@code $ref}); the
    * {@code references} list carries SR coordinates (subject + version used by
    * the SR client to fetch external content). They are populated independently
-   * — DDL's {@code ALIAS} populates {@code externalImports} but never the
+   * — DDL's {@code DECLARE} populates {@code externalImports} but never the
    * references list. To produce an SR-publishable LT from DDL, attach a
    * {@code references} list (with matching {@code resolvedReferences}
    * content) separately after the visitor runs.
@@ -441,7 +441,7 @@ public class LogicalType {
    * indices to the path according to a fixed convention:
    *
    * <ul>
-   *   <li><b>STRUCT (ROW):</b> the field's positional index. A struct with three
+   *   <li><b>STRUCT:</b> the field's positional index. A struct with three
    *       fields contributes {@code 0}, {@code 1}, or {@code 2} for its first,
    *       second, or third field respectively.</li>
    *   <li><b>MAP:</b> {@code 0} for the key type, {@code 1} for the value type.</li>
