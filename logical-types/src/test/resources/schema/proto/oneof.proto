@@ -1,0 +1,14 @@
+syntax = "proto3";
+package com.mycorp.mynamespace;
+
+message KeyValue {
+  string key = 1;
+  AnyValue value = 2;
+
+  message AnyValue {
+    oneof value {
+      string string_value = 1;
+      bool bool_value = 2;
+    }
+  }
+}
