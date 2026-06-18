@@ -128,7 +128,7 @@ public class ProtoToLogicalTypeConverter {
     // Convention: the descriptor stored in {@code schema} is the root (callers
     // that pass {@code new ProtobufSchema(specificMessage)} can pick any top-
     // level message). All other top-level messages and all top-level enums are
-    // local named types (corresponding to ROW/ENUM declarations). Anonymous
+    // local named types (corresponding to STRUCT/ENUM declarations). Anonymous
     // structs synthesized for inline anonymous types remain nested inside
     // their parent message.
     // Pre-register every named-type peer (full name) so field-side conversion

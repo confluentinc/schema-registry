@@ -22,15 +22,15 @@ declareNamespaceStmt
 // reachable from the root or from a local body that isn't itself declared
 // locally is treated as external. There is no syntactic marker for it.
 //
-// `ALIAS <qualifiedName> FOR <stringLiteral>` optionally attaches a
+// `DECLARE <qualifiedName> FOR <stringLiteral>` optionally attaches a
 // synthetic-wrapper URI to a named external — used when the source isn't
 // addressable by FQN alone (whole-doc JSON refs, arbitrary JSON-Pointer refs,
 // etc.). Visitor records (qualifiedName -> URI) in the LT's externalImports;
-// writers emit the URI as the reference target. Without an ALIAS, the external
+// writers emit the URI as the reference target. Without an DECLARE, the external
 // is canonical and the writer discovers its source by walking
 // resolvedReferences.
 //
-// `ALIAS` controls only the WIRE-FORMAT shape of the reference (the $ref URI
+// `DECLARE` controls only the WIRE-FORMAT shape of the reference (the $ref URI
 // in JSON, the import string in Proto). It deliberately does NOT carry SR
 // coordinates (subject + version) — those are deployment metadata that vary
 // across environments and aren't expressible in DDL. To produce an
@@ -38,20 +38,20 @@ declareNamespaceStmt
 // (with matching resolvedReferences content) to the LogicalType separately
 // after the visitor runs.
 //
-// Validation: each ALIAS's FQN must (a) actually be referenced by some local
+// Validation: each DECLARE's FQN must (a) actually be referenced by some local
 // body or by the root (no dangling aliases) and (b) not collide with a local
-// ROW/ENUM declaration of the same name (no shadowing).
+// STRUCT/ENUM declaration of the same name (no shadowing).
 
 aliasStmt
-    : ALIAS qualifiedName FOR stringLiteral
+    : DECLARE qualifiedName FOR stringLiteral
     ;
 
 // ─── named type declarations ──────────────────────────────────────────────────
 //
-// Two kind-specific shapes — `ROW <name> (...)` for record-like types and
+// Two kind-specific shapes — `STRUCT <name> (...)` for record-like types and
 // `ENUM <name> (...)` for enums. The leading kind keyword tells the reader
 // (and the parser) what's coming without burying the kind in the body. Inline
-// uses of ROW (as a type expression at field/branch positions) are unchanged;
+// uses of STRUCT (as a type expression at field/branch positions) are unchanged;
 // the parser disambiguates declaration vs. inline by structural position in
 // `script`.
 //
@@ -59,10 +59,10 @@ aliasStmt
 // LogicalTypesSchemaVisitor#qualifyWithNamespace):
 //   - No dots → unqualified, prefixed with the active NAMESPACE.
 //   - Dots, and a dotted prefix matches a previously-declared local type →
-//     NESTED under that local type. Example: with `ROW Outer (...)`
-//     in scope, `ROW Outer.Inner (...)` declares Inner nested in Outer.
+//     NESTED under that local type. Example: with `STRUCT Outer (...)`
+//     in scope, `STRUCT Outer.Inner (...)` declares Inner nested in Outer.
 //   - Dots, no matching local-type prefix → namespace-qualified top-level
-//     type (e.g., `ROW other.Bar (...)` declares Bar in namespace `other`).
+//     type (e.g., `STRUCT other.Bar (...)` declares Bar in namespace `other`).
 //
 // Parents must be declared before children (one-pass parse). Gaps in a
 // nesting chain (`Outer` exists, `Outer.Mid` doesn't, `Outer.Mid.Inner`
@@ -72,7 +72,7 @@ aliasStmt
 // emit dotted names as flat top-level types.
 
 createTypeStmt
-    : ROW  qualifiedName structBody commentClause? tagsClause? withClause?
+    : STRUCT  qualifiedName structBody commentClause? tagsClause? withClause?
     | ENUM qualifiedName enumBody   commentClause? withClause?
     ;
 
@@ -80,7 +80,7 @@ createTypeStmt
 //
 // Trailing `TYPE <typeExpr>` (no body) names the root for SR publication when
 // the single-root sugar can't infer it, or when the root needs a typeExpr
-// shape that isn't a named row/enum (a primitive, ARRAY, anonymous ROW, etc.).
+// shape that isn't a named row/enum (a primitive, ARRAY, anonymous STRUCT, etc.).
 
 registerTypeStmt
     : TYPE typeExpr
@@ -381,8 +381,8 @@ variantType
     ;
 
 rowType
-    : ROW '<' fieldDef ( ',' fieldDef )* '>'
-    | ROW '(' fieldDef ( ',' fieldDef )* ')'
+    : STRUCT '<' fieldDef ( ',' fieldDef )* '>'
+    | STRUCT '(' fieldDef ( ',' fieldDef )* ')'
     ;
 
 unionType
@@ -464,7 +464,7 @@ nonReservedKeyword
 
 // ─── lexer rules ──────────────────────────────────────────────────────────────
 
-ALIAS           : A L I A S ;
+DECLARE         : D E C L A R E ;
 AND             : A N D ;
 ARRAY           : A R R A Y ;
 AS              : A S ;
@@ -516,7 +516,7 @@ POSITION        : P O S I T I O N ;
 PRECISION       : P R E C I S I O N ;
 REAL            : R E A L ;
 RETURNING       : R E T U R N I N G ;
-ROW             : R O W ;
+STRUCT          : S T R U C T ;
 SMALLINT        : S M A L L I N T ;
 STRING          : S T R I N G ;
 SUBSTRING       : S U B S T R I N G ;

@@ -2208,7 +2208,7 @@ class LogicalTypeToProtoConverterTest {
   // =========================================================================
 
   /**
-   * `TYPE Address` against a `ROW Address` declaration produces a
+   * `TYPE Address` against a `STRUCT Address` declaration produces a
    * LogicalType whose root is NAMED_TYPE_REF("io.confluent.Address") and
    * whose namedTypes contains the actual struct. Proto needs to resolve this
    * to "the file's root message IS Address" — message name from the simple

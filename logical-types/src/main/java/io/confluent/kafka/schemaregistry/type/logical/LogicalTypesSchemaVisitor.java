@@ -39,10 +39,10 @@ import java.util.stream.Collectors;
  * <p>Visitor outputs (consumed by {@link #toLogicalType}):
  * <ul>
  *   <li>{@code namespace} — from any {@code NAMESPACE} statement.</li>
- *   <li>{@code namedTypes} — from each {@code ROW <name> (...)} or
+ *   <li>{@code namedTypes} — from each {@code STRUCT <name> (...)} or
  *       {@code ENUM <name> (...)} statement (locals).</li>
  *   <li>{@code externalImports} — from each
- *       {@code ALIAS x FOR 'uri'} statement; maps the typeName to the
+ *       {@code DECLARE x FOR 'uri'} statement; maps the typeName to the
  *       wire-format URI.</li>
  *   <li>{@code rootSchema} — from the trailing {@code TYPE <typeExpr>}
  *       statement (or sugar-inferred when absent).</li>
@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
  * shouldn't be embedded in schema source. So the produced LT has an empty
  * {@code references} list. The caller is responsible for attaching
  * {@code references} (and the corresponding {@code resolvedReferences}
- * content) before SR registration. {@code ALIAS} populates schema-text shape
+ * content) before SR registration. {@code DECLARE} populates schema-text shape
  * (which {@code $ref}/{@code import} string to emit); it does not bridge to SR
  * resolution.
  */
@@ -76,7 +76,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   /**
-   * URI bindings for {@code ALIAS x FOR '<uri>';} declarations. Becomes
+   * URI bindings for {@code DECLARE x FOR '<uri>';} declarations. Becomes
    * {@link LogicalType#getExternalImports()} on {@link #toLogicalType}.
    */
   public Map<String, String> getExternalImports() {
@@ -101,7 +101,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * enrichment is responsible for SR-fetching and promoting bodies into
    * {@code namedTypes}.
    *
-   * <p>ALIAS validation (no shadowing, no dangling entries) runs during
+   * <p>DECLARE validation (no shadowing, no dangling entries) runs during
    * parsing inside {@link #visitScript}, so a {@code LogicalType} produced
    * here is guaranteed to satisfy both invariants.
    */
@@ -144,8 +144,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     }
     // Pre-pass: register every named-type declaration's qualified name (with
     // an empty placeholder) before building any body. This lets a parent's
-    // body reference its own nested children by name (e.g., `ROW Outer
-    // (i Outer.Inner); ROW Outer.Inner (...)`). Qualification still happens
+    // body reference its own nested children by name (e.g., `STRUCT Outer
+    // (i Outer.Inner); STRUCT Outer.Inner (...)`). Qualification still happens
     // incrementally — each declaration's qualification consults the names
     // registered by previously-visited declarations in this same pre-pass.
     for (LogicalTypesParser.CreateTypeStmtContext stmt : ctx.createTypeStmt()) {
@@ -164,10 +164,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   /**
-   * After parsing completes, reject ALIAS declarations that either shadow a
+   * After parsing completes, reject DECLARE declarations that either shadow a
    * local declaration or aren't referenced by any local body / the root.
-   * Externals are inferred from usage, so an unused ALIAS has no effect and
-   * an ALIAS-on-local-name is contradictory — both are surfaced as errors at
+   * Externals are inferred from usage, so an unused DECLARE has no effect and
+   * an DECLARE-on-local-name is contradictory — both are surfaced as errors at
    * parse time rather than allowed to silently no-op.
    */
   private void validateAliases() {
@@ -178,8 +178,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     shadowed.retainAll(namedTypes.keySet());
     if (!shadowed.isEmpty()) {
       throw new ValidationException(
-          "ALIAS declared for name(s) that are also locally declared as "
-              + "ROW/ENUM — an ALIAS attaches a URI to an external reference, "
+          "DECLARE declared for name(s) that are also locally declared as "
+              + "STRUCT/ENUM — an DECLARE attaches a URI to an external reference, "
               + "so it must not collide with a local declaration: " + shadowed);
     }
     Set<String> externals = inferExternalTypes();
@@ -187,9 +187,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     dangling.removeAll(externals);
     if (!dangling.isEmpty()) {
       throw new ValidationException(
-          "ALIAS declared for name(s) that aren't referenced by any local "
+          "DECLARE declared for name(s) that aren't referenced by any local "
               + "type or by the root — externals are inferred from usage, so "
-              + "an unused ALIAS has no effect: " + dangling);
+              + "an unused DECLARE has no effect: " + dangling);
     }
   }
 
@@ -239,8 +239,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * otherwise emit {@code [null, T]}, Protobuf disallows null roots, etc.).
    * The explicit form ({@code TYPE Foo} with no marker) intentionally defers
    * to the grammar's general typeExpr default, which is <em>nullable</em> —
-   * same as a field type in any other position. So {@code ROW Foo (...)}
-   * (sugar) and {@code ROW Foo (...); TYPE Foo} (explicit) produce different
+   * same as a field type in any other position. So {@code STRUCT Foo (...)}
+   * (sugar) and {@code STRUCT Foo (...); TYPE Foo} (explicit) produce different
    * root nullability by design. Callers wanting a nullable root must write
    * the trailing {@code TYPE Foo} (or {@code ... NULL}) explicitly.
    *
@@ -261,7 +261,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   private void inferAndRegisterRoot(LogicalTypesParser.ScriptContext ctx) {
     if (namedTypes.isEmpty()) {
       throw error(ctx,
-          "No type to register. Add a 'ROW <name> (...)' or 'ENUM <name> (...)' "
+          "No type to register. Add a 'STRUCT <name> (...)' or 'ENUM <name> (...)' "
               + "declaration (which the script will auto-register) or a trailing "
               + "'TYPE <typeExpr>' statement.");
     }
@@ -273,7 +273,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
       Set<String> refs = new LinkedHashSet<>();
       LogicalType.collectNamedRefs(e.getValue(), refs);
       refs.retainAll(defined);
-      // A self-recursive named type (e.g. ROW Node (next Node)) is
+      // A self-recursive named type (e.g. STRUCT Node (next Node)) is
       // still a valid root — it just refers to itself. Strip self-references
       // so the type isn't mistakenly flagged as "referenced by another".
       refs.remove(e.getKey());
@@ -399,13 +399,13 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     String name = buildQualifiedName(ctx.qualifiedName());
     if (externalImports.containsKey(name)) {
       throw error(ctx.qualifiedName(),
-          "Duplicate ALIAS: " + name
+          "Duplicate DECLARE: " + name
               + " (each alias FQN may be declared at most once)");
     }
     String uri = stripStringLiteral(ctx.stringLiteral().getText());
     if (uri.trim().isEmpty()) {
       throw error(ctx.stringLiteral(),
-          "ALIAS " + name + " FOR clause must be a non-empty URI");
+          "DECLARE " + name + " FOR clause must be a non-empty URI");
     }
     externalImports.put(name, uri);
     return null;
@@ -870,7 +870,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
 
   /**
    * Applies the active namespace to a name written at a definition site
-   * (a {@code ROW} or {@code ENUM} declaration).
+   * (a {@code STRUCT} or {@code ENUM} declaration).
    *
    * <p>Rule:
    * <ul>
