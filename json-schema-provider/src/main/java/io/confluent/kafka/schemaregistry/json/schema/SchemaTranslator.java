@@ -111,7 +111,7 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   private final Map<Schema, org.everit.json.schema.Schema.Builder<?>> schemaMapping;
   private final Deque<Pair<org.everit.json.schema.ReferenceSchema, Schema>> refMapping;
-  // Tracks the jsonsKema schema each everit ReferenceSchema refers to, so a ReferenceSchema
+  // Tracks the json-sKema schema each everit ReferenceSchema refers to, so a ReferenceSchema
   // that is rebuilt (e.g. via schemaToBuilder) can be re-registered for deferred resolution.
   private final Map<org.everit.json.schema.ReferenceSchema, Schema> refReferred;
   // Tracks the json-sKema schemas currently being descended into, by object identity, so that an

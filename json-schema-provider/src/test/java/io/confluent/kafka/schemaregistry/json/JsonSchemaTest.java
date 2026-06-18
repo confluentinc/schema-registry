@@ -1932,19 +1932,6 @@ public class JsonSchemaTest {
     return new JsonSchema(schemaString);
   }
 
-  static class JsonSchemaWithMappings extends JsonSchema {
-    private Map<URI, String> mappings;
-    public JsonSchemaWithMappings(String schema, Map<URI, String> mappings) {
-      super(schema);
-      this.mappings = mappings;
-    }
-
-    @Override
-    protected Map<URI, String> getPrepopulatedMappings() {
-      return mappings;
-    }
-  }
-
   @Test
   public void testRecursiveMetaSchemaReference() {
     String schemaString = "{"

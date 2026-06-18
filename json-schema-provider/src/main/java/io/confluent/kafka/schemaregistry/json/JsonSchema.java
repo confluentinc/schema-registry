@@ -474,7 +474,7 @@ public class JsonSchema implements ParsedSchema {
 
   private void loadLatestDraft() throws URISyntaxException {
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
-    // Also make the older draft 4/6/7 meta-schemas resolvable locally
+    // Also make the older draft 4/6/7 meta-schemas resolvable locally, so a (modern) schema that
     // $refs an older meta-schema does not trigger an external HTTP fetch.
     mappings.putAll(previousDraftMetaSchemas);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
