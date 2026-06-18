@@ -18,10 +18,14 @@ package io.confluent.kafka.schemaregistry.type;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.UUID;
 
 /**
  * This Variant class holds the Variant-encoded value and metadata binary values.
+ *
+ * <p>Concurrency: the byte buffers are read-only and the lazy header caches are idempotent,
+ * so concurrent reads are safe - the worst outcome is a redundant decode.
  */
 public final class Variant {
   /**
@@ -33,6 +37,16 @@ public final class Variant {
    * The buffer that contains the Variant metadata.
    */
   final ByteBuffer metadata;
+
+  /**
+   * Lazy cache for the parsed object header.
+   */
+  private VariantFormat.ObjectInfo cachedObjectInfo;
+
+  /**
+   * Lazy cache for the parsed array header.
+   */
+  private VariantFormat.ArrayInfo cachedArrayInfo;
 
   /**
    * The threshold to switch from linear search to binary search when looking up a field by key in
@@ -56,10 +70,10 @@ public final class Variant {
   }
 
   public Variant(ByteBuffer value, ByteBuffer metadata) {
-    // The buffers are read a single-byte at a time, so the endianness of the input buffers
-    // is not important.
-    this.value = value.asReadOnlyBuffer();
-    this.metadata = metadata.asReadOnlyBuffer();
+    // Little-endian order is required by readUnsignedLittleEndian, which uses bulk
+    // ByteBuffer reads on the read path. Single-byte reads are unaffected by the order.
+    this.value = value.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
+    this.metadata = metadata.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
     // There is currently only one allowed version.
     if ((metadata.get(metadata.position()) & VariantFormat.VERSION_MASK) != VariantFormat.VERSION) {
@@ -194,7 +208,7 @@ public final class Variant {
    * @throws IllegalArgumentException if `getType()` does not return `Type.OBJECT`
    */
   public int numObjectElements() {
-    return VariantFormat.getObjectInfo(value).numElements;
+    return objectInfo().numElements;
   }
 
   /**
@@ -206,22 +220,22 @@ public final class Variant {
    * @throws IllegalArgumentException if `getType()` does not return `Type.OBJECT`
    */
   public Variant getFieldByKey(String key) {
-    VariantFormat.ObjectInfo info = VariantFormat.getObjectInfo(value);
+    VariantFormat.ObjectInfo info = objectInfo();
+    int idStart = value.position() + info.idStartOffset;
+    int offsetStart = value.position() + info.offsetStartOffset;
+    int dataStart = value.position() + info.dataStartOffset;
+
     // Use linear search for a short list. Switch to binary search when the length reaches
     // `BINARY_SEARCH_THRESHOLD`.
     if (info.numElements < BINARY_SEARCH_THRESHOLD) {
       for (int i = 0; i < info.numElements; ++i) {
-        ObjectField field = getFieldAtIndex(
-            i,
-            value,
-            metadata,
-            info.idSize,
-            info.offsetSize,
-            value.position() + info.idStartOffset,
-            value.position() + info.offsetStartOffset,
-            value.position() + info.dataStartOffset);
-        if (field.key.equals(key)) {
-          return field.value;
+        int id = VariantFormat.readUnsignedLittleEndian(
+            value, idStart + info.idSize * i, info.idSize);
+        String fieldKey = VariantFormat.getMetadataKey(metadata, id);
+        if (fieldKey.equals(key)) {
+          int offset = VariantFormat.readUnsignedLittleEndian(
+              value, offsetStart + info.offsetSize * i, info.offsetSize);
+          return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
         }
       }
     } else {
@@ -232,22 +246,18 @@ public final class Variant {
         // performance optimization, because it can properly handle the case where `low + high`
         // overflows int.
         int mid = (low + high) >>> 1;
-        ObjectField field = getFieldAtIndex(
-            mid,
-            value,
-            metadata,
-            info.idSize,
-            info.offsetSize,
-            value.position() + info.idStartOffset,
-            value.position() + info.offsetStartOffset,
-            value.position() + info.dataStartOffset);
-        int cmp = field.key.compareTo(key);
+        int midId = VariantFormat.readUnsignedLittleEndian(
+            value, idStart + info.idSize * mid, info.idSize);
+        String midKey = VariantFormat.getMetadataKey(metadata, midId);
+        int cmp = midKey.compareTo(key);
         if (cmp < 0) {
           low = mid + 1;
         } else if (cmp > 0) {
           high = mid - 1;
         } else {
-          return field.value;
+          int offset = VariantFormat.readUnsignedLittleEndian(
+              value, offsetStart + info.offsetSize * mid, info.offsetSize);
+          return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
         }
       }
     }
@@ -275,33 +285,13 @@ public final class Variant {
    * @throws IllegalArgumentException if `getType()` does not return `Type.OBJECT`
    */
   public ObjectField getFieldAtIndex(int idx) {
-    VariantFormat.ObjectInfo info = VariantFormat.getObjectInfo(value);
-    // Use linear search for a short list. Switch to binary search when the length reaches
-    // `BINARY_SEARCH_THRESHOLD`.
-    ObjectField field = getFieldAtIndex(
-        idx,
-        value,
-        metadata,
-        info.idSize,
-        info.offsetSize,
-        value.position() + info.idStartOffset,
-        value.position() + info.offsetStartOffset,
-        value.position() + info.dataStartOffset);
-    return field;
-  }
-
-  static ObjectField getFieldAtIndex(
-      int index,
-      ByteBuffer value,
-      ByteBuffer metadata,
-      int idSize,
-      int offsetSize,
-      int idStart,
-      int offsetStart,
-      int dataStart) {
-    // idStart, offsetStart, and dataStart are absolute positions in the `value` buffer.
-    int id = VariantFormat.readUnsigned(value, idStart + idSize * index, idSize);
-    int offset = VariantFormat.readUnsigned(value, offsetStart + offsetSize * index, offsetSize);
+    VariantFormat.ObjectInfo info = objectInfo();
+    int idStart = value.position() + info.idStartOffset;
+    int offsetStart = value.position() + info.offsetStartOffset;
+    int dataStart = value.position() + info.dataStartOffset;
+    int id = VariantFormat.readUnsignedLittleEndian(value, idStart + info.idSize * idx, info.idSize);
+    int offset = VariantFormat.readUnsignedLittleEndian(
+        value, offsetStart + info.offsetSize * idx, info.offsetSize);
     String key = VariantFormat.getMetadataKey(metadata, id);
     Variant v = new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
     return new ObjectField(key, v);
@@ -312,7 +302,7 @@ public final class Variant {
    * @throws IllegalArgumentException if `getType()` does not return `Type.ARRAY`
    */
   public int numArrayElements() {
-    return VariantFormat.getArrayInfo(value).numElements;
+    return arrayInfo().numElements;
   }
 
   /**
@@ -324,24 +314,38 @@ public final class Variant {
    * @throws IllegalArgumentException if `getType()` does not return `Type.ARRAY`
    */
   public Variant getElementAtIndex(int index) {
-    VariantFormat.ArrayInfo info = VariantFormat.getArrayInfo(value);
+    VariantFormat.ArrayInfo info = arrayInfo();
     if (index < 0 || index >= info.numElements) {
       return null;
     }
-    return getElementAtIndex(
-        index,
-        value,
-        metadata,
-        info.offsetSize,
-        value.position() + info.offsetStartOffset,
-        value.position() + info.dataStartOffset);
+    int offsetStart = value.position() + info.offsetStartOffset;
+    int dataStart = value.position() + info.dataStartOffset;
+    int offset = VariantFormat.readUnsignedLittleEndian(
+        value, offsetStart + info.offsetSize * index, info.offsetSize);
+    return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
   }
 
-  private static Variant getElementAtIndex(
-      int index, ByteBuffer value, ByteBuffer metadata,
-      int offsetSize, int offsetStart, int dataStart) {
-    // offsetStart and dataStart are absolute positions in the `value` buffer.
-    int offset = VariantFormat.readUnsigned(value, offsetStart + offsetSize * index, offsetSize);
-    return new Variant(VariantFormat.slice(value, dataStart + offset), metadata);
+  /**
+   * Returns the cached object header, parsing it on first access.
+   */
+  private VariantFormat.ObjectInfo objectInfo() {
+    VariantFormat.ObjectInfo info = cachedObjectInfo;
+    if (info == null) {
+      info = VariantFormat.getObjectInfo(value);
+      cachedObjectInfo = info;
+    }
+    return info;
+  }
+
+  /**
+   * Returns the cached array header, parsing it on first access.
+   */
+  private VariantFormat.ArrayInfo arrayInfo() {
+    VariantFormat.ArrayInfo info = cachedArrayInfo;
+    if (info == null) {
+      info = VariantFormat.getArrayInfo(value);
+      cachedArrayInfo = info;
+    }
+    return info;
   }
 }
