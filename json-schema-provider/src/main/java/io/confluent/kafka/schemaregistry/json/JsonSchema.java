@@ -198,6 +198,34 @@ public class JsonSchema implements ParsedSchema {
               readFromClassPath("/metaschemas/draft/2020-12/schema"))
           .build();
 
+  private static final String DRAFT_4_META_SCHEMA =
+      readFromClassPath("/metaschemas/draft-04/schema");
+  private static final String DRAFT_6_META_SCHEMA =
+      readFromClassPath("/metaschemas/draft-06/schema");
+  private static final String DRAFT_7_META_SCHEMA =
+      readFromClassPath("/metaschemas/draft-07/schema");
+
+  // Meta-schemas for drafts 4/6/7, registered with the Everit loader (loadPreviousDraft) so that a
+  // $ref to one of these meta-schemas resolves locally instead of triggering an external HTTP
+  // fetch. (A bare $schema declaration does not fetch; only an explicit $ref to the meta-schema
+  // does.) The json-sKema path is covered by prepopulatedMetaSchemas above. Both the http and
+  // https forms, with and without a trailing #, are included to match however the $ref is written.
+  private static final Map<URI, String> previousDraftMetaSchemas =
+      new ImmutableMap.Builder<URI, String>()
+          .put(URI.create("http://json-schema.org/draft-04/schema"), DRAFT_4_META_SCHEMA)
+          .put(URI.create("http://json-schema.org/draft-04/schema#"), DRAFT_4_META_SCHEMA)
+          .put(URI.create("https://json-schema.org/draft-04/schema"), DRAFT_4_META_SCHEMA)
+          .put(URI.create("https://json-schema.org/draft-04/schema#"), DRAFT_4_META_SCHEMA)
+          .put(URI.create("http://json-schema.org/draft-06/schema"), DRAFT_6_META_SCHEMA)
+          .put(URI.create("http://json-schema.org/draft-06/schema#"), DRAFT_6_META_SCHEMA)
+          .put(URI.create("https://json-schema.org/draft-06/schema"), DRAFT_6_META_SCHEMA)
+          .put(URI.create("https://json-schema.org/draft-06/schema#"), DRAFT_6_META_SCHEMA)
+          .put(URI.create("http://json-schema.org/draft-07/schema"), DRAFT_7_META_SCHEMA)
+          .put(URI.create("http://json-schema.org/draft-07/schema#"), DRAFT_7_META_SCHEMA)
+          .put(URI.create("https://json-schema.org/draft-07/schema"), DRAFT_7_META_SCHEMA)
+          .put(URI.create("https://json-schema.org/draft-07/schema#"), DRAFT_7_META_SCHEMA)
+          .build();
+
   public JsonSchema(JsonNode jsonNode) {
     this(jsonNode, Collections.emptyList(), Collections.emptyMap(), null);
   }
@@ -446,6 +474,9 @@ public class JsonSchema implements ParsedSchema {
 
   private void loadLatestDraft() throws URISyntaxException {
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
+    // Also make the older draft 4/6/7 meta-schemas resolvable locally
+    // $refs an older meta-schema does not trigger an external HTTP fetch.
+    mappings.putAll(previousDraftMetaSchemas);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI uri = new URI(dep.getKey());
       mappings.put(uri, dep.getValue());
@@ -491,6 +522,14 @@ public class JsonSchema implements ParsedSchema {
     }
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
         .useDefaults(true).draftV7Support();
+    // Register the draft 4/6/7 meta-schemas so a $ref to one of them resolves from the bundled
+    // copy instead of triggering an external HTTP fetch (Everit otherwise queries the network).
+    // The modern 2019-09/2020-12 meta-schemas are intentionally not registered here: they are
+    // modular (vocabulary sub-documents) and use keywords Everit does not support, so a draft<=7
+    // schema referencing a modern meta-schema is not resolved locally.
+    for (Map.Entry<URI, String> meta : previousDraftMetaSchemas.entrySet()) {
+      builder.registerSchemaByURI(meta.getKey(), new JSONObject(meta.getValue()));
+    }
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
       builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
