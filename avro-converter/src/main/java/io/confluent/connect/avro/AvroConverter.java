@@ -16,9 +16,8 @@
 
 package io.confluent.connect.avro;
 
+import io.confluent.connect.schema.backup.BackupConverterHelper;
 import io.confluent.connect.schema.backup.BackupReferenceResolver;
-import io.confluent.connect.schema.backup.BackupSchemaFetcher;
-import io.confluent.connect.schema.backup.BackupSchemaFetcher.BackupSchemaInfo;
 import io.confluent.connect.schema.backup.BackupWrapper;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -26,7 +25,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerializer;
@@ -54,8 +53,8 @@ import org.apache.kafka.connect.storage.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -79,8 +78,7 @@ public class AvroConverter implements Converter {
   private AvroData avroData;
   private AvroData restoreAvroData;
   private boolean backupEnvelopeMode;
-  private BackupSchemaFetcher schemaFetcher;
-  private BackupReferenceResolver referenceResolver;
+  private BackupConverterHelper backupHelper;
   private final Map<Schema, Schema> wrapperSchemaCache =
       new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -95,9 +93,7 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
-    Object schemaBackup = configs.get(BackupWrapper.SCHEMA_BACKUP_ENABLED_CONFIG);
-    this.backupEnvelopeMode = "true".equalsIgnoreCase(
-        schemaBackup != null ? schemaBackup.toString() : null);
+    this.backupEnvelopeMode = BackupConverterHelper.isBackupEnabled(configs);
     log.info("AvroConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
@@ -115,8 +111,7 @@ public class AvroConverter implements Converter {
     deserializer = new Deserializer(configs, schemaRegistry);
     avroData = new AvroData(new AvroDataConfig(configs));
 
-    schemaFetcher = new BackupSchemaFetcher(schemaRegistry);
-    referenceResolver = new BackupReferenceResolver(schemaRegistry);
+    backupHelper = new BackupConverterHelper(schemaRegistry, wrapperSchemaCache);
     restoreAvroData = avroData;
   }
 
@@ -168,11 +163,16 @@ public class AvroConverter implements Converter {
       String topic, Headers headers, Schema wrapperSchema, Struct wrapper) {
     try {
       Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
+      if (wrapperSchema.field(BackupWrapper.FIELD_DATA) == null) {
+        throw new DataException("Malformed backup wrapper: missing '"
+            + BackupWrapper.FIELD_DATA + "' field");
+      }
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
 
       BackupReferenceResolver.ResolutionResult resolved =
-          referenceResolver.resolveFromWrapper(wrapperSchema, wrapper, AVRO_SCHEMA_FACTORY);
+          backupHelper.getReferenceResolver().resolveFromWrapper(
+              wrapperSchema, wrapper, AVRO_SCHEMA_FACTORY);
 
       org.apache.avro.Schema avroSchema =
           restoreAvroData.fromConnectSchema(actualConnectSchema);
@@ -181,7 +181,7 @@ public class AvroConverter implements Converter {
 
       AvroSchema serializeSchema;
       if (rawSchema != null) {
-        log.info("restoreFromWrapper: hasRefs={}, targetRefs={}, resolvedKeys={}, rawSchema={}",
+        log.debug("restoreFromWrapper: hasRefs={}, targetRefs={}, resolvedKeys={}, rawSchema={}",
             resolved.hasReferences(),
             resolved.hasReferences() ? resolved.getTargetRefs() : "[]",
             resolved.hasReferences() ? resolved.getResolvedSchemas().keySet() : "[]",
@@ -277,44 +277,11 @@ public class AvroConverter implements Converter {
 
   private SchemaAndValue wrapWithBackupMetadata(
       SchemaAndValue original, String topic, int schemaId)
-      throws java.io.IOException,
-      io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException {
-    BackupSchemaInfo info = schemaFetcher.fetchSchemaInfo(schemaId);
-    String rawSchema = info.getRawSchema();
-
-    AvroSchema parsed;
-    if (!info.getDirectReferences().isEmpty()) {
-      Map<String, String> resolved = new HashMap<>();
-      for (Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
-          : info.getReferenceTree().entrySet()) {
-        resolved.put(e.getKey(), e.getValue().getSchema());
-      }
-      parsed = new AvroSchema(rawSchema,
-          info.getDirectReferences(), resolved, null);
-    } else {
-      parsed = new AvroSchema(rawSchema);
-    }
-    String subject = serializer.computeSubjectName(topic, isKey, parsed);
-
-    Integer schemaVersion = info.getVersionForSubject(subject);
-
-    Schema wrapperSchema;
-    if (original.schema() == null) {
-      wrapperSchema = BackupWrapper.buildSchema(null);
-    } else {
-      wrapperSchema = wrapperSchemaCache.computeIfAbsent(
-          original.schema(), ds -> BackupWrapper.buildSchema(ds));
-    }
-
-    Struct wrapper = BackupWrapper.buildWrapper(
-        wrapperSchema, original.value(),
-        schemaId, schemaVersion, "AVRO", subject, rawSchema,
-        info.getReferenceTreeJson(),
-        info.getDirectRefsJson());
-
-    log.debug("Wrapped backup metadata: topic={}, isKey={}, schemaId={}, hasRefs={}",
-        topic, isKey, schemaId, info.getReferenceTreeJson() != null);
-    return new SchemaAndValue(wrapperSchema, wrapper);
+      throws IOException, RestClientException {
+    return backupHelper.wrapWithBackupMetadata(
+        original, topic, schemaId,
+        BackupWrapper.SCHEMA_TYPE_AVRO, isKey,
+        AVRO_SCHEMA_FACTORY, serializer::computeSubjectName);
   }
 
   static class Serializer extends AbstractKafkaAvroSerializer {

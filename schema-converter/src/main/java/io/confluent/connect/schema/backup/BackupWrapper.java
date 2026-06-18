@@ -54,6 +54,26 @@ public final class BackupWrapper {
    */
   public static final String SCHEMA_BACKUP_ENABLED_CONFIG = "schema.backup.enabled";
 
+  // Schema type tags — used in wrapWithBackupMetadata() across converters.
+  // Must match BackupEnvelope.TYPE_* in storage-common (cross-repo contract).
+  public static final String SCHEMA_TYPE_AVRO = "AVRO";
+  public static final String SCHEMA_TYPE_PROTOBUF = "PROTOBUF";
+  public static final String SCHEMA_TYPE_JSON_SCHEMA = "JSON_SCHEMA";
+
+  public static final int MAX_REFERENCE_DEPTH = 50;
+
+  // Reference tree JSON field names (cross-repo contract between
+  // BackupSchemaFetcher, BackupReferenceResolver, BackupWrapperRebuilder,
+  // EnvelopeTransformer, BackupReferenceParser).
+  // Must match BackupEnvelope.REF_FIELD_* in storage-common.
+  public static final String REF_FIELD_SUBJECT = "subject";
+  public static final String REF_FIELD_VERSION = "version";
+  public static final String REF_FIELD_GLOBAL_ID = "globalId";
+  public static final String REF_FIELD_SCHEMA_TYPE = "schemaType";
+  public static final String REF_FIELD_SCHEMA = "schema";
+  public static final String REF_FIELD_REFERENCES = "references";
+  public static final String REF_FIELD_NAME = "name";
+
   private static final byte MAGIC_BYTE = 0x0;
 
   private BackupWrapper() {

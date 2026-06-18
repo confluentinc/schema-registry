@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,7 +49,7 @@ public class BackupReferenceResolver {
 
   private static final Logger log = LoggerFactory.getLogger(BackupReferenceResolver.class);
   private static final ObjectMapper JSON = new ObjectMapper();
-  private static final int MAX_DEPTH = 50;
+  private static final int MAX_DEPTH = BackupWrapper.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
   private final Map<String, Integer> registrationCache = new ConcurrentHashMap<>();
@@ -139,7 +141,7 @@ public class BackupReferenceResolver {
     // LinkedHashMap preserves insertion order (depth-first = leaves first)
     // which is required by schema parsers that iterate resolvedSchemas.values()
     // and need transitive dependencies parsed before their dependents
-    Map<String, String> resolvedSchemas = new java.util.LinkedHashMap<>();
+    Map<String, String> resolvedSchemas = new LinkedHashMap<>();
     registerRefsRecursive(
         directRefs, refTree, factory, targetRefs, resolvedSchemas);
     return ResolutionResult.of(targetRefs, resolvedSchemas);
@@ -163,35 +165,35 @@ public class BackupReferenceResolver {
       Map<String, BackupSchemaFetcher.RefTreeEntry> tree = new HashMap<>();
       for (Map.Entry<String, Map<String, Object>> e : raw.entrySet()) {
         Map<String, Object> v = e.getValue();
-        String subject = (String) v.get("subject");
-        int version = v.get("version") instanceof Number
-            ? ((Number) v.get("version")).intValue() : 0;
-        String schema = (String) v.get("schema");
+        String subject = (String) v.get(BackupWrapper.REF_FIELD_SUBJECT);
+        int version = v.get(BackupWrapper.REF_FIELD_VERSION) instanceof Number
+            ? ((Number) v.get(BackupWrapper.REF_FIELD_VERSION)).intValue() : 0;
+        String schema = (String) v.get(BackupWrapper.REF_FIELD_SCHEMA);
         List<SchemaReference> refs = Collections.emptyList();
-        Object refsObj = v.get("references");
+        Object refsObj = v.get(BackupWrapper.REF_FIELD_REFERENCES);
         if (refsObj instanceof List) {
           refs = new ArrayList<>();
           for (Object item : (List<?>) refsObj) {
             if (item instanceof Map) {
               Map<String, Object> m = (Map<String, Object>) item;
               refs.add(new SchemaReference(
-                  (String) m.get("name"),
-                  (String) m.get("subject"),
-                  m.get("version") instanceof Number
-                      ? ((Number) m.get("version")).intValue() : 0));
+                  (String) m.get(BackupWrapper.REF_FIELD_NAME),
+                  (String) m.get(BackupWrapper.REF_FIELD_SUBJECT),
+                  m.get(BackupWrapper.REF_FIELD_VERSION) instanceof Number
+                      ? ((Number) m.get(BackupWrapper.REF_FIELD_VERSION)).intValue() : 0));
             }
           }
         }
-        int globalId = v.get("globalId") instanceof Number
-            ? ((Number) v.get("globalId")).intValue() : 0;
-        String schemaType = v.get("schemaType") instanceof String
-            ? (String) v.get("schemaType") : null;
+        int globalId = v.get(BackupWrapper.REF_FIELD_GLOBAL_ID) instanceof Number
+            ? ((Number) v.get(BackupWrapper.REF_FIELD_GLOBAL_ID)).intValue() : 0;
+        String schemaType = v.get(BackupWrapper.REF_FIELD_SCHEMA_TYPE) instanceof String
+            ? (String) v.get(BackupWrapper.REF_FIELD_SCHEMA_TYPE) : null;
         tree.put(e.getKey(), new BackupSchemaFetcher.RefTreeEntry(
             subject, version, schema, refs, globalId, schemaType));
       }
       return tree;
     } catch (IOException e) {
-      throw new org.apache.kafka.connect.errors.DataException(
+      throw new DataException(
           "Cannot parse reference tree JSON for restore. "
           + "Backup metadata may be corrupt.", e);
     }
@@ -211,7 +213,7 @@ public class BackupReferenceResolver {
     try {
       return JSON.readValue(json, new TypeReference<List<SchemaReference>>() {});
     } catch (IOException e) {
-      throw new org.apache.kafka.connect.errors.DataException(
+      throw new DataException(
           "Cannot parse direct references JSON for restore. "
           + "Backup metadata may be corrupt.", e);
     }
@@ -243,7 +245,7 @@ public class BackupReferenceResolver {
       return;
     }
     if (depth >= MAX_DEPTH) {
-      throw new org.apache.kafka.connect.errors.DataException(
+      throw new DataException(
           "Reference registration depth limit (" + MAX_DEPTH
           + ") exceeded. Possible circular reference chain.");
     }
@@ -262,7 +264,7 @@ public class BackupReferenceResolver {
 
       BackupSchemaFetcher.RefTreeEntry entry = tree.get(ref.getName());
       if (entry == null) {
-        throw new org.apache.kafka.connect.errors.DataException(
+        throw new DataException(
             "Cannot guarantee pristine restore: reference '"
             + ref.getName()
             + "' (subject=" + ref.getSubject()
@@ -271,7 +273,7 @@ public class BackupReferenceResolver {
       }
 
       List<SchemaReference> childTargetRefs = new ArrayList<>();
-      Map<String, String> childResolvedSchemas = new java.util.LinkedHashMap<>();
+      Map<String, String> childResolvedSchemas = new LinkedHashMap<>();
       if (!entry.getReferences().isEmpty()) {
         registerRefsRecursive(
             entry.getReferences(), tree, factory,
@@ -293,7 +295,7 @@ public class BackupReferenceResolver {
             + "srcVersion={}, targetVersion={}",
             ref.getSubject(), ref.getVersion(), targetVersion);
       } catch (IOException | RestClientException e) {
-        throw new org.apache.kafka.connect.errors.DataException(
+        throw new DataException(
             "Cannot guarantee pristine restore: failed to register"
             + " reference schema '" + ref.getSubject()
             + "'. Schema references must be resolvable for "
@@ -310,11 +312,27 @@ public class BackupReferenceResolver {
       BackupSchemaFetcher.RefTreeEntry entry,
       Map<String, BackupSchemaFetcher.RefTreeEntry> tree,
       Map<String, String> resolvedSchemasOut) {
+    addTransitiveSchemas(refName, entry, tree, resolvedSchemasOut, 0);
+  }
+
+  private void addTransitiveSchemas(
+      String refName,
+      BackupSchemaFetcher.RefTreeEntry entry,
+      Map<String, BackupSchemaFetcher.RefTreeEntry> tree,
+      Map<String, String> resolvedSchemasOut,
+      int depth) {
+    if (depth >= MAX_DEPTH) {
+      throw new DataException(
+          "Reference tree depth limit (" + MAX_DEPTH
+          + ") exceeded while collecting transitive schemas. "
+          + "Possible circular reference chain.");
+    }
     if (entry.getReferences() != null) {
       for (SchemaReference childRef : entry.getReferences()) {
         BackupSchemaFetcher.RefTreeEntry childEntry = tree.get(childRef.getName());
         if (childEntry != null && !resolvedSchemasOut.containsKey(childRef.getName())) {
-          addTransitiveSchemas(childRef.getName(), childEntry, tree, resolvedSchemasOut);
+          addTransitiveSchemas(
+              childRef.getName(), childEntry, tree, resolvedSchemasOut, depth + 1);
         }
       }
     }

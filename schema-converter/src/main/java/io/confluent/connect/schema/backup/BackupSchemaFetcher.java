@@ -40,7 +40,7 @@ public class BackupSchemaFetcher {
 
   private static final Logger log = LoggerFactory.getLogger(BackupSchemaFetcher.class);
   private static final ObjectMapper JSON = new ObjectMapper();
-  private static final int MAX_DEPTH = 50;
+  private static final int MAX_DEPTH = BackupWrapper.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
   private final Map<Integer, BackupSchemaInfo> cache = new ConcurrentHashMap<>();
@@ -78,7 +78,9 @@ public class BackupSchemaFetcher {
         versionsBySubject.put(sv.getSubject(), sv.getVersion());
       }
     } catch (IOException | RestClientException e) {
-      log.warn("Could not fetch versions for schemaId={}: {}",
+      log.error("Could not fetch versions for schemaId={}. "
+          + "Schema entry will be backed up without version info, "
+          + "which may affect pristine restore: {}",
           schemaId, e.getMessage());
     }
 
