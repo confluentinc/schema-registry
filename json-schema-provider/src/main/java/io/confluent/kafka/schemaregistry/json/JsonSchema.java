@@ -474,6 +474,9 @@ public class JsonSchema implements ParsedSchema {
 
   private void loadLatestDraft() throws URISyntaxException {
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
+    // Also make the older draft 4/6/7 meta-schemas resolvable locally
+    // $refs an older meta-schema does not trigger an external HTTP fetch.
+    mappings.putAll(previousDraftMetaSchemas);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
       URI uri = new URI(dep.getKey());
       mappings.put(uri, dep.getValue());
@@ -521,6 +524,9 @@ public class JsonSchema implements ParsedSchema {
         .useDefaults(true).draftV7Support();
     // Register the draft 4/6/7 meta-schemas so a $ref to one of them resolves from the bundled
     // copy instead of triggering an external HTTP fetch (Everit otherwise queries the network).
+    // The modern 2019-09/2020-12 meta-schemas are intentionally not registered here: they are
+    // modular (vocabulary sub-documents) and use keywords Everit does not support, so a draft<=7
+    // schema referencing a modern meta-schema is not resolved locally.
     for (Map.Entry<URI, String> meta : previousDraftMetaSchemas.entrySet()) {
       builder.registerSchemaByURI(meta.getKey(), new JSONObject(meta.getValue()));
     }

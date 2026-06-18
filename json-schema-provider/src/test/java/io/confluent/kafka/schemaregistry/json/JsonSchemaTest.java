@@ -1947,8 +1947,6 @@ public class JsonSchemaTest {
 
   @Test
   public void testRecursiveMetaSchemaReference() {
-    // A $ref to the (recursive) draft-07 meta-schema must resolve from the bundled meta-schema
-    // (no external HTTP fetch) without overflowing the stack during translation.
     String schemaString = "{"
         + "\"$schema\":\"https://json-schema.org/draft-07/schema#\","
         + "\"type\":\"object\","
@@ -1960,13 +1958,21 @@ public class JsonSchemaTest {
 
   @Test
   public void testRecursiveMetaSchemaReferenceWithDraft_2020_12() {
-    // A $ref to the (recursive) 2020-12 meta-schema produces an object-identity cycle in the
-    // loaded json-sKema graph; translating it must break the cycle via a ReferenceSchema rather
-    // than recursing forever and overflowing the stack.
     String schemaString = "{"
         + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
         + "\"type\":\"object\","
         + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReferenceCrossDraft() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
         + "}";
     JsonSchema jsonSchema = new JsonSchema(schemaString);
     assertNotNull(jsonSchema.rawSchema());
