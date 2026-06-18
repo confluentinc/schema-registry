@@ -72,7 +72,6 @@
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
         <module>logical-types</module>
-        <module>logical-types-playground</module>
         <module>client-encryption-tink</module>
         <module>dek-registry-client</module>
         <module>dek-registry</module>
