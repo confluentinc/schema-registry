@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.client.rest.utils.UrlList;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsAccessDeniedException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryRequestForwardingException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
@@ -1180,7 +1181,7 @@ public abstract class AbstractDekRegistry implements Closeable {
       if (cause != null) {
         msg += ": " + cause.getMessage();
       }
-      throw new DekGenerationException(msg);
+      throw new DekGenerationException(msg, e, e instanceof KmsAccessDeniedException);
     }
   }
 
@@ -1208,7 +1209,7 @@ public abstract class AbstractDekRegistry implements Closeable {
       if (cause != null) {
         msg += ": " + cause.getMessage();
       }
-      throw new DekGenerationException(msg);
+      throw new DekGenerationException(msg, e, e instanceof KmsAccessDeniedException);
     }
   }
 
