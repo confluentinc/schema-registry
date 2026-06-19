@@ -158,6 +158,24 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
   public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
   /**
+   * <code>inter.instance.spire.enabled</code>*
+   */
+  public static final String INTER_INSTANCE_SPIRE_ENABLED_CONFIG =
+      "inter.instance.spire.enabled";
+  public static final boolean DEFAULT_INTER_INSTANCE_SPIRE_ENABLED = false;
+  /**
+   * <code>inter.instance.spire.agent.url</code>*
+   */
+  public static final String INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG =
+      "inter.instance.spire.agent.url";
+  public static final String DEFAULT_INTER_INSTANCE_SPIRE_AGENT_URL = "";
+  /**
+   * <code>inter.instance.spire.authorized.id.patterns</code>*
+   */
+  public static final String INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG =
+      "inter.instance.spire.authorized.id.patterns";
+  public static final String DEFAULT_INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS = "";
+  /**
    * <code>leader.election.delay</code>*
    */
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
@@ -489,6 +507,20 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for connections when forwarding requests to the leader.";
   protected static final String LEADER_READ_TIMEOUT_MS_DOC =
       "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String INTER_INSTANCE_SPIRE_ENABLED_DOC =
+      "If true, requests forwarded from a follower to the leader use SPIRE/SPIFFE mTLS. The "
+      + "forwarding client obtains its client certificate (X.509 SVID) from the SPIFFE Workload "
+      + "API instead of a static keystore, and the SVID is rotated automatically in memory. When "
+      + "enabled, hostname verification is disabled and the leader is instead authorized by its "
+      + "SPIFFE ID (see " + INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG + ").";
+  protected static final String INTER_INSTANCE_SPIRE_AGENT_URL_DOC =
+      "The SPIFFE Workload API socket path used by the inter-instance forwarding client to obtain "
+      + "its X.509 SVID. If left empty, the standard SPIFFE_ENDPOINT_SOCKET environment variable "
+      + "is used. Has no effect unless " + INTER_INSTANCE_SPIRE_ENABLED_CONFIG + " is true.";
+  protected static final String INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_DOC =
+      "Comma-separated list of SPIFFE ID patterns that the leader's SPIFFE ID must match for the "
+      + "forwarding client to trust it. If empty, any SPIFFE ID presented by the leader is "
+      + "accepted. Has no effect unless " + INTER_INSTANCE_SPIRE_ENABLED_CONFIG + " is true.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
   protected static final String LEADER_ELECTION_STICKY_DOC =
@@ -759,6 +791,18 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
         ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
+    )
+    .define(INTER_INSTANCE_SPIRE_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        DEFAULT_INTER_INSTANCE_SPIRE_ENABLED,
+        ConfigDef.Importance.LOW, INTER_INSTANCE_SPIRE_ENABLED_DOC
+    )
+    .define(INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG, ConfigDef.Type.STRING,
+        DEFAULT_INTER_INSTANCE_SPIRE_AGENT_URL,
+        ConfigDef.Importance.LOW, INTER_INSTANCE_SPIRE_AGENT_URL_DOC
+    )
+    .define(INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG, ConfigDef.Type.STRING,
+        DEFAULT_INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS,
+        ConfigDef.Importance.LOW, INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_DOC
     )
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
