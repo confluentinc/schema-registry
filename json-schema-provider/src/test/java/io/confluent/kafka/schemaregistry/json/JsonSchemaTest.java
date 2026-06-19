@@ -1968,17 +1968,37 @@ public class JsonSchemaTest {
     return new JsonSchema(schemaString);
   }
 
-  static class JsonSchemaWithMappings extends JsonSchema {
-    private Map<URI, String> mappings;
-    public JsonSchemaWithMappings(String schema, Map<URI, String> mappings) {
-      super(schema);
-      this.mappings = mappings;
-    }
+  @Test
+  public void testRecursiveMetaSchemaReference() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
 
-    @Override
-    protected Map<URI, String> getPrepopulatedMappings() {
-      return mappings;
-    }
+  @Test
+  public void testRecursiveMetaSchemaReferenceWithDraft_2020_12() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReferenceCrossDraft() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
   }
 
   @Test
