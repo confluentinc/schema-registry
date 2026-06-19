@@ -187,10 +187,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   private static SpireX509Client createSpireX509Client(SchemaRegistryConfig config)
       throws SchemaRegistryInitializationException {
+    return createSpireX509Client(config, new SpireX509Client.SpireX509ClientBuilder());
+  }
+
+  @VisibleForTesting
+  static SpireX509Client createSpireX509Client(SchemaRegistryConfig config,
+      SpireX509Client.SpireX509ClientBuilder builder)
+      throws SchemaRegistryInitializationException {
     String agentUrl = config.getString(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG);
     String authorizedIdPatterns =
         config.getString(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG);
-    SpireX509Client.SpireX509ClientBuilder builder = new SpireX509Client.SpireX509ClientBuilder();
     // Empty agent URL falls back to the SPIFFE_ENDPOINT_SOCKET environment variable.
     if (agentUrl != null && !agentUrl.isEmpty()) {
       builder.setSpireAgentURL(agentUrl);
