@@ -15,7 +15,7 @@
 
 package io.confluent.dekregistry.web.rest.handlers;
 
-import static io.confluent.dekregistry.storage.DekRegistry.AWS_KMS;
+import static io.confluent.dekregistry.storage.AbstractDekRegistry.AWS_KMS;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
@@ -91,7 +91,9 @@ public class EncryptionUpdateRequestHandler implements UpdateRequestHandler {
           rule.getOnSuccess(), rule.getOnFailure(), rule.isDisabled());
       newDomainRules.add(newRule);
     }
-    return new RuleSet(ruleSet.getMigrationRules(), newDomainRules);
+    return new RuleSet(
+        ruleSet.getMigrationRules(), newDomainRules, ruleSet.getEncodingRules(),
+        ruleSet.getEnableAt());
   }
 
   private static String scrub(String kmsKeyId) {

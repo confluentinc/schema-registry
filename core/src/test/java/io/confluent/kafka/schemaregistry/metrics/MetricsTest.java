@@ -19,12 +19,12 @@ import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
-import org.junit.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.List;
+import org.junit.jupiter.api.Test;
 
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_API_FAILURE_COUNT;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_API_SUCCESS_COUNT;
@@ -33,17 +33,12 @@ import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_DELETED_COUNT;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_MASTER_SLAVE_ROLE;
 import static io.confluent.kafka.schemaregistry.metrics.MetricsContainer.METRIC_NAME_REGISTERED_COUNT;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class MetricsTest extends ClusterTestHarness {
 
   public MetricsTest() { super(1, true); }
-
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
-  }
 
   @Test
   public void testLeaderFollowerMetric() throws Exception {

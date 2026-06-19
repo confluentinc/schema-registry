@@ -22,9 +22,13 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import io.confluent.avro.type.VariantConversion;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.connect.schema.ConnectEnum;
 import io.confluent.connect.schema.ConnectUnion;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import io.confluent.connect.schema.ConnectVariant;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import org.apache.avro.AvroTypeException;
@@ -326,8 +330,8 @@ public class AvroData {
 
   private int unionIndex = 0;
 
-  private Map<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
-  private Map<AvroSchema, Schema> toConnectSchemaCache;
+  private Cache<Schema, org.apache.avro.Schema> fromConnectSchemaCache;
+  private Cache<AvroSchema, Schema> toConnectSchemaCache;
   private boolean connectMetaData;
   private boolean generalizedSumTypeSupport;
   private boolean ignoreDefaultForNullables;
@@ -344,8 +348,12 @@ public class AvroData {
   }
 
   public AvroData(AvroDataConfig avroDataConfig) {
-    fromConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.schemaCacheSize());
-    toConnectSchemaCache = new BoundedConcurrentHashMap<>(avroDataConfig.schemaCacheSize());
+    fromConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(avroDataConfig.schemaCacheSize())
+        .build();
+    toConnectSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(avroDataConfig.schemaCacheSize())
+        .build();
     this.connectMetaData = avroDataConfig.isConnectMetaData();
     this.generalizedSumTypeSupport = avroDataConfig.isGeneralizedSumTypeSupport();
     this.ignoreDefaultForNullables = avroDataConfig.ignoreDefaultForNullables();
@@ -769,7 +777,7 @@ public class AvroData {
       return ANYTHING_SCHEMA;
     }
 
-    org.apache.avro.Schema cached = fromConnectSchemaCache.get(schema);
+    org.apache.avro.Schema cached = fromConnectSchemaCache.getIfPresent(schema);
     if (cached != null) {
       return cached;
     }
@@ -936,7 +944,9 @@ public class AvroData {
         }
         break;
       case STRUCT:
-        if (isUnionSchema(schema)) {
+        if (ConnectVariant.isVariant(schema)) {
+          baseSchema = new VariantConversion().getRecommendedSchema();
+        } else if (isUnionSchema(schema)) {
           List<org.apache.avro.Schema> unionSchemas = new ArrayList<>();
           if (schema.isOptional()) {
             unionSchemas.add(org.apache.avro.SchemaBuilder.builder().nullType());
@@ -1719,7 +1729,7 @@ public class AvroData {
     // conversions take extra flags (like forceOptional) which means the resulting schema might not
     // exactly match the Avro schema.
     AvroSchema schemaAndVersion = new AvroSchema(schema, version);
-    Schema cachedSchema = toConnectSchemaCache.get(schemaAndVersion);
+    Schema cachedSchema = toConnectSchemaCache.getIfPresent(schemaAndVersion);
     if (cachedSchema != null) {
       if (schema.getType() == org.apache.avro.Schema.Type.RECORD) {
         // cycleReferences is only populated with record type schemas. We need to initialize it here
@@ -1871,6 +1881,11 @@ public class AvroData {
         break;
 
       case RECORD: {
+        if (schema.getLogicalType() != null
+            && VariantLogicalType.NAME.equals(schema.getLogicalType().getName())) {
+          builder = ConnectVariant.builder();
+          break;
+        }
         builder = SchemaBuilder.struct();
         toConnectContext.cycleReferences.put(schema, new CyclicSchemaWrapper(builder));
         if (!discardTypeDocDefault && connectMetaData && schema.getDoc() != null) {
@@ -2067,7 +2082,9 @@ public class AvroData {
 
     } else if (schema.getType() == org.apache.avro.Schema.Type.RECORD
         || schema.getType() == org.apache.avro.Schema.Type.ENUM) {
-      name = schema.getFullName();
+      if (!ConnectVariant.LOGICAL_NAME.equals(builder.name())) {
+        name = schema.getFullName();
+      }
     } else if (schema.getType() == org.apache.avro.Schema.Type.FIXED) {
       // Ignore the fixed name if it is a decimal
       if (!Decimal.LOGICAL_NAME.equals(builder.name())) {

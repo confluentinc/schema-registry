@@ -18,6 +18,8 @@ package io.confluent.kafka.schemaregistry.storage.serialization;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import io.confluent.kafka.schemaregistry.storage.AssociationKey;
+import io.confluent.kafka.schemaregistry.storage.AssociationValue;
 import io.confluent.kafka.schemaregistry.storage.ContextKey;
 import io.confluent.kafka.schemaregistry.storage.ContextValue;
 import java.io.IOException;
@@ -88,7 +90,9 @@ public class SchemaRegistrySerializer
         keyObj = JacksonMapper.INSTANCE.readValue(
             key, new TypeReference<Map<Object, Object>>() {});
         keyType = SchemaRegistryKeyType.forName((String) keyObj.get("keytype"));
-        if (keyType == SchemaRegistryKeyType.CONFIG) {
+        if (keyType == SchemaRegistryKeyType.ASSOC) {
+          schemaKey = JacksonMapper.INSTANCE.readValue(key, AssociationKey.class);
+        } else if (keyType == SchemaRegistryKeyType.CONFIG) {
           schemaKey = JacksonMapper.INSTANCE.readValue(key, ConfigKey.class);
         } else if (keyType == SchemaRegistryKeyType.MODE) {
           schemaKey = JacksonMapper.INSTANCE.readValue(key, ModeKey.class);
@@ -134,7 +138,13 @@ public class SchemaRegistrySerializer
   public SchemaRegistryValue deserializeValue(SchemaRegistryKey key, byte[] value)
       throws SerializationException {
     SchemaRegistryValue schemaRegistryValue = null;
-    if (key.getKeyType().equals(SchemaRegistryKeyType.CONFIG)) {
+    if (key.getKeyType().equals(SchemaRegistryKeyType.ASSOC)) {
+      try {
+        schemaRegistryValue = JacksonMapper.INSTANCE.readValue(value, AssociationValue.class);
+      } catch (IOException e) {
+        throw new SerializationException("Error while deserializing association", e);
+      }
+    } else if (key.getKeyType().equals(SchemaRegistryKeyType.CONFIG)) {
       try {
         schemaRegistryValue = JacksonMapper.INSTANCE.readValue(value, ConfigValue.class);
       } catch (IOException e) {

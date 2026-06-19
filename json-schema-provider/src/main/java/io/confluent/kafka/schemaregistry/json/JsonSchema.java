@@ -50,8 +50,11 @@ import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
@@ -63,12 +66,14 @@ import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import io.confluent.kafka.schemaregistry.json.schema.SchemaTranslator;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
+import io.confluent.kafka.schemaregistry.rules.ValidationRule;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.RuleConditionException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -92,15 +97,18 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.errors.SerializationException;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.CombinedSchema.ValidationCriterion;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.NotSchema;
+import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ReferenceSchema;
@@ -156,13 +164,17 @@ public class JsonSchema implements ParsedSchema {
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
   private static final int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private static final ObjectMapper objectMapper = Jackson.newObjectMapper();
-  private static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
+  protected static final ObjectMapper objectMapper = Jackson.newObjectMapper();
+  protected static final ObjectMapper objectMapperWithOrderedProps = Jackson.newObjectMapper(true);
 
-  private static final Map<String, Map<String, BeanPropertyWriter>> beanGetters =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
-  private static final Map<String, Map<String, SettableBeanProperty>> beanSetters =
-      new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+  private static final Cache<String, Map<String, BeanPropertyWriter>> beanGetters =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
+  private static final Cache<String, Map<String, SettableBeanProperty>> beanSetters =
+      CacheBuilder.newBuilder()
+          .maximumSize(DEFAULT_CACHE_CAPACITY)
+          .build();
 
   // prepopulate the draft 2019-09 metaschemas, as the json-sKema library
   // only prepopulates the draft 2020-12 metaschemas
@@ -292,7 +304,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = ruleSet;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaString, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -311,7 +323,7 @@ public class JsonSchema implements ParsedSchema {
       this.ruleSet = null;
       this.ignoreModernDialects = false;
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON " + schemaObj, e);
+      throw new IllegalArgumentException("Invalid JSON schema", e);
     }
   }
 
@@ -390,9 +402,16 @@ public class JsonSchema implements ParsedSchema {
   @Override
   public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
                            Map<SchemaEntity, Set<String>> tagsToRemove) {
+    return copy(tagsToAdd, tagsToRemove, true);
+  }
+
+  @Override
+  public ParsedSchema copy(Map<SchemaEntity, Set<String>> tagsToAdd,
+                           Map<SchemaEntity, Set<String>> tagsToRemove,
+                           boolean addBeforeRemove) {
     JsonSchema schemaCopy = this.copy();
     JsonNode original = schemaCopy.toJsonNode().deepCopy();
-    modifySchemaTags(original, tagsToAdd, tagsToRemove);
+    modifySchemaTags(original, tagsToAdd, tagsToRemove, addBeforeRemove);
     return new JsonSchema(original.toString(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
@@ -448,13 +467,13 @@ public class JsonSchema implements ParsedSchema {
                 case DRAFT_2020_12:
                 case DRAFT_2019_09:
                   if (ignoreModernDialects) {
-                    loadPreviousDraft(spec);
+                    schemaObj = loadPreviousDraft(spec);
                   } else {
-                    loadLatestDraft();
+                    schemaObj = loadLatestDraft();
                   }
                   break;
                 default:
-                  loadPreviousDraft(spec);
+                  schemaObj = loadPreviousDraft(spec);
                   break;
               }
             }
@@ -472,29 +491,109 @@ public class JsonSchema implements ParsedSchema {
     return prepopulatedMetaSchemas;
   }
 
-  private void loadLatestDraft() throws URISyntaxException {
+  protected void setSkemaObj(com.github.erosb.jsonsKema.Schema skemaObj) {
+    this.skemaObj = skemaObj;
+  }
+
+  protected Schema loadLatestDraft() throws URISyntaxException, IOException {
     Map<URI, String> mappings = new HashMap<>(getPrepopulatedMappings());
     // Also make the older draft 4/6/7 meta-schemas resolvable locally, so a (modern) schema that
     // $refs an older meta-schema does not trigger an external HTTP fetch.
     mappings.putAll(previousDraftMetaSchemas);
+    URI base = URI.create(DEFAULT_BASE_URI);
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      // Bridge top-level `definitions` entries into `$defs` so json-sKema (which
+      // only walks `$defs`) can resolve a `$ref: "#/$defs/X"` regardless of which
+      // bucket the body lives in. The original content is left untouched in
+      // resolvedReferences; only the in-memory copy passed to the loader is augmented.
+      String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
       URI uri = new URI(dep.getKey());
-      mappings.put(uri, dep.getValue());
+      mappings.put(uri, content);
+      // Also register under the base-resolved absolute URI. json-sKema resolves a
+      // cross-document ref like `$ref: "external.json#/$defs/X"` against the document
+      // base (`mem://input`) before looking it up, producing
+      // `mem://input/external.json`. Without this entry, the relative form above
+      // wouldn't be matched and the ref would fail to resolve.
+      mappings.put(base.resolve(dep.getKey()), content);
       if (!uri.isAbsolute() && !dep.getKey().startsWith(".")) {
         // For backward compatibility
-        mappings.put(new URI("./" + dep.getKey()), dep.getValue());
+        mappings.put(new URI("./" + dep.getKey()), content);
       }
     }
     SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(mappings);
-    JsonValue schemaJson = objectMapper.convertValue(jsonNode, JsonObject.class);
-    skemaObj = new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
+    // Apply the same bridge to the root document so refs like `#/$defs/X` resolve
+    // when the body lives in `definitions`.
+    String rootJson = mergeDefBuckets(
+        objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
+    JsonValue schemaJson = objectMapper.convertValue(
+        objectMapper.readTree(rootJson), JsonObject.class);
+    com.github.erosb.jsonsKema.Schema skemaObj =
+        new com.github.erosb.jsonsKema.SchemaLoader(schemaJson, config).load();
     SchemaTranslator.SchemaContext ctx = skemaObj.accept(new SchemaTranslator());
     assert ctx != null;
     ctx.close();
-    schemaObj = ctx.schema();
+    setSkemaObj(skemaObj);
+    return ctx.schema();
   }
 
-  private void loadPreviousDraft(SpecificationVersion spec)
+  /**
+   * Copies any top-level entries under {@code fromKey} into {@code toKey}.
+   *
+   * <p>Used by both load paths to bridge {@code definitions} entries into {@code $defs} so
+   * that {@code $ref: "#/$defs/X"} resolves regardless of which bucket the body lives in.
+   * The keys are parameterized to keep the helper algorithmically symmetric and easy to test
+   * in isolation; in production both call sites pass {@code ("definitions", "$defs")}.
+   *
+   * <p>Existing {@code toKey} entries take precedence on key collision (the target keyword
+   * wins). Returns the original string when:
+   * <ul>
+   *   <li>{@code json} is null or empty,</li>
+   *   <li>{@code json} parses to a non-object (e.g. a boolean schema),</li>
+   *   <li>{@code fromKey} is absent, its value is not an object, or its value is empty,</li>
+   *   <li>{@code toKey} is present but not an object (preserved rather than overwritten),</li>
+   *   <li>parsing fails (best-effort fallback).</li>
+   * </ul>
+   *
+   * <p>Top-level only — nested {@code definitions}/{@code $defs} inside subschemas are not
+   * bridged.
+   */
+  static String mergeDefBuckets(String json, String fromKey, String toKey) {
+    if (json == null || json.isEmpty()) {
+      return json;
+    }
+    try {
+      JsonNode root = objectMapper.readTree(json);
+      if (!root.isObject()) {
+        return json;
+      }
+      JsonNode source = root.get(fromKey);
+      if (source == null || !source.isObject() || source.size() == 0) {
+        // Nothing to copy — return as-is to avoid creating a stray empty target.
+        return json;
+      }
+      // Preserve a non-object target unchanged rather than overwriting it.
+      JsonNode existingTarget = root.get(toKey);
+      if (existingTarget != null && !existingTarget.isObject()) {
+        return json;
+      }
+      ObjectNode mut = (ObjectNode) root;
+      ObjectNode target = existingTarget != null
+          ? (ObjectNode) existingTarget
+          : mut.putObject(toKey);
+      java.util.Iterator<Map.Entry<String, JsonNode>> it = source.fields();
+      while (it.hasNext()) {
+        Map.Entry<String, JsonNode> entry = it.next();
+        if (!target.has(entry.getKey())) {
+          target.set(entry.getKey(), entry.getValue());
+        }
+      }
+      return objectMapper.writeValueAsString(mut);
+    } catch (IOException e) {
+      return json;
+    }
+  }
+
+  protected Schema loadPreviousDraft(SpecificationVersion spec)
       throws JsonProcessingException {
     org.everit.json.schema.loader.SpecificationVersion loaderSpec =
         org.everit.json.schema.loader.SpecificationVersion.DRAFT_7;
@@ -531,13 +630,25 @@ public class JsonSchema implements ParsedSchema {
       builder.registerSchemaByURI(meta.getKey(), new JSONObject(meta.getValue()));
     }
     for (Map.Entry<String, String> dep : resolvedReferences.entrySet()) {
+      // Bridge top-level `definitions` into `$defs` so a `$ref: "#/$defs/X"`
+      // resolves via Everit's literal JSON Pointer fallback even when the
+      // schema author placed the body under draft-7's native `definitions`
+      // bucket. The asymmetric direction (definitions → $defs, not the
+      // reverse) makes `$defs` the canonical "forgiving" ref form across both
+      // drafts: a `$ref: "#/$defs/X"` always finds its target, regardless of
+      // which bucket the body actually lives in. The original content in
+      // resolvedReferences is left untouched; only the in-memory copy passed
+      // to the loader is augmented.
+      String content = mergeDefBuckets(dep.getValue(), "definitions", "$defs");
       URI child = ReferenceResolver.resolve(idUri, dep.getKey());
-      builder.registerSchemaByURI(child, new JSONObject(dep.getValue()));
+      builder.registerSchemaByURI(child, new JSONObject(content));
     }
-    JSONObject jsonObject = objectMapper.treeToValue(jsonNode, JSONObject.class);
+    String rootJson = mergeDefBuckets(
+        objectMapper.writeValueAsString(jsonNode), "definitions", "$defs");
+    JSONObject jsonObject = new JSONObject(rootJson);
     builder.schemaJson(jsonObject);
     SchemaLoader loader = builder.build();
-    schemaObj = loader.load().build();
+    return loader.load().build();
   }
 
   @Override
@@ -756,14 +867,20 @@ public class JsonSchema implements ParsedSchema {
   }
 
   @Override
-  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+  public List<String> isBackwardCompatible(
+      CompatibilityPolicy policy, ParsedSchema previousSchema) {
     if (!schemaType().equals(previousSchema.schemaType())) {
       return Lists.newArrayList("Incompatible because of different schema type");
     }
-    final List<Difference> differences =
-            SchemaDiff.compare(((JsonSchema) previousSchema).rawSchema(), rawSchema());
+    Set<Difference.Type> compatibleChanges = policy == CompatibilityPolicy.LENIENT
+        ? SchemaDiff.COMPATIBLE_CHANGES_LENIENT
+        : SchemaDiff.COMPATIBLE_CHANGES_STRICT;
+    final List<Difference> differences = SchemaDiff.compare(
+        compatibleChanges,
+        ((JsonSchema) previousSchema).rawSchema(),
+        rawSchema());
     final List<Difference> incompatibleDiffs = differences.stream()
-        .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+        .filter(diff -> !compatibleChanges.contains(diff.getType()))
         .collect(Collectors.toList());
     boolean isCompatible = incompatibleDiffs.isEmpty();
     if (!isCompatible) {
@@ -775,6 +892,11 @@ public class JsonSchema implements ParsedSchema {
     } else {
       return new ArrayList<>();
     }
+  }
+
+  @Override
+  public List<String> isBackwardCompatible(ParsedSchema previousSchema) {
+    return isBackwardCompatible(CompatibilityPolicy.STRICT, previousSchema);
   }
 
   @Override
@@ -970,6 +1092,241 @@ public class JsonSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Walk {@code message} against this schema and evaluate every inline
+   * {@code confluent:rules} CHECK constraint encountered, collecting all
+   * failures into the returned list. Read-only — does not modify the
+   * message.
+   *
+   * <p>Two kinds of rules are evaluated:
+   * <ul>
+   *   <li><b>Object-level</b> ({@code confluent:rules} on an
+   *       {@link ObjectSchema}) — {@code this} = the object value.</li>
+   *   <li><b>Property-level</b> ({@code confluent:rules} on a property's
+   *       schema) — {@code this} = the property value. Honors the
+   *       column-level skip-on-null contract: when the property value is
+   *       {@code null} (or the property is absent), property-level rules
+   *       are skipped.</li>
+   * </ul>
+   *
+   * <p>Failures are appended to the returned list with their dotted-path
+   * location (e.g. {@code $.addr.zip}, {@code $.tags[3]}). The walk
+   * continues after each failure so callers see the full set rather than
+   * only the first.
+   */
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message) {
+    return validateMessage(executor, message, false);
+  }
+
+  @Override
+  public List<ValidationRuleError> validateMessage(
+      ValidationRuleExecutor executor, Object message, boolean failFast) {
+    List<ValidationRuleError> violations = new ArrayList<>();
+    if (executor == null || message == null) {
+      return violations;
+    }
+    toValidatedMessage(rawSchema(), "$", message, executor, failFast, violations);
+    return violations;
+  }
+
+  /**
+   * Mirrors {@link #toTransformedMessage}'s instanceof dispatch on the
+   * org.everit {@link Schema} subtypes:
+   * <ul>
+   *   <li>{@link CombinedSchema} — for {@code allOf}, walk each
+   *       subschema; for {@code oneOf}/{@code anyOf}, validate against
+   *       each subschema and walk into matching ones.</li>
+   *   <li>{@link ArraySchema} — recurse on each element with {@code [i]}
+   *       path.</li>
+   *   <li>{@link ObjectSchema} — evaluate object-level rules with
+   *       {@code this = message}; iterate properties, evaluate
+   *       property-level rules (with skip-on-null), then recurse on each
+   *       property value.</li>
+   *   <li>{@link ReferenceSchema} — resolve to the referred schema and
+   *       recurse.</li>
+   *   <li>{@link ConditionalSchema}, {@link EmptySchema},
+   *       {@link FalseSchema}, {@link NotSchema} — no-op (return).</li>
+   *   <li>otherwise (primitive) — no-op; property-level rules were
+   *       already evaluated by the parent {@code ObjectSchema} case.</li>
+   * </ul>
+   */
+  private void toValidatedMessage(
+      Schema schema, String path, Object message,
+      ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
+    if (schema == null) {
+      return;
+    }
+    message = getValue(message);
+    if (schema instanceof CombinedSchema) {
+      CombinedSchema combinedSchema = (CombinedSchema) schema;
+      CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
+      Collection<Schema> subschemas = combinedSchema.getSubschemas();
+      if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
+        for (Schema subschema : subschemas) {
+          toValidatedMessage(subschema, path, message, executor, failFast, out);
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+        return;
+      }
+      JsonNode jsonNode;
+      try {
+        jsonNode = objectMapper.convertValue(message, JsonNode.class);
+      } catch (IllegalArgumentException e) {
+        // Can't introspect this message — skip oneOf/anyOf branch selection at this
+        // node. Structural JSON validation (if enabled) will have already surfaced
+        // the underlying serialization issue with a clearer error.
+        return;
+      }
+      for (Schema subschema : subschemas) {
+        boolean valid = false;
+        try {
+          validate(subschema, jsonNode);
+          valid = true;
+        } catch (Exception e) {
+          // noop
+        }
+        if (valid) {
+          toValidatedMessage(subschema, path, message, executor, failFast, out);
+          if (criterion.equals(CombinedSchema.ONE_CRITERION)) {
+            return;
+          }
+          if (failFast && !out.isEmpty()) {
+            return;
+          }
+        }
+      }
+      return;
+    } else if (schema instanceof ArraySchema) {
+      if (!(message instanceof Iterable)) {
+        return;
+      }
+      Schema subschema = ((ArraySchema) schema).getAllItemSchema();
+      int i = 0;
+      for (Object element : (Iterable<?>) message) {
+        toValidatedMessage(subschema, path + "[" + i + "]", element, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+        i++;
+      }
+      return;
+    } else if (schema instanceof ObjectSchema) {
+      if (message == null) {
+        return;
+      }
+      // Object-level rules: this = the object value, hint = its class.
+      for (ValidationRule rule : readRulesProp(schema)) {
+        evaluateOne(rule, message.getClass(), message, path, executor, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+      }
+      Map<String, Schema> propertySchemas = ((ObjectSchema) schema).getPropertySchemas();
+      for (Map.Entry<String, Schema> entry : propertySchemas.entrySet()) {
+        String propertyName = entry.getKey();
+        Schema propertySchema = entry.getValue();
+        String fullName = path + "." + propertyName;
+        // ctx is unused by getBeanGetter/Setter — pass null safely.
+        PropertyAccessor propertyAccessor =
+            getPropertyAccessor(null, message, propertyName);
+        if (propertyAccessor == null) {
+          continue;
+        }
+        Object propertyValue = getValue(propertyAccessor.getPropertyValue());
+        // Skip-on-null for property-level rules: when the property value
+        // is null (or the property is absent), don't evaluate. The
+        // recursion still happens but lands at branches that no-op for
+        // null values.
+        if (propertyValue != null) {
+          for (ValidationRule rule : readRulesProp(propertySchema)) {
+            evaluateOne(rule, propertyValue.getClass(), propertyValue,
+                fullName, executor, out);
+            if (failFast && !out.isEmpty()) {
+              return;
+            }
+          }
+        }
+        toValidatedMessage(propertySchema, fullName, propertyValue, executor, failFast, out);
+        if (failFast && !out.isEmpty()) {
+          return;
+        }
+      }
+      return;
+    } else if (schema instanceof ReferenceSchema) {
+      if (message == null) {
+        return;
+      }
+      toValidatedMessage(((ReferenceSchema) schema).getReferredSchema(),
+          path, message, executor, failFast, out);
+      return;
+    } else if (schema instanceof ConditionalSchema
+        || schema instanceof EmptySchema
+        || schema instanceof FalseSchema
+        || schema instanceof NotSchema) {
+      return;
+    }
+    // Primitive leaf — no rules at this level (property-level rules
+    // were evaluated by the parent ObjectSchema case).
+  }
+
+  /**
+   * Read the {@code confluent:rules} property off a schema's unprocessed
+   * properties map. Empty / missing / malformed entries return an empty
+   * list. Used for both object-level (the {@link ObjectSchema} itself)
+   * and property-level (each property's schema) rule reads.
+   */
+  private static List<ValidationRule> readRulesProp(Schema schema) {
+    Map<String, Object> unprocessed = schema.getUnprocessedProperties();
+    if (unprocessed == null) {
+      return Collections.emptyList();
+    }
+    Object propValue = unprocessed.get("confluent:rules");
+    if (!(propValue instanceof List<?>)) {
+      return Collections.emptyList();
+    }
+    List<ValidationRule> rules = new ArrayList<>();
+    for (Object entry : (List<?>) propValue) {
+      if (entry instanceof Map) {
+        Map<?, ?> m = (Map<?, ?>) entry;
+        rules.add(new ValidationRule(
+            (String) m.get("name"),
+            (String) m.get("doc"),
+            (String) m.get("expr"),
+            (String) m.get("sql")));
+      }
+    }
+    return rules;
+  }
+
+  private static void evaluateOne(
+      ValidationRule rule, Object schemaHint, Object value,
+      String path, ValidationRuleExecutor executor,
+      List<ValidationRuleError> out) {
+    try {
+      Object result = executor.execute(rule, schemaHint, value);
+      if (result instanceof Boolean) {
+        if (Boolean.FALSE.equals(result)) {
+          out.add(new ValidationRuleError(rule, path, null, null));
+        }
+      } else if (result instanceof String) {
+        String msg = (String) result;
+        if (!msg.isEmpty()) {
+          out.add(new ValidationRuleError(rule, path, msg, null));
+        }
+      } else {
+        throw new SerializationException(
+            "Validation rule '" + rule.getName() + "' resolved to an unexpected type: "
+                + (result == null ? "null" : result.getClass().getName()));
+      }
+    } catch (RuleException e) {
+      out.add(new ValidationRuleError(rule, path, null, e));
+    }
+  }
+
   private RuleContext.Type getType(Schema schema) {
     if (schema instanceof ObjectSchema) {
       return isMap((ObjectSchema) schema) ? Type.MAP : Type.RECORD;
@@ -978,6 +1335,14 @@ public class JsonSchema implements ParsedSchema {
     } else if (schema instanceof ArraySchema) {
       return Type.ARRAY;
     } else if (schema instanceof CombinedSchema) {
+      // Check if the schema is a nullable type
+      ValidationCriterion criterion = ((CombinedSchema) schema).getCriterion();
+      Collection<Schema> subschemas = ((CombinedSchema) schema).getSubschemas();
+      if (!criterion.equals(CombinedSchema.ALL_CRITERION)
+          && subschemas.size() == 2
+          && subschemas.stream().anyMatch(s -> s instanceof NullSchema)) {
+        return Type.NULLABLE;
+      }
       return Type.COMBINED;
     } else if (schema instanceof StringSchema) {
       return Type.STRING;
@@ -1294,61 +1659,70 @@ public class JsonSchema implements ParsedSchema {
 
   private static BeanPropertyWriter getBeanGetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, BeanPropertyWriter> props = beanGetters.computeIfAbsent(
-        message.getClass().getName(),
-        k -> {
-          try {
-            Map<String, BeanPropertyWriter> m = new HashMap<>();
-            JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
-                .findValueSerializer(message.getClass());
-            Iterator<PropertyWriter> propIter = ser.properties();
-            while (propIter.hasNext()) {
-              PropertyWriter p = propIter.next();
-              if (p instanceof BeanPropertyWriter) {
-                m.put(p.getName(), (BeanPropertyWriter) p);
-              }
+    Map<String, BeanPropertyWriter> props;
+    try {
+      props = beanGetters.get(message.getClass().getName(), () -> {
+        try {
+          Map<String, BeanPropertyWriter> m = new HashMap<>();
+          JsonSerializer<?> ser = objectMapper.getSerializerProviderInstance()
+              .findValueSerializer(message.getClass());
+          Iterator<PropertyWriter> propIter = ser.properties();
+          while (propIter.hasNext()) {
+            PropertyWriter p = propIter.next();
+            if (p instanceof BeanPropertyWriter) {
+              m.put(p.getName(), (BeanPropertyWriter) p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON serializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON serializer for " + message.getClass(), e);
+        }
+      });
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalArgumentException(
+          "Could not get getters for " + message.getClass(), e);
+    }
     return props.get(propertyName);
   }
 
   private static SettableBeanProperty getBeanSetter(
       RuleContext ctx, Object message, String propertyName) {
-    Map<String, SettableBeanProperty> props = beanSetters.computeIfAbsent(
-        message.getClass().getName(),
-        k -> {
-          try {
-            Map<String, SettableBeanProperty> m = new HashMap<>();
-            JavaType type = objectMapper.constructType(message.getClass());
-            DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
-                .createDummyInstance(objectMapper.getDeserializationConfig());
-            // Call findNonContextValueDeserializer instead of findRootValueDeserializer
-            // so we don't get a wrapping TypeDeserializer
-            JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
-            if (deser instanceof BeanDeserializer) {
-              Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
-              while (propIter.hasNext()) {
-                SettableBeanProperty p = propIter.next();
-                m.put(p.getName(), p);
-              }
+    Map<String, SettableBeanProperty> props;
+    try {
+      props = beanSetters.get(message.getClass().getName(), () -> {
+        try {
+          Map<String, SettableBeanProperty> m = new HashMap<>();
+          JavaType type = objectMapper.constructType(message.getClass());
+          DeserializationContext ctxt = ((Impl) objectMapper.getDeserializationContext())
+              .createDummyInstance(objectMapper.getDeserializationConfig());
+          // Call findNonContextValueDeserializer instead of findRootValueDeserializer
+          // so we don't get a wrapping TypeDeserializer
+          JsonDeserializer<Object> deser = ctxt.findNonContextualValueDeserializer(type);
+          if (deser instanceof BeanDeserializer) {
+            Iterator<SettableBeanProperty> propIter = ((BeanDeserializer) deser).properties();
+            while (propIter.hasNext()) {
+              SettableBeanProperty p = propIter.next();
+              m.put(p.getName(), p);
             }
-            return m;
-          } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Could not find JSON deserializer for " + message.getClass(), e);
           }
-        });
+          return m;
+        } catch (Exception e) {
+          throw new IllegalArgumentException(
+              "Could not find JSON deserializer for " + message.getClass(), e);
+        }
+      });
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalArgumentException(
+          "Could not get setters for " + message.getClass(), e);
+    }
     return props.get(propertyName);
   }
 
   private void modifySchemaTags(JsonNode node,
                                 Map<SchemaEntity, Set<String>> tagsToAddMap,
-                                Map<SchemaEntity, Set<String>> tagsToRemoveMap) {
+                                Map<SchemaEntity, Set<String>> tagsToRemoveMap,
+                                boolean addBeforeRemove) {
     Set<SchemaEntity> entityToModify = new LinkedHashSet<>(tagsToAddMap.keySet());
     entityToModify.addAll(tagsToRemoveMap.keySet());
 
@@ -1357,13 +1731,22 @@ public class JsonSchema implements ParsedSchema {
       Set<String> allTags = getInlineTags(fieldNodePtr);
 
       Set<String> tagsToAdd = tagsToAddMap.get(entity);
-      if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
-        allTags.addAll(tagsToAdd);
-      }
-
       Set<String> tagsToRemove = tagsToRemoveMap.get(entity);
-      if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
-        allTags.removeAll(tagsToRemove);
+
+      if (addBeforeRemove) {
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+      } else {
+        if (tagsToRemove != null && !tagsToRemove.isEmpty()) {
+          allTags.removeAll(tagsToRemove);
+        }
+        if (tagsToAdd != null && !tagsToAdd.isEmpty()) {
+          allTags.addAll(tagsToAdd);
+        }
       }
 
       if (allTags.isEmpty()) {

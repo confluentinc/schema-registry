@@ -17,40 +17,45 @@ package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.RestConfig;
 import io.confluent.rest.RestConfigException;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 
+import static io.confluent.kafka.schemaregistry.storage.AbstractSchemaRegistry.getInterInstanceListener;
 import static io.confluent.kafka.schemaregistry.storage.Mode.IMPORT;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READONLY;
 import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   private SchemaRegistryConfig config;
 
-  @Before
+  @Override
   public void setUp() throws Exception {
     super.setUp();
     String listeners = "http://localhost:123, https://localhost:456";
     Properties props = new Properties();
     props.setProperty(RestConfig.PORT_CONFIG, "123");
     props.setProperty(RestConfig.LISTENERS_CONFIG, listeners);
-    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, brokerList);
     props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
 
     config = new SchemaRegistryConfig(props);
@@ -65,9 +70,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected listeners to take precedence over port.", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+    assertEquals(456, listener.getUri().getPort(), "Expected listeners to take precedence over port.");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -79,9 +84,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected port to take the configured port value", 123, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+    assertEquals(123, listener.getUri().getPort(), "Expected port to take the configured port value");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -93,9 +98,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
-    assertEquals("Expected HTTPS listener's port to be returned", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTPS);
+    assertEquals(456, listener.getUri().getPort(), "Expected HTTPS listener's port to be returned");
+    assertEquals(SchemaRegistryConfig.HTTPS, listener.getUri().getScheme());
   }
 
   @Test
@@ -107,9 +112,9 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-        KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
-    assertEquals("Expected last listener's port to be returned", 456, listener.getUri().getPort());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+        getInterInstanceListener(config.getListeners(), "", SchemaRegistryConfig.HTTP);
+    assertEquals(456, listener.getUri().getPort(), "Expected last listener's port to be returned");
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -124,10 +129,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
 
     NamedURI listener =
-      KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
-    assertEquals("Expected internal listener's port to be returned", 123, listener.getUri().getPort());
-    assertEquals("Expected internal listener's name to be returned", "bob", listener.getName());
-    assertEquals("Expected Scheme match", SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
+      getInterInstanceListener(config.getListeners(), config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
+    assertEquals(123, listener.getUri().getPort());
+    assertEquals("bob", listener.getName());
+    assertEquals(SchemaRegistryConfig.HTTP, listener.getUri().getScheme());
   }
 
   @Test
@@ -142,7 +147,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     SchemaRegistryIdentity schemaRegistryIdentity = new
         SchemaRegistryIdentity("schema.registry-0.example.com", 123, true, "https");
-    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
 
     assertEquals(schemaRegistryIdentity,
@@ -162,7 +167,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     SchemaRegistryConfig config = new SchemaRegistryConfig(props);
     SchemaRegistryIdentity schemaRegistryIdentity = new
         SchemaRegistryIdentity("schema.registry-0.example.com", 443, true, "https");
-    NamedURI internalListener = KafkaSchemaRegistry.getInterInstanceListener(config.getListeners(),
+    NamedURI internalListener = getInterInstanceListener(config.getListeners(),
         config.interInstanceListenerName(), SchemaRegistryConfig.HTTP);
 
     assertEquals(schemaRegistryIdentity,
@@ -171,7 +176,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testRegister() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     Schema expected = new Schema(
@@ -189,7 +194,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testGet() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     Schema expected = new Schema(
@@ -213,7 +218,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteSchema() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // Set global mode and config
@@ -258,7 +263,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals(expected2, schema2);
 
     // Soft delete first version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, false);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 1, false);
     assertNull(kafkaSchemaRegistry.get("subject1", 1, false));
     assertEquals(expected1, kafkaSchemaRegistry.get("subject1", 1, true));
 
@@ -267,7 +272,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard delete first version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema1, true);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 1, true);
     assertNull(kafkaSchemaRegistry.get("subject1", 1, true));
 
     // Mode and config should still exist (since version 2 still exists)
@@ -275,7 +280,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Soft delete second version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, false);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 2, false);
     assertNull(kafkaSchemaRegistry.get("subject1", 2, false));
     assertEquals(expected2, kafkaSchemaRegistry.get("subject1", 2, true));
 
@@ -284,7 +289,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals("FULL", kafkaSchemaRegistry.getConfig("subject1").getCompatibilityLevel());
 
     // Hard delete second version
-    kafkaSchemaRegistry.deleteSchemaVersion("subject1", schema2, true);
+    kafkaSchemaRegistry.deleteSchemaVersion("subject1", 2, true);
     assertNull(kafkaSchemaRegistry.get("subject1", 2, true));
 
     // Now, mode and config should be deleted (since all versions are gone)
@@ -298,7 +303,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testDeleteSubject() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // Set global mode and config
@@ -357,7 +362,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     @Test
     public void testGetByVersion() throws SchemaRegistryException {
-      KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+      SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
       kafkaSchemaRegistry.init();
 
       Schema schema1 = new Schema(
@@ -401,24 +406,38 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
       assertEquals(1, itr.next().getVersion());
       assertEquals(2, itr.next().getVersion());
       assertFalse(itr.hasNext());
+
+      // Soft delete second version
+      kafkaSchemaRegistry.deleteSchemaVersion("subject1", 2, false);
+      itr = kafkaSchemaRegistry.getAllVersions("subject1", LookupFilter.DELETED_AS_NEGATIVE);
+      assertEquals(1, itr.next().getVersion());
+      assertEquals(-2, itr.next().getVersion());
+      assertFalse(itr.hasNext());
+
+      // Soft delete first version
+      kafkaSchemaRegistry.deleteSchemaVersion("subject1", 1, false);
+      itr = kafkaSchemaRegistry.getAllVersions("subject1", LookupFilter.DELETED_AS_NEGATIVE);
+      assertEquals(-1, itr.next().getVersion());
+      assertEquals(-2, itr.next().getVersion());
+      assertFalse(itr.hasNext());
     }
 
   @Test
   public void testSetMode() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(IMPORT.name()));
     assertEquals(IMPORT, kafkaSchemaRegistry.getMode("subject1"));
     assertEquals(IMPORT, kafkaSchemaRegistry.getModeInScope("subject1"));
     assertNull(kafkaSchemaRegistry.getMode("subject2"));
 
-    kafkaSchemaRegistry.setModeOrForward("subject1", new ModeUpdateRequest(READONLY.name()), true, new HashMap<String, String>());
+    kafkaSchemaRegistry.setModeOrForward("subject1", new ModeUpdateRequest(READONLY.name()), true, new HashMap<>());
     assertEquals(READONLY, kafkaSchemaRegistry.getMode("subject1"));
   }
 
   @Test
   public void testDeleteMode() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
     kafkaSchemaRegistry.setMode("subject1", new ModeUpdateRequest(READONLY.name()));
     assertEquals(READONLY, kafkaSchemaRegistry.getMode("subject1"));
@@ -429,7 +448,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testGetVersionsWithSubjectPrefix() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // No subject yet.
@@ -457,7 +476,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
   @Test
   public void testIsCompatible() throws SchemaRegistryException {
-    KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
     // Register schema 1.
@@ -510,6 +529,111 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testGetAssociationsByResourceNamespace() throws SchemaRegistryException {
+    SchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    kafkaSchemaRegistry.init();
+
+    // 6 resources: topic0+topic1 in lkc1, topic0+topic2 in lkc2, topic0+topic3 in lkc3
+    // Each resource gets two associations (key/value), mixing STRONG and WEAK lifecycles.
+    // Subjects are unique per resource to satisfy the one-STRONG-per-subject constraint.
+    int schemaFieldCount = 1;
+    String[][] resources = {
+        // resourceName, namespace, resourceId, keyLifecycle, valueLifecycle
+        {"topic0", "lkc1", "id-lkc1-topic0", "WEAK",   "STRONG"},
+        {"topic1", "lkc1", "id-lkc1-topic1", "STRONG", "WEAK"},
+        {"topic0", "lkc2", "id-lkc2-topic0", "WEAK",   "STRONG"},
+        {"topic2", "lkc2", "id-lkc2-topic2", "STRONG", "WEAK"},
+        {"topic0", "lkc3", "id-lkc3-topic0", "WEAK",   "STRONG"},
+        {"topic3", "lkc3", "id-lkc3-topic3", "STRONG", "WEAK"},
+    };
+    for (String[] r : resources) {
+      String resourceName = r[0], namespace = r[1], resourceId = r[2];
+      LifecyclePolicy keyLifecycle = LifecyclePolicy.valueOf(r[3]);
+      LifecyclePolicy valueLifecycle = LifecyclePolicy.valueOf(r[4]);
+      String subjectPrefix = namespace + "-" + resourceName;
+
+      // Pre-register schemas so associations don't need to carry them
+      String keySubject = subjectPrefix + "-key";
+      String valueSubject = subjectPrefix + "-value";
+      RegisterSchemaRequest keyReq = new RegisterSchemaRequest();
+      keyReq.setSchema(StoreUtils.avroSchemaString(schemaFieldCount++));
+      RegisterSchemaRequest valueReq = new RegisterSchemaRequest();
+      valueReq.setSchema(StoreUtils.avroSchemaString(schemaFieldCount++));
+      kafkaSchemaRegistry.register(keySubject, new Schema(keySubject, keyReq));
+      kafkaSchemaRegistry.register(valueSubject, new Schema(valueSubject, valueReq));
+
+      kafkaSchemaRegistry.createAssociation(null, false, new AssociationCreateOrUpdateRequest(
+          resourceName, namespace, resourceId, "topic",
+          Arrays.asList(
+              new AssociationCreateOrUpdateInfo(keySubject, "key", keyLifecycle, false, null, null),
+              new AssociationCreateOrUpdateInfo(valueSubject, "value", valueLifecycle, false, null, null)
+          )
+      ));
+    }
+
+    // Wildcard namespace ("-"): should return all 12 associations across all 3 namespaces
+    List<Association> all = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
+        "-", "topic", Collections.emptyList(), null);
+    assertEquals(12, all.size());
+    assertTrue(all.stream().anyMatch(a -> "lkc1".equals(a.getResourceNamespace())));
+    assertTrue(all.stream().anyMatch(a -> "lkc2".equals(a.getResourceNamespace())));
+    assertTrue(all.stream().anyMatch(a -> "lkc3".equals(a.getResourceNamespace())));
+
+    // lkc1 namespace: topic0/lkc1 (key=WEAK, value=STRONG) + topic1/lkc1 (key=STRONG, value=WEAK)
+    List<Association> lkc1 = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
+        "lkc1", "topic", Collections.emptyList(), null);
+    assertEquals(4, lkc1.size());
+    assertTrue(lkc1.stream().allMatch(a -> "lkc1".equals(a.getResourceNamespace())));
+    assertTrue(lkc1.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+    assertTrue(lkc1.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+    assertTrue(lkc1.stream().anyMatch(a ->
+        "topic1".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+    assertTrue(lkc1.stream().anyMatch(a ->
+        "topic1".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+
+    // lkc1 filtered to "key" associations only: topic0/key (WEAK) + topic1/key (STRONG)
+    List<Association> lkc1Keys = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
+        "lkc1", "topic", List.of("key"), null);
+    assertEquals(2, lkc1Keys.size());
+    assertTrue(lkc1Keys.stream().allMatch(a -> "lkc1".equals(a.getResourceNamespace())));
+    assertTrue(lkc1Keys.stream().allMatch(a -> "key".equals(a.getAssociationType())));
+    assertTrue(lkc1Keys.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+    assertTrue(lkc1Keys.stream().anyMatch(a ->
+        "topic1".equals(a.getResourceName()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+
+    // lkc2 namespace: topic0/lkc2 (key=WEAK, value=STRONG) + topic2/lkc2 (key=STRONG, value=WEAK)
+    List<Association> lkc2 = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
+        "lkc2", "topic", Collections.emptyList(), null);
+    assertEquals(4, lkc2.size());
+    assertTrue(lkc2.stream().allMatch(a -> "lkc2".equals(a.getResourceNamespace())));
+    assertTrue(lkc2.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+    assertTrue(lkc2.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+    assertTrue(lkc2.stream().anyMatch(a ->
+        "topic2".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+    assertTrue(lkc2.stream().anyMatch(a ->
+        "topic2".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+
+    // lkc3 namespace: topic0/lkc3 (key=WEAK, value=STRONG) + topic3/lkc3 (key=STRONG, value=WEAK)
+    List<Association> lkc3 = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
+        "lkc3", "topic", Collections.emptyList(), null);
+    assertEquals(4, lkc3.size());
+    assertTrue(lkc3.stream().allMatch(a -> "lkc3".equals(a.getResourceNamespace())));
+    assertTrue(lkc3.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+    assertTrue(lkc3.stream().anyMatch(a ->
+        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+    assertTrue(lkc3.stream().anyMatch(a ->
+        "topic3".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+    assertTrue(lkc3.stream().anyMatch(a ->
+        "topic3".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+  }
+
+  @Test
   public void testLeaderRestServiceIsForwardIsTrue() throws Exception {
     KafkaSchemaRegistry kafkaSchemaRegistry = new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
@@ -523,10 +647,10 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
 
     // Get the leader rest service
     RestService leaderRestService = kafkaSchemaRegistry.leaderRestService();
-    assertNotNull("Leader rest service should not be null", leaderRestService);
+    assertNotNull(leaderRestService, "Leader rest service should not be null");
 
     // Verify that isForward is set to true - this ensures that requests to the leader
     // will include the X-Forward header, which is critical for proper request forwarding
-    assertTrue("isForward should be true for leaderRestService", leaderRestService.isForward());
+    assertTrue(leaderRestService.isForward(), "isForward should be true for leaderRestService");
   }
 }
