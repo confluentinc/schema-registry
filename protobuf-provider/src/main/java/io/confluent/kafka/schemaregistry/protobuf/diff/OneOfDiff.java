@@ -27,7 +27,11 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ON
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_REMOVED;
 
 public class OneOfDiff {
-  static void compare(final Context ctx, final OneOfElement original, final OneOfElement update) {
+  static void compare(
+      final Context ctx,
+      final OneOfElement original,
+      final OneOfElement update,
+      final Set<Integer> updateTopLevelTags) {
     Map<Integer, FieldElement> originalByTag = new HashMap<>();
     for (FieldElement field : original.getFields()) {
       originalByTag.put(field.getTag(), field);
@@ -44,7 +48,16 @@ public class OneOfDiff {
         FieldElement originalField = originalByTag.get(tag);
         FieldElement updateField = updateByTag.get(tag);
         if (updateField == null) {
-          ctx.addDifference(ONEOF_FIELD_REMOVED);
+          // A field that left this oneof but still exists as a top-level field was
+          // relocated, not removed. Moving a field out of a oneof only relaxes the
+          // oneof's mutual-exclusivity constraint and is wire-compatible, so it is
+          // not reported as a oneof field removal. Genuine deletion, or a move into
+          // another oneof, leaves the tag absent from the update's top-level fields
+          // and is still reported. An incompatible type change on a relocated field
+          // is detected separately by the message-level by-tag comparison.
+          if (!updateTopLevelTags.contains(tag)) {
+            ctx.addDifference(ONEOF_FIELD_REMOVED);
+          }
         } else if (originalField == null) {
           ctx.addDifference(ONEOF_FIELD_ADDED);
         } else {

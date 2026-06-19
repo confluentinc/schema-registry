@@ -561,5 +561,77 @@
       "FIELD_SCALAR_KIND_CHANGED #/outer/GoogleHome/1", "FIELD_NAMED_TYPE_CHANGED #/TestMessage/1"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change when enclosing oneof is renamed",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oldOneOf {\n    float field_float = 1;\n    int32 field_with_incompatible_type_change = 2;\n  }\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof renamedOneOf {\n    float field_float = 1;\n    string field_with_incompatible_type_change = 2;\n  }\n}\n",
+    "changes": [
+      "ONEOF_REMOVED #/Message/oldOneOf",
+      "ONEOF_ADDED #/Message/renamedOneOf",
+      "FIELD_SCALAR_KIND_CHANGED #/Message/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change when field is moved out of a removed oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oldOneOf {\n    float field_float = 1;\n    int32 field_with_incompatible_type_change = 2;\n  }\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  float field_float = 1;\n  sint64 field_with_incompatible_type_change = 2;\n}\n",
+    "changes": [
+      "ONEOF_REMOVED #/Message/oldOneOf",
+      "FIELD_ADDED #/Message/1",
+      "FIELD_ADDED #/Message/2",
+      "FIELD_SCALAR_KIND_CHANGED #/Message/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change when field is moved into a new oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  float field_float = 1;\n  int32 field_with_incompatible_type_change = 2;\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  float field_float = 1;\n  oneof newOneOf {\n    sint64 field_with_incompatible_type_change = 2;\n  }\n}\n",
+    "changes": [
+      "ONEOF_ADDED #/Message/newOneOf",
+      "FIELD_SCALAR_KIND_CHANGED #/Message/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect compatible oneof rename with identical fields",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oldOneOf {\n    float field_float = 1;\n    int32 field_int = 2;\n  }\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof renamedOneOf {\n    float field_float = 1;\n    int32 field_int = 2;\n  }\n}\n",
+    "changes": [
+      "ONEOF_REMOVED #/Message/oldOneOf",
+      "ONEOF_ADDED #/Message/renamedOneOf"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible field move between two differently-named oneofs",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oneof_a {\n    int32 field_1 = 1;\n    int32 field_2 = 2;\n  }\n  oneof oneof_b {\n    int32 field_3 = 3;\n  }\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oneof_a {\n    int32 field_1 = 1;\n  }\n  oneof oneof_b {\n    int32 field_3 = 3;\n    int32 field_2 = 2;\n  }\n}\n",
+    "changes": [
+      "ONEOF_FIELD_REMOVED #/Message/oneof_a/2",
+      "ONEOF_FIELD_ADDED #/Message/oneof_b/2"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect compatible move field out of a oneof to top level",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oneof_x {\n    int32 field_a = 1;\n    int32 field_b = 2;\n  }\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oneof_x {\n    int32 field_a = 1;\n  }\n  int32 field_b = 2;\n}\n",
+    "changes": [
+      "FIELD_ADDED #/Message/2"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible type change when field moved out of a oneof to top level",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oneof_x {\n    int32 field_a = 1;\n    int32 field_b = 2;\n  }\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  oneof oneof_x {\n    int32 field_a = 1;\n  }\n  string field_b = 2;\n}\n",
+    "changes": [
+      "FIELD_ADDED #/Message/2",
+      "FIELD_SCALAR_KIND_CHANGED #/Message/2"
+    ],
+    "compatible": false
   }
 ]
