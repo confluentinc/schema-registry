@@ -584,5 +584,15 @@
       "FIELD_SCALAR_KIND_CHANGED #/Message/2"
     ],
     "compatible": false
+  },
+  {
+    "description": "Detect incompatible field type change when field is moved into a new oneof",
+    "original_schema": "syntax = \"proto3\";\nmessage Message {\n  float field_float = 1;\n  int32 field_with_incompatible_type_change = 2;\n}\n",
+    "update_schema": "syntax = \"proto3\";\nmessage Message {\n  float field_float = 1;\n  oneof newOneOf {\n    sint64 field_with_incompatible_type_change = 2;\n  }\n}\n",
+    "changes": [
+      "ONEOF_ADDED #/Message/newOneOf",
+      "FIELD_SCALAR_KIND_CHANGED #/Message/2"
+    ],
+    "compatible": false
   }
 ]

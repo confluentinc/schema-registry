@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.FIELD_MOVED_TO_EXISTING_ONEOF;
@@ -150,11 +151,13 @@ public class MessageSchemaDiff {
         // was moved into or out of a oneof). Fields that are top-level in both
         // schemas, or in a same-named oneof in both schemas, are already compared
         // above; skip them so that duplicate differences are not generated.
-        Set<Integer> commonTags = new HashSet<>(originalAllByTag.keySet());
+        // Iterate in tag order so that emitted differences have a stable,
+        // deterministic ordering regardless of map iteration order.
+        Set<Integer> commonTags = new TreeSet<>(originalAllByTag.keySet());
         commonTags.retainAll(updateAllByTag.keySet());
         for (Integer tag : commonTags) {
           boolean topLevelInBoth =
-              originalByTag.containsKey(tag) && updateByTag.containsKey(tag);
+              !originalTagToOneOf.containsKey(tag) && !updateTagToOneOf.containsKey(tag);
           String originalOneOfName = originalTagToOneOf.get(tag);
           String updateOneOfName = updateTagToOneOf.get(tag);
           boolean sameOneOfInBoth = originalOneOfName != null
