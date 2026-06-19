@@ -19,15 +19,19 @@ import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.OneOfElement;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_REMOVED;
 
 public class OneOfDiff {
-  static void compare(final Context ctx, final OneOfElement original, final OneOfElement update) {
+  static void compare(
+      final Context ctx,
+      final OneOfElement original,
+      final OneOfElement update,
+      final Set<Integer> updateTags) {
     Map<Integer, FieldElement> originalByTag = new HashMap<>();
     for (FieldElement field : original.getFields()) {
       originalByTag.put(field.getTag(), field);
@@ -37,14 +41,27 @@ public class OneOfDiff {
       updateByTag.put(field.getTag(), field);
     }
 
-    Set<Integer> allTags = new HashSet<>(originalByTag.keySet());
+    // Iterate in tag order so that emitted differences have a stable,
+    // deterministic ordering regardless of map iteration order.
+    Set<Integer> allTags = new TreeSet<>(originalByTag.keySet());
     allTags.addAll(updateByTag.keySet());
     for (Integer tag : allTags) {
       try (Context.PathScope pathScope = ctx.enterPath(tag.toString())) {
         FieldElement originalField = originalByTag.get(tag);
         FieldElement updateField = updateByTag.get(tag);
         if (updateField == null) {
-          ctx.addDifference(ONEOF_FIELD_REMOVED);
+          // A field that left this oneof but still exists somewhere in the update
+          // (as a top-level field or in another oneof) was relocated, not removed.
+          // Moving a field out of a oneof only relaxes this oneof's mutual-exclusivity
+          // constraint and loses no data, so it is not reported as a oneof field
+          // removal here. Any mutual exclusivity newly introduced at the destination
+          // is detected by the message-level membership check, and an incompatible
+          // type change on a relocated field is detected by the by-tag comparison.
+          // Only a genuine deletion (the tag is absent from the entire update) is
+          // reported as ONEOF_FIELD_REMOVED.
+          if (!updateTags.contains(tag)) {
+            ctx.addDifference(ONEOF_FIELD_REMOVED);
+          }
         } else if (originalField == null) {
           ctx.addDifference(ONEOF_FIELD_ADDED);
         } else {
