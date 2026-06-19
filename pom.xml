@@ -71,6 +71,7 @@
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
+        <module>logical-types</module>
         <module>client-encryption-tink</module>
         <module>dek-registry-client</module>
         <module>dek-registry</module>
@@ -91,7 +92,7 @@
         <checkstyle.suppressions.location>checkstyle/suppressions.xml</checkstyle.suppressions.location>
         <kafka.connect.maven.plugin.version>0.11.1</kafka.connect.maven.plugin.version>
         <kotlin.version>1.9.10</kotlin.version>
-        <antlr.version>4.13.1</antlr.version>
+        <antlr.version>4.13.2</antlr.version>
         <azure.sdk.version>4.9.2</azure.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
         <cel-version>0.12.0</cel-version>

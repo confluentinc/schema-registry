@@ -1,0 +1,26 @@
+{
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "f0": {
+          "connect.parameters": {
+            "connect.decimal.precision": "5",
+            "scale": "2"
+          },
+          "connect.type": "bytes",
+          "title": "org.apache.kafka.connect.data.Decimal",
+          "type": "number"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "f0": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

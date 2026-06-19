@@ -25,7 +25,7 @@ import dev.cel.common.types.SimpleType;
 import java.util.ArrayList;
 import java.util.List;
 
-final class BuiltinDeclarations {
+public final class BuiltinDeclarations {
 
   private static final OpaqueType DECIMAL = CelTypeLabels.DECIMAL;
   private static final OpaqueType VARIANT = CelTypeLabels.VARIANT;
@@ -33,7 +33,17 @@ final class BuiltinDeclarations {
   private BuiltinDeclarations() {
   }
 
-  static List<CelFunctionDecl> create() {
+  /**
+   * Function declarations for the extension family the schema-rules CEL
+   * surface exposes: the seven string-validation members (isEmail,
+   * isHostname, isIpv4, isIpv6, isUri, isUriRef, isUuid), the Decimal /
+   * Timestamp / Variant function families.
+   *
+   * <p>Returns an immutable list so callers can safely combine it with their
+   * own decls (logical-types adds a {@code _[_]} overload for synthetic root
+   * struct types, for example).
+   */
+  public static List<CelFunctionDecl> create() {
     List<CelFunctionDecl> decls = new ArrayList<>();
     decls.add(member("isEmail", "is_email"));
     decls.add(member("isHostname", "is_hostname"));
