@@ -117,7 +117,7 @@ public class MessageSchemaDiff {
             } else if (originalOneOf == null) {
               ctx.addDifference(ONEOF_ADDED);
             } else {
-              OneOfDiff.compare(ctx, originalOneOf, updateOneOf);
+              OneOfDiff.compare(ctx, originalOneOf, updateOneOf, updateByTag.keySet());
             }
           }
         }
