@@ -1092,13 +1092,12 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
         }
         int p = targetType.getPrecision();
         int s = targetType.getScale();
-        // Bare `DECIMAL` (no explicit precision/scale) gets DEFAULT_DECIMAL_PRECISION/
-        // DEFAULT_DECIMAL_SCALE — treat that as "unbounded" for default-value
-        // validation. Users who wrote `DECIMAL(10, 0)` explicitly get the
-        // strict check; users who wrote bare `DECIMAL` get lenient behavior.
-        boolean explicit = !(p == Schema.DEFAULT_DECIMAL_PRECISION
-            && s == Schema.DEFAULT_DECIMAL_SCALE);
-        if (explicit && p != Schema.NO_PARAM) {
+        // Precision is always known here (createDecimal coerces an omitted
+        // precision to DEFAULT_DECIMAL_PRECISION, i.e. bare `DECIMAL` ==
+        // `DECIMAL(10, 0)`), so the default value is range-checked for every
+        // decimal form. An omitted scale (NO_PARAM) is treated as
+        // DEFAULT_DECIMAL_SCALE for the integer-digit budget below.
+        if (p != Schema.NO_PARAM) {
           if (s != Schema.NO_PARAM && value.scale() > s) {
             throw error(ctx, "DECIMAL(" + p + ", " + s + ") default value '"
                 + value.toPlainString() + "' has scale " + value.scale()

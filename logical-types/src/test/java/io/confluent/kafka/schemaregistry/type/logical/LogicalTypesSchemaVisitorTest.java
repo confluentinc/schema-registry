@@ -1217,6 +1217,25 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testDefaultDecimalExplicit10x0OutOfRangeRejected() {
+    // DECIMAL(10, 0) DEFAULT 999999999999 has 12 integer digits > precision 10.
+    // Regression: the default-value leniency flag keyed off the default values
+    // (10, 0) rather than the NO_PARAM sentinel, so this fully-explicit form was
+    // the one declaration whose range check got skipped.
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> firstField("DECIMAL(10, 0) DEFAULT 999999999999"));
+    assertTrue(e.getMessage().contains("exceeds declared precision"),
+        "got: " + e.getMessage());
+  }
+
+  @Test
+  void testDefaultDecimalExplicit10x0InRangeAccepted() {
+    // An in-range default for the same declaration is still accepted.
+    assertEquals(new java.math.BigDecimal("123"),
+        firstField("DECIMAL(10, 0) DEFAULT 123").getDefaultValue());
+  }
+
+  @Test
   void testDefaultDate() {
     assertEquals(java.time.LocalDate.of(2026, 4, 17),
         firstField("DATE DEFAULT '2026-04-17'").getDefaultValue());
