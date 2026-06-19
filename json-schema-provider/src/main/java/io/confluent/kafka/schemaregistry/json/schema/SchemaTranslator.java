@@ -89,6 +89,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import kotlin.Pair;
 import org.everit.json.schema.ArraySchema;
@@ -110,14 +111,19 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   private final Map<Schema, org.everit.json.schema.Schema.Builder<?>> schemaMapping;
   private final Deque<Pair<org.everit.json.schema.ReferenceSchema, Schema>> refMapping;
-  // Tracks the jsonsKema schema each everit ReferenceSchema refers to, so a ReferenceSchema
+  // Tracks the json-sKema schema each everit ReferenceSchema refers to, so a ReferenceSchema
   // that is rebuilt (e.g. via schemaToBuilder) can be re-registered for deferred resolution.
   private final Map<org.everit.json.schema.ReferenceSchema, Schema> refReferred;
+  // Tracks the json-sKema schemas currently being descended into, by object identity, so that an
+  // object-identity cycle in the schema graph (e.g. a $ref/$dynamicRef to the recursive 2020-12
+  // meta-schema) is broken instead of recursing forever and overflowing the stack.
+  private final Set<Schema> descending;
 
   public SchemaTranslator() {
     this.schemaMapping = new IdentityHashMap<>();
     this.refMapping = new ArrayDeque<>();
     this.refReferred = new IdentityHashMap<>();
+    this.descending = Collections.newSetFromMap(new IdentityHashMap<>());
   }
 
   private void offerRef(org.everit.json.schema.ReferenceSchema ref, Schema referredSchema) {
@@ -182,11 +188,25 @@ public class SchemaTranslator extends SchemaVisitor<SchemaTranslator.SchemaConte
 
   @Override
   public SchemaContext visitChildren(Schema parent) {
-    SchemaContext ctx = super.visitChildren(parent);
-    return ctx != null
-        ? ctx
-        : new SchemaContext(
-            parent, CombinedSchemaExt.allOf(Collections.emptyList()).isGenerated(true));
+    if (!descending.add(parent)) {
+      // parent is its own descendant: an object-identity cycle in the json-sKema graph. Emit a
+      // ReferenceSchema placeholder instead of recursing; it is wired to parent's own translation
+      // when refMapping is drained (parent is registered in schemaMapping once its SchemaContext
+      // is built as the stack unwinds). everit supports such recursive references natively.
+      org.everit.json.schema.ReferenceSchema.Builder ref =
+          org.everit.json.schema.ReferenceSchema.builder().refValue("#");
+      offerRef(ref.build(), parent);
+      return new SchemaContext(parent, ref);
+    }
+    try {
+      SchemaContext ctx = super.visitChildren(parent);
+      return ctx != null
+          ? ctx
+          : new SchemaContext(
+              parent, CombinedSchemaExt.allOf(Collections.emptyList()).isGenerated(true));
+    } finally {
+      descending.remove(parent);
+    }
   }
 
   @Override
