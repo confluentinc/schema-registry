@@ -487,32 +487,6 @@ public class JsonSchemaTest {
     assertEquals(schema, schema2);
   }
 
-  @Test
-  public void testPrepopulatedMappings() throws Exception {
-    String schema = "{\n"
-        + "  \"$schema\": \"https://json-schema.org/draft/2019-09/schema\",\n"
-        + "  \"$id\": \"task.schema.json\",\n"
-        + "  \"title\": \"Task\",\n"
-        + "  \"description\": \"A task\",\n"
-        + "  \"type\": [\"null\", \"object\"],\n"
-        + "  \"properties\": {\n"
-        + "    \"title\": {\n"
-        + "        \"description\": \"Task title\",\n"
-        + "        \"type\": \"string\"\n"
-        + "    }\n"
-        + "  }\n"
-        + "}";
-
-    Map<URI, String> mappings = spy(new HashMap<>(new JsonSchema("{}").getPrepopulatedMappings()));
-
-    JsonSchema jsonSchema = new JsonSchemaWithMappings(schema, mappings);
-    jsonSchema.validate(true);
-    // Verify that the mappings in the prepopulatedMetaSchemas are used
-    // The underlying JSON Schema library calls putMapEntries, which calls size and entrySet
-    verify(mappings).size();
-    verify(mappings).entrySet();
-  }
-
   @Test(expected = ValidationException.class)
   public void testUnevaluatedProperties() throws Exception {
     String schema = " {\n"
@@ -1958,17 +1932,37 @@ public class JsonSchemaTest {
     return new JsonSchema(schemaString);
   }
 
-  static class JsonSchemaWithMappings extends JsonSchema {
-    private Map<URI, String> mappings;
-    public JsonSchemaWithMappings(String schema, Map<URI, String> mappings) {
-      super(schema);
-      this.mappings = mappings;
-    }
+  @Test
+  public void testRecursiveMetaSchemaReference() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
 
-    @Override
-    protected Map<URI, String> getPrepopulatedMappings() {
-      return mappings;
-    }
+  @Test
+  public void testRecursiveMetaSchemaReferenceWithDraft_2020_12() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft/2020-12/schema\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
+  }
+
+  @Test
+  public void testRecursiveMetaSchemaReferenceCrossDraft() {
+    String schemaString = "{"
+        + "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"$ref\":\"https://json-schema.org/draft-07/schema#\"}}"
+        + "}";
+    JsonSchema jsonSchema = new JsonSchema(schemaString);
+    assertNotNull(jsonSchema.rawSchema());
   }
 
   static class TestObj {
