@@ -29,6 +29,7 @@ import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ME
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.MESSAGE_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_ADDED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_ADDED;
+import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_FIELD_MOVED_TO_TOP_LEVEL;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.ONEOF_REMOVED;
 import static io.confluent.kafka.schemaregistry.protobuf.diff.Difference.Type.PACKAGE_CHANGED;
 
@@ -67,6 +68,7 @@ public class SchemaDiff {
     changes.add(ONEOF_ADDED);
     changes.add(ONEOF_REMOVED);
     changes.add(ONEOF_FIELD_ADDED);
+    changes.add(ONEOF_FIELD_MOVED_TO_TOP_LEVEL);
 
     COMPATIBLE_CHANGES = Collections.unmodifiableSet(changes);
   }
