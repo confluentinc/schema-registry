@@ -291,6 +291,15 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         ? providers.stream().collect(Collectors.toMap(SchemaProvider::schemaType, p -> p))
         : Collections.singletonMap(AvroSchema.TYPE, new AvroSchemaProvider());
     Map<String, Object> schemaProviderConfigs = new HashMap<>();
+    if (configs != null) {
+      String prefix = SchemaProvider.SCHEMA_PROVIDERS_PREFIX + ".";
+      for (Map.Entry<String, ?> entry : configs.entrySet()) {
+        if (entry.getKey().startsWith(prefix)) {
+          schemaProviderConfigs.put(
+              entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+      }
+    }
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
     for (SchemaProvider provider : this.providers.values()) {
       provider.configure(schemaProviderConfigs);
