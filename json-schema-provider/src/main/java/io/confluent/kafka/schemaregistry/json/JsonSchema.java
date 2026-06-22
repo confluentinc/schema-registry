@@ -448,6 +448,11 @@ public class JsonSchema implements ParsedSchema {
       // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (schemaObj == null) {
+          // Bail before kicking off a parse if the request has already been interrupted (e.g. by
+          // the request timeout). The parse itself runs inside the third-party loaders, which are
+          // not cooperative — see JsonSchemaCancellation — so this guards the lead-in, while the
+          // request timeout remains the backstop for a parse already in flight.
+          JsonSchemaCancellation.throwIfInterrupted();
           try {
             if (jsonNode.isBoolean()) {
               schemaObj = jsonNode.booleanValue()
@@ -972,6 +977,7 @@ public class JsonSchema implements ParsedSchema {
 
   private Object toTransformedMessage(
       RuleContext ctx, Schema schema, String path, Object message, FieldTransform transform) {
+    JsonSchemaCancellation.throwIfInterrupted();
     FieldContext fieldCtx = ctx.currentField();
     if (schema == null) {
       return message;
@@ -1155,6 +1161,7 @@ public class JsonSchema implements ParsedSchema {
   private void toValidatedMessage(
       Schema schema, String path, Object message,
       ValidationRuleExecutor executor, boolean failFast, List<ValidationRuleError> out) {
+    JsonSchemaCancellation.throwIfInterrupted();
     if (schema == null) {
       return;
     }
@@ -1372,6 +1379,7 @@ public class JsonSchema implements ParsedSchema {
   }
 
   private void getInlineTagsRecursively(Set<String> tags, JsonNode node) {
+    JsonSchemaCancellation.throwIfInterrupted();
     tags.addAll(getInlineTags(node));
     node.forEach(n -> getInlineTagsRecursively(tags, n));
   }
@@ -1389,6 +1397,7 @@ public class JsonSchema implements ParsedSchema {
 
   private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
       Schema schema, String scope, boolean inField, Set<String> visited) {
+    JsonSchemaCancellation.throwIfInterrupted();
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;
       String scopedName = scope + JsonSchemaComparator.getCriterion(combinedSchema);
@@ -1446,6 +1455,7 @@ public class JsonSchema implements ParsedSchema {
 
   private void getInlineTaggedEntitiesRecursively(Map<SchemaEntity, Set<String>> tags,
       Map<String, Object> unprocessedProperties, String scope, Set<String> visited) {
+    JsonSchemaCancellation.throwIfInterrupted();
     Map<String, Object> defns = (Map<String, Object>) unprocessedProperties.get("definitions");
     if (defns != null) {
       for (Map.Entry<String, Object> entry : defns.entrySet()) {
