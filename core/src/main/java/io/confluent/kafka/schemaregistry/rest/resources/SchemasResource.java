@@ -223,7 +223,7 @@ public class SchemasResource {
         throw Errors.schemaNotFoundException(id);
       }
       if (tags != null && !tags.isEmpty()) {
-        Schema s = new Schema(null, null, null, schema);
+        Schema s = new Schema(schema.getSubject(), schema.getVersion(), id, schema);
         schemaRegistry.extractSchemaTags(s, tags);
         schema.setSchemaTags(s.getSchemaTags());
       }
