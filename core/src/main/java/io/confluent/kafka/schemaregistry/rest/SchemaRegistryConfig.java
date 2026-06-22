@@ -15,7 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
@@ -153,6 +155,24 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_READ_TIMEOUT_MS = "leader.read.timeout.ms";
   public static final int DEFAULT_LEADER_READ_TIMEOUT_MS = 60000;
   /**
+   * <code>inter.instance.spire.enabled</code>*
+   */
+  public static final String INTER_INSTANCE_SPIRE_ENABLED_CONFIG =
+      "inter.instance.spire.enabled";
+  public static final boolean DEFAULT_INTER_INSTANCE_SPIRE_ENABLED = false;
+  /**
+   * <code>inter.instance.spire.agent.url</code>*
+   */
+  public static final String INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG =
+      "inter.instance.spire.agent.url";
+  public static final String DEFAULT_INTER_INSTANCE_SPIRE_AGENT_URL = "";
+  /**
+   * <code>inter.instance.spire.authorized.id.patterns</code>*
+   */
+  public static final String INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG =
+      "inter.instance.spire.authorized.id.patterns";
+  public static final String DEFAULT_INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS = "";
+  /**
    * <code>leader.election.delay</code>*
    */
   public static final String LEADER_ELECTION_DELAY = "leader.election.delay";
@@ -179,7 +199,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String HOST_PORT_CONFIG = "host.port";
 
-  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+  public static final String SCHEMA_PROVIDERS_CONFIG = SchemaProvider.SCHEMA_PROVIDERS_PREFIX;
 
   /**
    * <code>schema.compatibility.level</code>
@@ -196,6 +216,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
   public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
+
+  public static final String REFERENCE_VERSIONS_STRICT_CONFIG =
+      SCHEMA_PROVIDERS_CONFIG + "." + AbstractSchemaProvider.REFERENCE_VERSIONS_STRICT_CONFIG;
+  public static final boolean REFERENCE_VERSIONS_STRICT_DEFAULT = false;
 
   /**
    * <code>schema.cache.size</code>
@@ -436,6 +460,10 @@ public class SchemaRegistryConfig extends RestConfig {
       "If true, reject schema registration requests whose subject name is the empty string. "
       + "Defaults to false to preserve backward compatibility with existing deployments that "
       + "may have schemas registered under an empty subject.";
+  protected static final String REFERENCE_VERSIONS_STRICT_DOC =
+      "If true, reject schema registration when the reference graph contains the same "
+      + "reference name at different versions. This prevents conflicting type definitions "
+      + "from coexisting in the resolved schema graph. Defaults to false.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -484,6 +512,20 @@ public class SchemaRegistryConfig extends RestConfig {
       "The timeout for connections when forwarding requests to the leader.";
   protected static final String LEADER_READ_TIMEOUT_MS_DOC =
       "The timeout for reading responses after forwarding requests to the leader.";
+  protected static final String INTER_INSTANCE_SPIRE_ENABLED_DOC =
+      "If true, requests forwarded from a follower to the leader use SPIRE/SPIFFE mTLS. The "
+      + "forwarding client obtains its client certificate (X.509 SVID) from the SPIFFE Workload "
+      + "API instead of a static keystore, and the SVID is rotated automatically in memory. When "
+      + "enabled, hostname verification is disabled and the leader is instead authorized by its "
+      + "SPIFFE ID (see " + INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG + ").";
+  protected static final String INTER_INSTANCE_SPIRE_AGENT_URL_DOC =
+      "The SPIFFE Workload API socket path used by the inter-instance forwarding client to obtain "
+      + "its X.509 SVID. If left empty, the standard SPIFFE_ENDPOINT_SOCKET environment variable "
+      + "is used. Has no effect unless " + INTER_INSTANCE_SPIRE_ENABLED_CONFIG + " is true.";
+  protected static final String INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_DOC =
+      "Comma-separated list of SPIFFE ID patterns that the leader's SPIFFE ID must match for the "
+      + "forwarding client to trust it. If empty, any SPIFFE ID presented by the leader is "
+      + "accepted. Has no effect unless " + INTER_INSTANCE_SPIRE_ENABLED_CONFIG + " is true.";
   protected static final String LEADER_ELECTION_DELAY_DOC =
       "Whether to delay leader election until after initialization.";
   protected static final String LEADER_ELECTION_STICKY_DOC =
@@ -682,6 +724,10 @@ public class SchemaRegistryConfig extends RestConfig {
         SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
         ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
     )
+    .define(REFERENCE_VERSIONS_STRICT_CONFIG, ConfigDef.Type.BOOLEAN,
+        REFERENCE_VERSIONS_STRICT_DEFAULT,
+        ConfigDef.Importance.LOW, REFERENCE_VERSIONS_STRICT_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
@@ -754,6 +800,18 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_READ_TIMEOUT_MS, ConfigDef.Type.INT, DEFAULT_LEADER_READ_TIMEOUT_MS,
         ConfigDef.Importance.LOW, LEADER_READ_TIMEOUT_MS_DOC
+    )
+    .define(INTER_INSTANCE_SPIRE_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
+        DEFAULT_INTER_INSTANCE_SPIRE_ENABLED,
+        ConfigDef.Importance.LOW, INTER_INSTANCE_SPIRE_ENABLED_DOC
+    )
+    .define(INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG, ConfigDef.Type.STRING,
+        DEFAULT_INTER_INSTANCE_SPIRE_AGENT_URL,
+        ConfigDef.Importance.LOW, INTER_INSTANCE_SPIRE_AGENT_URL_DOC
+    )
+    .define(INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG, ConfigDef.Type.STRING,
+        DEFAULT_INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS,
+        ConfigDef.Importance.LOW, INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_DOC
     )
     .define(LEADER_ELECTION_DELAY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_DELAY,
         ConfigDef.Importance.LOW, LEADER_ELECTION_DELAY_DOC
