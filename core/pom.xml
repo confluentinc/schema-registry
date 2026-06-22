@@ -52,6 +52,11 @@
             <version>${io.confluent.rest-utils.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.confluent.srj</groupId>
+            <artifactId>spire</artifactId>
+            <version>0.275.0</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j-impl</artifactId>
         </dependency>
