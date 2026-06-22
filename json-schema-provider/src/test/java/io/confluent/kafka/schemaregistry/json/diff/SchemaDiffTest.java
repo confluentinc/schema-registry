@@ -68,12 +68,16 @@ public class SchemaDiffTest {
     final JsonSchema original = new JsonSchema("{\"type\":\"object\"}");
     final JsonSchema update =
         new JsonSchema("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+    // Parse up front so the interrupt below is exercised by the diff hub, not the parse guard
+    // in rawSchema().
+    final Schema originalRaw = original.rawSchema();
+    final Schema updateRaw = update.rawSchema();
 
     // Simulate the request-timeout interrupt arriving mid-comparison: an interrupted thread must
     // abort the (potentially exponential) diff so it can be reclaimed.
     Thread.currentThread().interrupt();
     try {
-      SchemaDiff.compare(original.rawSchema(), update.rawSchema());
+      SchemaDiff.compare(originalRaw, updateRaw);
       Assert.fail("expected CancellationException when the worker thread is interrupted");
     } catch (CancellationException expected) {
       // expected
