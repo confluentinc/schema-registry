@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.schema.backup;
+package io.confluent.connect.schema.backup.core;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -49,7 +51,7 @@ public class BackupReferenceResolver {
 
   private static final Logger log = LoggerFactory.getLogger(BackupReferenceResolver.class);
   private static final ObjectMapper JSON = new ObjectMapper();
-  private static final int MAX_DEPTH = BackupWrapper.MAX_REFERENCE_DEPTH;
+  private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
   private final Map<String, Integer> registrationCache = new ConcurrentHashMap<>();
@@ -165,29 +167,29 @@ public class BackupReferenceResolver {
       Map<String, BackupSchemaFetcher.RefTreeEntry> tree = new HashMap<>();
       for (Map.Entry<String, Map<String, Object>> e : raw.entrySet()) {
         Map<String, Object> v = e.getValue();
-        String subject = (String) v.get(BackupWrapper.REF_FIELD_SUBJECT);
-        int version = v.get(BackupWrapper.REF_FIELD_VERSION) instanceof Number
-            ? ((Number) v.get(BackupWrapper.REF_FIELD_VERSION)).intValue() : 0;
-        String schema = (String) v.get(BackupWrapper.REF_FIELD_SCHEMA);
+        String subject = (String) v.get(SchemaBackupConfig.REF_FIELD_SUBJECT);
+        int version = v.get(SchemaBackupConfig.REF_FIELD_VERSION) instanceof Number
+            ? ((Number) v.get(SchemaBackupConfig.REF_FIELD_VERSION)).intValue() : 0;
+        String schema = (String) v.get(SchemaBackupConfig.REF_FIELD_SCHEMA);
         List<SchemaReference> refs = Collections.emptyList();
-        Object refsObj = v.get(BackupWrapper.REF_FIELD_REFERENCES);
+        Object refsObj = v.get(SchemaBackupConfig.REF_FIELD_REFERENCES);
         if (refsObj instanceof List) {
           refs = new ArrayList<>();
           for (Object item : (List<?>) refsObj) {
             if (item instanceof Map) {
               Map<String, Object> m = (Map<String, Object>) item;
               refs.add(new SchemaReference(
-                  (String) m.get(BackupWrapper.REF_FIELD_NAME),
-                  (String) m.get(BackupWrapper.REF_FIELD_SUBJECT),
-                  m.get(BackupWrapper.REF_FIELD_VERSION) instanceof Number
-                      ? ((Number) m.get(BackupWrapper.REF_FIELD_VERSION)).intValue() : 0));
+                  (String) m.get(SchemaBackupConfig.REF_FIELD_NAME),
+                  (String) m.get(SchemaBackupConfig.REF_FIELD_SUBJECT),
+                  m.get(SchemaBackupConfig.REF_FIELD_VERSION) instanceof Number
+                      ? ((Number) m.get(SchemaBackupConfig.REF_FIELD_VERSION)).intValue() : 0));
             }
           }
         }
-        int globalId = v.get(BackupWrapper.REF_FIELD_GLOBAL_ID) instanceof Number
-            ? ((Number) v.get(BackupWrapper.REF_FIELD_GLOBAL_ID)).intValue() : 0;
-        String schemaType = v.get(BackupWrapper.REF_FIELD_SCHEMA_TYPE) instanceof String
-            ? (String) v.get(BackupWrapper.REF_FIELD_SCHEMA_TYPE) : null;
+        int globalId = v.get(SchemaBackupConfig.REF_FIELD_GLOBAL_ID) instanceof Number
+            ? ((Number) v.get(SchemaBackupConfig.REF_FIELD_GLOBAL_ID)).intValue() : 0;
+        String schemaType = v.get(SchemaBackupConfig.REF_FIELD_SCHEMA_TYPE) instanceof String
+            ? (String) v.get(SchemaBackupConfig.REF_FIELD_SCHEMA_TYPE) : null;
         tree.put(e.getKey(), new BackupSchemaFetcher.RefTreeEntry(
             subject, version, schema, refs, globalId, schemaType));
       }

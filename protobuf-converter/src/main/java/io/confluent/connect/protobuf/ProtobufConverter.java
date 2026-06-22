@@ -16,9 +16,10 @@
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.Message;
-import io.confluent.connect.schema.backup.BackupConverterHelper;
-import io.confluent.connect.schema.backup.BackupReferenceResolver;
-import io.confluent.connect.schema.backup.BackupWrapper;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
@@ -277,7 +278,7 @@ public class ProtobufConverter implements Converter {
       throws IOException, RestClientException {
     return backupHelper.wrapWithBackupMetadata(
         original, topic, schemaId,
-        BackupWrapper.SCHEMA_TYPE_PROTOBUF, isKey,
+        SchemaBackupConfig.TYPE_PROTOBUF, isKey,
         PROTOBUF_SCHEMA_FACTORY, serializer::computeSubjectName);
   }
 

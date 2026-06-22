@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.schema.backup;
+package io.confluent.connect.schema.backup.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -40,7 +42,7 @@ public class BackupSchemaFetcher {
 
   private static final Logger log = LoggerFactory.getLogger(BackupSchemaFetcher.class);
   private static final ObjectMapper JSON = new ObjectMapper();
-  private static final int MAX_DEPTH = BackupWrapper.MAX_REFERENCE_DEPTH;
+  private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
   private final Map<Integer, BackupSchemaInfo> cache = new ConcurrentHashMap<>();

@@ -17,9 +17,10 @@ package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
-import io.confluent.connect.schema.backup.BackupConverterHelper;
-import io.confluent.connect.schema.backup.BackupReferenceResolver;
-import io.confluent.connect.schema.backup.BackupWrapper;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
@@ -264,7 +265,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       throws IOException, RestClientException {
     return backupHelper.wrapWithBackupMetadata(
         original, topic, schemaId,
-        BackupWrapper.SCHEMA_TYPE_JSON_SCHEMA, isKey,
+        SchemaBackupConfig.TYPE_JSON_SCHEMA, isKey,
         JSON_SCHEMA_FACTORY, serializer::computeSubjectName);
   }
 

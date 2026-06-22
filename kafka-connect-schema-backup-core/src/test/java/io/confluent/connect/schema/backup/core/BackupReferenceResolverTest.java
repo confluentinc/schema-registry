@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.schema.backup;
+package io.confluent.connect.schema.backup.core;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

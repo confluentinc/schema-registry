@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.schema.backup;
+package io.confluent.connect.schema.backup.core;
 
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -64,7 +66,7 @@ public class BackupConverterHelper {
    * Checks if backup envelope mode is enabled in converter configs.
    */
   public static boolean isBackupEnabled(Map<String, ?> configs) {
-    Object val = configs.get(BackupWrapper.SCHEMA_BACKUP_ENABLED_CONFIG);
+    Object val = configs.get(SchemaBackupConfig.SCHEMA_BACKUP_ENABLED_CONFIG);
     return "true".equalsIgnoreCase(val != null ? val.toString() : null);
   }
 

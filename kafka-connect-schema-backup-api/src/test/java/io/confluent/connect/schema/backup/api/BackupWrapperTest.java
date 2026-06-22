@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.schema.backup;
+package io.confluent.connect.schema.backup.api;
 
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;

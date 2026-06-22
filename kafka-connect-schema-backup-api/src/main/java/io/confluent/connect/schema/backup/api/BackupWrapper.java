@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.connect.schema.backup;
+package io.confluent.connect.schema.backup.api;
 
 import java.nio.ByteBuffer;
 
@@ -23,17 +23,26 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 
 /**
- * Single source of truth for the backup Wrapper struct contract.
+ * Backup Wrapper struct operations for Kafka Connect object storage connectors.
  *
- * <p>The Wrapper carries schema metadata between converters and the envelope layer
- * during backup and restore. Converters build Wrappers in {@code toConnectData()}
- * and detect them in {@code fromConnectData()}. The envelope layer unwraps them
- * on backup and rebuilds them on restore.
+ * <p>The Wrapper is a self-identifying Connect Struct that carries schema
+ * metadata between converters and the envelope layer during backup and
+ * restore. Converters build Wrappers in {@code toConnectData()} and
+ * detect them in {@code fromConnectData()}. The envelope layer unwraps
+ * them on backup and rebuilds them on restore.
+ *
+ * <p>For schema type tags, reference field names, and configuration
+ * constants, see {@link SchemaBackupConfig}.
  */
 public final class BackupWrapper {
 
+  /**
+   * Schema name used to identify Wrapper structs.
+   * Detection key for {@link #isWrapper(Schema)}.
+   */
   public static final String NAME = "io.confluent.connect.backup.Wrapper";
 
+  // Wrapper struct field names
   public static final String FIELD_DATA = "data";
   public static final String FIELD_SCHEMA_ID = "schemaId";
   public static final String FIELD_SCHEMA_VERSION = "schemaVersion";
@@ -43,44 +52,21 @@ public final class BackupWrapper {
   public static final String FIELD_REFERENCE_TREE = "referenceTree";
   public static final String FIELD_DIRECT_REFS = "directRefs";
 
-  /**
-   * Converter config key that enables schema backup metadata wrapping.
-   * Set by the connector via taskConfigs() propagation
-   * (e.g., {@code value.converter.schema.backup.enabled=true}).
-   *
-   * <p>When enabled, the converter captures schema ID, version, subject,
-   * raw schema text, and reference metadata in a Wrapper struct so the
-   * envelope layer can back them up to object storage.
-   */
-  public static final String SCHEMA_BACKUP_ENABLED_CONFIG = "schema.backup.enabled";
-
-  // Schema type tags — used in wrapWithBackupMetadata() across converters.
-  // Must match BackupEnvelope.TYPE_* in storage-common (cross-repo contract).
-  public static final String SCHEMA_TYPE_AVRO = "AVRO";
-  public static final String SCHEMA_TYPE_PROTOBUF = "PROTOBUF";
-  public static final String SCHEMA_TYPE_JSON_SCHEMA = "JSON_SCHEMA";
-
-  public static final int MAX_REFERENCE_DEPTH = 50;
-
-  // Reference tree JSON field names (cross-repo contract between
-  // BackupSchemaFetcher, BackupReferenceResolver, BackupWrapperRebuilder,
-  // EnvelopeTransformer, BackupReferenceParser).
-  // Must match BackupEnvelope.REF_FIELD_* in storage-common.
-  public static final String REF_FIELD_SUBJECT = "subject";
-  public static final String REF_FIELD_VERSION = "version";
-  public static final String REF_FIELD_GLOBAL_ID = "globalId";
-  public static final String REF_FIELD_SCHEMA_TYPE = "schemaType";
-  public static final String REF_FIELD_SCHEMA = "schema";
-  public static final String REF_FIELD_REFERENCES = "references";
-  public static final String REF_FIELD_NAME = "name";
-
   private static final byte MAGIC_BYTE = 0x0;
 
   private BackupWrapper() {
   }
 
+  /**
+   * Builds the 8-field Wrapper Connect schema for a given data schema.
+   *
+   * @param dataSchema the original key or value schema, or null for
+   *     tombstones (defaults to OPTIONAL_BYTES_SCHEMA)
+   * @return a named struct schema with all Wrapper fields
+   */
   public static Schema buildSchema(Schema dataSchema) {
-    Schema safeDataSchema = dataSchema != null ? dataSchema : Schema.OPTIONAL_BYTES_SCHEMA;
+    Schema safeDataSchema = dataSchema != null
+        ? dataSchema : Schema.OPTIONAL_BYTES_SCHEMA;
     return SchemaBuilder.struct()
         .name(NAME)
         .field(FIELD_DATA, safeDataSchema)
@@ -94,16 +80,25 @@ public final class BackupWrapper {
         .build();
   }
 
+  /**
+   * Builds a Wrapper struct with all 8 fields populated.
+   *
+   * @param wrapperSchema the schema from {@link #buildSchema}
+   * @param data the original key or value data
+   * @param schemaId SR global schema ID
+   * @param schemaVersion SR schema version, or null if unknown
+   * @param schemaType schema type tag from {@link SchemaBackupConfig}
+   * @param subject SR subject name
+   * @param rawSchema pristine schema text from SR
+   * @param referenceTreeJson reference tree JSON, or null if no refs
+   * @param directRefsJson direct references JSON, or null if no refs
+   * @return populated Wrapper struct
+   */
   public static Struct buildWrapper(
-      Schema wrapperSchema,
-      Object data,
-      int schemaId,
-      Integer schemaVersion,
-      String schemaType,
-      String subject,
-      String rawSchema,
-      String referenceTreeJson,
-      String directRefsJson) {
+      Schema wrapperSchema, Object data,
+      int schemaId, Integer schemaVersion,
+      String schemaType, String subject, String rawSchema,
+      String referenceTreeJson, String directRefsJson) {
     Struct wrapper = new Struct(wrapperSchema);
     wrapper.put(FIELD_DATA, data);
     wrapper.put(FIELD_SCHEMA_ID, schemaId);
@@ -116,10 +111,23 @@ public final class BackupWrapper {
     return wrapper;
   }
 
+  /**
+   * Detects whether a Connect schema is a BackupWrapper by its name.
+   *
+   * @param schema the schema to check
+   * @return true if the schema name matches {@link #NAME}
+   */
   public static boolean isWrapper(Schema schema) {
     return schema != null && NAME.equals(schema.name());
   }
 
+  /**
+   * Extracts the SR schema ID from Confluent wire format bytes.
+   * The wire format is: {@code [0x00][4-byte big-endian schema ID][payload]}.
+   *
+   * @param value the raw Kafka record value bytes
+   * @return the schema ID, or null if the bytes are not in wire format
+   */
   public static Integer extractSchemaId(byte[] value) {
     if (value == null || value.length < 5 || value[0] != MAGIC_BYTE) {
       return null;

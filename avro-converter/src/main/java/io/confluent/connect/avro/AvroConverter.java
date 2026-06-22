@@ -16,9 +16,10 @@
 
 package io.confluent.connect.avro;
 
-import io.confluent.connect.schema.backup.BackupConverterHelper;
-import io.confluent.connect.schema.backup.BackupReferenceResolver;
-import io.confluent.connect.schema.backup.BackupWrapper;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -280,7 +281,7 @@ public class AvroConverter implements Converter {
       throws IOException, RestClientException {
     return backupHelper.wrapWithBackupMetadata(
         original, topic, schemaId,
-        BackupWrapper.SCHEMA_TYPE_AVRO, isKey,
+        SchemaBackupConfig.TYPE_AVRO, isKey,
         AVRO_SCHEMA_FACTORY, serializer::computeSubjectName);
   }
 
