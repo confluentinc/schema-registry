@@ -278,7 +278,10 @@ public class Schema implements Comparable<Schema> {
         .collect(Collectors.toList())
         : null;
 
-    return new Schema(subject, null, null, schemaType, referencesCopy, metadata, ruleSet, schema);
+    // Retain the fact that id is set, but don't retain the actual value,
+    // since it's not relevant to the hash key and may differ across instances of the same schema
+    Integer id = this.id != null && this.id >= 0 ? 0 : null;
+    return new Schema(subject, null, id, schemaType, referencesCopy, metadata, ruleSet, schema);
   }
 
   @io.swagger.v3.oas.annotations.media.Schema(description = SUBJECT_DESC, example = SUBJECT_EXAMPLE)
