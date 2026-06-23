@@ -87,7 +87,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
-import javax.net.ssl.SSLSocketFactory;
 
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
