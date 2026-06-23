@@ -71,10 +71,7 @@ import io.confluent.kafka.schemaregistry.storage.serialization.Serializer;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.rest.NamedURI;
 import io.confluent.rest.exceptions.RestException;
-import io.confluent.srj.spire.SpireX509Client;
-import io.confluent.srj.spire.exceptions.SpiffeX509SourceProviderException;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -116,9 +113,10 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private RestService leaderRestService;
   private final int leaderConnectTimeoutMs;
   private final int leaderReadTimeoutMs;
-  // SPIRE mTLS for the follower->leader forwarding client; null when SPIRE is disabled.
-  private final SpireX509Client spireX509Client;
-  private final SSLSocketFactory spireSslSocketFactory;
+  // Supplies the SSLSocketFactory (and owns the credential source) for the follower->leader
+  // forwarding client. Null when forwarding uses the standard keystore-based TLS. Commercial
+  // builds plug in an implementation (e.g. SPIRE/SPIFFE mTLS) via createLeaderForwardingClient.
+  private final LeaderForwardingClient leaderForwardingClient;
   private final IdGenerator idGenerator;
   private LeaderElector leaderElector = null;
   private final String kafkaClusterId;
@@ -148,20 +146,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
-    if (config.getBoolean(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_ENABLED_CONFIG)) {
-      this.spireX509Client = createSpireX509Client(config);
-      try {
-        this.spireSslSocketFactory =
-            spireX509Client.getHttpSSLContextForMtls().getSocketFactory();
-      } catch (GeneralSecurityException e) {
-        throw new SchemaRegistryInitializationException(
-            "Failed to create SPIRE mTLS context for inter-instance forwarding", e);
-      }
-      log.info("SPIRE mTLS enabled for inter-instance forwarding to the leader");
-    } else {
-      this.spireX509Client = null;
-      this.spireSslSocketFactory = null;
-    }
+    this.leaderForwardingClient = createLeaderForwardingClient(config);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -185,32 +170,18 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     return new MetricsContainer(config, kafkaClusterId);
   }
 
-  private static SpireX509Client createSpireX509Client(SchemaRegistryConfig config)
+  /**
+   * Creates the client that supplies the {@link SSLSocketFactory} for the follower-&gt;leader
+   * forwarding connection. The default implementation returns {@code null}, meaning forwarding
+   * uses the standard keystore-based TLS (or plaintext) derived from the listener configuration.
+   *
+   * <p>Commercial builds override this to plug in an alternative credential source (for example
+   * SPIRE/SPIFFE mTLS, where the client certificate is obtained from the Workload API and rotated
+   * in memory). The returned client is owned by this instance and closed in {@link #close()}.
+   */
+  protected LeaderForwardingClient createLeaderForwardingClient(SchemaRegistryConfig config)
       throws SchemaRegistryInitializationException {
-    return createSpireX509Client(config, new SpireX509Client.SpireX509ClientBuilder());
-  }
-
-  @VisibleForTesting
-  static SpireX509Client createSpireX509Client(SchemaRegistryConfig config,
-      SpireX509Client.SpireX509ClientBuilder builder)
-      throws SchemaRegistryInitializationException {
-    String agentUrl = config.getString(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_AGENT_URL_CONFIG);
-    String authorizedIdPatterns =
-        config.getString(SchemaRegistryConfig.INTER_INSTANCE_SPIRE_AUTHORIZED_ID_PATTERNS_CONFIG);
-    // Empty agent URL falls back to the SPIFFE_ENDPOINT_SOCKET environment variable.
-    if (agentUrl != null && !agentUrl.isEmpty()) {
-      builder.setSpireAgentURL(agentUrl);
-    }
-    // Empty patterns accept any SPIFFE ID.
-    if (authorizedIdPatterns != null && !authorizedIdPatterns.isEmpty()) {
-      builder.setAuthorizedSpiffeIdPatterns(authorizedIdPatterns, ',');
-    }
-    try {
-      return builder.build();
-    } catch (SpiffeX509SourceProviderException e) {
-      throw new SchemaRegistryInitializationException(
-          "Failed to initialize SPIRE X509 source for inter-instance forwarding", e);
-    }
+    return null;
   }
 
   @VisibleForTesting
@@ -386,9 +357,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
-        if (spireSslSocketFactory != null) {
-          // SPIFFE IDs are not DNS names, so the leader is authorized by SPIFFE ID, not hostname.
-          leaderRestService.setSslSocketFactory(spireSslSocketFactory);
+        SSLSocketFactory forwardingSslSocketFactory = leaderForwardingClient != null
+            ? leaderForwardingClient.sslSocketFactory() : null;
+        if (forwardingSslSocketFactory != null) {
+          // The forwarding client may authorize the leader by identity (e.g. SPIFFE ID) rather
+          // than hostname, so hostname verification is disabled in that case.
+          leaderRestService.setSslSocketFactory(forwardingSslSocketFactory);
           leaderRestService.setHostnameVerifier((hostname, session) -> true);
         } else if (sslFactory != null && sslFactory.sslContext() != null) {
           leaderRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
@@ -1413,8 +1387,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     if (leaderRestService != null) {
       leaderRestService.close();
     }
-    if (spireX509Client != null) {
-      spireX509Client.close();
+    if (leaderForwardingClient != null) {
+      leaderForwardingClient.close();
     }
     kafkaStore.close();
     metadataEncoder.close();
