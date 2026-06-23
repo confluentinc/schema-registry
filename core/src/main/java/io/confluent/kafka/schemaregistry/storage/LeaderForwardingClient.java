@@ -18,15 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 import java.io.Closeable;
 import javax.net.ssl.SSLSocketFactory;
 
-/**
- * Supplies the {@link SSLSocketFactory} used by the follower-&gt;leader forwarding client and owns
- * the lifecycle of the underlying credential source.
- *
- * <p>This is the seam through which commercial builds plug in an alternative source of client TLS
- * credentials (for example SPIRE/SPIFFE mTLS, where the X.509 SVID is obtained from the Workload
- * API and rotated automatically in memory) without the open-source core depending on those
- * implementations. See {@link KafkaSchemaRegistry#createLeaderForwardingClient}.
- */
 public interface LeaderForwardingClient extends Closeable {
 
   /**
