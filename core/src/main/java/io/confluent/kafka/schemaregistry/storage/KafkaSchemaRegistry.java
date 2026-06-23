@@ -87,6 +87,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
+import javax.net.ssl.SSLSocketFactory;
 
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -112,9 +113,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private RestService leaderRestService;
   private final int leaderConnectTimeoutMs;
   private final int leaderReadTimeoutMs;
-  // Supplies the SSLSocketFactory (and owns the credential source) for the follower->leader
-  // forwarding client. Null when forwarding uses the standard keystore-based TLS. Commercial
-  // builds plug in an implementation (e.g. SPIRE/SPIFFE mTLS) via createLeaderForwardingClient.
   private final LeaderForwardingClient leaderForwardingClient;
   private final IdGenerator idGenerator;
   private LeaderElector leaderElector = null;
@@ -169,15 +167,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     return new MetricsContainer(config, kafkaClusterId);
   }
 
-  /**
-   * Creates the client that supplies the {@link SSLSocketFactory} for the follower-&gt;leader
-   * forwarding connection. The default implementation returns {@code null}, meaning forwarding
-   * uses the standard keystore-based TLS (or plaintext) derived from the listener configuration.
-   *
-   * <p>Commercial builds override this to plug in an alternative credential source (for example
-   * SPIRE/SPIFFE mTLS, where the client certificate is obtained from the Workload API and rotated
-   * in memory). The returned client is owned by this instance and closed in {@link #close()}.
-   */
   protected LeaderForwardingClient createLeaderForwardingClient(SchemaRegistryConfig config)
       throws SchemaRegistryInitializationException {
     return null;
