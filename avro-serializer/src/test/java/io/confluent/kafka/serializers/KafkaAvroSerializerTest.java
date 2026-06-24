@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
@@ -30,8 +31,10 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.serializers.subject.AssociatedNameStrategy;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -72,6 +75,7 @@ import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -1856,6 +1860,110 @@ public class KafkaAvroSerializerTest {
         + ",{\"type\":\"record\",\"name\":\"Account\",\"namespace\":\"example.avro\","
         + "\"fields\":[{\"name\":\"accountNumber\",\"type\":\"string\"}]}]";
     assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
+  }
+
+  // --- Regression tests: the Avro datum writer/reader caches must be keyed by schema id /
+  // content, not by schema-object identity. They previously used identity (==) keys, so
+  // content-identical schemas arriving as distinct instances accumulated duplicate entries,
+  // leaking memory (the SpecificAvroSerializer datumWriterCache in particular).
+
+  @SuppressWarnings("unchecked")
+  private static Cache<Object, Object> getCache(
+      Object serde, Class<?> declaringClass, String fieldName) throws Exception {
+    Field field = declaringClass.getDeclaredField(fieldName);
+    field.setAccessible(true);
+    return (Cache<Object, Object>) field.get(serde);
+  }
+
+  @Test
+  public void testDatumWriterCacheKeyedBySchemaId() throws Exception {
+    // auto.register=false keeps the caller-provided schema instance (the getId branch does not
+    // replace it), so distinct-but-equal instances reach the datumWriterCache key. With the
+    // previous identity keys this produced one cache entry per instance.
+    Properties props = createSerializerConfig();
+    props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, "false");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(props));
+    schemaRegistry.register(topic + "-value", new AvroSchema(createUserSchema()));
+
+    byte[] bytes = null;
+    RecordHeaders headers = new RecordHeaders();
+    for (int i = 0; i < 5; i++) {
+      // Fresh schema instance each iteration, identical content.
+      Schema schema = createUserSchema();
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("name", "testUser");
+      bytes = serializer.serialize(topic, headers, record);
+    }
+
+    Cache<Object, Object> datumWriterCache =
+        getCache(serializer, AbstractKafkaAvroSerializer.class, "datumWriterCache");
+    assertEquals(1L, datumWriterCache.size());
+    // Sanity: the produced bytes still round-trip.
+    assertEquals("testUser",
+        ((GenericRecord) avroDeserializer.deserialize(topic, headers, bytes)).get("name").toString());
+  }
+
+  @Test
+  public void testDatumReaderCacheKeyedBySchemaId() throws Exception {
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, createUserRecord());
+    for (int i = 0; i < 5; i++) {
+      assertEquals("testUser",
+          ((GenericRecord) avroDeserializer.deserialize(topic, headers, bytes)).get("name").toString());
+    }
+    Cache<Object, Object> datumReaderCache =
+        getCache(avroDeserializer, AbstractKafkaAvroDeserializer.class, "datumReaderCache");
+    assertEquals(1L, datumReaderCache.size());
+  }
+
+  @Test
+  public void testDatumReaderKeyUsesContentEqualityForReaderSchema() {
+    // Distinct instances, identical content (both writer ids and reader schemas).
+    Schema readerA = createUserSchema();
+    Schema readerB = createUserSchema();
+    assertTrue(readerA != readerB);
+    SchemaId writerId = new SchemaId(AvroSchema.TYPE, 1, (String) null);
+    SchemaId writerIdCopy = new SchemaId(AvroSchema.TYPE, 1, (String) null);
+
+    AbstractKafkaAvroDeserializer.DatumReaderKey key1 =
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerId, readerA);
+    AbstractKafkaAvroDeserializer.DatumReaderKey key2 =
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerIdCopy, readerB);
+    // Same writer id + content-equal reader schema => equal key (unequal under identity keys).
+    assertEquals(key1, key2);
+    assertEquals(key1.hashCode(), key2.hashCode());
+
+    // The common no-explicit-reader case (null reader schema) keys consistently.
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            new SchemaId(AvroSchema.TYPE, 7, (String) null), null),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            new SchemaId(AvroSchema.TYPE, 7, (String) null), null));
+
+    // A schema identified by guid (id == null) keys consistently too.
+    String guid = "12345678-1234-1234-1234-123456789abc";
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            new SchemaId(AvroSchema.TYPE, null, guid), readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(
+            new SchemaId(AvroSchema.TYPE, null, guid), readerB));
+
+    // Different writer id => different key.
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
+        new SchemaId(AvroSchema.TYPE, 2, (String) null), readerA));
+    // Different reader content => different key.
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
+        writerId, createExtendUserSchema()));
+
+    // Post-migration sentinel: a null writer id never collides with a normal entry that has a
+    // non-null writer id for the same reader schema -- this is what prevents cache poisoning.
+    assertNotEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerId, readerA));
+    // Two post-migration entries (null writer id) with content-equal reader schemas collapse.
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerB));
   }
 
   static class EventWithInstant {
