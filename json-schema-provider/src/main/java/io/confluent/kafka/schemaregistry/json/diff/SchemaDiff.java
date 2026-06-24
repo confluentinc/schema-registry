@@ -15,6 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.json.diff;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchemaCancellation;
 import io.confluent.kafka.schemaregistry.json.diff.Difference.Type;
 import java.util.Collections;
 import java.util.HashSet;
@@ -163,6 +164,12 @@ public class SchemaDiff {
 
   @SuppressWarnings("ConstantConditions")
   static void compare(final Context ctx, Schema original, Schema update) {
+    // Cooperative cancellation: this method is the recursion hub for the (potentially
+    // exponential) compatibility diff over oneOf/anyOf/$ref schemas — every per-type diff
+    // recurses back through here. If the worker thread has been interrupted (e.g. by the
+    // rest-utils request timeout with interrupt enabled), abort the whole computation so the
+    // thread can be reclaimed instead of burning CPU to completion.
+    JsonSchemaCancellation.throwIfInterrupted();
     if (original == null && update == null) {
       return;
     } else if (original == null) {
