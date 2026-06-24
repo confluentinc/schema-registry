@@ -601,9 +601,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             }
 
             if (result instanceof JsonNode) {
-              // Writer == reader here (data is already in reader-schema form after migration);
-              // build uncached since the reader schema has no distinct writer id to key on.
-              reader = createDatumReader(schemaId,
+              // Writer == reader here (data is already in reader-schema form after migration).
+              reader = getDatumReader(schemaId,
                   readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
               result = AvroSchemaUtils.toObject(
                   (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
