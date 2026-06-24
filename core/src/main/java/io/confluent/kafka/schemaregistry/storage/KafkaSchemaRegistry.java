@@ -87,6 +87,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
+import javax.net.ssl.SSLSocketFactory;
 
 import org.apache.avro.reflect.Nullable;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -112,6 +113,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   private RestService leaderRestService;
   private final int leaderConnectTimeoutMs;
   private final int leaderReadTimeoutMs;
+  private final LeaderForwardingClient leaderForwardingClient;
   private final IdGenerator idGenerator;
   private LeaderElector leaderElector = null;
   private final String kafkaClusterId;
@@ -141,6 +143,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     this.leaderConnectTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_CONNECT_TIMEOUT_MS);
     this.leaderReadTimeoutMs = config.getInt(SchemaRegistryConfig.LEADER_READ_TIMEOUT_MS);
+    this.leaderForwardingClient = createLeaderForwardingClient(config);
     this.kafkaStoreTimeoutMs =
         config.getInt(SchemaRegistryConfig.KAFKASTORE_TIMEOUT_CONFIG);
     this.initTimeout = config.getInt(SchemaRegistryConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
@@ -162,6 +165,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       SchemaRegistryConfig config,
       String kafkaClusterId) {
     return new MetricsContainer(config, kafkaClusterId);
+  }
+
+  protected LeaderForwardingClient createLeaderForwardingClient(SchemaRegistryConfig config)
+      throws SchemaRegistryInitializationException {
+    return null;
   }
 
   @VisibleForTesting
@@ -337,7 +345,14 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         leaderRestService = new RestService(leaderIdentity.getUrl(), true);
         leaderRestService.setHttpConnectTimeoutMs(leaderConnectTimeoutMs);
         leaderRestService.setHttpReadTimeoutMs(leaderReadTimeoutMs);
-        if (sslFactory != null && sslFactory.sslContext() != null) {
+        SSLSocketFactory forwardingSslSocketFactory = leaderForwardingClient != null
+            ? leaderForwardingClient.sslSocketFactory() : null;
+        if (forwardingSslSocketFactory != null) {
+          // The forwarding client may authorize the leader by identity (e.g. SPIFFE ID) rather
+          // than hostname, so hostname verification is disabled in that case.
+          leaderRestService.setSslSocketFactory(forwardingSslSocketFactory);
+          leaderRestService.setHostnameVerifier((hostname, session) -> true);
+        } else if (sslFactory != null && sslFactory.sslContext() != null) {
           leaderRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
           leaderRestService.setHostnameVerifier(getHostnameVerifier());
         }
@@ -1360,6 +1375,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     }
     if (leaderRestService != null) {
       leaderRestService.close();
+    }
+    if (leaderForwardingClient != null) {
+      leaderForwardingClient.close();
     }
     kafkaStore.close();
     metadataEncoder.close();
