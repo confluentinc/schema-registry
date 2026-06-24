@@ -1951,6 +1951,16 @@ public class KafkaAvroSerializerTest {
     // Different reader content => different key.
     assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(
         writerId, createExtendUserSchema()));
+
+    // Post-migration sentinel: a null writer id never collides with a normal entry that has a
+    // non-null writer id for the same reader schema -- this is what prevents cache poisoning.
+    assertNotEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(writerId, readerA));
+    // Two post-migration entries (null writer id) with content-equal reader schemas collapse.
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerB));
   }
 
   static class EventWithInstant {
