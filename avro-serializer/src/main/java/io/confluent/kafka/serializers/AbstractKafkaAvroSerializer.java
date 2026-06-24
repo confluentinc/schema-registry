@@ -61,15 +61,16 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
   protected AbstractKafkaSchemaSerDeConfig.ValidationRulesExecution validationRulesExecution;
-  private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
+  private final Cache<SchemaId, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
-    // use identity (==) comparison for keys
+    // Key by the schema id (SchemaId covers both the integer id and the guid, since the id may
+    // be null when the schema is identified by guid) rather than by the schema object, so that
+    // content-identical schemas reuse a single DatumWriter even when they arrive as distinct
+    // instances.
     datumWriterCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .weakKeys()
         .build();
-
   }
 
   protected void configure(KafkaAvroSerializerConfig config) {
@@ -220,7 +221,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
                 "Unrecognized bytes object of type: " + value.getClass().getName());
           }
         } else {
-          writeDatum(baos, value, rawSchema);
+          writeDatum(baos, value, rawSchema, schemaId);
         }
         byte[] payload = baos.toByteArray();
         payload = (byte[]) executeRules(
@@ -245,12 +246,13 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   @SuppressWarnings("unchecked")
-  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
+  private void writeDatum(
+      ByteArrayOutputStream out, Object value, Schema rawSchema, SchemaId schemaId)
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
-    writer = datumWriterCache.get(rawSchema,
+    writer = datumWriterCache.get(schemaId,
         () -> (DatumWriter<Object>) getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
