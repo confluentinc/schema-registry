@@ -34,9 +34,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -226,6 +228,11 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
                 streams.store(
                     StoreQueryParameters.fromNameAndType(STORE_NAME, new TimestampedKeyValueStoreWithHeadersType<>()));
             assertNotNull(store, "Store should be accessible via IQv1");
+
+            ValueTimestampHeaders<GenericRecord> word2Result = store.get(createKey("word-2"));
+            assertNotNull(word2Result, "IQv1: word-2 should exist in store");
+            assertEquals(50L, word2Result.value().get("count"), "IQv1: word-2 count should be 50");
+            assertSchemaIdHeaders(word2Result.headers(), "IQv1 get word-2");
 
         } finally {
             closeStreams(streams);
@@ -810,6 +817,172 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
     }
 
     /**
+     * Restore-from-changelog test: writes to a persistent store, closes Streams, then restarts
+     * (cleanUp clears local state) so the store must be rebuilt from the changelog topic. Verifies
+     * that the restored entries still carry valid key/value schema-ID headers.
+     */
+    @Test
+    public void shouldRestoreFromChangelogPreservingHeaders() throws Exception {
+        String inputTopic = "restore-input";
+        String outputTopic = "restore-output";
+        String storeName = "restore-store";
+        String appId = "restore-integration-test";
+
+        createTopics(inputTopic, outputTopic);
+
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildRestoreTopology(inputTopic, outputTopic, storeName), appId);
+        try {
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                producer.send(new ProducerRecord<>(inputTopic, createKey("word-1"), createValue(10L, "PUT"))).get();
+                producer.send(new ProducerRecord<>(inputTopic, createKey("word-2"), createValue(20L, "PUT"))).get();
+                producer.send(new ProducerRecord<>(inputTopic, createKey("word-3"), createValue(30L, "PUT"))).get();
+                producer.flush();
+            }
+            consumeRecords(outputTopic, "restore-pre-consumer", 3, KafkaAvroDeserializer.class);
+        } finally {
+            closeStreams(streams);
+        }
+
+        // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store
+        // must be rebuilt from the changelog.
+        KafkaStreams restoredStreams = startStreamsAndAwaitRunning(
+            buildRestoreTopology(inputTopic, outputTopic, storeName), appId, 90);
+        try {
+            ReadOnlyKeyValueStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
+                restoredStreams.store(
+                    StoreQueryParameters.fromNameAndType(storeName, new TimestampedKeyValueStoreWithHeadersType<>()));
+
+            ValueTimestampHeaders<GenericRecord> word1 = store.get(createKey("word-1"));
+            assertNotNull(word1, "Restored store should contain word-1");
+            assertEquals(10L, word1.value().get("count"));
+            assertSchemaIdHeaders(word1.headers(), "Restored word-1");
+
+            ValueTimestampHeaders<GenericRecord> word2 = store.get(createKey("word-2"));
+            assertNotNull(word2, "Restored store should contain word-2");
+            assertEquals(20L, word2.value().get("count"));
+            assertSchemaIdHeaders(word2.headers(), "Restored word-2");
+
+            ValueTimestampHeaders<GenericRecord> word3 = store.get(createKey("word-3"));
+            assertNotNull(word3, "Restored store should contain word-3");
+            assertEquals(30L, word3.value().get("count"));
+            assertSchemaIdHeaders(word3.headers(), "Restored word-3");
+        } finally {
+            closeStreams(restoredStreams);
+        }
+    }
+
+    private Topology buildRestoreTopology(String inputTopic, String outputTopic, String storeName) {
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
+        StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .addStateStore(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName),
+                    keySerde,
+                    valueSerde))
+            .stream(inputTopic, Consumed.with(keySerde, valueSerde))
+            .process(() -> new WordCountProcessor(storeName), storeName)
+            .to(outputTopic, Produced.with(keySerde, valueSerde));
+        return builder.build();
+    }
+
+    /**
+     * Multi-partition + cache-flush coverage: uses a 3-partition input/changelog topic with default
+     * caching enabled, forces a cache flush via a low commit interval, and verifies that every
+     * changelog record (across all partitions) carries valid key/value schema-ID headers.
+     */
+    @Test
+    public void shouldPreserveHeadersAcrossPartitionsWithCacheFlush() throws Exception {
+        String inputTopic = "multi-partition-input";
+        String outputTopic = "multi-partition-output";
+        String storeName = "multi-partition-store";
+        String appId = "multi-partition-integration-test";
+        String changelogTopic = appId + "-" + storeName + "-changelog";
+        int numPartitions = 3;
+        int numKeys = 9;
+
+        createTopicsWithPartitions(numPartitions, inputTopic, outputTopic);
+
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
+
+        StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .addStateStore(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName),
+                    keySerde,
+                    valueSerde))
+            .stream(inputTopic, Consumed.with(keySerde, valueSerde))
+            .process(() -> new WordCountProcessor(storeName), storeName)
+            .to(outputTopic, Produced.with(keySerde, valueSerde));
+
+        Properties streamsProps = createStreamsProps(appId);
+        // Low commit interval forces the cache to flush into the changelog topic.
+        streamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+
+        KafkaStreams streams = null;
+        try {
+            CountDownLatch startedLatch = new CountDownLatch(1);
+            streams = new KafkaStreams(builder.build(), streamsProps);
+            streams.cleanUp();
+            streams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING) {
+                    startedLatch.countDown();
+                }
+            });
+            streams.start();
+            assertTrue(startedLatch.await(30, TimeUnit.SECONDS),
+                "KafkaStreams should reach RUNNING state");
+
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                for (int i = 1; i <= numKeys; i++) {
+                    producer.send(new ProducerRecord<>(inputTopic,
+                        createKey("word-" + i), createValue(i * 10L, "PUT"))).get();
+                }
+                producer.flush();
+            }
+
+            // Wait for outputs so we know the topology processed them, then briefly wait for the
+            // commit-driven cache flush (commit.interval.ms = 1s) to hit the changelog.
+            consumeRecords(outputTopic, "multi-partition-output-consumer", numKeys,
+                KafkaAvroDeserializer.class);
+            Thread.sleep(2000);
+
+            List<ConsumerRecord<GenericRecord, byte[]>> changelogRecords =
+                consumeRecords(changelogTopic, "multi-partition-changelog-consumer", numKeys,
+                    ByteArrayDeserializer.class);
+
+            Set<Integer> partitions = new HashSet<>();
+            for (ConsumerRecord<GenericRecord, byte[]> record : changelogRecords) {
+                partitions.add(record.partition());
+                assertSchemaIdHeaders(record.headers(),
+                    "changelog partition=" + record.partition()
+                        + " key=" + record.key().get("word"));
+            }
+            assertTrue(partitions.size() > 1,
+                "Changelog records should span multiple partitions but only saw: " + partitions);
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    private void createTopicsWithPartitions(int numPartitions, String... topicNames) throws Exception {
+        Properties adminProps = new Properties();
+        adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        try (AdminClient admin = AdminClient.create(adminProps)) {
+            List<NewTopic> topics = Arrays.stream(topicNames)
+                .map(name -> new NewTopic(name, numPartitions, (short) 1))
+                .collect(Collectors.toList());
+            admin.createTopics(topics).all().get(30, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
      * Processor for testing iterator and read-only operations.
      */
     private static class IteratorTestProcessor
@@ -1315,10 +1488,18 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
     }
 
     private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
+        return startStreamsAndAwaitRunning(topology, appId, 30);
+    }
+
+    private KafkaStreams startStreamsAndAwaitRunning(
+        Topology topology, String appId, int timeoutSeconds) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
         streams.cleanUp();
+        final java.util.concurrent.atomic.AtomicReference<KafkaStreams.State> lastState =
+            new java.util.concurrent.atomic.AtomicReference<>(KafkaStreams.State.CREATED);
         streams.setStateListener((newState, oldState) -> {
+            lastState.set(newState);
             if (newState == KafkaStreams.State.RUNNING) {
                 startedLatch.countDown();
             }
@@ -1326,8 +1507,10 @@ public class TimestampedKeyValueStoreWithHeadersIntegrationTest extends ClusterT
         streams.start();
         boolean running = false;
         try {
-            running = startedLatch.await(30, TimeUnit.SECONDS);
-            assertTrue(running, "KafkaStreams should reach RUNNING state");
+            running = startedLatch.await(timeoutSeconds, TimeUnit.SECONDS);
+            assertTrue(running,
+                "KafkaStreams should reach RUNNING state (last observed state: "
+                    + lastState.get() + ")");
             return streams;
         } finally {
             if (!running) {
