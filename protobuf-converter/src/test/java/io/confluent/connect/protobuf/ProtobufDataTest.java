@@ -2309,7 +2309,7 @@ public class ProtobufDataTest {
         .with(ProtobufDataConfig.WRAPPER_FOR_NULLABLES_CONFIG, true)
         .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, false)
         .build();
-    assertOneofMembersOptionalAndRoundTrip(config);
+    assertOneofMembersOptionalAndRoundTrip(config, false);
   }
 
   @Test
@@ -2318,31 +2318,55 @@ public class ProtobufDataTest {
         .with(ProtobufDataConfig.OPTIONAL_FOR_NULLABLES_CONFIG, true)
         .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, false)
         .build();
-    assertOneofMembersOptionalAndRoundTrip(config);
+    assertOneofMembersOptionalAndRoundTrip(config, false);
   }
 
-  private void assertOneofMembersOptionalAndRoundTrip(ProtobufDataConfig config) throws Exception {
+  @Test
+  public void testFlattenedOneofWithWrapperForNullables() throws Exception {
+    ProtobufDataConfig config = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.WRAPPER_FOR_NULLABLES_CONFIG, true)
+        .with(ProtobufDataConfig.FLATTEN_UNIONS_CONFIG, true)
+        .build();
+    assertOneofMembersOptionalAndRoundTrip(config, true);
+  }
+
+  @Test
+  public void testFlattenedOneofWithOptionalForNullables() throws Exception {
+    ProtobufDataConfig config = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.OPTIONAL_FOR_NULLABLES_CONFIG, true)
+        .with(ProtobufDataConfig.FLATTEN_UNIONS_CONFIG, true)
+        .build();
+    assertOneofMembersOptionalAndRoundTrip(config, true);
+  }
+
+  private void assertOneofMembersOptionalAndRoundTrip(ProtobufDataConfig config, boolean flatten)
+      throws Exception {
     ProtobufData protobufData = new ProtobufData(config);
     ProtobufSchema protobufSchema = new ProtobufSchema(ONEOF_WRAPPER_SCHEMA);
     Descriptor descriptor = protobufSchema.toDescriptor();
 
     // Union (oneof) members must be optional, since at most one is ever set. Without this,
     // the nullable configs leave them required and validation rejects the unset member.
+    // When unions are flattened the members are top-level fields; otherwise they live in a
+    // nested "payload" struct.
     Schema connectSchema = protobufData.toConnectSchema(protobufSchema);
-    Schema unionSchema = connectSchema.field("payload").schema();
-    assertTrue(unionSchema.field("text_payload").schema().isOptional());
-    assertTrue(unionSchema.field("number_payload").schema().isOptional());
+    Schema membersSchema = flatten ? connectSchema : connectSchema.field("payload").schema();
+    assertTrue(membersSchema.field("text_payload").schema().isOptional());
+    assertTrue(membersSchema.field("number_payload").schema().isOptional());
 
     // Setting either oneof member must deserialize and validate without crashing,
     // even though the other member is absent (null).
-    assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, "text_payload", "hello");
-    assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, "number_payload", 7L);
+    assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, flatten,
+        "text_payload", "hello");
+    assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, flatten,
+        "number_payload", 7L);
   }
 
   private void assertOneofBranchRoundTrips(
       ProtobufData protobufData,
       ProtobufSchema protobufSchema,
       Descriptor descriptor,
+      boolean flatten,
       String payloadField,
       Object payloadValue) {
     DynamicMessage.Builder builder = DynamicMessage.newBuilder(descriptor);
@@ -2361,8 +2385,8 @@ public class ProtobufDataTest {
     ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
 
     Struct value = (Struct) schemaAndValue.value();
-    Struct payload = (Struct) value.get("payload");
-    assertEquals(payloadValue, payload.get(payloadField));
+    Struct members = flatten ? value : (Struct) value.get("payload");
+    assertEquals(payloadValue, members.get(payloadField));
   }
 
   @Test
