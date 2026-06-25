@@ -968,8 +968,7 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
                         Stores.persistentTimestampedWindowStoreWithHeaders(
                             storeName, RETENTION_PERIOD, WINDOW_SIZE, false),
                         keySerde,
-                        valueSerde)
-                    .withCachingDisabled())
+                        valueSerde))
             .stream(inputTopic, Consumed.with(keySerde, valueSerde))
             .process(() -> new WindowedEventProcessor(storeName), storeName)
             .to(outputTopic, Produced.with(keySerde, valueSerde));
