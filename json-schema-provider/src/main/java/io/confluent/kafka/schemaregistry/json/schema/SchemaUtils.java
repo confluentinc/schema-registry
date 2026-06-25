@@ -17,6 +17,7 @@ package io.confluent.kafka.schemaregistry.json.schema;
 
 import static io.confluent.kafka.schemaregistry.json.diff.SchemaDiff.schemaTypesEqual;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -384,7 +385,11 @@ public class SchemaUtils {
       builder.writeOnly(s.isWriteOnly());
     }
     if (s.getUnprocessedProperties() != null) {
-      builder.unprocessedProperties(s.getUnprocessedProperties());
+      Map<String, Object> merged = builder.unprocessedProperties != null
+          ? builder.unprocessedProperties
+          : new HashMap<>();
+      merged.putAll(s.getUnprocessedProperties());
+      builder.unprocessedProperties(merged);
     }
   }
 

@@ -40,6 +40,38 @@ public interface KmsDriver {
     return keyUri.toLowerCase(Locale.US).startsWith(getKeyUrlPrefix());
   }
 
+  /**
+   * Returns true if the given throwable, or any of its causes, indicates that the KMS rejected the
+   * request because the caller is not authenticated or not authorized (i.e. a 401 or 403), so that
+   * such failures can be surfaced as a 4xx rather than a 5xx. Walks the cause chain and delegates
+   * to {@link #isAccessDeniedException(Throwable)}, which drivers override to inspect their own
+   * provider-specific exception types.
+   */
+  default boolean isAccessDenied(Throwable t) {
+    for (; t != null; t = t.getCause()) {
+      if (isAccessDeniedException(t)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Returns true if this single throwable (not its causes) is a provider-specific exception that
+   * represents an authentication or authorization failure. Defaults to false.
+   */
+  default boolean isAccessDeniedException(Throwable t) {
+    return false;
+  }
+
+  /**
+   * Returns true if the given HTTP status code denotes an authentication/authorization failure
+   * (401 or 403). Single source of truth for the access-denied status set shared by drivers.
+   */
+  default boolean isAccessDeniedStatus(int statusCode) {
+    return statusCode == 401 || statusCode == 403;
+  }
+
   default KmsClient getKmsClient(String kekUrl) throws GeneralSecurityException {
     return KmsClients.get(kekUrl);
   }

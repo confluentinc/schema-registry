@@ -16,22 +16,53 @@
 
 package io.confluent.kafka.schemaregistry.rules;
 
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+
 /**
  * A schema rule exception.
  */
 public class RuleException extends Exception {
+
+  private final Rule rule;
+
   public RuleException() {
+    this.rule = null;
   }
 
   public RuleException(Throwable cause) {
     super(cause);
+    this.rule = null;
   }
 
   public RuleException(String message) {
     super(message);
+    this.rule = null;
   }
 
   public RuleException(String message, Throwable cause) {
     super(message, cause);
+    this.rule = null;
+  }
+
+  public RuleException(Rule rule, Throwable cause) {
+    super(cause);
+    this.rule = rule;
+  }
+
+  public RuleException(Rule rule, String message) {
+    super(message);
+    this.rule = rule;
+  }
+
+  public RuleException(Rule rule, String message, Throwable cause) {
+    super(message, cause);
+    this.rule = rule;
+  }
+
+  /**
+   * Returns the rule that caused this exception, or null if unknown.
+   */
+  public Rule getRule() {
+    return rule;
   }
 }

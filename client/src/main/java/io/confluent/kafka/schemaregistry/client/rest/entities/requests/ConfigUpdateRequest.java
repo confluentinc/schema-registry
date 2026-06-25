@@ -37,10 +37,13 @@ import java.util.Optional;
 public class ConfigUpdateRequest {
 
   private Optional<String> alias;
+  private Optional<String> aliasForDeks;
   private Optional<Boolean> normalize;
   private Optional<Boolean> validateFields;
+  private Optional<Boolean> validateNewSchemas;
   private Optional<Boolean> validateRules;
   private Optional<String> compatibilityLevel;
+  private Optional<String> compatibilityPolicy;
   private Optional<String> compatibilityGroup;
   private Optional<Metadata> defaultMetadata;
   private Optional<Metadata> overrideMetadata;
@@ -52,10 +55,13 @@ public class ConfigUpdateRequest {
 
   public ConfigUpdateRequest(Config config) {
     setAlias(config.getAlias());
+    setAliasForDeks(config.getAliasForDeks());
     setNormalize(config.isNormalize());
     setValidateFields(config.isValidateFields());
+    setValidateNewSchemas(config.isValidateNewSchemas());
     setValidateRules(config.isValidateRules());
     setCompatibilityLevel(config.getCompatibilityLevel());
+    setCompatibilityPolicy(config.getCompatibilityPolicy());
     setCompatibilityGroup(config.getCompatibilityGroup());
     setDefaultMetadata(config.getDefaultMetadata());
     setOverrideMetadata(config.getOverrideMetadata());
@@ -85,6 +91,26 @@ public class ConfigUpdateRequest {
   @JsonIgnore
   public void setAlias(String alias) {
     this.alias = alias != null ? Optional.of(alias) : null;
+  }
+
+  @JsonProperty("aliasForDeks")
+  public Optional<String> getOptionalAliasForDeks() {
+    return this.aliasForDeks;
+  }
+
+  @JsonIgnore
+  public String getAliasForDeks()  {
+    return aliasForDeks != null ? aliasForDeks.orElse(null) : null;
+  }
+
+  @JsonProperty("aliasForDeks")
+  public void setAliasForDeks(Optional<String> aliasForDeks) {
+    this.aliasForDeks = aliasForDeks;
+  }
+
+  @JsonIgnore
+  public void setAliasForDeks(String aliasForDeks) {
+    this.aliasForDeks = aliasForDeks != null ? Optional.of(aliasForDeks) : null;
   }
 
   @JsonProperty("normalize")
@@ -125,6 +151,26 @@ public class ConfigUpdateRequest {
   @JsonIgnore
   public void setValidateFields(Boolean validateFields) {
     this.validateFields = validateFields != null ? Optional.of(validateFields) : null;
+  }
+
+  @JsonProperty("validateNewSchemas")
+  public Optional<Boolean> isOptionalValidateNewSchemas() {
+    return validateNewSchemas;
+  }
+
+  @JsonIgnore
+  public Boolean isValidateNewSchemas() {
+    return validateNewSchemas != null ? validateNewSchemas.orElse(null) : null;
+  }
+
+  @JsonProperty("validateNewSchemas")
+  public void setValidateNewSchemas(Optional<Boolean> validateNewSchemas) {
+    this.validateNewSchemas = validateNewSchemas;
+  }
+
+  @JsonIgnore
+  public void setValidateNewSchemas(Boolean validateNewSchemas) {
+    this.validateNewSchemas = validateNewSchemas != null ? Optional.of(validateNewSchemas) : null;
   }
 
   @JsonProperty("validateRules")
@@ -169,6 +215,28 @@ public class ConfigUpdateRequest {
   @JsonIgnore
   public void setCompatibilityLevel(String compatibilityLevel) {
     this.compatibilityLevel = compatibilityLevel != null ? Optional.of(compatibilityLevel) : null;
+  }
+
+  @JsonProperty("compatibilityPolicy")
+  public Optional<String> getOptionalCompatibilityPolicy() {
+    return this.compatibilityPolicy;
+  }
+
+  @JsonIgnore
+  public String getCompatibilityPolicy() {
+    return compatibilityPolicy != null ? compatibilityPolicy.orElse(null) : null;
+  }
+
+  @JsonProperty("compatibilityPolicy")
+  public void setCompatibilityPolicy(Optional<String> compatibilityPolicy) {
+    this.compatibilityPolicy = compatibilityPolicy;
+  }
+
+  @JsonIgnore
+  public void setCompatibilityPolicy(String compatibilityPolicy) {
+    this.compatibilityPolicy = compatibilityPolicy != null
+        ? Optional.of(compatibilityPolicy)
+        : null;
   }
 
   @JsonProperty("compatibilityGroup")
@@ -285,10 +353,13 @@ public class ConfigUpdateRequest {
     }
     ConfigUpdateRequest that = (ConfigUpdateRequest) o;
     return Objects.equals(alias, that.alias)
+        && Objects.equals(aliasForDeks, that.aliasForDeks)
         && Objects.equals(normalize, that.normalize)
         && Objects.equals(validateFields, that.validateFields)
+        && Objects.equals(validateNewSchemas, that.validateNewSchemas)
         && Objects.equals(validateRules, that.validateRules)
         && Objects.equals(compatibilityLevel, that.compatibilityLevel)
+        && Objects.equals(compatibilityPolicy, that.compatibilityPolicy)
         && Objects.equals(compatibilityGroup, that.compatibilityGroup)
         && Objects.equals(defaultMetadata, that.defaultMetadata)
         && Objects.equals(overrideMetadata, that.overrideMetadata)
@@ -298,8 +369,8 @@ public class ConfigUpdateRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(alias, normalize, validateFields, validateRules,
-        compatibilityLevel, compatibilityGroup,
+    return Objects.hash(alias, aliasForDeks, normalize, validateFields, validateNewSchemas,
+        validateRules, compatibilityLevel, compatibilityPolicy, compatibilityGroup,
         defaultMetadata, overrideMetadata, defaultRuleSet, overrideRuleSet);
   }
 }

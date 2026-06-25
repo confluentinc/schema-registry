@@ -93,7 +93,7 @@ public abstract class FieldRuleExecutor implements RuleExecutor {
             // We use the target schema
             message = ctx.target().copyMessage(message);
           } catch (IOException e) {
-            throw new RuleException("Could not copy source message", e);
+            throw new RuleException(ctx.rule(), "Could not copy source message", e);
           }
         }
         return ctx.target().transformMessage(ctx, transform, message);

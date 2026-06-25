@@ -18,5 +18,6 @@ package io.confluent.kafka.schemaregistry.storage;
 public enum LookupFilter {
     DEFAULT,
     INCLUDE_DELETED,
-    DELETED_ONLY
+    DELETED_ONLY,
+    DELETED_AS_NEGATIVE
 }

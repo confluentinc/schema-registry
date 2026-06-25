@@ -24,7 +24,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 public class RuleConditionException extends RuleException {
 
   public RuleConditionException(Rule rule) {
-    super(getErrorMessage(rule));
+    super(rule, getErrorMessage(rule));
   }
 
   private static String getErrorMessage(Rule rule) {

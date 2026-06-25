@@ -19,6 +19,7 @@ package io.confluent.kafka.serializers.protobuf;
 import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
+import io.confluent.kafka.schemaregistry.utils.EnumRecommender;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.subject.DefaultReferenceSubjectNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.ReferenceSubjectNameStrategy;
@@ -41,6 +42,14 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
       "Determines how to construct the subject name for referenced schemas. "
           + "By default, the reference name is used as subject.";
 
+  public static final String VALIDATION_RULES_EXECUTION = "validation.rules.execution";
+  public static final String VALIDATION_RULES_EXECUTION_DEFAULT =
+      ValidationRulesExecution.DISABLED.name();
+  public static final String VALIDATION_RULES_EXECUTION_DOC = "When to execute inline validation "
+      + "(CHECK constraint) rules attached to the schema. One of 'DISABLED', "
+      + "'BEFORE_DOMAIN_RULES' (run on the original message before domain rule transformations), "
+      + "or 'AFTER_DOMAIN_RULES' (run on the transformed message after domain rules).";
+
   private static final ConfigDef config;
 
   static {
@@ -53,7 +62,12 @@ public class KafkaProtobufSerializerConfig extends AbstractKafkaSchemaSerDeConfi
             SKIP_KNOWN_TYPES_DOC)
         .define(REFERENCE_SUBJECT_NAME_STRATEGY_CONFIG, ConfigDef.Type.CLASS,
             DefaultReferenceSubjectNameStrategy.class, ConfigDef.Importance.LOW,
-            REFERENCE_SUBJECT_NAME_STRATEGY_DOC);
+            REFERENCE_SUBJECT_NAME_STRATEGY_DOC)
+        .define(VALIDATION_RULES_EXECUTION, ConfigDef.Type.STRING,
+            VALIDATION_RULES_EXECUTION_DEFAULT,
+            EnumRecommender.in(ValidationRulesExecution.values()),
+            ConfigDef.Importance.MEDIUM,
+            VALIDATION_RULES_EXECUTION_DOC);
   }
 
   public KafkaProtobufSerializerConfig(Map<?, ?> props) {

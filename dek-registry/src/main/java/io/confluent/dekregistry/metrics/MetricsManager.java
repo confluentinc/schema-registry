@@ -18,11 +18,11 @@ package io.confluent.dekregistry.metrics;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.confluent.dekregistry.client.rest.entities.KeyType;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.common.MetricName;
@@ -55,7 +55,7 @@ public class MetricsManager implements Closeable {
 
   @Inject
   public MetricsManager(SchemaRegistry schemaRegistry) {
-    this.metrics = ((KafkaSchemaRegistry) schemaRegistry).getMetricsContainer().getMetrics();
+    this.metrics = schemaRegistry.getMetricsContainer().getMetrics();
     // for testing
     schemaRegistry.properties().put(KEY, this);
   }
@@ -83,6 +83,20 @@ public class MetricsManager implements Closeable {
   public void decrementSharedKeyCount(String tenant) {
     TenantMetrics tenantMetrics = getOrCreateTenantMetrics(tenant);
     tenantMetrics.getSensor(MetricDescriptor.NUM_KEKS_SHARED_MD, null, null).add(-1);
+  }
+
+  public Set<String> getTenants() {
+    return Set.copyOf(tenantMetrics.keySet());
+  }
+
+  public void removeTenant(String tenant) {
+    TenantMetrics tm = tenantMetrics.remove(tenant);
+    if (tm == null) {
+      return;
+    }
+    for (String sensorName : tm.sensors.keySet()) {
+      metrics.removeSensor(sensorName);
+    }
   }
 
   private TenantMetrics getOrCreateTenantMetrics(String tenant) {

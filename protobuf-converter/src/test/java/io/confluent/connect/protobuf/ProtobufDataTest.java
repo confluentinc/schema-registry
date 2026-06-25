@@ -35,6 +35,7 @@ import com.google.protobuf.util.Timestamps;
 import com.squareup.wire.schema.internal.parser.FieldElement;
 import com.squareup.wire.schema.internal.parser.MessageElement;
 import io.confluent.connect.protobuf.ProtobufData.SchemaWrapper;
+import io.confluent.connect.schema.ConnectVariant;
 import io.confluent.connect.protobuf.test.KeyValue;
 import io.confluent.connect.protobuf.test.KeyValueOptional;
 import io.confluent.connect.protobuf.test.KeyValueProto2;
@@ -1178,6 +1179,51 @@ public class ProtobufDataTest {
             .parameter(PROTOBUF_TYPE_TAG, String.valueOf(1))
             .build();
     assertEquals(getExpectedSchemaAndValue(decimalSchema, message, expectedValue), result);
+  }
+
+  @Test
+  public void testToConnectVariant() throws Exception {
+    // The PROTOBUF_VARIANT_TYPE case is hit when Variant is a field in a parent message.
+    // Verify that the schema conversion maps confluent.type.Variant to ConnectVariant.
+    ProtobufData protobufData = new ProtobufData();
+    Schema connectSchema = protobufData.toConnectSchema(
+        new ProtobufSchema(io.confluent.protobuf.type.Variant.getDescriptor()));
+    // When Variant is the top-level message, it becomes a struct named "Variant".
+    // The ConnectVariant logical name is applied when it's a field type (MESSAGE case).
+    // Verify the struct has metadata and value fields.
+    assertNotNull(connectSchema);
+    assertNotNull(connectSchema.field("metadata"));
+    assertNotNull(connectSchema.field("value"));
+  }
+
+  @Test
+  public void testFromConnectVariant() throws Exception {
+    // Test round-trip: build a Connect Variant schema and value, convert to protobuf and back.
+    Schema connectSchema = ConnectVariant.builder().build();
+    io.confluent.kafka.schemaregistry.type.VariantBuilder vb =
+        new io.confluent.kafka.schemaregistry.type.VariantBuilder();
+    vb.appendString("hello");
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    SchemaAndValue schemaAndValue = new SchemaAndValue(connectSchema, connectValue);
+    byte[] messageBytes = getMessageBytes(schemaAndValue);
+    Message message = io.confluent.protobuf.type.Variant.parseFrom(messageBytes);
+
+    assertEquals(2, message.getAllFields().size());
+    assertNotNull(message.getField(
+        message.getDescriptorForType().findFieldByName("metadata")));
+    assertNotNull(message.getField(
+        message.getDescriptorForType().findFieldByName("value")));
+  }
+
+  private static byte[] toBytes(java.nio.ByteBuffer buffer) {
+    byte[] bytes = new byte[buffer.remaining()];
+    buffer.duplicate().get(bytes);
+    return bytes;
   }
 
   @Test

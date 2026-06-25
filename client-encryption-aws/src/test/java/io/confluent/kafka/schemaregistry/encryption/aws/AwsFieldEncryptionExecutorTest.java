@@ -17,6 +17,8 @@
 package io.confluent.kafka.schemaregistry.encryption.aws;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,9 +29,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,8 +39,11 @@ import java.util.List;
 import java.util.Map;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import java.security.GeneralSecurityException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 
 public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -47,9 +52,9 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new AwsFieldEncryptionProperties(ruleNames, ruleExecutor);
+    return new AwsEncryptionProperties(ruleNames, ruleExecutor);
   }
 
   @Test
@@ -113,6 +118,50 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
     GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
     verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
     assertEquals("testUser", record.get("name"));
+  }
+
+  private static AwsServiceException awsException(int statusCode, String errorCode) {
+    return (AwsServiceException) AwsServiceException.builder()
+        .message("denied")
+        .statusCode(statusCode)
+        .awsErrorDetails(AwsErrorDetails.builder().errorCode(errorCode).build())
+        .build();
+  }
+
+  @Test
+  public void testIsAccessDeniedForbiddenStatus() {
+    AwsKmsDriver driver = new AwsKmsDriver();
+    assertTrue(driver.isAccessDeniedException(awsException(403, "SomethingElse")));
+    assertTrue(driver.isAccessDeniedException(awsException(401, "SomethingElse")));
+  }
+
+  @Test
+  public void testIsAccessDeniedByErrorCodeAtHttp400() {
+    // KMS returns IAM authorization failures as AccessDeniedException with HTTP 400.
+    AwsKmsDriver driver = new AwsKmsDriver();
+    assertTrue(driver.isAccessDeniedException(awsException(400, "AccessDeniedException")));
+    assertTrue(driver.isAccessDeniedException(awsException(400, "UnauthorizedOperation")));
+  }
+
+  @Test
+  public void testIsNotAccessDeniedForOtherErrors() {
+    AwsKmsDriver driver = new AwsKmsDriver();
+    assertFalse(driver.isAccessDeniedException(awsException(400, "ValidationException")));
+    assertFalse(driver.isAccessDeniedException(awsException(500, "InternalFailure")));
+    assertFalse(driver.isAccessDeniedException(new RuntimeException("not aws")));
+    assertFalse(driver.isAccessDeniedException(new GeneralSecurityException("boom")));
+  }
+
+  @Test
+  public void testIsAccessDeniedWalksCauseChain() {
+    AwsKmsDriver driver = new AwsKmsDriver();
+    // The default isAccessDenied walks the cause chain; wrapped exceptions are still detected.
+    Throwable wrapped =
+        new GeneralSecurityException("encryption failed", awsException(403, "AccessDeniedException"));
+    assertTrue(driver.isAccessDenied(wrapped));
+    assertFalse(driver.isAccessDenied(new GeneralSecurityException("encryption failed",
+        new RuntimeException("network blip"))));
+    assertFalse(driver.isAccessDenied(null));
   }
 
 }
