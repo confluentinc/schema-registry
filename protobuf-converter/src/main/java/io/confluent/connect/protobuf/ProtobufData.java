@@ -1569,7 +1569,9 @@ public class ProtobufData {
       builder.optional();
     }
 
-    if (useOptionalForNullables) {
+    if (descriptor.getRealContainingOneof() != null) {
+      builder.optional();
+    } else if (useOptionalForNullables) {
       if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }

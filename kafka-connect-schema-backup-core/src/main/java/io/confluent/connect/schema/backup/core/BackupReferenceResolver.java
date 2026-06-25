@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -296,12 +297,12 @@ public class BackupReferenceResolver {
         log.debug("Registered reference: subject={}, "
             + "srcVersion={}, targetVersion={}",
             ref.getSubject(), ref.getVersion(), targetVersion);
-      } catch (IOException | RestClientException e) {
-        throw new DataException(
-            "Cannot guarantee pristine restore: failed to register"
-            + " reference schema '" + ref.getSubject()
-            + "'. Schema references must be resolvable for "
-            + "correct backup/restore fidelity.", e);
+      } catch (IOException e) {
+        throw new RetriableException(
+            "Network error registering reference '" + ref.getSubject() + "'", e);
+      } catch (RestClientException e) {
+        throw SchemaRegistryErrorClassifier.classify(e,
+            "Failed to register reference '" + ref.getSubject() + "'");
       }
       targetRefsOut.add(new SchemaReference(
           ref.getName(), ref.getSubject(), targetVersion));
