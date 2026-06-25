@@ -84,7 +84,8 @@ import org.junit.jupiter.api.Test;
  * Integration test for {@link TimestampedWindowStoreWithHeaders} that verifies windowed store
  * operations work correctly with header-based schema ID transport.
  */
-public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
+public class
+TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
 
     private static final String INPUT_TOPIC = "events-input";
     private static final String OUTPUT_TOPIC = "windowed-output";
@@ -671,10 +672,11 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         builder
             .addStateStore(
                 Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(
-                        storeName, RETENTION_PERIOD, WINDOW_SIZE, false),
-                    keySerde,
-                    valueSerde))
+                        Stores.persistentTimestampedWindowStoreWithHeaders(
+                            storeName, RETENTION_PERIOD, WINDOW_SIZE, false),
+                        keySerde,
+                        valueSerde)
+                    .withCachingDisabled())
             .stream(inputTopic, Consumed.with(keySerde, valueSerde))
             .process(() -> new DeleteTestProcessor(storeName), storeName)
             .to(outputTopic, Produced.with(keySerde, valueSerde));
@@ -870,6 +872,108 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         } finally {
             closeStreams(streams);
         }
+    }
+
+    /**
+     * Restore-from-changelog test: writes to a persistent windowed store, closes Streams, then
+     * restarts (cleanUp clears local state) so the store must be rebuilt from the changelog topic.
+     * Verifies that the restored windowed entries still carry valid key/value schema-ID headers.
+     */
+    @Test
+    public void shouldRestoreFromChangelogPreservingHeaders() throws Exception {
+        String inputTopic = "window-restore-input";
+        String outputTopic = "window-restore-output";
+        String storeName = "window-restore-store";
+        String appId = "window-restore-integration-test";
+
+        createTopics(inputTopic, outputTopic);
+
+        // Use wall-clock-based timestamps aligned to a window boundary so the records aren't far
+        // in the past — avoids retention dropping them if observed stream time becomes wall-clock
+        // on restore.
+        long baseWindow = calculateWindowStartTime(System.currentTimeMillis());
+        long event1Window = baseWindow;
+        long event2Window = baseWindow + WINDOW_SIZE.toMillis();
+        long event3Window = baseWindow + 2 * WINDOW_SIZE.toMillis();
+        long event1Ts = event1Window + 60000L;
+        long event2Ts = event2Window;
+        long event3Ts = event3Window;
+
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildRestoreTopology(inputTopic, outputTopic, storeName), appId);
+        try {
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                producer.send(new ProducerRecord<>(inputTopic, null, event1Ts,
+                    createKey("event-1"), createValue(10L, "PUT"))).get();
+                producer.send(new ProducerRecord<>(inputTopic, null, event2Ts,
+                    createKey("event-2"), createValue(20L, "PUT"))).get();
+                producer.send(new ProducerRecord<>(inputTopic, null, event3Ts,
+                    createKey("event-3"), createValue(30L, "PUT"))).get();
+                producer.flush();
+            }
+            consumeRecords(outputTopic, "window-restore-pre-consumer", 3, KafkaAvroDeserializer.class);
+        } finally {
+            closeStreams(streams);
+        }
+
+        // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store
+        // must be rebuilt from the changelog.
+        KafkaStreams restoredStreams = startStreamsAndAwaitRunning(
+            buildRestoreTopology(inputTopic, outputTopic, storeName), appId, 90);
+        try {
+            ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
+                restoredStreams.store(StoreQueryParameters.fromNameAndType(
+                    storeName, new TimestampedWindowStoreWithHeadersType<>()));
+
+            // Diagnostic: collect what's actually in the restored store before asserting per-entry.
+            List<String> restoredKeys = new ArrayList<>();
+            try (KeyValueIterator<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> iter =
+                     store.fetchAll(
+                         Instant.ofEpochMilli(baseWindow),
+                         Instant.ofEpochMilli(event3Window + WINDOW_SIZE.toMillis()))) {
+                while (iter.hasNext()) {
+                    KeyValue<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    restoredKeys.add(kv.key.key().get("eventId") + "@" + kv.key.window().start());
+                }
+            }
+
+            ValueTimestampHeaders<GenericRecord> event1 = store.fetch(createKey("event-1"), event1Window);
+            assertNotNull(event1, "Restored store should contain event-1 @ window start="
+                + event1Window + " (restoredKeys=" + restoredKeys + ")");
+            assertEquals(10L, event1.value().get("count"));
+            assertSchemaIdHeaders(event1.headers(), "Restored event-1");
+
+            ValueTimestampHeaders<GenericRecord> event2 = store.fetch(createKey("event-2"), event2Window);
+            assertNotNull(event2, "Restored store should contain event-2 @ window start=" + event2Window);
+            assertEquals(20L, event2.value().get("count"));
+            assertSchemaIdHeaders(event2.headers(), "Restored event-2");
+
+            ValueTimestampHeaders<GenericRecord> event3 = store.fetch(createKey("event-3"), event3Window);
+            assertNotNull(event3, "Restored store should contain event-3 @ window start=" + event3Window);
+            assertEquals(30L, event3.value().get("count"));
+            assertSchemaIdHeaders(event3.headers(), "Restored event-3");
+        } finally {
+            closeStreams(restoredStreams);
+        }
+    }
+
+    private Topology buildRestoreTopology(String inputTopic, String outputTopic, String storeName) {
+        GenericAvroSerde keySerde = createKeySerde();
+        GenericAvroSerde valueSerde = createValueSerde();
+        StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .addStateStore(
+                Stores.timestampedWindowStoreWithHeadersBuilder(
+                        Stores.persistentTimestampedWindowStoreWithHeaders(
+                            storeName, RETENTION_PERIOD, WINDOW_SIZE, false),
+                        keySerde,
+                        valueSerde)
+                    .withCachingDisabled())
+            .stream(inputTopic, Consumed.with(keySerde, valueSerde))
+            .process(() -> new WindowedEventProcessor(storeName), storeName)
+            .to(outputTopic, Produced.with(keySerde, valueSerde));
+        return builder.build();
     }
 
     /**
@@ -1134,7 +1238,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
             long windowStart = calculateWindowStartTime(record.timestamp());
 
             ValueTimestampHeaders<GenericRecord> fetched = store.fetch(record.key(), windowStart);
-            if (fetched != null) {
+            if (fetched != null && fetched.value() != null) {
                 context.forward(new Record<>(
                     record.key(), fetched.value(), fetched.timestamp(), fetched.headers()));
             }
@@ -1157,8 +1261,8 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         }
 
         /**
-         * Fetch range for event-2 from 6-11min (240000ms to 660000ms).
-         * Should return 1 windows: 10-15min (start=600000).
+         * Fetch range for event-2 from 6-11min (360000ms to 660000ms).
+         * Should return 1 window: 10-15min (start=600000).
          */
         private void handleFetchRange2(Record<GenericRecord, GenericRecord> record) {
             try (WindowStoreIterator<ValueTimestampHeaders<GenericRecord>> iterator =
@@ -1226,7 +1330,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
          * Should return 4 entries: event-1:30, event-1:60, event-2:40, event-2:70.
          */
         private void handleFetchKeyRange(Record<GenericRecord, GenericRecord> record) {
-            Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
+            Schema keySchema = record.key().getSchema();
             GenericRecord event1Key = new GenericData.Record(keySchema);
             event1Key.put("eventId", "event-1");
             GenericRecord event2Key = new GenericData.Record(keySchema);
@@ -1247,7 +1351,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
          * Should return 4 entries in reverse: event-2:70, event-2:40, event-1:60, event-1:30.
          */
         private void handleBackwardFetchKeyRange(Record<GenericRecord, GenericRecord> record) {
-            Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
+            Schema keySchema = record.key().getSchema();
             GenericRecord event1Key = new GenericData.Record(keySchema);
             event1Key.put("eventId", "event-1");
             GenericRecord event2Key = new GenericData.Record(keySchema);
@@ -1337,7 +1441,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
          * Fetch key range from event-1 to event-2, 4-11min (long timestamp variant).
          */
         private void handleFetchKeyRangeLong(Record<GenericRecord, GenericRecord> record) {
-            Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
+            Schema keySchema = record.key().getSchema();
             GenericRecord event1Key = new GenericData.Record(keySchema);
             event1Key.put("eventId", "event-1");
             GenericRecord event2Key = new GenericData.Record(keySchema);
@@ -1357,7 +1461,7 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
          * Backward fetch key range from event-1 to event-2, 5-11min (long timestamp variant).
          */
         private void handleBackwardFetchKeyRangeLong(Record<GenericRecord, GenericRecord> record) {
-            Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
+            Schema keySchema = record.key().getSchema();
             GenericRecord event1Key = new GenericData.Record(keySchema);
             event1Key.put("eventId", "event-1");
             GenericRecord event2Key = new GenericData.Record(keySchema);
@@ -1428,10 +1532,18 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
 
 
     private KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId) throws Exception {
+        return startStreamsAndAwaitRunning(topology, appId, 30);
+    }
+
+    private KafkaStreams startStreamsAndAwaitRunning(
+        Topology topology, String appId, int timeoutSeconds) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId));
         streams.cleanUp();
+        final java.util.concurrent.atomic.AtomicReference<KafkaStreams.State> lastState =
+            new java.util.concurrent.atomic.AtomicReference<>(KafkaStreams.State.CREATED);
         streams.setStateListener((newState, oldState) -> {
+            lastState.set(newState);
             if (newState == KafkaStreams.State.RUNNING) {
                 startedLatch.countDown();
             }
@@ -1439,8 +1551,10 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
         streams.start();
         boolean running = false;
         try {
-            running = startedLatch.await(30, TimeUnit.SECONDS);
-            assertTrue(running, "KafkaStreams should reach RUNNING state");
+            running = startedLatch.await(timeoutSeconds, TimeUnit.SECONDS);
+            assertTrue(running,
+                "KafkaStreams should reach RUNNING state (last observed state: "
+                    + lastState.get() + ")");
             return streams;
         } finally {
             if (!running) {
@@ -1541,33 +1655,33 @@ public class TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTes
 
     private void verifyKeyValueList(KeyValueIterator<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> iter, List<String> expectedKeys, List<Long> expectedCounts, String assertionContext) {
         int idx = 0;
-        List<String> multiKeyBackwardKeys = new ArrayList<>();
-        List<Long> multiKeyBackwardCounts = new ArrayList<>();
+        List<String> actualKeys = new ArrayList<>();
+        List<Long> actualCounts = new ArrayList<>();
         while (iter.hasNext()) {
             KeyValue<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
-            multiKeyBackwardKeys.add(kv.key.key().get("eventId").toString());
-            multiKeyBackwardCounts.add((Long) kv.value.value().get("count"));
+            actualKeys.add(kv.key.key().get("eventId").toString());
+            actualCounts.add((Long) kv.value.value().get("count"));
             assertSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
             idx++;
         }
         assertEquals(expectedKeys.size(), idx, assertionContext + " number of records");
-        assertEquals(expectedKeys, multiKeyBackwardKeys, assertionContext + " keys");
-        assertEquals(expectedCounts, multiKeyBackwardCounts, assertionContext + " counts");
+        assertEquals(expectedKeys, actualKeys, assertionContext + " keys");
+        assertEquals(expectedCounts, actualCounts, assertionContext + " counts");
     }
 
     private void verifyKeyValueList(WindowStoreIterator<ValueTimestampHeaders<GenericRecord>> iter, List<Long> expectedCounts, String assertionContext) {
         int idx = 0;
-        List<Long> multiKeyBackwardCounts = new ArrayList<>();
+        List<Long> actualCounts = new ArrayList<>();
         while (iter.hasNext()) {
             KeyValue<Long, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
-            multiKeyBackwardCounts.add((Long) kv.value.value().get("count"));
+            actualCounts.add((Long) kv.value.value().get("count"));
             assertSchemaIdHeaders(kv.value.headers(), assertionContext + " entry " + idx);
             idx++;
         }
-        assertEquals(expectedCounts, multiKeyBackwardCounts, assertionContext + " counts");
+        assertEquals(expectedCounts, actualCounts, assertionContext + " counts");
     }
 
-private static long calculateWindowStartTime(long timestamp) {
+    private static long calculateWindowStartTime(long timestamp) {
         return (timestamp / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
     }
 
