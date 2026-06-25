@@ -2288,6 +2288,83 @@ public class ProtobufDataTest {
     return result;
   }
 
+  private static final String ONEOF_WRAPPER_SCHEMA = "syntax = \"proto3\";\n"
+      + "package io.confluent.test;\n"
+      + "import \"google/protobuf/wrappers.proto\";\n"
+      + "message OneofWrapFixed {\n"
+      + "  int32 id = 1;\n"
+      + "  string name = 2;\n"
+      + "  google.protobuf.StringValue nickname = 3;\n"
+      + "  google.protobuf.Int32Value priority = 4;\n"
+      + "  google.protobuf.BoolValue verified = 5;\n"
+      + "  oneof payload {\n"
+      + "    string text_payload = 6;\n"
+      + "    int64 number_payload = 7;\n"
+      + "  }\n"
+      + "}\n";
+
+  @Test
+  public void testOneofWithWrapperForNullables() throws Exception {
+    ProtobufDataConfig config = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.WRAPPER_FOR_NULLABLES_CONFIG, true)
+        .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, false)
+        .build();
+    assertOneofMembersOptionalAndRoundTrip(config);
+  }
+
+  @Test
+  public void testOneofWithOptionalForNullables() throws Exception {
+    ProtobufDataConfig config = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.OPTIONAL_FOR_NULLABLES_CONFIG, true)
+        .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, false)
+        .build();
+    assertOneofMembersOptionalAndRoundTrip(config);
+  }
+
+  private void assertOneofMembersOptionalAndRoundTrip(ProtobufDataConfig config) throws Exception {
+    ProtobufData protobufData = new ProtobufData(config);
+    ProtobufSchema protobufSchema = new ProtobufSchema(ONEOF_WRAPPER_SCHEMA);
+    Descriptor descriptor = protobufSchema.toDescriptor();
+
+    // Union (oneof) members must be optional, since at most one is ever set. Without this,
+    // the nullable configs leave them required and validation rejects the unset member.
+    Schema connectSchema = protobufData.toConnectSchema(protobufSchema);
+    Schema unionSchema = connectSchema.field("payload").schema();
+    assertTrue(unionSchema.field("text_payload").schema().isOptional());
+    assertTrue(unionSchema.field("number_payload").schema().isOptional());
+
+    // Setting either oneof member must deserialize and validate without crashing,
+    // even though the other member is absent (null).
+    assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, "text_payload", "hello");
+    assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, "number_payload", 7L);
+  }
+
+  private void assertOneofBranchRoundTrips(
+      ProtobufData protobufData,
+      ProtobufSchema protobufSchema,
+      Descriptor descriptor,
+      String payloadField,
+      Object payloadValue) {
+    DynamicMessage.Builder builder = DynamicMessage.newBuilder(descriptor);
+    builder.setField(descriptor.findFieldByName("id"), 42);
+    builder.setField(descriptor.findFieldByName("name"), "alice");
+    FieldDescriptor nicknameField = descriptor.findFieldByName("nickname");
+    Descriptor stringValueDesc = nicknameField.getMessageType();
+    builder.setField(nicknameField, DynamicMessage.newBuilder(stringValueDesc)
+        .setField(stringValueDesc.findFieldByName("value"), "ally")
+        .build());
+    builder.setField(descriptor.findFieldByName(payloadField), payloadValue);
+    DynamicMessage message = builder.build();
+
+    SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, message);
+    // Mirrors the converter validation path that previously threw for the unset oneof member.
+    ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
+
+    Struct value = (Struct) schemaAndValue.value();
+    Struct payload = (Struct) value.get("payload");
+    assertEquals(payloadValue, payload.get(payloadField));
+  }
+
   @Test
   public void testToConnectRecursiveSchema() {
     ProtobufSchema protobufSchema = new ProtobufSchema(
