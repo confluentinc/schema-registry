@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
@@ -44,7 +45,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -3169,8 +3172,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     // The wire format omits frozen because it matches the STRONG default (true)
     String rawJson = rawGet("/associations/resources/" + resourceId + "?resourceType=topic");
+    JsonNode root = JacksonMapper.INSTANCE.readTree(rawJson);
+    assertEquals(1, root.size());
     assertFalse(
-        rawJson.contains("\"frozen\""),
+        root.get(0).has("frozen"),
         "frozen should be hidden for a default STRONG association: " + rawJson);
 
     // The deserialized association still reports the effective frozen value
@@ -3185,8 +3190,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     URL url = new URL(restApp.restConnect + path);
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestMethod("GET");
-    try {
-      return new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    conn.setConnectTimeout(10_000);
+    conn.setReadTimeout(10_000);
+    try (InputStream in = conn.getInputStream()) {
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
     } finally {
       conn.disconnect();
     }

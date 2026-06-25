@@ -220,7 +220,7 @@ public class Association implements Comparable<Association> {
       return false;
     }
     Association that = (Association) o;
-    return Objects.equals(frozen, that.frozen)
+    return isFrozen() == that.isFrozen()
         && Objects.equals(subject, that.subject)
         && Objects.equals(guid, that.guid)
         && Objects.equals(resourceName, that.resourceName)
@@ -237,7 +237,7 @@ public class Association implements Comparable<Association> {
   public int hashCode() {
     return Objects.hash(
         subject, guid, resourceName, resourceNamespace, resourceId,
-        resourceType, associationType, lifecycle, frozen, createTimestamp, updateTimestamp);
+        resourceType, associationType, lifecycle, isFrozen(), createTimestamp, updateTimestamp);
   }
 
   public boolean isEquivalent(AssociationCreateOrUpdateInfo info) {

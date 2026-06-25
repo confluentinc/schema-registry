@@ -142,4 +142,33 @@ public class AssociationSerializationTest {
         MAPPER.writeValueAsString(info(LifecyclePolicy.STRONG, false)), AssociationInfo.class);
     assertFalse(deserialized.isFrozen());
   }
+
+  // equals()/hashCode() are stable across serialize -> deserialize even though the wire form
+  // omits frozen when it matches the lifecycle default (lossy for the raw field).
+
+  @Test
+  public void testAssociationEqualsStableAcrossRoundTrip() throws IOException {
+    for (LifecyclePolicy lifecycle : LifecyclePolicy.values()) {
+      for (Boolean frozen : new Boolean[] {Boolean.TRUE, Boolean.FALSE, null}) {
+        Association original = association(lifecycle, frozen);
+        Association roundTripped = MAPPER.readValue(
+            MAPPER.writeValueAsString(original), Association.class);
+        assertEquals(original, roundTripped);
+        assertEquals(original.hashCode(), roundTripped.hashCode());
+      }
+    }
+  }
+
+  @Test
+  public void testInfoEqualsStableAcrossRoundTrip() throws IOException {
+    for (LifecyclePolicy lifecycle : LifecyclePolicy.values()) {
+      for (Boolean frozen : new Boolean[] {Boolean.TRUE, Boolean.FALSE, null}) {
+        AssociationInfo original = info(lifecycle, frozen);
+        AssociationInfo roundTripped = MAPPER.readValue(
+            MAPPER.writeValueAsString(original), AssociationInfo.class);
+        assertEquals(original, roundTripped);
+        assertEquals(original.hashCode(), roundTripped.hashCode());
+      }
+    }
+  }
 }

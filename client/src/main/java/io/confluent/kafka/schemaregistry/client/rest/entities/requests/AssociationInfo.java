@@ -127,7 +127,7 @@ public class AssociationInfo {
       return false;
     }
     AssociationInfo that = (AssociationInfo) o;
-    return Objects.equals(frozen, that.frozen)
+    return isFrozen() == that.isFrozen()
         && Objects.equals(subject, that.subject)
         && Objects.equals(associationType, that.associationType)
         && lifecycle == that.lifecycle
@@ -137,7 +137,7 @@ public class AssociationInfo {
   @Override
   public int hashCode() {
     return Objects.hash(
-        subject, associationType, lifecycle, frozen, schema);
+        subject, associationType, lifecycle, isFrozen(), schema);
   }
 
   public String toJson() throws IOException {
