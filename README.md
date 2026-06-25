@@ -192,6 +192,17 @@ Thanks for helping us to make Schema Registry even better!
 License
 -------
 
-The project is licensed under the [Confluent Community License](LICENSE-ConfluentCommunity), except for the `client-*` and `avro-*` libs,
-which are under the [Apache 2.0 license](LICENSE-Apache).
+The project is licensed under the [Confluent Community License](LICENSE-ConfluentCommunity), except for the
+modules listed below, which are under the [Apache 2.0 license](LICENSE-Apache):
+
+- All `client-*` and `client-encryption-*` modules: `client`, `client-encryption`, `client-encryption-tink`,
+  `client-encryption-aws`, `client-encryption-azure`, `client-encryption-gcp`, `client-encryption-hcvault`
+- All `avro-*` modules: `avro-types`, `avro-serializer`, `avro-data`, `avro-converter`, `avro-serde`
+- All serializer and serde modules: `schema-serializer`, `json-serializer`, `protobuf-serializer`,
+  `json-schema-serializer`, `protobuf-serde`, `json-schema-serde`
+- `schema-types`, `schema-rules`, `schema-converter`
+- `protobuf-types`
+- `dek-registry-client`
+- `maven-plugin`
+
 See LICENSE file in each subfolder for detailed license agreement.
