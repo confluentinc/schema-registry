@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.client.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -41,7 +42,7 @@ public class Association implements Comparable<Association> {
   private String resourceType;
   private String associationType;
   private LifecyclePolicy lifecycle;
-  private boolean frozen;
+  private Boolean frozen;
   private Long createTimestamp;
   private Long updateTimestamp;
 
@@ -53,7 +54,7 @@ public class Association implements Comparable<Association> {
       @JsonProperty("resourceType") String resourceType,
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
-      @JsonProperty("frozen") boolean frozen) {
+      @JsonProperty("frozen") Boolean frozen) {
     this(subject, guid, resourceName, resourceNamespace, resourceId, resourceType, associationType,
         lifecycle, frozen, null, null);
   }
@@ -67,7 +68,7 @@ public class Association implements Comparable<Association> {
       @JsonProperty("resourceType") String resourceType,
       @JsonProperty("associationType") String associationType,
       @JsonProperty("lifecycle") LifecyclePolicy lifecycle,
-      @JsonProperty("frozen") boolean frozen,
+      @JsonProperty("frozen") Boolean frozen,
       @JsonProperty("createTs") Long createTimestamp,
       @JsonProperty("updateTs") Long updateTimestamp) {
     this.subject = subject;
@@ -163,14 +164,34 @@ public class Association implements Comparable<Association> {
     this.lifecycle = lifecycle;
   }
 
-  @JsonProperty("frozen")
+  /**
+   * The effective frozen value, applying the lifecycle default when unset.
+   * Used by business logic; not serialized directly.
+   */
+  @JsonIgnore
   public boolean isFrozen() {
+    return frozen != null ? frozen : defaultFrozen();
+  }
+
+  /**
+   * The frozen value for serialization. Returns {@code null} (so the property is
+   * omitted) when it matches the lifecycle default, and the explicit value otherwise.
+   */
+  @JsonProperty("frozen")
+  public Boolean getFrozen() {
+    if (frozen == null || frozen == defaultFrozen()) {
+      return null;
+    }
     return frozen;
   }
 
   @JsonProperty("frozen")
-  public void setFrozen(boolean frozen) {
+  public void setFrozen(Boolean frozen) {
     this.frozen = frozen;
+  }
+
+  private boolean defaultFrozen() {
+    return lifecycle == LifecyclePolicy.STRONG;
   }
 
   @JsonProperty("createTs")
@@ -199,7 +220,7 @@ public class Association implements Comparable<Association> {
       return false;
     }
     Association that = (Association) o;
-    return frozen == that.frozen
+    return Objects.equals(frozen, that.frozen)
         && Objects.equals(subject, that.subject)
         && Objects.equals(guid, that.guid)
         && Objects.equals(resourceName, that.resourceName)
