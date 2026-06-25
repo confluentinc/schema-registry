@@ -45,6 +45,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -3138,6 +3141,55 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertThrows(Exception.class, () ->
         restApp.restClient.createAssociation(
             RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+  }
+
+  // Serialization: frozen is hidden when it matches the lifecycle default
+
+  @Test
+  public void testStrongAssociationWithoutFrozenHidesFrozenInResponse() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "strong-hidden-frozen-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(allSchemas.get(0));
+
+    // Create a STRONG association without passing frozen — defaults to frozen=true for STRONG
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, schemaRequest, null)));
+
+    AssociationResponse createResponse = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(LifecyclePolicy.STRONG, createResponse.getAssociations().get(0).getLifecycle());
+    // The effective value is frozen even though frozen was never passed
+    assertTrue(createResponse.getAssociations().get(0).isFrozen());
+
+    // The wire format omits frozen because it matches the STRONG default (true)
+    String rawJson = rawGet("/associations/resources/" + resourceId + "?resourceType=topic");
+    assertFalse(
+        rawJson.contains("\"frozen\""),
+        "frozen should be hidden for a default STRONG association: " + rawJson);
+
+    // The deserialized association still reports the effective frozen value
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.singletonList("value"), null, 0, -1);
+    assertEquals(1, associations.size());
+    assertTrue(associations.get(0).isFrozen());
+  }
+
+  private String rawGet(String path) throws Exception {
+    URL url = new URL(restApp.restConnect + path);
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    conn.setRequestMethod("GET");
+    try {
+      return new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    } finally {
+      conn.disconnect();
+    }
   }
 
 }
