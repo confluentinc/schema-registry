@@ -1396,7 +1396,7 @@ public class ProtobufData {
         if (flattenUnions) {
           List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
           for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-            builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+            builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor, true));
           }
         } else {
           String unionFieldName = unionFieldName(oneOfDescriptor);
@@ -1433,13 +1433,18 @@ public class ProtobufData {
     }
     List<FieldDescriptor> fieldDescriptors = descriptor.getFields();
     for (FieldDescriptor fieldDescriptor : fieldDescriptors) {
-      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor));
+      builder.field(fieldDescriptor.getName(), toConnectSchema(ctx, fieldDescriptor, true));
     }
     builder.optional();
     return builder.build();
   }
 
   private Schema toConnectSchema(ToConnectContext ctx, FieldDescriptor descriptor) {
+    return toConnectSchema(ctx, descriptor, false);
+  }
+
+  private Schema toConnectSchema(
+      ToConnectContext ctx, FieldDescriptor descriptor, boolean forceOptional) {
     SchemaBuilder builder;
 
     switch (descriptor.getType()) {
@@ -1581,7 +1586,11 @@ public class ProtobufData {
       builder.optional();
     }
 
-    if (useOptionalForNullables) {
+    if (forceOptional) {
+      // Union (oneof) members are inherently nullable, since at most one is ever set,
+      // so they must be optional regardless of the nullable handling configs.
+      builder.optional();
+    } else if (useOptionalForNullables) {
       if (hasOptionalKeyword(descriptor)) {
         builder.optional();
       }
