@@ -2401,7 +2401,11 @@ public class ProtobufDataTest {
     assertTrue(membersSchema.field("number_payload").schema().isOptional());
 
     // Setting either oneof member must deserialize and validate without crashing,
-    // even though the other member is absent (null).
+    // even though the other member is absent (null). For the (non-flattened) union
+    // representation, writing the data back must also faithfully reproduce the original
+    // protobuf: oneof members must stay plain scalars rather than being rewritten as
+    // google.protobuf wrapper messages. Flattening unions is inherently lossy for the oneof
+    // structure, so byte-faithful restore is only asserted for the union representation.
     assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, flatten,
         "text_payload", "hello");
     assertOneofBranchRoundTrips(protobufData, protobufSchema, descriptor, flatten,
@@ -2415,16 +2419,14 @@ public class ProtobufDataTest {
       boolean flatten,
       String payloadField,
       Object payloadValue) {
-    DynamicMessage.Builder builder = DynamicMessage.newBuilder(descriptor);
-    builder.setField(descriptor.findFieldByName("id"), 42);
-    builder.setField(descriptor.findFieldByName("name"), "alice");
-    FieldDescriptor nicknameField = descriptor.findFieldByName("nickname");
-    Descriptor stringValueDesc = nicknameField.getMessageType();
-    builder.setField(nicknameField, DynamicMessage.newBuilder(stringValueDesc)
-        .setField(stringValueDesc.findFieldByName("value"), "ally")
-        .build());
-    builder.setField(descriptor.findFieldByName(payloadField), payloadValue);
-    DynamicMessage message = builder.build();
+    // Only the oneof member is set, isolating its round-trip from the (separate) handling of
+    // wrapper-typed fields such as "nickname".
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .setField(descriptor.findFieldByName("id"), 42)
+        .setField(descriptor.findFieldByName("name"), "alice")
+        .setField(descriptor.findFieldByName(payloadField), payloadValue)
+        .build();
+    byte[] originalBytes = message.toByteArray();
 
     SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, message);
     // Mirrors the converter validation path that previously threw for the unset oneof member.
@@ -2433,6 +2435,18 @@ public class ProtobufDataTest {
     Struct value = (Struct) schemaAndValue.value();
     Struct members = flatten ? value : (Struct) value.get("payload");
     assertEquals(payloadValue, members.get(payloadField));
+
+    if (!flatten) {
+      // Write the Connect data back to protobuf. The regenerated schema must keep the oneof
+      // member as its original scalar type (not a google.protobuf wrapper message), and the
+      // serialized bytes must match the original exactly so that restore is faithful.
+      ProtobufSchemaAndValue back =
+          protobufData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
+      FieldDescriptor regeneratedField =
+          back.getSchema().toDescriptor().findFieldByName(payloadField);
+      assertEquals(descriptor.findFieldByName(payloadField).getType(), regeneratedField.getType());
+      assertArrayEquals(originalBytes, ((Message) back.getValue()).toByteArray());
+    }
   }
 
   @Test
