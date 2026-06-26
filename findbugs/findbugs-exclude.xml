@@ -103,6 +103,16 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <Class name="io.confluent.kafka.schemaregistry.client.rest.entities.Association"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
+        <Class name="io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationInfo"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
         <Class name="io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor"/>
         <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
     </Match>
