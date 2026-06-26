@@ -319,6 +319,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     Map<String, Object> schemaProviderConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG + ".");
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    schemaProviderConfigs.put(JsonSchemaProvider.FETCH_REMOTE_REFS,
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG));
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
