@@ -1719,8 +1719,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           boolean validateAsNew,
           boolean normalize) throws InvalidSchemaException {
     try {
-      AbstractSchemaRegistry.RawSchema rawSchema =
-              new AbstractSchemaRegistry.RawSchema(schema.toHashKey(), validateAsNew, normalize);
+      AbstractSchemaRegistry.RawSchema rawSchema = new AbstractSchemaRegistry.RawSchema(
+          schema.toHashKey(!validateAsNew), validateAsNew, normalize);
       ParsedSchema parsedSchema = validateAsNew
               ? newSchemaCache.get(rawSchema)
               : oldSchemaCache.get(rawSchema);
