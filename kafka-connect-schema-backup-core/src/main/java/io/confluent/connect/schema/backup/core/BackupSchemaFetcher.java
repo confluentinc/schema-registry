@@ -17,7 +17,6 @@
 package io.confluent.connect.schema.backup.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
