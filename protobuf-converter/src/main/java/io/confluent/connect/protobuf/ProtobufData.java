@@ -377,7 +377,7 @@ public class ProtobufData {
       String scope,
       Object value,
       ProtobufSchema protobufSchema,
-      boolean suppressWrapper
+      boolean oneofMember
   ) {
     if (value == null) {
       // Ignore missing values
@@ -394,7 +394,7 @@ public class ProtobufData {
     // Oneof (union) members express nullability via the oneof itself, not via wrapper types,
     // so they must never be wrapped even when useWrapperForNullables is set.
     boolean isWrapper = isWrapper(protobufSchema)
-        || (useWrapperForNullables && !suppressWrapper && schema.isOptional());
+        || (useWrapperForNullables && !oneofMember && schema.isOptional());
     final Schema.Type schemaType = schema.type();
     try {
       switch (schemaType) {
