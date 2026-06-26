@@ -380,6 +380,17 @@ public class ProtobufData {
       Object value,
       ProtobufSchema protobufSchema
   ) {
+    return fromConnectData(ctx, schema, scope, value, protobufSchema, false);
+  }
+
+  private Object fromConnectData(
+      Object ctx,
+      Schema schema,
+      String scope,
+      Object value,
+      ProtobufSchema protobufSchema,
+      boolean oneofMember
+  ) {
     if (value == null) {
       // Ignore missing values
       return null;
@@ -392,8 +403,10 @@ public class ProtobufData {
       }
     }
 
+    // Oneof (union) members express nullability via the oneof itself, not via wrapper types,
+    // so they must never be wrapped even when useWrapperForNullables is set.
     boolean isWrapper = isWrapper(protobufSchema)
-        || (useWrapperForNullables && schema.isOptional());
+        || (useWrapperForNullables && !oneofMember && schema.isOptional());
     final Schema.Type schemaType = schema.type();
     try {
       switch (schemaType) {
@@ -518,7 +531,7 @@ public class ProtobufData {
                 String fieldName = scrubName(field.name());
                 Object fieldCtx = getFieldType(ctx, fieldName);
                 return new Pair<>(fieldName,
-                    fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema)
+                    fromConnectData(fieldCtx, field.schema(), scope, object, protobufSchema, true)
                 );
               }
             }
@@ -746,7 +759,8 @@ public class ProtobufData {
           message,
           fieldSchema,
           scrubName(field.name()),
-          tag
+          tag,
+          false
       );
       if (fieldDef != null) {
         boolean isProto3Optional = "optional".equals(getLabel(fieldSchema));
@@ -783,7 +797,8 @@ public class ProtobufData {
           message,
           field.schema(),
           scrubName(field.name()),
-          tag
+          tag,
+          true
       );
       if (fieldDef != null) {
         fieldDef.setOneofIndex(oneof.getIdx());
@@ -798,14 +813,15 @@ public class ProtobufData {
       MessageDefinition.Builder message,
       Schema fieldSchema,
       String name,
-      int tag
+      int tag,
+      boolean oneofMember
   ) {
     String label = getLabel(fieldSchema);
     if (fieldSchema.type() == Schema.Type.ARRAY) {
       fieldSchema = fieldSchema.valueSchema();
     }
     Map<String, String> params = new HashMap<>();
-    String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params);
+    String type = dataTypeFromConnectSchema(ctx, fieldSchema, name, params, oneofMember);
     Object defaultVal = null;
     if (fieldSchema.type() == Schema.Type.STRUCT) {
       String fieldSchemaName = fieldSchema.name();
@@ -939,7 +955,8 @@ public class ProtobufData {
         map,
         mapElem.keySchema(),
         KEY_FIELD,
-        1
+        1,
+        false
     );
     map.addField(key.build());
     FieldDefinition.Builder val = fieldDefinitionFromConnectSchema(
@@ -948,7 +965,8 @@ public class ProtobufData {
         map,
         mapElem.valueSchema(),
         VALUE_FIELD,
-        2
+        2,
+        false
     );
     map.addField(val.build());
     return map.build();
@@ -973,7 +991,8 @@ public class ProtobufData {
   }
 
   private String dataTypeFromConnectSchema(
-      FromConnectContext ctx, Schema schema, String fieldName, Map<String, String> params) {
+      FromConnectContext ctx, Schema schema, String fieldName, Map<String, String> params,
+      boolean oneofMember) {
     if (isDecimalSchema(schema)) {
       if (schema.parameters() != null) {
         String precision = schema.parameters().get(CONNECT_PRECISION_PROP);
@@ -999,11 +1018,11 @@ public class ProtobufData {
     switch (schema.type()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT16:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT16);
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
@@ -1013,7 +1032,7 @@ public class ProtobufData {
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
           defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
         }
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
         defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
@@ -1033,16 +1052,16 @@ public class ProtobufData {
           default:
             wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
         }
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? wrapperType : defaultType;
       case FLOAT32:
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
       case FLOAT64:
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_DOUBLE_WRAPPER_TYPE : FieldDescriptor.Type.DOUBLE.toString().toLowerCase();
       case BOOLEAN:
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_BOOL_WRAPPER_TYPE : FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
         if (schema.parameters() != null) {
@@ -1052,10 +1071,10 @@ public class ProtobufData {
             return schema.parameters().get(PROTOBUF_TYPE_ENUM);
           }
         }
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_STRING_WRAPPER_TYPE : FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
-        return useWrapperForNullables && schema.isOptional()
+        return useWrapperForNullables && schema.isOptional() && !oneofMember
             ? PROTOBUF_BYTES_WRAPPER_TYPE : FieldDescriptor.Type.BYTES.toString().toLowerCase();
       case ARRAY:
         // Array should not occur here
