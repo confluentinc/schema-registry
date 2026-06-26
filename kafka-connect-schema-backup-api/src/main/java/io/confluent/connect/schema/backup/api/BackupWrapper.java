@@ -51,6 +51,9 @@ public final class BackupWrapper {
   public static final String FIELD_RAW_SCHEMA = "rawSchema";
   public static final String FIELD_REFERENCE_TREE = "referenceTree";
   public static final String FIELD_DIRECT_REFS = "directRefs";
+  public static final String FIELD_FORMAT_VERSION = "formatVersion";
+
+  public static final int FORMAT_VERSION = 1;
 
   private static final byte MAGIC_BYTE = 0x0;
 
@@ -77,6 +80,7 @@ public final class BackupWrapper {
         .field(FIELD_RAW_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA)
         .field(FIELD_REFERENCE_TREE, Schema.OPTIONAL_STRING_SCHEMA)
         .field(FIELD_DIRECT_REFS, Schema.OPTIONAL_STRING_SCHEMA)
+        .field(FIELD_FORMAT_VERSION, Schema.INT32_SCHEMA)
         .build();
   }
 
@@ -108,6 +112,7 @@ public final class BackupWrapper {
     wrapper.put(FIELD_RAW_SCHEMA, rawSchema);
     wrapper.put(FIELD_REFERENCE_TREE, referenceTreeJson);
     wrapper.put(FIELD_DIRECT_REFS, directRefsJson);
+    wrapper.put(FIELD_FORMAT_VERSION, FORMAT_VERSION);
     return wrapper;
   }
 
