@@ -371,7 +371,7 @@ public abstract class Schema {
           "DECLARE", "DEFAULT", "DOUBLE", "ELSE", "END", "ESCAPE", "EXTRACT",
           "FALSE", "FLOAT", "FOR", "FROM", "IN", "INT", "INTEGER", "IS",
           "LEADING", "LIKE", "LOCAL", "MESSAGE", "MULTISET", "NOT", "NULL",
-          "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "STRUCT", "SMALLINT",
+          "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "ROW", "STRUCT", "SMALLINT",
           "STRING", "SUBSTRING", "SYMMETRIC", "THEN", "TIME",
           "TIMESTAMP", "TIMESTAMP_LTZ", "TINYINT", "TRAILING", "TRIM", "TRUE",
           "UNION", "VARBINARY", "VARCHAR", "VARYING", "WHEN", "WITH", "WITHOUT")));

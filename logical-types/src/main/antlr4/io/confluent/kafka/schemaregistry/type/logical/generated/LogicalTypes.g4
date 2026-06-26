@@ -49,7 +49,9 @@ aliasStmt
 // ─── named type declarations ──────────────────────────────────────────────────
 //
 // Two kind-specific shapes — `STRUCT <name> (...)` for record-like types and
-// `ENUM <name> (...)` for enums. The leading kind keyword tells the reader
+// `ENUM <name> (...)` for enums. `ROW` is accepted as an alias for `STRUCT`
+// (both as a declaration keyword and inline type expression), but `STRUCT` is
+// the canonical form the writer emits. The leading kind keyword tells the reader
 // (and the parser) what's coming without burying the kind in the body. Inline
 // uses of STRUCT (as a type expression at field/branch positions) are unchanged;
 // the parser disambiguates declaration vs. inline by structural position in
@@ -72,7 +74,7 @@ aliasStmt
 // emit dotted names as flat top-level types.
 
 createTypeStmt
-    : STRUCT  qualifiedName structBody commentClause? tagsClause? withClause?
+    : ( STRUCT | ROW ) qualifiedName structBody commentClause? tagsClause? withClause?
     | ENUM qualifiedName enumBody   commentClause? withClause?
     ;
 
@@ -381,8 +383,8 @@ variantType
     ;
 
 rowType
-    : STRUCT '<' fieldDef ( ',' fieldDef )* '>'
-    | STRUCT '(' fieldDef ( ',' fieldDef )* ')'
+    : ( STRUCT | ROW ) '<' fieldDef ( ',' fieldDef )* '>'
+    | ( STRUCT | ROW ) '(' fieldDef ( ',' fieldDef )* ')'
     ;
 
 unionType
@@ -516,6 +518,7 @@ POSITION        : P O S I T I O N ;
 PRECISION       : P R E C I S I O N ;
 REAL            : R E A L ;
 RETURNING       : R E T U R N I N G ;
+ROW             : R O W ;
 STRUCT          : S T R U C T ;
 SMALLINT        : S M A L L I N T ;
 STRING          : S T R I N G ;
