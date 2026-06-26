@@ -472,6 +472,38 @@ class LogicalTypesSchemaVisitorTest {
   }
 
   @Test
+  void testRowKeywordIsAliasForStructInline() {
+    // `ROW` is accepted as an alias for `STRUCT` in both inline forms; the
+    // parsed type is identical to the STRUCT spelling.
+    Schema paren = parseTypeExpr("ROW(name STRING, age INT)");
+    assertEquals(parseTypeExpr("STRUCT(name STRING, age INT)").toDdl(), paren.toDdl());
+    assertEquals(Schema.Type.STRUCT, paren.getType());
+    assertEquals(2, paren.getFields().size());
+
+    Schema angle = parseTypeExpr("ROW<name STRING, age INT>");
+    assertEquals(Schema.Type.STRUCT, angle.getType());
+    assertEquals(2, angle.getFields().size());
+  }
+
+  @Test
+  void testRowKeywordIsAliasForStructDeclaration() {
+    // `ROW <name> (...)` declares the same named STRUCT as `STRUCT <name> (...)`.
+    Schema viaRow = parseScript("ROW Addr (zip INT, city STRING);")
+        .getNamedTypes().get("Addr");
+    Schema viaStruct = parseScript("STRUCT Addr (zip INT, city STRING);")
+        .getNamedTypes().get("Addr");
+    assertEquals(Schema.Type.STRUCT, viaRow.getType());
+    assertEquals(viaStruct.toDdl(), viaRow.toDdl());
+  }
+
+  @Test
+  void testRowAliasCanonicalizesToStructOnEmit() {
+    // ROW is input-only; the writer always emits the canonical STRUCT keyword.
+    String ddl = parseTypeExpr("ROW(a INT)").toDdl();
+    assertTrue(ddl.startsWith("STRUCT("), "expected canonical STRUCT, got: " + ddl);
+  }
+
+  @Test
   void testRowWithDefault() {
     Schema s = parseTypeExpr("STRUCT(status STRING DEFAULT 'active')");
     Schema.Field f = s.getFields().get(0);

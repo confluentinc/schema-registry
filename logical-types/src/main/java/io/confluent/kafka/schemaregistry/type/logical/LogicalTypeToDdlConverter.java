@@ -315,7 +315,7 @@ public final class LogicalTypeToDdlConverter {
         case NAMED_TYPE_REF:
           // Schema.toDdl returns the bare qualified name without identifier
           // quoting — collides with reserved words (e.g., a type literally
-          // named "Row" would lex as the STRUCT keyword). Quote per-segment.
+          // named "Row" would lex as the ROW keyword). Quote per-segment.
           return wrapNullable(qualifiedName(schema.getQualifiedName()), schema);
         default:
           // Primitive / decimal / parametric / ENUM — Schema.toDdl already
