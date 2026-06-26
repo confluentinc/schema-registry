@@ -271,6 +271,10 @@ public class Schema implements Comparable<Schema> {
   }
 
   public Schema toHashKey() {
+    return toHashKey(false);
+  }
+
+  public Schema toHashKey(boolean preserveNonNullId) {
     // Deep copy the references list if it's not null
     List<SchemaReference> referencesCopy = references != null
         ? references.stream()
@@ -280,7 +284,7 @@ public class Schema implements Comparable<Schema> {
 
     // Retain the fact that id is set, but don't retain the actual value,
     // since it's not relevant to the hash key and may differ across instances of the same schema
-    Integer id = this.id != null && this.id >= 0 ? 0 : null;
+    Integer id = preserveNonNullId && this.id != null && this.id >= 0 ? 0 : null;
     return new Schema(subject, null, id, schemaType, referencesCopy, metadata, ruleSet, schema);
   }
 
