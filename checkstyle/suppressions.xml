@@ -37,7 +37,7 @@
               files="(.*SchemaRegistryClient|JSON.*|Variant.*).java"/>
 
     <suppress checks="MethodLength"
-              files="(AbstractSchemaRegistry|KafkaSchemaRegistry|SchemaRegistryConfig|ProtobufData|JsonSchemaData).java"/>
+              files="(AbstractSchemaRegistry|KafkaSchemaRegistry|SchemaRegistryConfig|ProtobufData|JsonSchemaData|AvroToLogicalTypeConverter|LogicalTypeToAvroConverter|LogicalTypeToJsonConverter).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="(AbstractSchemaRegistry|AvroData|JsonSchema|KafkaSchemaRegistry|ProtobufData|ProtobufSchema|CelExecutor|CelUtils|FieldRuleExecutor|MetadataEncoderService|MockDekRegistryClient|DataEncryptionKey|KeyEncryptionKey|Rule|CombinedSchemaDiff|RegisterSchemaRequest|RuleSet|Association).java"/>
