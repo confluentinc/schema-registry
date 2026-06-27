@@ -233,7 +233,13 @@ public class JsonSchemaData {
 
         Struct result = new Struct(schema.schema());
         for (Field field : schema.fields()) {
-          Object fieldValue = data.toConnectData(field.schema(), value.get(field.name()));
+          Object fieldValue;
+          try {
+            fieldValue = data.toConnectData(field.schema(), value.get(field.name()));
+          } catch (DataException e) {
+            throw new DataException(
+                "Error converting field '" + field.name() + "': " + e.getMessage(), e);
+          }
           if (fieldValue != null) {
             result.put(field, fieldValue);
           }
