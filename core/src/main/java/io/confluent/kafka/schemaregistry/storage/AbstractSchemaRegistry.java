@@ -603,9 +603,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                                                          boolean normalize)
           throws InvalidSchemaException {
     try {
-      if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
-        parsedSchema.validate(isSchemaFieldValidationEnabled(config));
-      }
+      validateSchema(parsedSchema, schema, config);
       if (normalize) {
         parsedSchema = parsedSchema.normalize();
       }
@@ -618,6 +616,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
     return parsedSchema;
+  }
+
+  protected void validateSchema(ParsedSchema parsedSchema, Schema schema, Config config)
+          throws SchemaRegistryException {
+    if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      parsedSchema.validate(isSchemaFieldValidationEnabled(config));
+    }
   }
 
   protected ParsedSchema canonicalizeSchema(Schema schema,
