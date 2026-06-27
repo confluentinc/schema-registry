@@ -625,7 +625,7 @@ class LogicalTypesSchemaVisitorTest {
         order.getField("amount").getSchema().getType());
     assertEquals("com.example.Money",
         order.getField("amount").getSchema().getQualifiedName());
-    // No DECLARE clauses → externalImports stays empty.
+    // No USING TYPE clauses → externalImports stays empty.
     assertTrue(v.getExternalImports().isEmpty());
 
     LogicalType lt = v.toLogicalType();
@@ -635,10 +635,10 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testAlias() {
-    // DECLARE attaches a URI binding to a (necessarily external) FQN.
+    // USING TYPE attaches a URI binding to a (necessarily external) FQN.
     LogicalTypesSchemaVisitor v = parseScript(
-        "DECLARE Ref1 FOR 'ext.Outer';"
-        + "DECLARE Ref2 FOR 'https://example.com/foo#/properties/bar';"
+        "USING TYPE Ref1 FOR 'ext.Outer';"
+        + "USING TYPE Ref2 FOR 'https://example.com/foo#/properties/bar';"
         + "STRUCT Holder ("
         + "  i Inner,"
         + "  one Ref1,"
@@ -652,7 +652,7 @@ class LogicalTypesSchemaVisitorTest {
     assertEquals("https://example.com/foo#/properties/bar", imports.get("Ref2"));
 
     // The bundled LT carries the bindings; externals are inferred (Inner has
-    // no DECLARE but is still external because it isn't locally declared).
+    // no USING TYPE but is still external because it isn't locally declared).
     LogicalType lt = v.toLogicalType();
     assertEquals(imports, lt.getExternalImports());
     assertTrue(lt.isExternal("Inner"));
@@ -663,7 +663,7 @@ class LogicalTypesSchemaVisitorTest {
   @Test
   void testAliasEmptyStringRejected() {
     assertThrows(ValidationException.class, () -> parseScript(
-        "DECLARE Ref1 FOR '';"
+        "USING TYPE Ref1 FOR '';"
         + "STRUCT H (one Ref1);"
         + "TYPE H"
     ));
@@ -671,11 +671,11 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testDuplicateAliasRejected() {
-    // Two DECLARE declarations for the same name. Last-write-wins would hide
+    // Two USING TYPE declarations for the same name. Last-write-wins would hide
     // the user's mistake — reject explicitly.
     assertThrows(ValidationException.class, () -> parseScript(
-        "DECLARE Foo FOR 'a';"
-        + "DECLARE Foo FOR 'b';"
+        "USING TYPE Foo FOR 'a';"
+        + "USING TYPE Foo FOR 'b';"
         + "STRUCT H (f Foo);"
         + "TYPE H"
     ));
@@ -683,20 +683,20 @@ class LogicalTypesSchemaVisitorTest {
 
   @Test
   void testDanglingAliasRejected() {
-    // DECLARE whose FQN isn't referenced anywhere — visitor rejects since
+    // USING TYPE whose FQN isn't referenced anywhere — visitor rejects since
     // externals are inferred from usage and an unused alias has no effect.
     assertThrows(ValidationException.class, () -> parseScript(
-        "DECLARE Foo FOR 'a';"
+        "USING TYPE Foo FOR 'a';"
         + "TYPE INT"
     ));
   }
 
   @Test
   void testShadowedAliasRejected() {
-    // DECLARE for a name that's also a local STRUCT declaration. The DECLARE's URI
+    // USING TYPE for a name that's also a local STRUCT declaration. The USING TYPE's URI
     // binding can't apply to a local type; reject the collision.
     assertThrows(ValidationException.class, () -> parseScript(
-        "DECLARE Foo FOR 'a';"
+        "USING TYPE Foo FOR 'a';"
         + "STRUCT Foo (x INT);"
         + "TYPE Foo"
     ));

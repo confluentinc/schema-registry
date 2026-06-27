@@ -172,7 +172,7 @@ class LogicalTypeToDdlConverterTest {
   }
 
   // -----------------------------------------------------------------------
-  // Phase B: DECLARE (URI bindings for external NAMED_TYPE_REFs)
+  // Phase B: USING TYPE (URI bindings for external NAMED_TYPE_REFs)
   // -----------------------------------------------------------------------
 
   @Test
@@ -191,8 +191,8 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertFalse(ddl.contains("DECLARE"),
-        "expected no DECLARE for bare external, got:\n" + ddl);
+    assertFalse(ddl.contains("USING TYPE"),
+        "expected no USING TYPE for bare external, got:\n" + ddl);
     assertTrue(ddl.contains("com.example.Address"),
         "field type should still reference the external by FQN, got:\n" + ddl);
     assertRoundTrip(lt);
@@ -201,7 +201,7 @@ class LogicalTypeToDdlConverterTest {
   @Test
   void aliasCarriesUriBinding() {
     // External Ref1 carries a synthetic-wrapper URI binding via externalImports.
-    // Emitter writes `DECLARE Ref1 FOR '<uri>';` so the binding round-trips
+    // Emitter writes `USING TYPE Ref1 FOR '<uri>';` so the binding round-trips
     // through DDL → LT → DDL.
     Schema struct = Schema.createStruct(Arrays.asList(
         new Schema.Field("a",
@@ -218,8 +218,8 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("DECLARE Ref1 FOR 'ext.Outer';"),
-        "expected DECLARE with URI binding, got:\n" + ddl);
+    assertTrue(ddl.contains("USING TYPE Ref1 FOR 'ext.Outer';"),
+        "expected USING TYPE with URI binding, got:\n" + ddl);
     assertRoundTrip(lt);
   }
 
@@ -242,8 +242,8 @@ class LogicalTypeToDdlConverterTest {
         java.util.Collections.emptyMap(),
         java.util.Collections.emptyMap());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
-    assertTrue(ddl.contains("DECLARE Ref1 FOR 'ext.O''Hare';"),
-        "expected escaped single-quote in DECLARE URI, got:\n" + ddl);
+    assertTrue(ddl.contains("USING TYPE Ref1 FOR 'ext.O''Hare';"),
+        "expected escaped single-quote in USING TYPE URI, got:\n" + ddl);
     assertRoundTrip(lt);
   }
 
