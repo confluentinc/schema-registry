@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  *   <li>{@code namedTypes} — from each {@code STRUCT <name> (...)} or
  *       {@code ENUM <name> (...)} statement (locals).</li>
  *   <li>{@code externalImports} — from each
- *       {@code DECLARE x FOR 'uri'} statement; maps the typeName to the
+ *       {@code USING TYPE x FOR 'uri'} statement; maps the typeName to the
  *       wire-format URI.</li>
  *   <li>{@code rootSchema} — from the trailing {@code TYPE <typeExpr>}
  *       statement (or sugar-inferred when absent).</li>
@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
  * shouldn't be embedded in schema source. So the produced LT has an empty
  * {@code references} list. The caller is responsible for attaching
  * {@code references} (and the corresponding {@code resolvedReferences}
- * content) before SR registration. {@code DECLARE} populates schema-text shape
+ * content) before SR registration. {@code USING TYPE} populates schema-text shape
  * (which {@code $ref}/{@code import} string to emit); it does not bridge to SR
  * resolution.
  */
@@ -76,7 +76,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   /**
-   * URI bindings for {@code DECLARE x FOR '<uri>';} declarations. Becomes
+   * URI bindings for {@code USING TYPE x FOR '<uri>';} declarations. Becomes
    * {@link LogicalType#getExternalImports()} on {@link #toLogicalType}.
    */
   public Map<String, String> getExternalImports() {
@@ -101,7 +101,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
    * enrichment is responsible for SR-fetching and promoting bodies into
    * {@code namedTypes}.
    *
-   * <p>DECLARE validation (no shadowing, no dangling entries) runs during
+   * <p>USING TYPE validation (no shadowing, no dangling entries) runs during
    * parsing inside {@link #visitScript}, so a {@code LogicalType} produced
    * here is guaranteed to satisfy both invariants.
    */
@@ -164,10 +164,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   /**
-   * After parsing completes, reject DECLARE declarations that either shadow a
+   * After parsing completes, reject USING TYPE declarations that either shadow a
    * local declaration or aren't referenced by any local body / the root.
-   * Externals are inferred from usage, so an unused DECLARE has no effect and
-   * an DECLARE-on-local-name is contradictory — both are surfaced as errors at
+   * Externals are inferred from usage, so an unused USING TYPE has no effect and
+   * a USING TYPE-on-local-name is contradictory — both are surfaced as errors at
    * parse time rather than allowed to silently no-op.
    */
   private void validateAliases() {
@@ -178,8 +178,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     shadowed.retainAll(namedTypes.keySet());
     if (!shadowed.isEmpty()) {
       throw new ValidationException(
-          "DECLARE declared for name(s) that are also locally declared as "
-              + "STRUCT/ENUM — an DECLARE attaches a URI to an external reference, "
+          "USING TYPE declared for name(s) that are also locally declared as "
+              + "STRUCT/ENUM — a USING TYPE attaches a URI to an external reference, "
               + "so it must not collide with a local declaration: " + shadowed);
     }
     Set<String> externals = inferExternalTypes();
@@ -187,9 +187,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     dangling.removeAll(externals);
     if (!dangling.isEmpty()) {
       throw new ValidationException(
-          "DECLARE declared for name(s) that aren't referenced by any local "
+          "USING TYPE declared for name(s) that aren't referenced by any local "
               + "type or by the root — externals are inferred from usage, so "
-              + "an unused DECLARE has no effect: " + dangling);
+              + "an unused USING TYPE has no effect: " + dangling);
     }
   }
 
@@ -399,13 +399,13 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     String name = buildQualifiedName(ctx.qualifiedName());
     if (externalImports.containsKey(name)) {
       throw error(ctx.qualifiedName(),
-          "Duplicate DECLARE: " + name
+          "Duplicate USING TYPE: " + name
               + " (each alias FQN may be declared at most once)");
     }
     String uri = stripStringLiteral(ctx.stringLiteral().getText());
     if (uri.trim().isEmpty()) {
       throw error(ctx.stringLiteral(),
-          "DECLARE " + name + " FOR clause must be a non-empty URI");
+          "USING TYPE " + name + " FOR clause must be a non-empty URI");
     }
     externalImports.put(name, uri);
     return null;

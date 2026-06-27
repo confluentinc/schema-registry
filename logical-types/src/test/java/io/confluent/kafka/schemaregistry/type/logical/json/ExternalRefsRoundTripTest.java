@@ -99,11 +99,11 @@ class ExternalRefsRoundTripTest {
 
     // Pin the DDL projection — bare externals have no syntactic marker (they
     // re-infer from usage on read-back). The synthesized Ref1 stands in for
-    // the whole-doc ext.Outer URI and is emitted as an DECLARE statement;
-    // Inner extracted from the canonical /$defs/Inner ref needs no DECLARE
+    // the whole-doc ext.Outer URI and is emitted as an USING TYPE statement;
+    // Inner extracted from the canonical /$defs/Inner ref needs no USING TYPE
     // (its source is discoverable via resolvedReferences).
     assertEquals(
-        "DECLARE Ref1 FOR 'ext.Outer';\n"
+        "USING TYPE Ref1 FOR 'ext.Outer';\n"
             + "TYPE STRUCT(inner Inner, outer Ref1) NOT NULL;\n",
         LogicalTypeToDdlConverter.toDdl(lt));
 
@@ -219,14 +219,14 @@ class ExternalRefsRoundTripTest {
         lt.getExternalImports().get(subName));
 
     // DDL projects clean: Local is local (STRUCT declaration — backticked because
-    // "Local" is a reserved word); the synthesized names appear as DECLARE
+    // "Local" is a reserved word); the synthesized names appear as USING TYPE
     // statements carrying their URI bindings.
     String ddl = LogicalTypeToDdlConverter.toDdl(lt);
     assertTrue(
-        ddl.contains("DECLARE " + wholeName + " FOR 'ext.Doc';"),
+        ddl.contains("USING TYPE " + wholeName + " FOR 'ext.Doc';"),
         ddl);
     assertTrue(
-        ddl.contains("DECLARE " + subName
+        ddl.contains("USING TYPE " + subName
             + " FOR 'ext.Doc#/properties/foo/items';"),
         ddl);
     assertTrue(ddl.contains("STRUCT `Local` ("), ddl);

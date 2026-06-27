@@ -22,15 +22,15 @@ declareNamespaceStmt
 // reachable from the root or from a local body that isn't itself declared
 // locally is treated as external. There is no syntactic marker for it.
 //
-// `DECLARE <qualifiedName> FOR <stringLiteral>` optionally attaches a
+// `USING TYPE <qualifiedName> FOR <stringLiteral>` optionally attaches a
 // synthetic-wrapper URI to a named external — used when the source isn't
 // addressable by FQN alone (whole-doc JSON refs, arbitrary JSON-Pointer refs,
 // etc.). Visitor records (qualifiedName -> URI) in the LT's externalImports;
-// writers emit the URI as the reference target. Without an DECLARE, the external
+// writers emit the URI as the reference target. Without a USING TYPE, the external
 // is canonical and the writer discovers its source by walking
 // resolvedReferences.
 //
-// `DECLARE` controls only the WIRE-FORMAT shape of the reference (the $ref URI
+// `USING TYPE` controls only the WIRE-FORMAT shape of the reference (the $ref URI
 // in JSON, the import string in Proto). It deliberately does NOT carry SR
 // coordinates (subject + version) — those are deployment metadata that vary
 // across environments and aren't expressible in DDL. To produce an
@@ -38,12 +38,12 @@ declareNamespaceStmt
 // (with matching resolvedReferences content) to the LogicalType separately
 // after the visitor runs.
 //
-// Validation: each DECLARE's FQN must (a) actually be referenced by some local
+// Validation: each USING TYPE's FQN must (a) actually be referenced by some local
 // body or by the root (no dangling aliases) and (b) not collide with a local
 // STRUCT/ENUM declaration of the same name (no shadowing).
 
 aliasStmt
-    : DECLARE qualifiedName FOR stringLiteral
+    : USING TYPE qualifiedName FOR stringLiteral
     ;
 
 // ─── named type declarations ──────────────────────────────────────────────────
@@ -466,7 +466,7 @@ nonReservedKeyword
 
 // ─── lexer rules ──────────────────────────────────────────────────────────────
 
-DECLARE         : D E C L A R E ;
+USING           : U S I N G ;
 AND             : A N D ;
 ARRAY           : A R R A Y ;
 AS              : A S ;

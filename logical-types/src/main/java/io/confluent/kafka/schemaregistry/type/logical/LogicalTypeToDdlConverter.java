@@ -32,7 +32,7 @@ import java.util.Set;
  * <p><b>Lossy points</b> (intentional, matching visitor capability):
  * <ul>
  *   <li>External references have no syntactic marker — they're inferred on
- *       read-back from usage. {@code DECLARE} statements survive (carrying the
+ *       read-back from usage. {@code USING TYPE} statements survive (carrying the
  *       wire-format URI binding) but bare externals (no URI) are implicit,
  *       identified by appearing in a type position without a matching local
  *       {@code STRUCT}/{@code ENUM}.</li>
@@ -77,7 +77,7 @@ public final class LogicalTypeToDdlConverter {
             .append(";\n");
       }
 
-      // DECLARE declarations: external-ness is inferred on read-back from
+      // USING TYPE declarations: external-ness is inferred on read-back from
       // usage, so bare externals don't need a syntactic marker. Only the
       // URI bindings (synthetic-wrapper $ref / import targets) need to be
       // emitted so they survive DDL → LT → DDL round-trip. Restrict to FQNs
@@ -88,7 +88,7 @@ public final class LogicalTypeToDdlConverter {
         if (!externalRefs.contains(e.getKey())) {
           continue;
         }
-        sb.append("DECLARE ").append(qualifiedName(e.getKey()))
+        sb.append("USING TYPE ").append(qualifiedName(e.getKey()))
             .append(" FOR ").append(stringLiteral(e.getValue()))
             .append(";\n");
       }
@@ -384,7 +384,7 @@ public final class LogicalTypeToDdlConverter {
      * {@link Schema.Type#NAMED_TYPE_REF} FQN. Intersect with
      * {@link LogicalType#getExternalTypes} to find externals that local code
      * actually references. Returns the FQNs eligible to receive a
-     * {@code DECLARE} statement (when a URI binding exists).
+     * {@code USING TYPE} statement (when a URI binding exists).
      *
      * <p>Walking only LOCAL bodies (not external-promoted ones) avoids
      * surfacing transitive externals in the emitted DDL — only the externals
