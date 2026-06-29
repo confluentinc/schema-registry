@@ -103,6 +103,11 @@ public class ProtobufData {
   public static final String PROTOBUF_TYPE_UNION_PREFIX = PROTOBUF_TYPE_UNION + ".";
   public static final String PROTOBUF_TYPE_TAG = NAMESPACE + ".Tag";
   public static final String PROTOBUF_TYPE_PROP = NAMESPACE + ".Type";
+  // Marks an optional scalar that originated from a protobuf wrapper type
+  // (e.g. google.protobuf.StringValue). Used to distinguish a genuine wrapper-typed oneof
+  // member from a plain scalar oneof member: oneof members are always optional, so optionality
+  // alone cannot signal wrapper-ness for them the way it does for ordinary fields.
+  public static final String PROTOBUF_TYPE_WRAPPER = NAMESPACE + ".Wrapper";
 
   public static final String PROTOBUF_PRECISION_PROP = "precision";
   public static final String PROTOBUF_SCALE_PROP = "scale";
@@ -403,10 +408,12 @@ public class ProtobufData {
       }
     }
 
-    // Oneof (union) members express nullability via the oneof itself, not via wrapper types,
-    // so they must never be wrapped even when useWrapperForNullables is set.
+    // A plain scalar oneof member expresses nullability via the oneof itself, so it must not be
+    // wrapped even when useWrapperForNullables is set. A genuine wrapper-typed oneof member
+    // (carrying the wrapper marker) must still be wrapped so it round-trips faithfully.
     boolean isWrapper = isWrapper(protobufSchema)
-        || (useWrapperForNullables && !oneofMember && schema.isOptional());
+        || (useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema)));
     final Schema.Type schemaType = schema.type();
     try {
       switch (schemaType) {
@@ -607,6 +614,13 @@ public class ProtobufData {
       default:
         return false;
     }
+  }
+
+  // True if the schema is an (optional scalar) oneof member that originated from a protobuf
+  // wrapper type and must therefore be re-wrapped on the write side.
+  private boolean hasWrapperMarker(Schema schema) {
+    return schema.parameters() != null
+        && Boolean.parseBoolean(schema.parameters().get(PROTOBUF_TYPE_WRAPPER));
   }
 
   private Object getFieldType(Object ctx, String name) {
@@ -1024,11 +1038,13 @@ public class ProtobufData {
     switch (schema.type()) {
       case INT8:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT8);
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT16:
         params.put(CONNECT_TYPE_PROP, CONNECT_TYPE_INT16);
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_INT32_WRAPPER_TYPE : FieldDescriptor.Type.INT32.toString().toLowerCase();
       case INT32:
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_ENUM)) {
@@ -1038,7 +1054,8 @@ public class ProtobufData {
         if (schema.parameters() != null && schema.parameters().containsKey(PROTOBUF_TYPE_PROP)) {
           defaultType = schema.parameters().get(PROTOBUF_TYPE_PROP);
         }
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_INT32_WRAPPER_TYPE : defaultType;
       case INT64:
         defaultType = FieldDescriptor.Type.INT64.toString().toLowerCase();
@@ -1058,16 +1075,20 @@ public class ProtobufData {
           default:
             wrapperType = PROTOBUF_INT64_WRAPPER_TYPE;
         }
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? wrapperType : defaultType;
       case FLOAT32:
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_FLOAT_WRAPPER_TYPE : FieldDescriptor.Type.FLOAT.toString().toLowerCase();
       case FLOAT64:
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_DOUBLE_WRAPPER_TYPE : FieldDescriptor.Type.DOUBLE.toString().toLowerCase();
       case BOOLEAN:
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_BOOL_WRAPPER_TYPE : FieldDescriptor.Type.BOOL.toString().toLowerCase();
       case STRING:
         if (schema.parameters() != null) {
@@ -1077,10 +1098,12 @@ public class ProtobufData {
             return schema.parameters().get(PROTOBUF_TYPE_ENUM);
           }
         }
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_STRING_WRAPPER_TYPE : FieldDescriptor.Type.STRING.toString().toLowerCase();
       case BYTES:
-        return useWrapperForNullables && schema.isOptional() && !oneofMember
+        return useWrapperForNullables && schema.isOptional()
+            && (!oneofMember || hasWrapperMarker(schema))
             ? PROTOBUF_BYTES_WRAPPER_TYPE : FieldDescriptor.Type.BYTES.toString().toLowerCase();
       case ARRAY:
         // Array should not occur here
@@ -1463,7 +1486,7 @@ public class ProtobufData {
   }
 
   private Schema toConnectSchema(
-      ToConnectContext ctx, FieldDescriptor descriptor, boolean forceOptional) {
+      ToConnectContext ctx, FieldDescriptor descriptor, boolean oneofMember) {
     SchemaBuilder builder;
 
     switch (descriptor.getType()) {
@@ -1605,10 +1628,18 @@ public class ProtobufData {
       builder.optional();
     }
 
-    if (forceOptional) {
+    if (oneofMember) {
       // Union (oneof) members are inherently nullable, since at most one is ever set,
       // so they must be optional regardless of the nullable handling configs.
       builder.optional();
+      if (useWrapperForNullables
+          && descriptor.getType() == FieldDescriptor.Type.MESSAGE
+          && isWrapperType(descriptor.getMessageType())) {
+        // The member was a genuine wrapper type that got unwrapped to an optional scalar.
+        // Since oneof members are always optional, record this so the write side can re-wrap
+        // it (a plain scalar member, which must stay unwrapped, looks identical otherwise).
+        builder.parameter(PROTOBUF_TYPE_WRAPPER, Boolean.TRUE.toString());
+      }
     } else if (useOptionalForNullables) {
       if (hasOptionalKeyword(descriptor)) {
         builder.optional();
@@ -1618,6 +1649,10 @@ public class ProtobufData {
     }
     builder.parameter(PROTOBUF_TYPE_TAG, String.valueOf(descriptor.getNumber()));
     return builder.build();
+  }
+
+  private boolean isWrapperType(Descriptor descriptor) {
+    return toUnwrappedSchema(descriptor) != null;
   }
 
   private SchemaBuilder toUnwrappedOrStructSchema(
