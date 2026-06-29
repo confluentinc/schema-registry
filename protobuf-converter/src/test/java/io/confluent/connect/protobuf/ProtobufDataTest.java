@@ -97,6 +97,7 @@ import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_ENUM;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_PROP;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_TAG;
 import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_UNION_PREFIX;
+import static io.confluent.connect.protobuf.ProtobufData.PROTOBUF_TYPE_WRAPPER;
 import static io.confluent.kafka.serializers.protobuf.test.TimestampValueOuterClass.TimestampValue.newBuilder;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -2436,6 +2437,10 @@ public class ProtobufDataTest {
     Struct members = flatten ? value : (Struct) value.get("payload");
     assertEquals(payloadValue, members.get(payloadField));
 
+    // Write-side fidelity is only asserted for the (non-flattened) union representation. With
+    // flattenUnions the oneof grouping is lost on read (members become plain top-level fields),
+    // so the converter cannot reconstruct the oneof on write and a byte-faithful round-trip is
+    // not achievable by design; these flattened cases therefore verify the read side only.
     if (!flatten) {
       // Write the Connect data back to protobuf. The regenerated schema must keep the oneof
       // member as its original scalar type (not a google.protobuf wrapper message), and the
@@ -2447,6 +2452,133 @@ public class ProtobufDataTest {
       assertEquals(descriptor.findFieldByName(payloadField).getType(), regeneratedField.getType());
       assertArrayEquals(originalBytes, ((Message) back.getValue()).toByteArray());
     }
+  }
+
+  private static final String WRAPPER_ONEOF_SCHEMA = "syntax = \"proto3\";\n"
+      + "package io.confluent.test;\n"
+      + "import \"google/protobuf/wrappers.proto\";\n"
+      + "message WrapperOneofMessage {\n"
+      + "  google.protobuf.StringValue display_name = 2;\n"   // wrapper, NOT in oneof
+      + "  google.protobuf.BoolValue verified = 3;\n"         // wrapper, NOT in oneof
+      + "  oneof payment_method {\n"
+      + "    google.protobuf.StringValue credit_card = 7;\n"  // wrapper IN oneof
+      + "    google.protobuf.StringValue bank_account = 8;\n" // wrapper IN oneof
+      + "  }\n"
+      + "  oneof contact_info {\n"
+      + "    string email = 5;\n"                             // plain string IN oneof
+      + "    string phone = 6;\n"                             // plain string IN oneof
+      + "  }\n"
+      + "  oneof mixed_choice {\n"
+      + "    google.protobuf.Int32Value count = 9;\n"         // wrapper IN oneof
+      + "    string note = 10;\n"                             // plain string IN oneof
+      + "  }\n"
+      + "}\n";
+
+  @Test
+  public void testWrapperTypedOneofMembersRoundTrip() throws Exception {
+    ProtobufDataConfig config = new ProtobufDataConfig.Builder()
+        .with(ProtobufDataConfig.WRAPPER_FOR_NULLABLES_CONFIG, true)
+        .with(ProtobufDataConfig.GENERATE_INDEX_FOR_UNIONS_CONFIG, false)
+        .build();
+    ProtobufData protobufData = new ProtobufData(config);
+    ProtobufSchema protobufSchema = new ProtobufSchema(WRAPPER_ONEOF_SCHEMA);
+    Descriptor descriptor = protobufSchema.toDescriptor();
+
+    // Read side: wrapper types are unwrapped to optional scalars whether or not they are in a
+    // oneof. A wrapper-typed oneof member additionally carries the wrapper marker, which is how
+    // the write side tells it apart from a plain scalar member (both are optional scalars).
+    Schema connectSchema = protobufData.toConnectSchema(protobufSchema);
+    Schema displayName = connectSchema.field("display_name").schema();
+    assertEquals(Schema.Type.STRING, displayName.type());
+    assertTrue(displayName.isOptional());
+    assertNull(displayName.parameters().get(PROTOBUF_TYPE_WRAPPER));   // not a oneof member
+
+    Schema creditCard = connectSchema.field("payment_method").schema().field("credit_card").schema();
+    assertEquals(Schema.Type.STRING, creditCard.type());
+    assertEquals("true", creditCard.parameters().get(PROTOBUF_TYPE_WRAPPER));   // wrapper in oneof
+
+    Schema email = connectSchema.field("contact_info").schema().field("email").schema();
+    assertEquals(Schema.Type.STRING, email.type());
+    assertNull(email.parameters().get(PROTOBUF_TYPE_WRAPPER));   // plain scalar in oneof
+
+    // A single oneof mixing a wrapper-typed member and a plain member: the marker is per-member,
+    // so only the wrapper member carries it.
+    Schema mixed = connectSchema.field("mixed_choice").schema();
+    assertEquals(Schema.Type.INT32, mixed.field("count").schema().type());
+    assertEquals("true", mixed.field("count").schema().parameters().get(PROTOBUF_TYPE_WRAPPER));
+    assertEquals(Schema.Type.STRING, mixed.field("note").schema().type());
+    assertNull(mixed.field("note").schema().parameters().get(PROTOBUF_TYPE_WRAPPER));
+
+    // Each oneof branch must round-trip byte-for-byte: a wrapper member stays a wrapper message
+    // and a plain member stays a plain scalar.
+    assertWrapperOneofRoundTrips(protobufData, protobufSchema, descriptor, "credit_card", "email");
+    assertWrapperOneofRoundTrips(protobufData, protobufSchema, descriptor, "bank_account", "phone");
+
+    // Same, but for the two members of the single mixed oneof.
+    FieldDescriptor countField = descriptor.findFieldByName("count");
+    Descriptor int32ValueDesc = countField.getMessageType();
+    DynamicMessage countValue = DynamicMessage.newBuilder(int32ValueDesc)
+        .setField(int32ValueDesc.findFieldByName("value"), 5)
+        .build();
+    assertOneofMemberRoundTrips(protobufData, protobufSchema, descriptor,
+        "count", countValue, FieldDescriptor.Type.MESSAGE);
+    assertOneofMemberRoundTrips(protobufData, protobufSchema, descriptor,
+        "note", "hello", FieldDescriptor.Type.STRING);
+  }
+
+  private void assertOneofMemberRoundTrips(
+      ProtobufData protobufData,
+      ProtobufSchema protobufSchema,
+      Descriptor descriptor,
+      String field,
+      Object value,
+      FieldDescriptor.Type expectedType) {
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .setField(descriptor.findFieldByName(field), value)
+        .build();
+    byte[] originalBytes = message.toByteArray();
+
+    SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, message);
+    ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
+
+    ProtobufSchemaAndValue back =
+        protobufData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
+    Descriptor regenerated = back.getSchema().toDescriptor();
+    assertEquals(expectedType, regenerated.findFieldByName(field).getType());
+    assertArrayEquals(originalBytes, ((Message) back.getValue()).toByteArray());
+  }
+
+  private void assertWrapperOneofRoundTrips(
+      ProtobufData protobufData,
+      ProtobufSchema protobufSchema,
+      Descriptor descriptor,
+      String paymentField,
+      String contactField) {
+    FieldDescriptor displayNameField = descriptor.findFieldByName("display_name");
+    Descriptor stringValueDesc = displayNameField.getMessageType();
+    DynamicMessage stringValue = DynamicMessage.newBuilder(stringValueDesc)
+        .setField(stringValueDesc.findFieldByName("value"), "shopper")
+        .build();
+    DynamicMessage paymentValue = DynamicMessage.newBuilder(stringValueDesc)
+        .setField(stringValueDesc.findFieldByName("value"), "secret")
+        .build();
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .setField(displayNameField, stringValue)                      // non-oneof wrapper
+        .setField(descriptor.findFieldByName(paymentField), paymentValue)  // wrapper in oneof
+        .setField(descriptor.findFieldByName(contactField), "a@b.com")     // plain string in oneof
+        .build();
+    byte[] originalBytes = message.toByteArray();
+
+    SchemaAndValue schemaAndValue = protobufData.toConnectData(protobufSchema, message);
+    ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value());
+
+    ProtobufSchemaAndValue back =
+        protobufData.fromConnectData(schemaAndValue.schema(), schemaAndValue.value());
+    Descriptor regenerated = back.getSchema().toDescriptor();
+    // Wrapper members stay wrapper messages; plain members stay plain scalars.
+    assertEquals(FieldDescriptor.Type.MESSAGE, regenerated.findFieldByName(paymentField).getType());
+    assertEquals(FieldDescriptor.Type.STRING, regenerated.findFieldByName(contactField).getType());
+    assertArrayEquals(originalBytes, ((Message) back.getValue()).toByteArray());
   }
 
   @Test
