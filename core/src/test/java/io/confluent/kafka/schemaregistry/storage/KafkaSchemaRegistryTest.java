@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.storage;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -190,6 +191,42 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertEquals(expected, actual);
     Schema schema = kafkaSchemaRegistry.get("subject1", 1, false);
     assertEquals(expected, schema);
+  }
+
+  @Test
+  public void testCanonicalizeSchemaClearsProvidedIdWhenNotImportMode()
+      throws SchemaRegistryException {
+    KafkaSchemaRegistry kafkaSchemaRegistry =
+        new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
+    kafkaSchemaRegistry.init();
+
+    // A client-supplied positive id must not be honored outside IMPORT mode. It is
+    // neutralized to -1 so the request id cannot influence schema identity/caching and
+    // cannot be used to make the schema look "not new" (which would bypass new-schema
+    // validation such as the remote-ref block) during register/lookup/compatibility.
+    assertEquals(READWRITE, kafkaSchemaRegistry.getModeInScope("subject1"));
+    Schema schema = new Schema(
+            "subject1",
+            -1,
+            999999,
+            AvroSchema.TYPE,
+            Collections.emptyList(),
+            StoreUtils.avroSchemaString(1));
+    kafkaSchemaRegistry.canonicalizeSchema(schema, new Config(), true, false);
+    assertEquals(-1, schema.getId().intValue());
+
+    // In IMPORT mode the client-supplied id is preserved.
+    kafkaSchemaRegistry.setMode("subject2", new ModeUpdateRequest(IMPORT.name()));
+    assertEquals(IMPORT, kafkaSchemaRegistry.getModeInScope("subject2"));
+    Schema importSchema = new Schema(
+            "subject2",
+            -1,
+            999999,
+            AvroSchema.TYPE,
+            Collections.emptyList(),
+            StoreUtils.avroSchemaString(1));
+    kafkaSchemaRegistry.canonicalizeSchema(importSchema, new Config(), false, false);
+    assertEquals(999999, importSchema.getId().intValue());
   }
 
   @Test
