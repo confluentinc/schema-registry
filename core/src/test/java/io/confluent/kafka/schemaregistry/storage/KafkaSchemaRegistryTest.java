@@ -200,10 +200,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
         new KafkaSchemaRegistry(config, new SchemaRegistrySerializer());
     kafkaSchemaRegistry.init();
 
-    // A client-supplied positive id must not be honored outside IMPORT mode. It is
-    // neutralized to -1 so the request id cannot influence schema identity/caching and
-    // cannot be used to make the schema look "not new" (which would bypass new-schema
-    // validation such as the remote-ref block) during register/lookup/compatibility.
+    // A client-supplied positive id must not be honored outside IMPORT mode.
     assertEquals(READWRITE, kafkaSchemaRegistry.getModeInScope("subject1"));
     Schema schema = new Schema(
             "subject1",
