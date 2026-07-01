@@ -623,11 +623,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected ParsedSchema canonicalizeSchema(Schema schema,
                                   Config config,
                                   boolean validateAsNew,
-                                  boolean normalize) throws InvalidSchemaException {
+                                  boolean normalize) throws SchemaRegistryException {
     if (schema == null
             || schema.getSchema() == null
             || schema.getSchema().trim().isEmpty()) {
       return null;
+    }
+    if (schema.getId() != null && schema.getId() >= 0
+        && getModeInScope(schema.getSubject()) != Mode.IMPORT) {
+      schema.setId(-1);
     }
     ParsedSchema parsedSchema = parseSchema(schema, validateAsNew, normalize);
     return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, normalize);
