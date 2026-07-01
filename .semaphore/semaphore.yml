@@ -95,7 +95,7 @@ blocks:
   - name: R2 Code Review
     dependencies: []
     run:
-      when: "pull_request =~ '.+'"
+      when: "pull_request =~ '.+' and change_in('/', {exclude: ['/.deployed-versions/']})"
     task:
       jobs:
         - name: R2 Code Review
