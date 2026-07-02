@@ -348,10 +348,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         SSLSocketFactory forwardingSslSocketFactory = leaderForwardingClient != null
             ? leaderForwardingClient.sslSocketFactory() : null;
         if (forwardingSslSocketFactory != null) {
-          // The forwarding client may authorize the leader by identity (e.g. SPIFFE ID) rather
-          // than hostname, so hostname verification is disabled in that case.
           leaderRestService.setSslSocketFactory(forwardingSslSocketFactory);
-          leaderRestService.setHostnameVerifier((hostname, session) -> true);
+          leaderRestService.setHostnameVerifier(getHostnameVerifier());
         } else if (sslFactory != null && sslFactory.sslContext() != null) {
           leaderRestService.setSslSocketFactory(sslFactory.sslContext().getSocketFactory());
           leaderRestService.setHostnameVerifier(getHostnameVerifier());
