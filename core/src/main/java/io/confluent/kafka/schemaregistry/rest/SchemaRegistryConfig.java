@@ -208,6 +208,16 @@ public class SchemaRegistryConfig extends RestConfig {
       SCHEMA_PROVIDERS_CONFIG + "." + AbstractSchemaProvider.REFERENCE_VERSIONS_STRICT_CONFIG;
   public static final boolean REFERENCE_VERSIONS_STRICT_DEFAULT = false;
 
+  public static final String SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG =
+      "schema.providers.json.fetch.remote.schemas";
+  public static final boolean SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DEFAULT = true;
+  protected static final String SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DOC =
+      "Determines whether the JSON Schema provider may fetch remote schema references over "
+      + "HTTP/HTTPS. If false, a newly registered JSON Schema must resolve its references from the "
+      + "registered references, the classpath, or the prepopulated meta-schemas, and any attempt "
+      + "to fetch an http/https URL is rejected. The check applies only to new schema "
+      + "registrations; already-stored schemas are never affected.";
+
   /**
    * <code>schema.cache.size</code>
    */
@@ -715,6 +725,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
         SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
         ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
+    )
+    .define(SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DEFAULT,
+        ConfigDef.Importance.LOW, SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_DOC
     )
     .define(REFERENCE_VERSIONS_STRICT_CONFIG, ConfigDef.Type.BOOLEAN,
         REFERENCE_VERSIONS_STRICT_DEFAULT,

@@ -38,6 +38,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
+import com.github.erosb.jsonsKema.ClassPathAwareSchemaClient;
 import com.github.erosb.jsonsKema.JsonArray;
 import com.github.erosb.jsonsKema.JsonBoolean;
 import com.github.erosb.jsonsKema.JsonNull;
@@ -45,7 +46,10 @@ import com.github.erosb.jsonsKema.JsonNumber;
 import com.github.erosb.jsonsKema.JsonObject;
 import com.github.erosb.jsonsKema.JsonString;
 import com.github.erosb.jsonsKema.JsonValue;
+import com.github.erosb.jsonsKema.MemoizingSchemaClient;
+import com.github.erosb.jsonsKema.PrepopulatedSchemaClient;
 import com.github.erosb.jsonsKema.SchemaLoaderConfig;
+import com.github.erosb.jsonsKema.URLQueryingSchemaClient;
 import com.github.erosb.jsonsKema.UnknownSource;
 import com.github.erosb.jsonsKema.ValidationFailure;
 import com.github.erosb.jsonsKema.Validator;
@@ -78,6 +82,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
@@ -156,6 +161,11 @@ public class JsonSchema implements ParsedSchema {
   private final RuleSet ruleSet;
 
   private final boolean ignoreModernDialects;
+
+  // When true, remote HTTP/HTTPS schema-reference fetching is blocked while loading this schema.
+  // Set only for a new schema registration when remote fetching is disabled; carried across
+  // copy()/normalize() so it is not lost before the schema is loaded/validated.
+  private final boolean blockRemoteRefs;
 
   private transient volatile String canonicalString;
 
@@ -259,6 +269,7 @@ public class JsonSchema implements ParsedSchema {
     this.metadata = null;
     this.ruleSet = null;
     this.ignoreModernDialects = false;
+    this.blockRemoteRefs = false;
   }
 
   public JsonSchema(
@@ -285,6 +296,7 @@ public class JsonSchema implements ParsedSchema {
     this.ruleSet = ruleSet;
     this.version = version;
     this.ignoreModernDialects = false;
+    this.blockRemoteRefs = false;
   }
 
   public JsonSchema(
@@ -303,6 +315,32 @@ public class JsonSchema implements ParsedSchema {
       this.metadata = metadata;
       this.ruleSet = ruleSet;
       this.ignoreModernDialects = false;
+      this.blockRemoteRefs = false;
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid JSON schema", e);
+    }
+  }
+
+  public JsonSchema(
+      String schemaString,
+      List<SchemaReference> references,
+      Map<String, String> resolvedReferences,
+      Metadata metadata,
+      RuleSet ruleSet,
+      Integer version,
+      boolean fetchRemoteRefs,
+      boolean schemaIsNew
+  ) {
+    try {
+      this.jsonNode = schemaString != null ? objectMapper.readTree(schemaString) : null;
+      this.version = version;
+      this.references = Collections.unmodifiableList(references);
+      this.resolvedReferences = Collections.unmodifiableMap(resolvedReferences);
+      this.metadata = metadata;
+      this.ruleSet = ruleSet;
+      this.ignoreModernDialects = false;
+      // Block remote ref fetching only for a new schema registration when fetching is disabled.
+      this.blockRemoteRefs = !fetchRemoteRefs && schemaIsNew;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON schema", e);
     }
@@ -322,6 +360,7 @@ public class JsonSchema implements ParsedSchema {
       this.metadata = null;
       this.ruleSet = null;
       this.ignoreModernDialects = false;
+      this.blockRemoteRefs = false;
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON schema", e);
     }
@@ -337,7 +376,8 @@ public class JsonSchema implements ParsedSchema {
       Metadata metadata,
       RuleSet ruleSet,
       boolean ignoreModernDialects,
-      String canonicalString
+      String canonicalString,
+      boolean blockRemoteRefs
   ) {
     this.jsonNode = jsonNode;
     this.skemaObj = skemaObj;
@@ -349,6 +389,7 @@ public class JsonSchema implements ParsedSchema {
     this.ruleSet = ruleSet;
     this.ignoreModernDialects = ignoreModernDialects;
     this.canonicalString = canonicalString;
+    this.blockRemoteRefs = blockRemoteRefs;
   }
 
   @Override
@@ -363,7 +404,8 @@ public class JsonSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         this.ignoreModernDialects,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -379,7 +421,8 @@ public class JsonSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         this.ignoreModernDialects,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -395,7 +438,8 @@ public class JsonSchema implements ParsedSchema {
         metadata,
         ruleSet,
         this.ignoreModernDialects,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -412,12 +456,18 @@ public class JsonSchema implements ParsedSchema {
     JsonSchema schemaCopy = this.copy();
     JsonNode original = schemaCopy.toJsonNode().deepCopy();
     modifySchemaTags(original, tagsToAdd, tagsToRemove, addBeforeRemove);
-    return new JsonSchema(original.toString(),
+    return new JsonSchema(
+      original,
+      null,
+      null,
+      schemaCopy.version(),
       schemaCopy.references(),
       schemaCopy.resolvedReferences(),
       schemaCopy.metadata(),
       schemaCopy.ruleSet(),
-      schemaCopy.version());
+      this.ignoreModernDialects,
+      null,
+      this.blockRemoteRefs);
   }
 
   public JsonSchema copyIgnoringModernDialects() {
@@ -431,7 +481,8 @@ public class JsonSchema implements ParsedSchema {
         this.metadata,
         this.ruleSet,
         true,
-        this.canonicalString
+        this.canonicalString,
+        this.blockRemoteRefs
     );
   }
 
@@ -525,7 +576,19 @@ public class JsonSchema implements ParsedSchema {
         mappings.put(new URI("./" + dep.getKey()), content);
       }
     }
-    SchemaLoaderConfig config = SchemaLoaderConfig.createDefaultConfig(mappings);
+    SchemaLoaderConfig config;
+    if (blockRemoteRefs) {
+      // Reproduce json-sKema's default client chain, but swap the innermost
+      // URLQueryingSchemaClient (which performs the network call) for one that refuses HTTP(S).
+      // The prepopulated meta-schemas, the registered mappings, and the classpath are tried first,
+      // so anything reaching the blocking client is a genuine remote fetch.
+      com.github.erosb.jsonsKema.SchemaClient schemaClient = new MemoizingSchemaClient(
+          new PrepopulatedSchemaClient(
+              new ClassPathAwareSchemaClient(new NoHttpSkemaClient()), mappings));
+      config = new SchemaLoaderConfig(schemaClient, base, mappings);
+    } else {
+      config = SchemaLoaderConfig.createDefaultConfig(mappings);
+    }
     // Apply the same bridge to the root document so refs like `#/$defs/X` resolve
     // when the body lives in `definitions`.
     String rootJson = mergeDefBuckets(
@@ -626,6 +689,10 @@ public class JsonSchema implements ParsedSchema {
     }
     SchemaLoader.SchemaLoaderBuilder builder = SchemaLoader.builder()
         .useDefaults(true).draftV7Support();
+    if (blockRemoteRefs) {
+      // Block remote HTTP(S) ref fetching; classpath and registered refs still resolve.
+      builder.schemaClient(new NoHttpSchemaClient());
+    }
     // Register the draft 4/6/7 meta-schemas so a $ref to one of them resolves from the bundled
     // copy instead of triggering an external HTTP fetch (Everit otherwise queries the network).
     // The modern 2019-09/2020-12 meta-schemas are intentionally not registered here: they are
@@ -654,6 +721,51 @@ public class JsonSchema implements ParsedSchema {
     builder.schemaJson(jsonObject);
     SchemaLoader loader = builder.build();
     return loader.load().build();
+  }
+
+  private static boolean isHttpScheme(String scheme) {
+    return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+  }
+
+  /**
+   * An Everit {@link org.everit.json.schema.loader.SchemaClient} that refuses to fetch
+   * {@code http}/{@code https} URLs, while delegating all other (e.g. {@code classpath})
+   * lookups to the default classpath-aware client.
+   */
+  private static final class NoHttpSchemaClient
+      implements org.everit.json.schema.loader.SchemaClient {
+
+    private final org.everit.json.schema.loader.SchemaClient delegate =
+        org.everit.json.schema.loader.SchemaClient.classPathAwareClient();
+
+    @Override
+    public InputStream get(String url) {
+      String scheme = url == null ? null : URI.create(url.trim()).getScheme();
+      if (isHttpScheme(scheme)) {
+        throw new UncheckedIOException(new IOException(
+            "Remote schema reference fetching over HTTP(S) is disabled: " + url));
+      }
+      return delegate.get(url);
+    }
+  }
+
+  /**
+   * A json-sKema {@link com.github.erosb.jsonsKema.SchemaClient} that refuses to fetch
+   * {@code http}/{@code https} URIs, while delegating any other scheme to the standard
+   * URL-querying client.
+   */
+  private static final class NoHttpSkemaClient implements com.github.erosb.jsonsKema.SchemaClient {
+
+    private final com.github.erosb.jsonsKema.SchemaClient delegate = new URLQueryingSchemaClient();
+
+    @Override
+    public InputStream get(URI uri) {
+      if (isHttpScheme(uri.getScheme())) {
+        throw new UncheckedIOException(new IOException(
+            "Remote schema reference fetching over HTTP(S) is disabled: " + uri));
+      }
+      return delegate.get(uri);
+    }
   }
 
   @Override
@@ -751,11 +863,17 @@ public class JsonSchema implements ParsedSchema {
       JsonNode jsonNode = objectMapperWithOrderedProps.readTree(canonical);
       return new JsonSchema(
           jsonNode,
-          this.references.stream().sorted().distinct().collect(Collectors.toList()),
+          null,
+          null,
+          this.version,
+          Collections.unmodifiableList(
+              this.references.stream().sorted().distinct().collect(Collectors.toList())),
           this.resolvedReferences,
           this.metadata,
           this.ruleSet,
-          this.version
+          this.ignoreModernDialects,
+          null,
+          this.blockRemoteRefs
       );
     } catch (IOException e) {
       throw new IllegalArgumentException("Invalid JSON", e);
