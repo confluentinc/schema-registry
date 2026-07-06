@@ -16,6 +16,11 @@
 
 package io.confluent.connect.avro;
 
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -41,17 +46,28 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that uses Avro schemas and objects.
  */
 public class AvroConverter implements Converter {
+
+  private static final Logger log = LoggerFactory.getLogger(AvroConverter.class);
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory AVRO_SCHEMA_FACTORY =
+      (raw, refs, resolvedSchemas) -> !refs.isEmpty()
+          ? new AvroSchema(raw, refs, resolvedSchemas, null)
+          : new AvroSchema(raw);
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -59,6 +75,11 @@ public class AvroConverter implements Converter {
 
   private boolean isKey;
   private AvroData avroData;
+  private AvroData restoreAvroData;
+  private boolean backupEnvelopeMode;
+  private BackupConverterHelper backupHelper;
+  private final Map<Schema, Schema> wrapperSchemaCache =
+      new ConcurrentHashMap<>();
 
   public AvroConverter() {
   }
@@ -71,6 +92,8 @@ public class AvroConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+    this.backupEnvelopeMode = BackupConverterHelper.isBackupEnabled(configs);
+    log.info("AvroConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     AvroConverterConfig avroConverterConfig = new AvroConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -86,6 +109,9 @@ public class AvroConverter implements Converter {
     serializer = new Serializer(configs, schemaRegistry);
     deserializer = new Deserializer(configs, schemaRegistry);
     avroData = new AvroData(new AvroDataConfig(configs));
+
+    backupHelper = new BackupConverterHelper(schemaRegistry, wrapperSchemaCache);
+    restoreAvroData = avroData;
   }
 
   @Override
@@ -95,6 +121,9 @@ public class AvroConverter implements Converter {
 
   @Override
   public byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {
+    if (BackupWrapper.isWrapper(schema) && value instanceof Struct) {
+      return restoreFromWrapper(topic, headers, schema, (Struct) value);
+    }
     try {
       org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(schema);
       return serializer.serialize(
@@ -111,7 +140,8 @@ public class AvroConverter implements Converter {
     } catch (SerializationException e) {
       if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
         throw new NetworkException(
-            String.format("Network connection error while serializing Avro data for topic %s: %s",
+            String.format(
+                "Network connection error while serializing Avro data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
         );
@@ -128,6 +158,43 @@ public class AvroConverter implements Converter {
     }
   }
 
+  private byte[] restoreFromWrapper(
+      String topic, Headers headers, Schema wrapperSchema, Struct wrapper) {
+    try {
+      Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
+      if (wrapperSchema.field(BackupWrapper.FIELD_DATA) == null) {
+        throw new DataException("Malformed backup wrapper: missing '"
+            + BackupWrapper.FIELD_DATA + "' field");
+      }
+      Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
+      String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
+
+      BackupReferenceResolver.ResolutionResult resolved =
+          backupHelper.getReferenceResolver().resolveFromWrapper(
+              wrapperSchema, wrapper, AVRO_SCHEMA_FACTORY);
+
+      org.apache.avro.Schema avroSchema =
+          restoreAvroData.fromConnectSchema(actualConnectSchema);
+      Object avroValue = restoreAvroData.fromConnectData(
+          actualConnectSchema, avroSchema, actualData);
+
+      AvroSchema serializeSchema;
+      if (rawSchema != null) {
+        serializeSchema = resolved.hasReferences()
+            ? new AvroSchema(rawSchema, resolved.getTargetRefs(),
+                resolved.getResolvedSchemas(), null)
+            : new AvroSchema(rawSchema);
+      } else {
+        serializeSchema = new AvroSchema(avroSchema);
+      }
+
+      return serializer.serialize(topic, isKey, headers, avroValue, serializeSchema);
+    } catch (Exception e) {
+      throw new DataException(
+          String.format("Failed to restore Avro data for topic %s", topic), e);
+    }
+  }
+
   @Override
   public SchemaAndValue toConnectData(String topic, byte[] value) {
     return toConnectData(topic, null, value);
@@ -136,6 +203,9 @@ public class AvroConverter implements Converter {
   @Override
   public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
+      Integer schemaId = backupEnvelopeMode
+          ? BackupWrapper.extractSchemaId(value) : null;
+
       GenericContainerWithVersion containerWithVersion =
           deserializer.deserialize(topic, isKey, headers, value);
       if (containerWithVersion == null) {
@@ -143,15 +213,22 @@ public class AvroConverter implements Converter {
       }
       GenericContainer deserialized = containerWithVersion.container();
       Integer version = containerWithVersion.version();
+      SchemaAndValue result;
       if (deserialized instanceof IndexedRecord) {
-        return avroData.toConnectData(deserialized.getSchema(), deserialized, version);
+        result = avroData.toConnectData(deserialized.getSchema(), deserialized, version);
       } else if (deserialized instanceof NonRecordContainer) {
-        return avroData.toConnectData(
+        result = avroData.toConnectData(
             deserialized.getSchema(), ((NonRecordContainer) deserialized).getValue(), version);
+      } else {
+        throw new DataException(
+            String.format("Unsupported type returned during deserialization of topic %s ", topic)
+        );
       }
-      throw new DataException(
-          String.format("Unsupported type returned during deserialization of topic %s ", topic)
-      );
+
+      if (backupEnvelopeMode && schemaId != null && result.schema() != null) {
+        return wrapWithBackupMetadata(result, topic, schemaId);
+      }
+      return result;
     } catch (TimeoutException e) {
       throw new RetriableException(
           String.format("Failed to deserialize data for topic %s to Avro: ", topic),
@@ -160,7 +237,8 @@ public class AvroConverter implements Converter {
     } catch (SerializationException e) {
       if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
         throw new NetworkException(
-            String.format("Network connection error while deserializing data for topic %s: %s",
+            String.format(
+                "Network connection error while deserializing data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
         );
@@ -177,6 +255,18 @@ public class AvroConverter implements Converter {
     }
   }
 
+  private SchemaAndValue wrapWithBackupMetadata(
+      SchemaAndValue original, String topic, int schemaId) {
+    try {
+      return backupHelper.wrapWithBackupMetadata(
+          original, topic, schemaId,
+          SchemaBackupConfig.TYPE_AVRO, isKey,
+          AVRO_SCHEMA_FACTORY, serializer::computeSubjectName);
+    } catch (Exception e) {
+      throw new DataException(
+          String.format("Failed to wrap backup metadata for topic %s", topic), e);
+    }
+  }
 
   static class Serializer extends AbstractKafkaAvroSerializer {
 
@@ -205,6 +295,10 @@ public class AvroConverter implements Converter {
           schema);
     }
 
+    public String computeSubjectName(String topic, boolean isKey, ParsedSchema schema) {
+      return getSubjectName(topic, isKey, null, schema);
+    }
+
     @Override
     protected DatumWriter<?> getDatumWriter(
         Object value, org.apache.avro.Schema schema, boolean useLogicalTypes, boolean allowNull) {
@@ -231,5 +325,6 @@ public class AvroConverter implements Converter {
         String topic, boolean isKey, Headers headers, byte[] payload) {
       return deserializeWithSchemaAndVersion(topic, isKey, headers, payload);
     }
+
   }
 }

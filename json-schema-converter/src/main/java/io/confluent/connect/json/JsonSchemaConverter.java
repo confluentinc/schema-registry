@@ -17,8 +17,22 @@ package io.confluent.connect.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaDeserializer;
+import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
+import io.confluent.kafka.serializers.json.JsonSchemaAndValue;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializerConfig;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -27,27 +41,28 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
-import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
-import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaDeserializer;
-import io.confluent.kafka.serializers.json.AbstractKafkaJsonSchemaSerializer;
-import io.confluent.kafka.serializers.json.JsonSchemaAndValue;
-import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializerConfig;
-import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializerConfig;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that supports JSON with JSON Schema.
  */
 public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Converter {
+
+  private static final Logger log = LoggerFactory.getLogger(JsonSchemaConverter.class);
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory JSON_SCHEMA_FACTORY =
+      (raw, refs, resolvedSchemas) -> !refs.isEmpty()
+          ? new JsonSchema(raw, refs, resolvedSchemas, null)
+          : new JsonSchema(raw);
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -55,6 +70,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   private boolean isKey;
   private JsonSchemaData jsonSchemaData;
+  private boolean backupEnvelopeMode;
+  private BackupConverterHelper backupHelper;
+  private final Map<Schema, Schema> wrapperSchemaCache =
+      new ConcurrentHashMap<>();
 
   public JsonSchemaConverter() {
   }
@@ -67,6 +86,8 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+    this.backupEnvelopeMode = BackupConverterHelper.isBackupEnabled(configs);
+    log.info("JsonSchemaConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     JsonSchemaConverterConfig jsonSchemaConverterConfig = new JsonSchemaConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -82,6 +103,8 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     serializer = new Serializer(configs, schemaRegistry);
     deserializer = new Deserializer(configs, schemaRegistry);
     jsonSchemaData = new JsonSchemaData(new JsonSchemaDataConfig(configs));
+
+    backupHelper = new BackupConverterHelper(schemaRegistry, wrapperSchemaCache);
   }
 
   @Override
@@ -91,6 +114,9 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   @Override
   public byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {
+    if (BackupWrapper.isWrapper(schema) && value instanceof Struct) {
+      return restoreFromWrapper(topic, headers, schema, (Struct) value);
+    }
     if (schema == null && value == null) {
       return null;
     }
@@ -99,15 +125,17 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     try {
       return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
     } catch (TimeoutException e) {
-      throw new RetriableException(String.format("Converting Kafka Connect data to byte[] failed "
-          + "due to serialization error of topic %s: ",
+      throw new RetriableException(String.format(
+          "Converting Kafka Connect data to byte[] failed "
+              + "due to serialization error of topic %s: ",
           topic),
           e
       );
     } catch (SerializationException e) {
       if (ExceptionUtils.isNetworkConnectionException(e.getCause())) {
         throw new NetworkException(
-            String.format("Network connection error while serializing Json data for topic %s: %s",
+            String.format(
+                "Network connection error while serializing Json data for topic %s: %s",
                 topic, e.getCause().getMessage()),
             e
         );
@@ -127,6 +155,38 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
+  private byte[] restoreFromWrapper(
+      String topic, Headers headers, Schema wrapperSchema, Struct wrapper) {
+    try {
+      Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
+      if (wrapperSchema.field(BackupWrapper.FIELD_DATA) == null) {
+        throw new DataException("Malformed backup wrapper: missing '"
+            + BackupWrapper.FIELD_DATA + "' field");
+      }
+      Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
+      String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
+
+      BackupReferenceResolver.ResolutionResult resolved =
+          backupHelper.getReferenceResolver().resolveFromWrapper(
+              wrapperSchema, wrapper, JSON_SCHEMA_FACTORY);
+
+      JsonSchema jsonSchema;
+      if (rawSchema != null) {
+        jsonSchema = resolved.hasReferences()
+            ? new JsonSchema(rawSchema, resolved.getTargetRefs(),
+                resolved.getResolvedSchemas(), null)
+            : new JsonSchema(rawSchema);
+      } else {
+        jsonSchema = jsonSchemaData.fromConnectSchema(actualConnectSchema);
+      }
+      JsonNode jsonValue = jsonSchemaData.fromConnectData(actualConnectSchema, actualData);
+      return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
+    } catch (Exception e) {
+      throw new DataException(
+          String.format("Failed to restore JSON Schema data for topic %s", topic), e);
+    }
+  }
+
   @Override
   public SchemaAndValue toConnectData(String topic, byte[] value) {
     return toConnectData(topic, null, value);
@@ -135,7 +195,11 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   @Override
   public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
-      JsonSchemaAndValue deserialized = deserializer.deserialize(topic, isKey, headers, value);
+      Integer schemaId = backupEnvelopeMode
+          ? BackupWrapper.extractSchemaId(value) : null;
+
+      JsonSchemaAndValue deserialized =
+          deserializer.deserialize(topic, isKey, headers, value);
 
       if (deserialized == null || deserialized.getValue() == null) {
         return SchemaAndValue.NULL;
@@ -143,11 +207,17 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
       JsonSchema jsonSchema = deserialized.getSchema();
       Schema schema = jsonSchemaData.toConnectSchema(jsonSchema);
-      return new SchemaAndValue(schema, jsonSchemaData.toConnectData(schema,
+      SchemaAndValue result = new SchemaAndValue(schema, jsonSchemaData.toConnectData(schema,
           (JsonNode) deserialized.getValue()));
+
+      if (backupEnvelopeMode && schemaId != null && result.schema() != null) {
+        return wrapWithBackupMetadata(result, topic, schemaId);
+      }
+      return result;
     } catch (TimeoutException e) {
-      throw new RetriableException(String.format("Converting byte[] to Kafka Connect data failed "
-          + "due to serialization error of topic %s: ",
+      throw new RetriableException(String.format(
+          "Converting byte[] to Kafka Connect data failed "
+              + "due to serialization error of topic %s: ",
           topic),
           e
       );
@@ -174,6 +244,19 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
     }
   }
 
+  private SchemaAndValue wrapWithBackupMetadata(
+      SchemaAndValue original, String topic, int schemaId) {
+    try {
+      return backupHelper.wrapWithBackupMetadata(
+          original, topic, schemaId,
+          SchemaBackupConfig.TYPE_JSON_SCHEMA, isKey,
+          JSON_SCHEMA_FACTORY, serializer::computeSubjectName);
+    } catch (Exception e) {
+      throw new DataException(
+          String.format("Failed to wrap backup metadata for topic %s", topic), e);
+    }
+  }
+
   static class Serializer extends AbstractKafkaJsonSchemaSerializer {
 
     public Serializer(SchemaRegistryClient client, boolean autoRegisterSchema) {
@@ -194,6 +277,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       }
       return serializeImpl(
           getSubjectName(topic, isKey, value, schema), topic, isKey, headers, value, schema);
+    }
+
+    public String computeSubjectName(String topic, boolean isKey, ParsedSchema schema) {
+      return getSubjectName(topic, isKey, null, schema);
     }
   }
 
