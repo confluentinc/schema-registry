@@ -39,6 +39,16 @@
         </dependency>
         <dependency>
             <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-schema-backup-api</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-connect-schema-backup-core</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
             <artifactId>kafka-protobuf-serializer</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
             <type>test-jar</type>
