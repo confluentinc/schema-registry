@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+
+  "properties": {
+    "requiredObject": {
+      "properties": {
+        "ref_1": {
+          "description": "Reference to an optional/nullable object",
+          "$ref": "#/definitions/optionalObject"
+        }
+      },
+      "required": [
+        "ref_1"
+      ]
+    }
+  },
+  "required": [
+    "requiredObject"
+  ],
+  "type": "object",
+
+  "definitions": {
+    "optionalObject": {
+      "description": "An optional object containing two string fields",
+      "properties": {
+        "f1": {
+          "description": "String field1",
+          "$ref": "#/definitions/optionalField"
+        },
+        "f2": {
+          "description": "String field2",
+          "$ref": "#/definitions/optionalField"
+        }
+      },
+      "required": [
+        "f1"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "optionalField": {
+      "description": "An optional field that can be a string or null",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
