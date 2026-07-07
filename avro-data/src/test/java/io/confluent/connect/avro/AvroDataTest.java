@@ -1373,6 +1373,43 @@ public class AvroDataTest {
     assertEquals(expected, ((Struct) result.value()).get("amount"));
   }
 
+  // Regression test: same as above, but for a negative unscaled value, to exercise the 0xFF
+  // sign-extension branch of padToFixedSize (as opposed to the 0x00 branch exercised by zero).
+  // A mistake in this branch would be silent rather than loud: the value would decode back as a
+  // large positive number instead of throwing.
+  @Test
+  public void testFromConnectLogicalDecimalFixedSerializesNegativeUnscaledValue()
+      throws IOException {
+    Schema decimalSchema = Decimal.builder(9)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "38")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "16")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("amount", decimalSchema).build();
+    BigDecimal expected = new BigDecimal(BigInteger.valueOf(-1), 9);
+    Struct value = new Struct(schema).put("amount", expected);
+
+    Object converted = avroData.fromConnectData(schema, value);
+    org.apache.avro.Schema avroSchema = ((GenericContainer) converted).getSchema();
+
+    GenericData.Fixed fixed = (GenericData.Fixed)
+        ((GenericRecord) converted).get("amount");
+    assertEquals(16, fixed.bytes().length);
+    for (byte b : fixed.bytes()) {
+      assertEquals((byte) 0xFF, b);
+    }
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    new GenericDatumWriter<>(avroSchema).write(converted, encoder);
+    encoder.flush();
+
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(avroSchema);
+    GenericRecord decoded = reader.read(null,
+        DecoderFactory.get().binaryDecoder(new ByteArrayInputStream(out.toByteArray()), null));
+    SchemaAndValue result = avroData.toConnectData(avroSchema, decoded);
+    assertEquals(expected, ((Struct) result.value()).get("amount"));
+  }
+
   // Regression test: padding/sign-extension only makes sense for a Decimal's two's-complement
   // unscaled value. A non-decimal fixed-byte field (e.g. a UUID or checksum stored as Avro
   // `fixed`) whose value is shorter than the declared size indicates a genuine data/connector
@@ -1402,6 +1439,29 @@ public class AvroDataTest {
       fail("Expected serialization to fail for a fixed value shorter than the declared size");
     } catch (IndexOutOfBoundsException expected) {
       // Avro correctly rejects the malformed short value instead of it being silently padded.
+    }
+  }
+
+  // Regression test: padToFixedSize fails fast with a DataException when the unscaled value's
+  // byte array is longer than the declared fixed size, instead of silently truncating it (Avro's
+  // GenericDatumWriter.writeFixed always writes exactly `size` bytes starting at offset 0, so an
+  // oversized array would otherwise serialize as silently corrupted data instead of erroring).
+  @Test
+  public void testFromConnectLogicalDecimalFixedTooSmallForUnscaledValueThrows() {
+    Schema decimalSchema = Decimal.builder(0)
+        .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "4")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "2")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("amount", decimalSchema).build();
+    // unscaledValue 100000 -> BigInteger.toByteArray() is 3 bytes, exceeding the 2-byte fixed
+    // size declared above.
+    Struct value = new Struct(schema).put("amount", new BigDecimal(BigInteger.valueOf(100000), 0));
+
+    try {
+      avroData.fromConnectData(schema, value);
+      fail("Expected DataException for an unscaled value exceeding the declared fixed size");
+    } catch (DataException expected) {
+      // expected: fail fast instead of silently truncating/corrupting the value
     }
   }
 
