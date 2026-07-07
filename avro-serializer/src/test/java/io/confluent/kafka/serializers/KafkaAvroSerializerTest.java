@@ -1523,6 +1523,18 @@ public class KafkaAvroSerializerTest {
   }
 
   @Test
+  public void testDatumReaderCacheKeyedBySchemaId() throws Exception {
+    byte[] bytes = avroSerializer.serialize(topic, createUserRecord());
+    for (int i = 0; i < 5; i++) {
+      assertEquals("testUser",
+          ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
+    }
+    Cache<Object, Object> datumReaderCache =
+        getCache(avroDeserializer, AbstractKafkaAvroDeserializer.class, "datumReaderCache");
+    assertEquals(1L, datumReaderCache.size());
+  }
+
+  @Test
   public void testDatumReaderKeyUsesContentEqualityForReaderSchema() {
     Schema readerA = createUserSchema();
     Schema readerB = createUserSchema();
