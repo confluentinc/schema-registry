@@ -513,7 +513,13 @@ public class AvroData {
             } else {
               fixedSchema = avroSchema;
             }
-            value = new GenericData.Fixed(fixedSchema, ((ByteBuffer)value).array());
+            ByteBuffer buffer = ((ByteBuffer) value).duplicate();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+              bytes = padToFixedSize(bytes, size);
+            }
+            value = new GenericData.Fixed(fixedSchema, bytes);
           }
           return maybeAddContainer(
               avroSchema,
@@ -2290,6 +2296,29 @@ public class AvroData {
 
   private static boolean isUnionSchema(Schema schema) {
     return AVRO_TYPE_UNION.equals(schema.name()) || ConnectUnion.isUnion(schema);
+  }
+
+  /**
+   * Left-pads (sign-extends) an unscaled decimal's two's-complement byte array, as produced by
+   * {@link java.math.BigInteger#toByteArray()}, to the exact length required by an Avro
+   * {@code fixed} schema. Avro fixed values must be exactly {@code size} bytes; the minimal
+   * two's-complement encoding is frequently shorter (e.g. a single {@code 0x00} byte for 0),
+   * which would otherwise cause an out-of-bounds error when the value is serialized.
+   */
+  private static byte[] padToFixedSize(byte[] unscaled, int size) {
+    if (unscaled.length == size) {
+      return unscaled;
+    }
+    if (unscaled.length > size) {
+      throw new DataException(
+          "Unscaled value byte array length " + unscaled.length
+              + " is greater than fixed size " + size);
+    }
+    byte signExtension = unscaled.length > 0 && unscaled[0] < 0 ? (byte) 0xFF : 0x00;
+    byte[] padded = new byte[size];
+    Arrays.fill(padded, 0, size - unscaled.length, signExtension);
+    System.arraycopy(unscaled, 0, padded, size - unscaled.length, unscaled.length);
+    return padded;
   }
 
   private static boolean isEnumSchema(Schema schema) {
