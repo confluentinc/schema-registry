@@ -511,7 +511,9 @@ public class AvroData {
             } else {
               fixedSchema = avroSchema;
             }
-            byte[] bytes = ((ByteBuffer) value).array();
+            ByteBuffer buffer = ((ByteBuffer) value).duplicate();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
             if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
               bytes = padToFixedSize(bytes, size);
             }
