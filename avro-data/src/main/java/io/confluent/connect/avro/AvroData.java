@@ -511,8 +511,11 @@ public class AvroData {
             } else {
               fixedSchema = avroSchema;
             }
-            value = new GenericData.Fixed(
-                fixedSchema, padToFixedSize(((ByteBuffer) value).array(), size));
+            byte[] bytes = ((ByteBuffer) value).array();
+            if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+              bytes = padToFixedSize(bytes, size);
+            }
+            value = new GenericData.Fixed(fixedSchema, bytes);
           }
           return maybeAddContainer(
               avroSchema,

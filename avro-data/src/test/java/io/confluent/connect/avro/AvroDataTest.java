@@ -1373,6 +1373,38 @@ public class AvroDataTest {
     assertEquals(expected, ((Struct) result.value()).get("amount"));
   }
 
+  // Regression test: padding/sign-extension only makes sense for a Decimal's two's-complement
+  // unscaled value. A non-decimal fixed-byte field (e.g. a UUID or checksum stored as Avro
+  // `fixed`) whose value is shorter than the declared size indicates a genuine data/connector
+  // bug, and must keep failing loudly at serialization time rather than being silently padded.
+  @Test
+  public void testFromConnectNonDecimalFixedDoesNotPadShortValue() throws IOException {
+    Schema fixedSchema = SchemaBuilder.bytes().name("myFixed")
+        .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "16")
+        .build();
+    Schema schema = SchemaBuilder.struct().name("row").field("id", fixedSchema).build();
+    byte[] shortValue = new byte[]{1, 2, 3, 4};
+    Struct value = new Struct(schema).put("id", shortValue);
+
+    Object converted = avroData.fromConnectData(schema, value);
+    org.apache.avro.Schema avroSchema = ((GenericContainer) converted).getSchema();
+
+    GenericData.Fixed fixed = (GenericData.Fixed) ((GenericRecord) converted).get("id");
+    // Not padded: the short value is passed through unchanged, unlike the decimal case.
+    assertEquals(4, fixed.bytes().length);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    GenericDatumWriter<Object> writer = new GenericDatumWriter<>(avroSchema);
+    try {
+      writer.write(converted, encoder);
+      encoder.flush();
+      fail("Expected serialization to fail for a fixed value shorter than the declared size");
+    } catch (IndexOutOfBoundsException expected) {
+      // Avro correctly rejects the malformed short value instead of it being silently padded.
+    }
+  }
+
   // test for old way of logical type handling
   @Test
   public void testFromConnectLogicalDate() {
