@@ -53,15 +53,14 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   protected boolean latestCompatStrict;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Cache<Schema, DatumWriter<Object>> datumWriterCache;
+  private final Cache<Integer, DatumWriter<Object>> datumWriterCache;
 
   public AbstractKafkaAvroSerializer() {
-    // use identity (==) comparison for keys
+    // Key by schema id, not the Schema object: schemas re-parsed from an 8.x server's responses
+    // arrive as fresh instances, so identity keying leaks a writer per call.
     datumWriterCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .weakKeys()
         .build();
-
   }
 
   protected void configure(KafkaAvroSerializerConfig config) {
@@ -170,7 +169,7 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
               "Unrecognized bytes object of type: " + value.getClass().getName());
         }
       } else {
-        writeDatum(out, value, rawSchema);
+        writeDatum(out, value, rawSchema, id);
       }
       byte[] bytes = out.toByteArray();
       out.close();
@@ -191,12 +190,12 @@ public abstract class AbstractKafkaAvroSerializer extends AbstractKafkaSchemaSer
   }
 
   @SuppressWarnings("unchecked")
-  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema)
+  private void writeDatum(ByteArrayOutputStream out, Object value, Schema rawSchema, int id)
           throws ExecutionException, IOException {
     BinaryEncoder encoder = encoderFactory.directBinaryEncoder(out, null);
 
     DatumWriter<Object> writer;
-    writer = datumWriterCache.get(rawSchema,
+    writer = datumWriterCache.get(id,
         () -> (DatumWriter<Object>) AvroSchemaUtils.getDatumWriter(
             value, rawSchema, avroUseLogicalTypeConverters, avroReflectionAllowNull)
     );
