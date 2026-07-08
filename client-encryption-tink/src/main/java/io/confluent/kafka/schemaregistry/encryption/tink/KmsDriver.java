@@ -76,6 +76,19 @@ public interface KmsDriver {
     return KmsClients.get(kekUrl);
   }
 
+  /**
+   * Returns the exact key id that should be used to wrap/unwrap a DEK, resolving any ambiguity
+   * (such as a versionless reference) into a concrete, pinned identifier. Defaults to returning
+   * {@code kmsKeyId} unchanged, which is correct for KMS providers (AWS, GCP, HashiCorp Vault)
+   * whose wrap/unwrap ciphertext is already self-describing with respect to key version. Drivers
+   * for providers that address wrap/unwrap by an explicit, non-self-describing key version (e.g.
+   * Azure Key Vault) should override this to resolve and return the concrete version.
+   */
+  default String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
+      throws GeneralSecurityException {
+    return kmsKeyId;
+  }
+
   default KmsClient registerKmsClient(Map<String, ?> configs, Optional<String> kekUrl)
       throws GeneralSecurityException {
     KmsClient client = newKmsClient(configs, kekUrl);
