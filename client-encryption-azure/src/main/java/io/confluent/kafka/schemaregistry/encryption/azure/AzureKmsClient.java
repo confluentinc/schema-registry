@@ -164,8 +164,11 @@ public final class AzureKmsClient implements KmsClient {
               "this client is bound to %s, cannot load keys bound to %s", this.keyUri, uri));
     }
     String keyUri = Validators.validateKmsKeyUriAndRemovePrefix(PREFIX, uri);
-    boolean saveVersion = configs != null && Boolean.parseBoolean(
-        (String) configs.get(AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE));
+    Object saveVersionValue = configs == null
+        ? null
+        : configs.get(AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE);
+    boolean saveVersion = saveVersionValue != null
+        && Boolean.parseBoolean(saveVersionValue.toString());
     // retry policy defined as per guidelines from MS
     // https://docs.microsoft.com/en-us/azure/key-vault/general/overview-throttling#recommended-client-side-throttling-method
     HttpPipeline pipeline = new HttpPipelineBuilder()

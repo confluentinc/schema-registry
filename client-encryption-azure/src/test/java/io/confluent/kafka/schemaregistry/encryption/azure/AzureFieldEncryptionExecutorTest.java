@@ -31,11 +31,10 @@ import static org.mockito.Mockito.when;
 import com.azure.core.exception.HttpResponseException;
 import com.azure.core.http.HttpResponse;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
-import com.azure.security.keyvault.keys.cryptography.models.DecryptResult;
-import com.azure.security.keyvault.keys.cryptography.models.EncryptResult;
 import com.azure.security.keyvault.keys.cryptography.models.EncryptionAlgorithm;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.google.common.collect.ImmutableList;
+import com.google.crypto.tink.Aead;
 import com.google.common.collect.ImmutableSortedSet;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -173,6 +172,19 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     AzureKmsDriver.withVersion("https://yokota1.vault.azure.net/notkeys/key1", VERSION_A);
   }
 
+  @Test(expected = GeneralSecurityException.class)
+  public void testGetVersionedKeyIdThrowsForRelativeUriWithNoSchemeOrAuthority() throws Exception {
+    // "keys/name" parses as a valid *relative* URI (no scheme/authority), which would otherwise
+    // slip past the segment-count check and produce a bogus "null://null" vault url.
+    Map<String, Object> configs = new HashMap<>();
+    AzureKmsDriver.getVersionedKeyId(configs, "keys/key1");
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testWithVersionThrowsForRelativeUriWithNoSchemeOrAuthority() throws Exception {
+    AzureKmsDriver.withVersion("keys/key1", VERSION_A);
+  }
+
   // ==================== AzureKmsAead unit tests ====================
 
   private static CryptographyClient fakeCryptographyClient() throws Exception {
@@ -212,6 +224,15 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     // The ciphertext bytes are appended directly, not base64-encoded a second time: total length
     // is exactly prefix + version + colon + the raw wrapped bytes, nothing more.
     assertEquals("azure:v1:".length() + 32 + 1 + rawWrapped.length, ciphertext.length);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testAeadEncryptThrowsWhenResolvedVersionIsNotFixedWidth() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    AzureKmsAead aead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, "not-32-chars"), null);
+
+    aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
   }
 
   @Test
@@ -261,6 +282,25 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
 
     AzureKmsAead decryptingAead = new AzureKmsAead(client, EncryptionAlgorithm.RSA_OAEP_256);
     decryptingAead.decrypt(ciphertext, new byte[0]);
+  }
+
+  @Test
+  public void testGetAeadHandlesBooleanToggleValueWithoutClassCastException() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    String versionedKeyId =
+        "azure-kms://https://yokota1.vault.azure.net/keys/key1/" + VERSION_A;
+    AzureKmsClient azureKmsClient = new AzureKmsClient(versionedKeyId);
+    azureKmsClient.withCryptographyClient(client);
+    // A real Boolean (not a String) for the toggle: kmsProps is always Map<String,String>, but
+    // the broader rule-executor configs map this gets merged with is not, so this is reachable.
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE, Boolean.TRUE);
+    azureKmsClient.withConfigs(configs);
+
+    Aead aead = azureKmsClient.getAead(versionedKeyId);
+    byte[] ciphertext = aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+
+    assertTrue(startsWithAzureV1Prefix(ciphertext));
   }
 
   // ==================== End-to-end produce/consume tests ====================

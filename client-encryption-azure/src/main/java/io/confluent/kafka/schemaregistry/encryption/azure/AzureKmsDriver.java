@@ -122,7 +122,8 @@ public class AzureKmsDriver implements KmsDriver {
     String[] segments = Arrays.stream(uri.getPath().split("/"))
         .filter(s -> !s.isEmpty())
         .toArray(String[]::new);
-    if (segments.length < 2 || segments.length > 3 || !"keys".equals(segments[0])) {
+    if (uri.getScheme() == null || uri.getAuthority() == null
+        || segments.length < 2 || segments.length > 3 || !"keys".equals(segments[0])) {
       throw new GeneralSecurityException("Invalid Azure Key Vault key id: " + kmsKeyId);
     }
     String vaultUrl = uri.getScheme() + "://" + uri.getAuthority();

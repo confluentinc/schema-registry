@@ -94,6 +94,11 @@ public final class AzureKmsAead implements Aead {
       }
     }
     EncryptTarget.Resolved resolved = encryptTarget.resolve();
+    if (resolved.version.length() != VERSION_LENGTH) {
+      throw new GeneralSecurityException(
+          "kms key version '" + resolved.version + "' is not " + VERSION_LENGTH
+              + " characters; cannot be embedded in a fixed-width azure:v1: prefix");
+    }
     try {
       byte[] ciphertext = resolved.client.encrypt(this.algorithm, plaintext).getCipherText();
       byte[] versionBytes = resolved.version.getBytes(StandardCharsets.US_ASCII);
