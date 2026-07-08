@@ -19,7 +19,9 @@ import io.confluent.kafka.schemaregistry.client.rest.Versions;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
+import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryException;
 import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException;
 import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
@@ -82,9 +84,11 @@ public class SchemasResource {
                   ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("schemas.get-schemas")
-  public List<Schema> getSchemas(
+  public List<ExtendedSchema> getSchemas(
       @Parameter(description = "Filters results by the respective subject prefix")
       @DefaultValue("") @QueryParam("subjectPrefix") String subjectPrefix,
+      @Parameter(description = "Whether to include aliases in the search")
+      @DefaultValue("false") @QueryParam("aliases") boolean aliases,
       @Parameter(description = "Whether to return soft deleted schemas")
       @DefaultValue("false") @QueryParam("deleted") boolean lookupDeletedSchema,
       @Parameter(description =
@@ -96,8 +100,8 @@ public class SchemasResource {
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
-    Iterator<Schema> schemas;
-    List<Schema> filteredSchemas = new ArrayList<>();
+    Iterator<ExtendedSchema> schemas;
+    List<ExtendedSchema> filteredSchemas = new ArrayList<>();
     String errorMessage = "Error while getting schemas for prefix " + subjectPrefix;
     LookupFilter filter = lookupDeletedSchema ? LookupFilter.INCLUDE_DELETED : LookupFilter.DEFAULT;
     try {
@@ -105,7 +109,9 @@ public class SchemasResource {
           ? schema -> schema.getRuleSet() != null && schema.getRuleSet().hasRulesWithType(ruleType)
           : null;
       schemas = schemaRegistry.getVersionsWithSubjectPrefix(
-          subjectPrefix, filter, latestOnly, postFilter);
+          subjectPrefix, aliases, filter, latestOnly, postFilter);
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
@@ -115,7 +121,7 @@ public class SchemasResource {
     int toIndex = offset + limit;
     int index = 0;
     while (schemas.hasNext() && index < toIndex) {
-      Schema schema = schemas.next();
+      ExtendedSchema schema = schemas.next();
       if (index >= offset) {
         filteredSchemas.add(schema);
       }
@@ -151,6 +157,8 @@ public class SchemasResource {
       @QueryParam("subject") String subject,
       @Parameter(description = "Desired output format, dependent on schema type")
       @DefaultValue("") @QueryParam("format") String format,
+      @Parameter(description = "Find tagged entities for the given tags or * for all tags")
+      @QueryParam("findTags") List<String> tags,
       @Parameter(description = "Whether to fetch the maximum schema identifier that exists")
       @DefaultValue("false") @QueryParam("fetchMaxId") boolean fetchMaxId) {
     SchemaString schema;
@@ -158,14 +166,21 @@ public class SchemasResource {
                           + "registry";
     try {
       schema = schemaRegistry.get(id, subject, format, fetchMaxId);
+      if (schema == null) {
+        throw Errors.schemaNotFoundException(id);
+      }
+      if (tags != null && !tags.isEmpty()) {
+        Schema s = new Schema(null, null, null, schema);
+        schemaRegistry.extractSchemaTags(s, tags);
+        schema.setSchemaTags(s.getSchemaTags());
+      }
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);
     } catch (SchemaRegistryException e) {
       throw Errors.schemaRegistryException(errorMessage, e);
-    }
-    if (schema == null) {
-      throw Errors.schemaNotFoundException(id);
     }
     return schema;
   }
@@ -301,6 +316,8 @@ public class SchemasResource {
     String schema ;
     try {
       schema = schemaRegistry.get(id, subject, format, false).getSchemaString();
+    } catch (InvalidSchemaException e) {
+      throw Errors.invalidSchemaException(e);
     } catch (SchemaRegistryStoreException e) {
       log.debug(errorMessage, e);
       throw Errors.storeException(errorMessage, e);

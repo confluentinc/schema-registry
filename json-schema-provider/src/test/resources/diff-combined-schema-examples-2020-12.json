@@ -1,0 +1,676 @@
+[
+  {
+    "description": "Detect compatible change to combined schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "enum": [
+                "one",
+                "two",
+                "three"
+              ]
+            },
+            {
+              "type": "string"
+            },
+            {
+              "maxLength": 5
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "maxLength": 5
+            },
+            {
+              "enum": [
+                "one",
+                "two",
+                "three"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible change to combined schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "enum": [
+                "one",
+                "two",
+                "three"
+              ]
+            },
+            {
+              "type": "string"
+            },
+            {
+              "maxLength": 5
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "maxLength": 5
+            },
+            {
+              "enum": [
+                "one",
+                "two",
+                "three"
+              ]
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_SUBSCHEMAS_CHANGED #/properties/prop1"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect combined schema with duplicates in original",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect combined schema with duplicates in update",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change to oneOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change to oneOf schema with more types",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change to oneOf schema with more properties",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 5
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "title": "my string",
+              "type": "string",
+              "maxLength": 8
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1",
+      "TITLE_CHANGED #/properties/prop1/oneOf/0",
+      "MAX_LENGTH_INCREASED #/properties/prop1/oneOf/0/maxLength"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible change to oneOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_NARROWED #/properties/prop1"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect compatible change to allOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "enum": [
+                "one",
+                "two",
+                "three"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "PRODUCT_TYPE_NARROWED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible change to allOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "enum": [
+                "one",
+                "two",
+                "three"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "PRODUCT_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": false
+  },
+  {
+    "description": "Detect compatible change from oneOf to anyOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from oneOf to anyOf schema with more properties",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1",
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from allOf to anyOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from allOf to anyOf schema with more properties",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "COMBINED_TYPE_EXTENDED #/properties/prop1",
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from non-combined to anyOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from non-combined to oneOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "SUM_TYPE_EXTENDED #/properties/prop1"
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect compatible change from non-combined to allOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+    ],
+    "compatible": true
+  },
+  {
+    "description": "Detect incompatible change from non-combined to allOf schema",
+    "original_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "type": "string"
+        }
+      }
+    },
+    "update_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "prop1": {
+          "allOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "changes": [
+      "TYPE_CHANGED #/properties/prop1"
+    ],
+    "compatible": false
+  }
+]
