@@ -24,8 +24,10 @@ import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -125,11 +127,32 @@ public class RewrapDeks implements Callable<Integer> {
     if (!kek.isShared()) {
       Map<String, Object> aeadConfigs = new HashMap<>(configs);
       aeadConfigs.putAll(kek.getKmsProps());
-      Aead aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kek.getKmsKeyId());
-      // Decrypt with old KEK version
-      byte[] rawDek = aead.decrypt(dek.getEncryptedKeyMaterialBytes(), EMPTY_AAD);
-      // Encrypt with latest KEK version
-      byte[] encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
+
+      // Decrypt with whichever kms key id actually wrapped this DEK, not necessarily the KEK's
+      // current kms key id (e.g. if the DEK carries a pinned kms key id prefix from a prior
+      // rewrap or produce with ENCRYPT_KMS_KEY_ID_SAVE enabled).
+      byte[] storedEncryptedKeyMaterial = dek.getEncryptedKeyMaterialBytes();
+      Map.Entry<String, byte[]> parsed =
+          EncryptionExecutor.extractKmsKeyId(storedEncryptedKeyMaterial);
+      String oldKmsKeyId = parsed != null ? parsed.getKey() : kek.getKmsKeyId();
+      byte[] wrappedDek = parsed != null ? parsed.getValue() : storedEncryptedKeyMaterial;
+      Aead decryptAead = new AeadWrapper(aeadConfigs, kek.getKmsType(), oldKmsKeyId);
+      byte[] rawDek = decryptAead.decrypt(wrappedDek, EMPTY_AAD);
+
+      // Encrypt with the latest KEK version, pinning and prefixing it if the KEK opts in.
+      boolean saveKmsKeyId = Boolean.parseBoolean(
+          kek.getKmsProps().get(EncryptionExecutor.ENCRYPT_KMS_KEY_ID_SAVE));
+      String newKmsKeyId = kek.getKmsKeyId();
+      if (saveKmsKeyId) {
+        newKmsKeyId = KmsDriverManager.getDriver(
+                kek.getKmsType() + EncryptionExecutor.KMS_TYPE_SUFFIX + newKmsKeyId)
+            .getVersionedKeyId(aeadConfigs, newKmsKeyId);
+      }
+      Aead encryptAead = new AeadWrapper(aeadConfigs, kek.getKmsType(), newKmsKeyId);
+      byte[] encryptedDek = encryptAead.encrypt(rawDek, EMPTY_AAD);
+      if (saveKmsKeyId) {
+        encryptedDek = EncryptionExecutor.prefixKmsKeyId(newKmsKeyId, encryptedDek);
+      }
       encryptedDekStr =
           new String(Base64.getEncoder().encode(encryptedDek), StandardCharsets.UTF_8);
       LOG.info("Converted previous encrypted key material from '" + dek.getEncryptedKeyMaterial()
