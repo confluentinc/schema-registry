@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.serializers;
 
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.example.ExtendedWidget;
 import io.confluent.kafka.example.Widget;
@@ -46,6 +47,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -63,6 +65,7 @@ import kafka.utils.VerifiableProperties;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1465,6 +1468,101 @@ public class KafkaAvroSerializerTest {
         + ",{\"type\":\"record\",\"name\":\"Account\",\"namespace\":\"example.avro\","
         + "\"fields\":[{\"name\":\"accountNumber\",\"type\":\"string\"}]}]";
     assertEquals(expectedResolved, schema.formattedString(Format.RESOLVED.symbol()));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Cache<Object, Object> getCache(
+      Object serde, Class<?> declaringClass, String fieldName) throws Exception {
+    Field field = declaringClass.getDeclaredField(fieldName);
+    field.setAccessible(true);
+    return (Cache<Object, Object>) field.get(serde);
+  }
+
+  @Test
+  public void testDatumWriterCacheKeyedBySchemaId() throws Exception {
+    // auto.register=false keeps the caller-provided schema instance, so fresh-but-equal
+    // instances reach the cache; identity keys produced one entry per instance.
+    HashMap<String, Object> props = new HashMap<>();
+    props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, "false");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, props);
+    schemaRegistry.register(topic + "-value", new AvroSchema(createUserSchema()));
+
+    byte[] bytes = null;
+    for (int i = 0; i < 5; i++) {
+      Schema schema = createUserSchema();
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("name", "testUser");
+      bytes = serializer.serialize(topic, record);
+    }
+
+    Cache<Object, Object> datumWriterCache =
+        getCache(serializer, AbstractKafkaAvroSerializer.class, "datumWriterCache");
+    assertEquals(1L, datumWriterCache.size());
+    assertEquals("testUser",
+        ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
+  }
+
+  @Test
+  public void testDatumWriterCacheAutoRegisterKeyedBySchemaId() throws Exception {
+    // The INC-11758 path: auto.register=true with a fresh, content-identical schema instance
+    // per call. Identity keys produced one entry per call; id keys collapse to 1.
+    byte[] bytes = null;
+    for (int i = 0; i < 5; i++) {
+      Schema schema = createUserSchema();
+      GenericRecord record = new GenericData.Record(schema);
+      record.put("name", "testUser");
+      bytes = avroSerializer.serialize(topic, record);
+    }
+
+    Cache<Object, Object> datumWriterCache =
+        getCache(avroSerializer, AbstractKafkaAvroSerializer.class, "datumWriterCache");
+    assertEquals(1L, datumWriterCache.size());
+    assertEquals("testUser",
+        ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
+  }
+
+  @Test
+  public void testDatumReaderCacheKeyedBySchemaId() throws Exception {
+    byte[] bytes = avroSerializer.serialize(topic, createUserRecord());
+    for (int i = 0; i < 5; i++) {
+      assertEquals("testUser",
+          ((GenericRecord) avroDeserializer.deserialize(topic, bytes)).get("name").toString());
+    }
+    Cache<Object, Object> datumReaderCache =
+        getCache(avroDeserializer, AbstractKafkaAvroDeserializer.class, "datumReaderCache");
+    assertEquals(1L, datumReaderCache.size());
+  }
+
+  @Test
+  public void testDatumReaderKeyUsesContentEqualityForReaderSchema() {
+    Schema readerA = createUserSchema();
+    Schema readerB = createUserSchema();
+    assertTrue(readerA != readerB);
+
+    AbstractKafkaAvroDeserializer.DatumReaderKey key1 =
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, readerA);
+    AbstractKafkaAvroDeserializer.DatumReaderKey key2 =
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, readerB);
+    // Same writer id + content-equal reader schema => equal key (unequal under identity keys).
+    assertEquals(key1, key2);
+    assertEquals(key1.hashCode(), key2.hashCode());
+
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(7, null),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(7, null));
+
+    assertNotEquals(key1, new AbstractKafkaAvroDeserializer.DatumReaderKey(2, readerA));
+    assertNotEquals(key1,
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, createExtendUserSchema()));
+
+    // A null writer id (JSON migration path) must not collide with a real id for the same reader.
+    assertNotEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(1, readerA));
+    assertEquals(
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerA),
+        new AbstractKafkaAvroDeserializer.DatumReaderKey(null, readerB));
   }
 
   static class RecordWithUUID {
