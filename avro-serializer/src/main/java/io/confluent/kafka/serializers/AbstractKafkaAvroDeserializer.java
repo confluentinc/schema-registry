@@ -19,14 +19,13 @@ package io.confluent.kafka.serializers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
@@ -61,44 +60,19 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected Schema specificAvroReaderSchema = null;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Cache<Schema, Schema> readerSchemaCache;
-  private final LoadingCache<IdentityPair<Schema, Schema>, DatumReader<?>> datumReaderCache;
+  private final Cache<Integer, Schema> readerSchemaCache;
+  private final Cache<DatumReaderKey, DatumReader<?>> datumReaderCache;
 
   public AbstractKafkaAvroDeserializer() {
-    CacheLoader<IdentityPair<Schema, Schema>, DatumReader<?>> cacheLoader =
-        new CacheLoader<IdentityPair<Schema, Schema>, DatumReader<?>>() {
-          @Override
-          public DatumReader<?> load(IdentityPair<Schema, Schema> key) {
-            Schema writerSchema = key.getKey();
-            Schema readerSchema = key.getValue();
-            Schema finalReaderSchema = getReaderSchema(writerSchema, readerSchema);
-            boolean writerSchemaIsPrimitive =
-                AvroSchemaUtils.getPrimitiveSchemas().containsValue(writerSchema);
-            if (writerSchemaIsPrimitive) {
-              return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                  AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
-            } else if (useSchemaReflection) {
-              return new ReflectDatumReader<>(writerSchema, finalReaderSchema,
-                  AvroSchemaUtils.getReflectData(
-                      avroUseLogicalTypeConverters, avroReflectionAllowNull));
-            } else if (useSpecificAvroReader) {
-              return new SpecificDatumReader<>(writerSchema, finalReaderSchema,
-                  AvroSchemaUtils.getSpecificDataForSchema(
-                      finalReaderSchema, avroUseLogicalTypeConverters));
-            } else {
-              return new GenericDatumReader<>(writerSchema, finalReaderSchema,
-                  AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
-            }
-          }
-        };
+    // Key by writer schema id (reader dimension by content), not the Schema object: schemas
+    // re-parsed from an 8.x server's responses arrive as fresh instances, so identity keying
+    // leaks a reader per call.
     readerSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
-        // use identity (==) comparison for keys
-        .weakKeys()
         .build();
     datumReaderCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
-        .build(cacheLoader);
+        .build();
   }
 
   protected void configure(KafkaAvroDeserializerConfig config) {
@@ -281,9 +255,35 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
-  protected DatumReader<?> getDatumReader(Schema writerSchema, Schema readerSchema)
+  protected DatumReader<?> getDatumReader(
+      Integer writerSchemaId, Schema writerSchema, Schema readerSchema)
       throws ExecutionException {
-    return datumReaderCache.get(new IdentityPair<>(writerSchema, readerSchema));
+    return datumReaderCache.get(new DatumReaderKey(writerSchemaId, readerSchema),
+        () -> createDatumReader(writerSchemaId, writerSchema, readerSchema));
+  }
+
+  private DatumReader<?> createDatumReader(
+      Integer writerSchemaId, Schema writerSchema, Schema readerSchema) {
+    Schema finalReaderSchema = getReaderSchema(writerSchemaId, writerSchema, readerSchema);
+    // Null writer schema (JSON migration path): read as identity against the reader schema.
+    Schema finalWriterSchema = writerSchema != null ? writerSchema : finalReaderSchema;
+    boolean writerSchemaIsPrimitive =
+        AvroSchemaUtils.getPrimitiveSchemas().containsValue(finalWriterSchema);
+    if (writerSchemaIsPrimitive) {
+      return new GenericDatumReader<>(finalWriterSchema, finalReaderSchema,
+          AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
+    } else if (useSchemaReflection) {
+      return new ReflectDatumReader<>(finalWriterSchema, finalReaderSchema,
+          AvroSchemaUtils.getReflectData(
+              avroUseLogicalTypeConverters, avroReflectionAllowNull));
+    } else if (useSpecificAvroReader) {
+      return new SpecificDatumReader<>(finalWriterSchema, finalReaderSchema,
+          AvroSchemaUtils.getSpecificDataForSchema(
+              finalReaderSchema, avroUseLogicalTypeConverters));
+    } else {
+      return new GenericDatumReader<>(finalWriterSchema, finalReaderSchema,
+          AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
+    }
   }
 
   /**
@@ -297,11 +297,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * <ul>otherwise use the writer schema</ul>
    * </li>
    */
-  private Schema getReaderSchema(Schema writerSchema, Schema readerSchema) {
+  private Schema getReaderSchema(
+      Integer writerSchemaId, Schema writerSchema, Schema readerSchema) {
     if (readerSchema != null) {
       return readerSchema;
     }
-    readerSchema = readerSchemaCache.getIfPresent(writerSchema);
+    readerSchema = readerSchemaCache.getIfPresent(writerSchemaId);
     if (readerSchema != null) {
       return readerSchema;
     }
@@ -311,10 +312,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       readerSchema = writerSchema;
     } else if (useSchemaReflection) {
       readerSchema = getReflectionReaderSchema(writerSchema);
-      readerSchemaCache.put(writerSchema, readerSchema);
+      readerSchemaCache.put(writerSchemaId, readerSchema);
     } else if (useSpecificAvroReader) {
       readerSchema = getSpecificReaderSchema(writerSchema);
-      readerSchemaCache.put(writerSchema, readerSchema);
+      readerSchemaCache.put(writerSchemaId, readerSchema);
     } else {
       readerSchema = writerSchema;
     }
@@ -508,7 +509,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           reader = new GenericDatumReader<>(writerSchema, writerSchema,
               AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
         } else {
-          reader = getDatumReader(writerSchema, readerSchema);
+          reader = getDatumReader(schemaId, writerSchema, readerSchema);
         }
         int length = buffer.limit() - 1 - idSize;
         Object result;
@@ -540,7 +541,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             }
 
             if (result instanceof JsonNode) {
-              reader = getDatumReader(readerAvroSchema.rawSchema(), readerAvroSchema.rawSchema());
+              reader = getDatumReader(null, null, readerAvroSchema.rawSchema());
               result = AvroSchemaUtils.toObject(
                   (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
             }
@@ -568,21 +569,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
-  static class IdentityPair<K, V> {
-    private final K key;
-    private final V value;
+  static class DatumReaderKey {
+    private final Integer writerSchemaId;
+    private final Schema readerSchema;
 
-    public IdentityPair(K key, V value) {
-      this.key = key;
-      this.value = value;
-    }
-
-    public K getKey() {
-      return key;
-    }
-
-    public V getValue() {
-      return value;
+    DatumReaderKey(Integer writerSchemaId, Schema readerSchema) {
+      this.writerSchemaId = writerSchemaId;
+      this.readerSchema = readerSchema;
     }
 
     @Override
@@ -593,21 +586,22 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      IdentityPair<?, ?> pair = (IdentityPair<?, ?>) o;
-      // Only perform identity check
-      return key == pair.key && value == pair.value;
+      DatumReaderKey that = (DatumReaderKey) o;
+      // Writer dimension compared by schema id, reader dimension by schema content.
+      return Objects.equals(writerSchemaId, that.writerSchemaId)
+          && Objects.equals(readerSchema, that.readerSchema);
     }
 
     @Override
     public int hashCode() {
-      return System.identityHashCode(key) + System.identityHashCode(value);
+      return Objects.hash(writerSchemaId, readerSchema);
     }
 
     @Override
     public String toString() {
-      return "IdentityPair{"
-          + "key=" + key
-          + ", value=" + value
+      return "DatumReaderKey{"
+          + "writerSchemaId=" + writerSchemaId
+          + ", readerSchema=" + readerSchema
           + '}';
     }
   }
