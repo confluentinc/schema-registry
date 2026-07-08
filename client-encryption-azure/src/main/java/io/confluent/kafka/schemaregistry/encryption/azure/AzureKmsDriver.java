@@ -39,6 +39,14 @@ public class AzureKmsDriver implements KmsDriver {
   public static final String CLIENT_ID = "client.id";
   public static final String CLIENT_SECRET = "client.secret";
 
+  /**
+   * Enables making a DEK's encryptedKeyMaterial self-describing with respect to which exact
+   * Azure Key Vault key version wrapped it (see {@link AzureKmsAead}), matching the same
+   * self-description property AWS KMS, GCP KMS, and HashiCorp Vault ciphertext already provide
+   * natively. Set as a kek kmsProps entry.
+   */
+  public static final String ENCRYPT_AZURE_KEY_VERSION_SAVE = "encrypt.azure.key.version.save";
+
   // Only used for testing.
   public static final String TEST_KEY_CLIENT = "test.key.client";
 
@@ -69,9 +77,41 @@ public class AzureKmsDriver implements KmsDriver {
    * that only ever uses a versionless reference has no way to know which version encrypted a given
    * DEK once the key has been rotated.
    */
-  @Override
   public String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
       throws GeneralSecurityException {
+    KeyVaultId parsed = parse(kmsKeyId);
+    if (parsed.version != null) {
+      // Already versioned; respect the explicitly pinned config as-is.
+      return kmsKeyId;
+    }
+    // A Function<String, KeyVaultKey> (rather than a raw KeyClient) is used as the test seam
+    // because KeyClient is a final Azure SDK class that plain Mockito cannot mock; KeyClient::getKey
+    // satisfies this functional interface for the real (non-test) path.
+    @SuppressWarnings("unchecked")
+    Function<String, KeyVaultKey> testKeyResolver =
+        (Function<String, KeyVaultKey>) configs.get(TEST_KEY_CLIENT);
+    Function<String, KeyVaultKey> keyResolver = testKeyResolver != null
+        ? testKeyResolver
+        : new KeyClientBuilder()
+            .vaultUrl(parsed.vaultUrl)
+            .credential(getCredentials(configs))
+            .buildClient()::getKey;
+    KeyVaultKey key = keyResolver.apply(parsed.name);
+    return key.getId();
+  }
+
+  /**
+   * Combines {@code kmsKeyId} (versionless or versioned; only the vault and key name are used)
+   * with an explicit {@code version}, returning the full versioned key identifier. Used to
+   * reconstruct a target for a version extracted from an already-wrapped DEK, which may differ
+   * from whatever {@link #getVersionedKeyId} currently resolves to (e.g. after a rotation).
+   */
+  public String withVersion(String kmsKeyId, String version) throws GeneralSecurityException {
+    KeyVaultId parsed = parse(kmsKeyId);
+    return parsed.vaultUrl + "/keys/" + parsed.name + "/" + version;
+  }
+
+  private static KeyVaultId parse(String kmsKeyId) throws GeneralSecurityException {
     URI uri;
     try {
       uri = new URI(kmsKeyId);
@@ -84,25 +124,20 @@ public class AzureKmsDriver implements KmsDriver {
     if (segments.length < 2 || segments.length > 3 || !"keys".equals(segments[0])) {
       throw new GeneralSecurityException("Invalid Azure Key Vault key id: " + kmsKeyId);
     }
-    if (segments.length == 3) {
-      // Already versioned; respect the explicitly pinned config as-is.
-      return kmsKeyId;
+    String vaultUrl = uri.getScheme() + "://" + uri.getAuthority();
+    return new KeyVaultId(vaultUrl, segments[1], segments.length == 3 ? segments[2] : null);
+  }
+
+  private static final class KeyVaultId {
+    private final String vaultUrl;
+    private final String name;
+    private final String version;
+
+    private KeyVaultId(String vaultUrl, String name, String version) {
+      this.vaultUrl = vaultUrl;
+      this.name = name;
+      this.version = version;
     }
-    String name = segments[1];
-    // A Function<String, KeyVaultKey> (rather than a raw KeyClient) is used as the test seam
-    // because KeyClient is a final Azure SDK class that plain Mockito cannot mock; KeyClient::getKey
-    // satisfies this functional interface for the real (non-test) path.
-    @SuppressWarnings("unchecked")
-    Function<String, KeyVaultKey> testKeyResolver =
-        (Function<String, KeyVaultKey>) configs.get(TEST_KEY_CLIENT);
-    Function<String, KeyVaultKey> keyResolver = testKeyResolver != null
-        ? testKeyResolver
-        : new KeyClientBuilder()
-            .vaultUrl(uri.getScheme() + "://" + uri.getAuthority())
-            .credential(getCredentials(configs))
-            .buildClient()::getKey;
-    KeyVaultKey key = keyResolver.apply(name);
-    return key.getId();
   }
 
   private TokenCredential getCredentials(Map<String, ?> configs) {
@@ -127,12 +162,12 @@ public class AzureKmsDriver implements KmsDriver {
     Optional<TokenCredential> creds = testClient != null
         ? Optional.empty()
         : Optional.of(getCredentials(configs));
-    return newKmsClientWithAzureKms(kekUrl, creds, testClient);
+    return newKmsClientWithAzureKms(this, configs, kekUrl, creds, testClient);
   }
 
   protected static KmsClient newKmsClientWithAzureKms(
-      Optional<String> keyUri, Optional<TokenCredential> credentials,
-      CryptographyClient cryptographyClient)
+      AzureKmsDriver driver, Map<String, ?> configs, Optional<String> keyUri,
+      Optional<TokenCredential> credentials, CryptographyClient cryptographyClient)
       throws GeneralSecurityException {
     AzureKmsClient client;
     if (keyUri.isPresent()) {
@@ -140,6 +175,7 @@ public class AzureKmsDriver implements KmsDriver {
     } else {
       client = new AzureKmsClient();
     }
+    client.withDriver(driver, configs);
     if (credentials.isPresent()) {
       client.withCredentialsProvider(credentials.get());
     } else {
@@ -151,4 +187,3 @@ public class AzureKmsDriver implements KmsDriver {
     return client;
   }
 }
-

@@ -32,7 +32,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
-import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriverManager;
 import io.confluent.kafka.schemaregistry.rules.RuleClientException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
@@ -40,7 +39,6 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.io.IOException;
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -54,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +76,6 @@ public class EncryptionExecutor implements RuleExecutor {
   public static final String ENCRYPT_ALTERNATE_KMS_KEY_IDS = "encrypt.alternate.kms.key.ids";
   public static final String ENCRYPT_NONSHARED_KEK_PASSTHROUGH =
       "encrypt.nonshared.kek.passthrough";
-  public static final String ENCRYPT_KMS_KEY_ID_SAVE = "encrypt.kms.key.id.save";
 
   public static final String KMS_TYPE_SUFFIX = "://";
   public static final byte[] EMPTY_AAD = new byte[0];
@@ -91,14 +87,6 @@ public class EncryptionExecutor implements RuleExecutor {
   protected static final byte MAGIC_BYTE = 0x0;
   protected static final int MILLIS_IN_DAY = 24 * 60 * 60 * 1000;
   protected static final int VERSION_SIZE = 4;
-
-  // Distinct, multi-byte marker (as opposed to the single MAGIC_BYTE above) prefixed onto
-  // encryptedKeyMaterial when ENCRYPT_KMS_KEY_ID_SAVE is enabled. A DEK's encryptedKeyMaterial
-  // is opaque, high-entropy ciphertext, and this prefix must coexist with legacy (un-prefixed) DEKs
-  // written before the toggle was enabled on a KEK; a single-byte marker would have a 1-in-256
-  // chance of a false positive against legacy ciphertext, so a 5-byte sequence is used to make that
-  // collision probability negligible.
-  protected static final byte[] KMS_KEY_ID_MAGIC = {0x0, 'e', 'd', 'e', 'k'};
 
   private Map<DekFormat, Cryptor> cryptors;
   private Map<String, ?> configs;
@@ -431,19 +419,10 @@ public class EncryptionExecutor implements RuleExecutor {
         if (!kek.isShared()) {
           Map<String, Object> aeadConfigs = new HashMap<>(configs);
           aeadConfigs.putAll(kek.getKmsProps());
-          String kmsKeyId = kek.getKmsKeyId();
-          boolean saveKmsKeyId = isKmsKeyIdSaveEnabled();
-          if (saveKmsKeyId) {
-            kmsKeyId = KmsDriverManager.getDriver(kek.getKmsType() + KMS_TYPE_SUFFIX + kmsKeyId)
-                .getVersionedKeyId(aeadConfigs, kmsKeyId);
-          }
-          aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kmsKeyId);
+          aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kek.getKmsKeyId());
           // Generate new dek
           byte[] rawDek = generateKey(dekId.getDekFormat());
           encryptedDek = aead.encrypt(rawDek, EMPTY_AAD);
-          if (saveKmsKeyId) {
-            encryptedDek = prefixKmsKeyId(kmsKeyId, encryptedDek);
-          }
         }
         Integer newVersion = isExpired ? dek.getVersion() + 1 : null;
         try {
@@ -457,25 +436,15 @@ public class EncryptionExecutor implements RuleExecutor {
         }
       }
       if (dek.getKeyMaterialBytes() == null) {
-        byte[] encryptedKeyMaterial = dek.getEncryptedKeyMaterialBytes();
-        Map.Entry<String, byte[]> parsed = extractKmsKeyId(encryptedKeyMaterial);
-        if (parsed != null) {
-          encryptedKeyMaterial = parsed.getValue();
-        }
         if (aead == null) {
           Map<String, Object> aeadConfigs = new HashMap<>(configs);
           aeadConfigs.putAll(kek.getKmsProps());
-          String kmsKeyId = parsed != null ? parsed.getKey() : kek.getKmsKeyId();
-          aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kmsKeyId);
+          aead = new AeadWrapper(aeadConfigs, kek.getKmsType(), kek.getKmsKeyId());
         }
-        byte[] rawDek = aead.decrypt(encryptedKeyMaterial, EMPTY_AAD);
+        byte[] rawDek = aead.decrypt(dek.getEncryptedKeyMaterialBytes(), EMPTY_AAD);
         dek.setKeyMaterial(rawDek);
       }
       return dek;
-    }
-
-    private boolean isKmsKeyIdSaveEnabled() {
-      return Boolean.parseBoolean(kek.getKmsProps().get(ENCRYPT_KMS_KEY_ID_SAVE));
     }
 
     private Dek createDek(RuleContext ctx, DekId dekId, Integer newVersion, byte[] encryptedDek)
@@ -642,58 +611,6 @@ public class EncryptionExecutor implements RuleExecutor {
       return new SimpleEntry<>(version, remaining);
     }
 
-  }
-
-  /**
-   * Prefixes {@code wrapped} (the raw KMS-wrapped DEK bytes) with {@code kmsKeyId} so that a
-   * subsequent unwrap can target the exact key (and, for KMS providers such as Azure Key Vault
-   * that address wrap/unwrap by an explicit version, the exact version) that produced it,
-   * regardless of the KEK's current configuration or any rotation that happens afterward.
-   *
-   * <p>The kms key id's length is encoded as a zig-zag variable-length int via
-   * {@link ByteUtils#writeVarint}, the same encoding Avro uses for a {@code string} length,
-   * followed by its UTF-8 bytes.
-   */
-  public static byte[] prefixKmsKeyId(String kmsKeyId, byte[] wrapped) {
-    byte[] idBytes = kmsKeyId.getBytes(StandardCharsets.UTF_8);
-    ByteBuffer buffer = ByteBuffer.allocate(KMS_KEY_ID_MAGIC.length
-        + ByteUtils.sizeOfVarint(idBytes.length) + idBytes.length + wrapped.length);
-    buffer.put(KMS_KEY_ID_MAGIC);
-    ByteUtils.writeVarint(idBytes.length, buffer);
-    buffer.put(idBytes);
-    buffer.put(wrapped);
-    return buffer.array();
-  }
-
-  /**
-   * Returns the kms key id and remaining wrapped bytes if {@code encryptedDek} carries a kms key
-   * id prefix (see {@link #prefixKmsKeyId}), or {@code null} if it does not (e.g. a legacy DEK
-   * written before ENCRYPT_KMS_KEY_ID_SAVE was enabled on this KEK, or the toggle is not set).
-   */
-  public static Map.Entry<String, byte[]> extractKmsKeyId(byte[] encryptedDek) {
-    if (encryptedDek.length < KMS_KEY_ID_MAGIC.length + 1) {
-      return null;
-    }
-    ByteBuffer buffer = ByteBuffer.wrap(encryptedDek);
-    byte[] magic = new byte[KMS_KEY_ID_MAGIC.length];
-    buffer.get(magic);
-    if (!Arrays.equals(magic, KMS_KEY_ID_MAGIC)) {
-      return null;
-    }
-    int idLength;
-    try {
-      idLength = ByteUtils.readVarint(buffer);
-    } catch (BufferUnderflowException | IllegalArgumentException e) {
-      return null;
-    }
-    if (idLength < 0 || idLength > buffer.remaining()) {
-      return null;
-    }
-    byte[] idBytes = new byte[idLength];
-    buffer.get(idBytes);
-    byte[] remaining = new byte[buffer.remaining()];
-    buffer.get(remaining);
-    return new SimpleEntry<>(new String(idBytes, StandardCharsets.UTF_8), remaining);
   }
 }
 

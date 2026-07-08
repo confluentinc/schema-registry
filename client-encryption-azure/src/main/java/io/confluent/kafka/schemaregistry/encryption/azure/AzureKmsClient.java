@@ -32,6 +32,8 @@ import com.google.crypto.tink.subtle.Validators;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
 
 /**
  * An implementation of {@link KmsClient} for <a
@@ -44,6 +46,8 @@ public final class AzureKmsClient implements KmsClient {
   private CryptographyClient cryptographyClient;
   private String keyUri;
   private TokenCredential provider;
+  private AzureKmsDriver driver;
+  private Map<String, ?> configs;
   private static final EncryptionAlgorithm DEFAULT_ENCRYPTION_ALGORITHM =
       EncryptionAlgorithm.RSA_OAEP_256;
   private EncryptionAlgorithm algorithm = DEFAULT_ENCRYPTION_ALGORITHM;
@@ -137,6 +141,17 @@ public final class AzureKmsClient implements KmsClient {
   }
 
   /**
+   * Associates this client with the {@link AzureKmsDriver} that created it and the configs it was
+   * created with, so that {@link #getAead} can consult {@link AzureKmsDriver#ENCRYPT_AZURE_KEY_VERSION_SAVE}
+   * and resolve a versionless key id before building a {@link CryptographyClient}.
+   */
+  public KmsClient withDriver(AzureKmsDriver driver, Map<String, ?> configs) {
+    this.driver = driver;
+    this.configs = configs;
+    return this;
+  }
+
+  /**
    * Returns {@code AzureKmsAead} for the url provided.
    *
    * @param uri - azure keyvault key uri
@@ -151,6 +166,8 @@ public final class AzureKmsClient implements KmsClient {
               "this client is bound to %s, cannot load keys bound to %s", this.keyUri, uri));
     }
     String keyUri = Validators.validateKmsKeyUriAndRemovePrefix(PREFIX, uri);
+    boolean saveVersion = driver != null && configs != null && Boolean.parseBoolean(
+        (String) configs.get(AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE));
     // retry policy defined as per guidelines from MS
     // https://docs.microsoft.com/en-us/azure/key-vault/general/overview-throttling#recommended-client-side-throttling-method
     HttpPipeline pipeline = new HttpPipelineBuilder()
@@ -159,13 +176,66 @@ public final class AzureKmsClient implements KmsClient {
             new RetryPolicy(
                 new ExponentialBackoff(5, Duration.ofSeconds(1), Duration.ofSeconds(16))))
         .build();
-    CryptographyClient client = this.cryptographyClient;
-    if (client == null) {
-      client = new CryptographyClientBuilder()
-          .pipeline(pipeline)
-          .keyIdentifier(keyUri)
-          .buildClient();
+    // Built from the raw (possibly versionless) keyUri, exactly as before this feature existed:
+    // used directly whenever saveVersion is off, and as decrypt()'s fallback for legacy
+    // ciphertext with no embedded version. Cheap to build eagerly: buildClient() does not itself
+    // make a network call (Azure's SDK resolves lazily on first actual encrypt/decrypt/wrapKey).
+    CryptographyClient testOverride = this.cryptographyClient;
+    CryptographyClient defaultClient = testOverride != null
+        ? testOverride
+        : new CryptographyClientBuilder().pipeline(pipeline).keyIdentifier(keyUri).buildClient();
+    if (!saveVersion) {
+      return new AzureKmsAead(defaultClient, this.algorithm);
     }
-    return new AzureKmsAead(client, this.algorithm);
+    AzureKmsDriver clientDriver = driver;
+    Map<String, ?> clientConfigs = configs;
+    // Deferred until encrypt() actually runs (not built here), so that constructing this Aead for
+    // a decrypt-only call site never triggers a wasted version-resolution round trip: getAead() is
+    // called for both encrypt and decrypt, and decrypt's own resolution (if needed at all) comes
+    // from whatever version is embedded in the ciphertext, not from re-resolving "current" here.
+    AzureKmsAead.EncryptTarget encryptTarget = () -> {
+      String resolvedKeyUri = clientDriver.getVersionedKeyId(clientConfigs, keyUri);
+      CryptographyClient client = testOverride != null
+          ? testOverride
+          : new CryptographyClientBuilder()
+              .pipeline(pipeline)
+              .keyIdentifier(resolvedKeyUri)
+              .buildClient();
+      String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
+      return new AzureKmsAead.EncryptTarget.Resolved(client, version);
+    };
+    // Used by decrypt() to target whichever version is embedded in already-wrapped ciphertext,
+    // which may differ from whatever encryptTarget resolves to (e.g. an older DEK wrapped before
+    // a subsequent rotation).
+    Function<String, CryptographyClient> clientFactory = version -> {
+      if (testOverride != null) {
+        return testOverride;
+      }
+      try {
+        String versionedKeyUri = clientDriver.withVersion(keyUri, version);
+        return new CryptographyClientBuilder()
+            .pipeline(pipeline)
+            .keyIdentifier(versionedKeyUri)
+            .buildClient();
+      } catch (GeneralSecurityException e) {
+        throw new RuntimeAzureKmsException(e);
+      }
+    };
+    return new AzureKmsAead(defaultClient, this.algorithm, encryptTarget, clientFactory);
+  }
+
+  /**
+   * Wraps a {@link GeneralSecurityException} so it can cross a {@link Function} boundary (which
+   * cannot declare checked exceptions); unwrapped by {@link AzureKmsAead#decrypt}.
+   */
+  static final class RuntimeAzureKmsException extends RuntimeException {
+    RuntimeAzureKmsException(GeneralSecurityException cause) {
+      super(cause);
+    }
+
+    @Override
+    public synchronized GeneralSecurityException getCause() {
+      return (GeneralSecurityException) super.getCause();
+    }
   }
 }
