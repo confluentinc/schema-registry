@@ -1,11 +1,11 @@
 /*
- * Copyright 2024 Confluent Inc.
+ * Copyright 2022 Confluent Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,12 +34,7 @@ import java.util.function.Function;
  * encryptTarget} is set (see {@link AzureKmsDriver#ENCRYPT_AZURE_KEY_VERSION_SAVE}), {@link
  * #encrypt} makes its output self-describing by prepending the exact version that produced it,
  * loosely mirroring HashiCorp Vault's own {@code vault:v1:<base64>} ciphertext convention: {@code
- * azure:v1:<32-character key version>:<raw ciphertext bytes>}. Unlike Vault's own convention, the
- * ciphertext bytes are not base64-encoded here, since (unlike Vault's own REST API, which must
- * return a JSON-safe string directly) nothing requires this Aead's {@code byte[]} output to be
- * ASCII-safe on its own; whatever ASCII-safety the caller needs is applied once, uniformly, by
- * whatever transport/storage layer serializes the returned bytes for every KMS type. Encoding
- * again here would waste ~33% extra space for no benefit.
+ * azure:v1:<32-character key version>:<raw ciphertext bytes>}.
  *
  * <p>{@link #decrypt} always checks for this prefix regardless of the current {@code
  * encryptTarget}, since a DEK wrapped while the toggle was on must remain decryptable even after
@@ -147,9 +142,7 @@ public final class AzureKmsAead implements Aead {
    * class javadoc), or {@code null} if it does not (e.g. a legacy DEK wrapped before
    * ENCRYPT_AZURE_KEY_VERSION_SAVE was enabled on its KEK, or the toggle is not set). Returning
    * null rather than throwing is deliberate: the toggle can be flipped on/off over a KEK's
-   * lifetime, and old, un-prefixed ciphertext must remain decryptable. The prefix and version are
-   * always plain ASCII (bytes we ourselves wrote), so only that fixed-width header is decoded;
-   * the remaining (possibly non-UTF-8) ciphertext bytes are never stringified.
+   * lifetime, and old, un-prefixed ciphertext must remain decryptable.
    */
   private static String extractVersion(byte[] ciphertext) {
     if (ciphertext.length < HEADER_LENGTH

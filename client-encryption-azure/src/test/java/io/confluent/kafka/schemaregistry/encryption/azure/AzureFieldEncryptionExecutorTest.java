@@ -108,14 +108,13 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
 
   @Test
   public void testGetVersionedKeyIdReturnsUnchangedWhenAlreadyVersioned() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
     String versionedKeyId = "https://yokota1.vault.azure.net/keys/key1/1234567890";
     @SuppressWarnings("unchecked")
     Function<String, KeyVaultKey> keyResolver = mock(Function.class);
     Map<String, Object> configs = new HashMap<>();
     configs.put(AzureKmsDriver.TEST_KEY_CLIENT, keyResolver);
 
-    String result = driver.getVersionedKeyId(configs, versionedKeyId);
+    String result = AzureKmsDriver.getVersionedKeyId(configs, versionedKeyId);
 
     assertEquals(versionedKeyId, result);
     verify(keyResolver, never()).apply(any());
@@ -123,7 +122,6 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
 
   @Test
   public void testGetVersionedKeyIdResolvesVersionlessKeyId() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
     String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
     String resolvedKeyId = "https://yokota1.vault.azure.net/keys/key1/" + VERSION_A;
     KeyVaultKey keyVaultKey = mock(KeyVaultKey.class);
@@ -134,7 +132,7 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     Map<String, Object> configs = new HashMap<>();
     configs.put(AzureKmsDriver.TEST_KEY_CLIENT, keyResolver);
 
-    String result = driver.getVersionedKeyId(configs, versionlessKeyId);
+    String result = AzureKmsDriver.getVersionedKeyId(configs, versionlessKeyId);
 
     assertEquals(resolvedKeyId, result);
     verify(keyResolver).apply("key1");
@@ -142,42 +140,37 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
 
   @Test(expected = GeneralSecurityException.class)
   public void testGetVersionedKeyIdThrowsForMalformedKeyId() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
     Map<String, Object> configs = new HashMap<>();
-    driver.getVersionedKeyId(configs, "https://yokota1.vault.azure.net/notkeys/key1");
+    AzureKmsDriver.getVersionedKeyId(configs, "https://yokota1.vault.azure.net/notkeys/key1");
   }
 
   @Test(expected = GeneralSecurityException.class)
   public void testGetVersionedKeyIdThrowsForInvalidUri() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
     Map<String, Object> configs = new HashMap<>();
-    driver.getVersionedKeyId(configs, "::not a uri::");
+    AzureKmsDriver.getVersionedKeyId(configs, "::not a uri::");
   }
 
   @Test
   public void testWithVersionCombinesVersionlessKeyIdWithExplicitVersion() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
     String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
 
-    String result = driver.withVersion(versionlessKeyId, VERSION_A);
+    String result = AzureKmsDriver.withVersion(versionlessKeyId, VERSION_A);
 
     assertEquals("https://yokota1.vault.azure.net/keys/key1/" + VERSION_A, result);
   }
 
   @Test
   public void testWithVersionIgnoresAnyExistingVersionInKeyId() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
     String versionedKeyId = "https://yokota1.vault.azure.net/keys/key1/" + VERSION_A;
 
-    String result = driver.withVersion(versionedKeyId, VERSION_B);
+    String result = AzureKmsDriver.withVersion(versionedKeyId, VERSION_B);
 
     assertEquals("https://yokota1.vault.azure.net/keys/key1/" + VERSION_B, result);
   }
 
   @Test(expected = GeneralSecurityException.class)
   public void testWithVersionThrowsForMalformedKeyId() throws Exception {
-    AzureKmsDriver driver = new AzureKmsDriver();
-    driver.withVersion("https://yokota1.vault.azure.net/notkeys/key1", VERSION_A);
+    AzureKmsDriver.withVersion("https://yokota1.vault.azure.net/notkeys/key1", VERSION_A);
   }
 
   // ==================== AzureKmsAead unit tests ====================

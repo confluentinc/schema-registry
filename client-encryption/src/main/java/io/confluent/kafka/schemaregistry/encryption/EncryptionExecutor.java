@@ -610,7 +610,6 @@ public class EncryptionExecutor implements RuleExecutor {
       buffer.get(remaining, 0, remainingSize);
       return new SimpleEntry<>(version, remaining);
     }
-
   }
 }
 

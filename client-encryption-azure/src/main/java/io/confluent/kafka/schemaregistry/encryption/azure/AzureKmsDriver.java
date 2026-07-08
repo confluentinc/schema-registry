@@ -77,7 +77,7 @@ public class AzureKmsDriver implements KmsDriver {
    * that only ever uses a versionless reference has no way to know which version encrypted a given
    * DEK once the key has been rotated.
    */
-  public String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
+  public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
       throws GeneralSecurityException {
     KeyVaultId parsed = parse(kmsKeyId);
     if (parsed.version != null) {
@@ -106,7 +106,8 @@ public class AzureKmsDriver implements KmsDriver {
    * reconstruct a target for a version extracted from an already-wrapped DEK, which may differ
    * from whatever {@link #getVersionedKeyId} currently resolves to (e.g. after a rotation).
    */
-  public String withVersion(String kmsKeyId, String version) throws GeneralSecurityException {
+  public static String withVersion(String kmsKeyId, String version)
+      throws GeneralSecurityException {
     KeyVaultId parsed = parse(kmsKeyId);
     return parsed.vaultUrl + "/keys/" + parsed.name + "/" + version;
   }
@@ -140,7 +141,7 @@ public class AzureKmsDriver implements KmsDriver {
     }
   }
 
-  private TokenCredential getCredentials(Map<String, ?> configs) {
+  private static TokenCredential getCredentials(Map<String, ?> configs) {
     String tenantId = (String) configs.get(TENANT_ID);
     String clientId = (String) configs.get(CLIENT_ID);
     String clientSecret = (String) configs.get(CLIENT_SECRET);
@@ -162,11 +163,11 @@ public class AzureKmsDriver implements KmsDriver {
     Optional<TokenCredential> creds = testClient != null
         ? Optional.empty()
         : Optional.of(getCredentials(configs));
-    return newKmsClientWithAzureKms(this, configs, kekUrl, creds, testClient);
+    return newKmsClientWithAzureKms(configs, kekUrl, creds, testClient);
   }
 
   protected static KmsClient newKmsClientWithAzureKms(
-      AzureKmsDriver driver, Map<String, ?> configs, Optional<String> keyUri,
+      Map<String, ?> configs, Optional<String> keyUri,
       Optional<TokenCredential> credentials, CryptographyClient cryptographyClient)
       throws GeneralSecurityException {
     AzureKmsClient client;
@@ -175,7 +176,7 @@ public class AzureKmsDriver implements KmsDriver {
     } else {
       client = new AzureKmsClient();
     }
-    client.withDriver(driver, configs);
+    client.withConfigs(configs);
     if (credentials.isPresent()) {
       client.withCredentialsProvider(credentials.get());
     } else {
