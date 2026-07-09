@@ -123,6 +123,13 @@ public final class AzureKmsAead implements Aead {
     byte[] wrapped = ciphertext;
     String version = extractVersion(ciphertext);
     if (version != null) {
+      if (!isHex(version)) {
+        // encryptedKeyMaterial is unauthenticated at this layer, so a corrupted or tampered
+        // value could otherwise smuggle arbitrary characters (e.g. '/') into the key identifier
+        // URL built from it below.
+        throw new GeneralSecurityException(
+            "ciphertext carries an invalid azure:v1: key version: '" + version + "'");
+      }
       if (clientFactory == null) {
         throw new GeneralSecurityException(
             "ciphertext carries a kms key version prefix, but this Aead has no client factory "
@@ -132,6 +139,12 @@ public final class AzureKmsAead implements Aead {
         client = clientFactory.apply(version);
       } catch (AzureKmsClient.RuntimeAzureKmsException e) {
         throw e.getCause();
+      } catch (RuntimeException e) {
+        // decrypt()'s contract is to only ever throw GeneralSecurityException; do not let an
+        // unexpected RuntimeException from the client factory (or the Azure SDK calls it makes)
+        // leak out uncaught.
+        throw new GeneralSecurityException(
+            "failed to resolve kms client for embedded key version '" + version + "'", e);
       }
       wrapped = Arrays.copyOfRange(ciphertext, HEADER_LENGTH, ciphertext.length);
     }
@@ -149,6 +162,17 @@ public final class AzureKmsAead implements Aead {
    * null rather than throwing is deliberate: the toggle can be flipped on/off over a KEK's
    * lifetime, and old, un-prefixed ciphertext must remain decryptable.
    */
+  private static boolean isHex(String value) {
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      boolean isHexDigit = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+      if (!isHexDigit) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static String extractVersion(byte[] ciphertext) {
     // Arrays.mismatch compares the prefix range in place, avoiding an array copy on every call
     // (this runs for every decrypt(), including the common case of legacy, un-prefixed

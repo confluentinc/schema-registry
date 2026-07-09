@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -340,6 +341,41 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
 
     AzureKmsAead decryptingAead = new AzureKmsAead(client, EncryptionAlgorithm.RSA_OAEP_256);
     decryptingAead.decrypt(ciphertext, new byte[0]);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testAeadDecryptThrowsForNonHexEmbeddedVersion() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    String nonHexVersion = "g".repeat(32);
+    AzureKmsAead encryptingAead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, nonHexVersion),
+        version -> client);
+    byte[] ciphertext = encryptingAead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+
+    AzureKmsAead decryptingAead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, null, version -> client);
+    decryptingAead.decrypt(ciphertext, new byte[0]);
+  }
+
+  @Test
+  public void testAeadDecryptWrapsUnexpectedRuntimeExceptionFromClientFactory() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    AzureKmsAead encryptingAead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, VERSION_A),
+        version -> client);
+    byte[] ciphertext = encryptingAead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+
+    Function<String, CryptographyClient> throwingFactory = version -> {
+      throw new IllegalStateException("boom");
+    };
+    AzureKmsAead decryptingAead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, null, throwingFactory);
+    try {
+      decryptingAead.decrypt(ciphertext, new byte[0]);
+      fail("expected GeneralSecurityException");
+    } catch (GeneralSecurityException expected) {
+      assertTrue(expected.getCause() instanceof IllegalStateException);
+    }
   }
 
   @Test
