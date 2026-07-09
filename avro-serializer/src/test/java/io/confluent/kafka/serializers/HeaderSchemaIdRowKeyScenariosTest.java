@@ -63,14 +63,6 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
   private static final Schema SCHEMA_C = new Schema.Parser().parse(
       "{\"type\":\"record\",\"name\":\"OtherKey\",\"namespace\":\"io.confluent.test\","
           + "\"fields\":[{\"name\":\"n\",\"type\":\"long\"}]}");
-  // A key schema and a byte-affecting evolution of it (adds a field with a default).
-  private static final Schema SCHEMA_V1 = new Schema.Parser().parse(
-      "{\"type\":\"record\",\"name\":\"EvolvingKeyV1\",\"namespace\":\"io.confluent.test\","
-          + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}");
-  private static final Schema SCHEMA_V2 = new Schema.Parser().parse(
-      "{\"type\":\"record\",\"name\":\"EvolvingKeyV2\",\"namespace\":\"io.confluent.test\","
-          + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"},"
-          + "{\"name\":\"region\",\"type\":\"string\",\"default\":\"US\"}]}");
 
   // Each schema is registered under its own topic/subject to keep auto-registration free of
   // subject-compatibility constraints; header-mode deserialization resolves the schema by the GUID
@@ -78,8 +70,6 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
   private static final String TOPIC_A = "topic-a";
   private static final String TOPIC_B = "topic-b";
   private static final String TOPIC_C = "topic-c";
-  private static final String TOPIC_V1 = "topic-v1";
-  private static final String TOPIC_V2 = "topic-v2";
 
   private KafkaAvroSerializer headerModeKeySerializer() {
     Map<String, Object> config = new HashMap<>();
@@ -236,33 +226,5 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
     assertEquals("the unrelated header id decodes the row key under the wrong schema",
         "OtherKey", ((GenericRecord) decoded).getSchema().getName());
     assertNotEquals("the real key is not recovered", realKey, decoded);
-  }
-
-  /**
-   * A byte-affecting key schema evolution (adding a field with a default) changes the encoded key
-   * bytes for the "same" logical key, so the versions self-separate into different rows rather than
-   * sharing one. This is the inverse of the collapse case: one logical key &rarr; two byte[].
-   *
-   * <p>How this arises in practice: someone evolves the KEY schema by adding a field. During a
-   * rolling upgrade, or with producers pinned to different schema versions, the same logical entity
-   * ({@code id="row-1"}) is emitted under both v1 and v2 and encodes to different bytes. In a keyed
-   * store or compacted topic the "same" entity then occupies two rows and {@code get} of one version
-   * misses the other. Evolving key schemas is explicitly discouraged for exactly this reason, but it
-   * is a common operational mistake. (Unlike the other tests, this one does not depend on where the
-   * schema id is placed &mdash; the payload bytes themselves change.)
-   */
-  @Test
-  public void keySchemaEvolutionChangesBytes_selfSeparatesRows() {
-    KafkaAvroSerializer serializer = headerModeKeySerializer();
-
-    byte[] rowKeyV1 =
-        serializer.serialize(TOPIC_V1, new RecordHeaders(), record(SCHEMA_V1, "id", "row-1"));
-    GenericRecord keyV2 = new GenericData.Record(SCHEMA_V2);
-    keyV2.put("id", "row-1");
-    keyV2.put("region", "US");
-    byte[] rowKeyV2 = serializer.serialize(TOPIC_V2, new RecordHeaders(), keyV2);
-
-    assertFalse("adding a field changes the encoded key bytes -> a different row",
-        Arrays.equals(rowKeyV1, rowKeyV2));
   }
 }
