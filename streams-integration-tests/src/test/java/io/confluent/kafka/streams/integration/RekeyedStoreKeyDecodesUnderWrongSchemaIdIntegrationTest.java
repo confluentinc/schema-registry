@@ -233,6 +233,10 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
           consumeRecords(output, consumerGroup, 1);
 
       GenericRecord report = results.get(0).value();
+      // OrderKey and CustomerKey are both a single string field, so they share an identical Avro wire
+      // format and the CustomerKey bytes decode silently as an OrderKey. Had the two key schemas been
+      // wire-incompatible (e.g. long vs string), this decode under the wrong id would instead THROW a
+      // SerializationException mid-iteration — a hard failure rather than a silent wrong reconstruction.
       assertEquals("OrderKey", report.get("reconstructedKeySchema").toString(),
           "stored CustomerKey was reconstructed under the in-flight OrderKey id (wrong schema)");
       assertNotEquals("CustomerKey", report.get("reconstructedKeySchema").toString(),
