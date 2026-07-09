@@ -156,11 +156,9 @@ public final class AzureKmsAead implements Aead {
   }
 
   /**
-   * Returns the embedded version if {@code ciphertext} carries the {@code azure:v1:} prefix (see
-   * class javadoc), or {@code null} if it does not (e.g. a legacy DEK wrapped before
-   * ENCRYPT_AZURE_KEY_VERSION_SAVE was enabled on its KEK, or the toggle is not set). Returning
-   * null rather than throwing is deliberate: the toggle can be flipped on/off over a KEK's
-   * lifetime, and old, un-prefixed ciphertext must remain decryptable.
+   * Returns true if every character in {@code value} is a hex digit. Used to validate an
+   * extracted version before it is used to build a key identifier, since encryptedKeyMaterial is
+   * unauthenticated at this layer and could be corrupted or tampered with.
    */
   private static boolean isHex(String value) {
     for (int i = 0; i < value.length(); i++) {
@@ -173,6 +171,13 @@ public final class AzureKmsAead implements Aead {
     return true;
   }
 
+  /**
+   * Returns the embedded version if {@code ciphertext} carries the {@code azure:v1:} prefix (see
+   * class javadoc), or {@code null} if it does not (e.g. a legacy DEK wrapped before
+   * ENCRYPT_AZURE_KEY_VERSION_SAVE was enabled on its KEK, or the toggle is not set). Returning
+   * null rather than throwing is deliberate: the toggle can be flipped on/off over a KEK's
+   * lifetime, and old, un-prefixed ciphertext must remain decryptable.
+   */
   private static String extractVersion(byte[] ciphertext) {
     // Arrays.mismatch compares the prefix range in place, avoiding an array copy on every call
     // (this runs for every decrypt(), including the common case of legacy, un-prefixed
