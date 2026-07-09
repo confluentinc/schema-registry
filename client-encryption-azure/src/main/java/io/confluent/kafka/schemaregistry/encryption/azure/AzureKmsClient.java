@@ -200,8 +200,26 @@ public final class AzureKmsClient implements KmsClient {
     CryptographyClient defaultClient = testOverride != null
         ? testOverride
         : new CryptographyClientBuilder().pipeline(pipeline).keyIdentifier(keyUri).buildClient();
+    // Always built, regardless of the current toggle value: a DEK wrapped while the toggle was on
+    // may still need to be decrypted after it has been turned back off, so decrypt() must always
+    // be able to resolve whatever version is embedded in an already-prefixed ciphertext. Building
+    // this closure is cheap (no network call) regardless of whether decrypt() ever invokes it.
+    Function<String, CryptographyClient> clientFactory = version -> {
+      if (testOverride != null) {
+        return testOverride;
+      }
+      try {
+        String versionedKeyUri = AzureKmsDriver.withVersion(keyUri, version);
+        return new CryptographyClientBuilder()
+            .pipeline(pipeline)
+            .keyIdentifier(versionedKeyUri)
+            .buildClient();
+      } catch (GeneralSecurityException e) {
+        throw new RuntimeAzureKmsException(e);
+      }
+    };
     if (!saveVersion) {
-      return new AzureKmsAead(defaultClient, this.algorithm);
+      return new AzureKmsAead(defaultClient, this.algorithm, null, clientFactory);
     }
     Map<String, ?> clientConfigs = configs;
     // Deferred until encrypt() actually runs (not built here), so that constructing this Aead for
@@ -218,23 +236,6 @@ public final class AzureKmsClient implements KmsClient {
               .buildClient();
       String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
       return new AzureKmsAead.EncryptTarget.Resolved(client, version);
-    };
-    // Used by decrypt() to target whichever version is embedded in already-wrapped ciphertext,
-    // which may differ from whatever encryptTarget resolves to (e.g. an older DEK wrapped before
-    // a subsequent rotation).
-    Function<String, CryptographyClient> clientFactory = version -> {
-      if (testOverride != null) {
-        return testOverride;
-      }
-      try {
-        String versionedKeyUri = AzureKmsDriver.withVersion(keyUri, version);
-        return new CryptographyClientBuilder()
-            .pipeline(pipeline)
-            .keyIdentifier(versionedKeyUri)
-            .buildClient();
-      } catch (GeneralSecurityException e) {
-        throw new RuntimeAzureKmsException(e);
-      }
     };
     return new AzureKmsAead(defaultClient, this.algorithm, encryptTarget, clientFactory);
   }

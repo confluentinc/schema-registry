@@ -361,6 +361,31 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     assertTrue(startsWithAzureV1Prefix(ciphertext));
   }
 
+  @Test
+  public void testDecryptRemainsPossibleAfterToggleTurnedOff() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    String versionedKeyId =
+        "azure-kms://https://yokota1.vault.azure.net/keys/key1/" + VERSION_A;
+    AzureKmsClient azureKmsClient = new AzureKmsClient(versionedKeyId);
+    azureKmsClient.withCryptographyClient(client);
+
+    Map<String, Object> toggleOnConfigs = new HashMap<>();
+    toggleOnConfigs.put(AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE, "true");
+    azureKmsClient.withConfigs(toggleOnConfigs);
+    Aead encryptingAead = azureKmsClient.getAead(versionedKeyId);
+    byte[] plaintext = "hello".getBytes(StandardCharsets.UTF_8);
+    byte[] ciphertext = encryptingAead.encrypt(plaintext, new byte[0]);
+    assertTrue(startsWithAzureV1Prefix(ciphertext));
+
+    // Toggle turned back off afterward; a DEK wrapped while it was on must still decrypt, per
+    // AzureKmsAead's own contract.
+    azureKmsClient.withConfigs(new HashMap<>());
+    Aead decryptingAead = azureKmsClient.getAead(versionedKeyId);
+    byte[] decrypted = decryptingAead.decrypt(ciphertext, new byte[0]);
+
+    assertArrayEquals(plaintext, decrypted);
+  }
+
   // ==================== End-to-end produce/consume tests ====================
 
   private static final String AZURE_V1_PREFIX = "azure:v1:";
