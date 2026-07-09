@@ -112,6 +112,15 @@ public class AzureKmsDriver implements KmsDriver {
     return parsed.vaultUrl + "/keys/" + parsed.name + "/" + version;
   }
 
+  /**
+   * Returns true if {@code kmsKeyId} has no explicit version segment. Used to warn when
+   * ENCRYPT_AZURE_KEY_VERSION_SAVE is not enabled for a versionless key, without performing any
+   * actual resolution (no {@code KeyClient} call).
+   */
+  public static boolean isVersionless(String kmsKeyId) throws GeneralSecurityException {
+    return parse(kmsKeyId).version == null;
+  }
+
   private static KeyVaultId parse(String kmsKeyId) throws GeneralSecurityException {
     URI uri;
     try {

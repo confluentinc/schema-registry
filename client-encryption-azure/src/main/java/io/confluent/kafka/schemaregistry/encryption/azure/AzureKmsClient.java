@@ -34,12 +34,16 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * An implementation of {@link KmsClient} for <a
  * href="https://azure.microsoft.com/en-us/services/key-vault/">Azure KMS</a>.
  */
 public final class AzureKmsClient implements KmsClient {
+
+  private static final Logger log = LoggerFactory.getLogger(AzureKmsClient.class);
 
   public static final String PREFIX = "azure-kms://";
 
@@ -169,6 +173,17 @@ public final class AzureKmsClient implements KmsClient {
         : configs.get(AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE);
     boolean saveVersion = saveVersionValue != null
         && Boolean.parseBoolean(saveVersionValue.toString());
+    if (!saveVersion) {
+      try {
+        if (AzureKmsDriver.isVersionless(keyUri)) {
+          log.warn("Azure Key Vault key '{}' is versionless and {} is not enabled; DEKs wrapped "
+                  + "with it may become undecryptable after the key is rotated.",
+              keyUri, AzureKmsDriver.ENCRYPT_AZURE_KEY_VERSION_SAVE);
+        }
+      } catch (GeneralSecurityException e) {
+        // Malformed key id; surfaced properly when it is actually used below.
+      }
+    }
     // retry policy defined as per guidelines from MS
     // https://docs.microsoft.com/en-us/azure/key-vault/general/overview-throttling#recommended-client-side-throttling-method
     HttpPipeline pipeline = new HttpPipelineBuilder()

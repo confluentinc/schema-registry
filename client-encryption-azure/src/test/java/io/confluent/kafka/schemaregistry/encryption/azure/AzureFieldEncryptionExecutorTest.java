@@ -185,6 +185,22 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     AzureKmsDriver.withVersion("keys/key1", VERSION_A);
   }
 
+  @Test
+  public void testIsVersionlessReturnsTrueForVersionlessKeyId() throws Exception {
+    assertTrue(AzureKmsDriver.isVersionless("https://yokota1.vault.azure.net/keys/key1"));
+  }
+
+  @Test
+  public void testIsVersionlessReturnsFalseForVersionedKeyId() throws Exception {
+    assertFalse(AzureKmsDriver.isVersionless(
+        "https://yokota1.vault.azure.net/keys/key1/" + VERSION_A));
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testIsVersionlessThrowsForMalformedKeyId() throws Exception {
+    AzureKmsDriver.isVersionless("https://yokota1.vault.azure.net/notkeys/key1");
+  }
+
   // ==================== AzureKmsAead unit tests ====================
 
   private static CryptographyClient fakeCryptographyClient() throws Exception {
