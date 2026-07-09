@@ -71,12 +71,49 @@ public class AliCloudKmsAeadTest {
   }
 
   @Test
-  public void decryptRejectsWrongReturnedKeyIdForPlainKeyIdUris() throws Exception {
+  public void decryptRejectsWrongReturnedKeyIdForUuidKeyIdUris() throws Exception {
     RecordingOperations operations = new RecordingOperations();
     operations.decryptPlaintextBase64 = base64("secret-dek");
-    operations.decryptKeyId = "key-different";
+    operations.decryptKeyId = "f4f03f7a-7078-4fe9-9a6b-b8ae12a34567";
     AliCloudKmsAead aead = new AliCloudKmsAead(
-        AliCloudKmsKeyUri.parse("alicloud-kms://cn-chengdu/key-expected"),
+        AliCloudKmsKeyUri.parse(
+            "alicloud-kms://cn-chengdu/08ec3bb9-034f-485b-b1cd-3459baa81234"),
+        operations);
+
+    GeneralSecurityException error = assertThrows(
+        GeneralSecurityException.class,
+        () -> aead.decrypt(bytes("ciphertext-from-kms"), null));
+
+    assertTrue(error.getMessage().contains("wrong key id"));
+  }
+
+  @Test
+  public void decryptAcceptsReturnedKeyIdForKeyArn() throws Exception {
+    RecordingOperations operations = new RecordingOperations();
+    operations.decryptPlaintextBase64 = base64("secret-dek");
+    operations.decryptKeyId = "08ec3bb9-034f-485b-b1cd-3459baa81234";
+    AliCloudKmsAead aead = new AliCloudKmsAead(
+        AliCloudKmsKeyUri.parse(
+            "alicloud-kms://cn-chengdu/"
+                + "acs%3Akms%3Acn-chengdu%3A123456789%3Akey%2F"
+                + "08ec3bb9-034f-485b-b1cd-3459baa81234"),
+        operations);
+
+    byte[] plaintext = aead.decrypt(bytes("ciphertext-from-kms"), null);
+
+    assertArrayEquals(bytes("secret-dek"), plaintext);
+  }
+
+  @Test
+  public void decryptRejectsWrongReturnedKeyIdForKeyArn() throws Exception {
+    RecordingOperations operations = new RecordingOperations();
+    operations.decryptPlaintextBase64 = base64("secret-dek");
+    operations.decryptKeyId = "f4f03f7a-7078-4fe9-9a6b-b8ae12a34567";
+    AliCloudKmsAead aead = new AliCloudKmsAead(
+        AliCloudKmsKeyUri.parse(
+            "alicloud-kms://cn-chengdu/"
+                + "acs%3Akms%3Acn-chengdu%3A123456789%3Akey%2F"
+                + "08ec3bb9-034f-485b-b1cd-3459baa81234"),
         operations);
 
     GeneralSecurityException error = assertThrows(

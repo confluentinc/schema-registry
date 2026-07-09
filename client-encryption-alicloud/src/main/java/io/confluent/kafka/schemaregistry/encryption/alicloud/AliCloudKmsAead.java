@@ -91,15 +91,20 @@ public final class AliCloudKmsAead implements Aead {
   }
 
   private void checkKeyId(String returnedKeyId) throws GeneralSecurityException {
-    if (!shouldCheckReturnedKeyId(keyUri.keyId()) || returnedKeyId == null) {
+    String expectedKeyId = expectedReturnedKeyId(keyUri.keyId());
+    if (expectedKeyId == null) {
       return;
     }
-    if (!keyUri.keyId().equals(returnedKeyId)) {
+    if (!expectedKeyId.equals(returnedKeyId)) {
       throw new GeneralSecurityException("Alibaba Cloud KMS decryption failed: wrong key id");
     }
   }
 
-  private static boolean shouldCheckReturnedKeyId(String keyId) {
-    return keyId != null && keyId.startsWith("key-");
+  private static String expectedReturnedKeyId(String keyId) {
+    if (keyId == null || keyId.startsWith("alias/") || keyId.contains(":alias/")) {
+      return null;
+    }
+    int arnKeyIndex = keyId.lastIndexOf(":key/");
+    return arnKeyIndex >= 0 ? keyId.substring(arnKeyIndex + ":key/".length()) : keyId;
   }
 }

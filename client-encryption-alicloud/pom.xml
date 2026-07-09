@@ -54,6 +54,12 @@
         <dependency>
             <groupId>com.aliyun</groupId>
             <artifactId>kms20160120</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>org.jacoco.agent</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.aliyun</groupId>
@@ -68,6 +74,12 @@
         <dependency>
             <groupId>com.aliyun</groupId>
             <artifactId>credentials-java</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>org.jacoco.agent</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
