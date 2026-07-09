@@ -243,8 +243,9 @@ public final class AzureKmsClient implements KmsClient {
   }
 
   /**
-   * Wraps a {@link GeneralSecurityException} so it can cross a {@link Function} boundary (which
-   * cannot declare checked exceptions); unwrapped by {@link AzureKmsAead#decrypt}.
+   * Wraps a {@link GeneralSecurityException} so it can cross a {@link Function} or
+   * {@link java.util.function.Supplier} boundary (neither can declare checked exceptions);
+   * unwrapped by {@link AzureKmsAead#decrypt} and {@link AzureKmsAead#encrypt}, respectively.
    */
   static final class RuntimeAzureKmsException extends RuntimeException {
     RuntimeAzureKmsException(GeneralSecurityException cause) {
