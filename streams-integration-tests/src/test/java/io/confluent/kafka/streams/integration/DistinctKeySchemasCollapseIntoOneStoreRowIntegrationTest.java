@@ -57,34 +57,46 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.junit.jupiter.api.Test;
 
 /**
- * Demonstrates the {@code __key_schema_id} row-collapse hazard on a header-aware
- * {@link TimestampedWindowStoreWithHeaders} (KIP-1271).
+ * Demonstrates the {@code __key_schema_id} row-collapse hazard on all three header-aware stores
+ * (KIP-1271): {@link TimestampedKeyValueStoreWithHeaders}, {@link TimestampedWindowStoreWithHeaders},
+ * and {@link SessionStoreWithHeaders} — one {@code @Test} per store type.
  *
- * <p>Identical to the key-value case, but for a windowed store: two DIFFERENT key schemas whose
- * values encode to identical bytes ({@code RowKeyA{id}} and {@code RowKeyB{label}}) collapse into the
- * SAME windowed row when placed in the same window, because in header mode the schema id lives in the
- * {@code __key_schema_id} header and not in the key {@code byte[]}. The processor counts records per
- * {@code (record.key(), window)} in a single fixed window; {@code RowKeyA{id:"k1"}} then
- * {@code RowKeyB{label:"k1"}} reach count 2 (collapse), while {@code RowKeyA{id:"k2"}} is a separate
- * row (count 1). Distinct schemas are registered under {@link RecordNameStrategy}.
+ * <p>In header mode ({@link HeaderSchemaIdSerializer}) the key {@code byte[]} is the raw Avro payload
+ * with no schema-id bytes; the schema GUID rides in the {@code __key_schema_id} header and plays no
+ * part in row identity. Two DIFFERENT key schemas whose values encode to identical bytes
+ * ({@code RowKeyA{id}} and {@code RowKeyB{label}}, both a single string field) therefore map to the
+ * SAME store row, even though they are logically distinct keys carrying different GUIDs.
+ *
+ * <p>Each test runs a Processor-API topology that counts records per {@code record.key()} (per
+ * window / session where applicable). Producing {@code RowKeyA{id:"k1"}} then
+ * {@code RowKeyB{label:"k1"}} makes the count reach 2 — the two distinct logical keys were aggregated
+ * into one row (collapse) — while a genuinely different key ({@code RowKeyA{id:"k2"}}) lands in its
+ * own row (count 1). The distinct schemas are registered under {@link RecordNameStrategy} so both can
+ * be produced to a single input topic without a subject-compatibility clash; header mode resolves
+ * each schema by its GUID on read.
  */
-public class HeaderSchemaIdWindowStoreRowCollapseIntegrationTest extends ClusterTestHarness {
+public class DistinctKeySchemasCollapseIntoOneStoreRowIntegrationTest extends ClusterTestHarness {
 
-  private static final String INPUT_TOPIC = "collapse-window-input";
-  private static final String OUTPUT_TOPIC = "collapse-window-output";
-  private static final String STORE_NAME = "collapse-window-store";
   private static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
   private static final Duration RETENTION_PERIOD = Duration.ofHours(1);
+  private static final Duration SESSION_GAP = Duration.ofMinutes(30);
 
+  // Two same-shaped but differently-named key schemas: equal string values encode to byte-identical
+  // payloads while the schemas (and their registered GUIDs) differ.
   private static final Schema KEY_SCHEMA_A = new Schema.Parser().parse(
       "{\"type\":\"record\",\"name\":\"RowKeyA\","
           + "\"namespace\":\"io.confluent.kafka.streams.integration\","
@@ -98,13 +110,42 @@ public class HeaderSchemaIdWindowStoreRowCollapseIntegrationTest extends Cluster
           + "\"namespace\":\"io.confluent.kafka.streams.integration\","
           + "\"fields\":[{\"name\":\"count\",\"type\":\"long\"}]}");
 
-  public HeaderSchemaIdWindowStoreRowCollapseIntegrationTest() {
+  public DistinctKeySchemasCollapseIntoOneStoreRowIntegrationTest() {
     super(1, true);
   }
 
   @Test
-  public void differentKeySchemasWithEqualValuesCollapseIntoOneWindowedRow() throws Exception {
-    createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
+  public void keyValueStore_differentKeySchemasWithEqualValuesCollapseIntoOneRow() throws Exception {
+    String input = "collapse-kv-input";
+    String output = "collapse-kv-output";
+    String storeName = "collapse-kv-store";
+    createTopics(input, output);
+
+    GenericAvroSerde keySerde = createKeySerde();
+    GenericAvroSerde valueSerde = createValueSerde();
+
+    StreamsBuilder builder = new StreamsBuilder();
+    builder
+        .addStateStore(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(storeName),
+                keySerde,
+                valueSerde))
+        .stream(input, Consumed.with(keySerde, valueSerde))
+        .process(() -> new KeyValueCountProcessor(storeName), storeName)
+        .to(output, Produced.with(keySerde, valueSerde));
+
+    runCollapseScenarioAndAssert(builder.build(), "collapse-kv-test", input, output,
+        "collapse-kv-consumer", "windowed row");
+  }
+
+  @Test
+  public void windowStore_differentKeySchemasWithEqualValuesCollapseIntoOneWindowedRow()
+      throws Exception {
+    String input = "collapse-window-input";
+    String output = "collapse-window-output";
+    String storeName = "collapse-window-store";
+    createTopics(input, output);
 
     GenericAvroSerde keySerde = createKeySerde();
     GenericAvroSerde valueSerde = createValueSerde();
@@ -114,39 +155,74 @@ public class HeaderSchemaIdWindowStoreRowCollapseIntegrationTest extends Cluster
         .addStateStore(
             Stores.timestampedWindowStoreWithHeadersBuilder(
                 Stores.persistentTimestampedWindowStoreWithHeaders(
-                    STORE_NAME, RETENTION_PERIOD, WINDOW_SIZE, false),
+                    storeName, RETENTION_PERIOD, WINDOW_SIZE, false),
                 keySerde,
                 valueSerde))
-        .stream(INPUT_TOPIC, Consumed.with(keySerde, valueSerde))
-        .process(() -> new CountProcessor(STORE_NAME), STORE_NAME)
-        .to(OUTPUT_TOPIC, Produced.with(keySerde, valueSerde));
+        .stream(input, Consumed.with(keySerde, valueSerde))
+        .process(() -> new WindowCountProcessor(storeName), storeName)
+        .to(output, Produced.with(keySerde, valueSerde));
 
+    runCollapseScenarioAndAssert(builder.build(), "collapse-window-test", input, output,
+        "collapse-window-consumer", "windowed row");
+  }
+
+  @Test
+  public void sessionStore_differentKeySchemasWithEqualValuesCollapseIntoOneSession()
+      throws Exception {
+    String input = "collapse-session-input";
+    String output = "collapse-session-output";
+    String storeName = "collapse-session-store";
+    createTopics(input, output);
+
+    GenericAvroSerde keySerde = createKeySerde();
+    GenericAvroSerde valueSerde = createValueSerde();
+
+    StreamsBuilder builder = new StreamsBuilder();
+    builder
+        .addStateStore(
+            Stores.sessionStoreWithHeadersBuilder(
+                Stores.persistentSessionStoreWithHeaders(storeName, SESSION_GAP),
+                keySerde,
+                valueSerde))
+        .stream(input, Consumed.with(keySerde, valueSerde))
+        .process(() -> new SessionCountProcessor(storeName), storeName)
+        .to(output, Produced.with(keySerde, valueSerde));
+
+    runCollapseScenarioAndAssert(builder.build(), "collapse-session-test", input, output,
+        "collapse-session-consumer", "session row");
+  }
+
+  /**
+   * Produces the three-record collapse scenario, consumes the output, and asserts the collapse:
+   * {@code RowKeyA{id:"k1"}} -> 1, {@code RowKeyB{label:"k1"}} -> 2 (collapse), {@code RowKeyA{id:"k2"}}
+   * -> 1 (control). All records share one fixed, recent timestamp so windowed/session rows fall in one
+   * window/session and stay within store retention relative to stream time.
+   */
+  private void runCollapseScenarioAndAssert(Topology topology, String appId, String input,
+      String output, String consumerGroup, String rowNoun) throws Exception {
     KafkaStreams streams = null;
     try {
-      streams = startStreamsAndAwaitRunning(builder.build(), "collapse-window-test");
+      streams = startStreamsAndAwaitRunning(topology, appId);
 
-      // Produce all records with one fixed, recent timestamp so they fall in the same window and
-      // stay within the store's retention relative to stream time.
       long ts = System.currentTimeMillis();
       try (KafkaProducer<GenericRecord, GenericRecord> producer =
           new KafkaProducer<>(createProducerProps())) {
-        producer.send(new ProducerRecord<>(INPUT_TOPIC, null, ts, key(KEY_SCHEMA_A, "id", "k1"), value())).get();
-        producer.send(new ProducerRecord<>(INPUT_TOPIC, null, ts, key(KEY_SCHEMA_B, "label", "k1"), value())).get();
-        producer.send(new ProducerRecord<>(INPUT_TOPIC, null, ts, key(KEY_SCHEMA_A, "id", "k2"), value())).get();
+        producer.send(new ProducerRecord<>(input, null, ts, key(KEY_SCHEMA_A, "id", "k1"), value())).get();
+        producer.send(new ProducerRecord<>(input, null, ts, key(KEY_SCHEMA_B, "label", "k1"), value())).get();
+        producer.send(new ProducerRecord<>(input, null, ts, key(KEY_SCHEMA_A, "id", "k2"), value())).get();
         producer.flush();
       }
 
       List<ConsumerRecord<GenericRecord, GenericRecord>> results =
-          consumeRecords(OUTPUT_TOPIC, "collapse-window-consumer", 3);
+          consumeRecords(output, consumerGroup, 3);
 
-      assertEquals(1L, results.get(0).value().get("count"), "first key: fresh windowed row");
+      assertEquals(1L, results.get(0).value().get("count"), "first key: fresh " + rowNoun);
       assertEquals("RowKeyB", results.get(1).key().getSchema().getName(),
           "second record's key is the other schema");
       assertEquals(2L, results.get(1).value().get("count"),
-          "row collapse: a different key schema with an equal value shares the windowed row");
+          "row collapse: a different key schema with an equal value shares the " + rowNoun);
       assertEquals(1L, results.get(2).value().get("count"),
-          "control: a different key value is a separate windowed row");
-
+          "control: a different key value is a separate " + rowNoun);
       assertNotEquals(results.get(0).key().getSchema().getName(),
           results.get(1).key().getSchema().getName(),
           "the collapsing keys use two different schemas");
@@ -155,15 +231,46 @@ public class HeaderSchemaIdWindowStoreRowCollapseIntegrationTest extends Cluster
     }
   }
 
+  // ---- processors (one per store type) ----
+
+  /** Counts records per {@code record.key()} in a header-aware timestamped KV store. */
+  private static class KeyValueCountProcessor
+      implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
+
+    private final String storeName;
+    private ProcessorContext<GenericRecord, GenericRecord> context;
+    private TimestampedKeyValueStoreWithHeaders<GenericRecord, GenericRecord> store;
+
+    KeyValueCountProcessor(String storeName) {
+      this.storeName = storeName;
+    }
+
+    @Override
+    public void init(ProcessorContext<GenericRecord, GenericRecord> context) {
+      this.context = context;
+      this.store = context.getStateStore(storeName);
+    }
+
+    @Override
+    public void process(Record<GenericRecord, GenericRecord> record) {
+      ValueTimestampHeaders<GenericRecord> existing = store.get(record.key());
+      long prev = existing == null ? 0L : (Long) existing.value().get("count");
+      GenericRecord newValue = incrementedCount(record.value().getSchema(), prev);
+      store.put(record.key(),
+          ValueTimestampHeaders.make(newValue, record.timestamp(), record.headers()));
+      context.forward(new Record<>(record.key(), newValue, record.timestamp(), record.headers()));
+    }
+  }
+
   /** Counts records per {@code (record.key(), fixed window)} in a header-aware window store. */
-  private static class CountProcessor
+  private static class WindowCountProcessor
       implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
 
     private final String storeName;
     private ProcessorContext<GenericRecord, GenericRecord> context;
     private TimestampedWindowStoreWithHeaders<GenericRecord, GenericRecord> store;
 
-    CountProcessor(String storeName) {
+    WindowCountProcessor(String storeName) {
       this.storeName = storeName;
     }
 
@@ -180,12 +287,50 @@ public class HeaderSchemaIdWindowStoreRowCollapseIntegrationTest extends Cluster
       long windowStart = record.timestamp() - (record.timestamp() % WINDOW_SIZE.toMillis());
       ValueTimestampHeaders<GenericRecord> existing = store.fetch(record.key(), windowStart);
       long prev = existing == null ? 0L : (Long) existing.value().get("count");
-      GenericRecord newValue = new GenericData.Record(record.value().getSchema());
-      newValue.put("count", prev + 1);
+      GenericRecord newValue = incrementedCount(record.value().getSchema(), prev);
       store.put(record.key(),
           ValueTimestampHeaders.make(newValue, record.timestamp(), record.headers()), windowStart);
       context.forward(new Record<>(record.key(), newValue, record.timestamp(), record.headers()));
     }
+  }
+
+  /** Counts records per {@code (record.key(), fixed session window)} in a header-aware session store. */
+  private static class SessionCountProcessor
+      implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
+
+    private final String storeName;
+    private ProcessorContext<GenericRecord, GenericRecord> context;
+    private SessionStoreWithHeaders<GenericRecord, GenericRecord> store;
+
+    SessionCountProcessor(String storeName) {
+      this.storeName = storeName;
+    }
+
+    @Override
+    public void init(ProcessorContext<GenericRecord, GenericRecord> context) {
+      this.context = context;
+      this.store = context.getStateStore(storeName);
+    }
+
+    @Override
+    public void process(Record<GenericRecord, GenericRecord> record) {
+      // All records share one timestamp, hence one session window, so the collapse is visible within
+      // a single session row.
+      long t = record.timestamp();
+      Windowed<GenericRecord> sessionKey = new Windowed<>(record.key(), new SessionWindow(t, t));
+      AggregationWithHeaders<GenericRecord> existing = store.fetchSession(record.key(), t, t);
+      long prev = (existing == null || existing.aggregation() == null)
+          ? 0L : (Long) existing.aggregation().get("count");
+      GenericRecord newValue = incrementedCount(record.value().getSchema(), prev);
+      store.put(sessionKey, AggregationWithHeaders.make(newValue, record.headers()));
+      context.forward(new Record<>(record.key(), newValue, t, record.headers()));
+    }
+  }
+
+  private static GenericRecord incrementedCount(Schema valueSchema, long prev) {
+    GenericRecord newValue = new GenericData.Record(valueSchema);
+    newValue.put("count", prev + 1);
+    return newValue;
   }
 
   // ---- helpers (mirroring the KIP-1271 store integration tests) ----
@@ -219,6 +364,7 @@ public class HeaderSchemaIdWindowStoreRowCollapseIntegrationTest extends Cluster
     config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
     config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
         HeaderSchemaIdSerializer.class.getName());
+    // Two distinct key schemas share one topic, so give each its own subject.
     config.put(AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY,
         RecordNameStrategy.class.getName());
     serde.configure(config, true);
