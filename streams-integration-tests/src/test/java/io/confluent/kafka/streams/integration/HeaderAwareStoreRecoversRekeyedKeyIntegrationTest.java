@@ -17,7 +17,6 @@
 package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
@@ -50,7 +49,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -73,42 +71,31 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.junit.jupiter.api.Test;
 
 /**
- * Demonstrates the re-keying hazard (PR #4409's {@code storedHeaderIdUnrelatedToRowKey} scenario) on
- * the header-aware stores (KIP-1271): {@link TimestampedKeyValueStoreWithHeaders},
- * {@link TimestampedWindowStoreWithHeaders}, and {@link SessionStoreWithHeaders} — one {@code @Test}
- * per store type.
+ * Verifies that the header-aware stores (KIP-1271) — {@link TimestampedKeyValueStoreWithHeaders},
+ * {@link TimestampedWindowStoreWithHeaders}, {@link SessionStoreWithHeaders} — <b>preserve key
+ * identity under re-keying</b>: a key reconstructed on read-back carries its own (correct) schema,
+ * not the in-flight record's.
  *
- * <p>A Processor-API processor consumes records keyed by {@code OrderKey{orderId}} and stores each
- * value under a key <em>derived from the value</em>, {@code CustomerKey{customerId}} — a normal
- * secondary-index / re-keying pattern where the store row key ({@code CustomerKey}) has a DIFFERENT
- * schema than the incoming record's key ({@code OrderKey}). In header mode
- * ({@link HeaderSchemaIdSerializer}) the store row bytes carry no schema id; the id used to decode a
- * stored key on read comes from {@code internalContext.headers()} — i.e. the CURRENTLY-processed
- * record's {@code __key_schema_id}, which describes {@code OrderKey}, not the stored
- * {@code CustomerKey}.
+ * <p>Setup (a re-keying / secondary-index pattern): records arrive keyed by {@code OrderKey{orderId}}
+ * and a Processor-API processor stores each value under a key <em>derived from the value</em>,
+ * {@code CustomerKey{customerId}} — a store row key whose schema differs from the incoming record's
+ * key. In header mode ({@link HeaderSchemaIdSerializer}) the row key bytes carry no schema id.
  *
- * <p>Each processor therefore sweeps the store (a key-returning read: {@code all()} for KV/window,
- * {@code findSessions(...)} for session) at the START of {@code process()} — before its own
- * {@code put}, so the in-flight headers still carry only {@code OrderKey}'s id — and reports the
- * schema of every reconstructed key. The stored {@code CustomerKey} comes back decoded as
- * {@code OrderKey} (both are a single string field, so the bytes decode silently), landing the
- * {@code customerId} value in an {@code orderId} field: the stored {@code __key_schema_id} described a
- * different key than the row, and the reconstruction is silently wrong.
- *
- * <p>Unlike a row-collapse demonstration, this needs no contrived "two key schemas on one topic":
- * the input topic has a single key schema, and the second schema arises naturally from the
- * value-derived store key (they even register under different subjects — input topic vs. changelog).
- * The hazard is Processor-API specific; the DSL always keys stores by {@code record.key()}.
+ * <p>What makes this safe: the header-aware stores keep <b>each entry's headers</b> alongside its
+ * value and deserialize a stored key using <b>those stored per-entry headers</b> (see
+ * {@code MeteredTimestampedKeyValueStoreWithHeaders} iterator), not
+ * {@code internalContext.headers()}. Because the store key serde stamps the key's own
+ * {@code __key_schema_id} into those headers on {@code put}, the read-back reconstructs the correct
+ * {@code CustomerKey} — even though an unrelated {@code OrderKey} record is in flight. (This is the
+ * opposite of a plain, non-header store keyed by a header-mode serde, which would reconstruct the key
+ * under the in-flight {@code OrderKey} id and get it wrong.)
  */
-public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends ClusterTestHarness {
+public class HeaderAwareStoreRecoversRekeyedKeyIntegrationTest extends ClusterTestHarness {
 
   private static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
   private static final Duration RETENTION_PERIOD = Duration.ofHours(1);
   private static final Duration SESSION_GAP = Duration.ofMinutes(30);
 
-  // Incoming records are keyed by OrderKey; the store row key is a CustomerKey derived from the
-  // value. Both are a single string field, so a CustomerKey's bytes decode without error under the
-  // OrderKey schema — the reconstruction is silently wrong rather than a hard failure.
   private static final Schema ORDER_KEY_SCHEMA = new Schema.Parser().parse(
       "{\"type\":\"record\",\"name\":\"OrderKey\","
           + "\"namespace\":\"io.confluent.kafka.streams.integration\","
@@ -121,20 +108,18 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
       "{\"type\":\"record\",\"name\":\"CustomerKey\","
           + "\"namespace\":\"io.confluent.kafka.streams.integration\","
           + "\"fields\":[{\"name\":\"customerId\",\"type\":\"string\"}]}");
-  // Report emitted by the sweep: the schema name a stored key was reconstructed under, and the value
-  // that landed in that reconstructed key's (first) field.
   private static final Schema REPORT_SCHEMA = new Schema.Parser().parse(
       "{\"type\":\"record\",\"name\":\"SweepReport\","
           + "\"namespace\":\"io.confluent.kafka.streams.integration\","
           + "\"fields\":[{\"name\":\"reconstructedKeySchema\",\"type\":\"string\"},"
           + "{\"name\":\"reconstructedValue\",\"type\":\"string\"}]}");
 
-  public RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest() {
+  public HeaderAwareStoreRecoversRekeyedKeyIntegrationTest() {
     super(1, true);
   }
 
   @Test
-  public void keyValueStore_rekeyedStoreKeyDecodesUnderWrongSchemaId() throws Exception {
+  public void keyValueStore_recoversRekeyedKeyWithItsOwnSchema() throws Exception {
     String input = "rekey-kv-input";
     String output = "rekey-kv-output";
     String storeName = "rekey-kv-store";
@@ -154,11 +139,11 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
         .process(() -> new KeyValueRekeyProcessor(storeName), storeName)
         .to(output, Produced.with(keySerde, valueSerde));
 
-    runRekeyScenarioAndAssert(builder.build(), "rekey-kv-test", input, output, "rekey-kv-consumer");
+    runAndAssertKeyRecovered(builder.build(), "rekey-kv-test", input, output, "rekey-kv-consumer");
   }
 
   @Test
-  public void windowStore_rekeyedStoreKeyDecodesUnderWrongSchemaId() throws Exception {
+  public void windowStore_recoversRekeyedKeyWithItsOwnSchema() throws Exception {
     String input = "rekey-window-input";
     String output = "rekey-window-output";
     String storeName = "rekey-window-store";
@@ -179,12 +164,12 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
         .process(() -> new WindowRekeyProcessor(storeName), storeName)
         .to(output, Produced.with(keySerde, valueSerde));
 
-    runRekeyScenarioAndAssert(builder.build(), "rekey-window-test", input, output,
+    runAndAssertKeyRecovered(builder.build(), "rekey-window-test", input, output,
         "rekey-window-consumer");
   }
 
   @Test
-  public void sessionStore_rekeyedStoreKeyDecodesUnderWrongSchemaId() throws Exception {
+  public void sessionStore_recoversRekeyedKeyWithItsOwnSchema() throws Exception {
     String input = "rekey-session-input";
     String output = "rekey-session-output";
     String storeName = "rekey-session-store";
@@ -204,17 +189,17 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
         .process(() -> new SessionRekeyProcessor(storeName), storeName)
         .to(output, Produced.with(keySerde, valueSerde));
 
-    runRekeyScenarioAndAssert(builder.build(), "rekey-session-test", input, output,
+    runAndAssertKeyRecovered(builder.build(), "rekey-session-test", input, output,
         "rekey-session-consumer");
   }
 
   /**
-   * Produces two OrderKey records (customerId "cust-1" then "cust-2"). The processor stores each under
-   * a value-derived CustomerKey, sweeping the store first. The sweep on the second record finds the
-   * first CustomerKey and reconstructs it under the in-flight OrderKey id, so the report's
-   * reconstructed schema is OrderKey (wrong), with "cust-1" mis-filed into it.
+   * Produces one {@code OrderKey} record whose value carries {@code customerId="cust-1"}. The
+   * processor stores it under a value-derived {@code CustomerKey} and immediately reads the key back;
+   * the reconstructed key must be a {@code CustomerKey} (recovered from the entry's own stored
+   * headers), not the in-flight {@code OrderKey}.
    */
-  private void runRekeyScenarioAndAssert(Topology topology, String appId, String input,
+  private void runAndAssertKeyRecovered(Topology topology, String appId, String input,
       String output, String consumerGroup) throws Exception {
     KafkaStreams streams = null;
     try {
@@ -224,37 +209,33 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
       try (KafkaProducer<GenericRecord, GenericRecord> producer =
           new KafkaProducer<>(createProducerProps())) {
         producer.send(new ProducerRecord<>(input, null, ts, orderKey("o1"), orderValue("cust-1"))).get();
-        producer.send(new ProducerRecord<>(input, null, ts, orderKey("o2"), orderValue("cust-2"))).get();
         producer.flush();
       }
 
-      // Exactly one report: the second record's sweep sees the first stored CustomerKey.
       List<ConsumerRecord<GenericRecord, GenericRecord>> results =
           consumeRecords(output, consumerGroup, 1);
 
       GenericRecord report = results.get(0).value();
-      // OrderKey and CustomerKey are both a single string field, so they share an identical Avro wire
-      // format and the CustomerKey bytes decode silently as an OrderKey. Had the two key schemas been
-      // wire-incompatible (e.g. long vs string), this decode under the wrong id would instead THROW a
-      // SerializationException mid-iteration — a hard failure rather than a silent wrong reconstruction.
-      assertEquals("OrderKey", report.get("reconstructedKeySchema").toString(),
-          "stored CustomerKey was reconstructed under the in-flight OrderKey id (wrong schema)");
-      assertNotEquals("CustomerKey", report.get("reconstructedKeySchema").toString(),
-          "the row's real key schema was NOT recovered");
+      // The header-aware store deserializes the stored key from its own per-entry headers (which
+      // carry the CustomerKey id stamped at put time), so the row key is recovered as CustomerKey —
+      // NOT the in-flight OrderKey. (A plain, non-header store keyed by a header-mode serde would
+      // instead decode under the in-flight OrderKey id and reconstruct the wrong key.)
+      assertEquals("CustomerKey", report.get("reconstructedKeySchema").toString(),
+          "header-aware store recovers the stored key's own schema, not the in-flight OrderKey id");
       assertEquals("cust-1", report.get("reconstructedValue").toString(),
-          "the customerId value landed in the wrong (orderId) field");
+          "customerId round-trips correctly");
     } finally {
       closeStreams(streams);
     }
   }
 
   private static void forwardReport(ProcessorContext<GenericRecord, GenericRecord> context,
-      GenericRecord originalKey, GenericRecord reconstructedKey, long timestamp, Headers headers) {
+      GenericRecord originalKey, GenericRecord reconstructedKey, Record<GenericRecord, GenericRecord> record) {
     GenericRecord report = new GenericData.Record(REPORT_SCHEMA);
     report.put("reconstructedKeySchema", reconstructedKey.getSchema().getName());
     String firstField = reconstructedKey.getSchema().getFields().get(0).name();
     report.put("reconstructedValue", String.valueOf(reconstructedKey.get(firstField)));
-    context.forward(new Record<>(originalKey, report, timestamp, headers));
+    context.forward(new Record<>(originalKey, report, record.timestamp(), record.headers()));
   }
 
   private static GenericRecord customerKeyFrom(GenericRecord orderValue) {
@@ -263,7 +244,7 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
     return customerKey;
   }
 
-  // ---- processors (one per store type); each sweeps BEFORE its own put ----
+  // ---- processors (one per store type): put under a value-derived key, then read the key back ----
 
   private static class KeyValueRekeyProcessor
       implements Processor<GenericRecord, GenericRecord, GenericRecord, GenericRecord> {
@@ -284,14 +265,14 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
 
     @Override
     public void process(Record<GenericRecord, GenericRecord> record) {
+      store.put(customerKeyFrom(record.value()),
+          ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()));
       try (KeyValueIterator<GenericRecord, ValueTimestampHeaders<GenericRecord>> it = store.all()) {
         while (it.hasNext()) {
           KeyValue<GenericRecord, ValueTimestampHeaders<GenericRecord>> kv = it.next();
-          forwardReport(context, record.key(), kv.key, record.timestamp(), record.headers());
+          forwardReport(context, record.key(), kv.key, record);
         }
       }
-      store.put(customerKeyFrom(record.value()),
-          ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()));
     }
   }
 
@@ -314,16 +295,16 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
 
     @Override
     public void process(Record<GenericRecord, GenericRecord> record) {
+      long windowStart = record.timestamp() - (record.timestamp() % WINDOW_SIZE.toMillis());
+      store.put(customerKeyFrom(record.value()),
+          ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()), windowStart);
       try (KeyValueIterator<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> it =
           store.all()) {
         while (it.hasNext()) {
           KeyValue<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> kv = it.next();
-          forwardReport(context, record.key(), kv.key.key(), record.timestamp(), record.headers());
+          forwardReport(context, record.key(), kv.key.key(), record);
         }
       }
-      long windowStart = record.timestamp() - (record.timestamp() % WINDOW_SIZE.toMillis());
-      store.put(customerKeyFrom(record.value()),
-          ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()), windowStart);
     }
   }
 
@@ -346,17 +327,18 @@ public class RekeyedStoreKeyDecodesUnderWrongSchemaIdIntegrationTest extends Clu
 
     @Override
     public void process(Record<GenericRecord, GenericRecord> record) {
+      long t = record.timestamp();
+      GenericRecord customerKey = customerKeyFrom(record.value());
+      store.put(new Windowed<>(customerKey, new SessionWindow(t, t)),
+          AggregationWithHeaders.make(record.value(), record.headers()));
+      // Read the key back with a keyed session query (keyless findSessions is unreliable here).
       try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> it =
-          store.findSessions(0L, Long.MAX_VALUE)) {
+          store.findSessions(customerKey, 0L, Long.MAX_VALUE)) {
         while (it.hasNext()) {
           KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> kv = it.next();
-          forwardReport(context, record.key(), kv.key.key(), record.timestamp(), record.headers());
+          forwardReport(context, record.key(), kv.key.key(), record);
         }
       }
-      long t = record.timestamp();
-      Windowed<GenericRecord> sessionKey =
-          new Windowed<>(customerKeyFrom(record.value()), new SessionWindow(t, t));
-      store.put(sessionKey, AggregationWithHeaders.make(record.value(), record.headers()));
     }
   }
 
