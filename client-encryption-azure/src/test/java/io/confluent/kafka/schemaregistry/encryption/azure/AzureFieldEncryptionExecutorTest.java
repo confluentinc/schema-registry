@@ -50,11 +50,13 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -250,9 +252,9 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     return AzureEncryptionProperties.mockClient("unused-key-id-for-mock");
   }
 
-  private static AzureKmsAead.EncryptTarget fixedEncryptTarget(
+  private static Supplier<Map.Entry<CryptographyClient, String>> fixedEncryptTarget(
       CryptographyClient client, String version) {
-    return () -> new AzureKmsAead.EncryptTarget.Resolved(client, version);
+    return () -> new SimpleEntry<>(client, version);
   }
 
   @Test

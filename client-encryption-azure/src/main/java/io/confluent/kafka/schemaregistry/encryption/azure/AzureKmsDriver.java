@@ -42,8 +42,8 @@ public class AzureKmsDriver implements KmsDriver {
   /**
    * Enables making a DEK's encryptedKeyMaterial self-describing with respect to which exact
    * Azure Key Vault key version wrapped it (see {@link AzureKmsAead}), matching the same
-   * self-description property AWS KMS, GCP KMS, and HashiCorp Vault ciphertext already provide
-   * natively. Set as a kek kmsProps entry.
+   * self-description property AWS KMS and GCP KMS ciphertext already provide natively. Set as a
+   * kek kmsProps entry.
    */
   public static final String ENCRYPT_AZURE_KEY_VERSION_SAVE = "encrypt.azure.key.version.save";
 
@@ -72,8 +72,8 @@ public class AzureKmsDriver implements KmsDriver {
    * {@code https://vault.vault.azure.net/keys/name}) into the concrete, currently-enabled version
    * (e.g. {@code https://vault.vault.azure.net/keys/name/<version>}). If {@code kmsKeyId} already
    * includes a version segment, it is returned unchanged and no call is made. This exists because,
-   * unlike AWS KMS, GCP KMS, and HashiCorp Vault, Azure Key Vault's wrap/unwrap operations address
-   * an explicit key version and do not embed that version in the returned ciphertext, so a caller
+   * unlike AWS KMS and GCP KMS, Azure Key Vault's wrap/unwrap operations address an explicit key
+   * version and do not embed that version in the returned ciphertext, so a caller
    * that only ever uses a versionless reference has no way to know which version encrypted a given
    * DEK once the key has been rotated.
    */

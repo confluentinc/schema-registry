@@ -31,9 +31,11 @@ import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.subtle.Validators;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -226,16 +228,20 @@ public final class AzureKmsClient implements KmsClient {
     // a decrypt-only call site never triggers a wasted version-resolution round trip: getAead() is
     // called for both encrypt and decrypt, and decrypt's own resolution (if needed at all) comes
     // from whatever version is embedded in the ciphertext, not from re-resolving "current" here.
-    AzureKmsAead.EncryptTarget encryptTarget = () -> {
-      String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri);
-      CryptographyClient client = testOverride != null
-          ? testOverride
-          : new CryptographyClientBuilder()
-              .pipeline(pipeline)
-              .keyIdentifier(resolvedKeyUri)
-              .buildClient();
-      String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
-      return new AzureKmsAead.EncryptTarget.Resolved(client, version);
+    Supplier<Map.Entry<CryptographyClient, String>> encryptTarget = () -> {
+      try {
+        String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri);
+        CryptographyClient client = testOverride != null
+            ? testOverride
+            : new CryptographyClientBuilder()
+                .pipeline(pipeline)
+                .keyIdentifier(resolvedKeyUri)
+                .buildClient();
+        String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
+        return new SimpleEntry<>(client, version);
+      } catch (GeneralSecurityException e) {
+        throw new RuntimeAzureKmsException(e);
+      }
     };
     return new AzureKmsAead(defaultClient, this.algorithm, encryptTarget, clientFactory);
   }
