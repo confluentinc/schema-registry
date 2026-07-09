@@ -111,8 +111,14 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
   }
 
   /**
-   * Regime 1 happy path: the same key serialized twice yields the same row key bytes AND the same
+   * Happy path: the same key serialized twice yields the same row key bytes AND the same
    * {@code __key_schema_id}. When a single, fixed key serde is used, the invariant holds trivially.
+   *
+   * <p>How this arises in practice: the normal, healthy case. A materialized source table (or any
+   * store) is fed by records whose keys all use one registered schema and one fixed key serde. The
+   * same logical key always encodes to the same bytes and stamps the same GUID, so the stored
+   * {@code __key_schema_id} genuinely describes the row. The remaining tests show how this breaks once
+   * more than one schema, an unrelated id, or a byte-affecting change enters the picture.
    */
   @Test
   public void sameSchema_sameRowKey_sameHeaderId() {
@@ -130,52 +136,77 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
   }
 
   /**
-   * Header mode collapses rows: two DIFFERENT key schemas whose values encode to identical bytes
-   * produce the same row key bytes (so they would land in the same row) while carrying DIFFERENT,
-   * non-equal {@code __key_schema_id} GUIDs. The schema id plays no part in row identity here.
+   * Two DIFFERENT key schemas whose values encode to identical bytes produce the SAME row key
+   * byte[] while carrying DIFFERENT {@code __key_schema_id} GUIDs. Because in header mode the schema
+   * id lives in the header and not in the bytes, it plays no part in row identity, which leads to
+   * three linked consequences demonstrated here in order:
+   * <ol>
+   *   <li><b>Row collapse:</b> identical row key bytes, different GUIDs &rarr; the two distinct keys
+   *       would land in the same store row.</li>
+   *   <li><b>Ambiguous decode:</b> that one shared byte[] deserializes to a DIFFERENT logical key
+   *       depending on which stored {@code __key_schema_id} you trust &mdash; there is no single
+   *       correct reconstruction.</li>
+   *   <li><b>Duplicate headers, last wins:</b> if both GUIDs are present as two
+   *       {@code __key_schema_id} headers, the default {@code DualSchemaIdDeserializer} silently uses
+   *       the LAST one ({@code lastHeader}).</li>
+   * </ol>
+   *
+   * <p>How this arises in practice: two producers (or two topics merged/joined into one store) use
+   * different key schemas that are logically the same shape &mdash; e.g. teams pick different record
+   * names/namespaces for an equal key, or a schema is renamed &mdash; so equal key values encode to
+   * byte-identical payloads under different registered GUIDs. Both records land in one store keyed by
+   * those bytes, each version keeping its own {@code __key_schema_id}. The duplicate-header case
+   * arises when a record that already carries a source {@code __key_schema_id} is re-serialized by a
+   * store key serde that appends another (KIP-1271 preserves the original headers).
    */
   @Test
-  public void differentSchemaIds_sameRowKey_headerModeCollapsesRows() {
-    KafkaAvroSerializer serializer = headerModeKeySerializer();
-
-    RecordHeaders headersA = new RecordHeaders();
-    byte[] rowKeyA = serializer.serialize(TOPIC_A, headersA, record(SCHEMA_A, "id", "row-1"));
-    RecordHeaders headersB = new RecordHeaders();
-    byte[] rowKeyB = serializer.serialize(TOPIC_B, headersB, record(SCHEMA_B, "label", "row-1"));
-
-    assertArrayEquals("distinct schemas, identical row key bytes", rowKeyA, rowKeyB);
-    assertFalse("but the stored key schema ids differ",
-        Arrays.equals(keySchemaIdHeader(headersA), keySchemaIdHeader(headersB)));
-  }
-
-  /**
-   * Semantic divergence: given one shared row key byte[], deserializing it with one version's header
-   * vs another's yields DIFFERENT logical keys. So "which stored header you trust" changes the
-   * reconstructed key — you cannot pick an arbitrary version's {@code __key_schema_id}.
-   */
-  @Test
-  public void sameRowKey_differentHeaderId_decodesToDifferentKey() {
+  public void twoSchemasSameRowKeyBytes_collapseAmbiguousDecodeLastWins() {
     KafkaAvroSerializer serializer = headerModeKeySerializer();
     KafkaAvroDeserializer deserializer = keyDeserializer();
 
+    GenericRecord keyA = record(SCHEMA_A, "id", "row-1");
+    GenericRecord keyB = record(SCHEMA_B, "label", "row-1");
+
     RecordHeaders headersA = new RecordHeaders();
-    byte[] rowKey = serializer.serialize(TOPIC_A, headersA, record(SCHEMA_A, "id", "row-1"));
+    byte[] rowKeyA = serializer.serialize(TOPIC_A, headersA, keyA);
     RecordHeaders headersB = new RecordHeaders();
-    serializer.serialize(TOPIC_B, headersB, record(SCHEMA_B, "label", "row-1"));
+    byte[] rowKeyB = serializer.serialize(TOPIC_B, headersB, keyB);
 
-    Object decodedWithA = deserializer.deserialize(TOPIC_A, headersA, rowKey);
-    Object decodedWithB = deserializer.deserialize(TOPIC_A, headersB, rowKey);
+    // (1) Row collapse: identical bytes, but different (non-equal) stored key schema ids.
+    assertArrayEquals("distinct schemas, identical row key bytes", rowKeyA, rowKeyB);
+    assertFalse("but the stored key schema ids differ",
+        Arrays.equals(keySchemaIdHeader(headersA), keySchemaIdHeader(headersB)));
 
+    // (2) Ambiguous decode: the one shared byte[] decodes to a different logical key per header.
+    Object decodedWithA = deserializer.deserialize(TOPIC_A, headersA, rowKeyA);
+    Object decodedWithB = deserializer.deserialize(TOPIC_A, headersB, rowKeyA);
+    assertEquals("header A reconstructs key A", keyA, decodedWithA);
+    assertEquals("header B reconstructs key B", keyB, decodedWithB);
     assertNotEquals("same bytes, different header id -> different decoded key",
         decodedWithA, decodedWithB);
+
+    // (3) Duplicate __key_schema_id headers: the last one silently wins.
+    RecordHeaders duplicate = new RecordHeaders();
+    duplicate.add(SchemaId.KEY_SCHEMA_ID_HEADER, keySchemaIdHeader(headersA));
+    duplicate.add(SchemaId.KEY_SCHEMA_ID_HEADER, keySchemaIdHeader(headersB));
+    assertEquals("the last __key_schema_id header (B) is the one used",
+        keyB, deserializer.deserialize(TOPIC_A, duplicate, rowKeyA));
   }
 
   /**
-   * The changelog/restore hazard: a stored {@code __key_schema_id} need not describe the row key at
-   * all. Here the row key bytes encode a string key, but the header carries the id of an unrelated
-   * numeric schema (as happens after re-keying / Processor-API puts, where the stored header comes
-   * from the source record, not the store key). Decoding silently produces the wrong record instead
-   * of failing.
+   * A stored {@code __key_schema_id} need not describe the row key at all. Here the row key bytes
+   * encode a string key, but the header carries the id of an unrelated numeric schema. Decoding
+   * silently produces the WRONG record instead of failing (the string's leading length byte happens
+   * to read as a valid {@code long}).
+   *
+   * <p>How this arises in practice: re-keying (a {@code selectKey}/{@code groupBy}/repartition/join)
+   * or a Processor-API {@code put(k, ...)} stores a value under a store key {@code k} while the
+   * record's {@code __key_schema_id} still describes the SOURCE record's key, not {@code k}. This is
+   * chiefly a hazard for the future header-aware VERSIONED store (KIP-1271), which preserves each
+   * version's source-record headers: if it later tried to recover the row key's identity from a
+   * stored {@code __key_schema_id}, it would decode {@code k}'s bytes under a schema for a different
+   * key. On existing stores it requires the narrower combination of a header-mode serde plus a store
+   * whose key schema differs from the in-flight record's, read via range/iteration/punctuation.
    */
   @Test
   public void storedHeaderIdUnrelatedToRowKey_decodesToWrongRecord() {
@@ -200,35 +231,17 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
   }
 
   /**
-   * Duplicate headers, last wins: {@link HeaderSchemaIdSerializer} appends and the default
-   * DualSchemaIdDeserializer reads {@code lastHeader}. If two {@code __key_schema_id} headers are
-   * present (e.g. the store key serde adds one to a record that already carries the source record's
-   * header), the LAST one silently decides the schema.
-   */
-  @Test
-  public void duplicateKeySchemaIdHeaders_lastWins() {
-    KafkaAvroSerializer serializer = headerModeKeySerializer();
-    KafkaAvroDeserializer deserializer = keyDeserializer();
-
-    RecordHeaders headersA = new RecordHeaders();
-    byte[] rowKey = serializer.serialize(TOPIC_A, headersA, record(SCHEMA_A, "id", "row-1"));
-    GenericRecord keyB = record(SCHEMA_B, "label", "row-1");
-    RecordHeaders headersB = new RecordHeaders();
-    serializer.serialize(TOPIC_B, headersB, keyB);
-
-    RecordHeaders duplicate = new RecordHeaders();
-    duplicate.add(SchemaId.KEY_SCHEMA_ID_HEADER, keySchemaIdHeader(headersA));
-    duplicate.add(SchemaId.KEY_SCHEMA_ID_HEADER, keySchemaIdHeader(headersB));
-
-    Object decoded = deserializer.deserialize(TOPIC_A, duplicate, rowKey);
-
-    assertEquals("the last __key_schema_id header (B) is the one used", keyB, decoded);
-  }
-
-  /**
-   * Regime 1 boundary: a byte-affecting key schema evolution (adding a field with a default) changes
-   * the encoded key bytes for the "same" logical key, so the versions self-separate into different
-   * rows rather than mixing schema ids within one row.
+   * A byte-affecting key schema evolution (adding a field with a default) changes the encoded key
+   * bytes for the "same" logical key, so the versions self-separate into different rows rather than
+   * sharing one. This is the inverse of the collapse case: one logical key &rarr; two byte[].
+   *
+   * <p>How this arises in practice: someone evolves the KEY schema by adding a field. During a
+   * rolling upgrade, or with producers pinned to different schema versions, the same logical entity
+   * ({@code id="row-1"}) is emitted under both v1 and v2 and encodes to different bytes. In a keyed
+   * store or compacted topic the "same" entity then occupies two rows and {@code get} of one version
+   * misses the other. Evolving key schemas is explicitly discouraged for exactly this reason, but it
+   * is a common operational mistake. (Unlike the other tests, this one does not depend on where the
+   * schema id is placed &mdash; the payload bytes themselves change.)
    */
   @Test
   public void keySchemaEvolutionChangesBytes_selfSeparatesRows() {
