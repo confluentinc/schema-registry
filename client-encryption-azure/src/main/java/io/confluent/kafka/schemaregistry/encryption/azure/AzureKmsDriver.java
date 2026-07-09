@@ -97,7 +97,17 @@ public class AzureKmsDriver implements KmsDriver {
             .credential(getCredentials(configs))
             .buildClient()::getKey;
     KeyVaultKey key = keyResolver.apply(parsed.name);
-    return key.getId();
+    if (key == null || key.getId() == null) {
+      throw new GeneralSecurityException(
+          "Failed to resolve Azure Key Vault key id for key name '" + parsed.name + "' in vault "
+              + parsed.vaultUrl);
+    }
+    String resolvedId = key.getId();
+    if (parse(resolvedId).version == null) {
+      throw new GeneralSecurityException(
+          "Resolved Azure Key Vault key id is missing a version segment: " + resolvedId);
+    }
+    return resolvedId;
   }
 
   /**

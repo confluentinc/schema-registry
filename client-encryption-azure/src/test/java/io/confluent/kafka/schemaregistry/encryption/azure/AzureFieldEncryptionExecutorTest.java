@@ -149,6 +149,48 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     AzureKmsDriver.getVersionedKeyId(configs, "::not a uri::");
   }
 
+  @Test(expected = GeneralSecurityException.class)
+  public void testGetVersionedKeyIdThrowsWhenResolverReturnsNull() throws Exception {
+    String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
+    @SuppressWarnings("unchecked")
+    Function<String, KeyVaultKey> keyResolver = mock(Function.class);
+    // Deliberately not stubbed: Mockito's default return for an unstubbed mock is null,
+    // simulating a resolver that fails to find the key.
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AzureKmsDriver.TEST_KEY_CLIENT, keyResolver);
+
+    AzureKmsDriver.getVersionedKeyId(configs, versionlessKeyId);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testGetVersionedKeyIdThrowsWhenResolvedKeyIdIsNull() throws Exception {
+    String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
+    KeyVaultKey keyVaultKey = mock(KeyVaultKey.class);
+    when(keyVaultKey.getId()).thenReturn(null);
+    @SuppressWarnings("unchecked")
+    Function<String, KeyVaultKey> keyResolver = mock(Function.class);
+    when(keyResolver.apply("key1")).thenReturn(keyVaultKey);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AzureKmsDriver.TEST_KEY_CLIENT, keyResolver);
+
+    AzureKmsDriver.getVersionedKeyId(configs, versionlessKeyId);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testGetVersionedKeyIdThrowsWhenResolvedKeyIdIsVersionless() throws Exception {
+    String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
+    KeyVaultKey keyVaultKey = mock(KeyVaultKey.class);
+    // Resolver misconfiguration: returns the same versionless id it was asked to resolve.
+    when(keyVaultKey.getId()).thenReturn(versionlessKeyId);
+    @SuppressWarnings("unchecked")
+    Function<String, KeyVaultKey> keyResolver = mock(Function.class);
+    when(keyResolver.apply("key1")).thenReturn(keyVaultKey);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AzureKmsDriver.TEST_KEY_CLIENT, keyResolver);
+
+    AzureKmsDriver.getVersionedKeyId(configs, versionlessKeyId);
+  }
+
   @Test
   public void testWithVersionCombinesVersionlessKeyIdWithExplicitVersion() throws Exception {
     String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
