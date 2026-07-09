@@ -150,8 +150,11 @@ public final class AzureKmsAead implements Aead {
    * lifetime, and old, un-prefixed ciphertext must remain decryptable.
    */
   private static String extractVersion(byte[] ciphertext) {
+    // Arrays.mismatch compares the prefix range in place, avoiding an array copy on every call
+    // (this runs for every decrypt(), including the common case of legacy, un-prefixed
+    // ciphertext).
     if (ciphertext.length < HEADER_LENGTH
-        || !Arrays.equals(Arrays.copyOfRange(ciphertext, 0, PREFIX.length), PREFIX)
+        || Arrays.mismatch(ciphertext, 0, PREFIX.length, PREFIX, 0, PREFIX.length) != -1
         || ciphertext[HEADER_LENGTH - 1] != ':') {
       return null;
     }
