@@ -231,14 +231,10 @@ public final class AzureKmsClient implements KmsClient {
     Supplier<Map.Entry<CryptographyClient, String>> encryptTarget = () -> {
       try {
         String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri);
-        CryptographyClient client = testOverride != null
-            ? testOverride
-            : new CryptographyClientBuilder()
-                .pipeline(pipeline)
-                .keyIdentifier(resolvedKeyUri)
-                .buildClient();
         String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
-        return new SimpleEntry<>(client, version);
+        // Reuses clientFactory rather than building its own CryptographyClient, so there is only
+        // one place (clientFactory) that knows how to turn a version into a client.
+        return new SimpleEntry<>(clientFactory.apply(version), version);
       } catch (GeneralSecurityException e) {
         throw new RuntimeAzureKmsException(e);
       }
