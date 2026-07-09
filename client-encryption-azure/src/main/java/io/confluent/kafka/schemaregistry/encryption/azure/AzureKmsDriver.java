@@ -138,13 +138,19 @@ public class AzureKmsDriver implements KmsDriver {
     } catch (URISyntaxException e) {
       throw new GeneralSecurityException("Invalid Azure Key Vault key id: " + kmsKeyId, e);
     }
-    String[] segments = Arrays.stream(uri.getPath().split("/"))
+    String path = uri.getPath();
+    boolean hasSchemeAndAuthority = uri.getScheme() != null && uri.getAuthority() != null;
+    if (path == null || !hasSchemeAndAuthority) {
+      // path is null for opaque URIs (e.g. "keys:key1"), which have no authority either, but the
+      // path check must come first since it feeds the split() below.
+      throw new GeneralSecurityException("Invalid Azure Key Vault key id: " + kmsKeyId);
+    }
+    String[] segments = Arrays.stream(path.split("/"))
         .filter(s -> !s.isEmpty())
         .toArray(String[]::new);
-    boolean hasSchemeAndAuthority = uri.getScheme() != null && uri.getAuthority() != null;
     boolean hasValidSegments = segments.length >= 2 && segments.length <= 3
         && "keys".equals(segments[0]);
-    if (!hasSchemeAndAuthority || !hasValidSegments) {
+    if (!hasValidSegments) {
       throw new GeneralSecurityException("Invalid Azure Key Vault key id: " + kmsKeyId);
     }
     String vaultUrl = uri.getScheme() + "://" + uri.getAuthority();
