@@ -199,14 +199,22 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
    * silently produces the WRONG record instead of failing (the string's leading length byte happens
    * to read as a valid {@code long}).
    *
-   * <p>How this arises in practice: re-keying (a {@code selectKey}/{@code groupBy}/repartition/join)
-   * or a Processor-API {@code put(k, ...)} stores a value under a store key {@code k} while the
-   * record's {@code __key_schema_id} still describes the SOURCE record's key, not {@code k}. This is
-   * chiefly a hazard for the future header-aware VERSIONED store (KIP-1271), which preserves each
-   * version's source-record headers: if it later tried to recover the row key's identity from a
-   * stored {@code __key_schema_id}, it would decode {@code k}'s bytes under a schema for a different
-   * key. On existing stores it requires the narrower combination of a header-mode serde plus a store
-   * whose key schema differs from the in-flight record's, read via range/iteration/punctuation.
+   * <p>How this arises in practice (Processor API only): a custom processor stores under a key
+   * derived from the value (e.g. a secondary index keyed by {@code CustomerKey} while the input
+   * records are keyed by {@code OrderKey}), then reads keys back via a key-returning op
+   * ({@code all}/{@code range}/{@code fetch}) or a punctuator. At read time
+   * {@code deserializeKey(bytes)} uses the in-flight record's {@code __key_schema_id} (an
+   * {@code OrderKey} id), or empty headers under a punctuator — neither describes the stored
+   * {@code CustomerKey} bytes, so the key decodes under the wrong schema.
+   *
+   * <p>Scope — this does NOT occur in the DSL, where every store is keyed by {@code record.key()}
+   * (so the in-flight id always matches the stored key's schema), and does NOT occur on the
+   * versioned store, which never deserializes stored keys (its {@code get}/{@code put}/{@code delete}
+   * and version queries all take the key as an input). It bites only plain key-value / windowed /
+   * session stores that return keys via iteration. The versioned angle is a purely hypothetical
+   * caution for a future header-aware versioned store that reconstructs keys from stored headers.
+   * (In this serde-level test the unrelated id belongs to a numeric schema, and the string key's
+   * leading length byte happens to read as a valid {@code long}, so decoding silently succeeds.)
    */
   @Test
   public void storedHeaderIdUnrelatedToRowKey_decodesToWrongRecord() {
