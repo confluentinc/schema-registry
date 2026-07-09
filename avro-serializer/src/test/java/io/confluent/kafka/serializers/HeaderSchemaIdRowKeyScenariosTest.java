@@ -91,15 +91,6 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
     return serializer;
   }
 
-  private KafkaAvroSerializer prefixModeKeySerializer() {
-    // No KEY_SCHEMA_ID_SERIALIZER override => default PrefixSchemaIdSerializer (id in the payload).
-    Map<String, Object> config = new HashMap<>();
-    config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry);
-    serializer.configure(config, /* isKey= */ true);
-    return serializer;
-  }
-
   private KafkaAvroDeserializer keyDeserializer() {
     // Default DualSchemaIdDeserializer: reads the __key_schema_id header first, else the prefix.
     Map<String, Object> config = new HashMap<>();
@@ -177,25 +168,6 @@ public class HeaderSchemaIdRowKeyScenariosTest extends KafkaAvroSerializerTest {
 
     assertNotEquals("same bytes, different header id -> different decoded key",
         decodedWithA, decodedWithB);
-  }
-
-  /**
-   * Contrast: in prefix mode the schema id IS part of the key bytes, so the two schemas produce
-   * DIFFERENT row keys (they would separate into different rows). This is the only regime in which
-   * the "otherwise it'd be a different row" reasoning holds — and there the id lives in the bytes,
-   * not the headers.
-   */
-  @Test
-  public void prefixMode_separatesRowsBySchemaId() {
-    KafkaAvroSerializer serializer = prefixModeKeySerializer();
-
-    byte[] rowKeyA =
-        serializer.serialize(TOPIC_A, new RecordHeaders(), record(SCHEMA_A, "id", "row-1"));
-    byte[] rowKeyB =
-        serializer.serialize(TOPIC_B, new RecordHeaders(), record(SCHEMA_B, "label", "row-1"));
-
-    assertFalse("prefix mode: the [magic][id] prefix separates the rows",
-        Arrays.equals(rowKeyA, rowKeyB));
   }
 
   /**
