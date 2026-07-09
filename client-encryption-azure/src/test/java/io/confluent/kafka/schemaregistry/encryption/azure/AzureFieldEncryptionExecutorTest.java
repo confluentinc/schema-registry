@@ -294,6 +294,25 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
   }
 
+  @Test(expected = GeneralSecurityException.class)
+  public void testAeadEncryptThrowsWhenResolvedVersionIsNotHex() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    String nonHexVersion = "g".repeat(32);
+    AzureKmsAead aead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, nonHexVersion), null);
+
+    aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testAeadEncryptThrowsWhenResolvedVersionIsNull() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    AzureKmsAead aead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, null), null);
+
+    aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+  }
+
   @Test
   public void testAeadDecryptUsesEmbeddedVersionViaClientFactory() throws Exception {
     CryptographyClient client = fakeCryptographyClient();

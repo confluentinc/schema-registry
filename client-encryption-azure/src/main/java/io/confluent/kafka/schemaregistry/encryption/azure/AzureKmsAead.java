@@ -94,10 +94,14 @@ public final class AzureKmsAead implements Aead {
       }
     }
     EncryptTarget.Resolved resolved = encryptTarget.resolve();
-    if (resolved.version.length() != VERSION_LENGTH) {
+    if (resolved.version == null
+        || resolved.version.length() != VERSION_LENGTH
+        || !isHex(resolved.version)) {
+      // Mirrors decrypt()'s own isHex check: a DEK this method wraps must always be one this
+      // same class can later unwrap.
       throw new GeneralSecurityException(
-          "kms key version '" + resolved.version + "' is not " + VERSION_LENGTH
-              + " characters; cannot be embedded in a fixed-width azure:v1: prefix");
+          "kms key version '" + resolved.version + "' must be a " + VERSION_LENGTH
+              + "-character hex string; cannot be embedded in a fixed-width azure:v1: prefix");
     }
     try {
       byte[] ciphertext = resolved.client.encrypt(this.algorithm, plaintext).getCipherText();
