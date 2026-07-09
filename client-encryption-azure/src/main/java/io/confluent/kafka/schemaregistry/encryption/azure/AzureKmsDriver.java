@@ -85,7 +85,7 @@ public class AzureKmsDriver implements KmsDriver {
       return kmsKeyId;
     }
     // A Function<String, KeyVaultKey> (rather than a raw KeyClient) is used as the test seam
-    // because KeyClient is a final Azure SDK class that plain Mockito cannot mock; KeyClient::getKey
+    // since KeyClient is a final Azure SDK class that plain Mockito cannot mock; KeyClient::getKey
     // satisfies this functional interface for the real (non-test) path.
     @SuppressWarnings("unchecked")
     Function<String, KeyVaultKey> testKeyResolver =
@@ -141,8 +141,10 @@ public class AzureKmsDriver implements KmsDriver {
     String[] segments = Arrays.stream(uri.getPath().split("/"))
         .filter(s -> !s.isEmpty())
         .toArray(String[]::new);
-    if (uri.getScheme() == null || uri.getAuthority() == null
-        || segments.length < 2 || segments.length > 3 || !"keys".equals(segments[0])) {
+    boolean hasSchemeAndAuthority = uri.getScheme() != null && uri.getAuthority() != null;
+    boolean hasValidSegments = segments.length >= 2 && segments.length <= 3
+        && "keys".equals(segments[0]);
+    if (!hasSchemeAndAuthority || !hasValidSegments) {
       throw new GeneralSecurityException("Invalid Azure Key Vault key id: " + kmsKeyId);
     }
     String vaultUrl = uri.getScheme() + "://" + uri.getAuthority();
