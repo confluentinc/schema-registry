@@ -152,6 +152,24 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     AzureKmsDriver.getVersionedKeyId(configs, "::not a uri::");
   }
 
+  @Test
+  public void testGetVersionedKeyIdWrapsRuntimeExceptionFromResolver() throws Exception {
+    String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";
+    RuntimeException resolverFailure = new RuntimeException("simulated HttpResponseException");
+    @SuppressWarnings("unchecked")
+    Function<String, KeyVaultKey> keyResolver = mock(Function.class);
+    when(keyResolver.apply("key1")).thenThrow(resolverFailure);
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AzureKmsDriver.TEST_KEY_CLIENT, keyResolver);
+
+    try {
+      AzureKmsDriver.getVersionedKeyId(configs, versionlessKeyId);
+      fail("expected GeneralSecurityException");
+    } catch (GeneralSecurityException e) {
+      assertEquals(resolverFailure, e.getCause());
+    }
+  }
+
   @Test(expected = GeneralSecurityException.class)
   public void testGetVersionedKeyIdThrowsWhenResolverReturnsNull() throws Exception {
     String versionlessKeyId = "https://yokota1.vault.azure.net/keys/key1";

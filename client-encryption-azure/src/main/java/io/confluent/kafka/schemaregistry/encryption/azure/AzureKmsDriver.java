@@ -96,7 +96,17 @@ public class AzureKmsDriver implements KmsDriver {
             .vaultUrl(parsed.vaultUrl)
             .credential(getCredentials(configs))
             .buildClient()::getKey;
-    KeyVaultKey key = keyResolver.apply(parsed.name);
+    KeyVaultKey key;
+    try {
+      key = keyResolver.apply(parsed.name);
+    } catch (RuntimeException e) {
+      // KeyClient#getKey throws unchecked exceptions (e.g. HttpResponseException) on failure;
+      // wrap so this method's declared GeneralSecurityException contract holds for any caller,
+      // not just the current one (which happens to also catch RuntimeException further up).
+      throw new GeneralSecurityException(
+          "Failed to resolve Azure Key Vault key id for key name '" + parsed.name + "' in vault "
+              + parsed.vaultUrl, e);
+    }
     if (key == null || key.getId() == null) {
       throw new GeneralSecurityException(
           "Failed to resolve Azure Key Vault key id for key name '" + parsed.name + "' in vault "
