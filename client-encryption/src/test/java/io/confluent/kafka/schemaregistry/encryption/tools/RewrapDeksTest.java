@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.tools;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
@@ -70,6 +71,27 @@ public class RewrapDeksTest {
     assertEquals(kekName, dek.getKekName());
     assertNotNull(dek.getEncryptedKeyMaterial());
     assertNull(dek.getKeyMaterial());
+  }
+
+  @Test
+  public void testRewrapDekNoSubjectSpecified() throws Exception {
+    String subject = topic + "-value";
+    String kekName = "kek1";
+    dekRegistry.createKek(kekName, "local-kms", "mykey", Collections.emptyMap(), null, false);
+    String encryptedDek = "07V2ndh02DA73p+dTybwZFm7DKQSZN1tEwQh+FoX1DZLk4Yj2LLu4omYjp/84tAg3BYlkfGSz+zZacJHIE4=";
+    dekRegistry.createDek(kekName, subject, null, encryptedDek);
+
+    RewrapDeks app = new RewrapDeks();
+    CommandLine cmd = new CommandLine(app);
+
+    // No subject arg passed, so the subject parameter should default to null
+    // (meaning all subjects)
+    int exitCode = cmd.execute("mock://", kekName,
+        "--property", "rule.executors._default_.param.secret=mysecret");
+    assertEquals(0, exitCode);
+
+    Dek dek = dekRegistry.getDekVersion(kekName, subject, -1, null, false);
+    assertNotEquals(encryptedDek, dek.getEncryptedKeyMaterial());
   }
 
   @Test
