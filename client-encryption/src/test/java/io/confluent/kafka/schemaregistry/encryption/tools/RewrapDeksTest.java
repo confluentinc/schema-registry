@@ -63,13 +63,15 @@ public class RewrapDeksTest {
     RewrapDeks app = new RewrapDeks();
     CommandLine cmd = new CommandLine(app);
 
-    int exitCode = cmd.execute("mock://", kekName,
+    // Pass subject positionally so this test verifies an explicit subject is
+    // actually rewrapped, not just that the command exits cleanly.
+    int exitCode = cmd.execute("mock://", kekName, subject,
         "--property", "rule.executors._default_.param.secret=mysecret");
     assertEquals(0, exitCode);
 
     Dek dek = dekRegistry.getDekVersion(kekName, subject, -1, null, false);
     assertEquals(kekName, dek.getKekName());
-    assertNotNull(dek.getEncryptedKeyMaterial());
+    assertNotEquals(encryptedDek, dek.getEncryptedKeyMaterial());
     assertNull(dek.getKeyMaterial());
   }
 
