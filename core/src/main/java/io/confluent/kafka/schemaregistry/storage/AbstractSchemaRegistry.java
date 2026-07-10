@@ -322,6 +322,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     Map<String, Object> schemaProviderConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.SCHEMA_PROVIDERS_CONFIG + ".");
     schemaProviderConfigs.put(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, this);
+    schemaProviderConfigs.put(JsonSchemaProvider.FETCH_REMOTE_REFS,
+        config.getBoolean(SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG));
     List<SchemaProvider> defaultSchemaProviders = Arrays.asList(
         new AvroSchemaProvider(), new JsonSchemaProvider(), new ProtobufSchemaProvider()
     );
@@ -630,9 +632,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     try {
       if (getModeInScope(schema.getSubject()) != Mode.IMPORT) {
         parsedSchema.validate(isSchemaFieldValidationEnabled(config));
-        if (normalize) {
-          parsedSchema = parsedSchema.normalize();
-        }
+      } else {
+        enforceRemoteRefBlockOnImport(parsedSchema);
+      }
+      if (normalize) {
+        parsedSchema = parsedSchema.normalize();
       }
     } catch (Exception e) {
       String errMsg = "Invalid schema " + schema + ", details: " + e.getMessage();
@@ -643,6 +647,25 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     schema.setSchema(parsedSchema.canonicalString());
     schema.setReferences(parsedSchema.references());
     return parsedSchema;
+  }
+
+  // IMPORT skips validation, so force $ref resolution to fire the block; other parse failures are
+  // swallowed to preserve IMPORT's leniency for storing quirky schemas.
+  private void enforceRemoteRefBlockOnImport(ParsedSchema parsedSchema)
+          throws InvalidSchemaException {
+    if (!"JSON".equals(parsedSchema.schemaType())
+        || config.getBoolean(
+            SchemaRegistryConfig.SCHEMA_PROVIDERS_JSON_FETCH_REMOTE_REFS_CONFIG)) {
+      return;
+    }
+    try {
+      parsedSchema.rawSchema();
+    } catch (RuntimeException e) {
+      if (isBlockedRemoteRef(e)) {
+        throw new InvalidSchemaException("Invalid schema of type " + parsedSchema.schemaType()
+            + ", details: " + e.getMessage(), e);
+      }
+    }
   }
 
   protected ParsedSchema canonicalizeSchema(Schema schema,
@@ -1782,12 +1805,31 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           throws SchemaRegistryException {
     ParsedSchema parsedSchema = parseSchema(schema);
     boolean isWildcard = tags.contains("*");
-    List<SchemaTags> schemaTags = parsedSchema.inlineTaggedEntities().entrySet()
-            .stream()
-            .filter(e -> isWildcard || !Collections.disjoint(tags, e.getValue()))
-            .map(e -> new SchemaTags(e.getKey(), new ArrayList<>(e.getValue())))
-            .collect(Collectors.toList());
+    List<SchemaTags> schemaTags;
+    try {
+      schemaTags = parsedSchema.inlineTaggedEntities().entrySet()
+              .stream()
+              .filter(e -> isWildcard || !Collections.disjoint(tags, e.getValue()))
+              .map(e -> new SchemaTags(e.getKey(), new ArrayList<>(e.getValue())))
+              .collect(Collectors.toList());
+    } catch (RuntimeException e) {
+      if (isBlockedRemoteRef(e)) {
+        throw new InvalidSchemaException("Invalid schema of type " + schema.getSchemaType()
+            + ", details: " + e.getMessage(), e);
+      }
+      throw e;
+    }
     schema.setSchemaTags(schemaTags);
+  }
+
+  private static boolean isBlockedRemoteRef(Throwable t) {
+    for (Throwable c = t; c != null; c = c.getCause()) {
+      if (c.getMessage() != null
+          && c.getMessage().contains("Remote schema reference fetching over HTTP(S) is disabled")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
