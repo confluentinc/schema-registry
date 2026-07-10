@@ -57,7 +57,7 @@ public class RewrapDeks implements Callable<Integer> {
   @Parameters(index = "1",
       description = "KEK name", paramLabel = "<kekName>")
   private String kekName;
-  @Parameters(index = "2", arity = "0..1", defaultValue = "true",
+  @Parameters(index = "2", arity = "0..1",
       description = "Subject, defaults to all subjects", paramLabel = "<subject>")
   private String subject;
   @Parameters(index = "3", arity = "0..1", defaultValue = "true",
