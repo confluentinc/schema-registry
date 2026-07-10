@@ -860,6 +860,7 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
             ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
                 restoredStreams.store(StoreQueryParameters.fromNameAndType(
                     storeName, new TimestampedWindowStoreWithHeadersType<>()));
+            System.err.println("DIAG store.getClass()=" + store.getClass());
 
             // Diagnostic: collect what's actually in the restored store before asserting per-entry.
             List<String> restoredKeys = new ArrayList<>();
@@ -867,8 +868,16 @@ TimestampedWindowStoreWithHeadersIntegrationTest extends ClusterTestHarness {
                      store.fetchAll(
                          Instant.ofEpochMilli(baseWindow),
                          Instant.ofEpochMilli(event3Window + WINDOW_SIZE.toMillis()))) {
+                System.err.println("DIAG iter.getClass()=" + iter.getClass());
                 while (iter.hasNext()) {
-                    KeyValue<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> kv = iter.next();
+                    KeyValue<Windowed<GenericRecord>, ValueTimestampHeaders<GenericRecord>> kv;
+                    try {
+                        kv = iter.next();
+                    } catch (RuntimeException e) {
+                        System.err.println("DIAG failure after " + restoredKeys.size()
+                            + " successful entries: " + restoredKeys);
+                        throw e;
+                    }
                     restoredKeys.add(kv.key.key().get("eventId") + "@" + kv.key.window().start());
                 }
             }
