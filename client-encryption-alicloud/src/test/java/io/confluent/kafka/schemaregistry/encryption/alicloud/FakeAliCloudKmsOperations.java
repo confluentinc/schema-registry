@@ -49,7 +49,7 @@ final class FakeAliCloudKmsOperations implements AliCloudKmsOperations {
       throws GeneralSecurityException {
     if (!aeads.containsKey(keyId)) {
       throw new GeneralSecurityException(
-          "Unknown key ID : " + keyId + " is not in " + aeads.keySet());
+          "Unknown key ID: " + keyId + " is not in " + aeads.keySet());
     }
     byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
     byte[] ciphertext = aeads.get(keyId).encrypt(plaintext, serializeContext(encryptionContext));
