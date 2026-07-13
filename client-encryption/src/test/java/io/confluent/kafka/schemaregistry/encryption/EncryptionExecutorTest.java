@@ -460,7 +460,7 @@ public abstract class EncryptionExecutorTest {
     DekRegistryClient mockDekClient = (DekRegistryClient) mockClient;
     Kek kek = new Kek("kek1", encryptionProps.getKmsType(), encryptionProps.getKmsKeyId(),
         null, null, false, 0L, false);
-    when(mockDekClient.getKek("kek1", false, "myctx")).thenReturn(kek);
+    when(mockDekClient.getKek("kek1", false, ".myctx")).thenReturn(kek);
     when(mockDekClient.getKek("kek1", false, null)).thenReturn(kek);
 
     EncryptionExecutor executor = new EncryptionExecutor();
@@ -481,7 +481,7 @@ public abstract class EncryptionExecutorTest {
           ":.myctx:widget-value", null, null, null, null, false,
           RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
       executor.newTransform(ctxWithContext);
-      verify(mockDekClient).getKek("kek1", false, "myctx");
+      verify(mockDekClient).getKek("kek1", false, ".myctx");
 
       // Unqualified subject (default context "."): the context should normalize to
       // null rather than being sent to the registry as the literal "." context.
