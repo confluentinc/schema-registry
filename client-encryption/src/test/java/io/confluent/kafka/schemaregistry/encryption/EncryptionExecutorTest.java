@@ -461,6 +461,7 @@ public abstract class EncryptionExecutorTest {
     Kek kek = new Kek("kek1", encryptionProps.getKmsType(), encryptionProps.getKmsKeyId(),
         null, null, false, 0L, false);
     when(mockDekClient.getKek("kek1", false, "myctx")).thenReturn(kek);
+    when(mockDekClient.getKek("kek1", false, null)).thenReturn(kek);
 
     EncryptionExecutor executor = new EncryptionExecutor();
     try {
@@ -473,15 +474,22 @@ public abstract class EncryptionExecutorTest {
           EncryptionExecutor.TYPE, null, null, null, null, null, false);
       ParsedSchema target = mock(ParsedSchema.class);
       when(target.metadata()).thenReturn(getMetadata("kek1"));
-      RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, target,
+
+      // Context-qualified subject: the context should be parsed out of the subject
+      // and threaded through to the dek registry client, not dropped.
+      RuleContext ctxWithContext = new RuleContext(Collections.emptyMap(), null, null, target,
           ":.myctx:widget-value", null, null, null, null, false,
           RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
-
-      executor.newTransform(ctx);
-
-      // The context (myctx) parsed from the qualified subject should be threaded
-      // through to the dek registry client, not dropped.
+      executor.newTransform(ctxWithContext);
       verify(mockDekClient).getKek("kek1", false, "myctx");
+
+      // Unqualified subject (default context "."): the context should normalize to
+      // null rather than being sent to the registry as the literal "." context.
+      RuleContext ctxDefaultContext = new RuleContext(Collections.emptyMap(), null, null, target,
+          "widget-value", null, null, null, null, false,
+          RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+      executor.newTransform(ctxDefaultContext);
+      verify(mockDekClient).getKek("kek1", false, null);
     } finally {
       executor.close();
     }
