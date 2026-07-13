@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
 
 import com.google.crypto.tink.Aead;
@@ -311,9 +312,11 @@ public class EncryptionExecutor implements RuleExecutor {
     }
 
     protected Kek getOrCreateKek(RuleContext ctx) throws RuleException {
-      String subject = ctx.subject();
-      String context = QualifiedSubject.contextFor(DEFAULT_TENANT, subject);
       boolean isRead = ctx.ruleMode() == RuleMode.READ;
+      String context = QualifiedSubject.contextFor(DEFAULT_TENANT, ctx.subject());
+      if (DEFAULT_CONTEXT.equals(context)) {
+        context = null;
+      }
       KekId kekId = new KekId(kekName, isRead, context);
 
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
