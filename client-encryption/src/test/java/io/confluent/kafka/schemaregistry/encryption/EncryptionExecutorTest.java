@@ -28,6 +28,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,12 +39,15 @@ import com.google.protobuf.DynamicMessage;
 import io.confluent.dekregistry.client.DekRegistryClient;
 import io.confluent.dekregistry.client.DekRegistryClientFactory;
 import io.confluent.dekregistry.client.MockDekRegistryClientFactory;
+import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
@@ -52,6 +56,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
@@ -443,6 +448,48 @@ public abstract class EncryptionExecutorTest {
 
       // Verify that cryptors map was initialized (configure was successful)
       assertNotNull(executor.getCryptors());
+    } finally {
+      executor.close();
+    }
+  }
+
+  @Test
+  public void testGetOrCreateKekUsesContextFromSubject() throws Exception {
+    SchemaRegistryClient mockClient = mock(SchemaRegistryClient.class,
+        withSettings().extraInterfaces(DekRegistryClient.class));
+    DekRegistryClient mockDekClient = (DekRegistryClient) mockClient;
+    Kek kek = new Kek("kek1", encryptionProps.getKmsType(), encryptionProps.getKmsKeyId(),
+        null, null, false, 0L, false);
+    when(mockDekClient.getKek("kek1", false, "myctx")).thenReturn(kek);
+    when(mockDekClient.getKek("kek1", false, null)).thenReturn(kek);
+
+    EncryptionExecutor executor = new EncryptionExecutor();
+    try {
+      executor.setSchemaRegistryClient(mockClient);
+      Map<String, Object> configs = new HashMap<>();
+      configs.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://");
+      executor.configure(configs);
+
+      Rule rule = new Rule("rule1", null, null, null,
+          EncryptionExecutor.TYPE, null, null, null, null, null, false);
+      ParsedSchema target = mock(ParsedSchema.class);
+      when(target.metadata()).thenReturn(getMetadata("kek1"));
+
+      // Context-qualified subject: the context should be parsed out of the subject
+      // and threaded through to the dek registry client, not dropped.
+      RuleContext ctxWithContext = new RuleContext(Collections.emptyMap(), null, null, target,
+          ":.myctx:widget-value", null, null, null, null, false,
+          RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+      executor.newTransform(ctxWithContext);
+      verify(mockDekClient).getKek("kek1", false, "myctx");
+
+      // Unqualified subject (default context "."): the context should normalize to
+      // null rather than being sent to the registry as the literal "." context.
+      RuleContext ctxDefaultContext = new RuleContext(Collections.emptyMap(), null, null, target,
+          "widget-value", null, null, null, null, false,
+          RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+      executor.newTransform(ctxDefaultContext);
+      verify(mockDekClient).getKek("kek1", false, null);
     } finally {
       executor.close();
     }
