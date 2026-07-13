@@ -69,7 +69,7 @@ public class RewrapDeksTest {
 
     // Pass subject positionally so this test verifies an explicit subject is
     // actually rewrapped, not just that the command exits cleanly.
-    int exitCode = cmd.execute("mock://", kekName, subject,
+    int exitCode = cmd.execute("mock://", kekName, subject1,
         "--property", "rule.executors._default_.param.secret=mysecret");
     assertEquals(0, exitCode);
 
@@ -111,7 +111,7 @@ public class RewrapDeksTest {
 
   @Test
   public void testRewrapDekNoSubjectSpecified() throws Exception {
-    String subject = topic + "-value";
+    String subject = topic1 + "-value";
     String kekName = "kek1";
     dekRegistry.createKek(kekName, "local-kms", "mykey", Collections.emptyMap(), null, false);
     String encryptedDek = "07V2ndh02DA73p+dTybwZFm7DKQSZN1tEwQh+FoX1DZLk4Yj2LLu4omYjp/84tAg3BYlkfGSz+zZacJHIE4=";
