@@ -177,7 +177,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
   @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
-    KekId key = new KekId(name, lookupDeleted);
+    return getKek(name, lookupDeleted, null);
+  }
+
+  @Override
+  public Kek getKek(String name, boolean lookupDeleted, String context)
+      throws IOException, RestClientException {
+    KekId key = new KekId(name, lookupDeleted, context);
     // Check positive cache first so a concurrent createKek that just populated kekCache
     // wins over a stale missingKekCache entry left behind by a racing 404 lookup.
     Kek cached = kekCache.getIfPresent(key);
@@ -192,7 +198,9 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     try {
       return kekCache.get(key, () -> {
         try {
-          return restService.getKek(name, lookupDeleted);
+          return context == null
+              ? restService.getKek(name, lookupDeleted)
+              : restService.getKek(DEFAULT_REQUEST_PROPERTIES, name, lookupDeleted, context);
         } catch (RestClientException rce) {
           if (isKeyNotFoundException(rce)) {
             missingKekCache.put(key, System.currentTimeMillis());
@@ -377,6 +385,21 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
         kmsProps, doc, shared, deleted);
   }
 
+  @Override
+  public Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted,
+      String context)
+      throws IOException, RestClientException {
+    return createKek(DEFAULT_REQUEST_PROPERTIES, name, kmsType, kmsKeyId,
+        kmsProps, doc, shared, deleted, context);
+  }
+
   public Kek createKek(
       Map<String, String> requestProperties,
       String name,
@@ -387,6 +410,21 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       boolean shared,
       boolean deleted)
       throws IOException, RestClientException {
+    return createKek(requestProperties, name, kmsType, kmsKeyId,
+        kmsProps, doc, shared, deleted, null);
+  }
+
+  public Kek createKek(
+      Map<String, String> requestProperties,
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted,
+      String context)
+      throws IOException, RestClientException {
     CreateKekRequest request = new CreateKekRequest();
     request.setName(name);
     request.setKmsType(kmsType);
@@ -396,15 +434,17 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     request.setShared(shared);
     request.setDeleted(deleted);
     try {
-      Kek kek = restService.createKek(requestProperties, request);
-      kekCache.put(new KekId(name, deleted), kek);
+      Kek kek = context == null
+          ? restService.createKek(requestProperties, request)
+          : restService.createKek(requestProperties, request, context);
+      kekCache.put(new KekId(name, deleted, context), kek);
       return kek;
     } finally {
       // Invalidate negative cache regardless of outcome: a 409 conflict means the kek
       // already exists, so any cached 404 is stale. Cost on transient failures is one
       // extra REST call on the next get.
-      missingKekCache.invalidate(new KekId(name, false));
-      missingKekCache.invalidate(new KekId(name, true));
+      missingKekCache.invalidate(new KekId(name, false, context));
+      missingKekCache.invalidate(new KekId(name, true, context));
     }
   }
 
@@ -509,7 +549,18 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String doc,
       Boolean shared)
       throws IOException, RestClientException {
-    return updateKek(DEFAULT_REQUEST_PROPERTIES, name, kmsProps, doc, shared);
+    return updateKek(DEFAULT_REQUEST_PROPERTIES, name, kmsProps, doc, shared, null);
+  }
+
+  @Override
+  public Kek updateKek(
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared,
+      String context)
+      throws IOException, RestClientException {
+    return updateKek(DEFAULT_REQUEST_PROPERTIES, name, kmsProps, doc, shared, context);
   }
 
   public Kek updateKek(
@@ -519,14 +570,27 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       String doc,
       Boolean shared)
       throws IOException, RestClientException {
+    return updateKek(requestProperties, name, kmsProps, doc, shared, null);
+  }
+
+  public Kek updateKek(
+      Map<String, String> requestProperties,
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared,
+      String context)
+      throws IOException, RestClientException {
     UpdateKekRequest request = new UpdateKekRequest();
     request.setKmsProps(kmsProps);
     request.setDoc(doc);
     request.setShared(shared);
-    Kek kek = restService.updateKek(requestProperties, name, request);
-    kekCache.put(new KekId(name, false), kek);
-    missingKekCache.invalidate(new KekId(name, false));
-    missingKekCache.invalidate(new KekId(name, true));
+    Kek kek = context == null
+        ? restService.updateKek(requestProperties, name, request)
+        : restService.updateKek(requestProperties, name, request, context);
+    kekCache.put(new KekId(name, false, context), kek);
+    missingKekCache.invalidate(new KekId(name, false, context));
+    missingKekCache.invalidate(new KekId(name, true, context));
     return kek;
   }
 
@@ -536,12 +600,29 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     deleteKek(DEFAULT_REQUEST_PROPERTIES, kekName, permanentDelete);
   }
 
+  @Override
+  public void deleteKek(String kekName, boolean permanentDelete, String context)
+      throws IOException, RestClientException {
+    deleteKek(DEFAULT_REQUEST_PROPERTIES, kekName, permanentDelete, context);
+  }
+
   public void deleteKek(
       Map<String, String> requestProperties, String kekName, boolean permanentDelete)
       throws IOException, RestClientException {
-    restService.deleteKek(requestProperties, kekName, permanentDelete);
-    kekCache.invalidate(new KekId(kekName, false));
-    kekCache.invalidate(new KekId(kekName, true));
+    deleteKek(requestProperties, kekName, permanentDelete, null);
+  }
+
+  public void deleteKek(
+      Map<String, String> requestProperties, String kekName,
+      boolean permanentDelete, String context)
+      throws IOException, RestClientException {
+    if (context == null) {
+      restService.deleteKek(requestProperties, kekName, permanentDelete);
+    } else {
+      restService.deleteKek(requestProperties, kekName, permanentDelete, context);
+    }
+    kekCache.invalidate(new KekId(kekName, false, context));
+    kekCache.invalidate(new KekId(kekName, true, context));
   }
 
   @Override
@@ -584,14 +665,30 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
     undeleteKek(DEFAULT_REQUEST_PROPERTIES, kekName);
   }
 
+  @Override
+  public void undeleteKek(String kekName, String context)
+      throws IOException, RestClientException {
+    undeleteKek(DEFAULT_REQUEST_PROPERTIES, kekName, context);
+  }
+
   public void undeleteKek(
       Map<String, String> requestProperties, String kekName)
       throws IOException, RestClientException {
-    restService.undeleteKek(requestProperties, kekName);
-    kekCache.invalidate(new KekId(kekName, false));
-    kekCache.invalidate(new KekId(kekName, true));
-    missingKekCache.invalidate(new KekId(kekName, false));
-    missingKekCache.invalidate(new KekId(kekName, true));
+    undeleteKek(requestProperties, kekName, null);
+  }
+
+  public void undeleteKek(
+      Map<String, String> requestProperties, String kekName, String context)
+      throws IOException, RestClientException {
+    if (context == null) {
+      restService.undeleteKek(requestProperties, kekName);
+    } else {
+      restService.undeleteKek(requestProperties, kekName, context);
+    }
+    kekCache.invalidate(new KekId(kekName, false, context));
+    kekCache.invalidate(new KekId(kekName, true, context));
+    missingKekCache.invalidate(new KekId(kekName, false, context));
+    missingKekCache.invalidate(new KekId(kekName, true, context));
   }
 
   @Override
@@ -646,10 +743,12 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
 
     private final String name;
     private final boolean lookupDeleted;
+    private final String context;
 
-    public KekId(String name, boolean lookupDeleted) {
+    public KekId(String name, boolean lookupDeleted, String context) {
       this.name = name;
       this.lookupDeleted = lookupDeleted;
+      this.context = context;
     }
 
     public String getName() {
@@ -658,6 +757,10 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
 
     public boolean isLookupDeleted() {
       return lookupDeleted;
+    }
+
+    public String getContext() {
+      return context;
     }
 
     @Override
@@ -670,12 +773,13 @@ public class CachedDekRegistryClient extends CachedSchemaRegistryClient
       }
       KekId kekId = (KekId) o;
       return lookupDeleted == kekId.lookupDeleted
-          && Objects.equals(name, kekId.name);
+          && Objects.equals(name, kekId.name)
+          && Objects.equals(context, kekId.context);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name, lookupDeleted);
+      return Objects.hash(name, lookupDeleted, context);
     }
   }
 
