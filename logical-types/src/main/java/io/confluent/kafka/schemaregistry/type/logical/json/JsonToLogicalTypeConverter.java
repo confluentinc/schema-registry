@@ -337,6 +337,11 @@ public class JsonToLogicalTypeConverter {
   private static Schema convertWithCycleDetection(
       final org.everit.json.schema.Schema schema, boolean isNullable,
       ToLogicalContext<String> ctx, final List<Integer> indexPath) {
+    if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
+      throw new ValidationException(
+          "Schema type nesting depth exceeds the maximum of "
+              + ToLogicalContext.MAX_TYPE_DEPTH);
+    }
     if (schema instanceof ReferenceSchema) {
       ReferenceSchema refSchema = (ReferenceSchema) schema;
       // Prefer NAMED_TYPE_REF emission via convert() — every $ref from our

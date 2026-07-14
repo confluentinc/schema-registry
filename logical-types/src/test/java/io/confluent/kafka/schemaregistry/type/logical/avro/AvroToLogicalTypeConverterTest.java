@@ -18,12 +18,15 @@ package io.confluent.kafka.schemaregistry.type.logical.avro;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AvroToLogicalTypeConverterTest {
@@ -163,5 +166,23 @@ class AvroToLogicalTypeConverterTest {
     assertEquals(Schema.Type.MAP, result.getType());
     assertEquals(Schema.Type.BIGINT, result.getKeyType().getType());
     assertEquals(Schema.Type.BOOLEAN, result.getValueType().getType());
+  }
+
+  @Test
+  void testDeeplyNestedRecordIsRejected() {
+    // A finite but very deeply nested (non-cyclic) record would recurse until the
+    // JVM stack overflows; the depth guard turns it into a ValidationException.
+    org.apache.avro.Schema inner =
+        org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING);
+    for (int i = 0; i < 1100; i++) {
+      org.apache.avro.Schema rec =
+          org.apache.avro.Schema.createRecord("R" + i, null, "ns", false);
+      rec.setFields(Collections.singletonList(
+          new org.apache.avro.Schema.Field("f", inner, null, null)));
+      inner = rec;
+    }
+    final org.apache.avro.Schema deep = inner;
+    assertThrows(ValidationException.class,
+        () -> AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(deep)));
   }
 }

@@ -622,12 +622,14 @@ public abstract class Schema {
         return false;
       }
       EnumValue that = (EnumValue) o;
-      return Objects.equals(symbol, that.symbol);
+      return Objects.equals(symbol, that.symbol)
+          && Objects.equals(doc, that.doc)
+          && Objects.equals(params, that.params);
     }
 
     @Override
     public int hashCode() {
-      return symbol.hashCode();
+      return Objects.hash(symbol, doc, params);
     }
 
     @Override
@@ -688,12 +690,14 @@ public abstract class Schema {
       }
       UnionBranch that = (UnionBranch) o;
       return Objects.equals(name, that.name)
-          && Objects.equals(schema, that.schema);
+          && Objects.equals(schema, that.schema)
+          && Objects.equals(doc, that.doc)
+          && Objects.equals(params, that.params);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(name, schema);
+      return Objects.hash(name, schema, doc, params);
     }
 
     @Override

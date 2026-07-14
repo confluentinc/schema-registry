@@ -48,10 +48,15 @@ public final class LogicalTypesParserFactory {
   /**
    * Parse a DDL script and return its root {@code script} parse tree. Throws
    * {@link ValidationException} with line/column info on the first lex or parse
-   * error encountered.
+   * error encountered, or when the script nests types too deeply to parse
+   * without overflowing the recursive-descent stack.
    */
   public static LogicalTypesParser.ScriptContext parse(String input) {
-    return newParser(input).script();
+    try {
+      return newParser(input).script();
+    } catch (StackOverflowError e) {
+      throw new ValidationException("DDL script nests types too deeply to parse");
+    }
   }
 
   /**

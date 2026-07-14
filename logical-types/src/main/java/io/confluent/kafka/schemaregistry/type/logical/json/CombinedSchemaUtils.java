@@ -30,8 +30,9 @@ import org.everit.json.schema.Schema;
 import org.everit.json.schema.StringSchema;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -65,7 +66,8 @@ public class CombinedSchemaUtils {
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
       }
-      collectPropertySchemas(subSchema, properties, required, new HashSet<>());
+      collectPropertySchemas(subSchema, properties, required,
+          Collections.newSetFromMap(new IdentityHashMap<>()));
     }
     if (!properties.isEmpty()) {
       final Builder builder = ObjectSchema.builder();
@@ -142,11 +144,12 @@ public class CombinedSchemaUtils {
       Schema schema,
       Map<String, Schema> properties,
       Map<String, Boolean> required,
-      Set<String> visited) {
-    if (visited.contains(schema.toString())) {
+      Set<Schema> visited) {
+    // Identity-based cycle guard: a recursive $ref resolves back to the same
+    // Schema instance, so this breaks the recursion without serializing the
+    // subschema (add() returns false when already present).
+    if (!visited.add(schema)) {
       return;
-    } else {
-      visited.add(schema.toString());
     }
     if (schema instanceof CombinedSchema) {
       CombinedSchema combinedSchema = (CombinedSchema) schema;

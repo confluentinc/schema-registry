@@ -45,6 +45,15 @@ import java.util.Set;
  */
 public final class ToLogicalContext<T> extends CycleContext<T> {
 
+  /**
+   * Maximum type-nesting depth accepted when converting an external schema into
+   * a logical type. Deeply nested (but non-cyclic) inputs would otherwise recurse
+   * until the JVM stack overflows; the to-logical converters check this bound and
+   * raise a ValidationException instead. Mirrors the parse-depth cap used for
+   * CHECK-constraint expressions.
+   */
+  public static final int MAX_TYPE_DEPTH = 1024;
+
   private final ParsedSchema parsedSchema;
   private Map<String, Object> unionMetadata;
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();

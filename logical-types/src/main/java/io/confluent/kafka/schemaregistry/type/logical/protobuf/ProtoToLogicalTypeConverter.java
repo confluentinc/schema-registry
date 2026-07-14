@@ -424,6 +424,11 @@ public class ProtoToLogicalTypeConverter {
       final Descriptor schema,
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath) {
+    if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
+      throw new ValidationException(
+          "Schema type nesting depth exceeds the maximum of "
+              + ToLogicalContext.MAX_TYPE_DEPTH);
+    }
     // Walk regular fields first, then oneofs, so each field's indexPath matches its
     // position in the resulting struct. Downstream consumers rely on the
     // regulars-then-oneofs layout, so we align path numbering to it rather than

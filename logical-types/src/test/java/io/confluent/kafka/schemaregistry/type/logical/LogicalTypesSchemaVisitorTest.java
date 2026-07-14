@@ -1796,4 +1796,22 @@ class LogicalTypesSchemaVisitorTest {
     assertNotNull(v.getNamedTypes().get("com.example.Outer.Inner"));
   }
 
+  @Test
+  void testDeeplyNestedTypeExprIsRejected() {
+    // A pathologically deep type expression would overflow the recursive-descent
+    // parser's stack; the parse boundary turns that into a ValidationException.
+    int depth = 50000;
+    StringBuilder sb = new StringBuilder("TYPE ");
+    for (int i = 0; i < depth; i++) {
+      sb.append("ARRAY<");
+    }
+    sb.append("INT");
+    for (int i = 0; i < depth; i++) {
+      sb.append('>');
+    }
+    String script = sb.toString();
+    assertThrows(ValidationException.class,
+        () -> LogicalTypesParserFactory.parse(script));
+  }
+
 }

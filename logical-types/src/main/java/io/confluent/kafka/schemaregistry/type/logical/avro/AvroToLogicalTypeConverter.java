@@ -174,6 +174,11 @@ public class AvroToLogicalTypeConverter {
       boolean isNullable,
       ToLogicalContext<org.apache.avro.Schema> ctx,
       List<Integer> indexPath) {
+    if (indexPath.size() > ToLogicalContext.MAX_TYPE_DEPTH) {
+      throw new ValidationException(
+          "Schema type nesting depth exceeds the maximum of "
+              + ToLogicalContext.MAX_TYPE_DEPTH);
+    }
 
     // Short-circuit recursive back-references to a named type currently being
     // recovered (placeholder is in localNamedTypes); avoids the cycle-detection
@@ -405,11 +410,16 @@ public class AvroToLogicalTypeConverter {
           // Temporarily set field-level union branch metadata
           Map<String, Object> savedMetadata = ctx.getUnionMetadata();
           ctx.setUnionMetadata(extractUnionMetadata(field));
-          final Schema fieldType =
-              convertWithCycleDetection(
-                  field.schema(), false, ctx, fieldIndex);
-          ctx.setUnionMetadata(savedMetadata);
-          ctx.popFieldPath();
+          final Schema fieldType;
+          try {
+            fieldType = convertWithCycleDetection(
+                field.schema(), false, ctx, fieldIndex);
+          } finally {
+            // Restore even if conversion throws, so the field-path stack and
+            // union metadata stay balanced for any later reuse of ctx.
+            ctx.setUnionMetadata(savedMetadata);
+            ctx.popFieldPath();
+          }
 
           Object defaultValue = field.defaultVal();
           boolean hasDefault = defaultValue != null;
@@ -518,10 +528,15 @@ public class AvroToLogicalTypeConverter {
       ctx.pushFieldPath(field.name());
       Map<String, Object> savedMetadata = ctx.getUnionMetadata();
       ctx.setUnionMetadata(extractUnionMetadata(field));
-      final Schema fieldType =
-          convertWithCycleDetection(field.schema(), false, ctx, fieldIndex);
-      ctx.setUnionMetadata(savedMetadata);
-      ctx.popFieldPath();
+      final Schema fieldType;
+      try {
+        fieldType = convertWithCycleDetection(field.schema(), false, ctx, fieldIndex);
+      } finally {
+        // Restore even if conversion throws, so the field-path stack and
+        // union metadata stay balanced for any later reuse of ctx.
+        ctx.setUnionMetadata(savedMetadata);
+        ctx.popFieldPath();
+      }
 
       Object defaultValue = field.defaultVal();
       boolean hasDefault = defaultValue != null;
