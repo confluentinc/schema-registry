@@ -108,6 +108,14 @@ public class JsonToLogicalTypeConverter {
   }
 
   public static LogicalType toLogicalType(final JsonSchema schema) {
+    try {
+      return toLogicalTypeInternal(schema);
+    } catch (StackOverflowError e) {
+      throw new ValidationException("JSON schema nests types too deeply to convert");
+    }
+  }
+
+  private static LogicalType toLogicalTypeInternal(final JsonSchema schema) {
     final ToLogicalContext<String> ctx = new ToLogicalContext<>(schema);
     // Recover named types from $defs (entries are keyed by qualified name).
     recoverNamedTypesFromDefs(schema, ctx);

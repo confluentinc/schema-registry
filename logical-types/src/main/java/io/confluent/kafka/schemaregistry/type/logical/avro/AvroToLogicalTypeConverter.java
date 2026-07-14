@@ -67,6 +67,14 @@ public class AvroToLogicalTypeConverter {
   }
 
   public static LogicalType toLogicalType(final AvroSchema avroSchema) {
+    try {
+      return toLogicalTypeInternal(avroSchema);
+    } catch (StackOverflowError e) {
+      throw new ValidationException("Avro schema nests types too deeply to convert");
+    }
+  }
+
+  private static LogicalType toLogicalTypeInternal(final AvroSchema avroSchema) {
     Map<String, Object> unionMetadata = extractUnionMetadata(avroSchema);
     final ToLogicalContext<org.apache.avro.Schema> ctx =
         new ToLogicalContext<>(avroSchema, unionMetadata);

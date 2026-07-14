@@ -170,19 +170,23 @@ class AvroToLogicalTypeConverterTest {
 
   @Test
   void testDeeplyNestedRecordIsRejected() {
-    // A finite but very deeply nested (non-cyclic) record would recurse until the
-    // JVM stack overflows; the depth guard turns it into a ValidationException.
+    // A finite but deeply nested (non-cyclic) record would recurse until the JVM
+    // stack overflows; the depth guard turns it into a ValidationException well
+    // before that. Depth is a little past MAX_TYPE_DEPTH (256) so the guard fires
+    // after only a few hundred frames — deterministic on any reasonable stack.
     org.apache.avro.Schema inner =
         org.apache.avro.Schema.create(org.apache.avro.Schema.Type.STRING);
-    for (int i = 0; i < 1100; i++) {
+    for (int i = 0; i < 300; i++) {
       org.apache.avro.Schema rec =
           org.apache.avro.Schema.createRecord("R" + i, null, "ns", false);
       rec.setFields(Collections.singletonList(
           new org.apache.avro.Schema.Field("f", inner, null, null)));
       inner = rec;
     }
-    final org.apache.avro.Schema deep = inner;
+    // Build the wrapper outside the assertion: constructing a 300-deep schema is
+    // cheap, so any thrown ValidationException comes from the conversion guard.
+    final AvroSchema deep = new AvroSchema(inner);
     assertThrows(ValidationException.class,
-        () -> AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(deep)));
+        () -> AvroToLogicalTypeConverter.toRootSchema(deep));
   }
 }

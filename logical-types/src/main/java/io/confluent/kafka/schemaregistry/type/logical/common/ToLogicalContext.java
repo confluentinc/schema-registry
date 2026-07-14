@@ -49,10 +49,14 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
    * Maximum type-nesting depth accepted when converting an external schema into
    * a logical type. Deeply nested (but non-cyclic) inputs would otherwise recurse
    * until the JVM stack overflows; the to-logical converters check this bound and
-   * raise a ValidationException instead. Mirrors the parse-depth cap used for
-   * CHECK-constraint expressions.
+   * raise a ValidationException instead. Unlike CHECK-constraint parsing (an
+   * iterative walk that can safely cap at a much higher depth), type conversion
+   * is genuinely recursive and consumes several stack frames per nesting level,
+   * so this cap sits well below the stack's frame budget to fire deterministically
+   * before exhaustion. A StackOverflowError backstop at each converter entry
+   * covers environments whose stack is smaller still.
    */
-  public static final int MAX_TYPE_DEPTH = 1024;
+  public static final int MAX_TYPE_DEPTH = 256;
 
   private final ParsedSchema parsedSchema;
   private Map<String, Object> unionMetadata;

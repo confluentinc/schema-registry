@@ -65,6 +65,14 @@ public class ProtoToLogicalTypeConverter {
   }
 
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
+    try {
+      return toLogicalTypeInternal(schema);
+    } catch (StackOverflowError e) {
+      throw new ValidationException("Protobuf schema nests types too deeply to convert");
+    }
+  }
+
+  private static LogicalType toLogicalTypeInternal(final ProtobufSchema schema) {
     // Re-export-only file: the local proto has no types of its own, just
     // `import public "..."`. Detect this BEFORE toDescriptor(), because
     // toDescriptor() resolves through the public import to the imported file
