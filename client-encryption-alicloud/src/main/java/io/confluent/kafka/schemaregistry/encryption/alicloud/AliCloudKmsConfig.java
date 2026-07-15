@@ -196,6 +196,21 @@ final class AliCloudKmsConfig {
     return caContent;
   }
 
+  private static String caContent(String caFile) throws GeneralSecurityException {
+    if (isBlank(caFile)) {
+      return null;
+    }
+    try {
+      String content = Files.readString(Path.of(caFile), StandardCharsets.UTF_8);
+      if (isBlank(content)) {
+        throw new GeneralSecurityException("Alibaba Cloud KMS CA file is empty: " + caFile);
+      }
+      return content;
+    } catch (IOException e) {
+      throw new GeneralSecurityException("failed to read Alibaba Cloud KMS CA file: " + caFile, e);
+    }
+  }
+
   CredentialType credentialType() {
     return credentialType;
   }
@@ -366,21 +381,6 @@ final class AliCloudKmsConfig {
       return parsed;
     } catch (NumberFormatException e) {
       throw new GeneralSecurityException(key + " must be an integer number of seconds", e);
-    }
-  }
-
-  private static String caContent(String caFile) throws GeneralSecurityException {
-    if (isBlank(caFile)) {
-      return null;
-    }
-    try {
-      String content = Files.readString(Path.of(caFile), StandardCharsets.UTF_8);
-      if (isBlank(content)) {
-        throw new GeneralSecurityException("Alibaba Cloud KMS CA file is empty: " + caFile);
-      }
-      return content;
-    } catch (IOException e) {
-      throw new GeneralSecurityException("failed to read Alibaba Cloud KMS CA file: " + caFile, e);
     }
   }
 
