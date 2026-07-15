@@ -25,6 +25,7 @@ import static io.confluent.kafka.schemaregistry.storage.Mode.READWRITE;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -486,6 +487,65 @@ public abstract class RestApiTest {
     assertEquals(expectedSchemaId(1), id1);
     id1 = restApp.restClient.registerSchema(schema, "subject1", 1, expectedSchemaId(1));
     assertEquals(expectedSchemaId(1), id1);
+  }
+
+  @Test
+  public void testNormalizeConfigFallbackNotAppliedInImportMode() throws Exception {
+    String subject = "testSubject";
+    // Normalize sorts non-standard field properties alphabetically ("aprop" before "zprop"),
+    // so this schema's raw and normalized canonical forms differ.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\",\"zprop\":\"z\",\"aprop\":\"a\"}]}";
+    AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+    String rawSchema = avroSchema.canonicalString();
+    String normalizedSchema = avroSchema.normalize().canonicalString();
+    assertNotEquals(rawSchema, normalizedSchema,
+        "Test schema should have distinct raw and normalized canonical forms");
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setNormalize(true);
+    restApp.restClient.updateConfig(configUpdateRequest, subject);
+    restApp.restClient.setMode(IMPORT.name(), subject);
+
+    // Simulates the exporter's write path: normalize=false request, explicit id/version as
+    // required by IMPORT mode.
+    restApp.restClient.registerSchema(rawSchema, subject, 1, expectedSchemaId(1));
+
+    assertEquals(
+        rawSchema,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be stored unnormalized: IMPORT mode should skip the normalize "
+            + "config fallback"
+    );
+  }
+
+  @Test
+  public void testNormalizeConfigFallbackAppliedOutsideImportMode() throws Exception {
+    String subject = "testSubject";
+    // Normalize sorts non-standard field properties alphabetically ("aprop" before "zprop"),
+    // so this schema's raw and normalized canonical forms differ.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\",\"zprop\":\"z\",\"aprop\":\"a\"}]}";
+    AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+    String rawSchema = avroSchema.canonicalString();
+    String normalizedSchema = avroSchema.normalize().canonicalString();
+
+    ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
+    configUpdateRequest.setNormalize(true);
+    restApp.restClient.updateConfig(configUpdateRequest, subject);
+
+    // Mode stays READWRITE (default): the normalize config fallback still applies.
+    restApp.restClient.registerSchema(rawSchema, subject);
+
+    assertEquals(
+        normalizedSchema,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be normalized via the config fallback outside IMPORT mode"
+    );
   }
 
   @Test
