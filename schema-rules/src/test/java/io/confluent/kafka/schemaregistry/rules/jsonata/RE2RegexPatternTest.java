@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.rules.jsonata;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -73,7 +74,7 @@ public class RE2RegexPatternTest {
   @Test
   public void testSplit() {
     RegexPattern pattern = new RE2RegexPattern("[0-9]", NONE);
-    assertTrue(java.util.Arrays.equals(new String[] {"a", "b", "c"}, pattern.split("a1b2c3")));
+    assertArrayEquals(new String[] {"a", "b", "c"}, pattern.split("a1b2c3"));
   }
 
   @Test

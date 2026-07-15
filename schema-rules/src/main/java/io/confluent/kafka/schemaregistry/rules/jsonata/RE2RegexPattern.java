@@ -20,11 +20,11 @@ import com.api.jsonata4java.expressions.regex.RegexEngine;
 import com.api.jsonata4java.expressions.regex.RegexFlags;
 import com.api.jsonata4java.expressions.regex.RegexMatch;
 import com.api.jsonata4java.expressions.regex.RegexPattern;
+import com.google.re2j.Matcher;
+import com.google.re2j.Pattern;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import com.google.re2j.Matcher;
-import com.google.re2j.Pattern;
 
 /**
  * A JSONata regex engine implementation backed by Google's RE2/J
