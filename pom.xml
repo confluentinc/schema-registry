@@ -53,6 +53,8 @@
         <module>avro-types</module>
         <module>avro-serializer</module>
         <module>json-serializer</module>
+        <module>kafka-connect-schema-backup-api</module>
+        <module>kafka-connect-schema-backup-core</module>
         <module>schema-converter</module>
         <module>avro-data</module>
         <module>avro-converter</module>
