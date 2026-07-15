@@ -1,0 +1,37 @@
+{
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "object",
+          "properties": {
+            "A": {"type": "string"}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "object",
+          "properties": {
+            "A": {"type": "integer"}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "object",
+          "properties": {
+            "B": {"type": "integer"}
+          }
+        }
+      }
+    }
+  ]
+}
