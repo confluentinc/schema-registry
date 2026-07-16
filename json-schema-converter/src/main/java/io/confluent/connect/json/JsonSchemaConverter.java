@@ -22,6 +22,7 @@ import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -205,9 +206,6 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   @Override
   public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
-      BackupConverterHelper.SchemaIdResult schemaIdResult = backupEnvelopeMode
-          ? backupHelper.resolveSchemaId(value, headers, isKey) : null;
-
       JsonSchemaAndValue deserialized =
           deserializer.deserialize(topic, isKey, headers, value);
 
@@ -220,8 +218,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       SchemaAndValue result = new SchemaAndValue(schema, jsonSchemaData.toConnectData(schema,
           (JsonNode) deserialized.getValue()));
 
-      if (backupEnvelopeMode && schemaIdResult != null && result.schema() != null) {
-        return wrapWithBackupMetadata(result, topic, schemaIdResult);
+      if (backupEnvelopeMode && deserialized.getWriterSchemaInfo() != null
+          && result.schema() != null) {
+        return wrapWithBackupMetadata(
+            result, topic, deserialized.getWriterSchemaInfo());
       }
       return result;
     } catch (TimeoutException e) {
@@ -256,10 +256,10 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
 
   private SchemaAndValue wrapWithBackupMetadata(
       SchemaAndValue original, String topic,
-      BackupConverterHelper.SchemaIdResult schemaIdResult) {
+      ParsedSchemaAndValue.SchemaInfo schemaInfo) {
     try {
       return backupHelper.wrapWithBackupMetadata(
-          original, topic, schemaIdResult,
+          original, topic, schemaInfo,
           SchemaBackupConfig.TYPE_JSON_SCHEMA, isKey,
           JSON_SCHEMA_FACTORY, serializer::computeSubjectName);
     } catch (Exception e) {

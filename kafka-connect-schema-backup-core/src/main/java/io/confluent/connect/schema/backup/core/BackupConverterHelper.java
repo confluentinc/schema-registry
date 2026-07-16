@@ -19,9 +19,9 @@ package io.confluent.connect.schema.backup.core;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
@@ -61,28 +61,25 @@ public class BackupConverterHelper {
   }
 
   public SchemaAndValue wrapWithBackupMetadata(
-      SchemaAndValue original, String topic, int schemaId,
+      SchemaAndValue original, String topic,
+      ParsedSchemaAndValue.SchemaInfo schemaInfo,
       String schemaType, boolean isKey,
       BackupReferenceResolver.ParsedSchemaFactory schemaFactory,
       SubjectNameComputer subjectComputer)
       throws IOException, RestClientException {
-    return wrapWithBackupMetadata(original, topic,
-        new SchemaIdResult(schemaId, null),
-        schemaType, isKey, schemaFactory, subjectComputer);
-  }
 
-  public SchemaAndValue wrapWithBackupMetadata(
-      SchemaAndValue original, String topic, SchemaIdResult schemaIdResult,
-      String schemaType, boolean isKey,
-      BackupReferenceResolver.ParsedSchemaFactory schemaFactory,
-      SubjectNameComputer subjectComputer)
-      throws IOException, RestClientException {
+    Integer schemaId = schemaInfo.id();
+    String schemaGuid = schemaInfo.guid() != null
+        ? schemaInfo.guid().toString() : null;
 
     BackupSchemaFetcher.BackupSchemaInfo info;
-    if (schemaIdResult.getSchemaId() != null) {
-      info = schemaFetcher.fetchSchemaInfo(schemaIdResult.getSchemaId());
+    if (schemaId != null) {
+      info = schemaFetcher.fetchSchemaInfo(schemaId);
+    } else if (schemaGuid != null) {
+      info = schemaFetcher.fetchSchemaInfoByGuid(schemaGuid);
     } else {
-      info = schemaFetcher.fetchSchemaInfoByGuid(schemaIdResult.getSchemaGuid());
+      throw new IllegalArgumentException(
+          "Schema info has neither id nor guid for topic=" + topic);
     }
     String rawSchema = info.getRawSchema();
 
@@ -108,56 +105,16 @@ public class BackupConverterHelper {
     }
 
     BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
-        schemaIdResult.getSchemaId(), schemaVersion, schemaType, subject,
+        schemaId, schemaVersion, schemaType, subject,
         rawSchema, info.getReferenceTreeJson(), info.getDirectRefsJson(),
-        schemaIdResult.getSchemaGuid());
+        schemaGuid);
     Struct wrapper = BackupWrapper.buildWrapper(
         wrapperSchema, original.value(), fields);
 
     log.debug("Wrapped backup metadata: topic={}, isKey={}, schemaId={}, guid={}, hasRefs={}",
-        topic, isKey, schemaIdResult.getSchemaId(),
-        schemaIdResult.getSchemaGuid(),
+        topic, isKey, schemaId, schemaGuid,
         info.getReferenceTreeJson() != null);
     return new SchemaAndValue(wrapperSchema, wrapper);
-  }
-
-  public SchemaIdResult resolveSchemaId(
-      byte[] value, Headers headers, boolean isKey) {
-    Integer intId = BackupWrapper.extractSchemaIdFromHeader(headers, isKey);
-    if (intId != null) {
-      return new SchemaIdResult(intId, null);
-    }
-    String guid = BackupWrapper.extractSchemaGuidFromHeader(headers, isKey);
-    if (guid != null) {
-      return new SchemaIdResult(null, guid);
-    }
-    intId = BackupWrapper.extractSchemaId(value);
-    if (intId != null) {
-      return new SchemaIdResult(intId, null);
-    }
-    return null;
-  }
-
-  public static class SchemaIdResult {
-    private final Integer schemaId;
-    private final String schemaGuid;
-
-    public SchemaIdResult(Integer schemaId, String schemaGuid) {
-      if (schemaId == null && schemaGuid == null) {
-        throw new IllegalArgumentException(
-            "SchemaIdResult requires at least one of schemaId or schemaGuid");
-      }
-      this.schemaId = schemaId;
-      this.schemaGuid = schemaGuid;
-    }
-
-    public Integer getSchemaId() {
-      return schemaId;
-    }
-
-    public String getSchemaGuid() {
-      return schemaGuid;
-    }
   }
 
   @FunctionalInterface

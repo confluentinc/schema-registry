@@ -21,6 +21,7 @@ import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
@@ -213,9 +214,6 @@ public class AvroConverter implements Converter {
   @Override
   public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
-      BackupConverterHelper.SchemaIdResult schemaIdResult = backupEnvelopeMode
-          ? backupHelper.resolveSchemaId(value, headers, isKey) : null;
-
       GenericContainerWithVersion containerWithVersion =
           deserializer.deserialize(topic, isKey, headers, value);
       if (containerWithVersion == null) {
@@ -235,8 +233,10 @@ public class AvroConverter implements Converter {
         );
       }
 
-      if (backupEnvelopeMode && schemaIdResult != null && result.schema() != null) {
-        return wrapWithBackupMetadata(result, topic, schemaIdResult);
+      if (backupEnvelopeMode && containerWithVersion.getWriterSchemaInfo() != null
+          && result.schema() != null) {
+        return wrapWithBackupMetadata(
+            result, topic, containerWithVersion.getWriterSchemaInfo());
       }
       return result;
     } catch (TimeoutException e) {
@@ -267,10 +267,10 @@ public class AvroConverter implements Converter {
 
   private SchemaAndValue wrapWithBackupMetadata(
       SchemaAndValue original, String topic,
-      BackupConverterHelper.SchemaIdResult schemaIdResult) {
+      ParsedSchemaAndValue.SchemaInfo schemaInfo) {
     try {
       return backupHelper.wrapWithBackupMetadata(
-          original, topic, schemaIdResult,
+          original, topic, schemaInfo,
           SchemaBackupConfig.TYPE_AVRO, isKey,
           AVRO_SCHEMA_FACTORY, serializer::computeSubjectName);
     } catch (Exception e) {

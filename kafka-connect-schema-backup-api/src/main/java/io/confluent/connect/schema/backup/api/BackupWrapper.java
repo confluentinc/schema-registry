@@ -16,10 +16,7 @@
 
 package io.confluent.connect.schema.backup.api;
 
-import java.nio.ByteBuffer;
-import java.util.UUID;
-
-import org.apache.kafka.common.header.Header;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -41,11 +38,6 @@ public final class BackupWrapper {
   public static final String FIELD_REFERENCE_TREE = "referenceTree";
   public static final String FIELD_DIRECT_REFS = "directRefs";
   public static final String FIELD_SCHEMA_GUID = "schemaGuid";
-
-  private static final byte MAGIC_BYTE = 0x0;
-  private static final byte MAGIC_BYTE_GUID = 0x1;
-  private static final String KEY_SCHEMA_ID_HEADER = "__key_schema_id";
-  private static final String VALUE_SCHEMA_ID_HEADER = "__value_schema_id";
 
   private BackupWrapper() {
   }
@@ -153,62 +145,10 @@ public final class BackupWrapper {
     return schema != null && NAME.equals(schema.name());
   }
 
-  public static Integer extractSchemaId(byte[] value) {
-    if (value == null || value.length < 5 || value[0] != MAGIC_BYTE) {
-      return null;
-    }
-    return ByteBuffer.wrap(value, 1, 4).getInt();
-  }
-
-  public static Integer extractSchemaIdFromHeader(Headers headers, boolean isKey) {
-    if (headers == null) {
-      return null;
-    }
-    String headerKey = isKey ? KEY_SCHEMA_ID_HEADER : VALUE_SCHEMA_ID_HEADER;
-    Header header = headers.lastHeader(headerKey);
-    if (header == null || header.value() == null || header.value().length < 5) {
-      return null;
-    }
-    byte[] hval = header.value();
-    if (hval[0] == MAGIC_BYTE) {
-      return ByteBuffer.wrap(hval, 1, 4).getInt();
-    }
-    return null;
-  }
-
-  public static String extractSchemaGuidFromHeader(Headers headers, boolean isKey) {
-    if (headers == null) {
-      return null;
-    }
-    String headerKey = isKey ? KEY_SCHEMA_ID_HEADER : VALUE_SCHEMA_ID_HEADER;
-    Header header = headers.lastHeader(headerKey);
-    if (header == null || header.value() == null || header.value().length < 17) {
-      return null;
-    }
-    byte[] hval = header.value();
-    if (hval[0] != MAGIC_BYTE_GUID) {
-      return null;
-    }
-    ByteBuffer buf = ByteBuffer.wrap(hval, 1, 16);
-    UUID guid = new UUID(buf.getLong(), buf.getLong());
-    return guid.toString();
-  }
-
-  public static byte[] extractSchemaIdHeaderBytes(Headers headers, boolean isKey) {
-    if (headers == null) {
-      return null;
-    }
-    String headerKey = isKey ? KEY_SCHEMA_ID_HEADER : VALUE_SCHEMA_ID_HEADER;
-    Header header = headers.lastHeader(headerKey);
-    if (header == null || header.value() == null) {
-      return null;
-    }
-    return header.value();
-  }
-
   public static void removeSchemaIdHeaders(Headers headers, boolean isKey) {
     if (headers != null) {
-      headers.remove(isKey ? KEY_SCHEMA_ID_HEADER : VALUE_SCHEMA_ID_HEADER);
+      headers.remove(isKey
+          ? SchemaId.KEY_SCHEMA_ID_HEADER : SchemaId.VALUE_SCHEMA_ID_HEADER);
     }
   }
 }

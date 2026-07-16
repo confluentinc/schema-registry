@@ -16,16 +16,13 @@
 
 package io.confluent.connect.schema.backup.api;
 
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
-import java.util.UUID;
-
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -34,11 +31,8 @@ import static org.junit.Assert.assertTrue;
 
 public class BackupWrapperTest {
 
-  private static final String VALUE_HEADER = "__value_schema_id";
-  private static final String KEY_HEADER = "__key_schema_id";
   private static final String SCHEMA_TYPE_AVRO = "AVRO";
   private static final String TEST_SUBJECT = "test-value";
-  private static final String TEST_GUID = "550e8400-e29b-41d4-a716-446655440000";
 
   @Test
   public void testBuildSchemaWithDataSchema() {
@@ -54,6 +48,7 @@ public class BackupWrapperTest {
     assertNotNull(wrapperSchema.field(BackupWrapper.FIELD_RAW_SCHEMA));
     assertNotNull(wrapperSchema.field(BackupWrapper.FIELD_REFERENCE_TREE));
     assertNotNull(wrapperSchema.field(BackupWrapper.FIELD_DIRECT_REFS));
+    assertNotNull(wrapperSchema.field(BackupWrapper.FIELD_SCHEMA_GUID));
   }
 
   @Test
@@ -77,7 +72,7 @@ public class BackupWrapperTest {
     assertEquals(100, (int) wrapper.getInt32(BackupWrapper.FIELD_SCHEMA_ID));
     assertEquals(1, (int) wrapper.getInt32(BackupWrapper.FIELD_SCHEMA_VERSION));
     assertEquals(SCHEMA_TYPE_AVRO, wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE));
-    assertEquals("test-value", wrapper.getString(BackupWrapper.FIELD_SCHEMA_SUBJECT));
+    assertEquals(TEST_SUBJECT, wrapper.getString(BackupWrapper.FIELD_SCHEMA_SUBJECT));
     assertEquals("{}", wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA));
     assertEquals("{\"tree\":{}}", wrapper.getString(BackupWrapper.FIELD_REFERENCE_TREE));
     assertEquals("[{\"name\":\"ref\"}]", wrapper.getString(BackupWrapper.FIELD_DIRECT_REFS));
@@ -94,6 +89,7 @@ public class BackupWrapperTest {
     assertNull(wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA));
     assertNull(wrapper.getString(BackupWrapper.FIELD_REFERENCE_TREE));
     assertNull(wrapper.getString(BackupWrapper.FIELD_DIRECT_REFS));
+    assertNull(wrapper.getString(BackupWrapper.FIELD_SCHEMA_GUID));
   }
 
   @Test
@@ -123,141 +119,23 @@ public class BackupWrapperTest {
   }
 
   @Test
-  public void testExtractSchemaIdValid() {
-    byte[] wire = new byte[10];
-    wire[0] = 0x00;
-    ByteBuffer.wrap(wire, 1, 4).putInt(42);
-    assertEquals(Integer.valueOf(42), BackupWrapper.extractSchemaId(wire));
-  }
-
-  @Test
-  public void testExtractSchemaIdNull() {
-    assertNull(BackupWrapper.extractSchemaId(null));
-  }
-
-  @Test
-  public void testExtractSchemaIdTooShort() {
-    assertNull(BackupWrapper.extractSchemaId(new byte[]{0x00, 0x01}));
-  }
-
-  @Test
-  public void testExtractSchemaIdWrongMagicByte() {
-    byte[] wire = new byte[]{0x01, 0x00, 0x00, 0x00, 0x2A};
-    assertNull(BackupWrapper.extractSchemaId(wire));
-  }
-
-  @Test
-  public void testExtractSchemaIdEmptyArray() {
-    assertNull(BackupWrapper.extractSchemaId(new byte[0]));
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderValid() {
-    RecordHeaders headers =
-        new RecordHeaders();
-    byte[] headerValue = new byte[]{0x00, 0x00, 0x00, 0x00, 0x2A};
-    headers.add(VALUE_HEADER, headerValue);
-    assertEquals(Integer.valueOf(42),
-        BackupWrapper.extractSchemaIdFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderKey() {
-    RecordHeaders headers =
-        new RecordHeaders();
-    byte[] headerValue = new byte[]{0x00, 0x00, 0x00, 0x00, 0x07};
-    headers.add(KEY_HEADER, headerValue);
-    assertEquals(Integer.valueOf(7),
-        BackupWrapper.extractSchemaIdFromHeader(headers, true));
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderNull() {
-    assertNull(BackupWrapper.extractSchemaIdFromHeader(null, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderMissing() {
-    RecordHeaders headers =
-        new RecordHeaders();
-    assertNull(BackupWrapper.extractSchemaIdFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderGuidReturnsNull() {
-    RecordHeaders headers =
-        new RecordHeaders();
-    byte[] guidHeader = new byte[17];
-    guidHeader[0] = 0x01;
-    headers.add(VALUE_HEADER, guidHeader);
-    assertNull(BackupWrapper.extractSchemaIdFromHeader(headers, false));
-  }
-
-  @Test
   public void testRemoveSchemaIdHeaders() {
-    RecordHeaders headers =
-        new RecordHeaders();
-    headers.add(KEY_HEADER, new byte[]{0x00, 0x00, 0x00, 0x00, 0x01});
-    headers.add(VALUE_HEADER, new byte[]{0x00, 0x00, 0x00, 0x00, 0x02});
+    RecordHeaders headers = new RecordHeaders();
+    headers.add(SchemaId.KEY_SCHEMA_ID_HEADER, new byte[]{0x00, 0x00, 0x00, 0x00, 0x01});
+    headers.add(SchemaId.VALUE_SCHEMA_ID_HEADER, new byte[]{0x00, 0x00, 0x00, 0x00, 0x02});
     headers.add("other-header", "keep".getBytes());
     BackupWrapper.removeSchemaIdHeaders(headers, true);
-    assertNull(headers.lastHeader(KEY_HEADER));
-    assertNotNull(headers.lastHeader(VALUE_HEADER));
+    assertNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
+    assertNotNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
     BackupWrapper.removeSchemaIdHeaders(headers, false);
-    assertNull(headers.lastHeader(VALUE_HEADER));
+    assertNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
     assertNotNull(headers.lastHeader("other-header"));
   }
 
   @Test
-  public void testExtractSchemaGuidFromHeaderValid() {
-    RecordHeaders headers = new RecordHeaders();
-    UUID testGuid = UUID.fromString(TEST_GUID);
-    byte[] guidHeader = new byte[17];
-    guidHeader[0] = 0x01;
-    ByteBuffer buf = ByteBuffer.wrap(guidHeader, 1, 16);
-    buf.putLong(testGuid.getMostSignificantBits());
-    buf.putLong(testGuid.getLeastSignificantBits());
-    headers.add(VALUE_HEADER, guidHeader);
-    assertEquals(TEST_GUID,
-        BackupWrapper.extractSchemaGuidFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaGuidFromHeaderKeyValid() {
-    RecordHeaders headers = new RecordHeaders();
-    UUID testGuid = UUID.fromString(TEST_GUID);
-    byte[] guidHeader = new byte[17];
-    guidHeader[0] = 0x01;
-    ByteBuffer buf = ByteBuffer.wrap(guidHeader, 1, 16);
-    buf.putLong(testGuid.getMostSignificantBits());
-    buf.putLong(testGuid.getLeastSignificantBits());
-    headers.add(KEY_HEADER, guidHeader);
-    assertEquals(TEST_GUID,
-        BackupWrapper.extractSchemaGuidFromHeader(headers, true));
-  }
-
-  @Test
-  public void testExtractSchemaGuidFromHeaderIntIdReturnsNull() {
-    RecordHeaders headers = new RecordHeaders();
-    byte[] intHeader = new byte[5];
-    intHeader[0] = 0x00;
-    ByteBuffer.wrap(intHeader, 1, 4).putInt(42);
-    headers.add(VALUE_HEADER, intHeader);
-    assertNull(BackupWrapper.extractSchemaGuidFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaGuidFromHeaderNull() {
-    assertNull(BackupWrapper.extractSchemaGuidFromHeader(null, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdHeaderBytes() {
-    RecordHeaders headers = new RecordHeaders();
-    byte[] headerValue = new byte[]{0x00, 0x00, 0x00, 0x00, 0x2A};
-    headers.add(VALUE_HEADER, headerValue);
-    assertArrayEquals(headerValue,
-        BackupWrapper.extractSchemaIdHeaderBytes(headers, false));
+  public void testRemoveSchemaIdHeadersNull() {
+    BackupWrapper.removeSchemaIdHeaders(null, true);
+    BackupWrapper.removeSchemaIdHeaders(null, false);
   }
 
   @Test
@@ -302,67 +180,5 @@ public class BackupWrapperTest {
     assertEquals("referenceTree", BackupWrapper.FIELD_REFERENCE_TREE);
     assertEquals("directRefs", BackupWrapper.FIELD_DIRECT_REFS);
     assertEquals("schemaGuid", BackupWrapper.FIELD_SCHEMA_GUID);
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderTooShort() {
-    RecordHeaders headers = new RecordHeaders();
-    headers.add(VALUE_HEADER, new byte[]{0x00, 0x01, 0x02});
-    assertNull(BackupWrapper.extractSchemaIdFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdFromHeaderNullValue() {
-    RecordHeaders headers = new RecordHeaders();
-    headers.add(VALUE_HEADER, null);
-    assertNull(BackupWrapper.extractSchemaIdFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaGuidFromHeaderMissing() {
-    RecordHeaders headers = new RecordHeaders();
-    assertNull(BackupWrapper.extractSchemaGuidFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaGuidFromHeaderTooShort() {
-    RecordHeaders headers = new RecordHeaders();
-    byte[] shortGuid = new byte[10];
-    shortGuid[0] = 0x01;
-    headers.add(VALUE_HEADER, shortGuid);
-    assertNull(BackupWrapper.extractSchemaGuidFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaGuidFromHeaderNullValue() {
-    RecordHeaders headers = new RecordHeaders();
-    headers.add(VALUE_HEADER, null);
-    assertNull(BackupWrapper.extractSchemaGuidFromHeader(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdHeaderBytesNull() {
-    assertNull(BackupWrapper.extractSchemaIdHeaderBytes(null, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdHeaderBytesMissing() {
-    RecordHeaders headers = new RecordHeaders();
-    assertNull(BackupWrapper.extractSchemaIdHeaderBytes(headers, false));
-  }
-
-  @Test
-  public void testExtractSchemaIdHeaderBytesKey() {
-    RecordHeaders headers = new RecordHeaders();
-    byte[] val = new byte[]{0x00, 0x00, 0x00, 0x00, 0x07};
-    headers.add(KEY_HEADER, val);
-    assertArrayEquals(val,
-        BackupWrapper.extractSchemaIdHeaderBytes(headers, true));
-  }
-
-  @Test
-  public void testRemoveSchemaIdHeadersNull() {
-    BackupWrapper.removeSchemaIdHeaders(null, true);
-    BackupWrapper.removeSchemaIdHeaders(null, false);
   }
 }
