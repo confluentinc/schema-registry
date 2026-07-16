@@ -47,7 +47,6 @@ import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidRuleSetException;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.storage.LookupFilter;
-import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.storage.SchemaKey;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -488,8 +487,7 @@ public class SubjectVersionsResource {
 
     RegisterSchemaResponse registerSchemaResponse;
     try {
-      if (!normalize
-          && schemaRegistry.getModeInScope(subjectName) != Mode.IMPORT) {
+      if (!normalize) {
         normalize = Boolean.TRUE.equals(schemaRegistry.getConfigInScope(subjectName).isNormalize());
       }
       Schema result =

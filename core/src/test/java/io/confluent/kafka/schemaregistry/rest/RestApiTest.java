@@ -549,6 +549,34 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testExplicitNormalizeIgnoredInImportMode() throws Exception {
+    String subject = "testSubject";
+    // Normalize sorts non-standard field properties alphabetically ("aprop" before "zprop"),
+    // so this schema's raw and normalized canonical forms differ.
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"name\":\"field1\",\"zprop\":\"z\",\"aprop\":\"a\"}]}";
+    AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
+    String rawSchema = avroSchema.canonicalString();
+    String normalizedSchema = avroSchema.normalize().canonicalString();
+    assertNotEquals(rawSchema, normalizedSchema,
+        "Test schema should have distinct raw and normalized canonical forms");
+
+    restApp.restClient.setMode(IMPORT.name(), subject);
+
+    // IMPORT stores the schema verbatim, so even an explicit normalize=true is skipped.
+    restApp.restClient.registerSchema(rawSchema, subject, 1, expectedSchemaId(1), true);
+
+    assertEquals(
+        rawSchema,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be stored unnormalized: IMPORT mode should skip normalization even "
+            + "when normalize=true is requested"
+    );
+  }
+
+  @Test
   public void testCompatibleSchemaLookupBySubject() throws Exception {
     String subject = "testSubject";
     int numRegisteredSchemas = 0;
