@@ -16,8 +16,6 @@
 
 package io.confluent.connect.schema.backup.api;
 
-import io.confluent.kafka.serializers.schema.id.SchemaId;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -116,26 +114,6 @@ public class BackupWrapperTest {
     Schema noName = SchemaBuilder.struct()
         .field("data", Schema.STRING_SCHEMA).build();
     assertFalse(BackupWrapper.isWrapper(noName));
-  }
-
-  @Test
-  public void testRemoveSchemaIdHeaders() {
-    RecordHeaders headers = new RecordHeaders();
-    headers.add(SchemaId.KEY_SCHEMA_ID_HEADER, new byte[]{0x00, 0x00, 0x00, 0x00, 0x01});
-    headers.add(SchemaId.VALUE_SCHEMA_ID_HEADER, new byte[]{0x00, 0x00, 0x00, 0x00, 0x02});
-    headers.add("other-header", "keep".getBytes());
-    BackupWrapper.removeSchemaIdHeaders(headers, true);
-    assertNull(headers.lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER));
-    assertNotNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
-    BackupWrapper.removeSchemaIdHeaders(headers, false);
-    assertNull(headers.lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER));
-    assertNotNull(headers.lastHeader("other-header"));
-  }
-
-  @Test
-  public void testRemoveSchemaIdHeadersNull() {
-    BackupWrapper.removeSchemaIdHeaders(null, true);
-    BackupWrapper.removeSchemaIdHeaders(null, false);
   }
 
   @Test

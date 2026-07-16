@@ -195,7 +195,6 @@ public class ProtobufConverter implements Converter {
       }
 
       if (v instanceof Message) {
-        BackupWrapper.removeSchemaIdHeaders(headers, isKey);
         return serializer.serialize(topic, isKey, headers,
             (Message) v, serializeSchema);
       }

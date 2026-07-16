@@ -16,8 +16,6 @@
 
 package io.confluent.connect.schema.backup.api;
 
-import io.confluent.kafka.serializers.schema.id.SchemaId;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -145,10 +143,4 @@ public final class BackupWrapper {
     return schema != null && NAME.equals(schema.name());
   }
 
-  public static void removeSchemaIdHeaders(Headers headers, boolean isKey) {
-    if (headers != null) {
-      headers.remove(isKey
-          ? SchemaId.KEY_SCHEMA_ID_HEADER : SchemaId.VALUE_SCHEMA_ID_HEADER);
-    }
-  }
 }

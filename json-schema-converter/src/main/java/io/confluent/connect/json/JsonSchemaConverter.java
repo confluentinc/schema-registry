@@ -188,7 +188,6 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
         jsonSchema = jsonSchemaData.fromConnectSchema(actualConnectSchema);
       }
       JsonNode jsonValue = jsonSchemaData.fromConnectData(actualConnectSchema, actualData);
-      BackupWrapper.removeSchemaIdHeaders(headers, isKey);
       return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
     } catch (DataException e) {
       throw e;

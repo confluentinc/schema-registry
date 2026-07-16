@@ -196,7 +196,6 @@ public class AvroConverter implements Converter {
         serializeSchema = new AvroSchema(avroSchema);
       }
 
-      BackupWrapper.removeSchemaIdHeaders(headers, isKey);
       return serializer.serialize(topic, isKey, headers, avroValue, serializeSchema);
     } catch (DataException e) {
       throw e;
