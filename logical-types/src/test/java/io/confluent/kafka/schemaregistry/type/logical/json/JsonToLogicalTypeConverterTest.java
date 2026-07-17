@@ -17,7 +17,9 @@
 package io.confluent.kafka.schemaregistry.type.logical.json;
 
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.EmptySchema;
@@ -221,5 +223,90 @@ class JsonToLogicalTypeConverterTest {
     Schema result = JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(jsonSchema));
     assertEquals(Schema.Type.STRUCT, result.getType());
     assertTrue(result.getFields().isEmpty());
+  }
+
+  @Test
+  void testSingletonObjectOneOfIsUnionInV1ButCollapsesInV2() {
+    // Mirrors getNullableReference: a single-member oneOf of an object stays a
+    // 1-branch union under V1 (old Flink's union-wrapper) but collapses to the
+    // member under V2 (canonical).
+    org.everit.json.schema.Schema oneOf = CombinedSchema.builder()
+        .criterion(CombinedSchema.ONE_CRITERION)
+        .subschema(ObjectSchema.builder()
+            .addPropertySchema("x", NumberSchema.builder().requiresInteger(true).build())
+            .build())
+        .build();
+
+    Schema v1 = JsonToLogicalTypeConverter
+        .toLogicalType(new JsonSchema(oneOf), LogicalTypeVersion.V1).getRootSchema();
+    assertEquals(Schema.Type.UNION, v1.getType());
+    assertEquals(1, v1.getBranches().size());
+    assertEquals(Schema.Type.STRUCT, v1.getBranches().get(0).getSchema().getType());
+
+    Schema v2 = JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(oneOf));
+    assertEquals(Schema.Type.STRUCT, v2.getType());
+  }
+
+  @Test
+  void testSingletonOneOfFieldIsUnionInV1ButCollapsesInV2() {
+    // Mirrors testSchemaReference (nested references): a field whose type is a
+    // single-member oneOf stays a union field under V1, collapses under V2.
+    org.everit.json.schema.Schema root = ObjectSchema.builder()
+        .addPropertySchema("f1", CombinedSchema.builder()
+            .criterion(CombinedSchema.ONE_CRITERION)
+            .subschema(ObjectSchema.builder()
+                .addPropertySchema("x", StringSchema.builder().build()).build())
+            .build())
+        .addRequiredProperty("f1")
+        .build();
+
+    Schema f1V1 = JsonToLogicalTypeConverter
+        .toLogicalType(new JsonSchema(root), LogicalTypeVersion.V1)
+        .getRootSchema().getField("f1").getSchema();
+    assertEquals(Schema.Type.UNION, f1V1.getType());
+
+    Schema f1V2 = JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(root))
+        .getField("f1").getSchema();
+    assertEquals(Schema.Type.STRUCT, f1V2.getType());
+  }
+
+  @Test
+  void testSingletonOneOfOfReferenceIsUnionInV1() {
+    // Mirrors testRoundTrip[5] / the reference cases: a single-member oneOf of a
+    // $ref stays a 1-branch union (wrapping a NAMED_TYPE_REF) under V1 and
+    // collapses to the NAMED_TYPE_REF under V2.
+    String json = "{\"type\":\"object\","
+        + "\"properties\":{\"f1\":{\"oneOf\":[{\"$ref\":\"#/definitions/T\"}]}},"
+        + "\"required\":[\"f1\"],"
+        + "\"definitions\":{\"T\":{\"type\":\"object\","
+        + "\"properties\":{\"x\":{\"type\":\"string\"}}}}}";
+
+    Schema f1V1 = JsonToLogicalTypeConverter
+        .toLogicalType(new JsonSchema(json), LogicalTypeVersion.V1)
+        .getRootSchema().getField("f1").getSchema();
+    assertEquals(Schema.Type.UNION, f1V1.getType());
+
+    Schema f1V2 = JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(json))
+        .getField("f1").getSchema();
+    assertEquals(Schema.Type.NAMED_TYPE_REF, f1V2.getType());
+  }
+
+  @Test
+  void testReferenceToNullableObjectStaysNullable() {
+    // Mirrors getNonRequiredReference: a required field referencing a nullable
+    // object (type:[object,null]) must keep the referenced type nullable, so the
+    // Flink projection reads it as a nullable row rather than a union.
+    String json = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+        + "\"type\":\"object\","
+        + "\"properties\":{\"ref1\":{\"$ref\":\"#/definitions/opt\"}},"
+        + "\"required\":[\"ref1\"],"
+        + "\"definitions\":{\"opt\":{\"type\":[\"object\",\"null\"],"
+        + "\"properties\":{\"x\":{\"type\":\"string\"}}}}}";
+
+    LogicalType lt = JsonToLogicalTypeConverter.toLogicalType(
+        new JsonSchema(json), LogicalTypeVersion.V1);
+    Schema opt = lt.getNamedTypes().get("opt");
+    assertTrue(opt != null && opt.isNullable(),
+        "referenced nullable object must remain nullable: " + lt.getNamedTypes());
   }
 }

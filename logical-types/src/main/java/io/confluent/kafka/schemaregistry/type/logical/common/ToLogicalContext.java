@@ -59,6 +59,7 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   public static final int MAX_TYPE_DEPTH = 256;
 
   private final ParsedSchema parsedSchema;
+  private final LogicalTypeVersion version;
   private Map<String, Object> unionMetadata;
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
   private final Set<String> externalTypes = new LinkedHashSet<>();
@@ -76,10 +77,21 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // walk runs) so a synthesized name never silently shadows an authored one.
   private int nextRefIndex = 1;
 
+  public ToLogicalContext(ParsedSchema parsedSchema) {
+    this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
+  }
+
   public ToLogicalContext(
       ParsedSchema parsedSchema, Map<String, Object> unionMetadata) {
+    this(parsedSchema, unionMetadata, LogicalTypeVersion.V2);
+  }
+
+  public ToLogicalContext(
+      ParsedSchema parsedSchema, Map<String, Object> unionMetadata,
+      LogicalTypeVersion version) {
     this.parsedSchema = parsedSchema;
     this.unionMetadata = unionMetadata != null ? unionMetadata : Map.of();
+    this.version = version != null ? version : LogicalTypeVersion.V2;
     // Seed externals from the SR reference list. Each entry's `name` is the
     // import string used in the schema text — for proto enum-only files
     // (which have no top-level messages and so don't get walked by the
@@ -94,12 +106,16 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
     }
   }
 
-  public ToLogicalContext(ParsedSchema parsedSchema) {
-    this(parsedSchema, Map.of());
-  }
-
   public ParsedSchema getParsedSchema() {
     return parsedSchema;
+  }
+
+  public LogicalTypeVersion getVersion() {
+    return version;
+  }
+
+  public boolean isV1() {
+    return version == LogicalTypeVersion.V1;
   }
 
   public List<SchemaReference> getReferences() {
