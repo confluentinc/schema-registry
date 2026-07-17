@@ -77,17 +77,13 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // walk runs) so a synthesized name never silently shadows an authored one.
   private int nextRefIndex = 1;
 
-  public ToLogicalContext(
-      ParsedSchema parsedSchema, Map<String, Object> unionMetadata) {
-    this(parsedSchema, unionMetadata, LogicalTypeVersion.V2);
-  }
-
   public ToLogicalContext(ParsedSchema parsedSchema) {
     this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
   }
 
-  public ToLogicalContext(ParsedSchema parsedSchema, LogicalTypeVersion version) {
-    this(parsedSchema, Map.of(), version);
+  public ToLogicalContext(
+      ParsedSchema parsedSchema, Map<String, Object> unionMetadata) {
+    this(parsedSchema, unionMetadata, LogicalTypeVersion.V2);
   }
 
   public ToLogicalContext(

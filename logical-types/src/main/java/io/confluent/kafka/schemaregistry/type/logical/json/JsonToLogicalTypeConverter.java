@@ -123,7 +123,7 @@ public class JsonToLogicalTypeConverter {
 
   private static LogicalType toLogicalTypeInternal(
       final JsonSchema schema, final LogicalTypeVersion version) {
-    final ToLogicalContext<String> ctx = new ToLogicalContext<>(schema, version);
+    final ToLogicalContext<String> ctx = new ToLogicalContext<>(schema, Map.of(), version);
     // Recover named types from $defs (entries are keyed by qualified name).
     recoverNamedTypesFromDefs(schema, ctx);
     final Schema logicalType =
@@ -598,13 +598,14 @@ public class JsonToLogicalTypeConverter {
       throw new ValidationException("Unsupported criterion " + criterion);
     }
 
-    // Singleton-collapse: a oneOf with one non-null member.
-    //  - oneOf:[null, T] is always collapsed to nullable T — the null member
-    //    conveys nullability, not a branch.
-    //  - A bare oneOf:[T] (no null member) is collapsed only in V2 (canonical,
+    // Singleton-collapse: a oneOf/anyOf with one non-null member (this branch is
+    // reached for both ONE_CRITERION and ANY_CRITERION; allOf is handled above).
+    //  - [null, T] is always collapsed to nullable T — the null member conveys
+    //    nullability, not a branch.
+    //  - A bare [T] (no null member) is collapsed only in V2 (canonical,
     //    semantically equivalent to T). In V1 it is kept as a 1-branch union so
     //    the Flink projection reproduces old Flink's union-wrapper RowType (old
-    //    Flink's JSON converter wrapped a bare singleton oneOf rather than
+    //    Flink's JSON converter wrapped a bare singleton oneOf/anyOf rather than
     //    collapsing it).
     List<org.everit.json.schema.Schema> nonNullSubschemas = new ArrayList<>();
     boolean hasNullMember = false;
