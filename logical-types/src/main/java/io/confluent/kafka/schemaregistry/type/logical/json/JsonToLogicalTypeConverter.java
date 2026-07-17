@@ -638,10 +638,14 @@ public class JsonToLogicalTypeConverter {
         String branchName;
         if (hint != null && hint.get("name") != null) {
           branchName = (String) hint.get("name");
+        } else if (!ctx.isV1() && subSchema.getTitle() != null) {
+          // V2 prefers a subschema's title as the branch name. V1 is the
+          // Flink-byte-compat edition, which always synthesizes
+          // connect_union_field_<index> (old Flink converter ignored titles);
+          // preserving titles under V1 would rename union RowType fields.
+          branchName = subSchema.getTitle();
         } else {
-          branchName = subSchema.getTitle() != null
-              ? subSchema.getTitle()
-              : GENERALIZED_TYPE_UNION_PREFIX + index;
+          branchName = GENERALIZED_TYPE_UNION_PREFIX + index;
         }
         String branchDoc = hint != null ? (String) hint.get("doc") : null;
         @SuppressWarnings("unchecked")
