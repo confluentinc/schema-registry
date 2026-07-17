@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
@@ -108,15 +109,21 @@ public class JsonToLogicalTypeConverter {
   }
 
   public static LogicalType toLogicalType(final JsonSchema schema) {
+    return toLogicalType(schema, LogicalTypeVersion.V2);
+  }
+
+  public static LogicalType toLogicalType(
+      final JsonSchema schema, final LogicalTypeVersion version) {
     try {
-      return toLogicalTypeInternal(schema);
+      return toLogicalTypeInternal(schema, version);
     } catch (StackOverflowError e) {
       throw new ValidationException("JSON schema nests types too deeply to convert");
     }
   }
 
-  private static LogicalType toLogicalTypeInternal(final JsonSchema schema) {
-    final ToLogicalContext<String> ctx = new ToLogicalContext<>(schema);
+  private static LogicalType toLogicalTypeInternal(
+      final JsonSchema schema, final LogicalTypeVersion version) {
+    final ToLogicalContext<String> ctx = new ToLogicalContext<>(schema, Map.of(), version);
     // Recover named types from $defs (entries are keyed by qualified name).
     recoverNamedTypesFromDefs(schema, ctx);
     final Schema logicalType =
@@ -591,11 +598,15 @@ public class JsonToLogicalTypeConverter {
       throw new ValidationException("Unsupported criterion " + criterion);
     }
 
-    // Singleton-collapse: a oneOf with exactly one non-null member is
-    // semantically equivalent to that member type. Mirrors Avro's
-    // AvroToLogicalTypeConverter behavior — in content-variant systems
-    // (Avro/JSON), UNION<T> conveys no information beyond T. Catches both
-    // bare oneOf:[T] and the wrapper shape oneOf:[null, T].
+    // Singleton-collapse: a oneOf/anyOf with one non-null member (this branch is
+    // reached for both ONE_CRITERION and ANY_CRITERION; allOf is handled above).
+    //  - [null, T] is always collapsed to nullable T — the null member conveys
+    //    nullability, not a branch.
+    //  - A bare [T] (no null member) is collapsed only in V2 (canonical,
+    //    semantically equivalent to T). In V1 it is kept as a 1-branch union so
+    //    the Flink projection reproduces old Flink's union-wrapper RowType (old
+    //    Flink's JSON converter wrapped a bare singleton oneOf/anyOf rather than
+    //    collapsing it).
     List<org.everit.json.schema.Schema> nonNullSubschemas = new ArrayList<>();
     boolean hasNullMember = false;
     for (org.everit.json.schema.Schema subSchema : combinedSchema.getSubschemas()) {
@@ -605,7 +616,7 @@ public class JsonToLogicalTypeConverter {
         nonNullSubschemas.add(subSchema);
       }
     }
-    if (nonNullSubschemas.size() == 1) {
+    if (nonNullSubschemas.size() == 1 && (hasNullMember || !ctx.isV1())) {
       return convertWithCycleDetection(
           nonNullSubschemas.get(0), isNullable || hasNullMember, ctx, indexPath);
     }
