@@ -187,6 +187,30 @@ class JsonToLogicalTypeConverterTest {
   }
 
   @Test
+  void testUnionBranchNamesUseTitleInV2ButSynthesizeInV1() {
+    // A 2-branch union whose subschemas set `title`. V2 uses the titles as the
+    // branch names; V1 (the Flink-byte-compat edition) ignores titles and
+    // synthesizes connect_union_field_<index>, matching the old Flink converter
+    // and keeping union RowType field names stable across the upgrade.
+    org.everit.json.schema.Schema jsonSchema = CombinedSchema.builder()
+        .criterion(CombinedSchema.ONE_CRITERION)
+        .subschema(StringSchema.builder().title("myString").build())
+        .subschema(BooleanSchema.builder().title("myBool").build())
+        .build();
+
+    Schema v1 = JsonToLogicalTypeConverter
+        .toLogicalType(new JsonSchema(jsonSchema), LogicalTypeVersion.V1).getRootSchema();
+    assertEquals(Schema.Type.UNION, v1.getType());
+    assertEquals("connect_union_field_0", v1.getBranches().get(0).getName());
+    assertEquals("connect_union_field_1", v1.getBranches().get(1).getName());
+
+    Schema v2 = JsonToLogicalTypeConverter.toRootSchema(new JsonSchema(jsonSchema));
+    assertEquals(Schema.Type.UNION, v2.getType());
+    assertEquals("myString", v2.getBranches().get(0).getName());
+    assertEquals("myBool", v2.getBranches().get(1).getName());
+  }
+
+  @Test
   void testSingletonOneOfCollapsesToMemberType() {
     // oneOf:[T] is semantically equivalent to T in JSON Schema (the value
     // satisfies exactly one schema, but there's only one option). Reader
