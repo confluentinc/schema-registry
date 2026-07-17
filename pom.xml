@@ -98,7 +98,7 @@
         <kotlin.version>1.9.10</kotlin.version>
         <antlr.version>4.13.2</antlr.version>
         <azure.sdk.version>4.10.6</azure.sdk.version>
-        <alibaba.kms.sdk.version>1.4.0</alibaba.kms.sdk.version>
+        <alibaba.kms.sdk.version>2.0.0</alibaba.kms.sdk.version>
         <alibaba.tea.sdk.version>1.3.2</alibaba.tea.sdk.version>
         <alibaba.credentials.sdk.version>1.0.4</alibaba.credentials.sdk.version>
         <caffeine.version>2.9.3</caffeine.version>
