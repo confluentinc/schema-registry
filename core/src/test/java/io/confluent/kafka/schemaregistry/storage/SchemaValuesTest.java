@@ -16,8 +16,11 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import java.util.Collections;
+import java.util.List;
 import org.junit.Test;
 
 import io.confluent.kafka.schemaregistry.storage.exceptions.SerializationException;
@@ -160,6 +163,42 @@ public class SchemaValuesTest {
     SchemaValue schemaValue = new SchemaValue("sub", 1, 0, ProtobufSchema.TYPE, null, oldSchema, false);
     KafkaStoreMessageHandler.canonicalize(new ProtobufSchemaProvider(), schemaValue);
     assertEquals(newSchema, schemaValue.getSchema());
+  }
+
+  @Test
+  public void testSchemaValueMD5() {
+    String schemaString = "{\"type\":\"record\","
+        + "\"name\":\"myrecord\","
+        + "\"fields\":"
+        + "[{\"type\":\"string\",\"default\":null,\"name\":"
+        + "\"f" + "\"}]}";
+
+    SchemaValue schema = new SchemaValue("subject", 1, 1, "AVRO", null, schemaString, false);
+
+    // Pin the MD5
+    MD5 md5 = new MD5(new byte[]
+        { 29, 32, -53, -71, -27, -29, 94, -105, 84, -25, -38, 23, 11, 110, 93, -37 });
+
+    assertEquals("MD5 hash should be equal",
+        md5,
+        MD5.ofSchema(schema.toSchemaEntity()));
+
+    // Test entities with null values
+    Metadata metadata = new Metadata(null, null, null);
+    List<Rule> domainRules = Collections.singletonList(new Rule(null, null, RuleKind.TRANSFORM,
+        RuleMode.WRITEREAD, null, null, null, null, null, null, false));
+    RuleSet ruleSet = new RuleSet(domainRules, null);
+
+    schema = new SchemaValue(
+        "subject", 1, 1, null, "AVRO", null, metadata, ruleSet, schemaString, false);
+
+    // Pin the MD5
+    md5 = new MD5(new byte[]
+        { 22, -15, -20, -91, -21, -7, 34, -77, -38, -128, 33, 47, -113, -89, 52, 46 });
+
+    assertEquals("MD5 hash should be equal",
+        md5,
+        MD5.ofSchema(schema.toSchemaEntity()));
   }
 
   private void assertSchemaValue(String subject, int version, int schemaId,

@@ -27,6 +27,7 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -43,16 +44,28 @@ public class SchemaDiffTest {
   }
 
   @Test
+  public void checkJsonSchemaCompatibility_2020_12() {
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-schema-examples-2020-12.json")));
+    checkJsonSchemaCompatibility(testCases);
+  }
+
+  @Test
   public void checkJsonSchemaCompatibilityForCombinedSchemas() {
     final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples.json")));
+    checkJsonSchemaCompatibility(testCases);
+  }
+
+  @Test
+  public void checkJsonSchemaCompatibilityForCombinedSchemas_2020_12() {
+    final JSONArray testCases = new JSONArray(Objects.requireNonNull(readFile("diff-combined-schema-examples-2020-12.json")));
     checkJsonSchemaCompatibility(testCases);
   }
 
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
-      final Schema original = SchemaLoader.load(testCase.getJSONObject("original_schema"));
-      final Schema update = SchemaLoader.load(testCase.getJSONObject("update_schema"));
+      final JsonSchema original = new JsonSchema(testCase.getJSONObject("original_schema").toString());
+      final JsonSchema update = new JsonSchema(testCase.getJSONObject("update_schema").toString());
       final JSONArray changes = (JSONArray) testCase.get("changes");
       boolean isCompatible = testCase.getBoolean("compatible");
       final List<String> errorMessages = changes.toList()
@@ -61,7 +74,7 @@ public class SchemaDiffTest {
           .collect(toList());
       final String description = (String) testCase.get("description");
 
-      List<Difference> differences = SchemaDiff.compare(original, update);
+      List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
           .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
           .collect(Collectors.toList());
@@ -80,6 +93,102 @@ public class SchemaDiffTest {
     final Schema original = SchemaLoader.load(new JSONObject(Objects.requireNonNull(readFile("recursive-schema.json"))));
     final Schema newOne = SchemaLoader.load(new JSONObject(Objects.requireNonNull(readFile("recursive-schema.json"))));
     Assert.assertTrue(SchemaDiff.compare(original, newOne).isEmpty());
+  }
+
+  @Test(timeout = 10000)
+  public void testRecursiveOneOfUnionTerminates() {
+    final Schema original = SchemaLoader.load(recursiveOneOfTradeSchema());
+    final Schema update = SchemaLoader.load(recursiveOneOfTradeSchema());
+    Assert.assertTrue(SchemaDiff.compare(original, update).isEmpty());
+  }
+
+  // Memoization must not mask real differences in the recursive structure: a type change deep in
+  // one product type is still detected as incompatible.
+  @Test(timeout = 10000)
+  public void testRecursiveOneOfUnionDetectsIncompatibleChange() {
+    final Schema original = SchemaLoader.load(recursiveOneOfTradeSchema());
+    final JSONObject changed = recursiveOneOfTradeSchema();
+    changed.getJSONObject("definitions").getJSONObject("Asset")
+        .getJSONObject("properties").getJSONObject("id").put("type", "number");
+    final Schema update = SchemaLoader.load(changed);
+    Assert.assertFalse(SchemaDiff.compare(original, update).isEmpty());
+  }
+
+  // A deterministic reproducer for cross-branch memoization. The genuine type changes to T0.id and
+  // T1.id sit behind a recursive oneOf cycle (T0 -> T2 -> T0). A single memoized pass caches the
+  // (T0,T0) sub-comparison as compatible while the cycle back into it is optimistically truncated,
+  // then the root oneOf[T0,T1] matching reuses that cached edge and wrongly reports the evolution
+  // compatible. The greatest-fixed-point iteration in SchemaDiff.compare corrects this; without it
+  // this assertion fails (the comparison returns no incompatible differences).
+  @Test(timeout = 10000)
+  public void testRecursiveOneOfMemoizationDoesNotMaskIncompatibility() {
+    final Schema original = SchemaLoader.load(memoMaskingSchema("integer", "boolean"));
+    final Schema update = SchemaLoader.load(memoMaskingSchema("boolean", "number"));
+    final boolean incompatible = SchemaDiff.compare(original, update).stream()
+        .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES.contains(d.getType()));
+    Assert.assertTrue(
+        "a recursive oneOf incompatibility must not be masked by cross-branch memoization",
+        incompatible);
+  }
+
+  // T0 and T1 carry an "id" of the given types and a "ref" that is a singleton oneOf; T0.ref -> T2,
+  // T1.ref -> T2, T2.ref -> T0 (so T0 -> T2 -> T0 is a cycle). The root is oneOf[T0, T1].
+  private static JSONObject memoMaskingSchema(final String t0Id, final String t1Id) {
+    final JSONObject definitions = new JSONObject();
+    definitions.put("T0", recursiveObject(t0Id, "T2"));
+    definitions.put("T1", recursiveObject(t1Id, "T2"));
+    definitions.put("T2", recursiveObject("integer", "T0"));
+    final JSONArray rootUnion = new JSONArray()
+        .put(new JSONObject().put("$ref", "#/definitions/T0"))
+        .put(new JSONObject().put("$ref", "#/definitions/T1"));
+    return new JSONObject()
+        .put("$schema", "http://json-schema.org/draft-07/schema#")
+        .put("type", "object")
+        .put("additionalProperties", true)
+        .put("definitions", definitions)
+        .put("properties", new JSONObject().put("root", new JSONObject().put("oneOf", rootUnion)));
+  }
+
+  private static JSONObject recursiveObject(final String idType, final String refTarget) {
+    final JSONObject properties = new JSONObject();
+    properties.put("id", new JSONObject().put("type", idType));
+    properties.put("ref", new JSONObject().put("oneOf", new JSONArray()
+        .put(new JSONObject().put("$ref", "#/definitions/" + refTarget))));
+    return new JSONObject()
+        .put("type", "object")
+        .put("additionalProperties", true)
+        .put("properties", properties);
+  }
+
+  private static JSONObject recursiveOneOfTradeSchema() {
+    final String[] types = {"Asset", "Basket", "Swap", "Bond", "Option", "Future",
+        "Forward", "Loan", "Repo", "Equity", "Index", "CommodityLeg"};
+    final JSONObject definitions = new JSONObject();
+    for (String type : types) {
+      JSONObject properties = new JSONObject();
+      properties.put("id", new JSONObject().put("type", "string"));
+      properties.put("underlying", inlineUnion(types));
+      properties.put("referenceProduct", inlineUnion(types));
+      definitions.put(type, new JSONObject().put("type", "object").put("properties", properties));
+    }
+    JSONObject rootProperties = new JSONObject();
+    rootProperties.put("tradeId", new JSONObject().put("type", "string"));
+    rootProperties.put("product", inlineUnion(types));
+    return new JSONObject()
+        .put("$schema", "http://json-schema.org/draft-07/schema#")
+        .put("title", "Trade")
+        .put("type", "object")
+        .put("additionalProperties", true)
+        .put("definitions", definitions)
+        .put("properties", rootProperties);
+  }
+
+  private static JSONObject inlineUnion(final String[] types) {
+    JSONArray oneOf = new JSONArray();
+    for (String type : types) {
+      oneOf.put(new JSONObject().put("$ref", "#/definitions/" + type));
+    }
+    return new JSONObject().put("oneOf", oneOf);
   }
 
   @Test

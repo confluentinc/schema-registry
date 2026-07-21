@@ -42,6 +42,11 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
   public static final String USE_OPTIONAL_FOR_NON_REQUIRED_DOC =
       "Whether to set non-required properties to be optional.";
 
+  public static final String IGNORE_MODERN_DIALECTS_CONFIG = "ignore.modern.dialects";
+  public static final boolean IGNORE_MODERN_DIALECTS_DEFAULT = false;
+  public static final String IGNORE_MODERN_DIALECTS_DOC = "Whether to ignore modern dialects "
+      + "of JSON Schema after draft 7, in which case draft 7 will be used.";
+
   public static final String DECIMAL_FORMAT_CONFIG = "decimal.format";
   public static final String DECIMAL_FORMAT_DEFAULT = DecimalFormat.BASE64.name();
   private static final String DECIMAL_FORMAT_DOC =
@@ -61,6 +66,12 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
         USE_OPTIONAL_FOR_NON_REQUIRED_DEFAULT,
         ConfigDef.Importance.MEDIUM,
         USE_OPTIONAL_FOR_NON_REQUIRED_DOC
+    ).define(
+        IGNORE_MODERN_DIALECTS_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        IGNORE_MODERN_DIALECTS_DEFAULT,
+        ConfigDef.Importance.LOW,
+        IGNORE_MODERN_DIALECTS_DOC
     ).define(
         DECIMAL_FORMAT_CONFIG,
         ConfigDef.Type.STRING,
@@ -91,6 +102,10 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
    */
   public DecimalFormat decimalFormat() {
     return DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
+  }
+
+  public boolean ignoreModernDialects() {
+    return getBoolean(IGNORE_MODERN_DIALECTS_CONFIG);
   }
 
   public static class Builder {

@@ -213,6 +213,9 @@ public class JsonSchemaUtils {
       case DRAFT_2019_09:
         draft = JsonSchemaDraft.DRAFT_2019_09;
         break;
+      case DRAFT_2020_12:
+        draft = JsonSchemaDraft.DRAFT_2020_12;
+        break;
       default:
         draft = JsonSchemaDraft.DRAFT_07;
         break;
@@ -272,7 +275,7 @@ public class JsonSchemaUtils {
   public static Object toObject(JsonNode value, JsonSchema schema, boolean validate)
       throws IOException {
     if (validate) {
-      schema.validate(value);
+      value = schema.validate(value);
     }
     return envelope(schema, value);
   }
@@ -347,6 +350,9 @@ public class JsonSchemaUtils {
         if ("definitions".equals(word)) {
           identifiersList.poll();
           result = findNodeFromNameBuilder(node.get("definitions"), identifiersList);
+        } else if ("$defs".equals(word)) {
+          identifiersList.poll();
+          result = findNodeFromNameBuilder(node.get("$defs"), identifiersList);
         } else {
           result = findNodeFromNameBuilder(node.get("properties"), identifiersList);
         }

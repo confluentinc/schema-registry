@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 public class SchemaMetadata {
 
+  private String subject;
   private int id;
   private int version;
   private String schemaType;
@@ -56,6 +57,7 @@ public class SchemaMetadata {
   }
 
   public SchemaMetadata(Schema schema) {
+    this.subject = schema.getSubject();
     this.id = schema.getId();
     this.version = schema.getVersion();
     this.schemaType = schema.getSchemaType();
@@ -63,6 +65,10 @@ public class SchemaMetadata {
     this.references = schema.getReferences();
     this.metadata = schema.getMetadata();
     this.ruleSet = schema.getRuleSet();
+  }
+
+  public String getSubject() {
+    return subject;
   }
 
   public int getId() {
