@@ -196,7 +196,8 @@ The project is licensed under the [Confluent Community License](LICENSE-Confluen
 modules listed below, which are under the [Apache 2.0 license](LICENSE-Apache):
 
 - All `client-*` and `client-encryption-*` modules: `client`, `client-encryption`, `client-encryption-tink`,
-  `client-encryption-aws`, `client-encryption-azure`, `client-encryption-gcp`, `client-encryption-hcvault`
+  `client-encryption-aws`, `client-encryption-azure`, `client-encryption-gcp`,
+  `client-encryption-hcvault`, `client-encryption-alicloud`
 - All `avro-*` modules: `avro-types`, `avro-serializer`, `avro-data`, `avro-converter`, `avro-serde`
 - All serializer and serde modules: `schema-serializer`, `json-serializer`, `protobuf-serializer`,
   `json-schema-serializer`, `protobuf-serde`, `json-schema-serde`
