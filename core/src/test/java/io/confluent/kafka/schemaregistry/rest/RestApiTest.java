@@ -484,8 +484,8 @@ public abstract class RestApiTest {
     AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
     String rawSchema = avroSchema.canonicalString();
     String normalizedSchema = avroSchema.normalize().canonicalString();
-    assertNotEquals("Test schema should have distinct raw and normalized canonical forms",
-        rawSchema, normalizedSchema);
+    assertNotEquals(rawSchema, normalizedSchema,
+        "Test schema should have distinct raw and normalized canonical forms");
 
     ConfigUpdateRequest configUpdateRequest = new ConfigUpdateRequest();
     configUpdateRequest.setNormalize(true);
@@ -497,10 +497,10 @@ public abstract class RestApiTest {
     restApp.restClient.registerSchema(rawSchema, subject, 1, 1);
 
     assertEquals(
-        "Schema should be stored unnormalized: IMPORT mode should skip the normalize "
-            + "config fallback",
         rawSchema,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be stored unnormalized: IMPORT mode should skip the normalize "
+            + "config fallback");
   }
 
   @Test
@@ -524,9 +524,9 @@ public abstract class RestApiTest {
     restApp.restClient.registerSchema(rawSchema, subject);
 
     assertEquals(
-        "Schema should be normalized via the config fallback outside IMPORT mode",
         normalizedSchema,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be normalized via the config fallback outside IMPORT mode");
   }
 
   @Test
@@ -541,8 +541,8 @@ public abstract class RestApiTest {
     AvroSchema avroSchema = AvroUtils.parseSchema(schemaString);
     String rawSchema = avroSchema.canonicalString();
     String normalizedSchema = avroSchema.normalize().canonicalString();
-    assertNotEquals("Test schema should have distinct raw and normalized canonical forms",
-        rawSchema, normalizedSchema);
+    assertNotEquals(rawSchema, normalizedSchema,
+        "Test schema should have distinct raw and normalized canonical forms");
 
     restApp.restClient.setMode("IMPORT", subject);
 
@@ -550,10 +550,10 @@ public abstract class RestApiTest {
     restApp.restClient.registerSchema(rawSchema, subject, 1, 1, true);
 
     assertEquals(
-        "Schema should be stored unnormalized: IMPORT mode should skip normalization even "
-            + "when normalize=true is requested",
         rawSchema,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Schema should be stored unnormalized: IMPORT mode should skip normalization even "
+            + "when normalize=true is requested");
   }
 
   public void testImportSameSchemaDifferentVersion() throws Exception {
