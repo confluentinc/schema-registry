@@ -1529,7 +1529,24 @@ public class ProtobufSchema implements ParsedSchema {
     if (existing.getKind() == Kind.MAP && replacement.getKind() == Kind.MAP) {
       Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
       Map<String, ?> replacementMap = (Map<String, ?>) replacement.getValue();
-      Map<String, Object> mergedMap = mergeMaps(existingMap, replacementMap);
+      Map<String, Object> mergedMap = new LinkedHashMap<>(existingMap);
+      for (Map.Entry<String, ?> entry : replacementMap.entrySet()) {
+        // Merging should only be needed for repeated fields
+        mergedMap.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
+          Set<Object> set = new LinkedHashSet<>();
+          if (v1 instanceof List) {
+            set.addAll((List<Object>) v1);
+          } else {
+            set.add(v1);
+          }
+          if (v2 instanceof List) {
+            set.addAll((List<Object>) v2);
+          } else {
+            set.add(v2);
+          }
+          return new ArrayList<>(set);
+        });
+      }
       return new OptionElement(
           replacement.getName(), Kind.MAP, mergedMap, replacement.isParenthesized());
     } else {
@@ -1537,37 +1554,6 @@ public class ProtobufSchema implements ParsedSchema {
       // This should only happen with custom options that are ignored
       return replacement;
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> mergeMaps(
-      Map<String, ?> existingMap, Map<String, ?> replacementMap) {
-    Map<String, Object> mergedMap = new LinkedHashMap<>(existingMap);
-    for (Map.Entry<String, ?> entry : replacementMap.entrySet()) {
-      mergedMap.merge(entry.getKey(), entry.getValue(), (v1, v2) -> {
-        if (v1 instanceof Map && v2 instanceof Map) {
-          // Both values are nested message literals (e.g. from two separate dotted-path
-          // option assignments targeting the same singular submessage field, such as
-          // `(opt).sub.a = 1, (opt).sub.b = 2`); deep-merge them instead of collapsing
-          // into a list, which would produce invalid syntax for a singular field.
-          return mergeMaps((Map<String, ?>) v1, (Map<String, ?>) v2);
-        }
-        // Merging should only be needed for repeated fields
-        Set<Object> set = new LinkedHashSet<>();
-        if (v1 instanceof List) {
-          set.addAll((List<Object>) v1);
-        } else {
-          set.add(v1);
-        }
-        if (v2 instanceof List) {
-          set.addAll((List<Object>) v2);
-        } else {
-          set.add(v2);
-        }
-        return new ArrayList<>(set);
-      });
-    }
-    return mergedMap;
   }
 
   protected static OptionElement transform(OptionElement option) {

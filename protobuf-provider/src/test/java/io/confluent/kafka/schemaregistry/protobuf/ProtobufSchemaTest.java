@@ -2459,6 +2459,63 @@ public class ProtobufSchemaTest {
   }
 
   @Test
+  public void testNormalizationWithRepeatedNestedCustomOptions() {
+    // Two dotted-path option assignments (`.tags.name = "a"` and `.tags.name = "b"`) share
+    // the intermediate path segment `tags`, but `tags` is a *repeated* submessage field, so
+    // each assignment must remain a separate list entry rather than being deep-merged into
+    // a single message (which would incorrectly turn the singular `name` field into a list).
+    String schemaString = "package acme.common;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message Container {\n"
+        + "  optional string value = 1 [\n"
+        + "    (wrapper).tags.name = \"a\", (wrapper).tags.name = \"b\"];\n"
+        + "}\n"
+        + "\n"
+        + "extend google.protobuf.FieldOptions {\n"
+        + "  optional Wrapper wrapper = 22303;\n"
+        + "}\n"
+        + "\n"
+        + "message Wrapper {\n"
+        + "  repeated Tag tags = 1;\n"
+        + "}\n"
+        + "\n"
+        + "message Tag {\n"
+        + "  optional string name = 1;\n"
+        + "}\n";
+    String normalized = "package acme.common;\n"
+        + "\n"
+        + "import \"google/protobuf/descriptor.proto\";\n"
+        + "\n"
+        + "message Container {\n"
+        + "  optional string value = 1 [(acme.common.wrapper) = {\n"
+        + "    tags: [\n"
+        + "      {\n"
+        + "        name: \"a\"\n"
+        + "      },\n"
+        + "      {\n"
+        + "        name: \"b\"\n"
+        + "      }\n"
+        + "    ]\n"
+        + "  }];\n"
+        + "}\n"
+        + "message Wrapper {\n"
+        + "  repeated .acme.common.Tag tags = 1;\n"
+        + "}\n"
+        + "message Tag {\n"
+        + "  optional string name = 1;\n"
+        + "}\n"
+        + "\n"
+        + "extend .google.protobuf.FieldOptions {\n"
+        + "  optional .acme.common.Wrapper wrapper = 22303;\n"
+        + "}\n";
+    ProtobufSchema schema = new ProtobufSchema(schemaString);
+    ProtobufSchema normalizedSchema = schema.normalize();
+    assertEquals(normalized, normalizedSchema.canonicalString());
+  }
+
+  @Test
   public void testNormalizationWithPackagePrefix() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package confluent.package;\n"

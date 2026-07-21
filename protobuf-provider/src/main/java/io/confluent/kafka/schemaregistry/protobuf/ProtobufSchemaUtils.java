@@ -63,9 +63,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1264,7 +1266,9 @@ public class ProtobufSchemaUtils {
               List<OptionElement> list = entry.getValue();
               ExtendFieldElementInfo fieldInfo = getExtendFieldForFullName(name, true);
               if (fieldInfo != null && !fieldInfo.isRepeated() && list.size() > 0) {
-                return Stream.of(list.stream().reduce(ProtobufSchema::merge).get());
+                FieldElement rootField = fieldInfo.field();
+                return Stream.of(
+                    list.stream().reduce((e1, e2) -> mergeOption(rootField, e1, e2)).get());
               } else {
                 return list.stream();
               }
@@ -1272,6 +1276,97 @@ public class ProtobufSchemaUtils {
             .collect(Collectors.toList());
       }
       return options;
+    }
+
+    @SuppressWarnings("unchecked")
+    private OptionElement mergeOption(
+        FieldElement field, OptionElement existing, OptionElement replacement) {
+      replacement = transform(replacement);
+      if (existing.getKind() == Kind.MAP && replacement.getKind() == Kind.MAP) {
+        Map<String, ?> existingMap = (Map<String, ?>) existing.getValue();
+        Map<String, ?> replacementMap = (Map<String, ?>) replacement.getValue();
+        Map<String, Object> mergedMap = mergeOptionMaps(field, existingMap, replacementMap);
+        return new OptionElement(
+            replacement.getName(), Kind.MAP, mergedMap, replacement.isParenthesized());
+      } else {
+        // Discard existing option
+        // This should only happen with custom options that are ignored
+        return replacement;
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mergeOptionMaps(
+        FieldElement containerField, Map<String, ?> existingMap, Map<String, ?> replacementMap) {
+      MessageElement containerType = resolveMessageType(containerField);
+      Map<String, Object> mergedMap = new LinkedHashMap<>(existingMap);
+      for (Map.Entry<String, ?> entry : replacementMap.entrySet()) {
+        String key = entry.getKey();
+        FieldElement nestedField = containerType != null
+            ? findField(containerType, key) : null;
+        mergedMap.merge(key, entry.getValue(),
+            (v1, v2) -> mergeOptionValues(nestedField, v1, v2));
+      }
+      return mergedMap;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object mergeOptionValues(FieldElement field, Object v1, Object v2) {
+      boolean isSingular = field != null && field.getLabel() != Label.REPEATED;
+      if (isSingular && v1 instanceof Map && v2 instanceof Map
+          && resolveMessageType(field) != null) {
+        // Both values are nested message literals for the same singular submessage
+        // field (e.g. from two dotted-path assignments `(opt).sub.a = 1, (opt).sub.b = 2`);
+        // deep-merge them instead of collapsing into a list, which would be invalid
+        // syntax for a singular field.
+        return mergeOptionMaps(field, (Map<String, ?>) v1, (Map<String, ?>) v2);
+      }
+      if (isSingular) {
+        // Singular scalar field set more than once; last one wins, matching
+        // standard protobuf text-format merge semantics.
+        return v2;
+      }
+      // Repeated field (or a field we couldn't resolve, kept conservative):
+      // accumulate values as a list.
+      Set<Object> set = new LinkedHashSet<>();
+      if (v1 instanceof List) {
+        set.addAll((List<Object>) v1);
+      } else {
+        set.add(v1);
+      }
+      if (v2 instanceof List) {
+        set.addAll((List<Object>) v2);
+      } else {
+        set.add(v2);
+      }
+      return new ArrayList<>(set);
+    }
+
+    private MessageElement resolveMessageType(FieldElement field) {
+      if (field == null) {
+        return null;
+      }
+      TypeElementInfo typeInfo = getType(field.getType(), true);
+      if (typeInfo != null && typeInfo.type() instanceof MessageElement) {
+        return (MessageElement) typeInfo.type();
+      }
+      return null;
+    }
+
+    private FieldElement findField(MessageElement messageElement, String name) {
+      for (FieldElement field : messageElement.getFields()) {
+        if (field.getName().equals(name)) {
+          return field;
+        }
+      }
+      for (OneOfElement oneOf : messageElement.getOneOfs()) {
+        for (FieldElement field : oneOf.getFields()) {
+          if (field.getName().equals(name)) {
+            return field;
+          }
+        }
+      }
+      return null;
     }
   }
 }
