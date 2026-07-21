@@ -19,8 +19,12 @@ package io.confluent.kafka.serializers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.rules.RulePhase;
+import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
+import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,9 +32,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
 
@@ -60,13 +66,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected Schema specificAvroReaderSchema = null;
   protected boolean avroReflectionAllowNull = false;
   protected boolean avroUseLogicalTypeConverters = false;
-  private final Cache<Integer, Schema> readerSchemaCache;
+  protected boolean avroFailOnTrailingData = false;
+  private final Cache<SchemaId, Schema> readerSchemaCache;
   private final Cache<DatumReaderKey, DatumReader<?>> datumReaderCache;
 
   public AbstractKafkaAvroDeserializer() {
-    // Key by writer schema id (reader dimension by content), not the Schema object: schemas
-    // re-parsed from an 8.x server's responses arrive as fresh instances, so identity keying
-    // leaks a reader per call.
+    // Key by the writer schema id (and reader schema content for the datum reader) rather
+    // than by schema object identity, so that content-identical schemas reuse a single
+    // cached entry even when they arrive as distinct instances. SchemaId is used (rather than
+    // the integer id) because the id may be null when the schema is identified by guid.
     readerSchemaCache = CacheBuilder.newBuilder()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
@@ -106,7 +114,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     avroReflectionAllowNull = config
         .getBoolean(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG);
     avroUseLogicalTypeConverters = config
-            .getBoolean(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+        .getBoolean(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG);
+    avroFailOnTrailingData = config
+        .getBoolean(KafkaAvroDeserializerConfig.AVRO_FAIL_ON_TRAILING_DATA_CONFIG);
   }
 
   protected KafkaAvroDeserializerConfig deserializerConfig(Map<String, ?> props) {
@@ -130,6 +140,10 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return deserialize(null, isKey, payload, specificAvroReaderSchema);
   }
 
+  protected Object deserialize(Headers headers, byte[] payload) throws SerializationException {
+    return deserialize(null, isKey, headers, payload, specificAvroReaderSchema);
+  }
+
   /**
    * Just like single-parameter version but accepts an Avro schema to use for reading
    *
@@ -139,6 +153,11 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    */
   protected Object deserialize(byte[] payload, Schema readerSchema) throws SerializationException {
     return deserialize(null, isKey, payload, readerSchema);
+  }
+
+  protected Object deserialize(
+      Headers headers, byte[] payload, Schema readerSchema) throws SerializationException {
+    return deserialize(null, isKey, headers, payload, readerSchema);
   }
 
   protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema)
@@ -164,16 +183,13 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   private Integer schemaVersion(String topic,
                                 boolean isKey,
-                                int id,
+                                SchemaId id,
                                 String subject,
                                 AvroSchema schema,
                                 Object result) {
     try {
       Integer version = null;
-      if (isDeprecatedSubjectNameStrategy(isKey)) {
-        subject = getSubjectName(topic, isKey, result, schema);
-      }
-      AvroSchema subjectSchema = (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subject, id);
+      AvroSchema subjectSchema = (AvroSchema) getSchemaBySchemaId(subject, id);
       Metadata metadata = subjectSchema.metadata();
       if (metadata != null) {
         version = metadata.getConfluentVersionNumber();
@@ -203,9 +219,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private String subjectName(String topic, boolean isKey, AvroSchema schemaFromRegistry) {
-    return isDeprecatedSubjectNameStrategy(isKey)
-        ? null
-        : getSubjectName(topic, isKey, null, schemaFromRegistry);
+    return getSubjectName(topic, isKey, null, schemaFromRegistry);
   }
 
   /**
@@ -225,6 +239,21 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
       String topic, boolean isKey, Headers headers, byte[] payload)
       throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(topic, isKey, headers, payload, (Schema) null);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload, Schema readerSchema)
+      throws SerializationException, InvalidConfigurationException {
+    return deserializeWithSchemaAndVersion(
+        topic, isKey, headers, payload,
+        writerAvroSchema -> readerSchema != null ? new AvroSchema(readerSchema) : null);
+  }
+
+  protected GenericContainerWithVersion deserializeWithSchemaAndVersion(
+      String topic, boolean isKey, Headers headers, byte[] payload,
+      Function<ParsedSchema, ParsedSchema> writerToReaderSchemaFunc)
+      throws SerializationException, InvalidConfigurationException {
     // Even if the caller requests schema & version, if the payload is null we cannot include it.
     // The caller must handle this case.
     if (payload == null) {
@@ -242,30 +271,35 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     // explicit from the Connector).
     DeserializationContext context = new DeserializationContext(topic, isKey, headers, payload);
     AvroSchema schema = context.schemaForDeserialize();
-    Object result = context.read(schema,
-        specificAvroReaderSchema != null ? new AvroSchema(specificAvroReaderSchema) : null);
+    AvroSchema readerAvroSchema = writerToReaderSchemaFunc != null
+        ? (AvroSchema) writerToReaderSchemaFunc.apply(schema)
+        : specificAvroReaderSchema != null
+            ? new AvroSchema(specificAvroReaderSchema)
+            : null;
+    Object result = context.read(schema, readerAvroSchema);
 
     Integer version = schemaVersion(topic, isKey, context.getSchemaId(),
         context.getSubject(), schema, result);
     if (schema.rawSchema().getType().equals(Schema.Type.RECORD)) {
-      return new GenericContainerWithVersion((GenericContainer) result, version);
+      return new GenericContainerWithVersion(schema, (GenericContainer) result, version);
     } else {
-      return new GenericContainerWithVersion(new NonRecordContainer(schema.rawSchema(), result),
-          version);
+      return new GenericContainerWithVersion(
+          schema, new NonRecordContainer(schema.rawSchema(), result), version);
     }
   }
 
   protected DatumReader<?> getDatumReader(
-      Integer writerSchemaId, Schema writerSchema, Schema readerSchema)
+      SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema)
       throws ExecutionException {
     return datumReaderCache.get(new DatumReaderKey(writerSchemaId, readerSchema),
         () -> createDatumReader(writerSchemaId, writerSchema, readerSchema));
   }
 
   private DatumReader<?> createDatumReader(
-      Integer writerSchemaId, Schema writerSchema, Schema readerSchema) {
+      SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema) {
     Schema finalReaderSchema = getReaderSchema(writerSchemaId, writerSchema, readerSchema);
-    // Null writer schema (JSON migration path): read as identity against the reader schema.
+    // A null writerSchema means there is no distinct writer schema (e.g. post-migration the data
+    // is already in reader-schema form); read it as an identity against the reader schema.
     Schema finalWriterSchema = writerSchema != null ? writerSchema : finalReaderSchema;
     boolean writerSchemaIsPrimitive =
         AvroSchemaUtils.getPrimitiveSchemas().containsValue(finalWriterSchema);
@@ -298,7 +332,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
    * </li>
    */
   private Schema getReaderSchema(
-      Integer writerSchemaId, Schema writerSchema, Schema readerSchema) {
+      SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema) {
     if (readerSchema != null) {
       return readerSchema;
     }
@@ -387,27 +421,47 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
   class DeserializationContext {
     private final String topic;
-    private final Boolean isKey;
+    private final boolean isKey;
     private final Headers headers;
     private final byte[] payload;
     private final ByteBuffer buffer;
-    private final int schemaId;
+    private final SchemaId schemaId;
+    private String subject;
 
     DeserializationContext(
-        final String topic, final Boolean isKey, Headers headers, final byte[] payload) {
+        final String topic, final Boolean key, Headers headers, final byte[] payload) {
       this.topic = topic;
-      this.isKey = isKey;
+      this.isKey = key != null ? key : AbstractKafkaAvroDeserializer.this.isKey;
       this.headers = headers;
       this.payload = payload;
-      this.buffer = getByteBuffer(payload);
-      this.schemaId = buffer.getInt();
+      SchemaId schemaId = new SchemaId(AvroSchema.TYPE);
+      try (SchemaIdDeserializer schemaIdDeserializer = schemaIdDeserializer(isKey)) {
+        ByteBuffer buffer = schemaIdDeserializer.deserialize(
+            topic, isKey, headers, payload, schemaId);
+        this.schemaId = schemaId;
+        AvroSchema schema = schemaFromRegistry();
+        String subjectName = getSubject();
+        Object buf = executeRules(
+            subjectName, topic, headers, payload, RulePhase.ENCODING, RuleMode.READ, null,
+            schema, buffer
+        );
+        this.buffer = buf instanceof byte[] ? ByteBuffer.wrap((byte[]) buf) : (ByteBuffer) buf;
+      } catch (IOException e) {
+        throw new SerializationException(
+            "Error deserializing Avro message for id " + schemaId, e);
+      }
     }
 
     AvroSchema schemaFromRegistry() {
       try {
-        String subjectName = isKey == null || strategyUsesSchema(isKey)
+        String subjectName = strategyUsesSchema(isKey)
             ? getContext() : getSubject();
-        return (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(subjectName, schemaId);
+        AvroSchema schema = (AvroSchema) getSchemaBySchemaId(subjectName, schemaId);
+        if (subjectName == null) {
+          this.subject = subjectName(topic, isKey, schema);
+          schema = (AvroSchema) getSchemaBySchemaId(this.subject, schemaId);
+        }
+        return schema;
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
             + getSchemaType(isKey)
@@ -430,9 +484,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
     AvroSchema schemaForDeserialize() {
       try {
-        return isDeprecatedSubjectNameStrategy(isKey)
-            ? AvroSchemaUtils.copyOf(schemaFromRegistry())
-            : (AvroSchema) schemaRegistry.getSchemaBySubjectAndId(getSubject(), schemaId);
+        return (AvroSchema) getSchemaBySchemaId(getSubject(), schemaId);
       } catch (InterruptedIOException e) {
         String errorMessage = "Error retrieving Avro "
             + getSchemaType(isKey)
@@ -454,8 +506,15 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
     String getSubject() {
+      if (subject != null) {
+        return subject;
+      }
       boolean usesSchema = strategyUsesSchema(isKey);
-      return subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
+      String subjectName = subjectName(topic, isKey, usesSchema ? schemaFromRegistry() : null);
+      if (subjectName != null) {
+        this.subject = subjectName;
+      }
+      return subjectName;
     }
 
     String getContext() {
@@ -471,7 +530,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
 
 
-    int getSchemaId() {
+    SchemaId getSchemaId() {
       return schemaId;
     }
 
@@ -511,7 +570,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
         } else {
           reader = getDatumReader(schemaId, writerSchema, readerSchema);
         }
-        int length = buffer.limit() - 1 - idSize;
+        int length = buffer.remaining();
         Object result;
         if (writerSchema.getType().equals(Schema.Type.BYTES)) {
           byte[] bytes = new byte[length];
@@ -519,8 +578,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
           result = bytes;
         } else {
           int start = buffer.position() + buffer.arrayOffset();
-          result = reader.read(null, decoderFactory.binaryDecoder(buffer.array(),
-              start, length, null));
+          BinaryDecoder decoder = decoderFactory.binaryDecoder(buffer.array(), start, length, null);
+          result = reader.read(null, decoder);
+          if (avroFailOnTrailingData && !decoder.isEnd()) {
+            throw new SerializationException("Trailing data found after deserializing Avro "
+                + " message for id " + schemaId);
+          }
           if (writerSchema.getType().equals(Schema.Type.STRING)) {
             result = result.toString();
           }
@@ -541,6 +604,12 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             }
 
             if (result instanceof JsonNode) {
+              // Writer == reader here (data is already in reader-schema form after migration), so
+              // pass a null writer schema id and a null writer schema: the null id keys this entry
+              // distinctly from the normal (wire-writer, reader) entries (which always have a
+              // non-null writer id), and the null writer schema makes createDatumReader read it as
+              // an identity against the reader schema. The migration reader depends only on the
+              // reader schema.
               reader = getDatumReader(null, null, readerAvroSchema.rawSchema());
               result = AvroSchemaUtils.toObject(
                   (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
@@ -569,11 +638,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
+  // Cache key for datum readers. The writer dimension is the registry schema id (cheap, and
+  // content-addressed via id/guid); the reader dimension is the reader schema content (the reader
+  // schema often has no registry id). A null writerSchemaId is a sentinel for the post-migration
+  // case where writer == reader: it keeps those entries distinct from the normal (wire-writer,
+  // reader) entries, which always carry a non-null writer id.
   static class DatumReaderKey {
-    private final Integer writerSchemaId;
+    private final SchemaId writerSchemaId;
     private final Schema readerSchema;
 
-    DatumReaderKey(Integer writerSchemaId, Schema readerSchema) {
+    DatumReaderKey(SchemaId writerSchemaId, Schema readerSchema) {
       this.writerSchemaId = writerSchemaId;
       this.readerSchema = readerSchema;
     }
@@ -606,10 +680,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     }
   }
 
-  private static String getSchemaType(Boolean isKey) {
-    if (isKey == null) {
-      return "unknown";
-    } else if (isKey) {
+  private static String getSchemaType(boolean isKey) {
+    if (isKey) {
       return "key";
     } else {
       return "value";

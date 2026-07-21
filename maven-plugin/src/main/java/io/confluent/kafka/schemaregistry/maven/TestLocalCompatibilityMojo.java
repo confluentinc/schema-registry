@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.maven;
 
 import io.confluent.kafka.schemaregistry.CompatibilityChecker;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -52,6 +53,9 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
 
   @Parameter(required = true)
   Map<String, CompatibilityLevel> compatibilityLevels = new HashMap<>();
+
+  @Parameter(required = false)
+  Map<String, CompatibilityPolicy> compatibilityPolicies = new HashMap<>();
 
   protected Optional<ParsedSchema> parseSchema(
       String schemaType,
@@ -155,8 +159,11 @@ public class TestLocalCompatibilityMojo extends AbstractMojo {
       previousSchemas.add(loadSchema(previousSchemaFile, schemaType, schemaProviders));
     }
 
-    CompatibilityChecker checker = CompatibilityChecker.checker(compatibilityLevel);
-    List<String> errorMessages = checker.isCompatible(schema, previousSchemas);
+    CompatibilityPolicy compatibilityPolicy =
+        compatibilityPolicies.getOrDefault(key, CompatibilityPolicy.STRICT);
+    CompatibilityChecker checker =
+        CompatibilityChecker.checker(compatibilityLevel);
+    List<String> errorMessages = checker.isCompatible(compatibilityPolicy, schema, previousSchemas);
 
     boolean success = errorMessages.isEmpty();
 

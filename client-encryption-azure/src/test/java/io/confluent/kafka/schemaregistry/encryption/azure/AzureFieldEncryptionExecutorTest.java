@@ -42,9 +42,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
@@ -72,9 +72,40 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new AzureFieldEncryptionProperties(ruleNames, ruleExecutor);
+    return new AzureEncryptionProperties(ruleNames, ruleExecutor);
+  }
+
+  private static HttpResponseException httpException(int statusCode) {
+    HttpResponse response = mock(HttpResponse.class);
+    when(response.getStatusCode()).thenReturn(statusCode);
+    return new HttpResponseException("denied", response);
+  }
+
+  @Test
+  public void testIsAccessDeniedForForbiddenAndUnauthorized() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertTrue(driver.isAccessDeniedException(httpException(403)));
+    assertTrue(driver.isAccessDeniedException(httpException(401)));
+  }
+
+  @Test
+  public void testIsNotAccessDeniedForOtherErrors() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertFalse(driver.isAccessDeniedException(httpException(404)));
+    assertFalse(driver.isAccessDeniedException(httpException(500)));
+    assertFalse(driver.isAccessDeniedException(new RuntimeException("not azure")));
+  }
+
+  @Test
+  public void testIsAccessDeniedWalksCauseChain() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertTrue(driver.isAccessDenied(
+        new GeneralSecurityException("encryption failed", httpException(403))));
+    assertFalse(driver.isAccessDenied(
+        new GeneralSecurityException("encryption failed", httpException(503))));
+    assertFalse(driver.isAccessDenied(null));
   }
 
   @Test
@@ -236,7 +267,7 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
   // ==================== AzureKmsAead unit tests ====================
 
   private static CryptographyClient fakeCryptographyClient() throws Exception {
-    return AzureFieldEncryptionProperties.mockClient("unused-key-id-for-mock");
+    return AzureEncryptionProperties.mockClient("unused-key-id-for-mock");
   }
 
   private static Supplier<Map.Entry<CryptographyClient, String>> fixedEncryptTarget(
@@ -279,6 +310,16 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     CryptographyClient client = fakeCryptographyClient();
     AzureKmsAead aead = new AzureKmsAead(
         client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, "not-32-chars"), null);
+
+    aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testAeadEncryptThrowsWhenResolvedVersionIsNotHex() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    String nonHexVersion = "g".repeat(32);
+    AzureKmsAead aead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, nonHexVersion), null);
 
     aead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
   }
@@ -338,6 +379,20 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     byte[] ciphertext = encryptingAead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
 
     AzureKmsAead decryptingAead = new AzureKmsAead(client, EncryptionAlgorithm.RSA_OAEP_256);
+    decryptingAead.decrypt(ciphertext, new byte[0]);
+  }
+
+  @Test(expected = GeneralSecurityException.class)
+  public void testAeadDecryptThrowsForNonHexEmbeddedVersion() throws Exception {
+    CryptographyClient client = fakeCryptographyClient();
+    String nonHexVersion = "g".repeat(32);
+    AzureKmsAead encryptingAead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, fixedEncryptTarget(client, nonHexVersion),
+        version -> client);
+    byte[] ciphertext = encryptingAead.encrypt("hello".getBytes(StandardCharsets.UTF_8), new byte[0]);
+
+    AzureKmsAead decryptingAead = new AzureKmsAead(
+        client, EncryptionAlgorithm.RSA_OAEP_256, null, version -> client);
     decryptingAead.decrypt(ciphertext, new byte[0]);
   }
 

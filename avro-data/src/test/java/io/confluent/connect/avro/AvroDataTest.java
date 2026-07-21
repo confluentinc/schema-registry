@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import java.util.LinkedHashMap;
@@ -1016,7 +1017,7 @@ public class AvroDataTest {
     arraySchema.addProp("connect.default", arrayNode);
     org.apache.avro.Schema expectedAvroSchema = org.apache.avro.SchemaBuilder.builder()
         .record("ConnectDefault").namespace("io.confluent.connect.avro").fields()
-        .name("array").type(arraySchema).noDefault()  // no default
+        .name("array").type(arraySchema).withDefault(Arrays.asList("a", "b", "c"))
         .endRecord();
 
     assertEquals(expectedAvroSchema, avroSchema);
@@ -1273,6 +1274,53 @@ public class AvroDataTest {
         .parameter(AvroData.CONNECT_AVRO_DECIMAL_PRECISION_PROP, "64")
         .parameter(CONNECT_AVRO_FIXED_SIZE_PROP, "100").build(), TEST_DECIMAL, avroData);
     checkNonRecordConversionNull(Decimal.builder(2).optional().build());
+  }
+
+  @Test
+  public void testFromConnectLogicalVariant() {
+    io.confluent.kafka.schemaregistry.type.VariantBuilder vb =
+        new io.confluent.kafka.schemaregistry.type.VariantBuilder();
+    io.confluent.kafka.schemaregistry.type.VariantObjectBuilder obj = vb.startObject();
+    obj.appendKey("name");
+    obj.appendString("Alice");
+    vb.endObject();
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    Object converted = avroData.fromConnectData(connectSchema, connectValue);
+    assertTrue(converted instanceof GenericRecord);
+    GenericRecord record = (GenericRecord) converted;
+    assertEquals("variant", record.getSchema().getLogicalType().getName());
+    assertNotNull(record.get("metadata"));
+    assertNotNull(record.get("value"));
+  }
+
+  @Test
+  public void testToConnectVariant() {
+    io.confluent.avro.type.VariantConversion variantConversion =
+        new io.confluent.avro.type.VariantConversion();
+    org.apache.avro.Schema avroSchema = variantConversion.getRecommendedSchema();
+
+    io.confluent.kafka.schemaregistry.type.VariantBuilder vb =
+        new io.confluent.kafka.schemaregistry.type.VariantBuilder();
+    vb.appendString("hello");
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    GenericRecord avroRecord = new GenericData.Record(avroSchema);
+    avroRecord.put("metadata", variant.getMetadataBuffer());
+    avroRecord.put("value", variant.getValueBuffer());
+
+    SchemaAndValue result = avroData.toConnectData(avroSchema, avroRecord);
+    assertNotNull(result.schema());
+    assertEquals(io.confluent.connect.schema.ConnectVariant.LOGICAL_NAME, result.schema().name());
+    assertTrue(result.value() instanceof Struct);
+    Struct struct = (Struct) result.value();
+    assertNotNull(struct.get("metadata"));
+    assertNotNull(struct.get("value"));
   }
 
   // test for new way of logical type handling
@@ -1629,7 +1677,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaFromConnectConversion() {
-    Map<org.apache.avro.Schema, Schema> cache =
+    Cache<org.apache.avro.Schema, Schema> cache =
         Whitebox.getInternalState(avroData, "fromConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -2782,7 +2830,7 @@ public class AvroDataTest {
 
   @Test
   public void testCacheSchemaToConnectConversion() {
-    Map<Schema, org.apache.avro.Schema> cache =
+    Cache<Schema, org.apache.avro.Schema> cache =
         Whitebox.getInternalState(avroData, "toConnectSchemaCache");
     assertEquals(0, cache.size());
 
@@ -3526,6 +3574,12 @@ public class AvroDataTest {
     org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().setValidateDefaults(true).parse(schemaStr);
     Schema schema = avroData.toConnectSchema(avroSchema);
     assertNotNull(avroData.fromConnectSchema(schema));
+  }
+
+  private static byte[] toBytes(java.nio.ByteBuffer buffer) {
+    byte[] bytes = new byte[buffer.remaining()];
+    buffer.duplicate().get(bytes);
+    return bytes;
   }
 
 }

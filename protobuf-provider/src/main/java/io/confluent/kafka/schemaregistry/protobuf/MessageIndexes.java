@@ -24,7 +24,7 @@ import java.util.List;
 
 public class MessageIndexes {
 
-  private static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
+  public static final List<Integer> DEFAULT_INDEX = Collections.singletonList(0);
 
   private List<Integer> indexes;
 

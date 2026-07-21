@@ -20,14 +20,16 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+import static org.junit.Assert.assertFalse;
+
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import java.io.BufferedReader;
+import java.util.concurrent.CancellationException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;
 import org.json.JSONArray;
@@ -61,6 +63,32 @@ public class SchemaDiffTest {
     checkJsonSchemaCompatibility(testCases);
   }
 
+  @Test
+  public void interruptedThreadAbortsComparison() {
+    final JsonSchema original = new JsonSchema("{\"type\":\"object\"}");
+    final JsonSchema update =
+        new JsonSchema("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
+    // Parse up front so the interrupt below is exercised by the diff hub, not the parse guard
+    // in rawSchema().
+    final Schema originalRaw = original.rawSchema();
+    final Schema updateRaw = update.rawSchema();
+
+    // Simulate the request-timeout interrupt arriving mid-comparison: an interrupted thread must
+    // abort the (potentially exponential) diff so it can be reclaimed.
+    Thread.currentThread().interrupt();
+    try {
+      SchemaDiff.compare(originalRaw, updateRaw);
+      Assert.fail("expected CancellationException when the worker thread is interrupted");
+    } catch (CancellationException expected) {
+      // expected
+    } finally {
+      Thread.interrupted(); // ensure no interrupt status leaks to other tests
+    }
+
+    // The diff clears the interrupt status as it aborts, so the (pooled) thread returns clean.
+    assertFalse(Thread.currentThread().isInterrupted());
+  }
+
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
@@ -76,7 +104,7 @@ public class SchemaDiffTest {
 
       List<Difference> differences = SchemaDiff.compare(original.rawSchema(), update.rawSchema());
       final List<Difference> incompatibleDiffs = differences.stream()
-          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES.contains(diff.getType()))
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(diff.getType()))
           .collect(Collectors.toList());
       assertThat(description,
           differences.stream()
@@ -85,6 +113,17 @@ public class SchemaDiffTest {
           is(errorMessages)
       );
       assertEquals(description, isCompatible, incompatibleDiffs.isEmpty());
+
+      boolean isCompatibleLenient = isCompatible;
+      if (testCase.has("compatible_lenient")) {
+        isCompatibleLenient = testCase.getBoolean("compatible_lenient");
+      }
+      List<Difference> differencesLenient = SchemaDiff.compare(SchemaDiff.COMPATIBLE_CHANGES_LENIENT,
+          original.rawSchema(), update.rawSchema());
+      final List<Difference> incompatibleDiffsLenient = differences.stream()
+          .filter(diff -> !SchemaDiff.COMPATIBLE_CHANGES_LENIENT.contains(diff.getType()))
+          .collect(Collectors.toList());
+      assertEquals(description, isCompatibleLenient, incompatibleDiffsLenient.isEmpty());
     }
   }
 
@@ -125,7 +164,7 @@ public class SchemaDiffTest {
     final Schema original = SchemaLoader.load(memoMaskingSchema("integer", "boolean"));
     final Schema update = SchemaLoader.load(memoMaskingSchema("boolean", "number"));
     final boolean incompatible = SchemaDiff.compare(original, update).stream()
-        .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES.contains(d.getType()));
+        .anyMatch(d -> !SchemaDiff.COMPATIBLE_CHANGES_STRICT.contains(d.getType()));
     Assert.assertTrue(
         "a recursive oneOf incompatibility must not be masked by cross-branch memoization",
         incompatible);

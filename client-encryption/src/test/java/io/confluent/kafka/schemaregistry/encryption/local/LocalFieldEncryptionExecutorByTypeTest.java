@@ -19,7 +19,7 @@ package io.confluent.kafka.schemaregistry.encryption.local;
 import com.google.common.collect.ImmutableList;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import java.util.List;
 
 public class LocalFieldEncryptionExecutorByTypeTest extends FieldEncryptionExecutorTest {
@@ -29,9 +29,9 @@ public class LocalFieldEncryptionExecutorByTypeTest extends FieldEncryptionExecu
   }
 
   @Override
-  protected FieldEncryptionProperties getFieldEncryptionProperties(
+  protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
-    return new LocalFieldEncryptionProperties(
+    return new LocalEncryptionProperties(
         ImmutableList.of("_" + FieldEncryptionExecutor.TYPE + "_"), ruleExecutor);
   }
 }

@@ -32,6 +32,9 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.confluent.connect.json.JsonSchemaData.SchemaWrapper;
+import io.confluent.kafka.schemaregistry.type.VariantArrayBuilder;
+import io.confluent.kafka.schemaregistry.type.VariantBuilder;
+import io.confluent.kafka.schemaregistry.type.VariantObjectBuilder;
 import io.confluent.kafka.schemaregistry.json.jackson.Jackson;
 import java.util.ArrayList;
 import java.util.Date;
@@ -51,6 +54,7 @@ import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConstSchema;
+import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
@@ -495,6 +499,218 @@ public class JsonSchemaDataTest {
         Timestamp.builder().defaultValue(new Date(0)).build(),
         new Date(1234567890)
     );
+  }
+
+  @Test
+  public void testFromConnectVariant() {
+    VariantBuilder vb = new VariantBuilder();
+    VariantObjectBuilder obj = vb.startObject();
+    obj.appendKey("name");
+    obj.appendString("Alice");
+    obj.appendKey("age");
+    obj.appendInt(30);
+    vb.endObject();
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertNotNull(jsonValue);
+    assertTrue(jsonValue.isObject());
+    assertEquals("Alice", jsonValue.get("name").textValue());
+    assertEquals(30, jsonValue.get("age").intValue());
+  }
+
+  @Test
+  public void testToConnectVariant() {
+    EmptySchema schema = EmptySchema.builder().build();
+    ObjectNode jsonValue = JsonNodeFactory.instance.objectNode();
+    jsonValue.put("name", "Alice");
+    jsonValue.put("age", 30);
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    assertNotNull(connectSchema);
+    assertEquals(io.confluent.connect.schema.ConnectVariant.LOGICAL_NAME, connectSchema.name());
+
+    Object connectValue = jsonSchemaData.toConnectData(connectSchema, jsonValue);
+    assertTrue(connectValue instanceof Struct);
+    Struct struct = (Struct) connectValue;
+    assertNotNull(struct.get("metadata"));
+    assertNotNull(struct.get("value"));
+
+    // Verify round-trip: the variant struct should decode back to the same JSON
+    JsonNode roundTripped = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertEquals("Alice", roundTripped.get("name").textValue());
+    assertEquals(30, roundTripped.get("age").intValue());
+  }
+
+  @Test
+  public void testFromConnectVariantString() {
+    VariantBuilder vb = new VariantBuilder();
+    vb.appendString("hello");
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(jsonValue.isTextual());
+    assertEquals("hello", jsonValue.textValue());
+  }
+
+  @Test
+  public void testFromConnectVariantNumber() {
+    VariantBuilder vb = new VariantBuilder();
+    vb.appendInt(42);
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(jsonValue.isNumber());
+    assertEquals(42, jsonValue.intValue());
+  }
+
+  @Test
+  public void testFromConnectVariantBoolean() {
+    VariantBuilder vb = new VariantBuilder();
+    vb.appendBoolean(true);
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(jsonValue.isBoolean());
+    assertTrue(jsonValue.booleanValue());
+  }
+
+  @Test
+  public void testFromConnectVariantNull() {
+    VariantBuilder vb = new VariantBuilder();
+    vb.appendNull();
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(jsonValue.isNull());
+  }
+
+  @Test
+  public void testFromConnectVariantArray() {
+    VariantBuilder vb = new VariantBuilder();
+    VariantArrayBuilder arr = vb.startArray();
+    arr.appendInt(1);
+    arr.appendInt(2);
+    arr.appendInt(3);
+    vb.endArray();
+    io.confluent.kafka.schemaregistry.type.Variant variant = vb.build();
+
+    Schema connectSchema = io.confluent.connect.schema.ConnectVariant.builder().build();
+    Struct connectValue = new Struct(connectSchema);
+    connectValue.put("metadata", toBytes(variant.getMetadataBuffer()));
+    connectValue.put("value", toBytes(variant.getValueBuffer()));
+
+    JsonNode jsonValue = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(jsonValue.isArray());
+    assertEquals(3, jsonValue.size());
+    assertEquals(1, jsonValue.get(0).intValue());
+    assertEquals(2, jsonValue.get(1).intValue());
+    assertEquals(3, jsonValue.get(2).intValue());
+  }
+
+  @Test
+  public void testToConnectVariantString() {
+    org.everit.json.schema.EmptySchema schema = org.everit.json.schema.EmptySchema.builder()
+        .build();
+    JsonNode jsonValue = JsonNodeFactory.instance.textNode("hello");
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Object connectValue = jsonSchemaData.toConnectData(connectSchema, jsonValue);
+    assertTrue(connectValue instanceof Struct);
+
+    JsonNode roundTripped = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertEquals("hello", roundTripped.textValue());
+  }
+
+  @Test
+  public void testToConnectVariantNumber() {
+    org.everit.json.schema.EmptySchema schema = org.everit.json.schema.EmptySchema.builder()
+        .build();
+    JsonNode jsonValue = JsonNodeFactory.instance.numberNode(42);
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Object connectValue = jsonSchemaData.toConnectData(connectSchema, jsonValue);
+    assertTrue(connectValue instanceof Struct);
+
+    JsonNode roundTripped = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertEquals(42, roundTripped.intValue());
+  }
+
+  @Test
+  public void testToConnectVariantBoolean() {
+    org.everit.json.schema.EmptySchema schema = org.everit.json.schema.EmptySchema.builder()
+        .build();
+    JsonNode jsonValue = JsonNodeFactory.instance.booleanNode(true);
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Object connectValue = jsonSchemaData.toConnectData(connectSchema, jsonValue);
+    assertTrue(connectValue instanceof Struct);
+
+    JsonNode roundTripped = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(roundTripped.booleanValue());
+  }
+
+  @Test
+  public void testToConnectVariantArray() {
+    org.everit.json.schema.EmptySchema schema = org.everit.json.schema.EmptySchema.builder()
+        .build();
+    ArrayNode jsonValue = JsonNodeFactory.instance.arrayNode();
+    jsonValue.add(1);
+    jsonValue.add(2);
+    jsonValue.add(3);
+
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Object connectValue = jsonSchemaData.toConnectData(connectSchema, jsonValue);
+    assertTrue(connectValue instanceof Struct);
+
+    JsonNode roundTripped = jsonSchemaData.fromConnectData(connectSchema, connectValue);
+    assertTrue(roundTripped.isArray());
+    assertEquals(3, roundTripped.size());
+    assertEquals(1, roundTripped.get(0).intValue());
+  }
+
+  @Test
+  public void testToConnectVariantNull() {
+    org.everit.json.schema.EmptySchema schema = org.everit.json.schema.EmptySchema.builder()
+        .build();
+    JsonNode jsonValue = JsonNodeFactory.instance.nullNode();
+
+    // JSON null is treated as a missing value, not a variant-encoded null.
+    // The schema must be optional for null to be accepted.
+    Schema connectSchema = jsonSchemaData.toConnectSchema(schema);
+    Schema optionalSchema = SchemaBuilder.struct()
+        .name(connectSchema.name())
+        .field("metadata", Schema.OPTIONAL_BYTES_SCHEMA)
+        .field("value", Schema.OPTIONAL_BYTES_SCHEMA)
+        .optional()
+        .build();
+    Object connectValue = jsonSchemaData.toConnectData(optionalSchema, jsonValue);
+    assertNull(connectValue);
   }
 
   @Test
@@ -2382,5 +2598,11 @@ public class JsonSchemaDataTest {
     Schema arraySchema = SchemaBuilder.array(schemaBuilder).build();
     schemaBuilder.field("foos", arraySchema);
     return schemaBuilder.build();
+  }
+
+  private static byte[] toBytes(java.nio.ByteBuffer buffer) {
+    byte[] bytes = new byte[buffer.remaining()];
+    buffer.duplicate().get(bytes);
+    return bytes;
   }
 }

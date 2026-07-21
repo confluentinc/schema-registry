@@ -39,15 +39,27 @@ import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_R
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_REMOVED_NOT_COVERED_BY_PARTIALLY_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_WITH_EMPTY_SCHEMA_ADDED_TO_OPEN_CONTENT_MODEL;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.ITEM_WITH_FALSE_REMOVED_FROM_CLOSED_CONTENT_MODEL;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_CONTAINS_ADDED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_CONTAINS_DECREASED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_CONTAINS_INCREASED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_CONTAINS_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_DECREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_INCREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MAX_ITEMS_REMOVED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_CONTAINS_ADDED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_CONTAINS_DECREASED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_CONTAINS_INCREASED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_CONTAINS_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_ITEMS_ADDED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_ITEMS_DECREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_ITEMS_INCREASED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.MIN_ITEMS_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNIQUE_ITEMS_ADDED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNEVALUATED_ITEMS_ADDED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNEVALUATED_ITEMS_EXTENDED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNEVALUATED_ITEMS_NARROWED;
+import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNEVALUATED_ITEMS_REMOVED;
 import static io.confluent.kafka.schemaregistry.json.diff.Difference.Type.UNIQUE_ITEMS_REMOVED;
 
 public class ArraySchemaDiff {
@@ -55,6 +67,7 @@ public class ArraySchemaDiff {
     compareItemSchemaObject(ctx, original, update);
     compareItemSchemaArray(ctx, original, update);
     compareAdditionalItems(ctx, original, update);
+    compareUnevaluatedItems(ctx, original, update);
     compareAttributes(ctx, original, update);
   }
 
@@ -90,6 +103,14 @@ public class ArraySchemaDiff {
         ctx.addDifference("uniqueItems", UNIQUE_ITEMS_ADDED);
       }
     }
+    compareContainsAttribute(ctx, "maxContains",
+        getMaxContains(original), getMaxContains(update),
+        MAX_CONTAINS_ADDED, MAX_CONTAINS_REMOVED,
+        MAX_CONTAINS_INCREASED, MAX_CONTAINS_DECREASED);
+    compareContainsAttribute(ctx, "minContains",
+        getMinContains(original), getMinContains(update),
+        MIN_CONTAINS_ADDED, MIN_CONTAINS_REMOVED,
+        MIN_CONTAINS_INCREASED, MIN_CONTAINS_DECREASED);
   }
 
   private static void compareAdditionalItems(
@@ -114,6 +135,43 @@ public class ArraySchemaDiff {
             original.getSchemaOfAdditionalItems(),
             update.getSchemaOfAdditionalItems()
         );
+      }
+    }
+  }
+
+  private static void compareUnevaluatedItems(
+      final Context ctx, final ArraySchema original, final ArraySchema update
+  ) {
+    Schema originalUneval = getUnevaluatedItems(original);
+    Schema updateUneval = getUnevaluatedItems(update);
+    if (originalUneval == null && updateUneval == null) {
+      return;
+    }
+    try (Context.PathScope pathScope = ctx.enterPath("unevaluatedItems")) {
+      if (originalUneval == null) {
+        if (updateUneval instanceof FalseSchema) {
+          ctx.addDifference(UNEVALUATED_ITEMS_REMOVED);
+        } else {
+          ctx.addDifference(UNEVALUATED_ITEMS_NARROWED);
+        }
+      } else if (updateUneval == null) {
+        if (originalUneval instanceof FalseSchema) {
+          ctx.addDifference(UNEVALUATED_ITEMS_ADDED);
+        } else {
+          ctx.addDifference(UNEVALUATED_ITEMS_EXTENDED);
+        }
+      } else if (originalUneval instanceof FalseSchema && !(updateUneval instanceof FalseSchema)) {
+        ctx.addDifference(UNEVALUATED_ITEMS_ADDED);
+      } else if (!(originalUneval instanceof FalseSchema) && updateUneval instanceof FalseSchema) {
+        ctx.addDifference(UNEVALUATED_ITEMS_REMOVED);
+      } else if (originalUneval instanceof EmptySchema
+          && !(updateUneval instanceof EmptySchema)) {
+        ctx.addDifference(UNEVALUATED_ITEMS_NARROWED);
+      } else if (!(originalUneval instanceof EmptySchema)
+          && updateUneval instanceof EmptySchema) {
+        ctx.addDifference(UNEVALUATED_ITEMS_EXTENDED);
+      } else {
+        SchemaDiff.compare(ctx, originalUneval, updateUneval);
       }
     }
   }
@@ -215,12 +273,72 @@ public class ArraySchemaDiff {
     }
   }
 
-  private static boolean isOpenContentModel(final ArraySchema schema) {
-    return schema.getSchemaOfAdditionalItems() == null
-        && schema.permitsAdditionalItems();
+  private static void compareContainsAttribute(
+      final Context ctx, final String name,
+      final Number originalVal, final Number updateVal,
+      final Difference.Type added, final Difference.Type removed,
+      final Difference.Type increased, final Difference.Type decreased) {
+    if (!Objects.equals(originalVal, updateVal)) {
+      if (originalVal == null) {
+        ctx.addDifference(name, added);
+      } else if (updateVal == null) {
+        ctx.addDifference(name, removed);
+      } else if (originalVal.intValue() < updateVal.intValue()) {
+        ctx.addDifference(name, increased);
+      } else if (originalVal.intValue() > updateVal.intValue()) {
+        ctx.addDifference(name, decreased);
+      }
+    }
+  }
+
+  private static Number getMaxContains(final ArraySchema schema) {
+    Object val = schema.getUnprocessedProperties().get("maxContains");
+    return val instanceof Number ? (Number) val : null;
+  }
+
+  private static Number getMinContains(final ArraySchema schema) {
+    Object val = schema.getUnprocessedProperties().get("minContains");
+    return val instanceof Number ? (Number) val : null;
+  }
+
+  private static Schema getUnevaluatedItems(final ArraySchema schema) {
+    Object uneval = schema.getUnprocessedProperties().get("unevaluatedItems");
+    return uneval instanceof Schema ? (Schema) uneval : null;
+  }
+
+  private static boolean isAdditionalItemsAbsent(final ArraySchema schema) {
+    return schema.permitsAdditionalItems()
+        && schema.getSchemaOfAdditionalItems() == null;
+  }
+
+  static boolean isOpenContentModel(final ArraySchema schema) {
+    // Given A=additionalItems, U=unevaluatedItems, S=schema of additionalItems
+    // Fully open = (A = true) or (A is missing and U is missing or true)
+    if (!schema.permitsAdditionalItems()) {
+      return false;
+    }
+    if (schema.getSchemaOfAdditionalItems() != null) {
+      return false;
+    }
+    // A is absent — check U
+    Schema uneval = getUnevaluatedItems(schema);
+    return uneval == null || uneval instanceof EmptySchema;
   }
 
   private static Schema schemaFromPartiallyOpenContentModel(final ArraySchema schema) {
-    return schema.getSchemaOfAdditionalItems();
+    // Given A=additionalItems, U=unevaluatedItems, S=schema of additionalItems
+    // Partially open = (A = S) or (A is missing and U = S)
+    if (schema.getSchemaOfAdditionalItems() != null) {
+      return schema.getSchemaOfAdditionalItems();
+    }
+    // Check unevaluatedItems (A is missing and U = S)
+    if (isAdditionalItemsAbsent(schema)) {
+      Schema uneval = getUnevaluatedItems(schema);
+      if (uneval != null && !(uneval instanceof FalseSchema)
+          && !(uneval instanceof EmptySchema)) {
+        return uneval;
+      }
+    }
+    return null;
   }
 }

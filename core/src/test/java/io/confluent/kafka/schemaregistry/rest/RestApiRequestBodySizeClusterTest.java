@@ -17,30 +17,47 @@ package io.confluent.kafka.schemaregistry.rest;
 
 import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.MAX_REQ_BODY_SIZE_CONFIG;
 import static io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig.SIZE_LIMIT_FILTER_ENABLED_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import org.junit.Test;
-
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import java.util.Properties;
 
-public class RestApiRequestBodySizeClusterTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public class RestApiRequestBodySizeClusterTest {
+
+  protected ClusterTestHarness harness;
+  protected RestApp restApp;
 
   public RestApiRequestBodySizeClusterTest() {
-    super(1, true); // 1 broker, setup restApp
-  }
-
-  @Override
-  protected Properties getSchemaRegistryProperties() {
+    this.harness = new ClusterTestHarness(1, true);
     Properties props = new Properties();
     props.setProperty(SIZE_LIMIT_FILTER_ENABLED_CONFIG, "true"); // 1KB limit
     props.setProperty(MAX_REQ_BODY_SIZE_CONFIG, "1024"); // 1KB limit
-    return props;
+    this.harness.injectSchemaRegistryProperties(props);  // Pass props, not new Properties()!
   }
+
+  @BeforeEach
+  public void setUpTest(TestInfo testInfo) throws Exception {
+    harness.setUpTest(testInfo);
+    this.restApp = harness.getRestApp();
+  }
+
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    harness.tearDown();
+  }
+
   /**
    * Generate a large Avro schema with a very long documentation string.
    */
@@ -86,8 +103,8 @@ public class RestApiRequestBodySizeClusterTest extends ClusterTestHarness {
       fail("Registering a schema with body size exceeding limit should fail");
     } catch (RestClientException e) {
       // The SizeLimitHandler returns HTTP 413 (Payload Too Large)
-      assertEquals("Expected HTTP 413 for request body exceeding size limit",
-          413, e.getStatus());
+      assertEquals(413, e.getStatus(),
+          "Expected HTTP 413 for request body exceeding size limit");
     }
   }
 
@@ -100,8 +117,8 @@ public class RestApiRequestBodySizeClusterTest extends ClusterTestHarness {
     try {
       // This should succeed
       int schemaId = restApp.restClient.registerSchema(smallSchema, subject);
-      assertTrue("Schema registration should succeed and return positive schema ID",
-          schemaId > 0);
+      assertTrue(schemaId > 0,
+          "Schema registration should succeed and return positive schema ID");
     } catch (RestClientException e) {
       fail("Registering a small schema should not fail with error: " + e.getMessage());
     }

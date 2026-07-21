@@ -33,8 +33,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
-import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionProperties;
-import io.confluent.kafka.schemaregistry.encryption.local.LocalFieldEncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
+import io.confluent.kafka.schemaregistry.encryption.local.LocalEncryptionProperties;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
 import java.time.temporal.ChronoUnit;
@@ -48,7 +48,7 @@ import picocli.CommandLine;
 
 public class RegisterDeksTest {
 
-  private final FieldEncryptionProperties fieldEncryptionProps;
+  private final EncryptionProperties fieldEncryptionProps;
   private final SchemaRegistryClient schemaRegistry;
   private final DekRegistryClient dekRegistry;
   private final String topic;
@@ -56,7 +56,7 @@ public class RegisterDeksTest {
 
   public RegisterDeksTest() throws Exception {
     topic = "test";
-    fieldEncryptionProps = new LocalFieldEncryptionProperties(ImmutableList.of("rule1"));
+    fieldEncryptionProps = new LocalEncryptionProperties(ImmutableList.of("rule1"), FieldEncryptionExecutor.class);
     schemaRegistry = SchemaRegistryClientFactory.newClient(Collections.singletonList(
             "mock://"),
         1000,

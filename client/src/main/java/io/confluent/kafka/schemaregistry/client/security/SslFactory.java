@@ -21,6 +21,11 @@ import static org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PEM_T
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
@@ -55,7 +60,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +75,10 @@ public class SslFactory {
   }
 
   private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
+
+  private static final int URL_CONNECT_TIMEOUT_MS = 10_000;
+  private static final int URL_READ_TIMEOUT_MS = 30_000;
+
   private final String provider;
   private final String kmfAlgorithm;
   private final String tmfAlgorithm;
@@ -330,6 +338,61 @@ public class SslFactory {
     boolean modified();
   }
 
+  /**
+   * Returns true if {@code path} is a URL of the canonical form {@code scheme://...} —
+   * e.g. {@code safkeyringjce://userid/keyring}, {@code https://example.com/store.jks},
+   * {@code file:///tmp/store.jks}. Anything else falls through to filesystem handling:
+   * <ul>
+   *   <li>opaque URIs ({@code mailto:foo}, {@code urn:isbn:...})</li>
+   *   <li>hierarchical URIs with a single slash ({@code file:/tmp/foo}, {@code certs:/prod/foo})
+   *       — these may also be POSIX paths containing a colon (e.g. a directory named
+   *       {@code certs:}). Use the canonical {@code file://} form for file URLs.</li>
+   *   <li>POSIX paths containing a colon ({@code certs:prod/store.jks})</li>
+   *   <li>Windows paths ({@code C:\foo}, which are not valid URIs at all)</li>
+   * </ul>
+   */
+  static boolean isUrl(String path) {
+    if (path == null) {
+      return false;
+    }
+    try {
+      URI uri = new URI(path);
+      String scheme = uri.getScheme();
+      return scheme != null
+          && scheme.length() > 1
+          && !uri.isOpaque()
+          && path.startsWith(scheme + "://");
+    } catch (URISyntaxException e) {
+      return false;
+    }
+  }
+
+  private static InputStream openStream(String path) throws IOException {
+    if (!isUrl(path)) {
+      return Files.newInputStream(Paths.get(path));
+    }
+    try {
+      URLConnection conn = new URI(path).toURL().openConnection();
+      conn.setConnectTimeout(URL_CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(URL_READ_TIMEOUT_MS);
+      return conn.getInputStream();
+    } catch (URISyntaxException e) {
+      // Unreachable: isUrl(path) above already validated parsing.
+      // Required by checked-exception rules.
+      throw new IOException("Invalid URL for SSL store: " + path, e);
+    } catch (MalformedURLException e) {
+      throw new IOException("No URL handler registered for SSL store location: " + path
+          + " (ensure the JCE provider or library that handles this scheme is on the"
+          + " classpath)", e);
+    }
+  }
+
+  private static String readAllAsString(String path) throws IOException {
+    try (InputStream in = openStream(path)) {
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
   // package access for testing
   static class FileBasedStore implements SecurityStore {
     protected final String path;
@@ -362,15 +425,17 @@ public class SslFactory {
     }
 
     /**
-     * Loads this keystore.
+     * Loads this store. The location may be a filesystem path or a URL (e.g.
+     * {@code safkeyringjce://userid/keyring} when the JVM has a registered URL handler).
      *
-     * @return the keystore
-     * @throws KafkaException if the file could not be read or if the keystore could not be loaded
-     *                        using the specified configs (e.g. if the password or keystore
-     *                        type is invalid)
+     * @return the store
+     * @throws KafkaException if the location could not be read or if the store could not be
+     *                        loaded using the specified configs (e.g. if the password or
+     *                        store type is invalid)
      */
     protected KeyStore load(boolean isKeyStore) {
-      try (InputStream in = Files.newInputStream(Paths.get(path))) {
+      String storeKind = isKeyStore ? "keystore" : "truststore";
+      try (InputStream in = openStream(path)) {
         KeyStore ks = KeyStore.getInstance(type);
         // If a password is not set access to the truststore is
         // still available, but integrity checking is disabled.
@@ -378,11 +443,16 @@ public class SslFactory {
         ks.load(in, passwordChars);
         return ks;
       } catch (GeneralSecurityException | IOException e) {
-        throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
+        throw new KafkaException(
+            "Failed to load SSL " + storeKind + " " + path + " of type " + type, e);
       }
     }
 
     private Long lastModifiedMs(String path) {
+      if (isUrl(path)) {
+        // URLs have no stable modification time — disable reload-on-change for them.
+        return null;
+      }
       try {
         return Files.getLastModifiedTime(Paths.get(path)).toMillis();
       } catch (IOException e) {
@@ -410,13 +480,15 @@ public class SslFactory {
 
     @Override
     protected KeyStore load(boolean isKeyStore) {
+      String storeKind = isKeyStore ? "keystore" : "truststore";
       try {
-        Password storeContents = new Password(Utils.readFileAsString(path));
+        Password storeContents = new Password(readAllAsString(path));
         PemStore pemStore = isKeyStore ? new PemStore(storeContents, storeContents, keyPassword) :
             new PemStore(storeContents);
         return pemStore.keyStore;
       } catch (Exception e) {
-        throw new InvalidConfigurationException("Failed to load PEM SSL keystore " + path, e);
+        throw new InvalidConfigurationException(
+            "Failed to load PEM SSL " + storeKind + " " + path, e);
       }
     }
   }

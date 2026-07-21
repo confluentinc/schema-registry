@@ -251,42 +251,42 @@ public class Rule {
   public void validate() throws RuleException {
     validateName(name);
     if (type == null) {
-      throw new RuleException("Missing rule type");
+      throw new RuleException(this, "Missing rule type");
     }
     validateAction(mode, onSuccess);
     validateAction(mode, onFailure);
   }
 
-  private static void validateName(String name) throws RuleException {
+  private void validateName(String name) throws RuleException {
     if (name == null) {
-      throw new RuleException("Missing rule name");
+      throw new RuleException(this, "Missing rule name");
     }
     int length = name.length();
     if (length == 0) {
-      throw new RuleException("Empty rule name");
+      throw new RuleException(this, "Empty rule name");
     }
     if (length > NAME_MAX_LENGTH) {
-      throw new RuleException("Rule name too long");
+      throw new RuleException(this, "Rule name too long");
     }
     char first = name.charAt(0);
     if (!(Character.isLetter(first) || first == '_')) {
-      throw new RuleException("Illegal initial character in rule name: " + name);
+      throw new RuleException(this, "Illegal initial character in rule name: " + name);
     }
     for (int i = 1; i < length; i++) {
       char c = name.charAt(i);
       if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) {
-        throw new RuleException("Illegal character in rule name: " + name);
+        throw new RuleException(this, "Illegal character in rule name: " + name);
       }
     }
   }
 
-  private static void validateAction(RuleMode mode, String action) throws RuleException {
+  private void validateAction(RuleMode mode, String action) throws RuleException {
     if (mode != null
         && mode != RuleMode.WRITEREAD
         && mode != RuleMode.UPDOWN
         && action != null
         && action.indexOf(',') >= 0) {
-      throw new RuleException("Multiple actions only valid with WRITEREAD and UPDOWN");
+      throw new RuleException(this, "Multiple actions only valid with WRITEREAD and UPDOWN");
     }
   }
 }

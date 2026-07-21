@@ -15,7 +15,9 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
+import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
@@ -168,6 +170,11 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String LEADER_ELECTION_STICKY = "leader.election.sticky";
   public static final boolean DEFAULT_LEADER_ELECTION_STICKY = false;
   /**
+   * <code>associations.enable</code>*
+   */
+  public static final String ASSOCIATIONS_ENABLE = "associations.enable";
+  public static final boolean DEFAULT_ASSOCIATIONS_ENABLE = true;
+  /**
    * <code>mode.mutability</code>*
    */
   public static final String MODE_MUTABILITY = "mode.mutability";
@@ -179,7 +186,7 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String HOST_PORT_CONFIG = "host.port";
 
-  public static final String SCHEMA_PROVIDERS_CONFIG = "schema.providers";
+  public static final String SCHEMA_PROVIDERS_CONFIG = SchemaProvider.SCHEMA_PROVIDERS_PREFIX;
 
   /**
    * <code>schema.compatibility.level</code>
@@ -190,6 +197,16 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String SCHEMA_VALIDATE_FIELDS_CONFIG = "schema.validate.fields";
   public static final boolean SCHEMA_VALIDATE_FIELDS_DEFAULT = false;
+
+  public static final String SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG = "schema.validate.new.schemas";
+  public static final boolean SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT = true;
+
+  public static final String SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG = "schema.reject.empty.subject";
+  public static final boolean SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT = false;
+
+  public static final String REFERENCE_VERSIONS_STRICT_CONFIG =
+      SCHEMA_PROVIDERS_CONFIG + "." + AbstractSchemaProvider.REFERENCE_VERSIONS_STRICT_CONFIG;
+  public static final boolean REFERENCE_VERSIONS_STRICT_DEFAULT = false;
 
   /**
    * <code>schema.cache.size</code>
@@ -276,6 +293,10 @@ public class SchemaRegistryConfig extends RestConfig {
 
   public static final String METADATA_ENCODER_TOPIC_CONFIG = "metadata.encoder.topic";
   public static final String METADATA_ENCODER_TOPIC_DEFAULT = "_schema_encoders";
+
+  public static final String METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG =
+      "metadata.encoder.secret.strict.validation";
+  public static final boolean METADATA_ENCODER_SECRET_STRICT_VALIDATION_DEFAULT = false;
 
   public static final String ENABLE_STORE_HEALTH_CHECK = "enable.store.health.check";
   public static final boolean DEFAULT_ENABLE_STORE_HEALTH_CHECK = false;
@@ -420,6 +441,16 @@ public class SchemaRegistryConfig extends RestConfig {
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "
       + "beginning with $$";
+  protected static final String VALIDATE_NEW_SCHEMAS_DOC = "Determines whether validation for new "
+      + "schemas is enabled or not. If enabled, it validates both namespaces and defaults in Avro.";
+  protected static final String REJECT_EMPTY_SUBJECT_DOC =
+      "If true, reject schema registration requests whose subject name is the empty string. "
+      + "Defaults to false to preserve backward compatibility with existing deployments that "
+      + "may have schemas registered under an empty subject.";
+  protected static final String REFERENCE_VERSIONS_STRICT_DOC =
+      "If true, reject schema registration when the reference graph contains the same "
+      + "reference name at different versions. This prevents conflicting type definitions "
+      + "from coexisting in the resolved schema graph. Defaults to false.";
   protected static final String SCHEMA_CACHE_SIZE_DOC =
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
@@ -457,6 +488,10 @@ public class SchemaRegistryConfig extends RestConfig {
       + "old secret and re-encrypted using the new secret.";
   protected static final String METADATA_ENCODER_TOPIC_DOC =
       "The durable single partition topic that acts as the durable log for the encoder keysets.";
+  protected static final String METADATA_ENCODER_SECRET_STRICT_VALIDATION_DOC =
+      "When true, treat an empty encoder secret the same as a missing secret (disable the encoder "
+      + "service). This prevents silent data corruption when the secret file is not yet mounted "
+      + "at startup.";
   protected static final String LEADER_ELIGIBILITY_DOC =
       "If true, this node can participate in leader election. In a multi-colo setup, turn this off "
       + "for clusters in the follower data center.";
@@ -469,6 +504,8 @@ public class SchemaRegistryConfig extends RestConfig {
   protected static final String LEADER_ELECTION_STICKY_DOC =
       "If true, leader election will prefer to keep the current leader if possible. This is a "
       + "cluster wide setting i.e all nodes should have either true or false.";
+  protected static final String ASSOCIATIONS_ENABLE_DOC =
+      "If true, enable support for associations between resources and subjects.";
   protected static final String MODE_MUTABILITY_DOC =
       "If true, this node will allow mode changes if it is the leader.";
   protected static final String ENABLE_STORE_HEALTH_CHECK_DOC =
@@ -558,6 +595,25 @@ public class SchemaRegistryConfig extends RestConfig {
       + "are set at the same time, inter.instance.listener.name takes precedence.";
   private static final String COMPATIBILITY_DEFAULT = "backward";
   private static final String METRICS_JMX_PREFIX_DEFAULT_OVERRIDE = "kafka.schema.registry";
+
+  // rest-utils request.timeout.ms: blanket wall-clock cap after which a request is aborted with
+  // an HTTP 504. Defaulted here (overridable) so a single slow request cannot hold a Jetty
+  // worker thread indefinitely (see INC-11350). The key is referenced as a literal so this
+  // compiles against rest-utils versions that predate the config; it is honored once rest-utils
+  // is upgraded to a version that defines it. The default is injected only into the config
+  // passed up to RestConfig (so the Jetty layer sees it); it is deliberately kept out of
+  // originalProperties so it never reaches Kafka clients, where "request.timeout.ms" is a
+  // distinct client setting.
+  private static final String REQUEST_TIMEOUT_MS_CONFIG = "request.timeout.ms";
+  private static final String REQUEST_TIMEOUT_MS_DEFAULT = "600000"; // 10 minutes
+
+  // rest-utils request.timeout.interrupt.enable: on timeout, also interrupt the worker thread.
+  // Enabled here so a timed-out request (e.g. a slow leader-forward or a runaway JSON schema
+  // compatibility check) can be reclaimed, not just abandoned. Same literal-key / inject-only-
+  // into-RestConfig handling as request.timeout.ms above.
+  private static final String REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG =
+      "request.timeout.interrupt.enable";
+  private static final String REQUEST_TIMEOUT_INTERRUPT_ENABLE_DEFAULT = "true";
 
   private static final ConfigDef config;
 
@@ -652,6 +708,18 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(SCHEMA_VALIDATE_FIELDS_CONFIG, ConfigDef.Type.BOOLEAN, SCHEMA_VALIDATE_FIELDS_DEFAULT,
         ConfigDef.Importance.LOW, VALIDATE_FIELDS_DOC
     )
+    .define(SCHEMA_VALIDATE_NEW_SCHEMAS_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_VALIDATE_NEW_SCHEMAS_DEFAULT,
+        ConfigDef.Importance.LOW, VALIDATE_NEW_SCHEMAS_DOC
+    )
+    .define(SCHEMA_REJECT_EMPTY_SUBJECT_CONFIG, ConfigDef.Type.BOOLEAN,
+        SCHEMA_REJECT_EMPTY_SUBJECT_DEFAULT,
+        ConfigDef.Importance.LOW, REJECT_EMPTY_SUBJECT_DOC
+    )
+    .define(REFERENCE_VERSIONS_STRICT_CONFIG, ConfigDef.Type.BOOLEAN,
+        REFERENCE_VERSIONS_STRICT_DEFAULT,
+        ConfigDef.Importance.LOW, REFERENCE_VERSIONS_STRICT_DOC
+    )
     .define(SCHEMA_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_SIZE_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_SIZE_DOC
     )
@@ -709,6 +777,10 @@ public class SchemaRegistryConfig extends RestConfig {
     .define(METADATA_ENCODER_TOPIC_CONFIG, ConfigDef.Type.STRING, METADATA_ENCODER_TOPIC_DEFAULT,
         ConfigDef.Importance.HIGH, METADATA_ENCODER_TOPIC_DOC
     )
+    .define(METADATA_ENCODER_SECRET_STRICT_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN,
+        METADATA_ENCODER_SECRET_STRICT_VALIDATION_DEFAULT,
+        ConfigDef.Importance.LOW, METADATA_ENCODER_SECRET_STRICT_VALIDATION_DOC
+    )
     .define(MASTER_ELIGIBILITY, ConfigDef.Type.BOOLEAN, null,
         ConfigDef.Importance.MEDIUM, LEADER_ELIGIBILITY_DOC
     )
@@ -726,6 +798,9 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(LEADER_ELECTION_STICKY, ConfigDef.Type.BOOLEAN, DEFAULT_LEADER_ELECTION_STICKY,
             ConfigDef.Importance.LOW, LEADER_ELECTION_STICKY_DOC
+    )
+    .define(ASSOCIATIONS_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_ASSOCIATIONS_ENABLE,
+        ConfigDef.Importance.LOW, ASSOCIATIONS_ENABLE_DOC
     )
     .define(MODE_MUTABILITY, ConfigDef.Type.BOOLEAN, DEFAULT_MODE_MUTABILITY,
         ConfigDef.Importance.LOW, MODE_MUTABILITY_DOC
@@ -870,7 +945,7 @@ public class SchemaRegistryConfig extends RestConfig {
   }
 
   public SchemaRegistryConfig(ConfigDef configDef, Properties props) throws RestConfigException {
-    super(configDef, props);
+    super(configDef, applyRequestTimeoutDefaults(props));
     this.originalProperties = props;
     String compatibilityTypeString = getString(COMPATIBILITY_CONFIG);
     if (compatibilityTypeString == null || compatibilityTypeString.isEmpty()) {
@@ -881,6 +956,23 @@ public class SchemaRegistryConfig extends RestConfig {
       throw new RestConfigException("Unknown compatibility level: " + compatibilityTypeString);
     }
     buildMetricsContextLabels();
+  }
+
+  // Returns a copy of the supplied properties with the blanket request-timeout defaults applied
+  // (each only if the operator has not set it explicitly). A copy is used so the defaults are
+  // visible to the rest-utils/Jetty layer via RestConfig without polluting originalProperties,
+  // which is forwarded to Kafka clients.
+  private static Properties applyRequestTimeoutDefaults(Properties props) {
+    if (props.containsKey(REQUEST_TIMEOUT_MS_CONFIG)
+        && props.containsKey(REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG)) {
+      return props;
+    }
+    Properties merged = new Properties();
+    merged.putAll(props);
+    merged.putIfAbsent(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS_DEFAULT);
+    merged.putIfAbsent(REQUEST_TIMEOUT_INTERRUPT_ENABLE_CONFIG,
+        REQUEST_TIMEOUT_INTERRUPT_ENABLE_DEFAULT);
+    return merged;
   }
 
   private static String getDefaultHost() {
@@ -1024,6 +1116,10 @@ public class SchemaRegistryConfig extends RestConfig {
       }
     }
     return overridden;
+  }
+
+  public boolean enableAssociations() {
+    return getBoolean(ASSOCIATIONS_ENABLE);
   }
 
   public static void main(String[] args) {

@@ -16,9 +16,12 @@
 
 package io.confluent.dekregistry.client;
 
+import com.google.common.base.Ticker;
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
+import io.confluent.kafka.schemaregistry.SchemaProvider;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -26,6 +29,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +37,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-public class MockDekRegistryClient implements DekRegistryClient {
+public class MockDekRegistryClient extends MockSchemaRegistryClient implements DekRegistryClient {
 
   public static final byte[] EMPTY_AAD = new byte[0];
 
@@ -43,6 +47,11 @@ public class MockDekRegistryClient implements DekRegistryClient {
   private final Map<DekFormat, Cryptor> cryptors;
 
   public MockDekRegistryClient(Map<String, ?> configs) {
+    this(configs, Collections.emptyList());
+  }
+
+  public MockDekRegistryClient(Map<String, ?> configs, List<SchemaProvider> providers) {
+    super(providers);
     this.configs = configs;
     this.keks = new ConcurrentHashMap<>();
     this.deks = new ConcurrentHashMap<>();
@@ -57,6 +66,11 @@ public class MockDekRegistryClient implements DekRegistryClient {
         throw new IllegalArgumentException("Invalid format " + dekFormat, e);
       }
     });
+  }
+
+  @Override
+  public Ticker ticker() {
+    return Ticker.systemTicker();
   }
 
   @Override
@@ -104,6 +118,12 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
   @Override
   public Kek getKek(String name, boolean lookupDeleted)
+      throws IOException, RestClientException {
+    return getKek(name, lookupDeleted, null);
+  }
+
+  @Override
+  public Kek getKek(String name, boolean lookupDeleted, String context)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
     Kek key = keks.get(keyId);
@@ -192,6 +212,20 @@ public class MockDekRegistryClient implements DekRegistryClient {
       String doc,
       boolean shared,
       boolean deleted)
+      throws IOException, RestClientException {
+    return createKek(name, kmsType, kmsKeyId, kmsProps, doc, shared, deleted, null);
+  }
+
+  @Override
+  public Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted,
+      String context)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
     Kek oldKey = keks.get(keyId);
@@ -331,6 +365,17 @@ public class MockDekRegistryClient implements DekRegistryClient {
       String doc,
       Boolean shared)
       throws IOException, RestClientException {
+    return updateKek(name, kmsProps, doc, shared, null);
+  }
+
+  @Override
+  public Kek updateKek(
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared,
+      String context)
+      throws IOException, RestClientException {
     KekId keyId = new KekId(name);
     Kek key = keks.get(keyId);
     if (key == null) {
@@ -353,6 +398,12 @@ public class MockDekRegistryClient implements DekRegistryClient {
 
   @Override
   public void deleteKek(String kekName, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteKek(kekName, permanentDelete, null);
+  }
+
+  @Override
+  public void deleteKek(String kekName, boolean permanentDelete, String context)
       throws IOException, RestClientException {
     KekId keyId = new KekId(kekName);
     Kek key = keks.get(keyId);
@@ -465,6 +516,12 @@ public class MockDekRegistryClient implements DekRegistryClient {
   @Override
   public void undeleteKek(String kekName)
       throws IOException, RestClientException {
+    undeleteKek(kekName, null);
+  }
+
+  @Override
+  public void undeleteKek(String kekName, String context)
+      throws IOException, RestClientException {
     KekId keyId = new KekId(kekName);
     Kek key = keks.get(keyId);
     if (key == null) {
@@ -549,6 +606,10 @@ public class MockDekRegistryClient implements DekRegistryClient {
     keks.clear();
     deks.clear();
     cryptors.clear();
+  }
+
+  @Override
+  public void close() {
   }
 
   static class KekId {

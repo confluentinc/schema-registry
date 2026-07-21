@@ -16,31 +16,34 @@
 package io.confluent.kafka.schemaregistry.rest;
 
 import com.google.common.collect.ImmutableMap;
+import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
-import org.junit.Test;
 
 import java.util.Collections;
-import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidModeException;
-import io.confluent.kafka.schemaregistry.rest.extensions.SchemaRegistryResourceExtension;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
-import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.rest.exceptions.RestConstraintViolationException;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
-import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
-public class RestApiModeTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiModeTest {
+
+  protected RestApp restApp = null;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
 
   private static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
@@ -100,10 +103,6 @@ public class RestApiModeTest extends ClusterTestHarness {
               + "}")
       .canonicalString();
 
-  public RestApiModeTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
-  }
-
   @Test
   public void testReadOnlyMode() throws Exception {
     String subject = "testSubject";
@@ -120,9 +119,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering during read-only mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 
@@ -142,15 +143,19 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering an incompatible schema should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
   }
 
   @Test
@@ -164,10 +169,12 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     // register a valid avro schema
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
   }
 
   @Test
@@ -186,9 +193,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering a schema without ID should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 
@@ -218,19 +227,23 @@ public class RestApiModeTest extends ClusterTestHarness {
     String mode = "IMPORT";
 
     // register a valid avro schema
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     try {
       restApp.restClient.setMode(mode).getMode();
       fail("Setting import mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
 
     // set subject mode to import with force=true
@@ -263,15 +276,19 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
     // register same schema with no id
-    assertEquals("Registering without id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
   }
 
   @Test
@@ -284,10 +301,12 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -300,10 +319,12 @@ public class RestApiModeTest extends ClusterTestHarness {
         restApp.restClient.setMode(mode).getMode());
 
     // register same schema with different id
-    expectedIdSchema1 = 2;
-    assertEquals("Registering with id should succeed",
+    expectedIdSchema1 = expectedSchemaId(2);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
   }
 
   @Test
@@ -316,10 +337,12 @@ public class RestApiModeTest extends ClusterTestHarness {
             mode,
             restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -333,22 +356,28 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register same schema with same id
     expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
     // delete subject again
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
 
     // register same schema with same id
     expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
-            SCHEMA_STRING,
-            restApp.restClient.getVersion(subject, 1).getSchema());
+    assertEquals(
+        SCHEMA_STRING,
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -361,10 +390,12 @@ public class RestApiModeTest extends ClusterTestHarness {
             mode,
             restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
-            expectedIdSchema1,
-            restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
+        expectedIdSchema1,
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -383,13 +414,17 @@ public class RestApiModeTest extends ClusterTestHarness {
     request.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
     request.setVersion(1);
     request.setId(expectedIdSchema1);
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_STRING,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
 
     // delete subject again
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -401,13 +436,17 @@ public class RestApiModeTest extends ClusterTestHarness {
     request.setMetadata(new Metadata(null, ImmutableMap.of("foo", "bar"), null));
     request.setVersion(1);
     request.setId(expectedIdSchema1);
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_STRING,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -420,24 +459,32 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(100);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
 
     // register equivalent schema with different id
-    expectedIdSchema1 = 200;
-    assertEquals("Registering with id should succeed",
+    expectedIdSchema1 = expectedSchemaId(200);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL2, subject, 2, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL2, subject, 2, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL2,
-        restApp.restClient.getVersion(subject, 2).getSchema());
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -450,24 +497,32 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 100;
-    assertEquals("Registering with id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(100);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
-        restApp.restClient.getVersion(subject, 1).getSchema());
+        restApp.restClient.getVersion(subject, 1).getSchema(),
+        "Getting schema by id should succeed"
+    );
 
     // register equivalent schema with different id
-    expectedIdSchema1 = 200;
-    assertEquals("Registering with id should succeed",
+    expectedIdSchema1 = expectedSchemaId(200);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 2, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA_WITH_DECIMAL,
-        restApp.restClient.getVersion(subject, 2).getSchema());
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -481,7 +536,7 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 100;
+    int expectedIdSchema1 = expectedSchemaId(100);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject, 1, expectedIdSchema1));
@@ -495,7 +550,7 @@ public class RestApiModeTest extends ClusterTestHarness {
     assertEquals(1, versionOfRegisteredSubject1);
 
     // register equivalent schema with different id
-    expectedIdSchema1 = 200;
+    expectedIdSchema1 = expectedSchemaId(200);
     assertEquals(
         expectedIdSchema1,
         restApp.restClient.registerSchema(SCHEMA_WITH_DECIMAL, subject2, 1, expectedIdSchema1));
@@ -523,10 +578,12 @@ public class RestApiModeTest extends ClusterTestHarness {
         mode,
         restApp.restClient.setMode(mode).getMode());
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject),
+        "Registering without id should succeed"
+    );
 
     // delete subject so we can switch to import mode
     restApp.restClient.deleteSubject(Collections.emptyMap(), subject);
@@ -540,19 +597,25 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // register same schema with same id
     expectedIdSchema1 = 1;
-    assertEquals("Registering with id should succeed",
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA_STRING, subject, 1, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
     // register same schema with same id
-    expectedIdSchema1 = 2;
-    assertEquals("Registering with id should succeed",
+    expectedIdSchema1 = expectedSchemaId(2);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(SCHEMA2_STRING, subject, 2, expectedIdSchema1));
+        restApp.restClient.registerSchema(SCHEMA2_STRING, subject, 2, expectedIdSchema1),
+        "Registering with id should succeed"
+    );
 
-    assertEquals("Getting schema by id should succeed",
+    assertEquals(
         SCHEMA2_STRING,
-        restApp.restClient.getVersion(subject, 2).getSchema());
+        restApp.restClient.getVersion(subject, 2).getSchema(),
+        "Getting schema by id should succeed"
+    );
   }
 
   @Test
@@ -574,9 +637,11 @@ public class RestApiModeTest extends ClusterTestHarness {
       fail("Registering during read-only mode should fail");
     } catch (RestClientException e) {
       // this is expected.
-      assertEquals("Should get a constraint violation",
+      assertEquals(
           RestConstraintViolationException.DEFAULT_ERROR_CODE,
-          e.getStatus());
+          e.getStatus(),
+          "Should get a constraint violation"
+      );
     }
   }
 
@@ -597,15 +662,15 @@ public class RestApiModeTest extends ClusterTestHarness {
     // delete global mode - should succeed and return the old mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(null);
     assertEquals(
-            "Deleted mode should return the old global mode",
             mode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old global mode");
 
     // verify global mode is now reset to default (READWRITE)
     assertEquals(
-            "Global mode should revert to default READWRITE",
             "READWRITE",
-            restApp.restClient.getMode().getMode());
+            restApp.restClient.getMode().getMode(),
+            "Global mode should revert to default READWRITE");
   }
 
   @Test
@@ -632,9 +697,9 @@ public class RestApiModeTest extends ClusterTestHarness {
     // delete subject mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(subject);
     assertEquals(
-            "Deleted mode should return the old mode",
             subjectMode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old mode");
 
     // verify subject mode falls back to global mode
     assertEquals(
@@ -682,16 +747,18 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete context mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, true);
-    assertEquals("Deleted mode should return the old context mode",
+    assertEquals(
             mode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old context mode");
 
     // verify context mode is deleted
     try {
       restApp.restClient.getMode(context, false);
       fail("Should throw exception for deleted context mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     // verify all subject modes under the context are also deleted
@@ -699,21 +766,24 @@ public class RestApiModeTest extends ClusterTestHarness {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject3, false);
       fail("Should throw exception for deleted subject3 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
   }
 
@@ -750,25 +820,29 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // non-recursive delete context mode (recursive = false)
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, false);
-    assertEquals("Deleted mode should return the old context mode",
+    assertEquals(
             mode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old context mode");
 
     // verify context mode is deleted
     try {
       restApp.restClient.getMode(context, false);
       fail("Should throw exception for deleted context mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     // verify subject modes are NOT deleted (still exist)
-    assertEquals("Subject1 mode should still exist",
+    assertEquals(
             mode,
-            restApp.restClient.getMode(subject1, false).getMode());
-    assertEquals("Subject2 mode should still exist",
+            restApp.restClient.getMode(subject1, false).getMode(),
+            "Subject1 mode should still exist");
+    assertEquals(
             mode,
-            restApp.restClient.getMode(subject2, false).getMode());
+            restApp.restClient.getMode(subject2, false).getMode(),
+            "Subject2 mode should still exist");
   }
 
   @Test
@@ -810,35 +884,40 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete global mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), null, true);
-    assertEquals("Deleted mode should return the old global mode",
+    assertEquals(
             mode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old global mode");
 
     // verify global mode is deleted (reverts to default)
-    assertEquals("Global mode should revert to default READWRITE",
+    assertEquals(
             "READWRITE",
-            restApp.restClient.getMode(null, false).getMode());
+            restApp.restClient.getMode(null, false).getMode(),
+            "Global mode should revert to default READWRITE");
 
     // verify all subject modes in default context are also deleted
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject3, false);
       fail("Should throw exception for deleted subject3 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
   }
 
@@ -870,29 +949,33 @@ public class RestApiModeTest extends ClusterTestHarness {
       restApp.restClient.getMode(context, false);
       fail("Context mode should not be set");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     // recursive delete context mode (should succeed even though context mode is not set)
     // and should delete modes for subjects under the context
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, true);
-    assertEquals("Deleted mode should return null as context mode was not set",
+    assertEquals(
             null,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return null as context mode was not set");
 
     // verify subject modes are deleted
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
   }
 
@@ -934,30 +1017,34 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete context mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context, true);
-    assertEquals("Deleted mode should return the old context mode",
+    assertEquals(
             contextMode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old context mode");
 
     // verify all modes are deleted
     try {
       restApp.restClient.getMode(context, false);
       fail("Should throw exception for deleted context mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject2, false);
       fail("Should throw exception for deleted subject2 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     // subject3 still has no mode (should not be affected)
@@ -965,7 +1052,8 @@ public class RestApiModeTest extends ClusterTestHarness {
       restApp.restClient.getMode(subject3, false);
       fail("Subject3 should still have no mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
   }
 
@@ -1007,81 +1095,36 @@ public class RestApiModeTest extends ClusterTestHarness {
 
     // recursive delete context1 mode
     Mode deletedMode = restApp.restClient.deleteSubjectMode(Collections.emptyMap(), context1, true);
-    assertEquals("Deleted mode should return the old context1 mode",
+    assertEquals(
             mode,
-            deletedMode.getMode());
+            deletedMode.getMode(),
+            "Deleted mode should return the old context1 mode");
 
     // verify context1 and subject1 modes are deleted
     try {
       restApp.restClient.getMode(context1, false);
       fail("Should throw exception for deleted context1 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     try {
       restApp.restClient.getMode(subject1, false);
       fail("Should throw exception for deleted subject1 mode");
     } catch (RestClientException e) {
-      assertEquals("Should get mode not configured error", 40409, e.getErrorCode());
+      assertEquals(40409, e.getErrorCode(),
+              "Should get mode not configured error");
     }
 
     // verify context2 and subject2 modes are NOT affected
-    assertEquals("Context2 mode should still exist",
+    assertEquals(
             mode,
-            restApp.restClient.getMode(context2, false).getMode());
-    assertEquals("Subject2 mode should still exist",
+            restApp.restClient.getMode(context2, false).getMode(),
+            "Context2 mode should still exist");
+    assertEquals(
             mode,
-            restApp.restClient.getMode(subject2, false).getMode());
-  }
-
-
-  @Test
-  public void testSetForwardMode() throws Exception {
-    String subject = "testSubject";
-    String mode = "FORWARD";
-
-    try {
-      restApp.restClient.setMode(mode, subject);
-    } catch (RestClientException e) {
-      assertEquals(42204, e.getErrorCode());
-      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
-    }
-
-    try {
-      restApp.restClient.setMode(mode).getMode();
-    } catch (RestClientException e) {
-      assertEquals(42204, e.getErrorCode());
-      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
-    }
-  }
-
-  @Test
-  public void testSetForwardModeForNonGlobalContext() throws Exception {
-    // only support global context
-    String mode = "FORWARD";
-    restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME);
-    assertEquals(mode, restApp.restClient.getMode(CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME).getMode());
-
-    try {
-      restApp.restClient.setMode(mode, null);
-    } catch (RestClientException e) {
-      assertEquals(42204, e.getErrorCode());
-      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
-    }
-
-    try {
-      restApp.restClient.setMode(mode, CONTEXT_DELIMITER + DEFAULT_CONTEXT);
-    } catch (RestClientException e) {
-      assertEquals(42204, e.getErrorCode());
-      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
-    }
-
-    try {
-      restApp.restClient.setMode(mode, CONTEXT_DELIMITER + GLOBAL_CONTEXT_NAME + ":subject-name");
-    } catch (RestClientException e) {
-      assertEquals(42204, e.getErrorCode());
-      assertEquals("Forward mode only supported on global level; error code: 42204", e.getMessage());
-    }
+            restApp.restClient.getMode(subject2, false).getMode(),
+            "Subject2 mode should still exist");
   }
 }

@@ -51,21 +51,21 @@ if [ ! -d "$LOG_DIR" ]; then
 fi
 
 # logj4 settings
-if [ "x$SCHEMA_REGISTRY_LOG4J_OPTS" = "x" ]; then
+if [ -z "$SCHEMA_REGISTRY_LOG4J_OPTS" ]; then
   # Test for files from dev -> packages so this will work as expected in dev if you have packages
   # installed
-  if [ -e "$base_dir/config/log4j.properties" ]; then # Dev environment
-    LOG4J_DIR="$base_dir/config/log4j.properties"
-  elif [ -e "$base_dir/etc/schema-registry/log4j.properties" ]; then # Simple zip file layout
-    LOG4J_DIR="$base_dir/etc/schema-registry/log4j.properties"
-  elif [ -e "/etc/schema-registry/log4j.properties" ]; then # Normal install layout
-    LOG4J_DIR="/etc/schema-registry/log4j.properties"
+  if [ -e "$base_dir/config/log4j2.yaml" ]; then # Dev environment
+    LOG4J_DIR="$base_dir/config/log4j2.yaml"
+  elif [ -e "$base_dir/etc/schema-registry/log4j2.yaml" ]; then # Simple zip file layout
+    LOG4J_DIR="$base_dir/etc/schema-registry/log4j2.yaml"
+  elif [ -e "/etc/schema-registry/log4j2.yaml" ]; then # Normal install layout
+    LOG4J_DIR="/etc/schema-registry/log4j2.yaml"
   fi
 
     # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
     (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
 
-    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
+    SCHEMA_REGISTRY_LOG4J_OPTS="-Dlog4j2.configurationFile=${LOG4J_DIR}"
 fi
 
 # If Cygwin is detected, LOG_DIR is converted to Windows format.

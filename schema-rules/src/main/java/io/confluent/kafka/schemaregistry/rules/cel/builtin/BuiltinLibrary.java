@@ -16,25 +16,26 @@
 
 package io.confluent.kafka.schemaregistry.rules.cel.builtin;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import org.projectnessie.cel.EnvOption;
-import org.projectnessie.cel.EvalOption;
-import org.projectnessie.cel.Library;
-import org.projectnessie.cel.ProgramOption;
+import dev.cel.checker.CelCheckerBuilder;
+import dev.cel.compiler.CelCompilerLibrary;
+import dev.cel.runtime.CelRuntimeBuilder;
+import dev.cel.runtime.CelRuntimeLibrary;
 
-public class BuiltinLibrary implements Library {
+/**
+ * Schema Registry's built-in CEL function library. Implements both
+ * {@link CelCompilerLibrary} (so {@link BuiltinDeclarations}'s function
+ * declarations are added to the type-checker) and {@link CelRuntimeLibrary}
+ * (so {@link BuiltinOverload}'s function bindings are added to the runtime).
+ */
+public class BuiltinLibrary implements CelCompilerLibrary, CelRuntimeLibrary {
 
   @Override
-  public List<EnvOption> getCompileOptions() {
-    return Collections.singletonList(EnvOption.declarations(BuiltinDeclarations.create()));
+  public void setCheckerOptions(CelCheckerBuilder checkerBuilder) {
+    checkerBuilder.addFunctionDeclarations(BuiltinDeclarations.create());
   }
 
   @Override
-  public List<ProgramOption> getProgramOptions() {
-    return Arrays.asList(
-        ProgramOption.evalOptions(EvalOption.OptOptimize),
-        ProgramOption.functions(BuiltinOverload.create()));
+  public void setRuntimeOptions(CelRuntimeBuilder runtimeBuilder) {
+    runtimeBuilder.addFunctionBindings(BuiltinOverload.create());
   }
 }

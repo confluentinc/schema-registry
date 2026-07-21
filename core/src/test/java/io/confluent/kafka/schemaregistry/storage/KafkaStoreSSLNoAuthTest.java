@@ -15,7 +15,7 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class KafkaStoreSSLNoAuthTest extends KafkaStoreSSLAuthTest {
   protected boolean requireSSLClientAuth() {

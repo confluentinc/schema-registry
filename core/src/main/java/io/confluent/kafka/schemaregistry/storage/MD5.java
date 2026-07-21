@@ -16,9 +16,14 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Simple wrapper for 16 byte MD5 hash.
@@ -40,6 +45,20 @@ public class MD5 {
     this.md5 = md5;
   }
 
+  public static MD5 fromString(String string) {
+    byte[] bytes;
+    try {
+      UUID uuid = UUID.fromString(string);
+      ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
+      bb.putLong(uuid.getMostSignificantBits());
+      bb.putLong(uuid.getLeastSignificantBits());
+      bytes = bb.array();
+    } catch (IllegalArgumentException e) {
+      bytes = HexFormat.of().parseHex(string);
+    }
+    return new MD5(bytes);
+  }
+
   public byte[] bytes() {
     return md5;
   }
@@ -56,7 +75,31 @@ public class MD5 {
 
   public static MD5 ofSchema(SchemaValue schema) {
     byte[] bytes = schema.getMd5Bytes();
-    return bytes != null ? new MD5(bytes) : ofSchema(schema.toSchemaEntity());
+    return bytes != null
+        ? new MD5(bytes)
+        : ofSchema(
+            schema.getSchema(),
+            schema.getReferences() == null ? null : schema.getReferences().stream()
+                .map(SchemaReference::toRefEntity)
+                .collect(Collectors.toList()),
+            schema.getMetadata() == null ? null : schema.getMetadata().toMetadataEntity() ,
+            schema.getRuleSet() == null ? null : schema.getRuleSet().toRuleSetEntity()
+        );
+  }
+
+  public static MD5 ofSchema(
+      String schema,
+      List<io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference> references,
+      io.confluent.kafka.schemaregistry.client.rest.entities.Metadata metadata,
+      io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet ruleSet
+  ) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("MD5");
+      Schema.updateHash(md, schema, references, metadata, ruleSet);
+      return new MD5(md.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
@@ -80,5 +123,14 @@ public class MD5 {
 
     MD5 otherMd5 = (MD5) o;
     return Arrays.equals(this.md5, otherMd5.md5);
+  }
+
+  @Override
+  public String toString() {
+    ByteBuffer byteBuffer = ByteBuffer.wrap(md5);
+    long high = byteBuffer.getLong();
+    long low = byteBuffer.getLong();
+    UUID uuid = new UUID(high, low);
+    return uuid.toString();
   }
 }

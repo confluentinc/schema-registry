@@ -17,14 +17,18 @@
 package io.confluent.kafka.schemaregistry.client.security;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -330,6 +334,91 @@ public class SslFactoryTest {
       builder.append("\n");
     }
     return new Password(builder.toString().trim());
+  }
+
+  @Test
+  public void testIsUrl() {
+    assertTrue(SslFactory.isUrl("safkeyringjce://userid/keyring"));
+    assertTrue(SslFactory.isUrl("https://example.com/truststore.jks"));
+    assertTrue(SslFactory.isUrl("file:///tmp/store.jks"));
+    assertFalse(SslFactory.isUrl("/etc/ssl/store.jks"));
+    assertFalse(SslFactory.isUrl("relative/store.jks"));
+    assertFalse(SslFactory.isUrl("store.jks"));
+    // Windows paths contain a backslash, which is not a valid URI character — fall through.
+    assertFalse(SslFactory.isUrl("C:\\Users\\me\\store.jks"));
+    // Single-letter scheme is rejected to avoid misclassifying drive letters in some forms.
+    assertFalse(SslFactory.isUrl("c:foo"));
+    // POSIX paths may contain colons; require :// to qualify as a URL.
+    assertFalse(SslFactory.isUrl("certs:prod/truststore.p12"));
+    // Hierarchical with single slash could be a POSIX path (e.g. a directory named "certs:");
+    // require :// (canonical form) to disambiguate.
+    assertFalse(SslFactory.isUrl("certs:/prod/truststore.p12"));
+    assertFalse(SslFactory.isUrl("file:/tmp/store.jks"));
+    assertFalse(SslFactory.isUrl("mailto:foo@bar.com"));
+    assertFalse(SslFactory.isUrl("urn:isbn:0451450523"));
+    assertFalse(SslFactory.isUrl(null));
+  }
+
+  @Test
+  public void testPemTrustStoreFromFileUrl() throws Exception {
+    // Canonical RFC 8089 form: file:///path
+    String fileUrl = "file://" + pemFile(CA1).getAbsolutePath();
+    configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, fileUrl);
+    configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
+    SslFactory factory = new SslFactory(configs);
+
+    KeyStore trustStore = factory.trustStore().get();
+    assertEquals(Collections.singletonList("kafka0"), Collections.list(trustStore.aliases()));
+    assertNotNull("Certificate not found", trustStore.getCertificate("kafka0"));
+  }
+
+  @Test
+  public void testBinaryTrustStoreFromFileUrl() throws Exception {
+    File trustStoreFile = pkcs12TrustStoreFile(CA1);
+    configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+        "file://" + trustStoreFile.getAbsolutePath());
+    configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
+    configs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, KEY_PASSWORD.value());
+    SslFactory factory = new SslFactory(configs);
+
+    KeyStore trustStore = factory.trustStore().get();
+    assertNotNull(trustStore.getCertificate("test-ca"));
+  }
+
+  @Test
+  public void testMalformedUrlFails() {
+    // Valid URI scheme but no registered URLStreamHandler — should surface a clear
+    // "No URL handler registered" message rather than a generic load failure.
+    configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "bogusscheme://does/not/exist");
+    configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
+    configs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, KEY_PASSWORD.value());
+    RuntimeException ex = assertThrows(RuntimeException.class, () -> new SslFactory(configs));
+    // Cause chain: KafkaException(load failed) <- IOException(no URL handler) <- MalformedURLException
+    Throwable kafkaEx = ex.getCause();
+    assertNotNull(kafkaEx);
+    Throwable ioEx = kafkaEx.getCause();
+    assertNotNull(ioEx);
+    assertTrue("Expected 'No URL handler' in message, got: " + ioEx.getMessage(),
+        ioEx.getMessage().contains("No URL handler"));
+  }
+
+  private File pemFile(String pem) throws Exception {
+    File pemFile = File.createTempFile(getClass().getSimpleName(), ".pem", TestUtils.tempDirectory());
+    Files.write(pemFile.toPath(), pem.getBytes(StandardCharsets.UTF_8));
+    return pemFile;
+  }
+
+  private File pkcs12TrustStoreFile(String certPem) throws Exception {
+    KeyStore ks = KeyStore.getInstance("PKCS12");
+    ks.load(null, null);
+    Certificate cert = CertificateFactory.getInstance("X.509").generateCertificate(
+        new java.io.ByteArrayInputStream(certPem.getBytes(StandardCharsets.UTF_8)));
+    ks.setCertificateEntry("test-ca", cert);
+    File f = File.createTempFile(getClass().getSimpleName(), ".p12", TestUtils.tempDirectory());
+    try (java.io.OutputStream out = Files.newOutputStream(f.toPath())) {
+      ks.store(out, KEY_PASSWORD.value().toCharArray());
+    }
+    return f;
   }
 
 }
