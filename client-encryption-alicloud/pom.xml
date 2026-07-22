@@ -128,6 +128,8 @@
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
+<<<<<<< HEAD
+=======
             <artifactId>kafka-server-common</artifactId>
             <version>${kafka.version}</version>
             <classifier>test-fixtures</classifier>
@@ -141,6 +143,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
+>>>>>>> master
             <artifactId>kafka-clients</artifactId>
             <classifier>test</classifier>
             <scope>test</scope>
@@ -152,6 +155,8 @@
             </exclusions>
         </dependency>
         <dependency>
+<<<<<<< HEAD
+=======
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <classifier>test-fixtures</classifier>
@@ -164,6 +169,7 @@
             </exclusions>
         </dependency>
         <dependency>
+>>>>>>> master
             <groupId>io.confluent</groupId>
             <artifactId>kafka-schema-registry-client-encryption</artifactId>
             <version>${io.confluent.schema-registry.version}</version>
