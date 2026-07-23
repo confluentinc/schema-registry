@@ -258,8 +258,11 @@ public class AvroConverter implements Converter {
         );
       }
     } catch (InvalidConfigurationException e) {
+      // ConfigException has no Throwable constructor, so fold the underlying cause
+      // into the message rather than dropping it (e.g. a Schema Registry auth failure).
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
+          String.format("Failed to access Avro data from topic %s : %s", topic,
+              e.getCause() != null ? e.getMessage() + "; caused by: " + e.getCause() : e.getMessage())
       );
     }
   }
