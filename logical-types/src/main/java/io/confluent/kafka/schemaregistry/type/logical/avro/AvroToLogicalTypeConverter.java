@@ -663,7 +663,8 @@ public class AvroToLogicalTypeConverter {
 
   private static boolean isLogicalMap(org.apache.avro.Schema arraySchema) {
     // Primary: LogicalMap on the array (the form LT-Avro emits).
-    if (arraySchema.getLogicalType() instanceof LogicalMap) {
+    org.apache.avro.LogicalType logicalType = arraySchema.getLogicalType();
+    if (logicalType != null && LogicalMap.NAME.equals(logicalType.getName())) {
       return true;
     }
     // Legacy fallbacks for Flink-emitted and AvroData-emitted schemas.
