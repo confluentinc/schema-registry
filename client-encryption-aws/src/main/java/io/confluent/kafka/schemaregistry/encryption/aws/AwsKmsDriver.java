@@ -32,6 +32,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kms.model.NotFoundException;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
@@ -65,6 +66,16 @@ public class AwsKmsDriver implements KmsDriver {
     }
     AwsServiceException e = (AwsServiceException) t;
     if (isAccessDeniedStatus(e.statusCode())) {
+      return true;
+    }
+    // NotFoundException is treated as access-denied here too: for a *shared* (cross-account)
+    // KMS key, "the key doesn't exist" and "we were never granted access to it" are
+    // indistinguishable from the caller's perspective, and equally a customer configuration
+    // problem -- neither should surface as an internal 500. AWS does not guarantee which of
+    // the two exceptions it returns for a missing cross-account key (it depends on where in
+    // its IAM-then-resource evaluation the request fails), so treating them differently would
+    // make our own response code non-deterministic across otherwise-identical requests.
+    if (e instanceof NotFoundException) {
       return true;
     }
     // KMS returns IAM authorization failures as AccessDeniedException with HTTP 400, so the
