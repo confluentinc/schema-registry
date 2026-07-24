@@ -243,9 +243,8 @@ public class LogicalTypeToAvroConverter {
         return LogicalTypes.decimal(schema.getPrecision(), schema.getScale())
             .addToSchema(SchemaBuilder.builder().bytesType());
       case VARIANT:
-        if (ctx.isV1()) {
-          throw new ValidationException("VARIANT not supported in V1 emission mode");
-        }
+        // Emitted in both V1 and V2: Flink has a native VariantType (LogicalTypeRoot.VARIANT),
+        // so VARIANT is not an LT-only construct.
         return new VariantConversion().getRecommendedSchema();
       case NAMED_TYPE_REF: {
         String name = schema.getQualifiedName();
