@@ -841,9 +841,8 @@ public class LogicalTypeToProtoConverter {
       case DECIMAL:
         return createDecimalField(schema, dependencies, builder);
       case VARIANT:
-        if (ctx.isV1()) {
-          throw new ValidationException("VARIANT not supported in V1 emission mode");
-        }
+        // Emitted in both V1 and V2: Flink has a native VariantType (LogicalTypeRoot.VARIANT),
+        // so VARIANT is not an LT-only construct.
         builder.setType(Type.TYPE_MESSAGE);
         builder.setTypeName(makeItTopLevelScoped(CommonConstants.PROTOBUF_VARIANT_TYPE));
         dependencies.add(CommonConstants.PROTOBUF_VARIANT_LOCATION);
