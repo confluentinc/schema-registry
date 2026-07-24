@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +40,40 @@ class AvroToLogicalTypeConverterTest {
           new AvroSchema(mapping.getAvroSchema()));
       assertEquals(mapping.getLogicalType(), result, "Failed for: " + mapping);
     }
+  }
+
+  @Test
+  void testVariantParsedFromStringMapsToVariant() {
+    // Production read path: a schema fetched from Schema Registry arrives as a JSON
+    // string. kafka-avro-types registers no "variant" logical-type factory, so after
+    // parsing getLogicalType() is null and detection must be structural (a record
+    // confluent.type.Variant with two bytes fields metadata/value).
+    String withLogicalTypeProp =
+        "{\"type\":\"record\",\"name\":\"Variant\",\"namespace\":\"confluent.type\","
+            + "\"fields\":[{\"name\":\"metadata\",\"type\":\"bytes\"},"
+            + "{\"name\":\"value\",\"type\":\"bytes\"}],\"logicalType\":\"variant\"}";
+    Schema withProp =
+        AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(withLogicalTypeProp));
+    assertEquals(Schema.Type.VARIANT, withProp.getType());
+    assertFalse(withProp.isNullable());
+
+    // Avro parsing canonical form strips the logicalType property entirely;
+    // structural detection must still recognize the record as VARIANT.
+    String noProp =
+        "{\"type\":\"record\",\"name\":\"Variant\",\"namespace\":\"confluent.type\","
+            + "\"fields\":[{\"name\":\"metadata\",\"type\":\"bytes\"},"
+            + "{\"name\":\"value\",\"type\":\"bytes\"}]}";
+    Schema withoutProp = AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(noProp));
+    assertEquals(Schema.Type.VARIANT, withoutProp.getType());
+
+    // Nullable variant: union [null, Variant] parsed from a string stays nullable VARIANT.
+    String nullableVariant =
+        "[\"null\",{\"type\":\"record\",\"name\":\"Variant\",\"namespace\":\"confluent.type\","
+            + "\"fields\":[{\"name\":\"metadata\",\"type\":\"bytes\"},"
+            + "{\"name\":\"value\",\"type\":\"bytes\"}],\"logicalType\":\"variant\"}]";
+    Schema nullable = AvroToLogicalTypeConverter.toRootSchema(new AvroSchema(nullableVariant));
+    assertEquals(Schema.Type.VARIANT, nullable.getType());
+    assertTrue(nullable.isNullable());
   }
 
   @Test

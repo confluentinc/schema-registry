@@ -2327,14 +2327,17 @@ class LogicalTypeToAvroConverterTest {
   }
 
   @Test
-  void testV1ThrowsOnVariant() {
-    Schema rootSchema = Schema.createStruct(Arrays.asList(
-        new Field("v", Schema.create(Schema.Type.VARIANT).setNullable(false), 0)))
-        .setNullable(false);
-    ValidationException ex = assertThrows(ValidationException.class, () ->
-        LogicalTypeToAvroConverter.fromLogicalType(
-            new LogicalType(rootSchema), "Holder", LogicalTypeVersion.V1));
-    assertTrue(ex.getMessage().contains("VARIANT"));
+  void testV1EmitsVariant() {
+    // Flink has a native VariantType, so V1 emits VARIANT identically to V2:
+    // a RECORD carrying the Variant logical type with metadata/value fields.
+    Schema variant = Schema.create(Schema.Type.VARIANT).setNullable(false);
+    AvroSchema avro = LogicalTypeToAvroConverter.fromLogicalType(
+        new LogicalType(variant), "row", LogicalTypeVersion.V1);
+    assertEquals(org.apache.avro.Schema.Type.RECORD, avro.rawSchema().getType());
+    assertEquals(VariantLogicalType.NAME, avro.rawSchema().getLogicalType().getName());
+    assertEquals(2, avro.rawSchema().getFields().size());
+    assertEquals("metadata", avro.rawSchema().getFields().get(0).name());
+    assertEquals("value", avro.rawSchema().getFields().get(1).name());
   }
 
   @Test
