@@ -109,9 +109,11 @@ class NumberSchemaDiff {
         ctx.addDifference("multipleOf", MULTIPLE_OF_ADDED);
       } else if (updateMultipleOf == null) {
         ctx.addDifference("multipleOf", MULTIPLE_OF_REMOVED);
-      } else if (update.getMultipleOf().intValue() % original.getMultipleOf().intValue() == 0) {
+      } else if (originalMultipleOf.compareTo(BigDecimal.ZERO) != 0
+          && updateMultipleOf.remainder(originalMultipleOf).compareTo(BigDecimal.ZERO) == 0) {
         ctx.addDifference("multipleOf", MULTIPLE_OF_EXPANDED);
-      } else if (original.getMultipleOf().intValue() % update.getMultipleOf().intValue() == 0) {
+      } else if (updateMultipleOf.compareTo(BigDecimal.ZERO) != 0
+          && originalMultipleOf.remainder(updateMultipleOf).compareTo(BigDecimal.ZERO) == 0) {
         ctx.addDifference("multipleOf", MULTIPLE_OF_REDUCED);
       } else {
         ctx.addDifference("multipleOf", MULTIPLE_OF_CHANGED);
