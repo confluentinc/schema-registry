@@ -99,6 +99,31 @@ public class AvroToLogicalTypeConverter {
         ctx.getDefaultValues());
   }
 
+  /**
+   * Recognizes the Confluent VARIANT Avro encoding: a record {@code confluent.type.Variant} with
+   * two {@code bytes} fields ({@code metadata}, {@code value}). Detection is structural rather than
+   * relying solely on the resolved Avro logical type: schemas fetched from Schema Registry arrive
+   * parsed from a JSON string (kafka-avro-types registers no {@code variant} logical-type factory,
+   * so {@code getLogicalType()} is null) or in canonical form (the {@code logicalType} property is
+   * stripped), yet must still map to VARIANT.
+   */
+  private static boolean isVariantRecord(org.apache.avro.Schema avroSchema) {
+    org.apache.avro.LogicalType logicalType = avroSchema.getLogicalType();
+    if (logicalType != null && VariantLogicalType.NAME.equals(logicalType.getName())) {
+      return true;
+    }
+    if (!"confluent.type.Variant".equals(avroSchema.getFullName())
+        || avroSchema.getFields().size() != 2) {
+      return false;
+    }
+    org.apache.avro.Schema.Field metadata = avroSchema.getField("metadata");
+    org.apache.avro.Schema.Field value = avroSchema.getField("value");
+    return metadata != null
+        && value != null
+        && metadata.schema().getType() == org.apache.avro.Schema.Type.BYTES
+        && value.schema().getType() == org.apache.avro.Schema.Type.BYTES;
+  }
+
   private static String extractNamespace(AvroSchema avroSchema) {
     Metadata metadata = avroSchema.metadata();
     if (metadata == null || metadata.getProperties() == null) {
@@ -390,8 +415,7 @@ public class AvroToLogicalTypeConverter {
             isMultisetType2);
 
       case RECORD: {
-        if (avroSchema.getLogicalType() != null
-            && VariantLogicalType.NAME.equals(avroSchema.getLogicalType().getName())) {
+        if (isVariantRecord(avroSchema)) {
           return Schema.create(Schema.Type.VARIANT).setNullable(isNullable);
         }
         // Anything not explicitly marked anonymous is a named record. Insert a

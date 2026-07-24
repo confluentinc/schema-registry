@@ -2328,14 +2328,13 @@ class LogicalTypeToJsonConverterTest {
   }
 
   @Test
-  void testV1ThrowsOnVariant() {
-    Schema rootSchema = Schema.createStruct(Arrays.asList(
-        new Field("v", Schema.create(Schema.Type.VARIANT).setNullable(false), 0)))
-        .setNullable(false);
-    ValidationException ex = assertThrows(ValidationException.class, () ->
-        LogicalTypeToJsonConverter.fromLogicalType(
-            new LogicalType(rootSchema), "Holder", LogicalTypeVersion.V1));
-    assertTrue(ex.getMessage().contains("VARIANT"));
+  void testV1EmitsVariant() {
+    // Flink has a native VariantType, so V1 emits VARIANT identically to V2:
+    // the match-anything empty JSON schema.
+    Schema schema = Schema.create(Schema.Type.VARIANT).setNullable(false);
+    JsonSchema result = LogicalTypeToJsonConverter.fromLogicalType(
+        new LogicalType(schema), "row", LogicalTypeVersion.V1);
+    assertTrue(result.rawSchema() instanceof EmptySchema);
   }
 
   @Test

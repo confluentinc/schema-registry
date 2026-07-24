@@ -25,8 +25,9 @@ package io.confluent.kafka.schemaregistry.type.logical.common;
  * {@code cc-flink-schema-converters} — a strict subset of LT capabilities.
  *
  * <p>V1 throws {@code ValidationException} for LT-only constructs that have no
- * Flink equivalent (UNION, VARIANT, TIME/TIMESTAMP precision &gt; 6 in Avro,
+ * Flink equivalent (UNION, TIME/TIMESTAMP precision &gt; 6 in Avro,
  * ENUM in JSON). It auto-promotes anonymous proto ENUMs to named enums.
+ * VARIANT is emitted in both editions — Flink has a native VariantType.
  * It silently skips LT-only metadata that Flink wouldn't carry.
  *
  * <p>The selected version is also recorded in the Schema Registry metadata
