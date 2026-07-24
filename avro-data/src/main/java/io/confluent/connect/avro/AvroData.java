@@ -60,6 +60,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -1244,6 +1245,8 @@ public class AvroData {
       defaultVal = JsonProperties.NULL_VALUE;
     }
     org.apache.avro.Schema.Field field;
+    boolean alreadySeen = fieldSchema.name() != null
+        && fromConnectContext.cycleReferences.containsKey(fieldSchema.name());
     org.apache.avro.Schema schema = fromConnectSchema(fieldSchema, fromConnectContext, false);
     try {
       field = new org.apache.avro.Schema.Field(
@@ -1258,9 +1261,84 @@ public class AvroData {
           discardTypeDocDefault ? fieldSchema.doc() : fieldDoc);
       log.warn("Ignoring invalid default for field {}", fieldName, e);
     }
+    if (alreadySeen
+        && fieldSchema.parameters() != null && !fieldSchema.parameters().isEmpty()
+        && isNamedAvroType(schema)) {
+      field.addProp(CONNECT_PARAMETERS_PROP, parametersFromConnect(fieldSchema.parameters()));
+    }
     fields.add(field);
   }
 
+  /**
+   * Returns true if the Avro schema is a named type (RECORD, ENUM, or FIXED) that is subject
+   * to deduplication via bare-name references. For UNION schemas, checks if any branch is named.
+   */
+  private static boolean isNamedAvroType(org.apache.avro.Schema avroSchema) {
+    org.apache.avro.Schema.Type type = avroSchema.getType();
+    if (type == org.apache.avro.Schema.Type.RECORD
+        || type == org.apache.avro.Schema.Type.ENUM
+        || type == org.apache.avro.Schema.Type.FIXED) {
+      return true;
+    }
+    if (type == org.apache.avro.Schema.Type.UNION) {
+      for (org.apache.avro.Schema branch : avroSchema.getTypes()) {
+        org.apache.avro.Schema.Type bt = branch.getType();
+        if (bt == org.apache.avro.Schema.Type.RECORD
+            || bt == org.apache.avro.Schema.Type.ENUM
+            || bt == org.apache.avro.Schema.Type.FIXED) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Rebuilds a Connect schema with field-level parameter overrides. Returns the original schema
+   * unchanged if the field-level parameters match the existing type-level parameters.
+   */
+  private static Schema applyFieldLevelParams(Schema original, Map<?, ?> fieldParams) {
+    Map<String, String> originalParams =
+        original.parameters() != null ? original.parameters() : Collections.emptyMap();
+    boolean same = true;
+    for (Map.Entry<?, ?> e : fieldParams.entrySet()) {
+      if (!e.getValue().toString().equals(originalParams.get(e.getKey().toString()))) {
+        same = false;
+        break;
+      }
+    }
+    if (same) {
+      return original;
+    }
+    SchemaBuilder builder = new SchemaBuilder(original.type());
+    if (original.name() != null) {
+      builder.name(original.name());
+    }
+    if (original.version() != null) {
+      builder.version(original.version());
+    }
+    if (original.doc() != null) {
+      builder.doc(original.doc());
+    }
+    if (original.isOptional()) {
+      builder.optional();
+    }
+    if (original.defaultValue() != null) {
+      builder.defaultValue(original.defaultValue());
+    }
+    for (Map.Entry<String, String> e : originalParams.entrySet()) {
+      builder.parameter(e.getKey(), e.getValue());
+    }
+    for (Map.Entry<?, ?> e : fieldParams.entrySet()) {
+      builder.parameter(e.getKey().toString(), e.getValue().toString());
+    }
+    if (original.type() == Schema.Type.STRUCT) {
+      for (Field f : original.fields()) {
+        builder.field(f.name(), f.schema());
+      }
+    }
+    return builder.build();
+  }
 
   private static Object toAvroLogical(Schema schema, Object value) {
     if (schema != null && schema.name() != null) {
@@ -1924,6 +2002,10 @@ public class AvroData {
           }
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   defaultVal, field.doc(), toConnectContext);
+          Object fieldConnectParams = field.getObjectProp(CONNECT_PARAMETERS_PROP);
+          if (fieldConnectParams instanceof Map) {
+            fieldSchema = applyFieldLevelParams(fieldSchema, (Map<?, ?>) fieldConnectParams);
+          }
           builder.field(field.name(), fieldSchema);
         }
         break;
