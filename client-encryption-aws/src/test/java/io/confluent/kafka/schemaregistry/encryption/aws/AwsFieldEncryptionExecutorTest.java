@@ -44,6 +44,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.kms.model.NotFoundException;
 
 public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -150,6 +151,19 @@ public class AwsFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
     assertFalse(driver.isAccessDeniedException(awsException(500, "InternalFailure")));
     assertFalse(driver.isAccessDeniedException(new RuntimeException("not aws")));
     assertFalse(driver.isAccessDeniedException(new GeneralSecurityException("boom")));
+  }
+
+  @Test
+  public void testIsAccessDeniedForNotFoundException() {
+    // For a shared (cross-account) KMS key, "not found" and "access denied" are
+    // indistinguishable from the caller's perspective, so NotFoundException is also
+    // treated as access-denied.
+    AwsKmsDriver driver = new AwsKmsDriver();
+    NotFoundException notFound = (NotFoundException) NotFoundException.builder()
+        .message("key not found")
+        .statusCode(400)
+        .build();
+    assertTrue(driver.isAccessDeniedException(notFound));
   }
 
   @Test
