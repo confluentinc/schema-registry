@@ -78,14 +78,6 @@ class LogicalTypeV1NegativePathTest {
         .isInstanceOf(ValidationException.class);
   }
 
-  @Test
-  void avroRejectsVariant() {
-    Schema v = Schema.create(Schema.Type.VARIANT).setNullable(false);
-    assertThatThrownBy(() -> LogicalTypeToAvroConverter
-            .fromLogicalType(new LogicalType(v), "Row", LogicalTypeVersion.V1))
-        .isInstanceOf(ValidationException.class);
-  }
-
   // ---------- Proto ----------
 
   @Test
@@ -101,17 +93,6 @@ class LogicalTypeV1NegativePathTest {
         .isInstanceOf(ValidationException.class);
   }
 
-  @Test
-  void protoRejectsVariant() {
-    Schema struct = Schema.createStruct(Collections.singletonList(
-        new Schema.Field("v",
-            Schema.create(Schema.Type.VARIANT).setNullable(false), 0)))
-        .setNullable(false);
-    assertThatThrownBy(() -> LogicalTypeToProtoConverter
-            .fromLogicalType(new LogicalType(struct), "Row", LogicalTypeVersion.V1))
-        .isInstanceOf(ValidationException.class);
-  }
-
   // ---------- JSON ----------
 
   @Test
@@ -122,14 +103,6 @@ class LogicalTypeV1NegativePathTest {
         .setNullable(false);
     assertThatThrownBy(() -> LogicalTypeToJsonConverter
             .fromLogicalType(new LogicalType(u), "Row", LogicalTypeVersion.V1))
-        .isInstanceOf(ValidationException.class);
-  }
-
-  @Test
-  void jsonRejectsVariant() {
-    Schema v = Schema.create(Schema.Type.VARIANT).setNullable(false);
-    assertThatThrownBy(() -> LogicalTypeToJsonConverter
-            .fromLogicalType(new LogicalType(v), "Row", LogicalTypeVersion.V1))
         .isInstanceOf(ValidationException.class);
   }
 

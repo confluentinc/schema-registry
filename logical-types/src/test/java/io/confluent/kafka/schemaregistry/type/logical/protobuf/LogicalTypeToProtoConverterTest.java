@@ -2549,14 +2549,18 @@ class LogicalTypeToProtoConverterTest {
   }
 
   @Test
-  void testV1ThrowsOnVariant() {
-    Schema rootSchema = Schema.createStruct(Arrays.asList(
-        new Field("v", Schema.create(Schema.Type.VARIANT).setNullable(false), 0)))
+  void testV1EmitsVariant() {
+    // Flink has a native VariantType, so V1 emits VARIANT identically to V2:
+    // a confluent.type.Variant message field.
+    Schema struct = Schema.createStruct(Arrays.asList(
+        new Field("v", Schema.create(Schema.Type.VARIANT).setNullable(true), 0)))
         .setNullable(false);
-    ValidationException ex = assertThrows(ValidationException.class, () ->
-        LogicalTypeToProtoConverter.fromLogicalType(
-            new LogicalType(rootSchema), "Holder", LogicalTypeVersion.V1));
-    assertTrue(ex.getMessage().contains("VARIANT"));
+    Descriptor descriptor = LogicalTypeToProtoConverter.fromLogicalType(
+        new LogicalType(struct), "Holder", LogicalTypeVersion.V1).toDescriptor();
+    FieldDescriptor dataField = descriptor.findFieldByName("v");
+    assertNotNull(dataField);
+    assertEquals(FieldDescriptor.Type.MESSAGE, dataField.getType());
+    assertEquals("confluent.type.Variant", dataField.getMessageType().getFullName());
   }
 
   @Test
