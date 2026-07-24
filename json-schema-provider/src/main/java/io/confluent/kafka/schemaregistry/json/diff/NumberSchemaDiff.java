@@ -104,7 +104,12 @@ class NumberSchemaDiff {
     BigDecimal originalMultipleOf = original.getMultipleOf() != null
         ? new BigDecimal(original.getMultipleOf().toString())
         : null;
-    if (!Objects.equals(originalMultipleOf, updateMultipleOf)) {
+    // BigDecimal#equals() is scale-sensitive (0.5 != 0.50), which would otherwise misclassify
+    // numerically-equal multipleOf values (differing only in trailing zeros) as a change.
+    boolean multipleOfEqual = originalMultipleOf == null
+        ? updateMultipleOf == null
+        : updateMultipleOf != null && originalMultipleOf.compareTo(updateMultipleOf) == 0;
+    if (!multipleOfEqual) {
       if (originalMultipleOf == null) {
         ctx.addDifference("multipleOf", MULTIPLE_OF_ADDED);
       } else if (updateMultipleOf == null) {

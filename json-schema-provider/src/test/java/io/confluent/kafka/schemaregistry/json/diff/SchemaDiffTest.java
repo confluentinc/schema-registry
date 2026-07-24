@@ -73,6 +73,17 @@ public class SchemaDiffTest {
     assertEquals(Difference.Type.MULTIPLE_OF_EXPANDED, differences.get(0).getType());
   }
 
+  @Test
+  public void testMultipleOfWithEqualValueDifferentScaleIsNotAChange() {
+    final JsonSchema original = new JsonSchema("{\"type\":\"number\",\"multipleOf\":0.5}");
+    final JsonSchema update = new JsonSchema("{\"type\":\"number\",\"multipleOf\":0.50}");
+
+    final List<Difference> differences =
+        SchemaDiff.compare(original.rawSchema(), update.rawSchema());
+
+    assertEquals(0, differences.size());
+  }
+
   private void checkJsonSchemaCompatibility(JSONArray testCases) {
     for (final Object testCaseObject : testCases) {
       final JSONObject testCase = (JSONObject) testCaseObject;
