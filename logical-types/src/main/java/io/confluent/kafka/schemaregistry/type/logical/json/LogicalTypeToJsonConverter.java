@@ -424,9 +424,8 @@ public class LogicalTypeToJsonConverter {
       case MULTISET:
         return convertMultiset(schema, rowName, ctx);
       case VARIANT:
-        if (ctx.isV1()) {
-          throw new ValidationException("VARIANT not supported in V1 emission mode");
-        }
+        // Emitted in both V1 and V2: Flink has a native VariantType (LogicalTypeRoot.VARIANT),
+        // so VARIANT is not an LT-only construct.
         return EmptySchema.builder();
       case NAMED_TYPE_REF: {
         String name = schema.getQualifiedName();
