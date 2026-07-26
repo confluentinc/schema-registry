@@ -48,6 +48,7 @@
         <module>core</module>
         <module>schema-types</module>
         <module>client</module>
+        <module>client-kafka-rpc</module>
         <module>schema-serializer</module>
         <module>schema-rules</module>
         <module>avro-types</module>

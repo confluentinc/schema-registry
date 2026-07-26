@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-schema-registry-parent</artifactId>
+        <version>8.0.7-0</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <artifactId>kafka-schema-registry-client-kafka-rpc</artifactId>
+    <packaging>jar</packaging>
+    <name>kafka-schema-registry-client-kafka-rpc</name>
+    <description>
+        Reaches the schema registry over Kafka RPCs rather than HTTP, so that clients need no separate
+        registry endpoint. Selected by the kafka:// scheme on schema.registry.url.
+
+        This module is deliberately kept out of kafka-schema-registry-client: the schema RPCs exist only
+        in a Kafka build that carries them, and depending on that build from the primary client artifact
+        would push it onto every downstream consumer. SchemaRegistryClientFactory loads this module
+        reflectively, so it is required on the classpath only when the kafka:// scheme is used.
+    </description>
+
+    <properties>
+        <java.version>11</java.version>
+        <!--
+          Overrides the Kafka version managed by the parent. The schema RPCs
+          (SubjectWrite, SubjectRead, ...) exist only in this build. Scoped to this module.
+        -->
+        <kafka.rpc.version>4.4.0-SNAPSHOT</kafka.rpc.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client</artifactId>
+            <version>${io.confluent.schema-registry.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>${kafka.rpc.version}</version>
+        </dependency>
+
+        <!-- Supplies KafkaRpcSchemaRegistryClient: the NetworkClient-based transport for the RPCs. -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-schema-avro-serde</artifactId>
+            <version>${kafka.rpc.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
