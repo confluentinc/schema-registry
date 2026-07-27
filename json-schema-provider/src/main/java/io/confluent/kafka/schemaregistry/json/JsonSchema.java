@@ -401,6 +401,12 @@ public class JsonSchema implements ParsedSchema {
       // Use double-checked locking to avoid unnecessary synchronization
       synchronized (this) {
         if (schemaObj == null) {
+          if (!jsonNode.isObject() && !jsonNode.isBoolean()) {
+            // A JSON Schema document must be an object or a boolean.
+            throw new IllegalArgumentException(
+                "Invalid JSON schema: expected an object or boolean at the root, found "
+                    + jsonNode.getNodeType());
+          }
           try {
             if (jsonNode.isBoolean()) {
               schemaObj = jsonNode.booleanValue()
