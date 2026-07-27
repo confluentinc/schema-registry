@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth;
 
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth.OauthCredentialProvider;
 import java.io.IOException;
@@ -44,6 +46,7 @@ public class BearerAuthCredentialProviderFactoryTest {
 
   @Test
   public void testOAuthCredentialProvider() {
+    System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, "https://okta.com");
     Map<String, String> CONFIG_MAP = new HashMap<>();
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, "lsrc-dummy");
     CONFIG_MAP.put(SchemaRegistryClientConfig.BEARER_AUTH_IDENTITY_POOL_ID, "my-pool-id");

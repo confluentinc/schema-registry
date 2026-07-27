@@ -16,6 +16,8 @@
 package io.confluent.dekregistry;
 
 import com.google.inject.AbstractModule;
+import io.confluent.dekregistry.storage.AbstractDekRegistry;
+import io.confluent.dekregistry.storage.KafkaDekRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +36,7 @@ public class DekRegistryModule extends AbstractModule {
     LOG.info("Configuring dek registry module");
 
     bind(SchemaRegistry.class).toInstance(schemaRegistry);
+    bind(AbstractDekRegistry.class).to(KafkaDekRegistry.class);
 
     LOG.info("Done configuring dek registry module");
   }

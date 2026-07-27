@@ -5,16 +5,11 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>kafka-schema-registry-parent</artifactId>
-        <version>7.9.9-0</version>
+        <version>8.0.7-0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <licenses>
-        <license>
-            <name>Confluent Community License</name>
-            <url>http://www.confluent.io/confluent-community-license</url>
-            <distribution>repo</distribution>
-        </license>
         <license>
             <name>Apache License 2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
@@ -25,6 +20,10 @@
     <artifactId>dek-registry-client</artifactId>
     <packaging>jar</packaging>
     <name>dek-registry-client</name>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -68,6 +67,19 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava-testlib</artifactId>
+            <version>${guava.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

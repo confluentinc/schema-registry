@@ -23,9 +23,9 @@ public class DefaultDekCacheUpdateHandler implements DekCacheUpdateHandler {
 
   private static final Logger log = LoggerFactory.getLogger(DefaultDekCacheUpdateHandler.class);
 
-  private final DekRegistry dekRegistry;
+  private final KafkaDekRegistry dekRegistry;
 
-  public DefaultDekCacheUpdateHandler(DekRegistry dekRegistry) {
+  public DefaultDekCacheUpdateHandler(KafkaDekRegistry dekRegistry) {
     this.dekRegistry = dekRegistry;
   }
 

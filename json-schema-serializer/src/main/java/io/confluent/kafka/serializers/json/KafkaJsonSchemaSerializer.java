@@ -17,10 +17,12 @@
 package io.confluent.kafka.serializers.json;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.confluent.kafka.schemaregistry.utils.BoundedConcurrentHashMap;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.serializers.SerializerWithSchema;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -30,26 +32,34 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 
 public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSerializer<T>
-    implements Serializer<T> {
+    implements SerializerWithSchema<T> {
 
   private static int DEFAULT_CACHE_CAPACITY = 1000;
 
-  private Map<ObjectNode, JsonSchema> nodeToSchemaCache;
-  private Map<Class<?>, JsonSchema> classToSchemaCache;
+  private Cache<ObjectNode, JsonSchema> nodeToSchemaCache;
+  private Cache<Class<?>, JsonSchema> classToSchemaCache;
 
   /**
    * Constructor used by Kafka producer.
    */
   public KafkaJsonSchemaSerializer() {
-    this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
-    this.classToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.nodeToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
+    this.classToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client) {
     this.schemaRegistry = client;
     this.ticker = ticker(client);
-    this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
-    this.classToSchemaCache = new BoundedConcurrentHashMap<>(DEFAULT_CACHE_CAPACITY);
+    this.nodeToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
+    this.classToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(DEFAULT_CACHE_CAPACITY)
+        .build();
   }
 
   public KafkaJsonSchemaSerializer(SchemaRegistryClient client, Map<String, ?> props) {
@@ -61,8 +71,12 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
     this.schemaRegistry = client;
     this.ticker = ticker(client);
     configure(serializerConfig(props));
-    this.nodeToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
-    this.classToSchemaCache = new BoundedConcurrentHashMap<>(cacheCapacity);
+    this.nodeToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.classToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
   }
 
   @Override
@@ -83,22 +97,40 @@ public class KafkaJsonSchemaSerializer<T> extends AbstractKafkaJsonSchemaSeriali
       return null;
     }
     JsonSchema schema;
-    if (JsonSchemaUtils.isEnvelope(record)) {
-      schema = nodeToSchemaCache.computeIfAbsent(
-          JsonSchemaUtils.copyEnvelopeWithoutPayload((ObjectNode) record),
-          k -> getSchema(record));
+    if (envelopeDetection && JsonSchemaUtils.isEnvelope(record)) {
+      try {
+        schema = nodeToSchemaCache.get(
+            JsonSchemaUtils.copyEnvelopeWithoutPayload((ObjectNode) record),
+            () -> getSchema(record));
+      } catch (java.util.concurrent.ExecutionException e) {
+        schema = getSchema(record);
+      }
     } else {
-      schema = classToSchemaCache.computeIfAbsent(record.getClass(), k -> getSchema(record));
+      try {
+        schema = classToSchemaCache.get(record.getClass(), () -> getSchema(record));
+      } catch (java.util.concurrent.ExecutionException e) {
+        schema = getSchema(record);
+      }
     }
-    Object value = JsonSchemaUtils.getValue(record);
+    Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
     return serializeImpl(
-        getSubjectName(topic, isKey, value, schema), topic, headers, (T) value, schema);
+        getSubjectName(topic, isKey, value, schema), topic, isKey, headers, (T) value, schema);
+  }
+
+  @Override
+  public byte[] serialize(String topic, Headers headers, T record, ParsedSchema schema) {
+    if (record == null) {
+      return null;
+    }
+    Object value = JsonSchemaUtils.getValue(envelopeDetection, record);
+    return serializeImpl(getSubjectName(topic, isKey, value, schema),
+        topic, isKey, headers, (T) value, (JsonSchema) schema);
   }
 
   private JsonSchema getSchema(T record) {
     try {
-      return JsonSchemaUtils.getSchema(record, specVersion, scanPackages, oneofForNullables,
-          failUnknownProperties, objectMapper, schemaRegistry);
+      return JsonSchemaUtils.getSchema(record, specVersion, scanPackages, envelopeDetection,
+          oneofForNullables, failUnknownProperties, objectMapper, schemaRegistry);
     } catch (IOException e) {
       throw new SerializationException(e);
     }
