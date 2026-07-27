@@ -453,6 +453,12 @@ public class JsonSchema implements ParsedSchema {
           // not cooperative — see JsonSchemaCancellation — so this guards the lead-in, while the
           // request timeout remains the backstop for a parse already in flight.
           JsonSchemaCancellation.throwIfInterrupted();
+          if (!jsonNode.isObject() && !jsonNode.isBoolean()) {
+            // A JSON Schema document must be an object or a boolean.
+            throw new IllegalArgumentException(
+                "Invalid JSON schema: expected an object or boolean at the root, found "
+                    + jsonNode.getNodeType());
+          }
           try {
             if (jsonNode.isBoolean()) {
               schemaObj = jsonNode.booleanValue()
