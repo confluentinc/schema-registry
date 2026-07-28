@@ -2126,6 +2126,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
 
       if (association == null) {
+        // A STRONG association is owned by its topic and can only be created together with the
+        // topic, never by an upsert. Subjects in IMPORT mode are exempt, since cluster linking
+        // replicates associations that were already established on the source.
+        if (!isCreate && effectiveLifecycle == LifecyclePolicy.STRONG
+            && (qualifiedSubject == null || getModeInScope(qualifiedSubject) != Mode.IMPORT)) {
+          throw new IllegalPropertyException(
+              "lifecycle", "cannot be STRONG when creating an association; "
+                  + "STRONG associations must be created with the topic");
+        }
         if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null
             && getModeInScope(qualifiedSubject) != Mode.IMPORT) {
           if (isCreate && info.getSchema() == null) {
@@ -2192,12 +2201,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
     }
 
+    checkUniformLifecycle(request);
+
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String unqualifiedSubject = info.getSubject();
       QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
+      // A subject in IMPORT mode is being replicated and its versions arrive on their own, so a
+      // schema passed alongside the association would be dropped rather than registered.
+      // Rejecting it here also keeps the check below honest: with no schema to register, the
+      // association is only accepted once the subject's versions have actually landed.
+      if (info.getSchema() != null && getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+        throw new IllegalPropertyException(
+            "schema", "cannot be provided while subject '" + unqualifiedSubject
+                + "' is in IMPORT mode");
+      }
       if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
         throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
       }
@@ -2298,6 +2318,68 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             .map(AssociationValue::toAssociationEntity)
             .collect(Collectors.toList()),
         registeredSchemas);
+  }
+
+  /**
+   * Rejects a request that would leave a resource holding associations of more than one
+   * lifecycle. A topic is either topic-owned (STRONG) or shared (WEAK) across all of its
+   * association types, never a mix of the two.
+   *
+   * <p>The lifecycle considered for each type is the one the resource would end up with: taken
+   * from the request where it supplies one, from the request's existing association where it
+   * does not, and from the stored association for types the request leaves alone. A request
+   * that converts every type at once therefore passes this check.
+   */
+  private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    // Associations were fetched earlier narrowed to the requested types, so sibling types have
+    // to be looked up again here to be seen at all. At the validate phase the caller may not
+    // yet have a resourceId, so fall back to (name, namespace, type) as the caller above does —
+    // without it a conflict with an existing sibling passes validate and fails on apply.
+    List<Association> existing;
+    if (request.getResourceId() != null) {
+      existing = getAssociationsByResourceId(
+          request.getResourceId(), request.getResourceType(), Collections.emptyList(), null);
+    } else {
+      existing = getAssociationsByResourceName(
+          request.getResourceName(), request.getResourceNamespace(),
+          request.getResourceType(), Collections.emptyList(), null);
+    }
+    // By-name can span resourceIds sharing (name, namespace, type) — e.g. an orphan from a
+    // deleted topic alongside a live one — so keep the most-recently-updated entry per type.
+    Map<String, Association> existingByType = new LinkedHashMap<>();
+    for (Association association : existing) {
+      existingByType.merge(association.getAssociationType(), association, (a, b) -> {
+        Long timestampA = a.getUpdateTimestamp();
+        Long timestampB = b.getUpdateTimestamp();
+        if (timestampA == null) {
+          return b;
+        }
+        if (timestampB == null) {
+          return a;
+        }
+        return timestampA >= timestampB ? a : b;
+      });
+    }
+    Map<String, LifecyclePolicy> lifecycleByType = new LinkedHashMap<>();
+    existingByType.forEach((type, association) ->
+        lifecycleByType.put(type, association.getLifecycle()));
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      LifecyclePolicy lifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : lifecycleByType.get(info.getAssociationType());
+      if (lifecycle != null) {
+        lifecycleByType.put(info.getAssociationType(), lifecycle);
+      }
+    }
+    if (new HashSet<>(lifecycleByType.values()).size() > 1) {
+      String detail = lifecycleByType.entrySet().stream()
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining(", "));
+      throw new IllegalPropertyException(
+          "lifecycle", "all associations for a resource must have the same lifecycle, but got "
+              + detail);
+    }
   }
 
   protected void checkDeleteAssociation(

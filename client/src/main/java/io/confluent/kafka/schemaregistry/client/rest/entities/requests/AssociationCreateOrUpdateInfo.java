@@ -154,22 +154,32 @@ public class AssociationCreateOrUpdateInfo {
   /**
    * Applies defaults for association creation or upsert.
    * For CREATE: schema implies frozen STRONG; frozen=false or WEAK with schema are rejected.
-   * For UPSERT: schema implies non-frozen STRONG; frozen and lifecycle are only defaulted if null.
+   * For UPSERT: no schema is accepted, since a schema implies a topic-owned STRONG association;
+   * frozen and lifecycle are defaulted if null.
+   *
+   * <p>An upsert only reaches this method when it is creating the association rather than
+   * updating one. A STRONG association is owned by its topic and can only be created together
+   * with the topic, so an upsert that creates an association cannot carry a schema. The
+   * corresponding check on an explicit STRONG lifecycle lives in the registry, which can exempt
+   * subjects in IMPORT mode.
    */
   public void applyDefaults(boolean isCreate) {
+    if (!isCreate && getSchema() != null) {
+      throw new IllegalPropertyException(
+          "schema", "cannot be provided when creating an association; "
+              + "STRONG associations must be created with the topic");
+    }
     if (getSchema() != null) {
       if (getLifecycle() == LifecyclePolicy.WEAK) {
         throw new IllegalPropertyException(
             "lifecycle", "cannot be WEAK when schema is provided");
       }
-      if (getFrozen() != null && getFrozen() != isCreate) {
+      if (Boolean.FALSE.equals(getFrozen())) {
         throw new IllegalPropertyException(
-            "frozen", isCreate
-                ? "cannot be false when schema is provided for create"
-                : "cannot be true when creating via upsert; use create instead");
+            "frozen", "cannot be false when schema is provided for create");
       }
       setLifecycle(LifecyclePolicy.STRONG);
-      setFrozen(isCreate);
+      setFrozen(true);
     } else {
       if (getFrozen() == null) {
         setFrozen(false);
