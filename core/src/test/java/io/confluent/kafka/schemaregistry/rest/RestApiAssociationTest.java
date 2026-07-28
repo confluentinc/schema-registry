@@ -95,7 +95,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationCreateOrUpdateInfo(
                 subject2,
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
@@ -119,7 +119,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("key", response.getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.WEAK, response.getAssociations().get(0).getLifecycle());
     assertEquals("value", response.getAssociations().get(1).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, response.getAssociations().get(1).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, response.getAssociations().get(1).getLifecycle());
 
     // Verify createTs and updateTs are set after creation
     List<Association> createdAssociations = restApp.restClient.getAssociationsByResourceId(
@@ -153,7 +153,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceName, associations.get(0).getResourceName());
     assertEquals(resourceNamespace, associations.get(0).getResourceNamespace());
     assertEquals("value", associations.get(0).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, associations.get(0).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
 
     associations = restApp.restClient.getAssociationsByResourceId(
         RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
@@ -168,7 +168,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceName, associations.get(1).getResourceName());
     assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
     assertEquals("value", associations.get(1).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(1).getLifecycle());
 
     associations = restApp.restClient.getAssociationsByResourceName(
         RestService.DEFAULT_REQUEST_PROPERTIES, resourceName, "-", "topic",
@@ -183,7 +183,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceName, associations.get(1).getResourceName());
     assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
     assertEquals("value", associations.get(1).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(1).getLifecycle());
 
     associations = restApp.restClient.getAssociationsByResourceName(
         RestService.DEFAULT_REQUEST_PROPERTIES, resourceName, resourceNamespace, "topic",
@@ -198,7 +198,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceName, associations.get(1).getResourceName());
     assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
     assertEquals("value", associations.get(1).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(1).getLifecycle());
 
     associations = restApp.restClient.getAssociationsByResourceName(
         RestService.DEFAULT_REQUEST_PROPERTIES, "-", resourceNamespace, "topic",
@@ -213,8 +213,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(resourceName, associations.get(1).getResourceName());
     assertEquals(resourceNamespace, associations.get(1).getResourceNamespace());
     assertEquals("value", associations.get(1).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, associations.get(1).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(1).getLifecycle());
 
+    // Promote both types together: a resource cannot hold a mix of lifecycles
     request = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
@@ -224,6 +225,14 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationCreateOrUpdateInfo(
                 subject1,
                 "key",
+                LifecyclePolicy.STRONG,
+                false,
+                null,
+                null
+            ),
+            new AssociationCreateOrUpdateInfo(
+                subject2,
+                "value",
                 LifecyclePolicy.STRONG,
                 false,
                 null,
@@ -1231,7 +1240,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationCreateOp(
                 subject2,
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
@@ -1275,7 +1284,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("key", result1.getResult().getAssociations().get(0).getAssociationType());
     assertEquals(LifecyclePolicy.WEAK, result1.getResult().getAssociations().get(0).getLifecycle());
     assertEquals("value", result1.getResult().getAssociations().get(1).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, result1.getResult().getAssociations().get(1).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, result1.getResult().getAssociations().get(1).getLifecycle());
 
     // Verify second result (1 association)
     AssociationResult result2 = batchResponse.getResults().get(1);
@@ -1801,10 +1810,12 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals("key", initialAssociations.get(0).getAssociationType());
 
     // Now create a SINGLE AssociationOpRequest with all three operation types:
-    // - CREATE "value" (new association)
     // - UPSERT "key" (update lifecycle from WEAK to STRONG)
+    // - CREATE "value" (new association)
     // - DELETE "key" (delete the existing association)
-    // The operations are processed in order, so final state will have only "value"
+    // The operations are processed in order, so final state will have only "value".
+    // "key" is promoted before "value" is added so the resource never holds a mix of
+    // lifecycles, which is rejected.
     List<AssociationOpRequest> requests = new ArrayList<>();
     requests.add(new AssociationOpRequest(
         resourceName,
@@ -1812,20 +1823,20 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         resourceId,
         "topic",
         ImmutableList.of(
-            // CREATE: Add new "value" association (schema already registered)
-            new AssociationCreateOp(
-                valueSubject,
-                "value",
-                LifecyclePolicy.STRONG,
-                false,
-                null,
-                null
-            ),
             // UPSERT: Update existing "key" association
             new AssociationUpsertOp(
                 keySubject,
                 "key",
                 LifecyclePolicy.STRONG,  // Change from WEAK to STRONG
+                false,
+                null,
+                null
+            ),
+            // CREATE: Add new "value" association (schema already registered)
+            new AssociationCreateOp(
+                valueSubject,
+                "value",
+                LifecyclePolicy.STRONG,
                 false,
                 null,
                 null
@@ -1905,7 +1916,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationCreateOrUpdateInfo(
                 subject2,
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
@@ -1975,7 +1986,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertNotNull(schema2.getAssociations());
     assertEquals(1, schema2.getAssociations().size());
     assertEquals("value", schema2.getAssociations().get(0).getAssociationType());
-    assertEquals(LifecyclePolicy.STRONG, schema2.getAssociations().get(0).getLifecycle());
+    assertEquals(LifecyclePolicy.WEAK, schema2.getAssociations().get(0).getLifecycle());
     assertEquals(resourceId1, schema2.getAssociations().get(0).getResourceId());
   }
 
@@ -1994,8 +2005,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     restApp.restClient.registerSchema(allSchemas.get(1), subject2);
     restApp.restClient.registerSchema(allSchemas.get(2), subject3);
 
-    // Create associations with different lifecycle policies
-    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+    // Create associations with different lifecycle policies. They go on separate resources:
+    // a single resource cannot hold a mix of lifecycles.
+    AssociationCreateOrUpdateRequest weakRequest = new AssociationCreateOrUpdateRequest(
         resourceName,
         resourceNamespace,
         resourceId,
@@ -2008,7 +2020,19 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 false,
                 null,
                 null
-            ),
+            )
+        )
+    );
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, weakRequest);
+
+    AssociationCreateOrUpdateRequest strongRequest = new AssociationCreateOrUpdateRequest(
+        resourceName + "-strong",
+        resourceNamespace,
+        resourceId + "-strong",
+        "topic",
+        ImmutableList.of(
             new AssociationCreateOrUpdateInfo(
                 subject2,
                 "value",
@@ -2021,7 +2045,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     );
 
     restApp.restClient.createAssociation(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, strongRequest);
 
     // lifecycle=WEAK → only subject1 returned (subject2 is STRONG, subject3 unassociated)
     List<ExtendedSchema> weakSchemas = restApp.restClient.getSchemas(
@@ -2780,6 +2804,40 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         ImmutableList.of("key", "value"), null, 0, -1);
     assertEquals(2, associations.size());
     associations.forEach(a -> assertEquals(LifecyclePolicy.WEAK, a.getLifecycle()));
+  }
+
+  /**
+   * At the validate phase the caller may not yet have a resourceId, so the resource is matched
+   * by (name, namespace). The conflict has to be caught there rather than only on apply.
+   */
+  @Test
+  public void testDryRunSeesMixedLifecycleAgainstExistingSibling() throws Exception {
+    String valueSubject = "dryrun-value-subject";
+    String keySubject = "dryrun-key-subject";
+    String resourceName = "dryRunMixedTopic";
+    String resourceNamespace = "default";
+    String resourceId = "dryrun-mixed-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), valueSubject);
+    restApp.restClient.registerSchema(allSchemas.get(1), keySubject);
+
+    AssociationCreateOrUpdateRequest valueRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            valueSubject, "value", LifecyclePolicy.STRONG, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, valueRequest);
+
+    // Validate phase: no resourceId yet, so the sibling is found by (name, namespace)
+    AssociationCreateOrUpdateRequest dryRunRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, null, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            keySubject, "key", LifecyclePolicy.WEAK, false, null, null)));
+
+    assertThrows(Exception.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, true, dryRunRequest));
   }
 
   /** A request that converts every type at once keeps the resource uniform, so it is allowed. */

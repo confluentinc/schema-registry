@@ -2328,17 +2328,42 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * <p>The lifecycle considered for each type is the one the resource would end up with: taken
    * from the request where it supplies one, from the request's existing association where it
    * does not, and from the stored association for types the request leaves alone. A request
-   * that brings a mixed resource back in line is therefore accepted.
+   * that converts every type at once therefore passes this check.
    */
   private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
     // Associations were fetched earlier narrowed to the requested types, so sibling types have
-    // to be looked up again here to be seen at all.
-    Map<String, LifecyclePolicy> lifecycleByType = new LinkedHashMap<>();
-    for (Association existing : getAssociationsByResourceId(
-        request.getResourceId(), request.getResourceType(), Collections.emptyList(), null)) {
-      lifecycleByType.put(existing.getAssociationType(), existing.getLifecycle());
+    // to be looked up again here to be seen at all. At the validate phase the caller may not
+    // yet have a resourceId, so fall back to (name, namespace, type) as the caller above does —
+    // without it a conflict with an existing sibling passes validate and fails on apply.
+    List<Association> existing;
+    if (request.getResourceId() != null) {
+      existing = getAssociationsByResourceId(
+          request.getResourceId(), request.getResourceType(), Collections.emptyList(), null);
+    } else {
+      existing = getAssociationsByResourceName(
+          request.getResourceName(), request.getResourceNamespace(),
+          request.getResourceType(), Collections.emptyList(), null);
     }
+    // By-name can span resourceIds sharing (name, namespace, type) — e.g. an orphan from a
+    // deleted topic alongside a live one — so keep the most-recently-updated entry per type.
+    Map<String, Association> existingByType = new LinkedHashMap<>();
+    for (Association association : existing) {
+      existingByType.merge(association.getAssociationType(), association, (a, b) -> {
+        Long timestampA = a.getUpdateTimestamp();
+        Long timestampB = b.getUpdateTimestamp();
+        if (timestampA == null) {
+          return b;
+        }
+        if (timestampB == null) {
+          return a;
+        }
+        return timestampA >= timestampB ? a : b;
+      });
+    }
+    Map<String, LifecyclePolicy> lifecycleByType = new LinkedHashMap<>();
+    existingByType.forEach((type, association) ->
+        lifecycleByType.put(type, association.getLifecycle()));
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       LifecyclePolicy lifecycle = info.getLifecycle() != null
           ? info.getLifecycle()
