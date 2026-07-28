@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -2012,19 +2013,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
       boolean isCreate)
       throws SchemaRegistryException {
-    return createOrUpdateAssociation(context, dryRun, request, isCreate, true);
-  }
-
-  /**
-   * @param checkLifecycle whether to verify that the resource is left with a single lifecycle.
-   *     A batch mutation applies one op at a time, and an op that converts one association type
-   *     leaves the resource mixed until its sibling is converted too, so the batch path checks
-   *     the whole op-request up front and passes {@code false} here.
-   */
-  private AssociationResponse createOrUpdateAssociation(
-      String context, boolean dryRun, AssociationCreateOrUpdateRequest request,
-      boolean isCreate, boolean checkLifecycle)
-      throws SchemaRegistryException {
     String defaultSubjectPrefix = QualifiedSubject.CONTEXT_PREFIX + request.getResourceNamespace()
         + QualifiedSubject.CONTEXT_DELIMITER + request.getResourceName() + "-";
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
@@ -2205,9 +2193,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
     }
 
-    if (checkLifecycle) {
-      checkUniformLifecycle(request);
-    }
+    checkUniformLifecycle(request);
 
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String unqualifiedSubject = info.getSubject();
@@ -2367,9 +2353,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * when it uses the default subject or is frozen. Such a resource has to be taken apart with a
    * delete.
    *
-   * <p>Each op of a batch mutation is validated separately against the state left by the ops
-   * before it, so converting every type at once works through {@code createOrUpdateAssociation}
-   * but not through {@code mutateAssociations}, where the types arrive as separate ops.
+   * <p>A batch mutation applies a run of adjacent create-or-update ops as one request, so this
+   * sees every type in that run together and a batch can convert them all at once. Runs are
+   * still applied in order, so a sequence that is only uniform once a later op has run — a
+   * conversion split either side of a delete, say — is rejected.
    */
   private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
@@ -2382,37 +2369,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           : lifecycleByType.get(info.getAssociationType());
       if (lifecycle != null) {
         lifecycleByType.put(info.getAssociationType(), lifecycle);
-      }
-    }
-    rejectMixedLifecycles(lifecycleByType);
-  }
-
-  /**
-   * Rejects a batch mutation whose ops together would leave the resource holding more than one
-   * lifecycle. Ops are applied one at a time, and an op converting a single association type
-   * leaves the resource mixed until its sibling is converted, so the whole op-request is
-   * checked against the state it projects instead of each op being checked in isolation. That
-   * is what lets a batch convert every type at once, as a single request through
-   * {@code createOrUpdateAssociation} already can.
-   */
-  private void checkUniformLifecycleForBatch(AssociationOpRequest req)
-      throws SchemaRegistryException {
-    Map<String, LifecyclePolicy> lifecycleByType = currentLifecyclesByType(
-        req.getResourceId(), req.getResourceName(),
-        req.getResourceNamespace(), req.getResourceType());
-    for (AssociationOp op : req.getAssociations()) {
-      if (op instanceof AssociationDeleteOp) {
-        lifecycleByType.remove(((AssociationDeleteOp) op).getAssociationType());
-      } else if (op instanceof AssociationCreateOrUpdateOp) {
-        AssociationCreateOrUpdateOp createOrUpdateOp = (AssociationCreateOrUpdateOp) op;
-        String associationType = createOrUpdateOp.getAssociationType();
-        LifecyclePolicy lifecycle = createOrUpdateOp.getLifecycle();
-        if (lifecycle == null) {
-          // An upsert that omits the lifecycle keeps the stored one, or is creating the
-          // association, in which case it defaults to WEAK.
-          lifecycle = lifecycleByType.getOrDefault(associationType, LifecyclePolicy.WEAK);
-        }
-        lifecycleByType.put(associationType, lifecycle);
       }
     }
     rejectMixedLifecycles(lifecycleByType);
@@ -2584,21 +2540,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       lock.lock();
       try {
         req.validate(dryRun);
-        checkUniformLifecycleForBatch(req);
         Map<String, Schema> schemas = new HashMap<>();
-        for (AssociationOp op : req.getAssociations()) {
-          switch (op.getType()) {
-            case CREATE:
-              AssociationResponse createResp = createOrUpdateAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op), true, false);
-              collectSchemas(createResp, schemas);
-              break;
-            case UPSERT:
-              AssociationResponse upsertResp = createOrUpdateAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op), false, false);
-              collectSchemas(upsertResp, schemas);
-              break;
-            case DELETE:
+        List<? extends AssociationOp> ops = req.getAssociations();
+        // A run of adjacent create-or-update ops is applied as one request rather than one at
+        // a time. Validation there sees every association type in the run at once, so a batch
+        // can convert them together, and nothing is written until all of them have passed.
+        int index = 0;
+        while (index < ops.size()) {
+          AssociationOp op = ops.get(index);
+          if (!(op instanceof AssociationCreateOrUpdateOp)) {
+            if (op instanceof AssociationDeleteOp) {
               AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
               deleteAssociations(
                   req.getResourceId(),
@@ -2606,10 +2557,24 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                   Collections.singletonList(deleteOp.getAssociationType()),
                   Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
               );
-              break;
-            default:
-              break;
+            }
+            index++;
+            continue;
           }
+          int end = index + 1;
+          while (end < ops.size() && ops.get(end).getType() == op.getType()) {
+            end++;
+          }
+          List<AssociationCreateOrUpdateInfo> infos = ops.subList(index, end).stream()
+              .map(o -> new AssociationCreateOrUpdateInfo((AssociationCreateOrUpdateOp) o))
+              .collect(Collectors.toList());
+          AssociationResponse response = createOrUpdateAssociation(context, dryRun,
+              new AssociationCreateOrUpdateRequest(
+                  req.getResourceName(), req.getResourceNamespace(),
+                  req.getResourceId(), req.getResourceType(), infos),
+              op.getType() == OpType.CREATE);
+          collectSchemas(response, schemas);
+          index = end;
         }
         List<Association> associations = null;
         if (!dryRun) {

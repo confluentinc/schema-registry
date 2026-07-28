@@ -1340,7 +1340,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             new AssociationCreateOp(
                 subject2,
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
@@ -2932,8 +2932,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   /**
-   * A batch whose projected end state is mixed is rejected before any op is committed, so it
-   * cannot leave a partially-applied resource behind.
+   * A batch whose projected end state is mixed is rejected up front, before any op is
+   * committed. This covers only that case: a batch whose projection is uniform runs its ops
+   * with the per-op check off, so one failing late can still leave the earlier ops persisted.
    */
   @Test
   public void testBatchProjectingMixedLifecycleCommitsNothing() throws Exception {
