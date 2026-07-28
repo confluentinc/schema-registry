@@ -2321,6 +2321,24 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
+   * Keeps only the associations belonging to the most-recently-updated resource, so that
+   * entries from several resources sharing a name and namespace are never treated as one.
+   */
+  private static List<Association> mostRecentlyUpdatedResource(List<Association> associations) {
+    if (associations.isEmpty()) {
+      return associations;
+    }
+    String resourceId = associations.stream()
+        .max(Comparator.comparing(
+            Association::getUpdateTimestamp, Comparator.nullsFirst(Long::compareTo)))
+        .map(Association::getResourceId)
+        .orElse(null);
+    return associations.stream()
+        .filter(a -> Objects.equals(a.getResourceId(), resourceId))
+        .collect(Collectors.toList());
+  }
+
+  /**
    * Rejects a request that would leave a resource holding associations of more than one
    * lifecycle. A topic is either topic-owned (STRONG) or shared (WEAK) across all of its
    * association types, never a mix of the two.
@@ -2329,6 +2347,16 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * from the request where it supplies one, from the request's existing association where it
    * does not, and from the stored association for types the request leaves alone. A request
    * that converts every type at once therefore passes this check.
+   *
+   * <p>Passing this check is not on its own enough to repair a resource that is already mixed,
+   * and for some shapes no request can: promoting a shared subject to STRONG is refused when
+   * that subject carries other associations, and demoting a topic-owned association is refused
+   * when it uses the default subject or is frozen. Such a resource has to be taken apart with a
+   * delete.
+   *
+   * <p>Each op of a batch mutation is validated separately against the state left by the ops
+   * before it, so converting every type at once works through {@code createOrUpdateAssociation}
+   * but not through {@code mutateAssociations}, where the types arrive as separate ops.
    */
   private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
@@ -2341,29 +2369,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       existing = getAssociationsByResourceId(
           request.getResourceId(), request.getResourceType(), Collections.emptyList(), null);
     } else {
-      existing = getAssociationsByResourceName(
+      // By-name can span resourceIds sharing (name, namespace, type) — e.g. an orphan from a
+      // deleted topic alongside a live one. Narrow to the most-recently-updated resource
+      // instead of merging per type, which would combine types across resources and report a
+      // mix that never existed on any single one.
+      existing = mostRecentlyUpdatedResource(getAssociationsByResourceName(
           request.getResourceName(), request.getResourceNamespace(),
-          request.getResourceType(), Collections.emptyList(), null);
-    }
-    // By-name can span resourceIds sharing (name, namespace, type) — e.g. an orphan from a
-    // deleted topic alongside a live one — so keep the most-recently-updated entry per type.
-    Map<String, Association> existingByType = new LinkedHashMap<>();
-    for (Association association : existing) {
-      existingByType.merge(association.getAssociationType(), association, (a, b) -> {
-        Long timestampA = a.getUpdateTimestamp();
-        Long timestampB = b.getUpdateTimestamp();
-        if (timestampA == null) {
-          return b;
-        }
-        if (timestampB == null) {
-          return a;
-        }
-        return timestampA >= timestampB ? a : b;
-      });
+          request.getResourceType(), Collections.emptyList(), null));
     }
     Map<String, LifecyclePolicy> lifecycleByType = new LinkedHashMap<>();
-    existingByType.forEach((type, association) ->
-        lifecycleByType.put(type, association.getLifecycle()));
+    for (Association association : existing) {
+      lifecycleByType.put(association.getAssociationType(), association.getLifecycle());
+    }
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       LifecyclePolicy lifecycle = info.getLifecycle() != null
           ? info.getLifecycle()

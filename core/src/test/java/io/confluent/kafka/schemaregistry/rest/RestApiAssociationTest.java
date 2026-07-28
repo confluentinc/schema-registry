@@ -2840,6 +2840,49 @@ public class RestApiAssociationTest extends ClusterTestHarness {
             RestService.DEFAULT_REQUEST_PROPERTIES, null, true, dryRunRequest));
   }
 
+  /**
+   * Two resources can share a name and namespace — an orphan from a deleted topic alongside a
+   * live one. The validate phase must not stitch their types together into a mix that never
+   * existed on either.
+   */
+  @Test
+  public void testDryRunDoesNotMixLifecyclesAcrossResourcesSharingAName() throws Exception {
+    String orphanSubject = "orphan-key-subject";
+    String liveSubject = "live-value-subject";
+    String resourceName = "sharedNameTopic";
+    String resourceNamespace = "default";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), orphanSubject);
+    restApp.restClient.registerSchema(allSchemas.get(1), liveSubject);
+
+    // Older resource, STRONG on key
+    AssociationCreateOrUpdateRequest orphanRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, "shared-name-orphan", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            orphanSubject, "key", LifecyclePolicy.STRONG, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, orphanRequest);
+
+    // Newer resource with the same name/namespace, WEAK on value
+    AssociationCreateOrUpdateRequest liveRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, "shared-name-live", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            liveSubject, "value", LifecyclePolicy.WEAK, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, liveRequest);
+
+    // Validate with no resourceId: only the newer resource counts, so this is uniform WEAK.
+    // Merging per type across resources would see key=STRONG, value=WEAK and wrongly reject.
+    AssociationCreateOrUpdateRequest dryRunRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, null, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            liveSubject, "value", LifecyclePolicy.WEAK, false, null, null)));
+
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, true, dryRunRequest);
+  }
+
   /** A request that converts every type at once keeps the resource uniform, so it is allowed. */
   @Test
   public void testConvertingAllTypesTogetherSucceeds() throws Exception {

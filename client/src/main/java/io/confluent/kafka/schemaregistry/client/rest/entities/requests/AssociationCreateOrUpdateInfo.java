@@ -152,16 +152,19 @@ public class AssociationCreateOrUpdateInfo {
   }
 
   /**
-   * Applies defaults for association creation or upsert.
-   * For CREATE: schema implies frozen STRONG; frozen=false or WEAK with schema are rejected.
-   * For UPSERT: no schema is accepted, since a schema implies a topic-owned STRONG association;
-   * frozen and lifecycle are defaulted if null.
+   * Applies defaults for an association that does not yet exist. Only call this while creating
+   * the association: an upsert that updates an existing one keeps that association's stored
+   * lifecycle and would be wrongly rejected here for carrying a schema.
    *
-   * <p>An upsert only reaches this method when it is creating the association rather than
-   * updating one. A STRONG association is owned by its topic and can only be created together
-   * with the topic, so an upsert that creates an association cannot carry a schema. The
-   * corresponding check on an explicit STRONG lifecycle lives in the registry, which can exempt
-   * subjects in IMPORT mode.
+   * <p>For a create op a schema implies frozen STRONG, and frozen=false or WEAK alongside a
+   * schema are rejected. For an upsert op no schema is accepted at all, since a schema implies
+   * a topic-owned STRONG association and those can only be created together with the topic.
+   * Either way frozen and lifecycle are defaulted when null.
+   *
+   * <p>The matching check on an explicit STRONG lifecycle lives in the registry, which can
+   * exempt subjects in IMPORT mode.
+   *
+   * @param isCreate whether this is a create op rather than an upsert op
    */
   public void applyDefaults(boolean isCreate) {
     if (!isCreate && getSchema() != null) {
@@ -176,7 +179,7 @@ public class AssociationCreateOrUpdateInfo {
       }
       if (Boolean.FALSE.equals(getFrozen())) {
         throw new IllegalPropertyException(
-            "frozen", "cannot be false when schema is provided for create");
+            "frozen", "cannot be false when a schema is provided");
       }
       setLifecycle(LifecyclePolicy.STRONG);
       setFrozen(true);
