@@ -2354,9 +2354,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    * delete.
    *
    * <p>A batch mutation applies a run of adjacent create-or-update ops as one request, so this
-   * sees every type in that run together and a batch can convert them all at once. Runs are
-   * still applied in order, so a sequence that is only uniform once a later op has run — a
-   * conversion split either side of a delete, say — is rejected.
+   * sees every type in that run together and a batch can convert them all at once. A run ends
+   * at a change of op type or a repeat of an association type, so successive ops on the same
+   * type still apply one after another. Runs are applied in order, so a sequence that is only
+   * uniform once a later op has run — a conversion split either side of a delete, say — is
+   * rejected.
    */
   private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
@@ -2561,17 +2563,21 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             index++;
             continue;
           }
+          // A run ends at a change of op type, and also at a repeat of an association type:
+          // a request may only carry one entry per type, and successive ops on the same type
+          // are meant to apply one after another rather than collapse into a single request.
+          Set<String> typesInRun = new HashSet<>();
+          typesInRun.add(((AssociationCreateOrUpdateOp) op).getAssociationType());
           int end = index + 1;
-          while (end < ops.size() && ops.get(end).getType() == op.getType()) {
+          while (end < ops.size()
+              && ops.get(end).getType() == op.getType()
+              && ops.get(end) instanceof AssociationCreateOrUpdateOp
+              && typesInRun.add(
+                  ((AssociationCreateOrUpdateOp) ops.get(end)).getAssociationType())) {
             end++;
           }
-          List<AssociationCreateOrUpdateInfo> infos = ops.subList(index, end).stream()
-              .map(o -> new AssociationCreateOrUpdateInfo((AssociationCreateOrUpdateOp) o))
-              .collect(Collectors.toList());
           AssociationResponse response = createOrUpdateAssociation(context, dryRun,
-              new AssociationCreateOrUpdateRequest(
-                  req.getResourceName(), req.getResourceNamespace(),
-                  req.getResourceId(), req.getResourceType(), infos),
+              new AssociationCreateOrUpdateRequest(req, ops.subList(index, end)),
               op.getType() == OpType.CREATE);
           collectSchemas(response, schemas);
           index = end;

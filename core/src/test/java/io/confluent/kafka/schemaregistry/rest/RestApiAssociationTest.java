@@ -2932,9 +2932,88 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   /**
-   * A batch whose projected end state is mixed is rejected up front, before any op is
-   * committed. This covers only that case: a batch whose projection is uniform runs its ops
-   * with the per-op check off, so one failing late can still leave the earlier ops persisted.
+   * Successive ops on the same association type are separate steps, not one request: a run
+   * ends where a type repeats, so two evolutions of the same subject both apply in order.
+   */
+  @Test
+  public void testBatchRepeatedAssociationTypeAppliesInOrder() throws Exception {
+    String subject = "dup-run-subject";
+    String resourceName = "dupRunTopic";
+    String resourceNamespace = "default";
+    String resourceId = "dup-run-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(3);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), subject);
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "value", LifecyclePolicy.STRONG, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    RegisterSchemaRequest second = new RegisterSchemaRequest();
+    second.setSchema(allSchemas.get(1));
+    RegisterSchemaRequest third = new RegisterSchemaRequest();
+    third.setSchema(allSchemas.get(2));
+
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(
+            new AssociationUpsertOp(subject, "value", null, null, second, null),
+            new AssociationUpsertOp(subject, "value", null, null, third, null)));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(opRequest)));
+    assertNull(response.getResults().get(0).getError());
+
+    // Both evolutions landed rather than colliding as a duplicate association type
+    assertEquals(ImmutableList.of(1, 2, 3), restApp.restClient.getAllVersions(subject));
+  }
+
+  /**
+   * Runs are applied in order and there is no rollback across them, so a later run failing
+   * leaves the earlier ones persisted — the caller's intent is partially applied. Each run is
+   * validated against the resource's full state before writing, though, so what remains is
+   * always uniform, never the mixed state the invariant forbids.
+   */
+  @Test
+  public void testBatchLaterRunFailingLeavesEarlierRunUniform() throws Exception {
+    String keySubject = "partial-run-key-subject";
+    String valueSubject = "partial-run-value-subject";
+    String resourceName = "partialRunTopic";
+    String resourceNamespace = "default";
+    String resourceId = "partial-run-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), keySubject);
+    restApp.restClient.registerSchema(allSchemas.get(1), valueSubject);
+
+    // CREATE and UPSERT are different op types, so these form two runs. The first succeeds;
+    // the second is refused because an upsert may not create a STRONG association.
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(
+            new AssociationCreateOp(
+                keySubject, "key", LifecyclePolicy.WEAK, false, null, null),
+            new AssociationUpsertOp(
+                valueSubject, "value", LifecyclePolicy.STRONG, null, null, null)));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(opRequest)));
+    assertNotNull(response.getResults().get(0).getError());
+
+    // The first run stands and the resource is left uniform, not mixed
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(1, associations.size());
+    assertEquals("key", associations.get(0).getAssociationType());
+    assertEquals(LifecyclePolicy.WEAK, associations.get(0).getLifecycle());
+  }
+
+  /**
+   * A run of adjacent ops is validated as a unit and nothing is written unless all of it
+   * passes, so a run that would leave the resource mixed commits none of its ops.
    */
   @Test
   public void testBatchProjectingMixedLifecycleCommitsNothing() throws Exception {
