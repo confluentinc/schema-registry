@@ -213,6 +213,105 @@ public class AssociationsRequestTest {
     info.validate(false, false);
   }
 
+  // An upsert may only create a WEAK association: a STRONG association is owned by its topic
+  // and has to be created with it, and a schema implies STRONG.
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertInfoCreatingWithSchemaAndSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, null, null, schema, null);
+    info.applyDefaults(false);
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertInfoCreatingWithSchemaAndStrongLifecycleThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, LifecyclePolicy.STRONG, null, schema, null);
+    info.applyDefaults(false);
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertInfoCreatingWithSchemaAndNoSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        null, null, null, null, schema, null);
+    info.applyDefaults(false);
+  }
+
+  /**
+   * An explicit STRONG lifecycle without a schema is left alone here: the registry rejects it,
+   * so that subjects in IMPORT mode can be exempted.
+   */
+  @Test
+  public void testUpsertInfoCreatingWithStrongLifecycleAndNoSchemaIsLeftToRegistry() {
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
+    info.applyDefaults(false);
+    assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
+    assertEquals(Boolean.FALSE, info.getFrozen());
+  }
+
+  @Test
+  public void testUpsertInfoCreatingFrozenStrongKeepsFrozenForImport() {
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, LifecyclePolicy.STRONG, true, null, null);
+    info.applyDefaults(false);
+    assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
+    assertEquals(Boolean.TRUE, info.getFrozen());
+  }
+
+  @Test
+  public void testUpsertInfoCreatingWeakDoesNotThrow() {
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, null, null, null, null);
+    info.applyDefaults(false);
+    assertEquals(LifecyclePolicy.WEAK, info.getLifecycle());
+    assertEquals(Boolean.FALSE, info.getFrozen());
+  }
+
+  @Test
+  public void testCreateInfoWithSchemaAndSubjectStillDefaultsToStrongFrozen() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationCreateOrUpdateInfo info = new AssociationCreateOrUpdateInfo(
+        "test-subject", null, null, null, schema, null);
+    info.applyDefaults(true);
+    assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
+    assertEquals(Boolean.TRUE, info.getFrozen());
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertOpCreatingWithSchemaAndSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationUpsertOp op = new AssociationUpsertOp(
+        "test-subject", null, null, null, schema, null);
+    op.applyDefaults(false);
+  }
+
+  @Test(expected = IllegalPropertyException.class)
+  public void testUpsertOpCreatingWithSchemaAndNoSubjectThrows() {
+    RegisterSchemaRequest schema = new RegisterSchemaRequest();
+    schema.setSchema("{\"type\":\"string\"}");
+    AssociationUpsertOp op = new AssociationUpsertOp(
+        null, null, null, null, schema, null);
+    op.applyDefaults(false);
+  }
+
+  @Test
+  public void testUpsertOpCreatingWithStrongLifecycleAndNoSchemaIsLeftToRegistry() {
+    AssociationUpsertOp op = new AssociationUpsertOp(
+        "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
+    op.applyDefaults(false);
+    assertEquals(LifecyclePolicy.STRONG, op.getLifecycle());
+    assertEquals(Boolean.FALSE, op.getFrozen());
+  }
+
   // Requirement #3: Default subject + subject required
 
   @Test
