@@ -4355,4 +4355,133 @@ public class AvroDataTest {
     assertNull(rtValue.getStruct("work"));
   }
 
+  @Test
+  public void testFieldLevelParametersIgnoredWhenConnectMetaDataDisabled() {
+    final String fieldHome = "home";
+    final String fieldWork = "work";
+    final String fieldStreet = "street";
+    final String valueHomeSt = "Home St";
+    final String valueWorkAve = "Work Ave";
+
+    Schema homeFieldSchema = SchemaBuilder.struct()
+        .name("Address")
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, "7")
+        .build();
+
+    Schema workFieldSchema = SchemaBuilder.struct()
+        .name("Address")
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, "8")
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name("Person")
+        .field(fieldHome, homeFieldSchema)
+        .field(fieldWork, workFieldSchema)
+        .build();
+
+    Struct homeAddr = new Struct(homeFieldSchema).put(fieldStreet, valueHomeSt);
+    Struct workAddr = new Struct(workFieldSchema).put(fieldStreet, valueWorkAve);
+    Struct value = new Struct(parent)
+        .put(fieldHome, homeAddr)
+        .put(fieldWork, workAddr);
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+    GenericRecord avroRecord = (GenericRecord) avroData.fromConnectData(parent, value);
+
+    AvroDataConfig configWithoutMetaData = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.CONNECT_META_DATA_CONFIG, false)
+        .build();
+    AvroData avroDataNoMeta = new AvroData(configWithoutMetaData);
+
+    SchemaAndValue rt = avroDataNoMeta.toConnectData(avroSchema, avroRecord);
+
+    assertNull(rt.schema().field(fieldHome).schema().parameters());
+    assertNull(rt.schema().field(fieldWork).schema().parameters());
+
+    Struct rtValue = (Struct) rt.value();
+    assertEquals(valueHomeSt, rtValue.getStruct(fieldHome).getString(fieldStreet));
+    assertEquals(valueWorkAve, rtValue.getStruct(fieldWork).getString(fieldStreet));
+  }
+
+  @Test
+  public void testFieldLevelParamsWithScrubInvalidNames() {
+    final String schemaAddress = "com.example.Address-v1";
+    final String schemaPerson = "com.example.Person-v1";
+    final String fieldStreet = "street";
+    final String fieldHomeAddr = "home_addr";
+    final String fieldWorkAddr = "work_addr";
+    final String tag2 = "2";
+    final String tag3 = "3";
+
+    AvroDataConfig config = new AvroDataConfig.Builder()
+        .with(AvroDataConfig.SCRUB_INVALID_NAMES_CONFIG, true)
+        .build();
+    AvroData scrubbingAvroData = new AvroData(config);
+
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag2)
+        .build();
+
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag3)
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name(schemaPerson)
+        .field(fieldHomeAddr, addrTag2)
+        .field(fieldWorkAddr, addrTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = scrubbingAvroData.fromConnectSchema(parent);
+    Schema roundTripped = scrubbingAvroData.toConnectSchema(avroSchema);
+
+    assertEquals(tag2, roundTripped.field(fieldHomeAddr).schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+    assertEquals(tag3, roundTripped.field(fieldWorkAddr).schema()
+        .parameters().get(PROTOBUF_TYPE_TAG));
+  }
+
+  @Test
+  public void testFieldLevelParamsNotWrittenOnFirstOccurrence() {
+    final String schemaAddress = "Address";
+    final String schemaPerson = "Person";
+    final String fieldStreet = "street";
+    final String fieldHome = "home";
+    final String fieldWork = "work";
+    final String tag2 = "2";
+    final String tag3 = "3";
+
+    Schema addrTag2 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag2)
+        .build();
+
+    Schema addrTag3 = SchemaBuilder.struct()
+        .name(schemaAddress)
+        .field(fieldStreet, Schema.STRING_SCHEMA)
+        .parameter(PROTOBUF_TYPE_TAG, tag3)
+        .build();
+
+    Schema parent = SchemaBuilder.struct()
+        .name(schemaPerson)
+        .field(fieldHome, addrTag2)
+        .field(fieldWork, addrTag3)
+        .build();
+
+    org.apache.avro.Schema avroSchema = avroData.fromConnectSchema(parent);
+
+    org.apache.avro.Schema.Field homeField = avroSchema.getField(fieldHome);
+    org.apache.avro.Schema.Field workField = avroSchema.getField(fieldWork);
+
+    assertNull(homeField.getObjectProp(CONNECT_PARAMETERS_PROP));
+    assertNotNull(workField.getObjectProp(CONNECT_PARAMETERS_PROP));
+  }
+
 }

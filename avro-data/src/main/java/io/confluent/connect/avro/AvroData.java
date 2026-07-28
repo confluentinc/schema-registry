@@ -2003,9 +2003,11 @@ public class AvroData {
           }
           Schema fieldSchema = toConnectSchema(field.schema(), getForceOptionalDefault(),
                   defaultVal, field.doc(), toConnectContext);
-          Object fieldConnectParams = field.getObjectProp(CONNECT_PARAMETERS_PROP);
-          if (fieldConnectParams instanceof Map) {
-            fieldSchema = applyFieldLevelParams(fieldSchema, (Map<?, ?>) fieldConnectParams);
+          if (connectMetaData) {
+            Object fieldConnectParams = field.getObjectProp(CONNECT_PARAMETERS_PROP);
+            if (fieldConnectParams instanceof Map) {
+              fieldSchema = applyFieldLevelParams(fieldSchema, (Map<?, ?>) fieldConnectParams);
+            }
           }
           builder.field(field.name(), fieldSchema);
         }
