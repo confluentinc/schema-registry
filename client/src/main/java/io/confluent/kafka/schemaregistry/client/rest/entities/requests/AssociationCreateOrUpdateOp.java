@@ -160,8 +160,8 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
   public void applyDefaults(boolean isCreate) {
     if (!isCreate && getSchema() != null) {
       throw new IllegalPropertyException(
-          "schema", "cannot be provided when creating an association; "
-              + "STRONG associations must be created with the topic");
+          "schema", "cannot be provided when adding an association to an existing topic; "
+              + "an association with a schema must be created with the topic");
     }
     if (getSchema() != null) {
       if (getLifecycle() == LifecyclePolicy.WEAK) {

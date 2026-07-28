@@ -2856,9 +2856,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     restApp.restClient.registerSchema(allSchemas.get(0), orphanSubject);
     restApp.restClient.registerSchema(allSchemas.get(1), liveSubject);
 
-    // Older resource, STRONG on key
+    // Older resource, STRONG on key. The ids are ordered so the live resource wins whether
+    // recency or the id tie-break decides, keeping the test independent of write timing.
     AssociationCreateOrUpdateRequest orphanRequest = new AssociationCreateOrUpdateRequest(
-        resourceName, resourceNamespace, "shared-name-orphan", "topic",
+        resourceName, resourceNamespace, "shared-name-a-orphan", "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
             orphanSubject, "key", LifecyclePolicy.STRONG, false, null, null)));
     restApp.restClient.createAssociation(
@@ -2866,7 +2867,7 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     // Newer resource with the same name/namespace, WEAK on value
     AssociationCreateOrUpdateRequest liveRequest = new AssociationCreateOrUpdateRequest(
-        resourceName, resourceNamespace, "shared-name-live", "topic",
+        resourceName, resourceNamespace, "shared-name-z-live", "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
             liveSubject, "value", LifecyclePolicy.WEAK, false, null, null)));
     restApp.restClient.createAssociation(
@@ -2881,6 +2882,88 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, true, dryRunRequest);
+  }
+
+  /**
+   * A batch is checked against the state its ops project, so it can convert every type at once
+   * — the same capability a single request through the create-or-update endpoint has.
+   */
+  @Test
+  public void testBatchConvertingAllTypesTogetherSucceeds() throws Exception {
+    String keySubject = "batch-convert-key-subject";
+    String valueSubject = "batch-convert-value-subject";
+    String resourceName = "batchConvertTopic";
+    String resourceNamespace = "default";
+    String resourceId = "batch-convert-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), keySubject);
+    restApp.restClient.registerSchema(allSchemas.get(1), valueSubject);
+
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(
+            new AssociationCreateOrUpdateInfo(
+                keySubject, "key", LifecyclePolicy.WEAK, null, null, null),
+            new AssociationCreateOrUpdateInfo(
+                valueSubject, "value", LifecyclePolicy.WEAK, null, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    // Converting one type at a time leaves the resource transiently mixed; the batch is
+    // accepted because its projected end state is uniform.
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(
+            new AssociationUpsertOp(
+                keySubject, "key", LifecyclePolicy.STRONG, null, null, null),
+            new AssociationUpsertOp(
+                valueSubject, "value", LifecyclePolicy.STRONG, null, null, null)));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(opRequest)));
+    assertNull(response.getResults().get(0).getError());
+
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertEquals(2, associations.size());
+    associations.forEach(a -> assertEquals(LifecyclePolicy.STRONG, a.getLifecycle()));
+  }
+
+  /**
+   * A batch whose projected end state is mixed is rejected before any op is committed, so it
+   * cannot leave a partially-applied resource behind.
+   */
+  @Test
+  public void testBatchProjectingMixedLifecycleCommitsNothing() throws Exception {
+    String keySubject = "batch-residue-key-subject";
+    String valueSubject = "batch-residue-value-subject";
+    String resourceName = "batchResidueTopic";
+    String resourceNamespace = "default";
+    String resourceId = "batch-residue-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), keySubject);
+    restApp.restClient.registerSchema(allSchemas.get(1), valueSubject);
+
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(
+            new AssociationUpsertOp(
+                keySubject, "key", LifecyclePolicy.WEAK, null, null, null),
+            new AssociationUpsertOp(
+                valueSubject, "value", LifecyclePolicy.STRONG, null, null, null)));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(opRequest)));
+    assertNotNull(response.getResults().get(0).getError());
+
+    // Neither op was committed, so no partially-applied residue is left behind
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        ImmutableList.of("key", "value"), null, 0, -1);
+    assertTrue(associations.isEmpty());
   }
 
   /** A request that converts every type at once keeps the resource uniform, so it is allowed. */
