@@ -16,8 +16,22 @@
 package io.confluent.connect.protobuf;
 
 import com.google.protobuf.Message;
+import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.utils.ExceptionUtils;
+import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
+import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -26,27 +40,28 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.storage.Converter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
-import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
-import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufDeserializer;
-import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
-import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
-import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializerConfig;
-import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
-
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that uses Protobuf schemas and objects.
  */
 public class ProtobufConverter implements Converter {
+
+  private static final Logger log = LoggerFactory.getLogger(ProtobufConverter.class);
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory PROTOBUF_SCHEMA_FACTORY =
+      (raw, refs, resolvedSchemas) -> !refs.isEmpty()
+          ? new ProtobufSchema(raw, refs, resolvedSchemas, null, null)
+          : new ProtobufSchema(raw);
 
   private SchemaRegistryClient schemaRegistry;
   private Serializer serializer;
@@ -54,6 +69,10 @@ public class ProtobufConverter implements Converter {
 
   private boolean isKey;
   private ProtobufData protobufData;
+  private boolean backupEnvelopeMode;
+  private BackupConverterHelper backupHelper;
+  private final Map<Schema, Schema> wrapperSchemaCache =
+      new ConcurrentHashMap<>();
 
   public ProtobufConverter() {
   }
@@ -66,6 +85,8 @@ public class ProtobufConverter implements Converter {
   @Override
   public void configure(Map<String, ?> configs, boolean isKey) {
     this.isKey = isKey;
+    this.backupEnvelopeMode = BackupConverterHelper.isBackupEnabled(configs);
+    log.info("ProtobufConverter schema.backup.enabled={}, isKey={}", backupEnvelopeMode, isKey);
     ProtobufConverterConfig protobufConverterConfig = new ProtobufConverterConfig(configs);
 
     if (schemaRegistry == null) {
@@ -81,6 +102,8 @@ public class ProtobufConverter implements Converter {
     serializer = new Serializer(configs, schemaRegistry);
     deserializer = new Deserializer(configs, schemaRegistry);
     protobufData = new ProtobufData(new ProtobufDataConfig(configs));
+
+    backupHelper = new BackupConverterHelper(schemaRegistry, wrapperSchemaCache);
   }
 
   @Override
@@ -90,6 +113,10 @@ public class ProtobufConverter implements Converter {
 
   @Override
   public byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {
+    if (backupEnvelopeMode
+        && BackupWrapper.isWrapper(schema) && value instanceof Struct) {
+      return restoreFromWrapper(topic, headers, schema, (Struct) value);
+    }
     try {
       ProtobufSchemaAndValue schemaAndValue = protobufData.fromConnectData(schema, value);
       Object v = schemaAndValue.getValue();
@@ -126,8 +153,58 @@ public class ProtobufConverter implements Converter {
       }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
+          String.format(
+              "Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
       );
+    }
+  }
+
+  private byte[] restoreFromWrapper(
+      String topic, Headers headers, Schema wrapperSchema, Struct wrapper) {
+    try {
+      if (wrapperSchema.field(BackupWrapper.FIELD_DATA) == null) {
+        throw new DataException("Malformed backup wrapper: missing '"
+            + BackupWrapper.FIELD_DATA + "' field");
+      }
+      String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
+      if (!SchemaBackupConfig.TYPE_PROTOBUF.equals(schemaType)) {
+        throw new DataException(
+            "ProtobufConverter received wrapper with schemaType='" + schemaType
+            + "', expected '" + SchemaBackupConfig.TYPE_PROTOBUF + "'");
+      }
+      Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
+      Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
+      String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
+
+      BackupReferenceResolver.ResolutionResult resolved =
+          backupHelper.getReferenceResolver().resolveFromWrapper(
+              wrapperSchema, wrapper, PROTOBUF_SCHEMA_FACTORY);
+
+      ProtobufSchemaAndValue schemaAndValue =
+          protobufData.fromConnectData(actualConnectSchema, actualData);
+      Object v = schemaAndValue.getValue();
+
+      ProtobufSchema serializeSchema;
+      if (rawSchema != null) {
+        serializeSchema = resolved.hasReferences()
+            ? new ProtobufSchema(rawSchema, resolved.getTargetRefs(),
+                resolved.getResolvedSchemas(), null, null)
+            : new ProtobufSchema(rawSchema);
+      } else {
+        serializeSchema = schemaAndValue.getSchema();
+      }
+
+      if (v instanceof Message) {
+        return serializer.serialize(topic, isKey, headers,
+            (Message) v, serializeSchema);
+      }
+      throw new DataException("Unsupported type during restore: "
+          + (v != null ? v.getClass().getName() : "null"));
+    } catch (DataException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataException(
+          String.format("Failed to restore Protobuf data for topic %s", topic), e);
     }
   }
 
@@ -139,22 +216,30 @@ public class ProtobufConverter implements Converter {
   @Override
   public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     try {
-      ProtobufSchemaAndValue deserialized = deserializer.deserialize(topic, isKey, headers, value);
+      ProtobufSchemaAndValue deserialized =
+          deserializer.deserialize(topic, isKey, headers, value);
 
       if (deserialized == null || deserialized.getValue() == null) {
         return SchemaAndValue.NULL;
-      } else {
-        Object object = deserialized.getValue();
-        if (object instanceof Message) {
-          Message message = (Message) object;
-          return protobufData.toConnectData(deserialized.getSchema(), message);
-        }
+      }
+      Object object = deserialized.getValue();
+      if (!(object instanceof Message)) {
         throw new DataException(String.format(
             "Unsupported type %s returned during deserialization of topic %s ",
             object.getClass().getName(),
             topic
         ));
       }
+
+      Message message = (Message) object;
+      SchemaAndValue result = protobufData.toConnectData(deserialized.getSchema(), message);
+
+      if (backupEnvelopeMode && deserialized.getWriterSchemaInfo() != null
+          && result.schema() != null) {
+        return wrapWithBackupMetadata(
+            result, topic, deserialized.getWriterSchemaInfo());
+      }
+      return result;
     } catch (TimeoutException e) {
       throw new RetriableException(String.format(
           "Failed to deserialize data for topic %s to Protobuf: ",
@@ -175,8 +260,23 @@ public class ProtobufConverter implements Converter {
       }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
+          String.format(
+              "Failed to access Protobuf data from topic %s : %s", topic, e.getMessage())
       );
+    }
+  }
+
+  private SchemaAndValue wrapWithBackupMetadata(
+      SchemaAndValue original, String topic,
+      ParsedSchemaAndValue.SchemaInfo schemaInfo) {
+    try {
+      return backupHelper.wrapWithBackupMetadata(
+          original, topic, schemaInfo,
+          SchemaBackupConfig.TYPE_PROTOBUF, isKey,
+          PROTOBUF_SCHEMA_FACTORY, serializer::computeSubjectName);
+    } catch (Exception e) {
+      throw new DataException(
+          String.format("Failed to wrap backup metadata for topic %s", topic), e);
     }
   }
 
@@ -200,6 +300,10 @@ public class ProtobufConverter implements Converter {
       return serializeImpl(getSubjectName(topic, isKey, value, schema),
           topic, isKey, headers, value, schema);
     }
+
+    public String computeSubjectName(String topic, boolean isKey, ParsedSchema schema) {
+      return getSubjectName(topic, isKey, null, schema);
+    }
   }
 
   static class Deserializer extends AbstractKafkaProtobufDeserializer {
@@ -217,5 +321,6 @@ public class ProtobufConverter implements Converter {
         String topic, boolean isKey, Headers headers, byte[] payload) {
       return deserializeWithSchemaAndVersion(topic, isKey, headers, payload);
     }
+
   }
 }

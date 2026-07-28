@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+
+  "properties": {
+    "profile": {
+      "$ref": "#/definitions/NullableProfile"
+    }
+  },
+
+  "definitions": {
+    "NullableProfile": {
+      "oneOf": [
+        { "$ref": "#/definitions/ProfileOrNull" },
+        { "type": "null" }
+      ]
+    },
+
+    "ProfileOrNull": {
+      "oneOf": [
+        { "$ref": "#/definitions/Profile" },
+        { "type": "null" }
+      ]
+    },
+
+    "Profile": {
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "email": { "type": "string", "format": "email" }
+      },
+      "required": ["username", "email"]
+    }
+  }
+}

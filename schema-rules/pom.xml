@@ -43,6 +43,10 @@
             <version>${io.confluent.schema-registry.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.google.re2j</groupId>
+            <artifactId>re2j</artifactId>
+        </dependency>
+        <dependency>
             <groupId>dev.cel</groupId>
             <artifactId>cel</artifactId>
         </dependency>

@@ -119,6 +119,12 @@ public class MockDekRegistryClient extends MockSchemaRegistryClient implements D
   @Override
   public Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException {
+    return getKek(name, lookupDeleted, null);
+  }
+
+  @Override
+  public Kek getKek(String name, boolean lookupDeleted, String context)
+      throws IOException, RestClientException {
     KekId keyId = new KekId(name);
     Kek key = keks.get(keyId);
     if (key != null && (!key.isDeleted() || lookupDeleted)) {
@@ -206,6 +212,20 @@ public class MockDekRegistryClient extends MockSchemaRegistryClient implements D
       String doc,
       boolean shared,
       boolean deleted)
+      throws IOException, RestClientException {
+    return createKek(name, kmsType, kmsKeyId, kmsProps, doc, shared, deleted, null);
+  }
+
+  @Override
+  public Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted,
+      String context)
       throws IOException, RestClientException {
     KekId keyId = new KekId(name);
     Kek oldKey = keks.get(keyId);
@@ -345,6 +365,17 @@ public class MockDekRegistryClient extends MockSchemaRegistryClient implements D
       String doc,
       Boolean shared)
       throws IOException, RestClientException {
+    return updateKek(name, kmsProps, doc, shared, null);
+  }
+
+  @Override
+  public Kek updateKek(
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared,
+      String context)
+      throws IOException, RestClientException {
     KekId keyId = new KekId(name);
     Kek key = keks.get(keyId);
     if (key == null) {
@@ -367,6 +398,12 @@ public class MockDekRegistryClient extends MockSchemaRegistryClient implements D
 
   @Override
   public void deleteKek(String kekName, boolean permanentDelete)
+      throws IOException, RestClientException {
+    deleteKek(kekName, permanentDelete, null);
+  }
+
+  @Override
+  public void deleteKek(String kekName, boolean permanentDelete, String context)
       throws IOException, RestClientException {
     KekId keyId = new KekId(kekName);
     Kek key = keks.get(keyId);
@@ -478,6 +515,12 @@ public class MockDekRegistryClient extends MockSchemaRegistryClient implements D
 
   @Override
   public void undeleteKek(String kekName)
+      throws IOException, RestClientException {
+    undeleteKek(kekName, null);
+  }
+
+  @Override
+  public void undeleteKek(String kekName, String context)
       throws IOException, RestClientException {
     KekId keyId = new KekId(kekName);
     Kek key = keks.get(keyId);

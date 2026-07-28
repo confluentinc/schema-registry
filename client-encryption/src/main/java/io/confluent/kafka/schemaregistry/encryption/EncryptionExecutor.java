@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.proto.AesGcmKey;
 import com.google.crypto.tink.proto.AesSivKey;
@@ -37,6 +40,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.RuleExecutor;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -337,7 +341,11 @@ public class EncryptionExecutor implements RuleExecutor {
 
     protected Kek getOrCreateKek(RuleContext ctx) throws RuleException {
       boolean isRead = ctx.ruleMode() == RuleMode.READ;
-      KekId kekId = new KekId(kekName, isRead);
+      String context = QualifiedSubject.contextFor(DEFAULT_TENANT, ctx.subject());
+      if (DEFAULT_CONTEXT.equals(context)) {
+        context = null;
+      }
+      KekId kekId = new KekId(kekName, isRead, context);
 
       String kmsType = ctx.getParameter(ENCRYPT_KMS_TYPE);
       String kmsKeyId = ctx.getParameter(ENCRYPT_KMS_KEY_ID);
@@ -396,7 +404,7 @@ public class EncryptionExecutor implements RuleExecutor {
 
     private Kek retrieveKekFromRegistry(RuleContext ctx, KekId key) throws RuleException {
       try {
-        return client.getKek(key.getName(), key.isLookupDeleted());
+        return client.getKek(key.getName(), key.isLookupDeleted(), key.getContext());
       } catch (RestClientException e) {
         if (e.getStatus() == 404) {
           return null;
@@ -413,7 +421,7 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         Kek kek = client.createKek(
             key.getName(), kmsType, kmsKeyId,
-            null, null, shared);
+            null, null, shared, false, key.getContext());
         log.info("Registered kek " + key.getName());
         return kek;
       } catch (RestClientException e) {

@@ -98,12 +98,24 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
-    LogicalTypes.register(LogicalMap.NAME, schema -> LogicalMap.get());
-    LogicalTypes.register(VariantLogicalType.NAME, schema -> VariantLogicalType.get());
+    registerLogicalTypeIfAbsent(LogicalMap.NAME, schema -> LogicalMap.get());
+    registerLogicalTypeIfAbsent(VariantLogicalType.NAME, schema -> VariantLogicalType.get());
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
+  }
+
+  // Avro's LogicalTypes registry is a single JVM-global map keyed by name, so an
+  // unconditional register() would clobber another library's factory for the same name
+  // (e.g. Apache Iceberg also registers "map" and "variant"). Iceberg's own registration is
+  // unconditional, so leaving ours conditional lets whichever library claimed the name first
+  // keep owning it, while still registering when no other library has.
+  private static void registerLogicalTypeIfAbsent(
+      String name, LogicalTypes.LogicalTypeFactory factory) {
+    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(name)) {
+      LogicalTypes.register(name, factory);
+    }
   }
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
