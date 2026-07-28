@@ -130,6 +130,7 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE_SUBJECT_VERSION_EXISTS_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.TOO_MANY_ASSOCIATIONS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
 
@@ -2206,6 +2207,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       // Rejecting it here also keeps the check below honest: with no schema to register, the
       // association is only accepted once the subject's versions have actually landed.
       if (info.getSchema() != null && getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+        log.debug("Rejecting schema for subject '{}' because it is in IMPORT mode",
+            qualifiedSubject);
         throw new IllegalPropertyException(
             "schema", "cannot be provided while subject '" + unqualifiedSubject
                 + "' is in IMPORT mode");
@@ -2373,7 +2376,19 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         lifecycleByType.put(info.getAssociationType(), lifecycle);
       }
     }
-    rejectMixedLifecycles(lifecycleByType);
+    if (new HashSet<>(lifecycleByType.values()).size() > 1) {
+      String detail = lifecycleByType.entrySet().stream()
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining(", "));
+      // The conflict can come from stored associations the caller never sent, so record which
+      // resource it was and what the combined state looked like.
+      log.warn("Rejecting association request for resource '{}' in namespace '{}': "
+              + "mixed lifecycles {}",
+          request.getResourceName(), request.getResourceNamespace(), detail);
+      throw new IllegalPropertyException(
+          "lifecycle", "all associations for a resource must have the same lifecycle, but got "
+              + detail);
+    }
   }
 
   /**
@@ -2397,17 +2412,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       lifecycleByType.put(association.getAssociationType(), association.getLifecycle());
     }
     return lifecycleByType;
-  }
-
-  private static void rejectMixedLifecycles(Map<String, LifecyclePolicy> lifecycleByType) {
-    if (new HashSet<>(lifecycleByType.values()).size() > 1) {
-      String detail = lifecycleByType.entrySet().stream()
-          .map(e -> e.getKey() + "=" + e.getValue())
-          .collect(Collectors.joining(", "));
-      throw new IllegalPropertyException(
-          "lifecycle", "all associations for a resource must have the same lifecycle, but got "
-              + detail);
-    }
   }
 
   protected void checkDeleteAssociation(
@@ -2566,18 +2570,28 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           // A run ends at a change of op type, and also at a repeat of an association type:
           // a request may only carry one entry per type, and successive ops on the same type
           // are meant to apply one after another rather than collapse into a single request.
+          List<AssociationCreateOrUpdateOp> run = new ArrayList<>();
           Set<String> typesInRun = new HashSet<>();
-          typesInRun.add(((AssociationCreateOrUpdateOp) op).getAssociationType());
+          AssociationCreateOrUpdateOp first = (AssociationCreateOrUpdateOp) op;
+          run.add(first);
+          typesInRun.add(first.getAssociationType());
           int end = index + 1;
           while (end < ops.size()
               && ops.get(end).getType() == op.getType()
-              && ops.get(end) instanceof AssociationCreateOrUpdateOp
-              && typesInRun.add(
-                  ((AssociationCreateOrUpdateOp) ops.get(end)).getAssociationType())) {
+              && ops.get(end) instanceof AssociationCreateOrUpdateOp) {
+            AssociationCreateOrUpdateOp next = (AssociationCreateOrUpdateOp) ops.get(end);
+            if (!typesInRun.add(next.getAssociationType())) {
+              break;
+            }
+            run.add(next);
             end++;
           }
+          if (log.isDebugEnabled()) {
+            log.debug("Applying {} {} op(s) as one request for resource '{}': types {}",
+                run.size(), op.getType(), req.getResourceName(), typesInRun);
+          }
           AssociationResponse response = createOrUpdateAssociation(context, dryRun,
-              new AssociationCreateOrUpdateRequest(req, ops.subList(index, end)),
+              new AssociationCreateOrUpdateRequest(req, run),
               op.getType() == OpType.CREATE);
           collectSchemas(response, schemas);
           index = end;
@@ -2626,8 +2640,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             String.format(STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT, e.getMessage()));
         results.add(new AssociationResult(errMsg, null));
       } catch (TooManyAssociationsException e) {
-        // TODO maxKeys
-        //throw Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys());
+        // Every branch here has to contribute a result: callers match results to requests by
+        // position, so skipping one silently attributes every later result to the wrong
+        // request. TODO maxKeys: once the limit is readable here, format the message with it
+        // via Errors.tooManyAssociationsException(schemaRegistry.config().maxKeys()).
+        ErrorMessage errMsg = new ErrorMessage(
+            TOO_MANY_ASSOCIATIONS_ERROR_CODE, e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
       } catch (InvalidSchemaException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INVALID_ASSOCIATION_ERROR_CODE,

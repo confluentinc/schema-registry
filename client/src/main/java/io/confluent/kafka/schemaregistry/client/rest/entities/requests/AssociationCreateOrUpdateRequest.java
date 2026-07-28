@@ -60,23 +60,22 @@ public class AssociationCreateOrUpdateRequest {
 
   public AssociationCreateOrUpdateRequest(
       AssociationOpRequest request, AssociationOp op) {
-    this(request, ImmutableList.of(op));
+    this(request, ImmutableList.of((AssociationCreateOrUpdateOp) op));
   }
 
   /**
    * Builds a single request carrying every op in {@code ops}, so that a batch can apply them
-   * as a unit. Each op must be an {@link AssociationCreateOrUpdateOp} of a distinct
-   * association type.
+   * as a unit. Repeated association types are rejected when the request is applied.
    */
   public AssociationCreateOrUpdateRequest(
-      AssociationOpRequest request, List<? extends AssociationOp> ops) {
+      AssociationOpRequest request, List<? extends AssociationCreateOrUpdateOp> ops) {
     this(
         request.getResourceName(),
         request.getResourceNamespace(),
         request.getResourceId(),
         request.getResourceType(),
         ops.stream()
-            .map(op -> new AssociationCreateOrUpdateInfo((AssociationCreateOrUpdateOp) op))
+            .map(AssociationCreateOrUpdateInfo::new)
             .collect(Collectors.toList())
     );
   }
