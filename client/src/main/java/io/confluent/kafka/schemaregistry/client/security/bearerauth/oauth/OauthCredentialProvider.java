@@ -18,12 +18,11 @@ package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.schemaregistry.client.security.bearerauth.BearerAuthCredentialProvider;
+import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import java.net.URL;
-import java.util.Collections;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
 
-import io.confluent.kafka.schemaregistry.client.ssl.HostSslSocketFactory;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
@@ -65,10 +64,12 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     return this.targetIdentityPoolId;
   }
 
+  Map<String, ?> config;
+
   @Override
   public void configure(Map<String, ?> map) {
+    this.config = map;
     ConfigurationUtils cu = new ConfigurationUtils(map);
-
     targetSchemaRegistry = cu.validateString(
         SchemaRegistryClientConfig.BEARER_AUTH_LOGICAL_CLUSTER, false);
     targetIdentityPoolId = cu.validateString(
@@ -89,7 +90,7 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
 
     String clientId = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_ID);
     String clientSecret = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_CLIENT_SECRET);
-    String scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE , false);
+    String scope = cu.validateString(SchemaRegistryClientConfig.BEARER_AUTH_SCOPE, false);
 
     //Keeping following configs needed by HttpAccessTokenRetriever as constants and not exposed to
     //users for modifications
@@ -97,7 +98,10 @@ public class OauthCredentialProvider implements BearerAuthCredentialProvider {
     Long retryBackoffMaxMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
     Integer loginConnectTimeoutMs = null;
     Integer loginReadTimeoutMs = null;
-    JaasOptionsUtils jou = new JaasOptionsUtils(Collections.EMPTY_MAP);
+    // Get client ssl configs if configured
+    JaasOptionsUtils jou = new JaasOptionsUtils(
+        SchemaRegistryClientConfig.getClientSslConfig(this.config));
+
     SSLSocketFactory sslSocketFactory = null;
     URL url = cu.validateUrl(SchemaRegistryClientConfig.BEARER_AUTH_ISSUER_ENDPOINT_URL);
     if (jou.shouldCreateSSLSocketFactory(url)) {

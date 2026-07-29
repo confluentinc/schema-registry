@@ -16,9 +16,11 @@
 
 package io.confluent.kafka.schemaregistry.client;
 
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
+
+import java.util.Map;
+import java.util.stream.Collectors;
 
 
 public class SchemaRegistryClientConfig {
@@ -59,6 +61,8 @@ public class SchemaRegistryClientConfig {
   public static final String MISSING_VERSION_CACHE_TTL_CONFIG = "missing.version.cache.ttl.sec";
   public static final String MISSING_SCHEMA_CACHE_TTL_CONFIG = "missing.schema.cache.ttl.sec";
 
+  public static final String URL_RANDOMIZE = "url.randomize";
+  public static final boolean URL_RANDOMIZE_DEFAULT = false;
 
   //OAuth AUTHORIZATION SERVER related configs
   public static final String BEARER_AUTH_ISSUER_ENDPOINT_URL = "bearer.auth.issuer.endpoint.url";
@@ -85,6 +89,7 @@ public class SchemaRegistryClientConfig {
   public static final String BEARER_AUTH_CUSTOM_PROVIDER_CLASS =
       "bearer.auth.custom.provider.class";
 
+  public static final String SSL_PREFIX = "ssl.";
 
   public static void withClientSslSupport(ConfigDef configDef, String namespace) {
     org.apache.kafka.common.config.ConfigDef sslConfigDef = new org.apache.kafka.common.config
@@ -223,4 +228,21 @@ public class SchemaRegistryClientConfig {
         : BEARER_AUTH_SUB_CLAIM_NAME_DEFAULT;
   }
 
+  public static Map<String, Object> getClientSslConfig(Map<String, ?> configs) {
+    return configs.entrySet().stream()
+        .filter(e -> e.getKey().startsWith(SSL_PREFIX))
+        .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+  }
+
+  public static boolean getUrlRandomize(Map<String, ?> configs) {
+    if (configs != null && configs.containsKey(URL_RANDOMIZE)) {
+      Object randomizeStartingUrlVal
+          = configs.get(URL_RANDOMIZE);
+      return randomizeStartingUrlVal instanceof String
+          ? Boolean.parseBoolean((String) randomizeStartingUrlVal)
+          : (Boolean) randomizeStartingUrlVal;
+    } else {
+      return URL_RANDOMIZE_DEFAULT;
+    }
+  }
 }

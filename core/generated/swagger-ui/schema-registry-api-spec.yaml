@@ -46,16 +46,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
         required: true
       responses:
         "200":
@@ -63,52 +63,52 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/CompatibilityCheckResponse'
+                $ref: "#/components/schemas/CompatibilityCheckResponse"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/CompatibilityCheckResponse'
+                $ref: "#/components/schemas/CompatibilityCheckResponse"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/CompatibilityCheckResponse'
+                $ref: "#/components/schemas/CompatibilityCheckResponse"
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: Unprocessable entity. Error code 42201 indicates an invalid
             schema or schema type. Error code 42202 indicates an invalid version.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /:
     get:
       summary: Schema Registry Root Resource
@@ -205,16 +205,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
         required: true
       responses:
         "200":
@@ -222,39 +222,39 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/CompatibilityCheckResponse'
+                $ref: "#/components/schemas/CompatibilityCheckResponse"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/CompatibilityCheckResponse'
+                $ref: "#/components/schemas/CompatibilityCheckResponse"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/CompatibilityCheckResponse'
+                $ref: "#/components/schemas/CompatibilityCheckResponse"
         "422":
           description: Unprocessable Entity. Error code 42201 indicates an invalid
             schema or schema type. Error code 42202 indicates an invalid version.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /config:
     get:
       tags:
@@ -268,26 +268,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     put:
       tags:
       - Config (v1)
@@ -300,16 +300,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
         required: true
       responses:
         "200":
@@ -317,26 +317,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ConfigUpdateRequest'
+                $ref: "#/components/schemas/ConfigUpdateRequest"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ConfigUpdateRequest'
+                $ref: "#/components/schemas/ConfigUpdateRequest"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ConfigUpdateRequest'
+                $ref: "#/components/schemas/ConfigUpdateRequest"
         "422":
           description: Unprocessable Entity. Error code 42203 indicates invalid compatibility
             level.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store. Error code 50003 indicates a failure forwarding
@@ -344,13 +344,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     delete:
       tags:
       - Config (v1)
@@ -404,13 +404,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /config/{subject}:
     get:
       tags:
@@ -437,38 +437,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     put:
       tags:
       - Config (v1)
@@ -488,16 +488,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/ConfigUpdateRequest'
+              $ref: "#/components/schemas/ConfigUpdateRequest"
         required: true
       responses:
         "200":
@@ -505,38 +505,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ConfigUpdateRequest'
+                $ref: "#/components/schemas/ConfigUpdateRequest"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ConfigUpdateRequest'
+                $ref: "#/components/schemas/ConfigUpdateRequest"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ConfigUpdateRequest'
+                $ref: "#/components/schemas/ConfigUpdateRequest"
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: Unprocessable Entity. Error code 42203 indicates invalid compatibility
             level.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store. Error code 50003 indicates a failure forwarding
@@ -544,13 +544,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     delete:
       tags:
       - Config (v1)
@@ -610,26 +610,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /contexts:
     get:
       tags:
@@ -637,6 +637,21 @@ paths:
       summary: List contexts
       description: Retrieves a list of contexts.
       operationId: listContexts
+      parameters:
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: The contexts.
@@ -665,13 +680,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /mode:
     get:
       tags:
@@ -685,13 +700,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
         "500":
           description: Error code 50001 -- Error in the backend data store
     put:
@@ -713,16 +728,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
         required: true
       responses:
         "200":
@@ -730,26 +745,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ModeUpdateRequest'
+                $ref: "#/components/schemas/ModeUpdateRequest"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ModeUpdateRequest'
+                $ref: "#/components/schemas/ModeUpdateRequest"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ModeUpdateRequest'
+                $ref: "#/components/schemas/ModeUpdateRequest"
         "422":
           description: Unprocessable Entity. Error code 42204 indicates an invalid
             mode. Error code 42205 indicates operation not permitted.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store. Error code 50003 indicates a failure forwarding
@@ -757,13 +772,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /mode/{subject}:
     get:
       tags:
@@ -789,38 +804,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     put:
       tags:
       - Modes (v1)
@@ -846,16 +861,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/ModeUpdateRequest'
+              $ref: "#/components/schemas/ModeUpdateRequest"
         required: true
       responses:
         "200":
@@ -863,26 +878,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ModeUpdateRequest'
+                $ref: "#/components/schemas/ModeUpdateRequest"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ModeUpdateRequest'
+                $ref: "#/components/schemas/ModeUpdateRequest"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ModeUpdateRequest'
+                $ref: "#/components/schemas/ModeUpdateRequest"
         "422":
           description: Unprocessable Entity. Error code 42204 indicates an invalid
             mode. Error code 42205 indicates operation not permitted.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store. Error code 50003 indicates a failure forwarding
@@ -890,13 +905,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     delete:
       tags:
       - Modes (v1)
@@ -917,38 +932,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Mode'
+                $ref: "#/components/schemas/Mode"
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /schemas:
     get:
       tags:
@@ -1010,30 +1025,30 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Schema'
+                  $ref: "#/components/schemas/Schema"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Schema'
+                  $ref: "#/components/schemas/Schema"
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Schema'
+                  $ref: "#/components/schemas/Schema"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /schemas/ids/{id}:
     get:
       tags:
@@ -1079,38 +1094,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/SchemaString'
+                $ref: "#/components/schemas/SchemaString"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/SchemaString'
+                $ref: "#/components/schemas/SchemaString"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/SchemaString'
+                $ref: "#/components/schemas/SchemaString"
         "404":
           description: Not Found. Error code 40403 indicates schema not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /schemas/ids/{id}/subjects:
     get:
       tags:
@@ -1137,6 +1152,20 @@ paths:
         description: Whether to include subjects where the schema was deleted
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of subjects matching the specified parameters.
@@ -1164,26 +1193,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /schemas/ids/{id}/versions:
     get:
       tags:
@@ -1209,6 +1238,20 @@ paths:
         description: Whether to include subject versions where the schema was deleted
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of subject versions matching the specified parameters.
@@ -1217,42 +1260,42 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/SubjectVersion'
+                  $ref: "#/components/schemas/SubjectVersion"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/SubjectVersion'
+                  $ref: "#/components/schemas/SubjectVersion"
             application/json; qs=0.5:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/SubjectVersion'
+                  $ref: "#/components/schemas/SubjectVersion"
         "404":
           description: Not Found. Error code 40403 indicates schema not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /schemas/types:
     get:
       tags:
@@ -1288,13 +1331,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /subjects:
     get:
       tags:
@@ -1308,7 +1351,21 @@ paths:
         description: Subject name prefix
         schema:
           type: string
-          default: ':*:'
+          default: ":*:"
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       - name: deleted
         in: query
         description: Whether to look up deleted subjects
@@ -1347,13 +1404,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /subjects/{subject}:
     post:
       tags:
@@ -1391,16 +1448,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
         required: true
       responses:
         "200":
@@ -1408,38 +1465,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40403 indicates schema not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     delete:
       tags:
       - Subjects (v1)
@@ -1490,26 +1547,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /subjects/{subject}/versions:
     get:
       tags:
@@ -1534,6 +1591,20 @@ paths:
         description: Whether to return deleted schemas only
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of version numbers matching the specified parameters.
@@ -1564,26 +1635,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     post:
       tags:
       - Subjects (v1)
@@ -1616,16 +1687,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/RegisterSchemaRequest'
+              $ref: "#/components/schemas/RegisterSchemaRequest"
         required: true
       responses:
         "200":
@@ -1633,38 +1704,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/RegisterSchemaResponse'
+                $ref: "#/components/schemas/RegisterSchemaResponse"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/RegisterSchemaResponse'
+                $ref: "#/components/schemas/RegisterSchemaResponse"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/RegisterSchemaResponse'
+                $ref: "#/components/schemas/RegisterSchemaResponse"
         "409":
           description: Conflict. Incompatible schema.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: 'Unprocessable entity. Error code 42201 indicates an invalid
             schema or schema type. '
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.Error code 50002 indicates operation timed out.
@@ -1672,13 +1743,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /subjects/{subject}/versions/{version}:
     get:
       tags:
@@ -1728,52 +1799,52 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
         "404":
           description: Not Found. Error code 40401 indicates subject not found. Error
             code 40402 indicates version not found.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: Unprocessable Entity. Error code 42202 indicates an invalid
             version.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
     delete:
       tags:
       - Subjects (v1)
@@ -1832,39 +1903,39 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: Unprocessable Entity. Error code 42202 indicates an invalid
             version.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /subjects/{subject}/versions/{version}/referencedby:
     get:
       tags:
@@ -1889,6 +1960,20 @@ paths:
         required: true
         schema:
           type: string
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of IDs for schemas that reference the specified schema.
@@ -1920,39 +2005,39 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: Unprocessable Entity. Error code 42202 indicates an invalid
             version.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /subjects/{subject}/versions/{version}/schema:
     get:
       tags:
@@ -1960,7 +2045,7 @@ paths:
       summary: Get schema string by version
       description: Retrieves the schema for the specified version of this subject.
         Only the unescaped schema string is returned.
-      operationId: getSchemaOnly
+      operationId: getSchemaOnly_1
       parameters:
       - name: subject
         in: path
@@ -2011,39 +2096,39 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: Unprocessable Entity. Error code 42202 indicates an invalid
             version.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /v1/metadata/id:
     get:
       tags:
@@ -2060,7 +2145,7 @@ paths:
       - Schemas (v1)
       summary: Get schema by ID
       description: Retrieves the schema identified by the input ID.
-      operationId: getSchemaOnly_1
+      operationId: getSchemaOnly_2
       parameters:
       - name: id
         in: path
@@ -2101,26 +2186,26 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
   /v1/metadata/version:
     get:
       tags:
@@ -2174,13 +2259,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Schema'
+                $ref: "#/components/schemas/Schema"
         "404":
           description: |-
             Error code 40401 -- Subject not found
@@ -2195,7 +2280,7 @@ paths:
       description: "Create new schema subject version with the provided field or record\
         \ level schema tags embedded (or remove) in the schema string, as well as\
         \ the given metadata and ruleset."
-      operationId: modifyTags_1
+      operationId: modifyTags
       parameters:
       - name: subject
         in: path
@@ -2218,16 +2303,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/TagSchemaRequest'
+              $ref: "#/components/schemas/TagSchemaRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/TagSchemaRequest'
+              $ref: "#/components/schemas/TagSchemaRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/TagSchemaRequest'
+              $ref: "#/components/schemas/TagSchemaRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/TagSchemaRequest'
+              $ref: "#/components/schemas/TagSchemaRequest"
         required: true
       responses:
         "200":
@@ -2235,38 +2320,38 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/RegisterSchemaResponse'
+                $ref: "#/components/schemas/RegisterSchemaResponse"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/RegisterSchemaResponse'
+                $ref: "#/components/schemas/RegisterSchemaResponse"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/RegisterSchemaResponse'
+                $ref: "#/components/schemas/RegisterSchemaResponse"
         "409":
           description: Conflict. Incompatible schema.
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "422":
           description: 'Unprocessable entity. Error code 42201 indicates an invalid
             schema or schema type. '
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
             in the backend data store.Error code 50002 indicates operation timed out.
@@ -2274,13 +2359,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: "#/components/schemas/ErrorMessage"
 components:
   schemas:
     CompatibilityCheckResponse:
@@ -2316,22 +2401,22 @@ components:
           type: array
           description: References to other schemas
           items:
-            $ref: '#/components/schemas/SchemaReference'
+            $ref: "#/components/schemas/SchemaReference"
         metadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         ruleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         schema:
           type: string
           description: Schema definition string
         schemaTagsToAdd:
           type: array
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
         schemaTagsToRemove:
           type: array
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
         propagateSchemaTags:
           type: boolean
       description: Schema register request
@@ -2355,6 +2440,14 @@ components:
     Config:
       type: object
       properties:
+        alias:
+          type: string
+        normalize:
+          type: boolean
+        validateFields:
+          type: boolean
+        validateRules:
+          type: boolean
         compatibilityLevel:
           type: string
           description: Compatibility Level
@@ -2367,24 +2460,16 @@ components:
           - FULL
           - FULL_TRANSITIVE
           - NONE
-        alias:
-          type: string
-        normalize:
-          type: boolean
-        validateFields:
-          type: boolean
-        validateRules:
-          type: boolean
         compatibilityGroup:
           type: string
         defaultMetadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         overrideMetadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         defaultRuleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         overrideRuleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
       description: Config
     ConfigUpdateRequest:
       type: object
@@ -2412,13 +2497,13 @@ components:
         compatibilityGroup:
           type: string
         defaultMetadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         overrideMetadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         defaultRuleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         overrideRuleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
       description: Config update request
     Mode:
       type: object
@@ -2461,16 +2546,16 @@ components:
           type: array
           description: References to other schemas
           items:
-            $ref: '#/components/schemas/SchemaReference'
+            $ref: "#/components/schemas/SchemaReference"
         metadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         ruleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         schemaTags:
           type: array
           description: Schema tags
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
         maxId:
           type: integer
           description: Maximum ID
@@ -2502,11 +2587,11 @@ components:
           type: array
           description: References to other schemas
           items:
-            $ref: '#/components/schemas/SchemaReference'
+            $ref: "#/components/schemas/SchemaReference"
         metadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         ruleset:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         schema:
           type: string
           description: Schema definition string
@@ -2515,9 +2600,9 @@ components:
           type: array
           description: Schema tags
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
         ruleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
       description: Schema
     SubjectVersion:
       type: object
@@ -2560,11 +2645,11 @@ components:
           type: array
           description: References to other schemas
           items:
-            $ref: '#/components/schemas/SchemaReference'
+            $ref: "#/components/schemas/SchemaReference"
         metadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         ruleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         schema:
           type: string
           description: Schema definition string
@@ -2667,11 +2752,13 @@ components:
         migrationRules:
           type: array
           items:
-            $ref: '#/components/schemas/Rule'
+            $ref: "#/components/schemas/Rule"
         domainRules:
           type: array
           items:
-            $ref: '#/components/schemas/Rule'
+            $ref: "#/components/schemas/Rule"
+        empty:
+          type: boolean
       description: Schema rule set
     SchemaEntity:
       type: object
@@ -2687,7 +2774,7 @@ components:
       type: object
       properties:
         schemaEntity:
-          $ref: '#/components/schemas/SchemaEntity'
+          $ref: "#/components/schemas/SchemaEntity"
         tags:
           type: array
           items:
@@ -2717,11 +2804,11 @@ components:
           type: array
           description: References to other schemas
           items:
-            $ref: '#/components/schemas/SchemaReference'
+            $ref: "#/components/schemas/SchemaReference"
         metadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         ruleset:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         schema:
           type: string
           description: Schema definition string
@@ -2733,12 +2820,12 @@ components:
             type: string
             description: Aliases for the given subject
         ruleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         schemaTags:
           type: array
           description: Schema tags
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
       description: ExtendedSchema
     TagSchemaRequest:
       type: object
@@ -2751,17 +2838,17 @@ components:
         tagsToAdd:
           type: array
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
         tagsToRemove:
           type: array
           items:
-            $ref: '#/components/schemas/SchemaTags'
+            $ref: "#/components/schemas/SchemaTags"
         metadata:
-          $ref: '#/components/schemas/Metadata'
+          $ref: "#/components/schemas/Metadata"
         ruleSet:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         rulesToMerge:
-          $ref: '#/components/schemas/RuleSet'
+          $ref: "#/components/schemas/RuleSet"
         rulesToRemove:
           type: array
           items:

@@ -19,6 +19,20 @@ paths:
         description: Whether to include deleted keys
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of dek subjects
@@ -60,16 +74,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/CreateDekRequest'
+              $ref: "#/components/schemas/CreateDekRequest"
         required: true
       responses:
         "200":
@@ -77,13 +91,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
         "409":
           description: Conflict. Error code 40971 -- Key already exists. Error code
             40972 -- Too many keys.
@@ -108,6 +122,20 @@ paths:
         description: Whether to include deleted keys
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of kek names
@@ -144,16 +172,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/CreateKekRequest'
+              $ref: "#/components/schemas/CreateKekRequest"
         required: true
       responses:
         "200":
@@ -161,13 +189,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "409":
           description: Conflict. Error code 40971 -- Key already exists. Error code
             40972 -- Too many keys.
@@ -195,13 +223,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "404":
           description: Error code 40470 -- Key not found
         "422":
@@ -226,16 +254,16 @@ paths:
         content:
           application/vnd.schemaregistry.v1+json:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
           application/vnd.schemaregistry+json:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
           application/octet-stream:
             schema:
-              $ref: '#/components/schemas/UpdateKekRequest'
+              $ref: "#/components/schemas/UpdateKekRequest"
         required: true
       responses:
         "200":
@@ -243,13 +271,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "404":
           description: Error code 40470 -- Key not found
         "409":
@@ -317,13 +345,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
         "404":
           description: Error code 40470 -- Key not found
         "422":
@@ -411,13 +439,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Dek'
+                $ref: "#/components/schemas/Dek"
         "404":
           description: Error code 40470 -- Key not found
         "422":
@@ -501,6 +529,20 @@ paths:
         description: Whether to include deleted keys
         schema:
           type: boolean
+      - name: offset
+        in: query
+        description: Pagination offset for results
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Pagination size for results. Ignored if negative
+        schema:
+          type: integer
+          format: int32
+          default: -1
       responses:
         "200":
           description: List of version numbers for dek
@@ -627,7 +669,7 @@ paths:
   /dek-registry/v1/keks/{name}/test:
     post:
       summary: Test a kek.
-      operationId: testKek_1
+      operationId: testKek
       parameters:
       - name: name
         in: path
@@ -641,13 +683,13 @@ paths:
           content:
             application/vnd.schemaregistry.v1+json:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
             application/json; qs=0.5:
               schema:
-                $ref: '#/components/schemas/Kek'
+                $ref: "#/components/schemas/Kek"
         "422":
           description: Error code 42271 -- Invalid key
         "500":
