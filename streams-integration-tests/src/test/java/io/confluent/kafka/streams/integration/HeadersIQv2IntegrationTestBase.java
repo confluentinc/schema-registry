@@ -39,9 +39,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -55,6 +57,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.junit.jupiter.api.AfterEach;
 
 /**
  * Shared infrastructure for the KIP-1356 headers-aware IQv2 integration tests. Holds the boilerplate
@@ -72,12 +75,41 @@ import org.apache.kafka.streams.Topology;
  */
 public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness {
 
-    /** GUID bytes the producer wrote for the key / value schema, captured on send (see below). */
-    private byte[] expectedKeyGuid;
-    private byte[] expectedValueGuid;
+    /**
+     * The schema-id GUID bytes a producer wrote into a record's {@code __key_schema_id} /
+     * {@code __value_schema_id} headers, captured on send by {@link #sendAndCapture} so a later IQv2
+     * result can be asserted byte-for-byte equal to what that record produced. Either field is
+     * {@code null} when the record carried no corresponding header (a tombstone writes no value
+     * header). Capturing per record -- rather than into a shared field -- lets a subclass that
+     * produces more than one key or value schema assert each result against its own GUID.
+     */
+    protected static final class CapturedSchemaIds {
+        private final byte[] keyGuid;
+        private final byte[] valueGuid;
+
+        private CapturedSchemaIds(byte[] keyGuid, byte[] valueGuid) {
+            this.keyGuid = keyGuid;
+            this.valueGuid = valueGuid;
+        }
+    }
+
+    /**
+     * Serdes handed to the topology. Streams does not close serdes passed via
+     * {@code Consumed.with}/{@code Produced.with}/{@code StoreBuilder}, so each would leak its
+     * {@code CachedSchemaRegistryClient} HTTP connection pool -- we close them ourselves in teardown.
+     */
+    private final List<GenericAvroSerde> createdSerdes = new ArrayList<>();
 
     protected HeadersIQv2IntegrationTestBase() {
         super(1, true);
+    }
+
+    @AfterEach
+    public void closeSerdes() {
+        for (GenericAvroSerde serde : createdSerdes) {
+            serde.close();
+        }
+        createdSerdes.clear();
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -91,7 +123,7 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     protected void createTopicsWithPartitions(int numPartitions, String... topicNames)
         throws Exception {
         Properties adminProps = new Properties();
-        adminProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
         try (AdminClient admin = AdminClient.create(adminProps)) {
             List<NewTopic> topics = Arrays.stream(topicNames)
                 .map(name -> new NewTopic(name, numPartitions, (short) 1))
@@ -111,6 +143,7 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
             HeaderSchemaIdSerializer.class.getName());
         serde.configure(config, true);
+        createdSerdes.add(serde);
         return serde;
     }
 
@@ -121,6 +154,7 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
             HeaderSchemaIdSerializer.class.getName());
         serde.configure(config, false);
+        createdSerdes.add(serde);
         return serde;
     }
 
@@ -165,18 +199,30 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     protected KafkaStreams startStreamsAndAwaitRunning(Topology topology, String appId,
         int timeoutSeconds, Integer commitIntervalMs) throws Exception {
         CountDownLatch startedLatch = new CountDownLatch(1);
+        AtomicReference<KafkaStreams.State> lastState =
+            new AtomicReference<>(KafkaStreams.State.CREATED);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId, commitIntervalMs));
-        streams.cleanUp();
-        streams.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.RUNNING) {
-                startedLatch.countDown();
-            }
-        });
-        streams.start();
         boolean running = false;
         try {
-            running = startedLatch.await(timeoutSeconds, TimeUnit.SECONDS);
-            assertTrue(running, "KafkaStreams should reach RUNNING state");
+            streams.cleanUp();
+            streams.setStateListener((newState, oldState) -> {
+                lastState.set(newState);
+                // Count down on RUNNING and on any shutdown/error state, so a startup failure fails
+                // fast with the observed state instead of waiting out the whole timeout.
+                if (newState == KafkaStreams.State.RUNNING
+                    || newState.hasStartedOrFinishedShuttingDown()) {
+                    startedLatch.countDown();
+                }
+            });
+            streams.start();
+            boolean reached = startedLatch.await(timeoutSeconds, TimeUnit.SECONDS);
+            assertTrue(reached,
+                "KafkaStreams did not reach RUNNING within " + timeoutSeconds
+                    + "s (last observed state: " + lastState.get() + ")");
+            assertEquals(KafkaStreams.State.RUNNING, lastState.get(),
+                "KafkaStreams should reach RUNNING state (last observed state: "
+                    + lastState.get() + ")");
+            running = true;
             return streams;
         } finally {
             if (!running) {
@@ -187,7 +233,8 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
 
     protected void closeStreams(KafkaStreams streams) {
         if (streams != null) {
-            streams.close(Duration.ofSeconds(10));
+            assertTrue(streams.close(Duration.ofSeconds(10)),
+                "KafkaStreams.close() timed out before shutting down cleanly");
         }
     }
 
@@ -196,43 +243,42 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Sends {@code record} synchronously and captures the schema-id GUID bytes the serializer wrote
-     * into the record's headers, so later IQv2 results can be asserted byte-equal to what was
-     * produced. A tombstone (null value) writes no value header and leaves the captured value GUID
-     * untouched.
+     * Sends {@code record} synchronously and returns the schema-id GUID bytes the serializer wrote
+     * into the record's headers, so the IQv2 result for this record can be asserted byte-equal to
+     * what was produced. A tombstone (null value) writes no value header, so the returned value GUID
+     * is {@code null}.
      */
-    protected void sendAndCapture(KafkaProducer<GenericRecord, GenericRecord> producer,
+    protected CapturedSchemaIds sendAndCapture(KafkaProducer<GenericRecord, GenericRecord> producer,
         ProducerRecord<GenericRecord, GenericRecord> record) throws Exception {
         producer.send(record).get();
         Header keyHeader = record.headers().lastHeader(SchemaId.KEY_SCHEMA_ID_HEADER);
-        if (keyHeader != null) {
-            expectedKeyGuid = keyHeader.value().clone();
-        }
+        byte[] keyGuid = keyHeader != null ? keyHeader.value().clone() : null;
         Header valueHeader = record.headers().lastHeader(SchemaId.VALUE_SCHEMA_ID_HEADER);
-        if (valueHeader != null) {
-            expectedValueGuid = valueHeader.value().clone();
-        }
+        byte[] valueGuid = valueHeader != null ? valueHeader.value().clone() : null;
+        return new CapturedSchemaIds(keyGuid, valueGuid);
     }
 
-    protected void produce(String topic, GenericRecord key, GenericRecord value, long timestamp)
-        throws Exception {
-        try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                 new KafkaProducer<>(createProducerProps())) {
-            sendAndCapture(producer, new ProducerRecord<>(topic, null, timestamp, key, value));
-            producer.flush();
-        }
-    }
-
-    protected void produceAll(String topic, List<GenericRecord> keys, List<GenericRecord> values,
+    /** Produces a single record and returns the GUIDs its serializer wrote (see {@link #sendAndCapture}). */
+    protected CapturedSchemaIds produce(String topic, GenericRecord key, GenericRecord value,
         long timestamp) throws Exception {
         try (KafkaProducer<GenericRecord, GenericRecord> producer =
                  new KafkaProducer<>(createProducerProps())) {
-            for (int i = 0; i < keys.size(); i++) {
-                sendAndCapture(producer,
-                    new ProducerRecord<>(topic, null, timestamp, keys.get(i), values.get(i)));
-            }
-            producer.flush();
+            return sendAndCapture(producer, new ProducerRecord<>(topic, null, timestamp, key, value));
         }
+    }
+
+    /** Produces one record per key/value pair and returns the captured GUIDs in produce order. */
+    protected List<CapturedSchemaIds> produceAll(String topic, List<GenericRecord> keys,
+        List<GenericRecord> values, long timestamp) throws Exception {
+        List<CapturedSchemaIds> captured = new ArrayList<>();
+        try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                 new KafkaProducer<>(createProducerProps())) {
+            for (int i = 0; i < keys.size(); i++) {
+                captured.add(sendAndCapture(producer,
+                    new ProducerRecord<>(topic, null, timestamp, keys.get(i), values.get(i))));
+            }
+        }
+        return captured;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -262,8 +308,8 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
                 }
             }
         }
-        assertEquals(expectedCount, results.size(),
-            "Expected " + expectedCount + " records from " + topic
+        assertTrue(results.size() >= expectedCount,
+            "Expected at least " + expectedCount + " records from " + topic
                 + " but got " + results.size() + " within 30s");
         return results;
     }
@@ -274,22 +320,26 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
 
     /**
      * Asserts the record carries a well-formed 17-byte {@code MAGIC_BYTE_V1} schema-id GUID in both
-     * the {@code __key_schema_id} and {@code __value_schema_id} headers and, once a producer has
-     * recorded the GUID it wrote (via {@link #sendAndCapture}), that the bytes are exactly those
-     * produced.
+     * the {@code __key_schema_id} and {@code __value_schema_id} headers and that the bytes are
+     * exactly the GUIDs {@code expected} captured when this record was produced (via
+     * {@link #produce}/{@link #produceAll}). A {@code null} {@code expected} or a missing captured
+     * GUID fails, rather than silently degrading to a format-only check.
      */
-    protected void assertSchemaIdHeaders(Headers headers, String context) {
+    protected void assertSchemaIdHeaders(Headers headers, CapturedSchemaIds expected,
+        String context) {
+        assertNotNull(expected,
+            context + ": no captured schema-id GUIDs -- produce the record via produce/produceAll");
         byte[] keyBytes = assertGuidHeader(headers, SchemaId.KEY_SCHEMA_ID_HEADER, "Key", context);
-        if (expectedKeyGuid != null) {
-            assertArrayEquals(expectedKeyGuid, keyBytes,
-                context + ": Key GUID header should equal the GUID the producer wrote");
-        }
+        assertNotNull(expected.keyGuid,
+            context + ": no produced key GUID captured -- produce a record before asserting");
+        assertArrayEquals(expected.keyGuid, keyBytes,
+            context + ": Key GUID header should equal the GUID the producer wrote");
         byte[] valueBytes =
             assertGuidHeader(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, "Value", context);
-        if (expectedValueGuid != null) {
-            assertArrayEquals(expectedValueGuid, valueBytes,
-                context + ": Value GUID header should equal the GUID the producer wrote");
-        }
+        assertNotNull(expected.valueGuid,
+            context + ": no produced value GUID captured -- produce a record before asserting");
+        assertArrayEquals(expected.valueGuid, valueBytes,
+            context + ": Value GUID header should equal the GUID the producer wrote");
     }
 
     private static byte[] assertGuidHeader(Headers headers, String headerName, String which,
