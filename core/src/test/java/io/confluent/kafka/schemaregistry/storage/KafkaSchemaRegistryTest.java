@@ -568,17 +568,18 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     kafkaSchemaRegistry.init();
 
     // 6 resources: topic0+topic1 in lkc1, topic0+topic2 in lkc2, topic0+topic3 in lkc3
-    // Each resource gets two associations (key/value), mixing STRONG and WEAK lifecycles.
+    // Each resource gets two associations (key/value). A resource cannot mix lifecycles, so
+    // the lifecycle varies between resources rather than within one.
     // Subjects are unique per resource to satisfy the one-STRONG-per-subject constraint.
     int schemaFieldCount = 1;
     String[][] resources = {
         // resourceName, namespace, resourceId, keyLifecycle, valueLifecycle
-        {"topic0", "lkc1", "id-lkc1-topic0", "WEAK",   "STRONG"},
-        {"topic1", "lkc1", "id-lkc1-topic1", "STRONG", "WEAK"},
-        {"topic0", "lkc2", "id-lkc2-topic0", "WEAK",   "STRONG"},
-        {"topic2", "lkc2", "id-lkc2-topic2", "STRONG", "WEAK"},
-        {"topic0", "lkc3", "id-lkc3-topic0", "WEAK",   "STRONG"},
-        {"topic3", "lkc3", "id-lkc3-topic3", "STRONG", "WEAK"},
+        {"topic0", "lkc1", "id-lkc1-topic0", "WEAK",   "WEAK"},
+        {"topic1", "lkc1", "id-lkc1-topic1", "STRONG", "STRONG"},
+        {"topic0", "lkc2", "id-lkc2-topic0", "WEAK",   "WEAK"},
+        {"topic2", "lkc2", "id-lkc2-topic2", "STRONG", "STRONG"},
+        {"topic0", "lkc3", "id-lkc3-topic0", "WEAK",   "WEAK"},
+        {"topic3", "lkc3", "id-lkc3-topic3", "STRONG", "STRONG"},
     };
     for (String[] r : resources) {
       String resourceName = r[0], namespace = r[1], resourceId = r[2];
@@ -613,7 +614,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertTrue(all.stream().anyMatch(a -> "lkc2".equals(a.getResourceNamespace())));
     assertTrue(all.stream().anyMatch(a -> "lkc3".equals(a.getResourceNamespace())));
 
-    // lkc1 namespace: topic0/lkc1 (key=WEAK, value=STRONG) + topic1/lkc1 (key=STRONG, value=WEAK)
+    // lkc1 namespace: topic0/lkc1 (both WEAK) + topic1/lkc1 (both STRONG)
     List<Association> lkc1 = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
         "lkc1", "topic", Collections.emptyList(), null);
     assertEquals(4, lkc1.size());
@@ -621,11 +622,11 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertTrue(lkc1.stream().anyMatch(a ->
         "topic0".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
     assertTrue(lkc1.stream().anyMatch(a ->
-        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
     assertTrue(lkc1.stream().anyMatch(a ->
         "topic1".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
     assertTrue(lkc1.stream().anyMatch(a ->
-        "topic1".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+        "topic1".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
 
     // lkc1 filtered to "key" associations only: topic0/key (WEAK) + topic1/key (STRONG)
     List<Association> lkc1Keys = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
@@ -638,7 +639,7 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertTrue(lkc1Keys.stream().anyMatch(a ->
         "topic1".equals(a.getResourceName()) && LifecyclePolicy.STRONG == a.getLifecycle()));
 
-    // lkc2 namespace: topic0/lkc2 (key=WEAK, value=STRONG) + topic2/lkc2 (key=STRONG, value=WEAK)
+    // lkc2 namespace: topic0/lkc2 (both WEAK) + topic2/lkc2 (both STRONG)
     List<Association> lkc2 = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
         "lkc2", "topic", Collections.emptyList(), null);
     assertEquals(4, lkc2.size());
@@ -646,13 +647,13 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertTrue(lkc2.stream().anyMatch(a ->
         "topic0".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
     assertTrue(lkc2.stream().anyMatch(a ->
-        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
     assertTrue(lkc2.stream().anyMatch(a ->
         "topic2".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
     assertTrue(lkc2.stream().anyMatch(a ->
-        "topic2".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+        "topic2".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
 
-    // lkc3 namespace: topic0/lkc3 (key=WEAK, value=STRONG) + topic3/lkc3 (key=STRONG, value=WEAK)
+    // lkc3 namespace: topic0/lkc3 (both WEAK) + topic3/lkc3 (both STRONG)
     List<Association> lkc3 = kafkaSchemaRegistry.getAssociationsByResourceNamespace(
         "lkc3", "topic", Collections.emptyList(), null);
     assertEquals(4, lkc3.size());
@@ -660,11 +661,11 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
     assertTrue(lkc3.stream().anyMatch(a ->
         "topic0".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
     assertTrue(lkc3.stream().anyMatch(a ->
-        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
+        "topic0".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
     assertTrue(lkc3.stream().anyMatch(a ->
         "topic3".equals(a.getResourceName()) && "key".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
     assertTrue(lkc3.stream().anyMatch(a ->
-        "topic3".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.WEAK == a.getLifecycle()));
+        "topic3".equals(a.getResourceName()) && "value".equals(a.getAssociationType()) && LifecyclePolicy.STRONG == a.getLifecycle()));
   }
 
   @Test
