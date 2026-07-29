@@ -19,7 +19,6 @@ package io.confluent.kafka.streams.serdes.avro;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.util.Map;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -33,7 +32,6 @@ import org.apache.kafka.common.serialization.Serializer;
  *
  * <p>See {@link ReflectionAvroDeserializer} for its deserializer counterpart.</p>
  */
-@InterfaceStability.Unstable
 public class ReflectionAvroSerializer<T> implements Serializer<T> {
 
   private final KafkaAvroSerializer inner;

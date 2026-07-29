@@ -193,7 +193,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
         return null;
       }
       return serializeImpl(
-          getSubjectName(topic, isKey, value, schema), topic, headers, value, schema);
+          getSubjectName(topic, isKey, value, schema), topic, isKey, headers, value, schema);
     }
   }
 

@@ -1,0 +1,97 @@
+syntax = "proto3";
+package io.confluent.protobuf.generated;
+
+message Row {
+  optional string string = 1 [(confluent.field_meta) = {
+    doc: "string comment"
+  }];
+  optional string charMax = 2 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.minLength",
+        value: "2147483647"
+      },
+      {
+        key: "flink.maxLength",
+        value: "2147483647"
+      }
+    ]
+  }];
+  optional bytes bytes = 3;
+  optional bytes binaryMax = 4 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.minLength",
+        value: "2147483647"
+      },
+      {
+        key: "flink.maxLength",
+        value: "2147483647"
+      }
+    ]
+  }];
+  optional string varchar = 5 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.maxLength",
+        value: "123"
+      }
+    ]
+  }];
+  optional bytes varbinary = 6 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.maxLength",
+        value: "123"
+      }
+    ]
+  }];
+  optional string char = 7 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.minLength",
+        value: "123"
+      },
+      {
+        key: "flink.maxLength",
+        value: "123"
+      }
+    ]
+  }];
+  optional bytes binary = 8 [(confluent.field_meta) = {
+    params: [
+      {
+        key: "flink.version",
+        value: "1"
+      },
+      {
+        key: "flink.minLength",
+        value: "123"
+      },
+      {
+        key: "flink.maxLength",
+        value: "123"
+      }
+    ]
+  }];
+}

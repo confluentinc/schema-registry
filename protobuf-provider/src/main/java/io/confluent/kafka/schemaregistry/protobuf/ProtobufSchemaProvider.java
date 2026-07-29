@@ -32,12 +32,13 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
   }
 
   @Override
-  public ParsedSchema parseSchemaOrElseThrow(Schema schema, boolean isNew, boolean normalize) {
+  public ParsedSchema parseSchemaOrElseThrow(
+      Schema schema, boolean validateAsNew, boolean normalize) {
     try {
       return new ProtobufSchema(
               schema.getSchema(),
               schema.getReferences(),
-              resolveReferences(schema, isNew),
+              resolveReferences(schema, validateAsNew),
               schema.getMetadata(),
               schema.getRuleSet(),
               null,
@@ -45,7 +46,8 @@ public class ProtobufSchemaProvider extends AbstractSchemaProvider {
       );
     } catch (Exception e) {
       log.error("Could not parse Protobuf schema", e);
-      throw e;
+      throw new IllegalArgumentException("Invalid schema of type " + schema.getSchemaType()
+          + ", details: " + e.getMessage(), e);
     }
   }
 }

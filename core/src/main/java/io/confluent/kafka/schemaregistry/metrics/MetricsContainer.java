@@ -284,7 +284,8 @@ public class MetricsContainer {
     }
   }
 
-  private static MetricsContext buildMetricsContext(
+  // Visible for testing
+  static MetricsContext buildMetricsContext(
       SchemaRegistryConfig config, String kafkaClusterId) {
 
     String srGroupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
@@ -292,7 +293,9 @@ public class MetricsContainer {
     Map<String, Object> metadata =
             config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX);
 
-    metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
+    if (kafkaClusterId != null) {
+      metadata.put(RESOURCE_LABEL_KAFKA_CLUSTER_ID, kafkaClusterId);
+    }
     metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_CLUSTER_ID, srGroupId);
     metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_GROUP_ID, srGroupId);
     metadata.put(SchemaRegistryConfig.RESOURCE_LABEL_TYPE,  "schema_registry");

@@ -43,6 +43,11 @@ public interface DekRegistryClient extends Closeable {
   Kek getKek(String name, boolean lookupDeleted)
       throws IOException, RestClientException;
 
+  default Kek getKek(String name, boolean lookupDeleted, String context)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   List<String> listDeks(String kekName, boolean lookupDeleted)
       throws IOException, RestClientException;
 
@@ -79,6 +84,19 @@ public interface DekRegistryClient extends Closeable {
       boolean shared,
       boolean deleted)
       throws IOException, RestClientException;
+
+  default Kek createKek(
+      String name,
+      String kmsType,
+      String kmsKeyId,
+      Map<String, String> kmsProps,
+      String doc,
+      boolean shared,
+      boolean deleted,
+      String context)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   Dek createDek(
       String kekName,
@@ -121,8 +139,23 @@ public interface DekRegistryClient extends Closeable {
       Boolean shared)
       throws IOException, RestClientException;
 
+  default Kek updateKek(
+      String name,
+      Map<String, String> kmsProps,
+      String doc,
+      Boolean shared,
+      String context)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   void deleteKek(String kekName, boolean permanentDelete)
       throws IOException, RestClientException;
+
+  default void deleteKek(String kekName, boolean permanentDelete, String context)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   void deleteDek(String kekName, String subject, DekFormat algorithm, boolean permanentDelete)
       throws IOException, RestClientException;
@@ -134,11 +167,21 @@ public interface DekRegistryClient extends Closeable {
   void undeleteKek(String kekName)
       throws IOException, RestClientException;
 
+  default void undeleteKek(String kekName, String context)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   void undeleteDek(String kekName, String subject, DekFormat algorithm)
       throws IOException, RestClientException;
 
   void undeleteDekVersion(String kekName, String subject, int version, DekFormat algorithm)
       throws IOException, RestClientException;
+
+  default void testKek(String name)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
 
   void reset();
 

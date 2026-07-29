@@ -15,15 +15,13 @@
 
 package io.confluent.kafka.schemaregistry.rest;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
-import io.confluent.kafka.schemaregistry.ClusterTestHarness;
-import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.RestApp;
 import io.confluent.kafka.schemaregistry.avro.AvroUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -32,45 +30,58 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
-import io.confluent.kafka.schemaregistry.storage.encoder.MetadataEncoderService;
-import org.junit.Test;
+import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
-public class RestApiMetadataEncoderTest extends ClusterTestHarness {
+@Tag("IntegrationTest")
+public abstract class RestApiMetadataEncoderTest {
 
   protected static final String INITIAL_SECRET = "mysecret";
   protected static final String ROTATED_SECRET = "mynewsecret";
 
-  private static final String SCHEMA_STRING = AvroUtils.parseSchema(
+  protected RestApp restApp = null;
+
+  protected String tenant = SchemaRegistry.DEFAULT_TENANT;
+
+  public void setRestApp(RestApp restApp) {
+    this.restApp = restApp;
+  }
+
+  protected int expectedSchemaId(int sequentialId) {
+    return sequentialId;
+  }
+
+  protected abstract void removeEncoder(String tenant) throws Exception;
+
+  /**
+   * Creates a new RestApp configured with the rotated secret.
+   *
+   * @param newSecret the new encoder secret
+   * @param oldSecret the old encoder secret (for rotation)
+   * @return a new RestApp configured with the rotated secrets
+   */
+  protected abstract RestApp createRotatedRestApp(String newSecret, String oldSecret) throws Exception;
+
+  protected static String SCHEMA_STRING = AvroUtils.parseSchema(
       "{\"type\":\"record\","
           + "\"name\":\"myrecord\","
           + "\"fields\":"
           + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
       .canonicalString();
 
-  private static final String ROTATION_TEST_SCHEMA = AvroUtils.parseSchema(
-          "{\"type\":\"record\","
-              + "\"name\":\"rotationtest\","
-              + "\"fields\":"
-              + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
+  protected static String ROTATION_TEST_SCHEMA = AvroUtils.parseSchema(
+      "{\"type\":\"record\","
+          + "\"name\":\"rotationtest\","
+          + "\"fields\":"
+          + "[{\"type\":\"string\",\"name\":\"f1\"}]}")
       .canonicalString();
-
-  public RestApiMetadataEncoderTest() {
-    super(1, true, CompatibilityLevel.BACKWARD.name);
-  }
-
-  @Override
-  protected Properties getSchemaRegistryProperties() throws Exception {
-    Properties props = new Properties();
-    props.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, "mysecret");
-    return props;
-  }
 
   @Test
   public void testRegisterSchemaWithSensitiveMetadata() throws Exception {
@@ -83,12 +94,14 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     Schema schema = new Schema(subject, null, null, null, null, metadata, null, SCHEMA_STRING);
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering without id should succeed"
+    );
 
-    List<SubjectVersion> subjectVersions = restApp.restClient.getAllVersionsById(1);
+    List<SubjectVersion> subjectVersions = restApp.restClient.getAllVersionsById(expectedIdSchema1);
     assertEquals(ImmutableList.of(new SubjectVersion(subject, 1)), subjectVersions);
 
     SchemaString schemaString = restApp.restClient.getId(expectedIdSchema1);
@@ -106,34 +119,45 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     Schema schema = new Schema(subject, null, null, null, null, metadata, null, SCHEMA_STRING);
     RegisterSchemaRequest request = new RegisterSchemaRequest(schema);
 
-    int expectedIdSchema1 = 1;
-    assertEquals("Registering without id should succeed",
+    int expectedIdSchema1 = expectedSchemaId(1);
+    assertEquals(
         expectedIdSchema1,
-        restApp.restClient.registerSchema(request, subject, false).getId());
+        restApp.restClient.registerSchema(request, subject, false).getId(),
+        "Registering without id should succeed"
+    );
 
     // Remove encoder
-    ((KafkaSchemaRegistry) restApp.schemaRegistry()).getMetadataEncoder().getEncoders()
-        .remove(KafkaSchemaRegistry.DEFAULT_TENANT);
+    removeEncoder(tenant);
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getAllVersionsById(1));
+        () -> restApp.restClient.getAllVersionsById(expectedIdSchema1),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getId(expectedIdSchema1));
+        () -> restApp.restClient.getId(expectedIdSchema1),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getVersion(subject, 1));
+        () -> restApp.restClient.getVersion(subject, 1),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getLatestVersion(subject));
+        () -> restApp.restClient.getLatestVersion(subject),
+        "Should fail to get schema"
+    );
 
-    assertThrows("Should fail to get schema",
+    assertThrows(
         RestClientException.class,
-        () -> restApp.restClient.getLatestVersion(subject));
+        () -> restApp.restClient.getLatestVersion(subject),
+        "Should fail to get schema"
+    );
 
     List<Schema> schemas = restApp.restClient.getSchemas(subject, true, false);
     assertTrue(schemas.isEmpty());
@@ -170,13 +194,11 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
     assertEquals(properties, schemaString.getMetadata().getProperties());
 
     // Get the encoder keyset size before rotation (should be 1 key)
-    MetadataEncoderService metadataEncoder =
-        ((KafkaSchemaRegistry) restApp.schemaRegistry()).getMetadataEncoder();
-    int keyCountBeforeRotation = metadataEncoder
-        .getEncoder(KafkaSchemaRegistry.DEFAULT_TENANT).size();
-    assertEquals("Should have 1 key before rotation", 1, keyCountBeforeRotation);
+    int keyCountBeforeRotation = restApp.schemaRegistry().getMetadataEncoder()
+        .getEncoder(tenant).size();
+    assertEquals(1, keyCountBeforeRotation, "Should have 1 key before rotation");
 
-    // Step 2: Stop the RestApp (but keep Kafka running)
+    // Step 2: Stop the RestApp
     restApp.stop();
 
     // Step 3: Start a new RestApp with the rotated secret configuration
@@ -187,16 +209,14 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
       // Step 4: Verify the schema can still be read after rotation
       // The maybeRotateSecrets() should have run during init()
       SchemaString rotatedSchemaString = rotatedRestApp.restClient.getId(schemaId);
-      assertEquals("Schema should be readable after secret rotation",
-          properties, rotatedSchemaString.getMetadata().getProperties());
+      assertEquals(properties, rotatedSchemaString.getMetadata().getProperties(),
+          "Schema should be readable after secret rotation");
 
       // Step 5: Verify the encoder keyset has been rotated (should now have 2 keys)
-      MetadataEncoderService rotatedMetadataEncoder =
-          ((KafkaSchemaRegistry) rotatedRestApp.schemaRegistry()).getMetadataEncoder();
-      int keyCountAfterRotation = rotatedMetadataEncoder
-          .getEncoder(KafkaSchemaRegistry.DEFAULT_TENANT).size();
-      assertEquals("Should have 2 keys after rotation (old + new primary)",
-          2, keyCountAfterRotation);
+      int keyCountAfterRotation = rotatedRestApp.schemaRegistry().getMetadataEncoder()
+          .getEncoder(tenant).size();
+      assertEquals(2, keyCountAfterRotation,
+          "Should have 2 keys after rotation (old + new primary)");
 
       // Verify we can still register new schemas with sensitive metadata
       String newSubject = "rotationTestSubject2";
@@ -208,34 +228,13 @@ public class RestApiMetadataEncoderTest extends ClusterTestHarness {
       RegisterSchemaRequest newRequest = new RegisterSchemaRequest(newSchema);
 
       int newSchemaId = rotatedRestApp.restClient.registerSchema(newRequest, newSubject, false).getId();
-      assertNotEquals("New schema should have different ID", schemaId, newSchemaId);
+      assertNotEquals(schemaId, newSchemaId, "New schema should have different ID");
 
       SchemaString newSchemaString = rotatedRestApp.restClient.getId(newSchemaId);
-      assertEquals("New schema should be readable",
-          newProperties, newSchemaString.getMetadata().getProperties());
+      assertEquals(newProperties, newSchemaString.getMetadata().getProperties(),
+          "New schema should be readable");
     } finally {
       rotatedRestApp.stop();
     }
-  }
-
-  protected RestApp createRotatedRestApp(String newSecret, String oldSecret) throws Exception {
-    Properties rotatedProps = new Properties();
-    int port = choosePort();
-    rotatedProps.setProperty(SchemaRegistryConfig.METADATA_ENCODER_SECRET_CONFIG, newSecret);
-    rotatedProps.setProperty(SchemaRegistryConfig.METADATA_ENCODER_OLD_SECRET_CONFIG, oldSecret);
-    rotatedProps.put(SchemaRegistryConfig.LISTENERS_CONFIG,
-        getSchemaRegistryProtocol() + "://0.0.0.0:" + port);
-    rotatedProps.put(SchemaRegistryConfig.MODE_MUTABILITY, true);
-
-    RestApp rotatedRestApp = new RestApp(
-        port,
-        null,
-        bootstrapServers,
-        ClusterTestHarness.KAFKASTORE_TOPIC,
-        CompatibilityLevel.BACKWARD.name,
-        true,
-        rotatedProps);
-    rotatedRestApp.start();
-    return rotatedRestApp;
   }
 }

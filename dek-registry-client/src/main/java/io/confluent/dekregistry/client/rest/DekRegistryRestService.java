@@ -116,8 +116,17 @@ public class DekRegistryRestService extends RestService implements Configurable 
 
   public Kek getKek(Map<String, String> requestProperties, String name, boolean lookupDeleted)
       throws IOException, RestClientException {
+    return getKek(requestProperties, name, lookupDeleted, null);
+  }
+
+  public Kek getKek(Map<String, String> requestProperties, String name, boolean lookupDeleted,
+      String context)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}")
         .queryParam("deleted", lookupDeleted);
+    if (context != null) {
+      builder = builder.queryParam("context", context);
+    }
     String path = builder.build(name).toString();
 
     return httpRequest(path, "GET", null, requestProperties, KEK_TYPE);
@@ -244,7 +253,18 @@ public class DekRegistryRestService extends RestService implements Configurable 
       Map<String, String> requestProperties,
       CreateKekRequest request)
       throws IOException, RestClientException {
+    return createKek(requestProperties, request, null);
+  }
+
+  public Kek createKek(
+      Map<String, String> requestProperties,
+      CreateKekRequest request,
+      String context)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks");
+    if (context != null) {
+      builder = builder.queryParam("context", context);
+    }
     String path = builder.build().toString();
 
     return httpRequest(
@@ -308,7 +328,19 @@ public class DekRegistryRestService extends RestService implements Configurable 
       String name,
       UpdateKekRequest request)
       throws IOException, RestClientException {
+    return updateKek(requestProperties, name, request, null);
+  }
+
+  public Kek updateKek(
+      Map<String, String> requestProperties,
+      String name,
+      UpdateKekRequest request,
+      String context)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}");
+    if (context != null) {
+      builder = builder.queryParam("context", context);
+    }
     String path = builder.build(name).toString();
 
     return httpRequest(
@@ -325,8 +357,17 @@ public class DekRegistryRestService extends RestService implements Configurable 
 
   public void deleteKek(Map<String, String> requestProperties, String name, boolean permanentDelete)
       throws IOException, RestClientException {
+    deleteKek(requestProperties, name, permanentDelete, null);
+  }
+
+  public void deleteKek(Map<String, String> requestProperties, String name,
+      boolean permanentDelete, String context)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}")
         .queryParam("permanent", permanentDelete);
+    if (context != null) {
+      builder = builder.queryParam("context", context);
+    }
     String path = builder.build(name).toString();
 
     httpRequest(path, "DELETE", null, requestProperties, VOID_TYPE);
@@ -388,7 +429,15 @@ public class DekRegistryRestService extends RestService implements Configurable 
 
   public void undeleteKek(Map<String, String> requestProperties, String name)
       throws IOException, RestClientException {
+    undeleteKek(requestProperties, name, null);
+  }
+
+  public void undeleteKek(Map<String, String> requestProperties, String name, String context)
+      throws IOException, RestClientException {
     UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/undelete");
+    if (context != null) {
+      builder = builder.queryParam("context", context);
+    }
     String path = builder.build(name).toString();
 
     httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
@@ -428,6 +477,14 @@ public class DekRegistryRestService extends RestService implements Configurable 
       builder = builder.queryParam("algorithm", algorithm.name());
     }
     String path = builder.build(name, subject, version).toString();
+
+    httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
+  }
+
+  public void testKek(Map<String, String> requestProperties, String name)
+      throws IOException, RestClientException {
+    UriBuilder builder = UriBuilder.fromPath("/dek-registry/v1/keks/{name}/test");
+    String path = builder.build(name).toString();
 
     httpRequest(path, "POST", null, requestProperties, VOID_TYPE);
   }

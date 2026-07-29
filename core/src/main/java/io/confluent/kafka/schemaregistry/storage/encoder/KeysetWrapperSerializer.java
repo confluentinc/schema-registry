@@ -25,14 +25,20 @@ import java.security.GeneralSecurityException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KeysetWrapperSerializer implements Serializer<KeysetWrapper> {
+
+  private static final Logger log = LoggerFactory.getLogger(KeysetWrapperSerializer.class);
 
   private Aead aead;
 
   public KeysetWrapperSerializer(SchemaRegistryConfig config) {
     try {
       String secret = MetadataEncoderService.encoderSecret(config);
+      log.info("KeysetWrapperSerializer initialized with secret hash={}",
+          secret != null ? Integer.toHexString(secret.hashCode()) : "null");
       aead = MetadataEncoderService.getPrimitive(secret);
     } catch (GeneralSecurityException e) {
       throw new ConfigException("Error while configuring KeysetWrapperSerializer", e);

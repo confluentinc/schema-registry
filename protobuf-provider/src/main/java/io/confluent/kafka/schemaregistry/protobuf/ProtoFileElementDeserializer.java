@@ -100,6 +100,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       Syntax.valueOf(node.get("syntax").asText()),
       Arrays.asList(mapper.convertValue(node.get("imports"), String[].class)),
       Arrays.asList(mapper.convertValue(node.get("publicImports"), String[].class)),
+      Arrays.asList(mapper.convertValue(node.get("weakImports"), String[].class)),
       typeElementBuilder.build(),
       serviceElementBuilder.build(),
       extendElementBuilder.build(),
@@ -369,7 +370,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
         value = toOption(valueNode);
         break;
       default:
-        throw new IllegalStateException(
+        throw new IllegalArgumentException(
           String.format("Unknown kind '%s' of given option node.",
             node.get("kind").asText()));
     }
