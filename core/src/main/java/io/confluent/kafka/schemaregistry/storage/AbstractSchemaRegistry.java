@@ -2036,7 +2036,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
         throw new IllegalPropertyException(
-            "associationType", "Duplicate association type: " + associationType);
+            "associationType",
+            "may only appear once per request, but '" + associationType + "' appears more"
+                + " than once");
       }
       infosByType.put(associationType, info);
     }
@@ -2053,10 +2055,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       List<Association> fallback = getAssociationsByResourceName(
           request.getResourceName(), request.getResourceNamespace(),
           request.getResourceType(), new ArrayList<>(infosByType.keySet()), null);
-      // The fallback can return entries from multiple resourceIds sharing (name, namespace,
-      // type) — e.g. an orphan from a deleted topic alongside a live one. Narrow to a single
-      // resource so equivalence, subject-change and frozen checks all compare against the same
-      // one rather than a composite stitched from several.
+      // The fallback matches on (name, namespace, type) and so can span resourceIds. Narrow to
+      // a single resource, otherwise the equivalence, subject-change and frozen checks below
+      // could each be comparing against a different one.
       assocsByType = mostRecentlyUpdatedResource(fallback).stream()
           .collect(Collectors.toMap(Association::getAssociationType, a -> a));
     } else {
@@ -2340,27 +2341,12 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
-   * Rejects a request that would leave a resource holding associations of more than one
-   * lifecycle. A topic is either topic-owned (STRONG) or shared (WEAK) across all of its
-   * association types, never a mix of the two.
+   * Rejects a request that would leave a resource holding more than one lifecycle: a topic is
+   * either topic-owned (STRONG) or shared (WEAK) across all of its association types.
    *
-   * <p>The lifecycle considered for each type is the one the resource would end up with: taken
-   * from the request where it supplies one, from the request's existing association where it
-   * does not, and from the stored association for types the request leaves alone. A request
-   * that converts every type at once therefore passes this check.
-   *
-   * <p>Passing this check is not on its own enough to repair a resource that is already mixed,
-   * and for some shapes no request can: promoting a shared subject to STRONG is refused when
-   * that subject carries other associations, and demoting a topic-owned association is refused
-   * when it uses the default subject or is frozen. Such a resource has to be taken apart with a
-   * delete.
-   *
-   * <p>A batch mutation applies a run of adjacent create-or-update ops as one request, so this
-   * sees every type in that run together and a batch can convert them all at once. A run ends
-   * at a change of op type or a repeat of an association type, so successive ops on the same
-   * type still apply one after another. Runs are applied in order, so a sequence that is only
-   * uniform once a later op has run — a conversion split either side of a delete, say — is
-   * rejected.
+   * <p>Each type is judged by the lifecycle it would end up with — from the request where it
+   * supplies one, otherwise from the stored association — so converting every type at once is
+   * allowed, while converting only one of several is not.
    */
   private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
       throws SchemaRegistryException {
@@ -2566,28 +2552,18 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             index++;
             continue;
           }
-          // A run ends at a change of op type, and also at a repeat of an association type:
-          // a request may only carry one entry per type, and successive ops on the same type
-          // are meant to apply one after another rather than collapse into a single request.
           List<AssociationCreateOrUpdateOp> run = new ArrayList<>();
-          Set<String> typesInRun = new HashSet<>();
-          AssociationCreateOrUpdateOp first = (AssociationCreateOrUpdateOp) op;
-          run.add(first);
-          typesInRun.add(first.getAssociationType());
+          run.add((AssociationCreateOrUpdateOp) op);
           int end = index + 1;
           while (end < ops.size()
               && ops.get(end).getType() == op.getType()
               && ops.get(end) instanceof AssociationCreateOrUpdateOp) {
-            AssociationCreateOrUpdateOp next = (AssociationCreateOrUpdateOp) ops.get(end);
-            if (!typesInRun.add(next.getAssociationType())) {
-              break;
-            }
-            run.add(next);
+            run.add((AssociationCreateOrUpdateOp) ops.get(end));
             end++;
           }
           if (log.isDebugEnabled()) {
-            log.debug("Applying {} {} op(s) as one request for resource '{}': types {}",
-                run.size(), op.getType(), req.getResourceName(), typesInRun);
+            log.debug("Applying {} {} op(s) as one request for resource '{}'",
+                run.size(), op.getType(), req.getResourceName());
           }
           AssociationResponse response = createOrUpdateAssociation(context, dryRun,
               new AssociationCreateOrUpdateRequest(req, run),

@@ -1760,9 +1760,9 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testMutateAssociationsWithAllOpTypesInSingleRequest() throws Exception {
-    // This test exercises CREATE, UPSERT, and DELETE operations in a SINGLE AssociationOpRequest
-    // (i.e., all three operation types for the same resource in one request)
+  public void testMutateAssociationsWithAllOpTypesInSingleBatch() throws Exception {
+    // This test exercises CREATE, UPSERT, and DELETE operations in a single batch
+    // (all three operation types for the same resource in one mutateAssociations call)
     String keySubject = "mutateKeySubject";
     String valueSubject = "mutateValueSubject";
     String resourceName = "mutateSingleTopic";
@@ -1809,11 +1809,8 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     assertEquals(1, initialAssociations.size());
     assertEquals("key", initialAssociations.get(0).getAssociationType());
 
-    // Now create a SINGLE AssociationOpRequest with all three operation types:
-    // - UPSERT "key" (update lifecycle from WEAK to STRONG)
-    // - CREATE "value" (new association)
-    // - DELETE "key" (delete the existing association)
-    // The operations are processed in order, so final state will have only "value".
+    // All three operation types in one batch. A request may only carry one op per association
+    // type, so the DELETE of "key" goes in a second request against the same resource.
     // "key" is promoted before "value" is added so the resource never holds a mix of
     // lifecycles, which is rejected.
     List<AssociationOpRequest> requests = new ArrayList<>();
@@ -1840,10 +1837,16 @@ public class RestApiAssociationTest extends ClusterTestHarness {
                 false,
                 null,
                 null
-            ),
-            // DELETE: Delete the "key" association
-            new AssociationDeleteOp("key")
+            )
         )
+    ));
+    requests.add(new AssociationOpRequest(
+        resourceName,
+        resourceNamespace,
+        resourceId,
+        "topic",
+        // DELETE: Delete the "key" association
+        ImmutableList.of(new AssociationDeleteOp("key"))
     ));
 
     AssociationBatchRequest batchRequest = new AssociationBatchRequest(requests);
@@ -1854,9 +1857,10 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
     // Verify batch response
     assertNotNull(batchResponse);
-    assertEquals(1, batchResponse.getResults().size());
+    assertEquals(2, batchResponse.getResults().size());
+    assertNull(batchResponse.getResults().get(0).getError());
 
-    AssociationResult result = batchResponse.getResults().get(0);
+    AssociationResult result = batchResponse.getResults().get(1);
     assertNull(result.getError());
     assertNotNull(result.getResult());
     assertEquals(resourceId, result.getResult().getResourceId());
@@ -2841,29 +2845,28 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   /**
-   * Two resources can share a name and namespace — an orphan from a deleted topic alongside a
-   * live one. The validate phase must not stitch their types together into a mix that never
-   * existed on either.
+   * Matching by name and namespace can span resourceIds. The validate phase must not stitch
+   * their types together into a mix that never existed on either resource.
    */
   @Test
   public void testDryRunDoesNotMixLifecyclesAcrossResourcesSharingAName() throws Exception {
-    String orphanSubject = "orphan-key-subject";
+    String olderSubject = "older-key-subject";
     String liveSubject = "live-value-subject";
     String resourceName = "sharedNameTopic";
     String resourceNamespace = "default";
     List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(2);
 
-    restApp.restClient.registerSchema(allSchemas.get(0), orphanSubject);
+    restApp.restClient.registerSchema(allSchemas.get(0), olderSubject);
     restApp.restClient.registerSchema(allSchemas.get(1), liveSubject);
 
     // Older resource, STRONG on key. The ids are ordered so the live resource wins whether
     // recency or the id tie-break decides, keeping the test independent of write timing.
-    AssociationCreateOrUpdateRequest orphanRequest = new AssociationCreateOrUpdateRequest(
-        resourceName, resourceNamespace, "shared-name-a-orphan", "topic",
+    AssociationCreateOrUpdateRequest olderRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, "shared-name-a-older", "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
-            orphanSubject, "key", LifecyclePolicy.STRONG, false, null, null)));
+            olderSubject, "key", LifecyclePolicy.STRONG, false, null, null)));
     restApp.restClient.createAssociation(
-        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, orphanRequest);
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, olderRequest);
 
     // Newer resource with the same name/namespace, WEAK on value
     AssociationCreateOrUpdateRequest liveRequest = new AssociationCreateOrUpdateRequest(
@@ -2932,11 +2935,12 @@ public class RestApiAssociationTest extends ClusterTestHarness {
   }
 
   /**
-   * Successive ops on the same association type are separate steps, not one request: a run
-   * ends where a type repeats, so two evolutions of the same subject both apply in order.
+   * A request may carry at most one op per association type. Nothing can legitimately send
+   * more — a topic config key appears once per incrementalAlterConfigs request — so this is
+   * rejected rather than applied in sequence.
    */
   @Test
-  public void testBatchRepeatedAssociationTypeAppliesInOrder() throws Exception {
+  public void testBatchRepeatedAssociationTypeIsRejected() throws Exception {
     String subject = "dup-run-subject";
     String resourceName = "dupRunTopic";
     String resourceNamespace = "default";
@@ -2964,11 +2968,46 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     AssociationBatchResponse response = restApp.restClient.mutateAssociations(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
         new AssociationBatchRequest(Collections.singletonList(opRequest)));
-    assertNull(response.getResults().get(0).getError());
+    assertNotNull(response.getResults().get(0).getError());
 
-    // Both evolutions landed rather than colliding as a duplicate association type
-    assertEquals(ImmutableList.of(1, 2, 3), restApp.restClient.getAllVersions(subject));
+    // Rejected before anything was applied, so no new version was registered
+    assertEquals(Collections.singletonList(1), restApp.restClient.getAllVersions(subject));
   }
+
+  /** A delete counts towards the one-op-per-type rule as well. */
+  @Test
+  public void testBatchUpsertAndDeleteOfSameTypeIsRejected() throws Exception {
+    String subject = "dup-delete-subject";
+    String resourceName = "dupDeleteTopic";
+    String resourceNamespace = "default";
+    String resourceId = "dup-delete-123";
+    List<String> allSchemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    restApp.restClient.registerSchema(allSchemas.get(0), subject);
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            subject, "value", LifecyclePolicy.WEAK, false, null, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+
+    AssociationOpRequest opRequest = new AssociationOpRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(
+            new AssociationUpsertOp(subject, "value", LifecyclePolicy.WEAK, null, null, null),
+            new AssociationDeleteOp("value")));
+    AssociationBatchResponse response = restApp.restClient.mutateAssociations(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false,
+        new AssociationBatchRequest(Collections.singletonList(opRequest)));
+    assertNotNull(response.getResults().get(0).getError());
+
+    // The association is untouched
+    List<Association> associations = restApp.restClient.getAssociationsByResourceId(
+        RestService.DEFAULT_REQUEST_PROPERTIES, resourceId, "topic",
+        Collections.singletonList("value"), null, 0, -1);
+    assertEquals(1, associations.size());
+  }
+
 
   /**
    * Runs are applied in order and there is no rollback across them, so a later run failing
