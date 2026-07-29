@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
@@ -106,10 +107,23 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
 
     @AfterEach
     public void closeSerdes() {
+        RuntimeException firstError = null;
         for (GenericAvroSerde serde : createdSerdes) {
-            serde.close();
+            try {
+                serde.close();
+            } catch (RuntimeException e) {
+                // Keep closing the rest so a single failing serde can't leak the others.
+                if (firstError == null) {
+                    firstError = e;
+                } else {
+                    firstError.addSuppressed(e);
+                }
+            }
         }
         createdSerdes.clear();
+        if (firstError != null) {
+            throw firstError;
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -201,6 +215,10 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         CountDownLatch startedLatch = new CountDownLatch(1);
         AtomicReference<KafkaStreams.State> lastState =
             new AtomicReference<>(KafkaStreams.State.CREATED);
+        // Record that RUNNING was observed, rather than re-reading lastState after the latch:
+        // RUNNING -> REBALANCING is a valid transition, so a benign follow-up rebalance could
+        // otherwise flip lastState away from RUNNING and spuriously fail the start assertion.
+        AtomicBoolean reachedRunning = new AtomicBoolean(false);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId, commitIntervalMs));
         boolean running = false;
         try {
@@ -209,8 +227,10 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
                 lastState.set(newState);
                 // Count down on RUNNING and on any shutdown/error state, so a startup failure fails
                 // fast with the observed state instead of waiting out the whole timeout.
-                if (newState == KafkaStreams.State.RUNNING
-                    || newState.hasStartedOrFinishedShuttingDown()) {
+                if (newState == KafkaStreams.State.RUNNING) {
+                    reachedRunning.set(true);
+                    startedLatch.countDown();
+                } else if (newState.hasStartedOrFinishedShuttingDown()) {
                     startedLatch.countDown();
                 }
             });
@@ -219,9 +239,9 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
             assertTrue(reached,
                 "KafkaStreams did not reach RUNNING within " + timeoutSeconds
                     + "s (last observed state: " + lastState.get() + ")");
-            assertEquals(KafkaStreams.State.RUNNING, lastState.get(),
-                "KafkaStreams should reach RUNNING state (last observed state: "
-                    + lastState.get() + ")");
+            assertTrue(reachedRunning.get(),
+                "KafkaStreams entered a shutdown state before reaching RUNNING (last observed "
+                    + "state: " + lastState.get() + ")");
             running = true;
             return streams;
         } finally {
@@ -270,6 +290,7 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     /** Produces one record per key/value pair and returns the captured GUIDs in produce order. */
     protected List<CapturedSchemaIds> produceAll(String topic, List<GenericRecord> keys,
         List<GenericRecord> values, long timestamp) throws Exception {
+        assertEquals(keys.size(), values.size(), "produceAll requires one value per key");
         List<CapturedSchemaIds> captured = new ArrayList<>();
         try (KafkaProducer<GenericRecord, GenericRecord> producer =
                  new KafkaProducer<>(createProducerProps())) {
@@ -324,6 +345,10 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
      * exactly the GUIDs {@code expected} captured when this record was produced (via
      * {@link #produce}/{@link #produceAll}). A {@code null} {@code expected} or a missing captured
      * GUID fails, rather than silently degrading to a format-only check.
+     *
+     * <p>This asserts a value-bearing record: both a key and a value GUID must have been captured.
+     * It is not applicable to tombstones -- a null-value record captures no value GUID (see
+     * {@link CapturedSchemaIds}) and would fail the value-header assertion here.
      */
     protected void assertSchemaIdHeaders(Headers headers, CapturedSchemaIds expected,
         String context) {
