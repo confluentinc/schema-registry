@@ -17,6 +17,7 @@
 package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -102,7 +103,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     // carries the same schema-id GUIDs. Capture them once when producing and assert that IQv2
     // results come back byte-equal to what was produced (see
     // HeadersIQv2IntegrationTestBase#assertSchemaIdHeaders).
-    private CapturedSchemaIds valueSchemaIds;
+    private CapturedSchemaIds producedSchemaIds;
 
     // ---------------------------------------------------------------------------------------------
     // TimestampedKeyWithHeadersQuery (point)
@@ -362,6 +363,31 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         }
     }
 
+    @Test
+    public void shouldReturnEmptyForRangeWithNoMatches() throws Exception {
+        String input = "iqv2-emptyrange-input";
+        String output = "iqv2-emptyrange-output";
+        String storeName = "iqv2-emptyrange-store";
+        String appId = "iqv2-emptyrange-test";
+
+        // Caching disabled: range header-queries bypass the cache and read the store directly.
+        KafkaStreams streams = startAndPopulate(
+            storeName, input, output, appId,
+            Arrays.asList("word-1", "word-2", "word-3"), Arrays.asList(10L, 20L, 30L),
+            false, null);
+        try {
+            // A lower bound past the last stored key selects nothing: the query must still succeed
+            // and return an empty iterator -- not fail, and not spuriously return the stored keys.
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> none = queryRange(
+                streams, storeName,
+                TimestampedRangeWithHeadersQuery.withLowerBound(createKey("word-9")), 0);
+            assertTrue(none.isEmpty(),
+                "range with a lower bound past the last key should return no records");
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Restore-from-changelog and multi-partition
     // ---------------------------------------------------------------------------------------------
@@ -393,7 +419,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             ReadOnlyRecord<GenericRecord, GenericRecord> word1 =
                 queryPointExpectPresent(restored, storeName, createKey("word-1"), false);
             assertEquals(10L, word1.value().get("count"), "restored word-1 value");
-            assertSchemaIdHeaders(word1.headers(), valueSchemaIds, "restored word-1");
+            assertSchemaIdHeaders(word1.headers(), producedSchemaIds, "restored word-1");
 
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> all = queryRange(
                 restored, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 3);
@@ -480,6 +506,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             query = query.skipCache();
         }
         long deadline = System.currentTimeMillis() + 30_000;
+        String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
             StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> result =
                 streams.query(StateQueryRequest.inStore(storeName).withQuery(query));
@@ -487,9 +514,13 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             if (pr != null && pr.isSuccess() && pr.getResult() != null) {
                 return pr.getResult();
             }
+            if (pr != null && pr.isFailure()) {
+                lastFailure = pr.getFailureReason() + ": " + pr.getFailureMessage();
+            }
             sleepQuietly(200);
         }
-        throw new AssertionError("IQv2 point query never returned a result for key " + key);
+        throw new AssertionError("IQv2 point query never returned a result for key " + key
+            + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
     }
 
     private void assertPointQuery(KafkaStreams streams, String storeName, String word,
@@ -499,7 +530,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         assertEquals(word, record.key().get("word").toString(), "IQv2 point key " + word);
         assertEquals(expectedCount, record.value().get("count"), "IQv2 point value " + word);
         assertTrue(record.timestamp() >= 0, "IQv2 point timestamp should be non-negative: " + word);
-        assertSchemaIdHeaders(record.headers(), valueSchemaIds,
+        assertSchemaIdHeaders(record.headers(), producedSchemaIds,
             "IQv2 point " + word + (skipCache ? " (skipCache)" : ""));
     }
 
@@ -513,8 +544,11 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> result =
             streams.query(StateQueryRequest.inStore(storeName)
                 .withQuery(TimestampedKeyWithHeadersQuery.withKey(createKey(word))));
+        Map<Integer, QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>>> partitionResults =
+            result.getPartitionResults();
+        assertFalse(partitionResults.isEmpty(), context + " query should return a partition result");
         QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> pr =
-            result.getPartitionResults().values().iterator().next();
+            partitionResults.values().iterator().next();
         assertTrue(pr.isSuccess(), context + " query should succeed");
         assertNull(pr.getResult(), context + " should yield a null result");
     }
@@ -538,6 +572,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         TimestampedRangeWithHeadersQuery<GenericRecord, GenericRecord> query, int expected) {
         long deadline = System.currentTimeMillis() + 30_000;
         List<ReadOnlyRecord<GenericRecord, GenericRecord>> out = new ArrayList<>();
+        String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
             out.clear();
             StateQueryResult<ReadOnlyRecordIterator<GenericRecord, GenericRecord>> result =
@@ -553,10 +588,13 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 if (out.size() >= expected) {
                     return out;
                 }
+            } else if (pr != null && pr.isFailure()) {
+                lastFailure = pr.getFailureReason() + ": " + pr.getFailureMessage();
             }
             sleepQuietly(200);
         }
-        assertEquals(expected, out.size(), "IQv2 range query returned an unexpected count");
+        assertEquals(expected, out.size(), "IQv2 range query returned an unexpected count"
+            + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
         return out;
     }
 
@@ -569,7 +607,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     private void assertHeadersOnEach(
         List<ReadOnlyRecord<GenericRecord, GenericRecord>> records, String context) {
         for (int i = 0; i < records.size(); i++) {
-            assertSchemaIdHeaders(records.get(i).headers(), valueSchemaIds, context + " entry " + i);
+            assertSchemaIdHeaders(records.get(i).headers(), producedSchemaIds, context + " entry " + i);
         }
     }
 
@@ -620,7 +658,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         try (KafkaProducer<GenericRecord, GenericRecord> producer =
                  new KafkaProducer<>(createProducerProps())) {
             for (int i = 0; i < words.size(); i++) {
-                valueSchemaIds = sendAndCapture(producer, new ProducerRecord<>(
+                producedSchemaIds = sendAndCapture(producer, new ProducerRecord<>(
                     topic, createKey(words.get(i)), createValue(counts.get(i), "PUT")));
             }
             producer.flush();
