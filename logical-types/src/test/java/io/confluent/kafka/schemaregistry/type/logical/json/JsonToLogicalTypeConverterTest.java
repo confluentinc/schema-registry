@@ -333,4 +333,38 @@ class JsonToLogicalTypeConverterTest {
     assertTrue(opt != null && opt.isNullable(),
         "referenced nullable object must remain nullable: " + lt.getNamedTypes());
   }
+
+  @Test
+  void anAnyOfOfObjectShapesInsideAnAllOfStillLosesItsProperties() {
+    // The same root cause with no conditional involved at all: `b` and `c` are both dropped. A merge
+    // gap rather than a condition -- the right fix is to collect the branch properties as nullable
+    // columns, not to reject the schema.
+    LogicalType type = convert("{\"allOf\":["
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"}}},"
+        + "{\"anyOf\":["
+        + "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}},"
+        + "{\"type\":\"object\",\"properties\":{\"c\":{\"type\":\"boolean\"}}}]}]}");
+    assertEquals("STRUCT(a BIGINT) NOT NULL", type.getRootSchema().toDdl());
+  }
+
+  @Test
+  void dependentRequiredIsStillAcceptedBecauseBothPropertiesKeepTheirColumns() {
+    LogicalType type = convert("{\"type\":\"object\",\"properties\":{"
+        + "\"a\":{\"type\":\"integer\"},\"b\":{\"type\":\"string\"}},"
+        + "\"dependentRequired\":{\"a\":[\"b\"]}}");
+    assertEquals("STRUCT(a BIGINT, b STRING) NOT NULL", type.getRootSchema().toDdl());
+  }
+
+  @Test
+  void anOrdinaryAllOfMergeStillWorks() {
+    // The guard sits inside allOf simplification, so this is the regression that matters most.
+    LogicalType type = convert("{\"allOf\":["
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"}}},"
+        + "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}}]}");
+    assertEquals("STRUCT(a BIGINT, b STRING) NOT NULL", type.getRootSchema().toDdl());
+  }
+
+  private static LogicalType convert(String jsonText) {
+    return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(jsonText));
+  }
 }
