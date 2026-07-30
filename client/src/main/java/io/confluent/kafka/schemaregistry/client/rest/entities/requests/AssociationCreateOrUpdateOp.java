@@ -143,24 +143,37 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
   }
 
   /**
-   * Applies defaults for association creation or upsert.
-   * For CREATE: schema implies frozen STRONG; frozen=false or WEAK with schema are rejected.
-   * For UPSERT: schema implies non-frozen STRONG; frozen and lifecycle are only defaulted if null.
+   * Applies defaults for an association that does not yet exist. Only call this while creating
+   * the association: an upsert that updates an existing one keeps that association's stored
+   * lifecycle and would be wrongly rejected here for carrying a schema.
+   *
+   * <p>For a create op a schema implies frozen STRONG, and frozen=false or WEAK alongside a
+   * schema are rejected. For an upsert op no schema is accepted at all, since a schema implies
+   * a topic-owned STRONG association and those can only be created together with the topic.
+   * Either way frozen and lifecycle are defaulted when null.
+   *
+   * <p>The matching check on an explicit STRONG lifecycle lives in the registry, which can
+   * exempt subjects in IMPORT mode.
+   *
+   * @param isCreate whether this is a create op rather than an upsert op
    */
   public void applyDefaults(boolean isCreate) {
+    if (!isCreate && getSchema() != null) {
+      throw new IllegalPropertyException(
+          "schema", "cannot be provided when adding an association to an existing topic; "
+              + "an association with a schema must be created with the topic");
+    }
     if (getSchema() != null) {
       if (getLifecycle() == LifecyclePolicy.WEAK) {
         throw new IllegalPropertyException(
             "lifecycle", "cannot be WEAK when schema is provided");
       }
-      if (getFrozen() != null && getFrozen() != isCreate) {
+      if (Boolean.FALSE.equals(getFrozen())) {
         throw new IllegalPropertyException(
-            "frozen", isCreate
-                ? "cannot be false when schema is provided for create"
-                : "cannot be true when creating via upsert; use create instead");
+            "frozen", "cannot be false when a schema is provided");
       }
       setLifecycle(LifecyclePolicy.STRONG);
-      setFrozen(isCreate);
+      setFrozen(true);
     } else {
       if (getFrozen() == null) {
         setFrozen(false);

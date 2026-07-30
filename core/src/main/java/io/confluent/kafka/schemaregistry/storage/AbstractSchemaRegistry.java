@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.ErrorMessage;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ExtendedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.OpType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
@@ -43,6 +44,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationBatchResponse;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateInfo;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationCreateOrUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationDeleteOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationGetRequest;
@@ -2035,7 +2037,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       String associationType = info.getAssociationType();
       if (infosByType.containsKey(associationType)) {
         throw new IllegalPropertyException(
-            "associationType", "Duplicate association type: " + associationType);
+            "associationType",
+            "may only appear once per request, but '" + associationType + "' appears more"
+                + " than once");
       }
       infosByType.put(associationType, info);
     }
@@ -2052,22 +2056,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       List<Association> fallback = getAssociationsByResourceName(
           request.getResourceName(), request.getResourceNamespace(),
           request.getResourceType(), new ArrayList<>(infosByType.keySet()), null);
-      // The fallback can return entries from multiple resourceIds sharing (name, namespace,
-      // type) — e.g. an orphan from a deleted topic alongside a live one. Keep the
-      // most-recently-updated entry per type so equivalence compares against the live one.
-      assocsByType = fallback.stream()
-          .collect(Collectors.toMap(Association::getAssociationType, a -> a,
-              (a, b) -> {
-                Long timestampA = a.getUpdateTimestamp();
-                Long timestampB = b.getUpdateTimestamp();
-                if (timestampA == null) {
-                  return b;
-                }
-                if (timestampB == null) {
-                  return a;
-                }
-                return timestampA >= timestampB ? a : b;
-              }));
+      // The fallback matches on (name, namespace, type) and so can span resourceIds. Narrow to
+      // a single resource, otherwise the equivalence, subject-change and frozen checks below
+      // could each be comparing against a different one.
+      assocsByType = mostRecentlyUpdatedResource(fallback).stream()
+          .collect(Collectors.toMap(Association::getAssociationType, a -> a));
     } else {
       // By-resourceId guarantees one row per associationType. Keep fail-fast on duplicates
       assocsByType = associations.stream()
@@ -2127,6 +2120,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
 
       if (association == null) {
+        // A STRONG association is owned by its topic and can only be created together with the
+        // topic, never by an upsert. Subjects in IMPORT mode are exempt, since cluster linking
+        // replicates associations that were already established on the source.
+        if (!isCreate && effectiveLifecycle == LifecyclePolicy.STRONG
+            && (qualifiedSubject == null || getModeInScope(qualifiedSubject) != Mode.IMPORT)) {
+          throw new IllegalPropertyException(
+              "lifecycle", "cannot be STRONG when creating an association; "
+                  + "STRONG associations must be created with the topic");
+        }
         if (Boolean.TRUE.equals(info.getFrozen()) && qualifiedSubject != null
             && getModeInScope(qualifiedSubject) != Mode.IMPORT) {
           if (isCreate && info.getSchema() == null) {
@@ -2193,12 +2195,25 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       }
     }
 
+    checkUniformLifecycle(request);
+
     for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
       String unqualifiedSubject = info.getSubject();
       QualifiedSubject qs = QualifiedSubject.createFromUnqualified(tenant(), unqualifiedSubject);
       String qualifiedSubject = qs.toQualifiedSubject();
       String associationType = info.getAssociationType();
       Association association = assocsByType.get(associationType);
+      // A subject in IMPORT mode is being replicated and its versions arrive on their own, so a
+      // schema passed alongside the association would be dropped rather than registered.
+      // Rejecting it here also keeps the check below honest: with no schema to register, the
+      // association is only accepted once the subject's versions have actually landed.
+      if (info.getSchema() != null && getModeInScope(qualifiedSubject) == Mode.IMPORT) {
+        log.debug("Rejecting schema for subject '{}' because it is in IMPORT mode",
+            qualifiedSubject);
+        throw new IllegalPropertyException(
+            "schema", "cannot be provided while subject '" + unqualifiedSubject
+                + "' is in IMPORT mode");
+      }
       if (info.getSchema() == null && getLatestVersion(qualifiedSubject) == null) {
         throw new NoActiveSubjectVersionExistsException(unqualifiedSubject);
       }
@@ -2299,6 +2314,90 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             .map(AssociationValue::toAssociationEntity)
             .collect(Collectors.toList()),
         registeredSchemas);
+  }
+
+  /**
+   * Keeps only the associations belonging to the most-recently-updated resource, so that
+   * entries from several resources sharing a name and namespace are never treated as one.
+   */
+  private static List<Association> mostRecentlyUpdatedResource(List<Association> associations) {
+    if (associations.isEmpty()) {
+      return associations;
+    }
+    // Timestamps alone do not order these: two resources can be written within the same
+    // millisecond, and the list arrives sorted by name/type, which would let the winner depend
+    // on association type. Fall through to the creation time and then the id so the choice is
+    // always defined.
+    Comparator<Association> byRecency = Comparator
+        .comparing(Association::getUpdateTimestamp, Comparator.nullsFirst(Long::compareTo))
+        .thenComparing(Association::getCreateTimestamp, Comparator.nullsFirst(Long::compareTo))
+        .thenComparing(Association::getResourceId, Comparator.nullsFirst(String::compareTo));
+    String resourceId = associations.stream()
+        .max(byRecency)
+        .map(Association::getResourceId)
+        .orElse(null);
+    return associations.stream()
+        .filter(a -> Objects.equals(a.getResourceId(), resourceId))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Rejects a request that would leave a resource holding more than one lifecycle: a topic is
+   * either topic-owned (STRONG) or shared (WEAK) across all of its association types.
+   *
+   * <p>Each type is judged by the lifecycle it would end up with — from the request where it
+   * supplies one, otherwise from the stored association — so converting every type at once is
+   * allowed, while converting only one of several is not.
+   */
+  private void checkUniformLifecycle(AssociationCreateOrUpdateRequest request)
+      throws SchemaRegistryException {
+    Map<String, LifecyclePolicy> lifecycleByType = currentLifecyclesByType(
+        request.getResourceId(), request.getResourceName(),
+        request.getResourceNamespace(), request.getResourceType());
+    for (AssociationCreateOrUpdateInfo info : request.getAssociations()) {
+      LifecyclePolicy lifecycle = info.getLifecycle() != null
+          ? info.getLifecycle()
+          : lifecycleByType.get(info.getAssociationType());
+      if (lifecycle != null) {
+        lifecycleByType.put(info.getAssociationType(), lifecycle);
+      }
+    }
+    if (new HashSet<>(lifecycleByType.values()).size() > 1) {
+      String detail = lifecycleByType.entrySet().stream()
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining(", "));
+      // The conflict can come from stored associations the caller never sent, so record which
+      // resource it was and what the combined state looked like.
+      log.warn("Rejecting association request for resource '{}' in namespace '{}': "
+              + "mixed lifecycles {}",
+          request.getResourceName(), request.getResourceNamespace(), detail);
+      throw new IllegalPropertyException(
+          "lifecycle", "all associations for a resource must have the same lifecycle, but got "
+              + detail);
+    }
+  }
+
+  /**
+   * Returns the stored lifecycle of every association type on a resource. At the validate phase
+   * the caller may not yet have a resourceId, so the resource is matched by (name, namespace)
+   * instead — narrowed to a single resource, since several can share a name and namespace.
+   */
+  private Map<String, LifecyclePolicy> currentLifecyclesByType(
+      String resourceId, String resourceName, String resourceNamespace, String resourceType)
+      throws SchemaRegistryException {
+    List<Association> existing;
+    if (resourceId != null) {
+      existing = getAssociationsByResourceId(
+          resourceId, resourceType, Collections.emptyList(), null);
+    } else {
+      existing = mostRecentlyUpdatedResource(getAssociationsByResourceName(
+          resourceName, resourceNamespace, resourceType, Collections.emptyList(), null));
+    }
+    Map<String, LifecyclePolicy> lifecycleByType = new LinkedHashMap<>();
+    for (Association association : existing) {
+      lifecycleByType.put(association.getAssociationType(), association.getLifecycle());
+    }
+    return lifecycleByType;
   }
 
   protected void checkDeleteAssociation(
@@ -2434,19 +2533,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       try {
         req.validate(dryRun);
         Map<String, Schema> schemas = new HashMap<>();
-        for (AssociationOp op : req.getAssociations()) {
-          switch (op.getType()) {
-            case CREATE:
-              AssociationResponse createResp = createAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op));
-              collectSchemas(createResp, schemas);
-              break;
-            case UPSERT:
-              AssociationResponse upsertResp = createOrUpdateAssociation(context, dryRun,
-                  new AssociationCreateOrUpdateRequest(req, op));
-              collectSchemas(upsertResp, schemas);
-              break;
-            case DELETE:
+        List<? extends AssociationOp> ops = req.getAssociations();
+        // A run of adjacent create-or-update ops is applied as one request rather than one at
+        // a time. Validation there sees every association type in the run at once, so a batch
+        // can convert them together, and nothing is written until all of them have passed.
+        int index = 0;
+        while (index < ops.size()) {
+          AssociationOp op = ops.get(index);
+          if (!(op instanceof AssociationCreateOrUpdateOp)) {
+            if (op instanceof AssociationDeleteOp) {
               AssociationDeleteOp deleteOp = (AssociationDeleteOp) op;
               deleteAssociations(
                   req.getResourceId(),
@@ -2454,10 +2549,28 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
                   Collections.singletonList(deleteOp.getAssociationType()),
                   Boolean.TRUE.equals(deleteOp.getCascadeLifecycle()), dryRun
               );
-              break;
-            default:
-              break;
+            }
+            index++;
+            continue;
           }
+          List<AssociationCreateOrUpdateOp> run = new ArrayList<>();
+          run.add((AssociationCreateOrUpdateOp) op);
+          int end = index + 1;
+          while (end < ops.size()
+              && ops.get(end).getType() == op.getType()
+              && ops.get(end) instanceof AssociationCreateOrUpdateOp) {
+            run.add((AssociationCreateOrUpdateOp) ops.get(end));
+            end++;
+          }
+          if (log.isDebugEnabled()) {
+            log.debug("Applying {} {} op(s) as one request for resource '{}'",
+                run.size(), op.getType(), req.getResourceName());
+          }
+          AssociationResponse response = createOrUpdateAssociation(context, dryRun,
+              new AssociationCreateOrUpdateRequest(req, run),
+              op.getType() == OpType.CREATE);
+          collectSchemas(response, schemas);
+          index = end;
         }
         List<Association> associations = null;
         if (!dryRun) {
