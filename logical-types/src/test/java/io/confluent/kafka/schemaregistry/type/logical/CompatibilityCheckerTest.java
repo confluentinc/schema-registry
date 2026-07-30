@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -107,10 +106,21 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void flinkModeIsNotImplementedYet() {
-    LogicalType schema = struct(required("id", Schema.create(Schema.Type.INT), 0));
-    assertThrows(UnsupportedOperationException.class,
-        () -> CompatibilityChecker.compare(Mode.FLINK, schema, schema));
+  void bothModesDisagreeWhereTheirTypeSystemsDo() {
+    // A MULTISET is a MAP to Iceberg but a distinct type to Flink, so the two modes reach opposite
+    // verdicts on the same pair. Pinned here because it is the clearest evidence the modes are not
+    // interchangeable.
+    LogicalType before =
+        struct(required("c", Schema.createMultiset(nonNull(Schema.createString())), 0));
+    LogicalType after = struct(required("c", Schema.createMap(
+        nonNull(Schema.createString()), nonNull(Schema.create(Schema.Type.INT))), 0));
+
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG, before, after).isCompatible());
+    assertEquals(
+        Collections.singletonList(Rule.TYPE_MISMATCH),
+        CompatibilityChecker.compare(Mode.FLINK, before, after).getIncompatibilities().stream()
+            .map(Incompatibility::getRule)
+            .collect(Collectors.toList()));
   }
 
   // ---------------------------------------------------------------------------------------------

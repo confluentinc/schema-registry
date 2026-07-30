@@ -20,14 +20,13 @@ import io.confluent.kafka.schemaregistry.type.logical.Incompatibility.Rule;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Checks whether one {@link LogicalType} can evolve into another for a given downstream consumer.
@@ -105,7 +104,10 @@ public final class CompatibilityChecker {
      */
     ICEBERG,
 
-    /** Flink SQL tables. Not yet implemented. */
+    /**
+     * Flink SQL tables. Compares the Flink logical types the two schemas derive to; see the class
+     * javadoc.
+     */
     FLINK
   }
 
@@ -131,7 +133,7 @@ public final class CompatibilityChecker {
       case ICEBERG:
         return new IcebergComparison(original, update).run();
       case FLINK:
-        throw new UnsupportedOperationException("Mode.FLINK is not implemented yet");
+        return new FlinkComparison(original, update).run();
       default:
         throw new IllegalArgumentException("Unknown mode: " + mode);
     }
@@ -273,6 +275,65 @@ public final class CompatibilityChecker {
     // -- structs ---------------------------------------------------------------------------------
 
     /**
+     * Mirrors the Iceberg-schema implementation's {@code validateStructs}, with two intentional
+     * departures: findings accumulate instead of throwing, and the nullability relaxation is folded
+     * in via {@link #isEffectivelyOptional} rather than applied as a pre-pass.
+     */
+    private void validateStructs(
+        List<FieldView> originalFields, List<FieldView> updateFields, String path) {
+
+      final Map<String, FieldView> originalFieldMap = originalFields.stream()
+          .collect(Collectors.toMap(field -> field.name, field -> field));
+
+      int lastSeenOriginalIndex = -1;
+      final List<String> originalFieldOrder = originalFields.stream()
+          .map(field -> field.name)
+          .collect(Collectors.toList());
+
+      final Set<String> updateFieldNames = updateFields.stream()
+          .map(field -> field.name)
+          .collect(Collectors.toSet());
+      for (FieldView updateField : updateFields) {
+        String fieldPath = childPath(path, updateField.name);
+        final FieldView originalField = originalFieldMap.get(updateField.name);
+
+        if (originalField == null) {
+          if (!isEffectivelyOptional(updateField, null)) {
+            add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
+                "added field is neither nullable nor defaulted; pre-existing rows have no value "
+                    + "for it and Iceberg v2 cannot store a column default");
+          }
+          // Do not descend into a field the original schema never had.
+          continue;
+        }
+
+        // Existing fields must keep their relative order. The position is advanced even when a
+        // violation is reported, so a single swap yields one finding rather than cascading.
+        final int originalIndex = originalFieldOrder.indexOf(updateField.name);
+        if (originalIndex < lastSeenOriginalIndex) {
+          add(Rule.FIELD_REORDERED, fieldPath,
+              "field moved ahead of a field that preceded it in the original schema");
+        }
+        lastSeenOriginalIndex = originalIndex;
+
+        if (isEffectivelyNullable(originalField)
+            && !isEffectivelyOptional(updateField, originalField)) {
+          add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
+              "field was nullable and is now non-nullable; pre-existing rows may hold nulls");
+        }
+
+        compareTypes(originalField.schema, updateField.schema, fieldPath);
+      }
+
+      for (FieldView originalField : originalFields) {
+        if (!updateFieldNames.contains(originalField.name)) {
+          add(Rule.FIELD_DELETED, childPath(path, originalField.name),
+              "field present in the original schema is missing from the update");
+        }
+      }
+    }
+
+    /**
      * Mirrors the Iceberg-schema implementation's {@code validateLists}.
      */
     private void validateLists(Schema original, Schema update, String path) {
@@ -289,69 +350,6 @@ public final class CompatibilityChecker {
                 + " to " + render(keyOf(update)));
       }
       compareTypes(valueOf(original), valueOf(update), path + "{}");
-    }
-
-    /**
-     * Mirrors the Iceberg-schema implementation's {@code validateStructs}, with two intentional
-      * departures: findings accumulate instead of throwing, and the nullability relaxation
-      * is folded in
-     * via {@link #isEffectivelyOptional} rather than applied as a pre-pass.
-     */
-    private void validateStructs(
-        List<FieldView> originalFields, List<FieldView> updateFields, String path) {
-
-      Map<String, FieldView> originalByName = new LinkedHashMap<>();
-      Map<String, Integer> originalPositions = new HashMap<>();
-      for (int i = 0; i < originalFields.size(); i++) {
-        FieldView field = originalFields.get(i);
-        originalByName.put(field.name, field);
-        originalPositions.put(field.name, i);
-      }
-
-      Set<String> updateNames = new HashSet<>();
-      for (FieldView field : updateFields) {
-        updateNames.add(field.name);
-      }
-
-      int lastSeenOriginalPosition = -1;
-      for (FieldView updateField : updateFields) {
-        String fieldPath = childPath(path, updateField.name);
-        FieldView originalField = originalByName.get(updateField.name);
-
-        if (originalField == null) {
-          if (!isEffectivelyOptional(updateField, null)) {
-            add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
-                "added field is neither nullable nor defaulted; pre-existing rows have no value "
-                    + "for it and Iceberg v2 cannot store a column default");
-          }
-          // Do not descend into a field the original schema never had.
-          continue;
-        }
-
-        // Existing fields must keep their relative order. The position is advanced even when a
-        // violation is reported, so a single swap yields one finding rather than cascading.
-        int originalPosition = originalPositions.get(updateField.name);
-        if (originalPosition < lastSeenOriginalPosition) {
-          add(Rule.FIELD_REORDERED, fieldPath,
-              "field moved ahead of a field that preceded it in the original schema");
-        }
-        lastSeenOriginalPosition = originalPosition;
-
-        if (isEffectivelyNullable(originalField)
-            && !isEffectivelyOptional(updateField, originalField)) {
-          add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
-              "field was nullable and is now non-nullable; pre-existing rows may hold nulls");
-        }
-
-        compareTypes(originalField.schema, updateField.schema, fieldPath);
-      }
-
-      for (FieldView originalField : originalFields) {
-        if (!updateNames.contains(originalField.name)) {
-          add(Rule.FIELD_DELETED, childPath(path, originalField.name),
-              "field present in the original schema is missing from the update");
-        }
-      }
     }
 
     // -- primitives ------------------------------------------------------------------------------
@@ -511,11 +509,16 @@ public final class CompatibilityChecker {
   // Iceberg type model
   // ---------------------------------------------------------------------------------------------
 
-  /** The structural shapes Iceberg models, after erasing the SRLT types that map onto them. */
+  /**
+   * The structural shapes a target type system models, after erasing the SRLT types that map onto
+   * them. {@code MULTISET} is only ever produced by Flink mode — Iceberg has no multiset and lowers
+   * one to a {@code MAP}.
+   */
   private enum Kind {
     STRUCT,
     LIST,
     MAP,
+    MULTISET,
     PRIMITIVE
   }
 
@@ -755,6 +758,465 @@ public final class CompatibilityChecker {
         return "ref(" + schema.getQualifiedName() + ")";
       default:
         return schema.getType().toString();
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // FLINK
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * One comparison run in Flink mode.
+   *
+   * <p>Structured to mirror {@link IcebergComparison} rather than share a base class with it. The
+   * traversal skeleton is similar, but the three rules that matter all differ — which fields count
+   * as optional, how leaves are compared, and whether a MULTISET is a MAP — and each class must
+   * stay independently readable against the specification it implements. Factoring out a common
+   * walk would couple them and make neither diffable against its own reference.
+   */
+  private static final class FlinkComparison {
+
+    private final Schema originalRoot;
+    private final Schema updateRoot;
+    private final Map<String, Schema> originalNamedTypes;
+    private final Map<String, Schema> updateNamedTypes;
+    private final List<Incompatibility> findings = new ArrayList<>();
+
+    /**
+     * See {@link IcebergComparison#comparedRefPairs}.
+     */
+    private final Set<String> comparedRefPairs = new HashSet<>();
+
+    /**
+     * See {@link IcebergComparison#comparedStructPairs}.
+     */
+    private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
+
+    FlinkComparison(LogicalType original, LogicalType update) {
+      this.originalRoot = original.getRootSchema();
+      this.updateRoot = update.getRootSchema();
+      this.originalNamedTypes = original.getNamedTypes();
+      this.updateNamedTypes = update.getNamedTypes();
+    }
+
+    CompatibilityResult run() {
+      compareTypes(originalRoot, updateRoot, "");
+      return CompatibilityResult.of(findings);
+    }
+
+    private void add(Rule rule, String path, String message) {
+      findings.add(new Incompatibility(rule, path, message));
+    }
+
+    private boolean claimStructPair(Schema original, Schema update) {
+      return comparedStructPairs
+          .computeIfAbsent(original, key -> Collections.newSetFromMap(new IdentityHashMap<>()))
+          .add(update);
+    }
+
+    // -- dispatch --------------------------------------------------------------------------------
+
+    private void compareTypes(Schema original, Schema update, String path) {
+      if (isRef(original) || isRef(update)) {
+        String pairKey = refKey(original) + ' ' + refKey(update);
+        if (!comparedRefPairs.add(pairKey)) {
+          return;
+        }
+        checkCompatibilityRecursive(
+            resolve(original, originalNamedTypes),
+            resolve(update, updateNamedTypes),
+            path);
+        return;
+      }
+      checkCompatibilityRecursive(original, update, path);
+    }
+
+    private void checkCompatibilityRecursive(Schema original, Schema update, String path) {
+      if (isRef(original) || isRef(update)) {
+        if (!isRef(original) || !isRef(update)
+            || !original.getQualifiedName().equals(update.getQualifiedName())) {
+          add(Rule.TYPE_MISMATCH, path, describeChange(original, update));
+        }
+        return;
+      }
+
+      Kind originalKind = flinkKindOf(original);
+      Kind updateKind = flinkKindOf(update);
+      if (originalKind != updateKind) {
+        add(Rule.TYPE_MISMATCH, path, describeChange(original, update));
+        return;
+      }
+
+      switch (originalKind) {
+        case STRUCT:
+          if (claimStructPair(original, update)) {
+            validateStructs(fieldViews(original), fieldViews(update), path);
+          }
+          break;
+        case LIST:
+          validateLists(original, update, path);
+          break;
+        case MULTISET:
+          validateMultisets(original, update, path);
+          break;
+        case MAP:
+          validateMaps(original, update, path);
+          break;
+        case PRIMITIVE:
+          validatePrimitives(original, update, path);
+          break;
+        default:
+          throw new IllegalStateException("Unhandled kind: " + originalKind);
+      }
+    }
+
+    // -- structs ---------------------------------------------------------------------------------
+
+    /**
+     * R1-R5 and R8. Deliberately the same shape as
+     * {@link IcebergComparison#validateStructs(List, List, String)}, differing only in the
+     * added-field predicate: Flink can represent a NOT NULL column that carries a default, so there
+     * is no container-only relaxation here — a default is enough on its own.
+     */
+    private void validateStructs(
+        List<FieldView> originalFields, List<FieldView> updateFields, String path) {
+
+      final Map<String, FieldView> originalFieldMap = originalFields.stream()
+          .collect(Collectors.toMap(field -> field.name, field -> field));
+
+      int lastSeenOriginalIndex = -1;
+      final List<String> originalFieldOrder = originalFields.stream()
+          .map(field -> field.name)
+          .collect(Collectors.toList());
+
+      final Set<String> updateFieldNames = updateFields.stream()
+          .map(field -> field.name)
+          .collect(Collectors.toSet());
+      for (FieldView updateField : updateFields) {
+        String fieldPath = childPath(path, updateField.name);
+        final FieldView originalField = originalFieldMap.get(updateField.name);
+
+        // R1: a new column must be readable for rows written before it existed.
+        if (originalField == null) {
+          if (!isNullableOrDefaulted(updateField)) {
+            add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
+                "added column is neither nullable nor defaulted, so rows written before it existed "
+                    + "have no value for it");
+          }
+          continue;
+        }
+
+        // R4: Flink columns are positional, so existing columns may not be resequenced.
+        final int originalIndex = originalFieldOrder.indexOf(updateField.name);
+        if (originalIndex < lastSeenOriginalIndex) {
+          add(Rule.FIELD_REORDERED, fieldPath,
+              "column moved ahead of a column that preceded it in the original schema");
+        }
+        lastSeenOriginalIndex = originalIndex;
+
+        // R5: tightening nullability would reject rows that already hold nulls.
+        if (isEffectivelyNullable(originalField) && !isEffectivelyNullable(updateField)) {
+          add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
+              "column was nullable and is now NOT NULL; pre-existing rows may hold nulls");
+        }
+
+        compareTypes(originalField.schema, updateField.schema, fieldPath);
+      }
+
+      // R2, and R3 by consequence: a rename is indistinguishable from a drop plus an add.
+      for (FieldView originalField : originalFields) {
+        if (!updateFieldNames.contains(originalField.name)) {
+          add(Rule.FIELD_DELETED, childPath(path, originalField.name),
+              "column present in the original schema is missing from the update");
+        }
+      }
+    }
+
+    /**
+     * R1's predicate. Unlike Iceberg mode there is no container restriction and no scalar
+     * exclusion: a Flink column may be NOT NULL and still carry a default, so any default suffices.
+     *
+     * <p>As in Iceberg mode the schema is the authoritative source of defaults — read from the
+     * field, never from a caller-supplied side table.
+     */
+    private static boolean isNullableOrDefaulted(FieldView field) {
+      return isEffectivelyNullable(field) || field.hasDefault;
+    }
+
+    /** R7 for ARRAY. */
+    private void validateLists(Schema original, Schema update, String path) {
+      compareTypes(elementOf(original), elementOf(update), path + "[]");
+    }
+
+    /** R7 for MULTISET, which Flink models as its own type rather than as a MAP. */
+    private void validateMultisets(Schema original, Schema update, String path) {
+      compareTypes(elementOf(original), elementOf(update), path + "[]");
+    }
+
+    /** R7 for MAP. The key type is frozen; only the value may widen. */
+    private void validateMaps(Schema original, Schema update, String path) {
+      if (!flinkTypesEqual(original.getKeyType(), update.getKeyType())) {
+        add(Rule.MAP_KEY_TYPE_MISMATCH, path,
+            "map key type changed from " + render(original.getKeyType())
+                + " to " + render(update.getKeyType()));
+      }
+      compareTypes(original.getValueType(), update.getValueType(), path + "{}");
+    }
+
+    private static boolean isEffectivelyNullable(FieldView field) {
+      return field.forcedNullable || field.schema.isNullable();
+    }
+
+    // -- primitives ------------------------------------------------------------------------------
+
+    /**
+     * R6. Two independent parts, both required.
+     *
+     * <p>Part A delegates the root relation to {@link FlinkLogicalTypeCasts}, so this checker's
+     * notion of a safe type change is Flink's own rather than a hand-picked one. Nullability is
+     * excluded because R5 already covers it at field level, and reporting it twice would be noise.
+     *
+     * <p>Part B applies the parameter guards that Part A structurally cannot: Flink's table is
+     * keyed by type root and never reads a length, precision, or scale, so on its own it would
+     * admit {@code VARCHAR(50) -> VARCHAR(10)}. That is a hole rather than a policy — see {@link
+     * FlinkLogicalTypeCasts}. <b>Do not remove these guards as redundant.</b>
+     */
+    private void validatePrimitives(Schema original, Schema update, String path) {
+      FlinkLogicalTypeCasts.Root originalRootType = flinkRootOf(original);
+      FlinkLogicalTypeCasts.Root updateRootType = flinkRootOf(update);
+
+      // Part A -- the root relation, straight from Flink's table.
+      if (!FlinkLogicalTypeCasts.supportsImplicitCast(originalRootType, updateRootType)) {
+        add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update));
+        return;
+      }
+
+      // Part B -- the parameters Flink's table does not look at.
+      ParamKind originalParams = paramKindOf(originalRootType);
+      ParamKind updateParams = paramKindOf(updateRootType);
+
+      if (originalParams == updateParams) {
+        switch (originalParams) {
+          case LENGTH:
+            if (flinkLengthOf(update) < flinkLengthOf(original)) {
+              add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
+                  + " (length may not shrink)");
+            }
+            return;
+          case PRECISION:
+            if (update.getPrecision() < original.getPrecision()) {
+              add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
+                  + " (precision may not shrink)");
+            }
+            return;
+          case PRECISION_AND_SCALE:
+            if (update.getScale() != original.getScale()
+                || update.getPrecision() < original.getPrecision()) {
+              add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
+                  + " (decimal scale must be unchanged and precision may not shrink)");
+            }
+            return;
+          default:
+            return;
+        }
+      }
+
+      // An integer widening into a DECIMAL must leave room for the integer's whole range.
+      if (updateParams == ParamKind.PRECISION_AND_SCALE) {
+        int digitsNeeded = decimalDigitsOf(originalRootType);
+        if (digitsNeeded > 0
+            && update.getPrecision() - update.getScale() < digitsNeeded) {
+          add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
+              + " (target cannot represent the full range of the source)");
+        }
+      }
+    }
+
+    /** Exact Flink-type equality, with no widening allowed. Used for map keys, which are frozen. */
+    private boolean flinkTypesEqual(Schema original, Schema update) {
+      Schema left = resolve(original, originalNamedTypes);
+      Schema right = resolve(update, updateNamedTypes);
+      if (isRef(left) || isRef(right)) {
+        return isRef(left) && isRef(right)
+            && left.getQualifiedName().equals(right.getQualifiedName());
+      }
+      Kind kind = flinkKindOf(left);
+      if (kind != flinkKindOf(right)) {
+        return false;
+      }
+      switch (kind) {
+        case STRUCT: {
+          List<FieldView> leftFields = fieldViews(left);
+          List<FieldView> rightFields = fieldViews(right);
+          if (leftFields.size() != rightFields.size()) {
+            return false;
+          }
+          for (int i = 0; i < leftFields.size(); i++) {
+            if (!leftFields.get(i).name.equals(rightFields.get(i).name)
+                || !flinkTypesEqual(leftFields.get(i).schema, rightFields.get(i).schema)) {
+              return false;
+            }
+          }
+          return true;
+        }
+        case LIST:
+        case MULTISET:
+          return flinkTypesEqual(elementOf(left), elementOf(right));
+        case MAP:
+          return flinkTypesEqual(left.getKeyType(), right.getKeyType())
+              && flinkTypesEqual(left.getValueType(), right.getValueType());
+        case PRIMITIVE: {
+          FlinkLogicalTypeCasts.Root leftRoot = flinkRootOf(left);
+          if (leftRoot != flinkRootOf(right)) {
+            return false;
+          }
+          switch (paramKindOf(leftRoot)) {
+            case LENGTH:
+              return flinkLengthOf(left) == flinkLengthOf(right);
+            case PRECISION:
+              return left.getPrecision() == right.getPrecision();
+            case PRECISION_AND_SCALE:
+              return left.getPrecision() == right.getPrecision()
+                  && left.getScale() == right.getScale();
+            default:
+              return true;
+          }
+        }
+        default:
+          return false;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Flink type model
+  // ---------------------------------------------------------------------------------------------
+
+  /** Which parameters a Flink type root carries, and therefore which guard applies to it. */
+  private enum ParamKind {
+    NONE,
+    LENGTH,
+    PRECISION,
+    PRECISION_AND_SCALE
+  }
+
+  /**
+   * The Flink shape of an SRLT type.
+   *
+   * <p>Differs from {@link #kindOf} in one respect that matters: Flink has a MULTISET type of its
+   * own, so a MULTISET and a MAP are different types here, where Iceberg lowers both to a map.
+   */
+  private static Kind flinkKindOf(Schema schema) {
+    switch (schema.getType()) {
+      case STRUCT:
+      case UNION:
+        return Kind.STRUCT;
+      case ARRAY:
+        return Kind.LIST;
+      case MULTISET:
+        return Kind.MULTISET;
+      case MAP:
+        return Kind.MAP;
+      default:
+        return Kind.PRIMITIVE;
+    }
+  }
+
+  /**
+   * Maps an SRLT primitive onto the Flink type root it derives to.
+   *
+   * <p>Only one erasure applies: Flink has no enum type, so an ENUM derives to an unbounded
+   * VARCHAR. Adding or removing enum symbols therefore does not change the Flink type. Everything
+   * else keeps its identity and its parameters, which is the whole reason this mode exists
+   * alongside Iceberg's.
+   */
+  private static FlinkLogicalTypeCasts.Root flinkRootOf(Schema schema) {
+    switch (schema.getType()) {
+      case BOOLEAN:
+        return FlinkLogicalTypeCasts.Root.BOOLEAN;
+      case TINYINT:
+        return FlinkLogicalTypeCasts.Root.TINYINT;
+      case SMALLINT:
+        return FlinkLogicalTypeCasts.Root.SMALLINT;
+      case INT:
+        return FlinkLogicalTypeCasts.Root.INTEGER;
+      case BIGINT:
+        return FlinkLogicalTypeCasts.Root.BIGINT;
+      case FLOAT:
+        return FlinkLogicalTypeCasts.Root.FLOAT;
+      case DOUBLE:
+        return FlinkLogicalTypeCasts.Root.DOUBLE;
+      case DECIMAL:
+        return FlinkLogicalTypeCasts.Root.DECIMAL;
+      case CHAR:
+        return FlinkLogicalTypeCasts.Root.CHAR;
+      case VARCHAR:
+      case ENUM:
+        return FlinkLogicalTypeCasts.Root.VARCHAR;
+      case BINARY:
+        return FlinkLogicalTypeCasts.Root.BINARY;
+      case VARBINARY:
+        return FlinkLogicalTypeCasts.Root.VARBINARY;
+      case DATE:
+        return FlinkLogicalTypeCasts.Root.DATE;
+      case TIME:
+        return FlinkLogicalTypeCasts.Root.TIME;
+      case TIMESTAMP:
+        return FlinkLogicalTypeCasts.Root.TIMESTAMP;
+      case TIMESTAMP_LTZ:
+        return FlinkLogicalTypeCasts.Root.TIMESTAMP_LTZ;
+      case VARIANT:
+        return FlinkLogicalTypeCasts.Root.VARIANT;
+      default:
+        throw new IllegalStateException("Not a Flink primitive: " + schema.getType());
+    }
+  }
+
+  /**
+   * The length of the Flink type an SRLT schema derives to.
+   *
+   * <p>Needed because the derivation is not always length-preserving: an ENUM derives to an
+   * unbounded VARCHAR and carries no length of its own, so asking the SRLT schema directly throws.
+   */
+  private static int flinkLengthOf(Schema schema) {
+    return schema.getType() == Schema.Type.ENUM ? Schema.MAX_LENGTH : schema.getLength();
+  }
+
+  private static ParamKind paramKindOf(FlinkLogicalTypeCasts.Root root) {
+    switch (root) {
+      case CHAR:
+      case VARCHAR:
+      case BINARY:
+      case VARBINARY:
+        return ParamKind.LENGTH;
+      case TIME:
+      case TIMESTAMP:
+      case TIMESTAMP_LTZ:
+        return ParamKind.PRECISION;
+      case DECIMAL:
+        return ParamKind.PRECISION_AND_SCALE;
+      default:
+        return ParamKind.NONE;
+    }
+  }
+
+  /**
+   * Decimal digits needed to hold every value of an integer root, or {@code 0} if the root is not
+   * an integer. Used to check that an integer widening into a DECIMAL leaves room for its whole
+   * range.
+   */
+  private static int decimalDigitsOf(FlinkLogicalTypeCasts.Root root) {
+    switch (root) {
+      case TINYINT:
+        return 3;
+      case SMALLINT:
+        return 5;
+      case INTEGER:
+        return 10;
+      case BIGINT:
+        return 19;
+      default:
+        return 0;
     }
   }
 }
