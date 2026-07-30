@@ -29,10 +29,8 @@ import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
-import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
-import org.everit.json.schema.FalseSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
@@ -486,33 +484,9 @@ public class JsonToLogicalTypeConverter {
       return convertWithCycleDetection(
           refSchema.getReferredSchema(), isNullable, ctx, indexPath);
     } else {
-      throw new ValidationException(describeUnsupported(schema));
+      throw new ValidationException(
+          "Unsupported JSON schema type " + schema.getClass().getName());
     }
-  }
-
-  /**
-   * A user-facing message for a JSON Schema construct that has no SRLT equivalent.
-   *
-   * <p>Named explicitly rather than by class, because the class name is an implementation detail of
-   * the parser: {@code "Unsupported JSON schema type org.everit.json.schema.ConstSchema"} tells the
-   * author of a schema nothing about what to change. The unknown case still falls back to a class
-   * name, but the simple one — a leaked package path helps nobody either way.
-   */
-  private static String describeUnsupported(final org.everit.json.schema.Schema schema) {
-    if (schema instanceof ConstSchema) {
-      return "JSON Schema `const` is not supported: a single permitted value has no type to "
-          + "derive. Use `enum` with one value, or the plain type if the constant is documentation "
-          + "rather than a constraint";
-    }
-    if (schema instanceof NullSchema) {
-      return "The JSON Schema `null` type is not supported on its own: it describes a value that "
-          + "is always null, which has no column type. Combine it with a real type to make that "
-          + "type nullable instead";
-    }
-    if (schema instanceof FalseSchema) {
-      return "A JSON Schema of `false` is not supported: it permits no value at all";
-    }
-    return "Unsupported JSON Schema construct: " + schema.getClass().getSimpleName();
   }
 
   private static Schema convertNumberSchema(
