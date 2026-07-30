@@ -17,6 +17,9 @@
 package io.confluent.kafka.schemaregistry.type.logical.check;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -174,12 +177,21 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void jsonConstraintAdditions() {
-    // Allowed. Constraint keywords do not reach the logical type, so the derived columns are
-    // unchanged. Ignoring them is the intended handling.
-    LogicalType before = json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
-    LogicalType after = json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}},"
-        + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}");
-    assertAllowedByBoth(before, after);
+    // No longer reaches either checker: the converter now rejects if/then/else outright, because a
+    // property required only by a conditional branch gets no column and its values would be
+    // silently dropped. Caught one layer earlier than a comparison, and so caught on a first
+    // registration too.
+    assertThatThrownBy(() -> json("{\"type\":\"object\",\"properties\":{"
+        + "\"a\":{\"type\":\"string\"}},"
+        + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("if/then/else");
+
+    // Value-level constraints carry no such cost and are still ignored, as intended.
+    assertAllowedByBoth(
+        json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}"),
+        json("{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"type\":\"string\",\"minLength\":3,\"pattern\":\"^x\"}}}"));
   }
 
   @Test

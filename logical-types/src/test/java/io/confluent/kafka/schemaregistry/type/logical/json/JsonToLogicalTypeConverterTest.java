@@ -16,9 +16,12 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.json;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
@@ -332,5 +335,66 @@ class JsonToLogicalTypeConverterTest {
     Schema opt = lt.getNamedTypes().get("opt");
     assertTrue(opt != null && opt.isNullable(),
         "referenced nullable object must remain nullable: " + lt.getNamedTypes());
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  // Conditional constructs -- rejected rather than silently dropped
+  // -----------------------------------------------------------------------------------------------
+
+  @Test
+  void ifThenElseIsRejectedRatherThanDroppingTheConditionalBranchesProperties() {
+    // everit parses this as allOf[ObjectSchema, ConditionalSchema]. Before the guard, the
+    // ConditionalSchema fell through simplifyAllOfSchema's type chain and was discarded, yielding
+    // STRUCT(a BIGINT) -- so `b`, required only when a == 1, had no column and every record
+    // carrying it lost that value with no error anywhere.
+    assertThatThrownBy(() -> convert("{\"type\":\"object\","
+        + "\"properties\":{\"a\":{\"type\":\"integer\"}},"
+        + "\"if\":{\"properties\":{\"a\":{\"const\":1}}},"
+        + "\"then\":{\"required\":[\"b\"],\"properties\":{\"b\":{\"type\":\"string\"}}}}"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("if/then/else");
+  }
+
+  @Test
+  void ifThenElseIsRejectedEvenWhenTheBranchesDeclareNoNewProperties() {
+    // Uniform rejection. Working out whether a given conditional actually adds a property would
+    // make the guard depend on the branch contents, and a later edit to those branches would then
+    // silently change whether the schema converts.
+    assertThatThrownBy(() -> convert("{\"type\":\"object\","
+        + "\"properties\":{\"a\":{\"type\":\"integer\"}},"
+        + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("if/then/else");
+  }
+
+  @Test
+  void notIsStillAcceptedBecauseItCostsNoColumn() {
+    // Deliberately out of scope: `not` discards a constraint but every declared property keeps its
+    // column, so no value is lost. Rejecting it would break schemas that work today.
+    LogicalType type = convert("{\"type\":\"object\","
+        + "\"properties\":{\"a\":{\"type\":\"integer\"}},"
+        + "\"not\":{\"required\":[\"a\"]}}");
+    assertEquals("STRUCT(a BIGINT) NOT NULL", type.getRootSchema().toDdl());
+  }
+
+  @Test
+  void dependentRequiredIsStillAcceptedBecauseBothPropertiesKeepTheirColumns() {
+    LogicalType type = convert("{\"type\":\"object\",\"properties\":{"
+        + "\"a\":{\"type\":\"integer\"},\"b\":{\"type\":\"string\"}},"
+        + "\"dependentRequired\":{\"a\":[\"b\"]}}");
+    assertEquals("STRUCT(a BIGINT, b STRING) NOT NULL", type.getRootSchema().toDdl());
+  }
+
+  @Test
+  void anOrdinaryAllOfMergeStillWorks() {
+    // The guard sits inside allOf simplification, so this is the regression that matters most.
+    LogicalType type = convert("{\"allOf\":["
+        + "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"}}},"
+        + "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"}}}]}");
+    assertEquals("STRUCT(a BIGINT, b STRING) NOT NULL", type.getRootSchema().toDdl());
+  }
+
+  private static LogicalType convert(String jsonText) {
+    return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(jsonText));
   }
 }

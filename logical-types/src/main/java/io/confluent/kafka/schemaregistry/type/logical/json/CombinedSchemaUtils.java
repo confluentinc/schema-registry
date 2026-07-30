@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.CombinedSchema;
+import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.NumberSchema;
@@ -65,6 +66,20 @@ public class CombinedSchemaUtils {
         stringSchema = (StringSchema) subSchema;
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
+      } else if (subSchema instanceof ConditionalSchema) {
+        // Rejected rather than dropped. A JSON Schema writing `if`/`then`/`else` alongside its
+        // properties is parsed by everit as an allOf of [ObjectSchema, ConditionalSchema], and the
+        // branches of the conditional declare properties that the ObjectSchema does not. Falling
+        // through this chain would discard the ConditionalSchema and return a struct built from the
+        // ObjectSchema alone -- so a conditionally-required property gets no column at all, and
+        // every record carrying it silently loses that value.
+        //
+        // Deliberately scoped to the conditional. NotSchema and property dependencies are also
+        // dropped here, but neither costs a column: they weaken a constraint rather than destroying
+        // data, and rejecting them would break schemas that work today.
+        throw new ValidationException(
+            "JSON Schema if/then/else is not supported: a property required only by a conditional "
+                + "branch has no column to be read into, so its values would be silently dropped");
       }
       collectPropertySchemas(subSchema, properties, required,
           Collections.newSetFromMap(new IdentityHashMap<>()));
