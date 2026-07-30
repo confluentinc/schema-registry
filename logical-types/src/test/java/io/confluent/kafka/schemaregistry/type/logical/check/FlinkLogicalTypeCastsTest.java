@@ -87,7 +87,7 @@ class FlinkLogicalTypeCastsTest {
     return nullable(Schema.create(Schema.Type.BOOLEAN));
   }
 
-  /** Flink's {@code new Varthe engine's fixed-length character type(Integer.MAX_VALUE)}. */
+  /** The engine's variable-length character type at its maximum length. */
   private static Schema varCharMaxType() {
     return nullable(Schema.createString());
   }
