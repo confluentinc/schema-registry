@@ -34,124 +34,66 @@ import java.util.Set;
 
 /**
  * Checks whether a single {@link LogicalType} can be used by a given downstream consumer at all.
+ * {@link LogicalTypeChecker} is the entry point; this class holds the rules. All violations are
+ * collected; see {@link ValidityResult}.
  *
- * <p>{@link LogicalTypeChecker} is the entry point; this class holds the rules.
- *
- * <p>The companion to {@link CompatibilityChecker}, and the answer to a different question. A
- * compatibility check needs two schemas, so it has nothing to say about the <em>first</em> schema
- * registered on a subject — that one is compared against nothing and passes unconditionally. This
- * checker takes one schema and asks whether the consumer can consume it, which applies equally to a
- * first registration and to every later one. All violations are collected; see
- * {@link ValidityResult}.
- *
- * <p><b>Both checks are needed; neither subsumes the other.</b> A caller registering a schema
- * should validate the proposed schema and, when a previous version exists, also compare the pair.
- * Two rules used to live in {@link CompatibilityChecker} and now live only here — decimal precision
+ * <p>The companion to {@link CompatibilityChecker}, which needs two schemas and so says nothing
+ * about the first registered on a subject. Two rules live here rather than there — decimal
+ * precision
  * above {@value #MAX_DECIMAL_PRECISION}, and sub-microsecond timestamps under
  * {@link Mode#ICEBERG_V2} — precisely because a first registration escaped them.
  *
- * <h2>Structure</h2>
+ * <h2>Every rule must clear the constructibility bar</h2>
  *
- * <p>Unlike {@link CompatibilityChecker}, which keeps a separate comparison class per consumer,
- * this is a single walk with a handful of mode-conditional branches. That is a deliberate
- * difference and not an inconsistency: the compatibility rules genuinely diverge between consumers,
- * whereas almost every validity rule here is shared. Only two are mode-specific, both about what
- * Iceberg v2 can store.
+ * <p>{@link Schema} validates a good deal in its own constructors, and anything it rejects can
+ * never reach this checker, so a rule for it would be dead code and untestable. It already
+ * guarantees fractional-second precision in 0..9, non-blank field and branch names, and no
+ * duplicate names within a struct, union or enum — so none of those is a rule here.
  *
- * <h2>Relationship to the validator on the Iceberg materialization path</h2>
+ * <p><b>Determine that empirically, not by reading.</b> The {@code create*} factory bodies contain
+ * no validation — it lives in the constructors they delegate to — so a survey of the factories
+ * concludes, wrongly, that SRLT validates nothing. One related trap: {@link Schema#NO_PARAM} is
+ * {@code -1}, the "unspecified" sentinel rather than invalid input, so a naive "reject negative"
+ * rule fires on legitimate schemas.
  *
- * <p>An equivalent single-schema validator is maintained elsewhere, and {@link
- * Walk#checkInvalidTypeRecursive} keeps its walk shape and its name. The correspondence is much
- * looser than the one {@link CompatibilityChecker} maintains with its references, for a structural
- * reason: that validator inspects a Flink type that has <em>already</em> been converted, and holds
- * only two rules. This one inspects SRLT, before conversion, and holds seven. So it is a superset
- * rather than a port, and only one rule is shared.
- *
- * <ul>
- *   <li><b>Empty row → {@link Rule#EMPTY_STRUCT}.</b> The shared rule, same verdict.
- *   <li><b>MULTISET is rejected there, accepted here.</b> A deliberate divergence — see below.
- *   <li><b>Everything else here has no counterpart.</b> Parameter ranges, cycles and unresolved
- *       named-type references are invisible once a schema has been converted to a Flink type: the
- *       conversion would already have failed, or erased the distinction.
- * </ul>
- *
- * <p><b>Map paths differ, deliberately.</b> That validator writes a map key as {@code [key]} and a
- * value as {@code [value]}; the Iceberg-schema <em>comparison</em> it ships alongside writes a
- * value as <code>{}</code>. The two references disagree with each other, so matching both is
- * impossible. This checker follows the comparison, so a caller running
- * {@link LogicalTypeChecker#compare} and {@link LogicalTypeChecker#validate} over one schema gets
- * one path syntax rather than two.
- *
- * <h2>What is checked, and why the list is short</h2>
- *
- * <p>Every rule here has to clear one bar: the schema must be <em>constructible</em>. {@link
- * Schema} validates a good deal in its own constructors, and anything it rejects can never reach
- * this checker, so re-checking it would be dead code. Specifically, it already guarantees that
- * fractional-second precision on TIME and the timestamps lies in 0 to 9, that no field or union
- * branch name is empty or contains whitespace, and that no two fields of a struct — or two branches
- * of a union — share a name. None of those is a rule here, and adding one would be untestable.
- *
- * <p>What it does <em>not</em> validate, and so is checked here:
- *
- * <ul>
- *   <li>decimal precision and scale, which are entirely unchecked — Avro caps precision only at
- *       what the underlying {@code fixed} can hold, well above {@value #MAX_DECIMAL_PRECISION};
- *   <li>character- and binary-string length, where a zero is accepted by SRLT but rejected by
- *       Flink's the engine's fixed-length character type and the engine's fixed-length binary type;
- *   <li>a struct or union with no fields, which SRLT builds happily and which derives to a row type
- *       with no columns;
- *   <li>a named type that refers to itself, or one that resolves to nothing — neither Flink nor
- *       Iceberg has a recursive type, so a cycle cannot be inlined at all.
- * </ul>
- *
- * <p>Only the last group is structural; the rest are parameter ranges taken from the constructors
- * of the corresponding Flink types. Two further rules are mode-specific, both about what Iceberg v2
- * can store: sub-microsecond timestamps and VARIANT both need format-version 3.
- *
- * <h2>Reachability of named types</h2>
- *
- * <p>Only named types reachable from the root are walked, and each is walked once. An unreferenced
- * named type is never inlined by the conversion to a Flink type, so its contents cannot break a
- * consumer; and walking a shared named type once reports its problems at the first path that
- * reaches it rather than at every path that does.
+ * <p>Three rules are mode-specific: {@link Rule#EMPTY_STRUCT} and
+ * {@link Rule#FIELD_NAME_CASE_COLLISION} apply to the Iceberg modes only, and
+ * {@link Rule#UNREPRESENTABLE_TYPE} to {@code ICEBERG_V2} only.
  *
  * <h2>What is deliberately not a rule</h2>
  *
- * <p>MULTISET is accepted. Iceberg's own the Iceberg type mapping maps it to {@code map<T, int>},
- * so it is representable; a rejection elsewhere in the stack is policy rather than a limit of the
- * type system.
+ * <p>Each of these was considered and rejected on the merits. Do not add one without defeating the
+ * argument.
  *
- * <p>A TIME with precision above 3 is accepted. The conversion to a Flink type maps it to BIGINT
- * rather than failing, because Flink carries TIME as an int millis-of-day — a silent retyping, but
- * not an error, and not this checker's to invent.
- *
- * <p>A DECIMAL whose scale is {@link Schema#NO_PARAM} is accepted. That is SRLT's encoding of a
- * scale the author omitted, and {@code DECIMAL(p)} means {@code DECIMAL(p, 0)} in SQL, so the
- * schema is legitimate and rejecting it would reject valid DDL.
- *
- * <p>Field names differing only in case are accepted under {@link Mode#FLINK}. Flink's
- * a row type duplicate check is case-sensitive, so they are two ordinary distinct columns. It
- * is only Iceberg's case-insensitive name index that cannot tell them apart.
- *
- * <p>An ENUM with no symbols is accepted: it derives to an unbounded VARCHAR, which no consumer
- * objects to. A non-struct root is accepted: whether a table may have a scalar at its root is a
- * question about tables, not about types.
+ * <ul>
+ *   <li><b>MULTISET</b> — Iceberg's own type mapping maps it to {@code map<T, int>}, so it is
+ * representable; a rejection elsewhere in the stack is policy, not a limit of the type system.
+ * <li><b>{@code TIME(p > 3)}</b> — the conversion to a Flink type retypes it to BIGINT rather than
+ * failing. Lossy, but deliberate, and not this checker's to override.
+ *   <li><b>A DECIMAL with {@link Schema#NO_PARAM} scale</b> — SRLT's encoding of an omitted scale.
+ *       {@code DECIMAL(p)} means {@code DECIMAL(p, 0)} in SQL, so rejecting it would reject valid
+ *       DDL.
+ *   <li><b>An ENUM with no symbols</b> — derives to an unbounded VARCHAR, which no consumer objects
+ *       to.
+ * <li><b>A non-struct root</b> — whether a table may have a scalar at its root is a question about
+ * tables, not types.
+ * </ul>
  */
 final class ValidityChecker {
 
   /**
-   * Lowest decimal precision Flink's the engine's decimal type permits.
+   * Lowest decimal precision the engine's decimal type permits.
    */
   private static final int MIN_DECIMAL_PRECISION = 1;
 
   /**
-   * Highest decimal precision. Flink's the engine's decimal type and Iceberg's {@code decimal}
+   * Highest decimal precision. The engine's decimal type and Iceberg's {@code decimal}
    * agree on this bound, and Iceberg's holds in every format version.
    */
   private static final int MAX_DECIMAL_PRECISION = 38;
 
   /**
-   * Lowest length Flink's the engine's fixed-length character type and the engine's fixed-length
+   * Lowest length the engine's fixed-length character and binary types
    * binary type permit. The unbounded variants additionally accept zero; see {@link
    * #validateLength}.
    */
@@ -189,8 +131,11 @@ final class ValidityChecker {
 
     /**
      * Named types whose body has already been walked. Serves two purposes: it terminates the walk
-     * on a cyclic schema, and it keeps a named type used by several fields from being reported
-     * once per use.
+     * on a cyclic schema, and it keeps a named type used by several fields from being reported once
+     * per use — problems surface at the first path that reaches it, not at every path that does.
+     *
+     * <p>Only types reachable from the root are walked at all. An unreferenced named type is never
+     * inlined by the conversion to a Flink type, so its contents cannot break a consumer.
      */
     private final Set<String> walkedNamedTypes = new HashSet<>();
 
@@ -209,8 +154,14 @@ final class ValidityChecker {
      * Mirrors the walk in the equivalent validator on the Iceberg materialization path, which is
      * also named {@code checkInvalidTypeRecursive}: the empty-row check fires before descending,
      * fields compose a dot-joined path, an array appends its element marker, and a map descends
-     * into key and value. Kept in that shape so the two can be diffed, with the departures noted
-     * in the class javadoc.
+     * into key and value. Kept in that shape so the two can be diffed.
+     *
+     * <p>Two departures. That validator holds only two type-level rules and inspects an
+     * already-converted Flink type, so most rules here have no counterpart at all. And its map
+     * paths read {@code [key]} / {@code [value]} where these read <code>{key}</code> /
+     * <code>{}</code> — the two references disagree with each other, so this follows the
+     * Iceberg-schema comparison, giving a caller one path syntax across both checks rather than
+     * two.
      */
 
     private void checkInvalidTypeRecursive(Schema schema, String path) {
@@ -363,7 +314,7 @@ final class ValidityChecker {
      * <p>Iceberg indexes a schema's field names case-insensitively — it keeps a lazily built
      * lower-case name-to-id map and exposes {@code caseInsensitiveFindField} and
      * {@code caseInsensitiveSelect} over it — so two names that differ only in case collide in that
-     * index. Flink has no such index: its a row type duplicate check is case-sensitive, so
+     * index. Flink has no such index: its row-type duplicate check is case-sensitive, so
      * {@code a} and {@code A} are two ordinary distinct columns and nothing is wrong with them.
      * Hence Iceberg modes only.
      *

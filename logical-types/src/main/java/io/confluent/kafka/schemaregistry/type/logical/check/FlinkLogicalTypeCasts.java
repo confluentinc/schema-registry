@@ -26,10 +26,9 @@ import java.util.Set;
 /**
  * Apache Flink's implicit type-widening rules, ported.
  *
- * <p>This is a transcription of its implicit-cast table in Flink's
- * {@code the engine's implicit-cast table}. Depending on
- * {@code flink-table-common} directly is not an option here — it would impose the whole Flink table
- * stack on every consumer of this module — so the table is mirrored instead.
+ * <p>A transcription of the implicit-cast table Flink maintains for its own planner. Depending on
+ * the Flink table stack directly is not an option here — it would impose that whole dependency on
+ * every consumer of this module — so the table is mirrored instead.
  *
  * <p><b>Keep this in sync with the Flink original.</b> The enum names, the builder API, and the
  * order in which rules are declared all deliberately match it, so {@link #IMPLICIT_CASTING_RULES}'s

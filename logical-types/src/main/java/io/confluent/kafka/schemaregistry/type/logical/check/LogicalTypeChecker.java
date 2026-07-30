@@ -21,22 +21,15 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 /**
  * Entry point for checking a {@link LogicalType} against a downstream consumer's rules.
  *
- * <p>Two questions, deliberately kept apart:
+ * <p>{@link #validate} takes <b>one</b> schema and asks whether the consumer can use it at all.
+ * {@link #compare} takes <b>two</b> and asks whether the change between them is safe. The rules
+ * live in {@link ValidityChecker} and {@link CompatibilityChecker} respectively; read those for the
+ * rules, call this for the API.
  *
- * <ul>
- *   <li>{@link #validate} takes <b>one</b> schema and asks whether the consumer can use it at all —
- *       is the decimal precision within range, is the struct non-empty, does a named type refer to
- *       itself. Applies to a first registration and to every later one.
- *   <li>{@link #compare} takes <b>two</b> and asks whether the change between them is safe — was a
- *       field dropped, reordered, tightened to non-null, or retyped in a way the consumer
- *       forbids.
- * </ul>
- *
- * <p><b>A caller registering a schema needs both.</b> Neither subsumes the other, and the gap is
- * not hypothetical: a schema whose decimal precision exceeds what the consumer supports is unusable
- * whether or not it changed, so a pairwise check alone lets it through on the subject's first
- * registration and on any later one that leaves the offending column untouched. The intended shape
- * is:
+ * <p><b>A caller registering a schema needs both.</b> Neither subsumes the other: a schema whose
+ * decimal precision exceeds what the consumer supports is unusable whether or not it changed, so a
+ * pairwise check alone lets it through on a first registration and on any later one that leaves the
+ * offending column untouched.
  *
  * <pre>{@code
  * ValidityResult validity = LogicalTypeChecker.validate(mode, update);
@@ -48,19 +41,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
  * }
  * }</pre>
  *
- * <p>Both results collect every finding rather than stopping at the first, so one pass yields the
- * complete set of problems.
- *
- * <p>Note also that {@code io.confluent.kafka.schemaregistry.CompatibilityChecker} — the
- * format-level check this one is layered with — shares a simple name with {@link
- * CompatibilityChecker} here. A caller running both would have to fully qualify one of them; going
- * through this class avoids the collision entirely.
- *
- * <p>This class is a thin façade. The rules live in {@link CompatibilityChecker} and
- * {@link ValidityChecker}, which stay separate for a reason: the compatibility rules are maintained
- * against two external reference implementations and are structured to be diffed against them
- * line by line, and folding them together would destroy that. Read those classes for the rules;
- * call this one.
+ * <p>Both results collect every finding rather than stopping at the first.
  */
 public final class LogicalTypeChecker {
 

@@ -53,7 +53,7 @@ class ValidityCheckerTest {
 
   @Test
   void decimalPrecisionAboveThirtyEightIsRejectedByEveryConsumer() {
-    // The bound Flink's the engine's decimal type and Iceberg's decimal agree on. Avro caps precision only at
+    // The bound both the engine's decimal type and Iceberg's decimal agree on. Avro caps precision at
     // what the underlying fixed can hold, so 40 really does arrive from registered schemas.
     for (Mode mode : Mode.values()) {
       assertThat(rulesOf(mode, col(Schema.createDecimal(40, 2))))
@@ -165,7 +165,7 @@ class ValidityCheckerTest {
 
   @Test
   void multisetIsAcceptedByEveryConsumer() {
-    // Iceberg's own the Iceberg type mapping maps a multiset to map<T, int>, so it is representable. A
+    // Iceberg's own type mapping maps a multiset to map<T, int>, so it is representable. A
     // rejection elsewhere in the stack is policy, not a limit of the type system.
     LogicalType multiset = col(Schema.createMultiset(nonNull(Schema.createString())));
     for (Mode mode : Mode.values()) {

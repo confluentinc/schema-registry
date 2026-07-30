@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  * here rather than kept separate: the container-nullability relaxation (in
  * {@code isEffectivelyOptional}), Iceberg's promotion table from
  * {@code TypeUtil#isPromotionAllowed} (in {@code validatePrimitives}), and the Flink-to-Iceberg
- * type mapping from Iceberg's own the Iceberg type mapping (in {@link #icebergClassOf}).
+ * type mapping Iceberg itself applies (in {@link #icebergClassOf}).
  *
  * <p>Intentional departures, each noted at its site: findings accumulate rather than throwing
  * on the first violation; the nullability relaxation is a predicate rather than a rewrite; and
@@ -85,7 +85,7 @@ import java.util.stream.Collectors;
  * {@code VARCHAR(50) -> VARCHAR(10)} passes because Iceberg has no string length. A Flink-level
  * checker is responsible for the distinctions erased here.
  *
- * <p>The equivalence classes are taken from Iceberg's own the Iceberg type mapping, which is the
+ * <p>The equivalence classes are taken from the type mapping Iceberg itself applies, which is the
  * conversion applied before comparing there, so this checker agrees with it. Keep the two in
  * step. Notably: {@code BINARY(n)} becomes {@code fixed(n)} and so keeps its length, while
  * {@code CHAR} and {@code VARCHAR} lose theirs; {@code MULTISET<T>} becomes {@code map<T, int>};
@@ -97,7 +97,7 @@ final class CompatibilityChecker {
 
   /**
    * Precision above which a Flink timestamp maps to Iceberg's nanosecond timestamp rather than its
-   * microsecond one. Mirrors the threshold in Iceberg's own the Iceberg type mapping.
+   * microsecond one. Mirrors the threshold Iceberg's own type mapping uses.
    */
   private static final int MAX_ICEBERG_MICROS_PRECISION = 6;
 
