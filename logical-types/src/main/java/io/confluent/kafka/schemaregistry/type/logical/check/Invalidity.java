@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical;
+package io.confluent.kafka.schemaregistry.type.logical.check;
 
 import java.util.Objects;
 
 /**
- * A single problem with one schema, found by {@link ValidityChecker}.
+ * A single problem with one schema, found by {@link LogicalTypeChecker#validate}.
  *
  * <p>The counterpart of {@link Incompatibility}, which describes a problem with a <em>pair</em> of
  * schemas. The two are kept as separate types, with separate {@code Rule} enums, because the

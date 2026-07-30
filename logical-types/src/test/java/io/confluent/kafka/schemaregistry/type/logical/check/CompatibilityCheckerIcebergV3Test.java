@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical;
+package io.confluent.kafka.schemaregistry.type.logical.check;
 
-import io.confluent.kafka.schemaregistry.type.logical.CompatibilityChecker.Mode;
-import io.confluent.kafka.schemaregistry.type.logical.Incompatibility.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
+
+import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.check.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import org.junit.jupiter.api.Test;
 

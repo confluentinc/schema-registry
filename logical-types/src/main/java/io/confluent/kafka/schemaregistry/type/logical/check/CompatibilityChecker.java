@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical;
+package io.confluent.kafka.schemaregistry.type.logical.check;
 
-import io.confluent.kafka.schemaregistry.type.logical.Incompatibility.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
+
+import io.confluent.kafka.schemaregistry.type.logical.check.Incompatibility.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +37,8 @@ import java.util.stream.Collectors;
  *
  * <p>Direction is BACKWARD: the {@code update} schema must be able to read data written with the
  * {@code original} schema. All violations are collected; see {@link CompatibilityResult}.
+ *
+ * <p>{@link LogicalTypeChecker} is the entry point; this class holds the rules.
  *
  * <p><b>This check is only half of the question.</b> It takes two schemas, so it says nothing about
  * the first schema registered on a subject, and nothing about whether either schema is usable by
@@ -87,7 +93,7 @@ import java.util.stream.Collectors;
  * a timestamp with precision above {@value #MAX_ICEBERG_MICROS_PRECISION} becomes the nanosecond
  * timestamp type rather than being rejected.
  */
-public final class CompatibilityChecker {
+final class CompatibilityChecker {
 
   /**
    * Precision above which a Flink timestamp maps to Iceberg's nanosecond timestamp rather than its
@@ -110,31 +116,6 @@ public final class CompatibilityChecker {
   /** The multiset-to-map encoding uses a non-null INT count as the map value. */
   private static final Schema MULTISET_COUNT_TYPE =
       Schema.create(Schema.Type.INT).setNullable(false);
-
-  /** The downstream consumer whose evolution rules should be applied. */
-  public enum Mode {
-    /**
-     * Flink SQL tables. Compares the Flink logical types the two schemas derive to; see the class
-     * javadoc.
-     */
-    FLINK,
-
-    /**
-     * Materialization into an Apache Iceberg table at format-version 2. Stricter than the Iceberg
-     * spec; see the class javadoc.
-     */
-    ICEBERG_V2,
-
-    /**
-     * Materialization into an Apache Iceberg table at format-version 3.
-     *
-     * <p>A relaxation of {@link #ICEBERG_V2} in the rules, and a tightening in what it will
-     * represent. v3 adds {@code initial-default} and {@code write-default}, so a newly added
-     * required field becomes legal when it carries a non-null default; and it adds the nanosecond
-     * timestamp types and {@code variant}, which v2 cannot store at all.
-     */
-    ICEBERG_V3
-  }
 
   private CompatibilityChecker() {
   }

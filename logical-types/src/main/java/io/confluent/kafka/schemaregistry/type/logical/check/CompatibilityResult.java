@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical;
+package io.confluent.kafka.schemaregistry.type.logical.check;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * The outcome of a {@link CompatibilityChecker#compare} call.
+ * The outcome of a {@link LogicalTypeChecker#compare} call.
  *
  * <p>All violations are collected rather than failing on the first one, so a caller can present the
  * complete set of problems with a schema change in one pass.

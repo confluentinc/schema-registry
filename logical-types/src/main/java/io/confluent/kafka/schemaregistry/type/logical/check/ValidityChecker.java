@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical;
+package io.confluent.kafka.schemaregistry.type.logical.check;
 
-import io.confluent.kafka.schemaregistry.type.logical.CompatibilityChecker.Mode;
-import io.confluent.kafka.schemaregistry.type.logical.Invalidity.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
+
+import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.check.Invalidity.Rule;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -28,6 +31,8 @@ import java.util.Set;
 
 /**
  * Checks whether a single {@link LogicalType} can be used by a given downstream consumer at all.
+ *
+ * <p>{@link LogicalTypeChecker} is the entry point; this class holds the rules.
  *
  * <p>The companion to {@link CompatibilityChecker}, and the answer to a different question. A
  * compatibility check needs two schemas, so it has nothing to say about the <em>first</em> schema
@@ -49,6 +54,30 @@ import java.util.Set;
  * difference and not an inconsistency: the compatibility rules genuinely diverge between consumers,
  * whereas almost every validity rule here is shared. Only two are mode-specific, both about what
  * Iceberg v2 can store.
+ *
+ * <h2>Relationship to the validator on the Iceberg materialization path</h2>
+ *
+ * <p>An equivalent single-schema validator is maintained elsewhere, and {@link
+ * Walk#checkInvalidTypeRecursive} keeps its walk shape and its name. The correspondence is much
+ * looser than the one {@link CompatibilityChecker} maintains with its references, for a structural
+ * reason: that validator inspects a Flink type that has <em>already</em> been converted, and holds
+ * only two rules. This one inspects SRLT, before conversion, and holds seven. So it is a superset
+ * rather than a port, and only one rule is shared.
+ *
+ * <ul>
+ *   <li><b>Empty row → {@link Rule#EMPTY_STRUCT}.</b> The shared rule, same verdict.
+ *   <li><b>MULTISET is rejected there, accepted here.</b> A deliberate divergence — see below.
+ *   <li><b>Everything else here has no counterpart.</b> Parameter ranges, cycles and unresolved
+ *       named-type references are invisible once a schema has been converted to a Flink type: the
+ *       conversion would already have failed, or erased the distinction.
+ * </ul>
+ *
+ * <p><b>Map paths differ, deliberately.</b> That validator writes a map key as {@code [key]} and a
+ * value as {@code [value]}; the Iceberg-schema <em>comparison</em> it ships alongside writes a
+ * value as <code>{}</code>. The two references disagree with each other, so matching both is
+ * impossible. This checker follows the comparison, so a caller running
+ * {@link LogicalTypeChecker#compare} and {@link LogicalTypeChecker#validate} over one schema gets
+ * one path syntax rather than two.
  *
  * <h2>What is checked, and why the list is short</h2>
  *
@@ -101,7 +130,7 @@ import java.util.Set;
  * objects to. A non-struct root is accepted: whether a table may have a scalar at its root is a
  * question about tables, not about types.
  */
-public final class ValidityChecker {
+final class ValidityChecker {
 
   /**
    * Lowest decimal precision Flink's {@code DecimalType} permits.
@@ -164,11 +193,19 @@ public final class ValidityChecker {
     }
 
     ValidityResult run() {
-      validateType(logicalType.getRootSchema(), "");
+      checkInvalidTypeRecursive(logicalType.getRootSchema(), "");
       return ValidityResult.of(found);
     }
 
-    private void validateType(Schema schema, String path) {
+    /**
+     * Mirrors the walk in the equivalent validator on the Iceberg materialization path, which is
+     * also named {@code checkInvalidTypeRecursive}: the empty-row check fires before descending,
+     * fields compose a dot-joined path, an array appends its element marker, and a map descends
+     * into key and value. Kept in that shape so the two can be diffed, with the departures noted
+     * in the class javadoc.
+     */
+
+    private void checkInvalidTypeRecursive(Schema schema, String path) {
       if (schema == null) {
         return;
       }
@@ -176,22 +213,22 @@ public final class ValidityChecker {
         case STRUCT:
           validateNonEmpty(schema.getFields().size(), "struct", path);
           for (Schema.Field field : schema.getFields()) {
-            validateType(field.getSchema(), childPath(path, field.getName()));
+            checkInvalidTypeRecursive(field.getSchema(), childPath(path, field.getName()));
           }
           return;
         case UNION:
           validateNonEmpty(schema.getBranches().size(), "union", path);
           for (Schema.UnionBranch branch : schema.getBranches()) {
-            validateType(branch.getSchema(), childPath(path, branch.getName()));
+            checkInvalidTypeRecursive(branch.getSchema(), childPath(path, branch.getName()));
           }
           return;
         case ARRAY:
         case MULTISET:
-          validateType(schema.getElementType(), path + "[]");
+          checkInvalidTypeRecursive(schema.getElementType(), path + "[]");
           return;
         case MAP:
-          validateType(schema.getKeyType(), path + "{key}");
-          validateType(schema.getValueType(), path + "{}");
+          checkInvalidTypeRecursive(schema.getKeyType(), path + "{key}");
+          checkInvalidTypeRecursive(schema.getValueType(), path + "{}");
           return;
         case NAMED_TYPE_REF:
           validateNamedTypeRef(schema, path);
@@ -221,7 +258,7 @@ public final class ValidityChecker {
         return;
       }
       if (walkedNamedTypes.add(name)) {
-        validateType(body, path);
+        checkInvalidTypeRecursive(body, path);
       }
     }
 

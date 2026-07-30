@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical;
+package io.confluent.kafka.schemaregistry.type.logical.check;
 
 import java.util.Objects;
 
 /**
- * A single schema-evolution violation found by {@link CompatibilityChecker}.
+ * A single schema-evolution violation found by {@link LogicalTypeChecker#compare}.
  *
  * <p>Carries a machine-readable {@link Rule} plus the path of the offending field so callers can
  * surface the exact location rather than a whole-schema failure.
