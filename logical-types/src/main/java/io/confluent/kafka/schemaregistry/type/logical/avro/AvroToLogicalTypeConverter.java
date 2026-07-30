@@ -637,32 +637,36 @@ public class AvroToLogicalTypeConverter {
   }
 
   /**
-   * Resolves the {@code flink.precision} annotation against the precision its Avro logical type
-   * actually carries, rejecting a contradiction.
-   *
-   * <p>An annotation may narrow but never widen. A field declared {@code time-millis} holds
-   * millisecond-resolution data, so a request for 6- or 9-digit precision is not a wider view of
-   * the same value — it re-scales every value ever written. Left unchecked the mismatch is
-   * silent and survives into the logical type, where nothing downstream can detect it: by then the
-   * logical-type name is gone and only the resolved precision remains.
-   *
-   * <p>Restores guards that existed in the direct Avro-to-Flink converter and cannot be reproduced
-   * further down the chain, for that reason.
-   *
-   * <p>Applied to the millis and micros carriers only, and deliberately <b>not</b> to
-   * {@code time-micros} or the nanos carriers. The writer picks the smallest carrier that can hold
-   * a precision, so for timestamps the annotation always narrows — {@code TIMESTAMP(7)} is emitted
-   * as {@code timestamp-nanos} with an annotation of 7. TIME has no nanos carrier, so {@code
-   * TIME(7)} must be emitted as {@code time-micros} with an annotation of 7, which widens by
-   * necessity. Guarding that would break a round-trip the writer depends on.
-   *
-   * @param inherentPrecision the precision the logical type carries, and therefore the ceiling
+   * The {@code flink.precision} annotation, if the schema carries one.
    */
   private static Optional<Integer> annotatedPrecision(final org.apache.avro.Schema avroSchema) {
     return Optional.ofNullable(avroSchema.getObjectProp(CommonConstants.FLINK_PRECISION))
         .map(i -> (Integer) i);
   }
 
+  /**
+   * Resolves the {@code flink.precision} annotation against the precision its Avro logical type
+   * actually carries, rejecting a contradiction.
+   *
+   * <p>An annotation may narrow but never widen. A field declared {@code time-millis} holds
+   * millisecond-resolution data, so a request for 6- or 9-digit precision is not a wider view of
+   * the same value — it re-scales every value ever written. Left unchecked the mismatch is silent
+   * and survives into the logical type, where nothing downstream can detect it: by then the
+   * logical-type name is gone and only the resolved precision remains.
+   *
+   * <p>Applied to the millis and micros carriers only, and deliberately <b>not</b> to
+   * {@code time-micros} or the nanos carriers — see {@link #annotatedPrecision}, which those use
+   * instead. The writer picks the smallest carrier that can hold a precision, so for timestamps the
+   * annotation always narrows: {@code TIMESTAMP(7)} is emitted as {@code timestamp-nanos} annotated
+   * 7. TIME has no nanos carrier, so {@code TIME(7)} must be emitted as {@code time-micros}
+   * annotated 7, which widens by necessity. Guarding that would break a round-trip the writer
+   * depends on.
+   *
+   * @param avroSchema        the schema that may carry the annotation
+   * @param logicalType       the Avro logical type name, for the error message
+   * @param inherentPrecision the precision the logical type carries, and therefore the ceiling
+   * @return the annotated precision if present and within the ceiling, else the inherent precision
+   */
   private static int resolvePrecision(
       final org.apache.avro.Schema avroSchema,
       final String logicalType,

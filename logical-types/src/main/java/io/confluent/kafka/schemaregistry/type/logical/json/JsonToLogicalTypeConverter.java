@@ -29,12 +29,10 @@ import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import org.everit.json.schema.ArraySchema;
 import org.everit.json.schema.BooleanSchema;
 import org.everit.json.schema.CombinedSchema;
-import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EmptySchema;
 import org.everit.json.schema.EnumSchema;
 import org.everit.json.schema.FalseSchema;
-import org.everit.json.schema.NotSchema;
 import org.everit.json.schema.NullSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
@@ -510,14 +508,6 @@ public class JsonToLogicalTypeConverter {
       return "The JSON Schema `null` type is not supported on its own: it describes a value that "
           + "is always null, which has no column type. Combine it with a real type to make that "
           + "type nullable instead";
-    }
-    if (schema instanceof NotSchema) {
-      return "JSON Schema `not` is not supported: it constrains what a value may not be, without "
-          + "describing what it is";
-    }
-    if (schema instanceof ConditionalSchema) {
-      return "JSON Schema if/then/else is not supported: a property declared only under a "
-          + "condition has no column to be read into, so its values would be silently dropped";
     }
     if (schema instanceof FalseSchema) {
       return "A JSON Schema of `false` is not supported: it permits no value at all";
