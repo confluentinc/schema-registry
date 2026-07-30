@@ -949,7 +949,7 @@ public final class CompatibilityChecker {
     // -- structs ---------------------------------------------------------------------------------
 
     /**
-     * R1-R5 and R8. Deliberately the same shape as
+     * Field-level rules: additions, drops, order, and nullability. Deliberately the same shape as
      * {@link IcebergComparison#validateStructs(List, List, String)}, differing only in the
      * added-field predicate: Flink can represent a NOT NULL column that carries a default, so there
      * is no container-only relaxation here — a default is enough on its own.
@@ -978,7 +978,7 @@ public final class CompatibilityChecker {
         final List<Integer> fieldIndexPath = appendIndex(indexPath, updatePosition);
         final FieldView originalField = originalFieldMap.get(updateField.name);
 
-        // R1: a new column must be readable for rows written before it existed.
+        // A new column must be readable for rows written before it existed.
         if (originalField == null) {
           if (!isNullableOrDefaulted(updateField, fieldIndexPath)) {
             add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
@@ -988,7 +988,7 @@ public final class CompatibilityChecker {
           continue;
         }
 
-        // R4: Flink columns are positional, so existing columns may not be resequenced.
+        // Flink columns are positional, so existing columns may not be resequenced.
         final int originalIndex = originalFieldOrder.indexOf(updateField.name);
         if (originalIndex < lastSeenOriginalIndex) {
           add(Rule.FIELD_REORDERED, fieldPath,
@@ -996,7 +996,7 @@ public final class CompatibilityChecker {
         }
         lastSeenOriginalIndex = originalIndex;
 
-        // R5: tightening nullability would reject rows that already hold nulls.
+        // Tightening nullability would reject rows that already hold nulls.
         if (isEffectivelyNullable(originalField) && !isEffectivelyNullable(updateField)) {
           add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
               "column was nullable and is now NOT NULL; pre-existing rows may hold nulls");
@@ -1005,7 +1005,7 @@ public final class CompatibilityChecker {
         compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
       }
 
-      // R2, and R3 by consequence: a rename is indistinguishable from a drop plus an add.
+      // Drops. A rename falls out of this too, being indistinguishable from a drop plus an add.
       for (FieldView originalField : originalFields) {
         if (!updateFieldNames.contains(originalField.name)) {
           add(Rule.FIELD_DELETED, childPath(path, originalField.name),
@@ -1015,7 +1015,8 @@ public final class CompatibilityChecker {
     }
 
     /**
-     * R1's predicate. Unlike Iceberg mode there is no container restriction and no scalar
+     * The added-column predicate. Unlike Iceberg mode there is no container restriction and no
+     * scalar
      * exclusion: a Flink column may be NOT NULL and still carry a default, so any default suffices.
      *
      * <p>As in Iceberg mode the schema is the authoritative source of defaults — read from the
@@ -1025,7 +1026,7 @@ public final class CompatibilityChecker {
       return isEffectivelyNullable(field) || hasDefault(field, fieldIndexPath);
     }
 
-    /** R7 for ARRAY. */
+    /** Container recursion for ARRAY. */
     private void validateLists(
         Schema original, Schema update, String path, List<Integer> indexPath) {
       // The element index path is not portable: the Avro converter appends 0 for an array element
@@ -1034,13 +1035,15 @@ public final class CompatibilityChecker {
       compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
-    /** R7 for MULTISET, which Flink models as its own type rather than as a MAP. */
+    /**
+     * Container recursion for MULTISET, which Flink models as its own type rather than a MAP.
+     */
     private void validateMultisets(
         Schema original, Schema update, String path, List<Integer> indexPath) {
       compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
-    /** R7 for MAP. The key type is frozen; only the value may widen. */
+    /** Container recursion for MAP. The key type is frozen; only the value may widen. */
     private void validateMaps(
         Schema original, Schema update, String path, List<Integer> indexPath) {
       if (!flinkTypesEqual(original.getKeyType(), update.getKeyType())) {
@@ -1081,11 +1084,12 @@ public final class CompatibilityChecker {
     // -- primitives ------------------------------------------------------------------------------
 
     /**
-     * R6. Two independent parts, both required.
+     * Leaf type changes. Two independent parts, both required.
      *
      * <p>Part A delegates the root relation to {@link FlinkLogicalTypeCasts}, so this checker's
      * notion of a safe type change is Flink's own rather than a hand-picked one. Nullability is
-     * excluded because R5 already covers it at field level, and reporting it twice would be noise.
+     * excluded because the field-level nullability rule already covers it, and reporting it twice
+     * would be noise.
      *
      * <p>Part B applies the parameter guards that Part A structurally cannot: Flink's table is
      * keyed by type root and never reads a length, precision, or scale, so on its own it would

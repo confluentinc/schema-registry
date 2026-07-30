@@ -34,21 +34,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * One case per rule in the downstream-safety rule set, driven from real schema text.
+ * One case per schema change known to break a downstream consumer, driven from real schema text.
  *
  * <p>This is a ledger rather than a specification: it records what the checker <em>does</em> for each
- * catalogued hazard, so a change in verdict is visible in review. Where the verdict deliberately
- * differs from the catalogue, the test says so and why — the catalogue describes what several
- * downstream engines do today, which is not always the same question as whether a schema change is
- * safe.
+ * hazard, so a change in verdict is visible in review. Some verdicts here are deliberately more or
+ * less permissive than what a given downstream engine does today; those say so, and why. What an
+ * engine currently tolerates is not always the same question as whether a schema change is safe.
  *
- * <p>Rules the catalogue lists that this checker cannot see at all are recorded too, with the reason.
- * Those are not gaps in the composed gate: a schema change must pass the format-level check as well,
- * and that is where an erased distinction is caught.
+ * <p>Hazards this checker cannot see at all are recorded too, with the reason. Those are not gaps in
+ * the composed gate: a schema change must pass the format-level check as well, and that is where an
+ * erased distinction is caught.
  *
- * <p>Structure-and-format hazards from the catalogue (cyclic schemas, empty structs, open content,
- * schemaless payloads, illegal field names) are properties of a single schema rather than of a pair,
- * so they belong to a validity check and are out of scope here.
+ * <p>Single-schema hazards — cyclic schemas, empty structs, open content, schemaless payloads,
+ * illegal field names — are properties of one schema rather than of a pair, so they belong to a
+ * validity check and are out of scope here.
  */
 class CompatibilityCheckerDownstreamSafetyTest {
 
@@ -117,8 +116,8 @@ class CompatibilityCheckerDownstreamSafetyTest {
         rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
         Rule.REQUIRED_FIELD_ADDED);
 
-    // An added scalar WITH a declared default splits the two modes, and the split is the point of
-    // the catalogue's "fix with logical types" remedy. Flink can store a NOT NULL column carrying a
+    // An added scalar WITH a declared default splits the two modes. Flink can store a NOT NULL
+    // column carrying a
     // default, so it accepts. Iceberg v2 cannot persist a column default at all -- initial-default
     // arrived in v3 -- so the only v2-safe shape is an optional column, and a defaulted scalar is
     // still refused.
@@ -150,8 +149,8 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void fieldRenamesWithAnAliasAreAlsoBlocked() {
-    // DIVERGENCE. The catalogue names this rule "renames without aliases", implying a rename that
-    // carries an alias should be permitted. Aliases are not implemented: an alias is the assertion
+    // KNOWN GAP. A rename that carries an alias arguably ought to be permitted, since the alias is
+    // exactly the assertion needed to preserve identity. Aliases are not implemented: an alias asserts
     // that two fields are the same field, and nothing here reads one, so the rename still reads as a
     // drop plus an add. A known gap rather than a considered verdict.
     LogicalType before = rec(fld("name", "\"string\""));
@@ -174,7 +173,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
   @Test
   void jsonConstraintAdditions() {
     // Allowed. Constraint keywords do not reach the logical type, so the derived columns are
-    // unchanged -- which matches the catalogue's own proposed handling ("just ignore in metastore").
+    // unchanged. Ignoring them is the intended handling.
     LogicalType before = json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}");
     LogicalType after = json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}},"
         + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}");
@@ -205,9 +204,8 @@ class CompatibilityCheckerDownstreamSafetyTest {
   void numericCrossFamilyChanges() {
     // Iceberg blocks all of these; it has no integer-to-floating-point promotion.
     // Flink allows only the exact ones. INT to DOUBLE is exact (a 32-bit integer fits a 53-bit
-    // significand) and is allowed, matching the catalogue. INT to FLOAT and BIGINT to DOUBLE are
-    // DIVERGENCES: the catalogue says Flink "can widen without issue", but both round silently above
-    // 2^24 and 2^53 respectively, so they are refused.
+    // significand) and is allowed. INT to FLOAT and BIGINT to DOUBLE are refused: Flink's own table
+    // admits them, and they are often assumed safe, but both round silently above 2^24 and 2^53.
     assertAllowed(Mode.FLINK, rec(fld("n", "\"int\"")), rec(fld("n", "\"double\"")));
     assertBlocked(Mode.ICEBERG, rec(fld("n", "\"int\"")), rec(fld("n", "\"double\"")),
         Rule.UNSUPPORTED_TYPE_CHANGE);
@@ -257,10 +255,10 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void addingABranchToAnAlreadyMultiBranchUnionIsAllowed() {
-    // DIVERGENCE, and one worth revisiting in the catalogue rather than here. Under BACKWARD the new
-    // union has an extra branch, historical records only ever used the original ones, and the reader
-    // resolves them all; the derived type simply gains a nullable column. The catalogue's claim that
-    // this fails describes FORWARD, or the materializer's present limits.
+    // Sometimes assumed to be breaking, but under BACKWARD it is not: the new union has an extra
+    // branch, historical records only ever used the original ones, and the reader resolves them all,
+    // so the derived type simply gains a nullable column. The breaking case is FORWARD, or a
+    // materializer that cannot apply the change in place.
     assertAllowedByBoth(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
         rec(fld("u", "[\"null\",\"string\",\"int\",\"boolean\"]")));
   }
@@ -270,8 +268,8 @@ class CompatibilityCheckerDownstreamSafetyTest {
     // Reordering two or more non-null branches reads as a struct-field reorder.
     assertBlockedByBoth(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
         rec(fld("u", "[\"null\",\"int\",\"string\"]")), Rule.FIELD_REORDERED);
-    // Flipping only the null branch is a no-op, as the catalogue notes: a two-member union with a
-    // null collapses to a nullable type regardless of branch order.
+    // Flipping only the null branch is a no-op: a two-member union containing a null collapses to a
+    // nullable type regardless of branch order.
     assertAllowedByBoth(rec(fld("u", "[\"null\",\"string\"]")),
         rec(fld("u", "[\"string\",\"null\"]")));
   }

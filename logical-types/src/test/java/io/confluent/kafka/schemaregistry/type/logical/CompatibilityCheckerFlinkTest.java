@@ -34,15 +34,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests for {@link Mode#FLINK}.
  *
- * <p>Organised by the rule each case pins, so a rule change has an obvious blast radius. R6 splits
- * into the two halves it is built from: the root relation ported into
+ * <p>Organised by the rule each case pins, so a rule change has an obvious blast radius. Leaf type
+ * changes are split into the two halves they are built from: the root relation ported into
  * {@link FlinkLogicalTypeCasts}, and the parameter guards layered on top because that table is
  * root-keyed and cannot see a length, precision, or scale.
  *
  * <p>Several cases exist specifically to pin behaviour that <em>differs</em> from {@link
  * Mode#ICEBERG}. Those are marked, and the two modes are deliberately not expected to agree.
  *
- * <p>A handful of R6 cases pin edges deliberately <em>narrower</em> than Flink's own table, where
+ * <p>A handful of leaf-type cases pin edges deliberately <em>narrower</em> than Flink's own table,
+ * where
  * Flink admits a conversion that loses data. Each says so; the reasoning lives at the corresponding
  * declaration in {@link FlinkLogicalTypeCasts}.
  */
@@ -112,7 +113,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R1 -- added columns
+  // Added columns
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -153,7 +154,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R2, R3 -- dropped and renamed columns
+  // Dropped and renamed columns
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -167,7 +168,7 @@ class CompatibilityCheckerFlinkTest {
 
   @Test
   void renamingAColumnReportsBothADropAndAnAddition() {
-    // R3 is not separately detectable without field IDs: a rename is a drop plus an add.
+    // A rename is not separately detectable without field IDs: it reads as a drop plus an add.
     CompatibilityResult result = compare(
         schema(required("id", type(Schema.Type.INT)), required("name", Schema.createString())),
         schema(required("id", type(Schema.Type.INT)), required("banana", Schema.createString())));
@@ -180,7 +181,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R4 -- column order
+  // Column order
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -211,7 +212,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R5 -- nullability
+  // Nullability
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -230,7 +231,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R6 Part A -- the root relation ported from Flink
+  // Leaf types, part one -- the root relation ported from Flink
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -336,7 +337,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R6 Part B -- the parameter guards Flink's table cannot see
+  // Leaf types, part two -- the parameter guards Flink's table cannot see
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -402,7 +403,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R7 -- containers
+  // Containers
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -475,7 +476,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // R8 -- nested structs
+  // Nested structs
   // ---------------------------------------------------------------------------------------------
 
   @Test
