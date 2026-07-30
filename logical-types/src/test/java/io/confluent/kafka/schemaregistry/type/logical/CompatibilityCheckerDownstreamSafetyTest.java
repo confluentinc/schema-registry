@@ -92,7 +92,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   private static void assertBlockedByBoth(LogicalType original, LogicalType update, Rule rule) {
     assertBlocked(Mode.FLINK, original, update, rule);
-    assertBlocked(Mode.ICEBERG, original, update, rule);
+    assertBlocked(Mode.ICEBERG_V2, original, update, rule);
   }
 
   private static void assertAllowed(Mode mode, LogicalType original, LogicalType update) {
@@ -102,7 +102,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   private static void assertAllowedByBoth(LogicalType original, LogicalType update) {
     assertAllowed(Mode.FLINK, original, update);
-    assertAllowed(Mode.ICEBERG, original, update);
+    assertAllowed(Mode.ICEBERG_V2, original, update);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
     LogicalType withDefault = rec(fld("a", "\"string\"")
         + ",{\"name\":\"b\",\"type\":\"string\",\"default\":\"x\"}");
     assertAllowed(Mode.FLINK, rec(fld("a", "\"string\"")), withDefault);
-    assertBlocked(Mode.ICEBERG, rec(fld("a", "\"string\"")), withDefault,
+    assertBlocked(Mode.ICEBERG_V2, rec(fld("a", "\"string\"")), withDefault,
         Rule.REQUIRED_FIELD_ADDED);
 
     // An added OPTIONAL field is accepted by both: that is the shape the Iceberg spec permits.
@@ -207,7 +207,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
     // significand) and is allowed. INT to FLOAT and BIGINT to DOUBLE are refused: Flink's own table
     // admits them, and they are often assumed safe, but both round silently above 2^24 and 2^53.
     assertAllowed(Mode.FLINK, rec(fld("n", "\"int\"")), rec(fld("n", "\"double\"")));
-    assertBlocked(Mode.ICEBERG, rec(fld("n", "\"int\"")), rec(fld("n", "\"double\"")),
+    assertBlocked(Mode.ICEBERG_V2, rec(fld("n", "\"int\"")), rec(fld("n", "\"double\"")),
         Rule.UNSUPPORTED_TYPE_CHANGE);
 
     assertBlockedByBoth(rec(fld("n", "\"int\"")), rec(fld("n", "\"float\"")),
@@ -301,7 +301,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
     LogicalType millis = rec(fld("ts", "{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}"));
     LogicalType micros = rec(fld("ts", "{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}"));
     assertBlocked(Mode.FLINK, millis, micros, Rule.UNSUPPORTED_TYPE_CHANGE);
-    assertAllowed(Mode.ICEBERG, millis, micros);
+    assertAllowed(Mode.ICEBERG_V2, millis, micros);
   }
 
   @Test

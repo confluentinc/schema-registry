@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * root-keyed and cannot see a length, precision, or scale.
  *
  * <p>Several cases exist specifically to pin behaviour that <em>differs</em> from {@link
- * Mode#ICEBERG}. Those are marked, and the two modes are deliberately not expected to agree.
+ * Mode#ICEBERG_V2}. Those are marked, and the two modes are deliberately not expected to agree.
  *
  * <p>A handful of leaf-type cases pin edges deliberately <em>narrower</em> than Flink's own table,
  * where
@@ -346,6 +346,24 @@ class CompatibilityCheckerFlinkTest {
     // format checker nor Iceberg mode sees a string length, so nothing else would catch it.
     assertWidens(Schema.createVarchar(10), Schema.createVarchar(50));
     assertRejected(Schema.createVarchar(50), Schema.createVarchar(10));
+  }
+
+  @Test
+  void aNonPositiveVariableLengthIsTreatedAsUnbounded() {
+    // The SR-LT-to-Flink shim maps a non-positive length on VARCHAR or VARBINARY to the unbounded
+    // type rather than passing the number through, so this checker has to agree or the verdict
+    // inverts in both directions: VARCHAR(0) -> VARCHAR(10) looks like growth here while the derived
+    // Flink type actually narrows from unbounded to 10, and the reverse looks like a shrink while it
+    // is really a widening. CHAR and BINARY are excluded -- their length is a stored width, and the
+    // shim passes it through unchanged.
+    assertRejected(Schema.createVarchar(0), Schema.createVarchar(10));
+    assertWidens(Schema.createVarchar(10), Schema.createVarchar(0));
+    assertRejected(Schema.createVarbinary(0), Schema.createVarbinary(10));
+    assertWidens(Schema.createVarbinary(10), Schema.createVarbinary(0));
+
+    // An unbounded VARCHAR is the same thing by either spelling.
+    assertWidens(Schema.createVarchar(0), Schema.createString());
+    assertWidens(Schema.createString(), Schema.createVarchar(0));
   }
 
   @Test

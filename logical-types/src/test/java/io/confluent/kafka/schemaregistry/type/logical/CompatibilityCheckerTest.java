@@ -73,7 +73,7 @@ class CompatibilityCheckerTest {
   }
 
   private static CompatibilityResult compare(LogicalType original, LogicalType update) {
-    return CompatibilityChecker.compare(Mode.ICEBERG, original, update);
+    return CompatibilityChecker.compare(Mode.ICEBERG_V2, original, update);
   }
 
   private static List<Rule> rulesOf(CompatibilityResult result) {
@@ -115,7 +115,7 @@ class CompatibilityCheckerTest {
     LogicalType after = struct(required("c", Schema.createMap(
         nonNull(Schema.createString()), nonNull(Schema.create(Schema.Type.INT))), 0));
 
-    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG, before, after).isCompatible());
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible());
     assertEquals(
         Collections.singletonList(Rule.TYPE_MISMATCH),
         CompatibilityChecker.compare(Mode.FLINK, before, after).getIncompatibilities().stream()
@@ -200,20 +200,26 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void crossingTheMicrosBoundaryChangesTheIcebergTimestampType() {
-    // Iceberg's FlinkTypeToType maps precision > 6 to timestamp_ns, a distinct type that is not a
-    // promotion target of timestamp -- so this is a type change, not an unrepresentable value.
-    assertSingle(
-        struct(required("ts", Schema.createTimestamp(6), 0)),
-        struct(required("ts", Schema.createTimestamp(9), 0)),
-        Rule.UNSUPPORTED_TYPE_CHANGE);
+  void crossingTheMicrosBoundaryIsUnrepresentableAtV2AndATypeChangeAtV3() {
+    // Precision above 6 needs timestamp_ns, which v2 has no way to store -- so at v2 the objection is
+    // that the type cannot exist, not that the change is disallowed. At v3 it can exist, and the
+    // objection becomes the real one: timestamp and timestamp_ns are distinct types and the spec adds
+    // no promotion between them.
+    LogicalType micros = struct(required("ts", Schema.createTimestamp(6), 0));
+    LogicalType nanos = struct(required("ts", Schema.createTimestamp(9), 0));
+    assertSingle(micros, nanos, Rule.UNREPRESENTABLE_TYPE);
+    assertEquals(Collections.singletonList(Rule.UNSUPPORTED_TYPE_CHANGE),
+        rulesOf(CompatibilityChecker.compare(Mode.ICEBERG_V3, micros, nanos)));
   }
 
   @Test
-  void precisionChangeWithinTheNanosecondTypeIsInvisibleToIceberg() {
-    assertCompatible(
-        struct(required("ts", Schema.createTimestamp(7), 0)),
-        struct(required("ts", Schema.createTimestamp(9), 0)));
+  void precisionChangeWithinTheNanosecondTypeIsInvisibleAtV3() {
+    // Both erase to timestamp_ns, so at v3 there is nothing to see. At v2 neither type exists.
+    LogicalType sevenDigits = struct(required("ts", Schema.createTimestamp(7), 0));
+    LogicalType nineDigits = struct(required("ts", Schema.createTimestamp(9), 0));
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V3, sevenDigits, nineDigits)
+        .isCompatible());
+    assertSingle(sevenDigits, nineDigits, Rule.UNREPRESENTABLE_TYPE);
   }
 
   @Test

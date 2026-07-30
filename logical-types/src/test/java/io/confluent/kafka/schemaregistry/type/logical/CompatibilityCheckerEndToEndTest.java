@@ -22,11 +22,14 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.CompatibilityChecker.Mode;
 import io.confluent.kafka.schemaregistry.type.logical.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +68,15 @@ class CompatibilityCheckerEndToEndTest {
     return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(jsonText));
   }
 
+  private static Set<Rule> rulesOf(Mode mode, LogicalType original, LogicalType update) {
+    CompatibilityResult result = CompatibilityChecker.compare(mode, original, update);
+    return result.getIncompatibilities().isEmpty()
+        ? EnumSet.noneOf(Rule.class)
+        : result.getIncompatibilities().stream()
+            .map(Incompatibility::getRule)
+            .collect(Collectors.toCollection(() -> EnumSet.noneOf(Rule.class)));
+  }
+
   private static void assertCompatible(Mode mode, LogicalType original, LogicalType update) {
     CompatibilityResult result = CompatibilityChecker.compare(mode, original, update);
     assertTrue(result.isCompatible(),
@@ -98,7 +110,7 @@ class CompatibilityCheckerEndToEndTest {
 
     // The derived ARRAY is NOT NULL, so this only passes if the relaxation finds the empty-list
     // default the converter recorded in the path-keyed map.
-    assertCompatible(Mode.ICEBERG, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
     assertCompatible(Mode.FLINK, before, after);
   }
 
@@ -113,7 +125,7 @@ class CompatibilityCheckerEndToEndTest {
             + "package t;\n"
             + "message M { string name = 1; map<string, string> labels = 2; }\n");
 
-    assertCompatible(Mode.ICEBERG, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
     assertCompatible(Mode.FLINK, before, after);
   }
 
@@ -133,7 +145,7 @@ class CompatibilityCheckerEndToEndTest {
             + "  message Inner { string a = 1; repeated string tags = 2; } }\n");
 
     // Exercises the index path one level down.
-    assertCompatible(Mode.ICEBERG, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
     assertCompatible(Mode.FLINK, before, after);
   }
 
@@ -159,7 +171,7 @@ class CompatibilityCheckerEndToEndTest {
             + "message M { Inner inner = 1; }\n"
             + "message Inner { string a = 1; repeated string tags = 2; }\n");
 
-    assertSingle(Mode.ICEBERG, before, after, Rule.REQUIRED_FIELD_ADDED);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
   }
 
   @Test
@@ -178,7 +190,7 @@ class CompatibilityCheckerEndToEndTest {
 
     assertCompatible(Mode.FLINK, before, after);
     // Iceberg mode relaxes containers only, so a scalar is still rejected there.
-    assertSingle(Mode.ICEBERG, before, after, Rule.REQUIRED_FIELD_ADDED);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
   }
 
   @Test
@@ -188,9 +200,9 @@ class CompatibilityCheckerEndToEndTest {
     LogicalType asInt64 = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { int64 n = 1; }\n");
 
-    assertCompatible(Mode.ICEBERG, asInt32, asInt64);
+    assertCompatible(Mode.ICEBERG_V2, asInt32, asInt64);
     assertCompatible(Mode.FLINK, asInt32, asInt64);
-    assertSingle(Mode.ICEBERG, asInt64, asInt32, Rule.UNSUPPORTED_TYPE_CHANGE);
+    assertSingle(Mode.ICEBERG_V2, asInt64, asInt32, Rule.UNSUPPORTED_TYPE_CHANGE);
     assertSingle(Mode.FLINK, asInt64, asInt32, Rule.UNSUPPORTED_TYPE_CHANGE);
   }
 
@@ -203,7 +215,7 @@ class CompatibilityCheckerEndToEndTest {
         "syntax = \"proto3\";\npackage t;\nmessage M { string b = 2; string a = 1; }\n");
 
     assertSingle(Mode.FLINK, before, after, Rule.FIELD_REORDERED);
-    assertSingle(Mode.ICEBERG, before, after, Rule.FIELD_REORDERED);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -221,7 +233,7 @@ class CompatibilityCheckerEndToEndTest {
             + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}}]}");
 
     assertSingle(Mode.FLINK, asLong, asTimestamp, Rule.UNSUPPORTED_TYPE_CHANGE);
-    assertSingle(Mode.ICEBERG, asLong, asTimestamp, Rule.UNSUPPORTED_TYPE_CHANGE);
+    assertSingle(Mode.ICEBERG_V2, asLong, asTimestamp, Rule.UNSUPPORTED_TYPE_CHANGE);
   }
 
   @Test
@@ -250,7 +262,7 @@ class CompatibilityCheckerEndToEndTest {
             + "{\"name\":\"b\",\"type\":\"string\"}]}");
 
     assertSingle(Mode.FLINK, before, after, Rule.REQUIRED_FIELD_ADDED);
-    assertSingle(Mode.ICEBERG, before, after, Rule.REQUIRED_FIELD_ADDED);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
   }
 
   @Test
@@ -265,7 +277,7 @@ class CompatibilityCheckerEndToEndTest {
             + "{\"name\":\"a\",\"type\":\"string\"},"
             + "{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":\"string\"}}]}");
 
-    assertSingle(Mode.ICEBERG, before, after, Rule.REQUIRED_FIELD_ADDED);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
   }
 
   @Test
@@ -278,9 +290,9 @@ class CompatibilityCheckerEndToEndTest {
             + "{\"name\":\"a\",\"type\":[\"null\",\"string\"],\"default\":null}]}");
 
     assertCompatible(Mode.FLINK, required, nullable);
-    assertCompatible(Mode.ICEBERG, required, nullable);
+    assertCompatible(Mode.ICEBERG_V2, required, nullable);
     assertSingle(Mode.FLINK, nullable, required, Rule.NULLABLE_TO_NON_NULLABLE);
-    assertSingle(Mode.ICEBERG, nullable, required, Rule.NULLABLE_TO_NON_NULLABLE);
+    assertSingle(Mode.ICEBERG_V2, nullable, required, Rule.NULLABLE_TO_NON_NULLABLE);
   }
 
   @Test
@@ -295,7 +307,7 @@ class CompatibilityCheckerEndToEndTest {
             + "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}}]}");
 
     assertCompatible(Mode.FLINK, before, after);
-    assertCompatible(Mode.ICEBERG, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -313,7 +325,7 @@ class CompatibilityCheckerEndToEndTest {
             + "\"b\":{\"type\":\"string\",\"connect.index\":1}},\"required\":[\"a\"]}");
 
     assertCompatible(Mode.FLINK, before, after);
-    assertCompatible(Mode.ICEBERG, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
   }
 
   @Test
@@ -327,7 +339,7 @@ class CompatibilityCheckerEndToEndTest {
             + "\"b\":{\"type\":\"string\",\"connect.index\":1}},\"required\":[\"a\",\"b\"]}");
 
     assertSingle(Mode.FLINK, before, after, Rule.REQUIRED_FIELD_ADDED);
-    assertSingle(Mode.ICEBERG, before, after, Rule.REQUIRED_FIELD_ADDED);
+    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
   }
 
   @Test
@@ -342,7 +354,80 @@ class CompatibilityCheckerEndToEndTest {
             + "\"n\":{\"type\":\"number\",\"connect.index\":0}},\"required\":[\"n\"]}");
 
     assertSingle(Mode.FLINK, asInteger, asNumber, Rule.UNSUPPORTED_TYPE_CHANGE);
-    assertSingle(Mode.ICEBERG, asInteger, asNumber, Rule.UNSUPPORTED_TYPE_CHANGE);
+    assertSingle(Mode.ICEBERG_V2, asInteger, asNumber, Rule.UNSUPPORTED_TYPE_CHANGE);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Editions -- both schemas must be derived by the same one
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * {@code LogicalTypeVersion} selects the derivation edition on the way <em>in</em> as well as out.
+   * V1 mirrors what the Flink converters would produce; V2 is the canonical logical-types reading.
+   * For unions the two differ in ways that are invisible to a reader of the JSON but not to this
+   * checker, so a comparison must be given two schemas derived under the same edition.
+   */
+  private static LogicalType fromJson(String jsonText, LogicalTypeVersion edition) {
+    return JsonToLogicalTypeConverter.toLogicalType(new JsonSchema(jsonText), edition);
+  }
+
+  private static final String TITLED_UNION =
+      "{\"type\":\"object\",\"properties\":{\"u\":{\"oneOf\":["
+          + "{\"type\":\"string\",\"title\":\"AsText\"},"
+          + "{\"type\":\"integer\",\"title\":\"AsNum\"}]}}}";
+
+  @Test
+  void aUnionIsUnchangedWithinEitherEdition() {
+    // The point of reference: comparing like with like finds nothing, in both editions.
+    assertCompatible(Mode.FLINK,
+        fromJson(TITLED_UNION, LogicalTypeVersion.V1),
+        fromJson(TITLED_UNION, LogicalTypeVersion.V1));
+    assertCompatible(Mode.FLINK,
+        fromJson(TITLED_UNION, LogicalTypeVersion.V2),
+        fromJson(TITLED_UNION, LogicalTypeVersion.V2));
+  }
+
+  @Test
+  void crossingEditionsReportsSpuriousUnionBranchRenames() {
+    // KNOWN HAZARD, pinned so it is not discovered in production. V1 always synthesizes
+    // connect_union_field_<index> as a branch name -- the Flink converters ignored titles, and
+    // honouring them under V1 would rename union columns. V2 prefers a subschema's title. Branches
+    // are matched by name, so the identical schema read under the two editions looks like every
+    // branch was renamed, which is a drop plus an add.
+    //
+    // The lesson is a precondition rather than a bug: both sides of a comparison must be derived
+    // under the same edition. Nothing in the signature enforces that today.
+    Set<Rule> rules = rulesOf(Mode.FLINK,
+        fromJson(TITLED_UNION, LogicalTypeVersion.V1),
+        fromJson(TITLED_UNION, LogicalTypeVersion.V2));
+    assertTrue(rules.contains(Rule.FIELD_DELETED), "expected spurious drops, got " + rules);
+  }
+
+  @Test
+  void crossingEditionsCanAlsoChangeTheStructuralKind() {
+    // A single-member oneOf with no null collapses to the member type under V2 but stays a union
+    // under V1, so crossing editions changes the column's kind outright.
+    String singleton =
+        "{\"type\":\"object\",\"properties\":{\"u\":{\"oneOf\":[{\"type\":\"string\"}]}}}";
+    Set<Rule> rules = rulesOf(Mode.FLINK,
+        fromJson(singleton, LogicalTypeVersion.V1),
+        fromJson(singleton, LogicalTypeVersion.V2));
+    assertTrue(rules.contains(Rule.TYPE_MISMATCH), "expected a kind change, got " + rules);
+  }
+
+  @Test
+  void addingAUnionBranchIsAcceptedUnderEitherEdition() {
+    // The verdict that prompted this section: adding a branch is an added nullable column, and that
+    // is edition-independent because both editions keep a first-class UNION. Only the SRLT-to-Flink
+    // lowering turns a union into a struct, and it marks the branches nullable.
+    String twoBranch = "{\"type\":\"object\",\"properties\":{\"u\":{\"oneOf\":["
+        + "{\"type\":\"string\"},{\"type\":\"integer\"}]}}}";
+    String threeBranch = "{\"type\":\"object\",\"properties\":{\"u\":{\"oneOf\":["
+        + "{\"type\":\"string\"},{\"type\":\"integer\"},{\"type\":\"boolean\"}]}}}";
+    for (LogicalTypeVersion edition : LogicalTypeVersion.values()) {
+      assertCompatible(Mode.FLINK, fromJson(twoBranch, edition), fromJson(threeBranch, edition));
+      assertCompatible(Mode.ICEBERG_V2, fromJson(twoBranch, edition), fromJson(threeBranch, edition));
+    }
   }
 
   @Test

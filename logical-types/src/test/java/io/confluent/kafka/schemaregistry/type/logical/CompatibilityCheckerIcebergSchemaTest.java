@@ -110,7 +110,7 @@ class CompatibilityCheckerIcebergSchemaTest {
   }
 
   private static CompatibilityResult compare(LogicalType original, LogicalType update) {
-    return CompatibilityChecker.compare(Mode.ICEBERG, original, update);
+    return CompatibilityChecker.compare(Mode.ICEBERG_V2, original, update);
   }
 
   /** Their {@code assertDoesNotThrow(...)}. */

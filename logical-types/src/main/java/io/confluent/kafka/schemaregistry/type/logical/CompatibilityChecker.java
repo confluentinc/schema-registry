@@ -89,8 +89,25 @@ public final class CompatibilityChecker {
    */
   private static final int MAX_ICEBERG_MICROS_PRECISION = 6;
 
-  /** Highest decimal precision Iceberg supports. */
+  /** Highest decimal precision Iceberg supports, in every format version. */
   private static final int MAX_ICEBERG_DECIMAL_PRECISION = 38;
+
+  /**
+   * Format version that added {@code initial-default} and {@code write-default}.
+   */
+  private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
+
+  /**
+   * Format version that added the nanosecond timestamps, {@code variant}, and {@code unknown}.
+   */
+  private static final int FORMAT_VERSION_WITH_V3_TYPES = 3;
+
+  /**
+   * Format version that widened the promotion table. v3 adds {@code date} to the without-timezone
+   * timestamps, and {@code unknown} to any type — the latter unreachable here, since no
+   * {@link Schema.Type} maps onto {@code unknown}.
+   */
+  private static final int FORMAT_VERSION_WITH_V3_PROMOTIONS = 3;
 
   /** The multiset-to-map encoding uses a non-null INT count as the map value. */
   private static final Schema MULTISET_COUNT_TYPE =
@@ -99,16 +116,26 @@ public final class CompatibilityChecker {
   /** The downstream consumer whose evolution rules should be applied. */
   public enum Mode {
     /**
-     * Materialization into an Apache Iceberg table. Stricter than the Iceberg spec; see the class
-     * javadoc.
-     */
-    ICEBERG,
-
-    /**
      * Flink SQL tables. Compares the Flink logical types the two schemas derive to; see the class
      * javadoc.
      */
-    FLINK
+    FLINK,
+
+    /**
+     * Materialization into an Apache Iceberg table at format-version 2. Stricter than the Iceberg
+     * spec; see the class javadoc.
+     */
+    ICEBERG_V2,
+
+    /**
+     * Materialization into an Apache Iceberg table at format-version 3.
+     *
+     * <p>A relaxation of {@link #ICEBERG_V2} in the rules, and a tightening in what it will
+     * represent. v3 adds {@code initial-default} and {@code write-default}, so a newly added
+     * required field becomes legal when it carries a non-null default; and it adds the nanosecond
+     * timestamp types and {@code variant}, which v2 cannot store at all.
+     */
+    ICEBERG_V3
   }
 
   private CompatibilityChecker() {
@@ -130,10 +157,12 @@ public final class CompatibilityChecker {
     Objects.requireNonNull(update, "update");
 
     switch (mode) {
-      case ICEBERG:
-        return new IcebergComparison(original, update).run();
       case FLINK:
         return new FlinkComparison(original, update).run();
+      case ICEBERG_V2:
+        return new IcebergComparison(original, update, 2).run();
+      case ICEBERG_V3:
+        return new IcebergComparison(original, update, 3).run();
       default:
         throw new IllegalArgumentException("Unknown mode: " + mode);
     }
@@ -201,7 +230,11 @@ public final class CompatibilityChecker {
      */
     private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
 
-    IcebergComparison(LogicalType original, LogicalType update) {
+    /** Iceberg table format version being targeted. */
+    private final int formatVersion;
+
+    IcebergComparison(LogicalType original, LogicalType update, int formatVersion) {
+      this.formatVersion = formatVersion;
       this.originalRoot = original.getRootSchema();
       this.updateRoot = update.getRootSchema();
       this.originalNamedTypes = original.getNamedTypes();
@@ -386,7 +419,7 @@ public final class CompatibilityChecker {
      * {@code float -> double}, and {@code decimal(p,s) -> decimal(p',s)} with {@code p' >= p}.
      */
     private void validatePrimitives(Schema original, Schema update, String path) {
-      if (!isIcebergRepresentable(update)) {
+      if (!isIcebergRepresentable(update, formatVersion)) {
         add(Rule.UNREPRESENTABLE_TYPE, path,
             render(update) + " cannot be represented in Iceberg v2");
         return;
@@ -417,10 +450,7 @@ public final class CompatibilityChecker {
         }
       }
 
-      boolean promotable =
-          (originalClass == IcebergClass.INT && updateClass == IcebergClass.LONG)
-              || (originalClass == IcebergClass.FLOAT && updateClass == IcebergClass.DOUBLE);
-      if (!promotable) {
+      if (!isPromotionAllowed(originalClass, updateClass)) {
         add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update));
       }
     }
@@ -517,6 +547,22 @@ public final class CompatibilityChecker {
       if (isEffectivelyNullable(field)) {
         return true;
       }
+
+      // v3 only. With initial-default and write-default available, a newly added required field is
+      // readable for rows written before it existed, so no relaxation is needed -- the default is
+      // simply stored. Restricted to newly added fields because initial-default "is set only when a
+      // field is added to an existing schema": it cannot be attached to an existing column
+      // retroactively, so tightening one is still unrecoverable.
+      if (supportsColumnDefaults()
+          && originalField == null
+          && typeAllowsNonNullDefault(field.schema)
+          && hasNonNullDefault(field, fieldIndexPath)) {
+        return true;
+      }
+
+      // The container relaxation, in both versions. It addresses a derivation quirk rather than an
+      // Iceberg capability -- proto and Avro containers are marked NOT NULL because those formats
+      // cannot encode a null container -- so v3 does not retire it.
       if (!hasDefault(field, fieldIndexPath)) {
         return false;
       }
@@ -525,6 +571,50 @@ public final class CompatibilityChecker {
         return false;
       }
       return originalField == null || isEffectivelyNullable(originalField);
+    }
+
+    private boolean supportsColumnDefaults() {
+      return formatVersion >= FORMAT_VERSION_WITH_COLUMN_DEFAULTS;
+    }
+
+    private boolean supportsV3Promotions() {
+      return formatVersion >= FORMAT_VERSION_WITH_V3_PROMOTIONS;
+    }
+
+    /** Iceberg's promotion table for the targeted format version. */
+    private boolean isPromotionAllowed(IcebergClass from, IcebergClass to) {
+      if (from == IcebergClass.INT && to == IcebergClass.LONG) {
+        return true;
+      }
+      if (from == IcebergClass.FLOAT && to == IcebergClass.DOUBLE) {
+        return true;
+      }
+      return supportsV3Promotions() && isDateToTimestampPromotion(from, to);
+    }
+
+    /**
+     * v3 adds {@code date} to the without-timezone timestamps only. Promotion to
+     * {@code timestamptz} or {@code timestamptz_ns} is explicitly forbidden: a date carries no
+     * zone, and assigning one would invent information.
+     */
+    private static boolean isDateToTimestampPromotion(IcebergClass from, IcebergClass to) {
+      if (from != IcebergClass.DATE) {
+        return false;
+      }
+      return to == IcebergClass.TIMESTAMP || to == IcebergClass.TIMESTAMP_NANO;
+    }
+
+    /**
+     * Whether the default is present <em>and</em> non-null.
+     *
+     * <p>v3 requires both defaults to be non-null when a required field is added, so mere presence
+     * is not enough. A null default leaves pre-existing rows with nothing to read.
+     */
+    private boolean hasNonNullDefault(FieldView field, List<Integer> fieldIndexPath) {
+      if (field.hasDefault && field.defaultValue != null) {
+        return true;
+      }
+      return fieldIndexPath != null && updateDefaults.get(fieldIndexPath) != null;
     }
 
     private static boolean isEffectivelyNullable(FieldView field) {
@@ -675,11 +765,32 @@ public final class CompatibilityChecker {
    * given table can then store one depends on its format version, which is not a schema-comparison
    * question.
    */
-  private static boolean isIcebergRepresentable(Schema schema) {
-    if (schema.getType() == Schema.Type.DECIMAL) {
-      return schema.getPrecision() <= MAX_ICEBERG_DECIMAL_PRECISION;
+  private static boolean isIcebergRepresentable(Schema schema, int formatVersion) {
+    switch (schema.getType()) {
+      case DECIMAL:
+        // Unchanged in v3: precision is capped at 38 in both.
+        return schema.getPrecision() <= MAX_ICEBERG_DECIMAL_PRECISION;
+      case TIMESTAMP:
+      case TIMESTAMP_LTZ:
+        // Sub-microsecond precision needs timestamp_ns or timestamptz_ns, added in v3.
+        return schema.getPrecision() <= MAX_ICEBERG_MICROS_PRECISION
+            || formatVersion >= FORMAT_VERSION_WITH_V3_TYPES;
+      case VARIANT:
+        return formatVersion >= FORMAT_VERSION_WITH_V3_TYPES;
+      default:
+        // TIME is representable at any precision: Iceberg has no nanosecond time type, so the
+        // precision is simply erased rather than needing a wider one.
+        return true;
     }
-    return true;
+  }
+
+  /**
+   * Whether the type may carry a non-null default. The spec forbids it for {@code unknown},
+   * {@code variant}, {@code geometry} and {@code geography}; of those only VARIANT is expressible
+   * here.
+   */
+  private static boolean typeAllowsNonNullDefault(Schema schema) {
+    return schema.getType() != Schema.Type.VARIANT;
   }
 
   private static boolean isContainer(Schema schema) {
@@ -701,13 +812,21 @@ public final class CompatibilityChecker {
     private final Schema schema;
     private final boolean hasDefault;
 
+    /**
+     * The declared default, or {@code null}. Distinct from {@link #hasDefault}: v3 requires a
+     * non-null default when a required field is added, so presence alone is not enough.
+     */
+    private final Object defaultValue;
+
     /** Union branches are always optional: at most one branch is populated per record. */
     private final boolean forcedNullable;
 
-    private FieldView(String name, Schema schema, boolean hasDefault, boolean forcedNullable) {
+    private FieldView(String name, Schema schema, boolean hasDefault, Object defaultValue,
+        boolean forcedNullable) {
       this.name = name;
       this.schema = schema;
       this.hasDefault = hasDefault;
+      this.defaultValue = defaultValue;
       this.forcedNullable = forcedNullable;
     }
   }
@@ -716,13 +835,13 @@ public final class CompatibilityChecker {
     List<FieldView> views = new ArrayList<>();
     if (schema.getType() == Schema.Type.UNION) {
       for (Schema.UnionBranch branch : schema.getBranches()) {
-        views.add(new FieldView(branch.getName(), branch.getSchema(), false, true));
+        views.add(new FieldView(branch.getName(), branch.getSchema(), false, null, true));
       }
       return views;
     }
     for (Schema.Field field : schema.getFields()) {
-      views.add(new FieldView(
-          field.getName(), field.getSchema(), field.hasDefaultValue(), false));
+      views.add(new FieldView(field.getName(), field.getSchema(),
+          field.hasDefaultValue(), field.getDefaultValue(), false));
     }
     return views;
   }
@@ -1326,7 +1445,24 @@ public final class CompatibilityChecker {
    * unbounded VARCHAR and carries no length of its own, so asking the SRLT schema directly throws.
    */
   private static int flinkLengthOf(Schema schema) {
-    return schema.getType() == Schema.Type.ENUM ? Schema.MAX_LENGTH : schema.getLength();
+    switch (schema.getType()) {
+      case ENUM:
+        // No enum type in Flink; an ENUM derives to an unbounded VARCHAR.
+        return Schema.MAX_LENGTH;
+      case VARCHAR:
+      case VARBINARY: {
+        // Mirror the SR-LT-to-Flink shim, which treats a non-positive length on a variable-length
+        // type as "unbounded" rather than passing it through. Without this a VARCHAR(0) reads here
+        // as length 0 while the derived Flink type is VARCHAR(MAX), inverting the verdict in both
+        // directions.
+        final int length = schema.getLength();
+        return length > 0 ? length : Schema.MAX_LENGTH;
+      }
+      default:
+        // CHAR and BINARY pass their length through in the shim too: it is the stored width, and a
+        // zero-width fixed type is not reinterpreted as unbounded.
+        return schema.getLength();
+    }
   }
 
   private static ParamKind paramKindOf(FlinkLogicalTypeCasts.Root root) {
