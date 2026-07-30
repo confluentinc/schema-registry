@@ -153,6 +153,17 @@ public final class CompatibilityChecker {
     private final Schema updateRoot;
     private final Map<String, Schema> originalNamedTypes;
     private final Map<String, Schema> updateNamedTypes;
+
+    /**
+     * Derived defaults for the update schema, keyed by index path.
+     *
+     * <p>Read in preference to nothing at all: the converters record a container's implicit default
+     * ({@code repeated} is an empty list, a proto map is an empty map) <em>only</em> here, never on
+     * the {@link Schema.Field}. The field's own default is reserved for user-declared values so
+     * that a DDL round-trip stays clean. Both are consulted; see {@code hasDefault}.
+     */
+    private final Map<List<Integer>, Object> updateDefaults;
+
     private final List<Incompatibility> findings = new ArrayList<>();
 
     /**
@@ -195,10 +206,11 @@ public final class CompatibilityChecker {
       this.updateRoot = update.getRootSchema();
       this.originalNamedTypes = original.getNamedTypes();
       this.updateNamedTypes = update.getNamedTypes();
+      this.updateDefaults = update.getDefaultValues();
     }
 
     CompatibilityResult run() {
-      compareTypes(originalRoot, updateRoot, "");
+      compareTypes(originalRoot, updateRoot, "", Collections.emptyList());
       return CompatibilityResult.of(findings);
     }
 
@@ -220,7 +232,8 @@ public final class CompatibilityChecker {
 
     // -- dispatch --------------------------------------------------------------------------------
 
-    private void compareTypes(Schema original, Schema update, String path) {
+    private void compareTypes(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
       if (isRef(original) || isRef(update)) {
         String pairKey = refKey(original) + ' ' + refKey(update);
         if (!comparedRefPairs.add(pairKey)) {
@@ -229,13 +242,14 @@ public final class CompatibilityChecker {
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
             resolve(update, updateNamedTypes),
-            path);
+            path, indexPath);
         return;
       }
-      checkCompatibilityRecursive(original, update, path);
+      checkCompatibilityRecursive(original, update, path, indexPath);
     }
 
-    private void checkCompatibilityRecursive(Schema original, Schema update, String path) {
+    private void checkCompatibilityRecursive(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
       // An unresolvable reference (e.g. an external type) can only be compared by name.
       if (isRef(original) || isRef(update)) {
         if (!isRef(original) || !isRef(update)
@@ -255,14 +269,14 @@ public final class CompatibilityChecker {
       switch (originalKind) {
         case STRUCT:
           if (claimStructPair(original, update)) {
-            validateStructs(fieldViews(original), fieldViews(update), path);
+            validateStructs(fieldViews(original), fieldViews(update), path, indexPath);
           }
           break;
         case LIST:
-          validateLists(original, update, path);
+          validateLists(original, update, path, indexPath);
           break;
         case MAP:
-          validateMaps(original, update, path);
+          validateMaps(original, update, path, indexPath);
           break;
         case PRIMITIVE:
           validatePrimitives(original, update, path);
@@ -280,12 +294,14 @@ public final class CompatibilityChecker {
      * in via {@link #isEffectivelyOptional} rather than applied as a pre-pass.
      */
     private void validateStructs(
-        List<FieldView> originalFields, List<FieldView> updateFields, String path) {
+        List<FieldView> originalFields, List<FieldView> updateFields, String path,
+        List<Integer> indexPath) {
 
       final Map<String, FieldView> originalFieldMap = originalFields.stream()
           .collect(Collectors.toMap(field -> field.name, field -> field));
 
       int lastSeenOriginalIndex = -1;
+      int updatePosition = -1;
       final List<String> originalFieldOrder = originalFields.stream()
           .map(field -> field.name)
           .collect(Collectors.toList());
@@ -294,11 +310,15 @@ public final class CompatibilityChecker {
           .map(field -> field.name)
           .collect(Collectors.toSet());
       for (FieldView updateField : updateFields) {
-        String fieldPath = childPath(path, updateField.name);
+        updatePosition++;
+        final String fieldPath = childPath(path, updateField.name);
+        // Struct fields are the one place both converters agree on the index convention: the
+        // field's position within its struct, appended to the parent's path.
+        final List<Integer> fieldIndexPath = appendIndex(indexPath, updatePosition);
         final FieldView originalField = originalFieldMap.get(updateField.name);
 
         if (originalField == null) {
-          if (!isEffectivelyOptional(updateField, null)) {
+          if (!isEffectivelyOptional(updateField, fieldIndexPath, null)) {
             add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
                 "added field is neither nullable nor defaulted; pre-existing rows have no value "
                     + "for it and Iceberg v2 cannot store a column default");
@@ -317,12 +337,12 @@ public final class CompatibilityChecker {
         lastSeenOriginalIndex = originalIndex;
 
         if (isEffectivelyNullable(originalField)
-            && !isEffectivelyOptional(updateField, originalField)) {
+            && !isEffectivelyOptional(updateField, fieldIndexPath, originalField)) {
           add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
               "field was nullable and is now non-nullable; pre-existing rows may hold nulls");
         }
 
-        compareTypes(originalField.schema, updateField.schema, fieldPath);
+        compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
       }
 
       for (FieldView originalField : originalFields) {
@@ -336,20 +356,26 @@ public final class CompatibilityChecker {
     /**
      * Mirrors the Iceberg-schema implementation's {@code validateLists}.
      */
-    private void validateLists(Schema original, Schema update, String path) {
-      compareTypes(elementOf(original), elementOf(update), path + "[]");
+    private void validateLists(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
+      // The element index path is not portable: the Avro converter appends 0 for an array element
+      // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
+      // down, which makes a default lookup below an array fail closed rather than guess.
+      compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
     /**
      * Mirrors the Iceberg-schema implementation's {@code validateMaps}.
      */
-    private void validateMaps(Schema original, Schema update, String path) {
+    private void validateMaps(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
       if (!erasedEquals(keyOf(original), keyOf(update))) {
         add(Rule.MAP_KEY_TYPE_MISMATCH, path,
             "map key type changed from " + render(keyOf(original))
                 + " to " + render(keyOf(update)));
       }
-      compareTypes(valueOf(original), valueOf(update), path + "{}");
+      // Both converters agree on the map value index, unlike the array element.
+      compareTypes(valueOf(original), valueOf(update), path + "{}", appendIndex(indexPath, 1));
     }
 
     // -- primitives ------------------------------------------------------------------------------
@@ -486,11 +512,12 @@ public final class CompatibilityChecker {
      * @param originalField the matching field in the original schema, or {@code null} if the field
      *                      is newly added
      */
-    private boolean isEffectivelyOptional(FieldView field, FieldView originalField) {
+    private boolean isEffectivelyOptional(
+        FieldView field, List<Integer> fieldIndexPath, FieldView originalField) {
       if (isEffectivelyNullable(field)) {
         return true;
       }
-      if (!field.hasDefault) {
+      if (!hasDefault(field, fieldIndexPath)) {
         return false;
       }
       Schema resolved = resolve(field.schema, updateNamedTypes);
@@ -503,6 +530,27 @@ public final class CompatibilityChecker {
     private static boolean isEffectivelyNullable(FieldView field) {
       return field.forcedNullable || field.schema.isNullable();
     }
+
+    /**
+     * Whether {@code field} carries a default, from either channel.
+     *
+     * <p>Two channels exist and both count. A user-declared default lands on the
+     * {@link Schema.Field}. A default the converter derived from format semantics — an absent
+     * {@code repeated} field is an empty list, an absent proto map is an empty map — lands only in
+     * the schema's path-keyed map. Reading just the field would miss every derived default, which
+     * is the majority of them and the whole reason the container relaxation exists.
+     *
+     * <p>A {@code null} path means the walk crossed an array, where the two converters disagree on
+     * the index convention. There the lookup is skipped rather than guessed, so an undecidable case
+     * reads as "no default" and fails closed.
+     */
+    private boolean hasDefault(FieldView field, List<Integer> fieldIndexPath) {
+      if (field.hasDefault) {
+        return true;
+      }
+      return fieldIndexPath != null && updateDefaults.containsKey(fieldIndexPath);
+    }
+
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -733,6 +781,20 @@ public final class CompatibilityChecker {
   // Rendering
   // ---------------------------------------------------------------------------------------------
 
+  /**
+   * Appends a child index, or returns {@code null} if the parent path was already unresolvable.
+   * See {@code hasDefault} for what {@code null} means.
+   */
+  private static List<Integer> appendIndex(List<Integer> parentPath, int index) {
+    if (parentPath == null) {
+      return null;
+    }
+    final List<Integer> child = new ArrayList<>(parentPath.size() + 1);
+    child.addAll(parentPath);
+    child.add(index);
+    return child;
+  }
+
   private static String childPath(String parentPath, String fieldName) {
     return parentPath.isEmpty() ? fieldName : parentPath + '.' + fieldName;
   }
@@ -780,6 +842,17 @@ public final class CompatibilityChecker {
     private final Schema updateRoot;
     private final Map<String, Schema> originalNamedTypes;
     private final Map<String, Schema> updateNamedTypes;
+
+    /**
+     * Derived defaults for the update schema, keyed by index path.
+     *
+     * <p>Read in preference to nothing at all: the converters record a container's implicit default
+     * ({@code repeated} is an empty list, a proto map is an empty map) <em>only</em> here, never on
+     * the {@link Schema.Field}. The field's own default is reserved for user-declared values so
+     * that a DDL round-trip stays clean. Both are consulted; see {@code hasDefault}.
+     */
+    private final Map<List<Integer>, Object> updateDefaults;
+
     private final List<Incompatibility> findings = new ArrayList<>();
 
     /**
@@ -797,10 +870,11 @@ public final class CompatibilityChecker {
       this.updateRoot = update.getRootSchema();
       this.originalNamedTypes = original.getNamedTypes();
       this.updateNamedTypes = update.getNamedTypes();
+      this.updateDefaults = update.getDefaultValues();
     }
 
     CompatibilityResult run() {
-      compareTypes(originalRoot, updateRoot, "");
+      compareTypes(originalRoot, updateRoot, "", Collections.emptyList());
       return CompatibilityResult.of(findings);
     }
 
@@ -816,7 +890,8 @@ public final class CompatibilityChecker {
 
     // -- dispatch --------------------------------------------------------------------------------
 
-    private void compareTypes(Schema original, Schema update, String path) {
+    private void compareTypes(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
       if (isRef(original) || isRef(update)) {
         String pairKey = refKey(original) + ' ' + refKey(update);
         if (!comparedRefPairs.add(pairKey)) {
@@ -825,13 +900,14 @@ public final class CompatibilityChecker {
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
             resolve(update, updateNamedTypes),
-            path);
+            path, indexPath);
         return;
       }
-      checkCompatibilityRecursive(original, update, path);
+      checkCompatibilityRecursive(original, update, path, indexPath);
     }
 
-    private void checkCompatibilityRecursive(Schema original, Schema update, String path) {
+    private void checkCompatibilityRecursive(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
       if (isRef(original) || isRef(update)) {
         if (!isRef(original) || !isRef(update)
             || !original.getQualifiedName().equals(update.getQualifiedName())) {
@@ -850,17 +926,17 @@ public final class CompatibilityChecker {
       switch (originalKind) {
         case STRUCT:
           if (claimStructPair(original, update)) {
-            validateStructs(fieldViews(original), fieldViews(update), path);
+            validateStructs(fieldViews(original), fieldViews(update), path, indexPath);
           }
           break;
         case LIST:
-          validateLists(original, update, path);
+          validateLists(original, update, path, indexPath);
           break;
         case MULTISET:
-          validateMultisets(original, update, path);
+          validateMultisets(original, update, path, indexPath);
           break;
         case MAP:
-          validateMaps(original, update, path);
+          validateMaps(original, update, path, indexPath);
           break;
         case PRIMITIVE:
           validatePrimitives(original, update, path);
@@ -879,12 +955,14 @@ public final class CompatibilityChecker {
      * is no container-only relaxation here — a default is enough on its own.
      */
     private void validateStructs(
-        List<FieldView> originalFields, List<FieldView> updateFields, String path) {
+        List<FieldView> originalFields, List<FieldView> updateFields, String path,
+        List<Integer> indexPath) {
 
       final Map<String, FieldView> originalFieldMap = originalFields.stream()
           .collect(Collectors.toMap(field -> field.name, field -> field));
 
       int lastSeenOriginalIndex = -1;
+      int updatePosition = -1;
       final List<String> originalFieldOrder = originalFields.stream()
           .map(field -> field.name)
           .collect(Collectors.toList());
@@ -893,12 +971,16 @@ public final class CompatibilityChecker {
           .map(field -> field.name)
           .collect(Collectors.toSet());
       for (FieldView updateField : updateFields) {
-        String fieldPath = childPath(path, updateField.name);
+        updatePosition++;
+        final String fieldPath = childPath(path, updateField.name);
+        // Struct fields are the one place both converters agree on the index convention: the
+        // field's position within its struct, appended to the parent's path.
+        final List<Integer> fieldIndexPath = appendIndex(indexPath, updatePosition);
         final FieldView originalField = originalFieldMap.get(updateField.name);
 
         // R1: a new column must be readable for rows written before it existed.
         if (originalField == null) {
-          if (!isNullableOrDefaulted(updateField)) {
+          if (!isNullableOrDefaulted(updateField, fieldIndexPath)) {
             add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
                 "added column is neither nullable nor defaulted, so rows written before it existed "
                     + "have no value for it");
@@ -920,7 +1002,7 @@ public final class CompatibilityChecker {
               "column was nullable and is now NOT NULL; pre-existing rows may hold nulls");
         }
 
-        compareTypes(originalField.schema, updateField.schema, fieldPath);
+        compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
       }
 
       // R2, and R3 by consequence: a rename is indistinguishable from a drop plus an add.
@@ -939,33 +1021,62 @@ public final class CompatibilityChecker {
      * <p>As in Iceberg mode the schema is the authoritative source of defaults — read from the
      * field, never from a caller-supplied side table.
      */
-    private static boolean isNullableOrDefaulted(FieldView field) {
-      return isEffectivelyNullable(field) || field.hasDefault;
+    private boolean isNullableOrDefaulted(FieldView field, List<Integer> fieldIndexPath) {
+      return isEffectivelyNullable(field) || hasDefault(field, fieldIndexPath);
     }
 
     /** R7 for ARRAY. */
-    private void validateLists(Schema original, Schema update, String path) {
-      compareTypes(elementOf(original), elementOf(update), path + "[]");
+    private void validateLists(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
+      // The element index path is not portable: the Avro converter appends 0 for an array element
+      // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
+      // down, which makes a default lookup below an array fail closed rather than guess.
+      compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
     /** R7 for MULTISET, which Flink models as its own type rather than as a MAP. */
-    private void validateMultisets(Schema original, Schema update, String path) {
-      compareTypes(elementOf(original), elementOf(update), path + "[]");
+    private void validateMultisets(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
+      compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
     /** R7 for MAP. The key type is frozen; only the value may widen. */
-    private void validateMaps(Schema original, Schema update, String path) {
+    private void validateMaps(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
       if (!flinkTypesEqual(original.getKeyType(), update.getKeyType())) {
         add(Rule.MAP_KEY_TYPE_MISMATCH, path,
             "map key type changed from " + render(original.getKeyType())
                 + " to " + render(update.getKeyType()));
       }
-      compareTypes(original.getValueType(), update.getValueType(), path + "{}");
+      // Both converters agree on the map value index, unlike the array element.
+      compareTypes(original.getValueType(), update.getValueType(), path + "{}",
+          appendIndex(indexPath, 1));
     }
 
     private static boolean isEffectivelyNullable(FieldView field) {
       return field.forcedNullable || field.schema.isNullable();
     }
+
+    /**
+     * Whether {@code field} carries a default, from either channel.
+     *
+     * <p>Two channels exist and both count. A user-declared default lands on the
+     * {@link Schema.Field}. A default the converter derived from format semantics — an absent
+     * {@code repeated} field is an empty list, an absent proto map is an empty map — lands only in
+     * the schema's path-keyed map. Reading just the field would miss every derived default, which
+     * is the majority of them and the whole reason the container relaxation exists.
+     *
+     * <p>A {@code null} path means the walk crossed an array, where the two converters disagree on
+     * the index convention. There the lookup is skipped rather than guessed, so an undecidable case
+     * reads as "no default" and fails closed.
+     */
+    private boolean hasDefault(FieldView field, List<Integer> fieldIndexPath) {
+      if (field.hasDefault) {
+        return true;
+      }
+      return fieldIndexPath != null && updateDefaults.containsKey(fieldIndexPath);
+    }
+
 
     // -- primitives ------------------------------------------------------------------------------
 
@@ -995,18 +1106,41 @@ public final class CompatibilityChecker {
       ParamKind originalParams = paramKindOf(originalRootType);
       ParamKind updateParams = paramKindOf(updateRootType);
 
+      // A fixed-length type may widen into a variable-length one if the bound still covers it.
+      if (originalParams == ParamKind.FIXED_LENGTH
+          && updateParams == ParamKind.VARIABLE_LENGTH) {
+        if (flinkLengthOf(update) < flinkLengthOf(original)) {
+          add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
+              + " (length may not shrink)");
+        }
+        return;
+      }
+
       if (originalParams == updateParams) {
         switch (originalParams) {
-          case LENGTH:
+          case FIXED_LENGTH:
+            // Not a bound: the length is the value's stored width. CHAR right-pads and BINARY is a
+            // fixed byte count, so widening rewrites every historical value rather than admitting
+            // wider ones. Avro resolution likewise requires an identical `fixed` size.
+            if (flinkLengthOf(update) != flinkLengthOf(original)) {
+              add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
+                  + " (a fixed-length type cannot change length)");
+            }
+            return;
+          case VARIABLE_LENGTH:
             if (flinkLengthOf(update) < flinkLengthOf(original)) {
               add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
                   + " (length may not shrink)");
             }
             return;
           case PRECISION:
-            if (update.getPrecision() < original.getPrecision()) {
+            // Frozen, not merely non-shrinking, for the same reason decimal scale is: the precision
+            // selects the unit of the stored integer. An Avro timestamp-millis field re-annotated
+            // as timestamp-micros keeps its bytes and its column type but every value is then read
+            // a thousandfold out.
+            if (update.getPrecision() != original.getPrecision()) {
               add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
-                  + " (precision may not shrink)");
+                  + " (precision selects the unit of the stored value and cannot change)");
             }
             return;
           case PRECISION_AND_SCALE:
@@ -1071,7 +1205,8 @@ public final class CompatibilityChecker {
             return false;
           }
           switch (paramKindOf(leftRoot)) {
-            case LENGTH:
+            case FIXED_LENGTH:
+            case VARIABLE_LENGTH:
               return flinkLengthOf(left) == flinkLengthOf(right);
             case PRECISION:
               return left.getPrecision() == right.getPrecision();
@@ -1095,8 +1230,16 @@ public final class CompatibilityChecker {
   /** Which parameters a Flink type root carries, and therefore which guard applies to it. */
   private enum ParamKind {
     NONE,
-    LENGTH,
+    /** CHAR and BINARY: the declared length is the stored length. */
+    FIXED_LENGTH,
+    /** VARCHAR and VARBINARY: the declared length is an upper bound. */
+    VARIABLE_LENGTH,
+    /**
+     * TIME and TIMESTAMP. The precision is not merely a bound: for an Avro logical type it selects
+     * the unit of the stored integer, so changing it reinterprets every historical value.
+     */
     PRECISION,
+    /** DECIMAL, where precision is a bound but scale selects the unit. */
     PRECISION_AND_SCALE
   }
 
@@ -1185,10 +1328,11 @@ public final class CompatibilityChecker {
   private static ParamKind paramKindOf(FlinkLogicalTypeCasts.Root root) {
     switch (root) {
       case CHAR:
-      case VARCHAR:
       case BINARY:
+        return ParamKind.FIXED_LENGTH;
+      case VARCHAR:
       case VARBINARY:
-        return ParamKind.LENGTH;
+        return ParamKind.VARIABLE_LENGTH;
       case TIME:
       case TIMESTAMP:
       case TIMESTAMP_LTZ:

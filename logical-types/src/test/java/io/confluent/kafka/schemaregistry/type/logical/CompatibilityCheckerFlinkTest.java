@@ -299,11 +299,12 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void timestampAndTimestampLtzConvertInBothDirections() {
-    // Flink permits this; Iceberg mode rejects it, since timestamp and timestamptz are distinct
-    // there. The known gap: the same long is reinterpreted against a different reference frame.
-    assertWidens(Schema.createTimestamp(3), Schema.createTimestampLtz(3));
-    assertWidens(Schema.createTimestampLtz(3), Schema.createTimestamp(3));
+  void timestampAndTimestampLtzNeverConvertInEitherDirection() {
+    // Narrower than Flink, which permits both directions. The two share a representation but not a
+    // reference frame -- one is a wall-clock reading, the other an instant -- so re-annotating a
+    // field shifts every historical value by the local UTC offset while the bytes stay put.
+    assertRejected(Schema.createTimestamp(3), Schema.createTimestampLtz(3));
+    assertRejected(Schema.createTimestampLtz(3), Schema.createTimestamp(3));
   }
 
   @Test
@@ -353,19 +354,28 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void binaryLengthMayGrowButNotShrink() {
-    // Differs from Iceberg mode, where BINARY(n) becomes fixed(n) and the length is frozen.
-    assertWidens(Schema.createBinary(16), Schema.createBinary(32));
+  void fixedLengthTypesCannotChangeLengthAtAll() {
+    // The declared length of CHAR and BINARY is the stored width, not a bound: BINARY pads to an
+    // exact byte count and CHAR right-pads with spaces, so widening rewrites every historical value.
+    // Avro resolution likewise requires an identical `fixed` size. Narrower than Flink, whose table
+    // does not read the length at all.
+    assertRejected(Schema.createBinary(16), Schema.createBinary(32));
     assertRejected(Schema.createBinary(32), Schema.createBinary(16));
+    assertRejected(Schema.createChar(5), Schema.createChar(10));
+    assertRejected(Schema.createChar(10), Schema.createChar(5));
   }
 
   @Test
-  void temporalPrecisionMayGrowButNotShrink() {
-    assertWidens(Schema.createTimestamp(3), Schema.createTimestamp(6));
+  void temporalPrecisionIsFrozenInBothDirections() {
+    // Precision is not a bound here: for an Avro logical type it selects the unit of the stored
+    // integer, so a timestamp-millis field re-annotated as timestamp-micros keeps its bytes and its
+    // column type while every value is read a thousandfold out. Growing it is no safer than
+    // shrinking it -- the same reasoning that freezes decimal scale.
+    assertRejected(Schema.createTimestamp(3), Schema.createTimestamp(6));
     assertRejected(Schema.createTimestamp(6), Schema.createTimestamp(3));
-    assertWidens(Schema.createTime(3), Schema.createTime(9));
+    assertRejected(Schema.createTime(3), Schema.createTime(9));
     assertRejected(Schema.createTime(9), Schema.createTime(3));
-    assertWidens(Schema.createTimestampLtz(3), Schema.createTimestampLtz(9));
+    assertRejected(Schema.createTimestampLtz(3), Schema.createTimestampLtz(9));
     assertRejected(Schema.createTimestampLtz(9), Schema.createTimestampLtz(3));
   }
 

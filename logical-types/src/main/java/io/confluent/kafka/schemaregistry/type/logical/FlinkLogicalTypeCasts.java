@@ -38,7 +38,7 @@ import java.util.Set;
  * timestamp-with-time-zone) and the explicit and injective cast tables, which no rule here
  * consults.
  *
- * <p><b>Five edges are deliberately narrower than Flink's</b>, each marked
+ * <p><b>Seven edges are deliberately narrower than Flink's</b>, each marked
  * {@code DIVERGENCE FROM FLINK} at its declaration. Flink's table serves query planning, where an
  * inserted cast may legitimately truncate, so "implicit" there does not imply lossless. A stored
  * column has no such licence: the rows were written under the old type and nothing rewrites them.
@@ -207,12 +207,19 @@ final class FlinkLogicalTypeCasts {
         .implicitFrom(Root.TIME)
         .build();
 
+    // DIVERGENCE FROM FLINK: Flink also admits TIMESTAMP_LTZ, in both directions. The two share a
+    // representation but not a reference frame -- one is a local wall-clock reading, the other an
+    // instant -- so re-annotating a field shifts every historical value by the local UTC offset
+    // while the bytes and the column type stay put. Same class as the frozen decimal scale and the
+    // frozen temporal precision: an annotation that selects how stored bytes are read cannot be
+    // changed.
     castTo(Root.TIMESTAMP)
-        .implicitFrom(Root.TIMESTAMP, Root.TIMESTAMP_LTZ)
+        .implicitFrom(Root.TIMESTAMP)
         .build();
 
+    // DIVERGENCE FROM FLINK: as above, for the opposite direction.
     castTo(Root.TIMESTAMP_LTZ)
-        .implicitFrom(Root.TIMESTAMP_LTZ, Root.TIMESTAMP)
+        .implicitFrom(Root.TIMESTAMP_LTZ)
         .build();
   }
 

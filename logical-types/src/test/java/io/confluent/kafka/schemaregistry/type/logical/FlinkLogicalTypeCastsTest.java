@@ -45,9 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * <p><b>The split between the two providers is the point of this file.</b>
  * {@link #flinkAgreedTestData()} copies Flink's expectations verbatim, so a disagreement there means
  * the transcription drifted. {@link #flinkDivergentTestData()} holds the cases where this module
- * deliberately answers differently, each with its reason — and all three turn out to be parameter
- * narrowings that Flink's root-keyed table structurally cannot see, which is exactly what the
- * parameter guards exist for.
+ * deliberately answers differently, each with its reason. 15 of the 24 agree; the 9 that do not are
+ * all cases where Flink calls a cast implicit even though it reinterprets stored bytes.
  */
 class FlinkLogicalTypeCastsTest {
 
@@ -158,13 +157,7 @@ class FlinkLogicalTypeCastsTest {
             false),
 
         Arguments.of(timestampType(9), timestampType(9), true),
-        Arguments.of(localZonedTimestampType(9), localZonedTimestampType(9), true),
-        Arguments.of(timestampType(3), localZonedTimestampType(3), true),
-        Arguments.of(localZonedTimestampType(3), timestampType(3), true),
-        Arguments.of(timestampType(3), localZonedTimestampType(6), true),
-        Arguments.of(localZonedTimestampType(3), timestampType(6), true),
-        Arguments.of(notNull(Schema.createTimestamp(3)), localZonedTimestampType(6), true),
-        Arguments.of(notNull(Schema.createTimestampLtz(3)), timestampType(6), true));
+        Arguments.of(localZonedTimestampType(9), localZonedTimestampType(9), true));
   }
 
   @ParameterizedTest(name = "{0} -> {1}")
@@ -178,11 +171,11 @@ class FlinkLogicalTypeCastsTest {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Every entry here is a parameter narrowing that Flink calls an implicit cast. Its table is keyed by
-   * type root and never reads a precision or scale, so it cannot distinguish these from the widening
-   * of the same roots. The parameter guards can, and refuse them.
+   * Every entry here is a change Flink calls an implicit cast that nonetheless reinterprets stored
+   * bytes. Some are parameter changes its root-keyed table cannot see; the rest are the
+   * TIMESTAMP/TIMESTAMP_LTZ pair, which share a representation but not a reference frame.
    *
-   * <p>These three are, in effect, Flink's own test suite documenting that
+   * <p>These nine are, in effect, Flink's own test suite documenting that
    * {@code supportsImplicitCast} is not a lossless relation.
    */
   static Stream<Arguments> flinkDivergentTestData() {
@@ -190,7 +183,17 @@ class FlinkLogicalTypeCastsTest {
         // Flink: true. INT needs 10 digits; DECIMAL(5,5) leaves none for the integer part.
         Arguments.of(intType(), decimalType(5, 5), false),
 
-        // Flink: true. Both narrow the fractional-second precision from 6 to 3.
+        // Flink: true, in both directions. TIMESTAMP and TIMESTAMP_LTZ share a representation but
+        // not a reference frame, so re-annotating shifts every value by the local UTC offset.
+        Arguments.of(timestampType(3), localZonedTimestampType(3), false),
+        Arguments.of(localZonedTimestampType(3), timestampType(3), false),
+
+        // Flink: true. Precision selects the unit of the stored integer, so a change reinterprets
+        // every historical value -- growing it is no safer than shrinking it.
+        Arguments.of(timestampType(3), localZonedTimestampType(6), false),
+        Arguments.of(localZonedTimestampType(3), timestampType(6), false),
+        Arguments.of(notNull(Schema.createTimestamp(3)), localZonedTimestampType(6), false),
+        Arguments.of(notNull(Schema.createTimestampLtz(3)), timestampType(6), false),
         Arguments.of(timestampType(6), localZonedTimestampType(3), false),
         Arguments.of(localZonedTimestampType(6), timestampType(3), false));
   }
