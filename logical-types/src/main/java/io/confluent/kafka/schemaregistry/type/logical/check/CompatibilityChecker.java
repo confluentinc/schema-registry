@@ -209,6 +209,11 @@ final class CompatibilityChecker {
      */
     private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
 
+    /**
+     * In-progress ref pairs for {@link #erasedEquals}; see its javadoc.
+     */
+    private final Set<String> erasedRefPairsInProgress = new HashSet<>();
+
     /** Iceberg table format version being targeted. */
     private final int formatVersion;
 
@@ -247,9 +252,15 @@ final class CompatibilityChecker {
     private void compareTypes(
         Schema original, Schema update, String path, List<Integer> indexPath) {
       if (isRef(original) || isRef(update)) {
-        String pairKey = refKey(original) + ' ' + refKey(update);
-        if (!comparedRefPairs.add(pairKey)) {
-          return;
+        // Dedup only when BOTH sides are refs. refKey returns "" for a non-ref, so keying on a
+        // one-sided ref collapses every inline counterpart onto the same key: the first
+        // (inline, ref X) pair claims it and every later one returns without comparing anything,
+        // silently dropping findings. Inline-to-$ref is ordinary JSON Schema evolution.
+        if (isRef(original) && isRef(update)) {
+          final String pairKey = refKey(original) + ' ' + refKey(update);
+          if (!comparedRefPairs.add(pairKey)) {
+            return;
+          }
         }
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
@@ -285,7 +296,7 @@ final class CompatibilityChecker {
           }
           break;
         case LIST:
-          validateLists(original, update, path, indexPath);
+          validateLists(original, update, path);
           break;
         case MAP:
           validateMaps(original, update, path, indexPath);
@@ -332,8 +343,11 @@ final class CompatibilityChecker {
         if (originalField == null) {
           if (!isEffectivelyOptional(updateField, fieldIndexPath, null)) {
             add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
-                "added field is neither nullable nor defaulted; pre-existing rows have no value "
-                    + "for it and Iceberg v2 cannot store a column default");
+                "added field is neither nullable nor defaulted, so pre-existing rows have no "
+                    + "value for it"
+                    + (supportsColumnDefaults()
+                        ? "; a non-null column default would make it readable"
+                        : "; format-version 2 cannot store a column default"));
           }
           // Do not descend into a field the original schema never had.
           continue;
@@ -369,7 +383,7 @@ final class CompatibilityChecker {
      * Mirrors the Iceberg-schema implementation's {@code validateLists}.
      */
     private void validateLists(
-        Schema original, Schema update, String path, List<Integer> indexPath) {
+        Schema original, Schema update, String path) {
       // The element index path is not portable: the Avro converter appends 0 for an array element
       // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
       // down, which makes a default lookup below an array fail closed rather than guess.
@@ -409,7 +423,7 @@ final class CompatibilityChecker {
           case DECIMAL:
             // Iceberg allows decimal precision to widen but never the scale to change: the stored
             // value is an unscaled integer, so re-scaling would reinterpret every existing row.
-            if (update.getScale() != original.getScale()
+            if (scaleOf(update) != scaleOf(original)
                 || update.getPrecision() < original.getPrecision()) {
               add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
                   + " (decimal scale must be unchanged and precision may not shrink)");
@@ -431,8 +445,37 @@ final class CompatibilityChecker {
       }
     }
 
-    /** Structural equality under Iceberg erasure, with no promotion allowed. Used for map keys. */
+    /**
+     * Structural equality under Iceberg erasure, with no promotion allowed. Used for map keys.
+     *
+     * <p>The main walk's cycle guards do not cover this path, so it carries its own. Without one, a
+     * recursive named type reached through a map key — or a MULTISET element, since Iceberg lowers
+     * {@code MULTISET<T>} to {@code map<T, int>} — resolves to the same struct forever and
+     * reported to the user as an incompatibility at all.
+     * reported to the user as an incompatibility at all.
+     *
+     * <p>The guard is an in-progress stack rather than a memo: entries are removed on the way out,
+     * so a second, unrelated occurrence of the same pair is still compared properly. Re-entering a
+     * pair means a cycle, and a cycle is structurally equal to itself, so the inner frame answers
+     * {@code true} and lets the outer one decide.
+     */
     private boolean erasedEquals(Schema original, Schema update) {
+      if (isRef(original) && isRef(update)) {
+        final String pairKey =
+            original.getQualifiedName() + ' ' + update.getQualifiedName();
+        if (!erasedRefPairsInProgress.add(pairKey)) {
+          return true;
+        }
+        try {
+          return erasedEqualsResolved(original, update);
+        } finally {
+          erasedRefPairsInProgress.remove(pairKey);
+        }
+      }
+      return erasedEqualsResolved(original, update);
+    }
+
+    private boolean erasedEqualsResolved(Schema original, Schema update) {
       Schema left = resolve(original, originalNamedTypes);
       Schema right = resolve(update, updateNamedTypes);
       if (isRef(left) || isRef(right)) {
@@ -470,7 +513,7 @@ final class CompatibilityChecker {
           }
           if (leftClass == IcebergClass.DECIMAL) {
             return left.getPrecision() == right.getPrecision()
-                && left.getScale() == right.getScale();
+                && scaleOf(left) == scaleOf(right);
           }
           if (leftClass == IcebergClass.FIXED) {
             return left.getLength() == right.getLength();
@@ -506,14 +549,11 @@ final class CompatibilityChecker {
      * must not be modified, and since the relaxation is only ever needed to answer a question, a
      * predicate suffices.
      *
-     * <p><b>The schema is the authoritative source of defaults.</b> The default is read from
-     * {@link Schema.Field#hasDefaultValue()} on the field being examined, never from a path-keyed
-     * side table supplied by the caller. That choice is deliberate: a separately-carried map of
-     * defaults can be mis-keyed against the schema it describes, and reading the field
-     * directly makes
-     * that failure mode unrepresentable. A caller holding defaults out-of-band should
-     * push them onto
-     * the schema rather than expect this method to consult them.
+     * <p><b>Defaults are read from either of two channels, and either suffices</b> — see
+     * {@link #hasDefault}. A user-declared default lands on the field itself; one the converter
+     * derived from format semantics lands only in the schema's path-keyed map. Consulting just the
+     * field would miss the derived majority, which is precisely the population this relaxation
+     * exists for.
      *
      * @param originalField the matching field in the original schema, or {@code null} if the field
      *                      is newly added
@@ -870,10 +910,26 @@ final class CompatibilityChecker {
     return "type changed from " + render(original) + " to " + render(update);
   }
 
+  /**
+   * A DECIMAL's scale, with {@link Schema#NO_PARAM} read as {@code 0}.
+   *
+   * <p>SRLT preserves {@code NO_PARAM} so the SQL form {@code DECIMAL(p)} round-trips through DDL,
+   * making the sentinel a legitimate value here rather than bad input — and SQL reads
+   * {@code DECIMAL(p)} as {@code DECIMAL(p, 0)}. Comparing it raw both rejects the no-op
+   * {@code DECIMAL(10) -> DECIMAL(10, 0)} and, worse, makes an integer widening look safe:
+   * {@code precision - (-1)} overstates the available integer digits by one, so
+   * {@code BIGINT -> DECIMAL(18)} passes while {@code BIGINT -> DECIMAL(18, 0)} is correctly
+   * rejected.
+   */
+  private static int scaleOf(Schema decimal) {
+    final int scale = decimal.getScale();
+    return scale == Schema.NO_PARAM ? 0 : scale;
+  }
+
   private static String render(Schema schema) {
     switch (schema.getType()) {
       case DECIMAL:
-        return "DECIMAL(" + schema.getPrecision() + ", " + schema.getScale() + ")";
+        return "DECIMAL(" + schema.getPrecision() + ", " + scaleOf(schema) + ")";
       case CHAR:
       case VARCHAR:
       case BINARY:
@@ -990,9 +1046,15 @@ final class CompatibilityChecker {
     private void compareTypes(
         Schema original, Schema update, String path, List<Integer> indexPath) {
       if (isRef(original) || isRef(update)) {
-        String pairKey = refKey(original) + ' ' + refKey(update);
-        if (!comparedRefPairs.add(pairKey)) {
-          return;
+        // Dedup only when BOTH sides are refs. refKey returns "" for a non-ref, so keying on a
+        // one-sided ref collapses every inline counterpart onto the same key: the first
+        // (inline, ref X) pair claims it and every later one returns without comparing anything,
+        // silently dropping findings. Inline-to-$ref is ordinary JSON Schema evolution.
+        if (isRef(original) && isRef(update)) {
+          final String pairKey = refKey(original) + ' ' + refKey(update);
+          if (!comparedRefPairs.add(pairKey)) {
+            return;
+          }
         }
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
@@ -1027,10 +1089,10 @@ final class CompatibilityChecker {
           }
           break;
         case LIST:
-          validateLists(original, update, path, indexPath);
+          validateLists(original, update, path);
           break;
         case MULTISET:
-          validateMultisets(original, update, path, indexPath);
+          validateMultisets(original, update, path);
           break;
         case MAP:
           validateMaps(original, update, path, indexPath);
@@ -1192,7 +1254,7 @@ final class CompatibilityChecker {
 
     /** Container recursion for ARRAY. */
     private void validateLists(
-        Schema original, Schema update, String path, List<Integer> indexPath) {
+        Schema original, Schema update, String path) {
       // The element index path is not portable: the Avro converter appends 0 for an array element
       // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
       // down, which makes a default lookup below an array fail closed rather than guess.
@@ -1203,7 +1265,7 @@ final class CompatibilityChecker {
      * Container recursion for MULTISET, which Flink models as its own type rather than a MAP.
      */
     private void validateMultisets(
-        Schema original, Schema update, String path, List<Integer> indexPath) {
+        Schema original, Schema update, String path) {
       compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
@@ -1304,7 +1366,7 @@ final class CompatibilityChecker {
             }
             return;
           case PRECISION_AND_SCALE:
-            if (update.getScale() != original.getScale()
+            if (scaleOf(update) != scaleOf(original)
                 || update.getPrecision() < original.getPrecision()) {
               add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
                   + " (decimal scale must be unchanged and precision may not shrink)");
@@ -1319,66 +1381,10 @@ final class CompatibilityChecker {
       if (updateParams == ParamKind.PRECISION_AND_SCALE) {
         int digitsNeeded = decimalDigitsOf(originalRootType);
         if (digitsNeeded > 0
-            && update.getPrecision() - update.getScale() < digitsNeeded) {
+            && update.getPrecision() - scaleOf(update) < digitsNeeded) {
           add(Rule.UNSUPPORTED_TYPE_CHANGE, path, describeChange(original, update)
               + " (target cannot represent the full range of the source)");
         }
-      }
-    }
-
-    /** Exact Flink-type equality, with no widening allowed. Used for map keys, which are frozen. */
-    private boolean flinkTypesEqual(Schema original, Schema update) {
-      Schema left = resolve(original, originalNamedTypes);
-      Schema right = resolve(update, updateNamedTypes);
-      if (isRef(left) || isRef(right)) {
-        return isRef(left) && isRef(right)
-            && left.getQualifiedName().equals(right.getQualifiedName());
-      }
-      Kind kind = flinkKindOf(left);
-      if (kind != flinkKindOf(right)) {
-        return false;
-      }
-      switch (kind) {
-        case STRUCT: {
-          List<FieldView> leftFields = fieldViews(left);
-          List<FieldView> rightFields = fieldViews(right);
-          if (leftFields.size() != rightFields.size()) {
-            return false;
-          }
-          for (int i = 0; i < leftFields.size(); i++) {
-            if (!leftFields.get(i).name.equals(rightFields.get(i).name)
-                || !flinkTypesEqual(leftFields.get(i).schema, rightFields.get(i).schema)) {
-              return false;
-            }
-          }
-          return true;
-        }
-        case LIST:
-        case MULTISET:
-          return flinkTypesEqual(elementOf(left), elementOf(right));
-        case MAP:
-          return flinkTypesEqual(left.getKeyType(), right.getKeyType())
-              && flinkTypesEqual(left.getValueType(), right.getValueType());
-        case PRIMITIVE: {
-          FlinkLogicalTypeCasts.Root leftRoot = flinkRootOf(left);
-          if (leftRoot != flinkRootOf(right)) {
-            return false;
-          }
-          switch (paramKindOf(leftRoot)) {
-            case FIXED_LENGTH:
-            case VARIABLE_LENGTH:
-              return flinkLengthOf(left) == flinkLengthOf(right);
-            case PRECISION:
-              return left.getPrecision() == right.getPrecision();
-            case PRECISION_AND_SCALE:
-              return left.getPrecision() == right.getPrecision()
-                  && left.getScale() == right.getScale();
-            default:
-              return true;
-          }
-        }
-        default:
-          return false;
       }
     }
   }

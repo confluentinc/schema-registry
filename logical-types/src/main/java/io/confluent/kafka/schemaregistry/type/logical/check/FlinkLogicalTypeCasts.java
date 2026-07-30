@@ -33,7 +33,7 @@ import java.util.Set;
  * <p><b>Keep this in sync with the Flink original.</b> The enum names, the builder API, and the
  * order in which rules are declared all deliberately match it, so {@link #IMPLICIT_CASTING_RULES}'s
  * static initialiser can be diffed against Flink's line for line. Two things are intentionally
- * absent: the roots that no {@link Schema.Type} maps onto (structured, raw, symbol, interval, null,
+ * absent: the roots that no {@code Schema.Type} maps onto (structured, raw, symbol, interval, null,
  * timestamp-with-time-zone) and the explicit and injective cast tables, which no rule here
  * consults.
  *
@@ -56,11 +56,11 @@ import java.util.Set;
 final class FlinkLogicalTypeCasts {
 
   /**
-   * Mirrors the subset of Flink's type root that a {@link Schema.Type} can produce.
+   * Mirrors the subset of Flink's type root that a {@code Schema.Type} can produce.
    *
    * <p>{@code TIMESTAMP} and {@code TIMESTAMP_LTZ} correspond to Flink's
    * {@code TIMESTAMP_WITHOUT_TIME_ZONE} and {@code TIMESTAMP_WITH_LOCAL_TIME_ZONE}; the shorter
-   * names match this module's {@link Schema.Type} spelling.
+   * names match this module's {@code Schema.Type} spelling.
    */
   enum Root {
     CHAR,
@@ -229,7 +229,7 @@ final class FlinkLogicalTypeCasts {
    * Whether {@code source} widens to {@code target} without loss of information, by Flink's
    * definition.
    *
-   * <p>Unlike Flink's, this relation really is lossless: the five edges where Flink's is not are
+   * <p>Unlike Flink's, this relation really is lossless: the seven edges where Flink's is not are
    * narrowed at their declarations. See the class javadoc.
    */
   static boolean supportsImplicitCast(Root source, Root target) {

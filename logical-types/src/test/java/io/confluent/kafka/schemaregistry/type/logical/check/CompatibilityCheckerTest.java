@@ -28,10 +28,13 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -458,5 +461,99 @@ class CompatibilityCheckerTest {
     assertEquals(2, result.getIncompatibilities().size(), result.describe());
     assertTrue(result.describe().contains("a"), result.describe());
     assertTrue(result.describe().contains("b"), result.describe());
+  }
+
+  // -----------------------------------------------------------------------------------------------
+  // Regressions from the review of the check package
+  // -----------------------------------------------------------------------------------------------
+
+  @Test
+  void aRecursiveNamedTypeUnderAMapKeyDoesNotOverflowTheStack() {
+    // erasedEquals has no share in the main walk's cycle guards, so it carries its own. Without it
+    // a recursive named type reached through a map key resolves forever and throws StackOverflowError
+    // -- an Error, which cannot be reported to a user as an incompatibility at all.
+    LogicalType t = recursiveUnder(false);
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, t, t).isCompatible());
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V3, t, t).isCompatible());
+  }
+
+  @Test
+  void aRecursiveNamedTypeUnderAMultisetElementDoesNotOverflowTheStack() {
+    // Same path: Iceberg lowers MULTISET<T> to map<T, int>, so keyOf returns the element.
+    LogicalType t = recursiveUnder(true);
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, t, t).isCompatible());
+  }
+
+  @Test
+  void anOmittedDecimalScaleCompareEqualToAnExplicitZero() {
+    // NO_PARAM is SRLT's "scale omitted", and SQL reads DECIMAL(p) as DECIMAL(p, 0), so this is a
+    // no-op change rather than a scale change.
+    LogicalType omitted = struct(required("d", Schema.createDecimal(10, Schema.NO_PARAM), 0));
+    LogicalType explicit = struct(required("d", Schema.createDecimal(10, 0), 0));
+    for (Mode mode : Mode.values()) {
+      assertTrue(CompatibilityChecker.compare(mode, omitted, explicit).isCompatible(),
+          mode + " omitted -> explicit");
+      assertTrue(CompatibilityChecker.compare(mode, explicit, omitted).isCompatible(),
+          mode + " explicit -> omitted");
+    }
+  }
+
+  @Test
+  void anIntegerWideningIntoADecimalWithOmittedScaleStillChecksTheRange() {
+    // The dangerous half: precision - (-1) overstated the available integer digits by one, so
+    // BIGINT -> DECIMAL(18) passed while the DECIMAL(18, 0) control was correctly rejected.
+    // Mode.FLINK explicitly: this class's helpers default to ICEBERG_V2, which has no
+    // integer-to-decimal promotion at all and would reject every case here for the wrong reason.
+    LogicalType from = struct(required("d", Schema.create(Schema.Type.BIGINT), 0));
+    assertFalse(CompatibilityChecker.compare(Mode.FLINK, from,
+        struct(required("d", Schema.createDecimal(18, Schema.NO_PARAM), 0))).isCompatible());
+    assertFalse(CompatibilityChecker.compare(Mode.FLINK, from,
+        struct(required("d", Schema.createDecimal(18, 0), 0))).isCompatible());
+    // 19 digits is enough for BIGINT, with or without the sentinel.
+    assertTrue(CompatibilityChecker.compare(Mode.FLINK, from,
+        struct(required("d", Schema.createDecimal(19, Schema.NO_PARAM), 0))).isCompatible());
+    assertTrue(CompatibilityChecker.compare(Mode.FLINK, from,
+        struct(required("d", Schema.createDecimal(19, 0), 0))).isCompatible());
+  }
+
+  @Test
+  void aOneSidedRefDoesNotSwallowLaterFindings() {
+    // refKey returns "" for a non-ref, so keying the dedup on a one-sided ref collapsed every
+    // inline counterpart onto one key: the first (inline, ref X) pair claimed it and later ones
+    // returned without comparing anything. Both fields must be reported.
+    // Two distinct objects, as a format conversion produces. Reusing one instance would let the
+    // identity-keyed struct-pair guard suppress the second finding for an unrelated reason.
+    Schema inlineA = nonNull(Schema.createStruct(Collections.singletonList(
+        required("v", Schema.create(Schema.Type.INT), 0))));
+    Schema inlineB = nonNull(Schema.createStruct(Collections.singletonList(
+        required("v", Schema.create(Schema.Type.INT), 0))));
+    Map<String, Schema> named = new LinkedHashMap<>();
+    named.put("ns.X", nonNull(Schema.createStruct(Collections.singletonList(
+        required("v", Schema.createString(), 0)))));
+    LogicalType before = new LogicalType(nonNull(Schema.createStruct(Arrays.asList(
+        new Field("a", inlineA, 0), new Field("b", inlineB, 1)))));
+    LogicalType after = new LogicalType(nonNull(Schema.createStruct(Arrays.asList(
+        new Field("a", nonNull(Schema.createNamedTypeRef("ns.X")), 0),
+        new Field("b", nonNull(Schema.createNamedTypeRef("ns.X")), 1)))), named);
+
+    assertEquals(Arrays.asList("a.v", "b.v"),
+        CompatibilityChecker.compare(Mode.ICEBERG_V2, before, after).getIncompatibilities().stream()
+            .map(Incompatibility::getPath)
+            .collect(Collectors.toList()));
+  }
+
+  /** {@code struct { m: <container><ns.R> }} where {@code ns.R} refers to itself. */
+  private static LogicalType recursiveUnder(boolean multiset) {
+    Map<String, Schema> named = new LinkedHashMap<>();
+    named.put("ns.R", nonNull(Schema.createStruct(Arrays.asList(
+        required("v", Schema.create(Schema.Type.INT), 0),
+        new Field("next", Schema.createNamedTypeRef("ns.R").setNullable(true), 1)))));
+    Schema ref = nonNull(Schema.createNamedTypeRef("ns.R"));
+    Schema container = multiset
+        ? Schema.createMultiset(ref)
+        : Schema.createMap(ref, nonNull(Schema.create(Schema.Type.INT)));
+    return new LogicalType(
+        nonNull(Schema.createStruct(Collections.singletonList(
+            new Field("m", nonNull(container), 0)))), named);
   }
 }
