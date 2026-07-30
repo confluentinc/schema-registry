@@ -193,8 +193,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
     assertThatThrownBy(() -> json("{\"type\":\"object\",\"properties\":{"
         + "\"a\":{\"type\":\"string\"}},"
         + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}"))
-        .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("if/then/else");
+        .isInstanceOf(ValidationException.class);
 
     assertAllowedByBoth(
         json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}"),

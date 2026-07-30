@@ -405,7 +405,20 @@ final class ValidityChecker {
       return names;
     }
 
+    /**
+     * Iceberg modes only, mirroring the reference validator that this rule was ported from.
+     *
+     * <p>Not applied under {@link Mode#FLINK}, because nothing on the Flink side rejects it: a
+     * {@code RowType} constructs with zero fields, the {@code CREATE TABLE} column list is optional
+     * in the grammar, and no minimum-column check was found on a resolved schema. So an empty
+     * struct neither reinterprets nor invents a value, and the criterion in
+     * {@code FlinkComparison} admits it. It was applied to every mode for a while purely because
+     * the walk is shared, which is not a reason.
+     */
     private void validateNonEmpty(int childCount, String kind, String path) {
+      if (!isIceberg()) {
+        return;
+      }
       if (childCount == 0) {
         add(Rule.EMPTY_STRUCT, path, "a " + kind + " must have at least one field");
       }

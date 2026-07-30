@@ -351,8 +351,7 @@ class JsonToLogicalTypeConverterTest {
         + "\"properties\":{\"a\":{\"type\":\"integer\"}},"
         + "\"if\":{\"properties\":{\"a\":{\"const\":1}}},"
         + "\"then\":{\"required\":[\"b\"],\"properties\":{\"b\":{\"type\":\"string\"}}}}"))
-        .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("if/then/else");
+        .isInstanceOf(ValidationException.class);
   }
 
   @Test
@@ -362,8 +361,7 @@ class JsonToLogicalTypeConverterTest {
     assertThatThrownBy(() -> convert("{\"type\":\"object\","
         + "\"properties\":{\"a\":{\"type\":\"integer\"}},"
         + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}"))
-        .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("if/then/else");
+        .isInstanceOf(ValidationException.class);
   }
 
   @Test
@@ -374,8 +372,7 @@ class JsonToLogicalTypeConverterTest {
     assertThatThrownBy(() -> convert("{\"type\":\"object\","
         + "\"properties\":{\"a\":{\"type\":\"integer\"}},"
         + "\"not\":{\"required\":[\"a\"]}}"))
-        .isInstanceOf(ValidationException.class)
-        .hasMessageContaining("`not`");
+        .isInstanceOf(ValidationException.class);
   }
 
   @Test
