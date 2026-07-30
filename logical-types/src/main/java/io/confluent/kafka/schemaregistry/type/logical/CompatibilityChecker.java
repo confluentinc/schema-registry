@@ -34,6 +34,12 @@ import java.util.stream.Collectors;
  * <p>Direction is BACKWARD: the {@code update} schema must be able to read data written with the
  * {@code original} schema. All violations are collected; see {@link CompatibilityResult}.
  *
+ * <p><b>This check is only half of the question.</b> It takes two schemas, so it says nothing about
+ * the first schema registered on a subject, and nothing about whether either schema is usable by
+ * the consumer on its own terms — a decimal whose precision exceeds what the consumer supports is
+ * unusable whether or not it changed. {@link ValidityChecker} answers that half, and a caller
+ * registering a schema should run both.
+ *
  * <h2>Mode.ICEBERG</h2>
  *
  * <p>Applies the evolution rules that govern materialising a registered schema into an Apache
@@ -89,18 +95,10 @@ public final class CompatibilityChecker {
    */
   private static final int MAX_ICEBERG_MICROS_PRECISION = 6;
 
-  /** Highest decimal precision Iceberg supports, in every format version. */
-  private static final int MAX_ICEBERG_DECIMAL_PRECISION = 38;
-
   /**
    * Format version that added {@code initial-default} and {@code write-default}.
    */
   private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
-
-  /**
-   * Format version that added the nanosecond timestamps, {@code variant}, and {@code unknown}.
-   */
-  private static final int FORMAT_VERSION_WITH_V3_TYPES = 3;
 
   /**
    * Format version that widened the promotion table. v3 adds {@code date} to the without-timezone
@@ -419,12 +417,9 @@ public final class CompatibilityChecker {
      * {@code float -> double}, and {@code decimal(p,s) -> decimal(p',s)} with {@code p' >= p}.
      */
     private void validatePrimitives(Schema original, Schema update, String path) {
-      if (!isIcebergRepresentable(update, formatVersion)) {
-        add(Rule.UNREPRESENTABLE_TYPE, path,
-            render(update) + " cannot be represented in Iceberg v2");
-        return;
-      }
-
+      // Whether Iceberg can represent the update's types at all is deliberately not asked here.
+      // It is a property of one schema rather than of the change, so a first registration would
+      // escape it entirely; ValidityChecker owns it for both schemas instead.
       IcebergClass originalClass = icebergClassOf(original);
       IcebergClass updateClass = icebergClassOf(update);
 
@@ -753,34 +748,6 @@ public final class CompatibilityChecker {
       default:
         throw new IllegalStateException(
             "Not an Iceberg primitive: " + schema.getType());
-    }
-  }
-
-  /**
-   * Whether Iceberg can represent the type at all, as distinct from erasing a detail of it.
-   *
-   * <p>Sub-microsecond timestamps are deliberately <em>not</em> listed here: Iceberg's own
-   * {@code FlinkTypeToType} maps those to {@code timestamp_ns} rather than rejecting them, so they
-   * are representable — just as a different type, which {@link #icebergClassOf} reflects. Whether a
-   * given table can then store one depends on its format version, which is not a schema-comparison
-   * question.
-   */
-  private static boolean isIcebergRepresentable(Schema schema, int formatVersion) {
-    switch (schema.getType()) {
-      case DECIMAL:
-        // Unchanged in v3: precision is capped at 38 in both.
-        return schema.getPrecision() <= MAX_ICEBERG_DECIMAL_PRECISION;
-      case TIMESTAMP:
-      case TIMESTAMP_LTZ:
-        // Sub-microsecond precision needs timestamp_ns or timestamptz_ns, added in v3.
-        return schema.getPrecision() <= MAX_ICEBERG_MICROS_PRECISION
-            || formatVersion >= FORMAT_VERSION_WITH_V3_TYPES;
-      case VARIANT:
-        return formatVersion >= FORMAT_VERSION_WITH_V3_TYPES;
-      default:
-        // TIME is representable at any precision: Iceberg has no nanosecond time type, so the
-        // precision is simply erased rather than needing a wider one.
-        return true;
     }
   }
 

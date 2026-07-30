@@ -19,46 +19,43 @@ package io.confluent.kafka.schemaregistry.type.logical;
 import java.util.Objects;
 
 /**
- * A single schema-evolution violation found by {@link CompatibilityChecker}.
+ * A single problem with one schema, found by {@link ValidityChecker}.
  *
- * <p>Carries a machine-readable {@link Rule} plus the path of the offending field so callers can
- * surface the exact location rather than a whole-schema failure.
+ * <p>The counterpart of {@link Incompatibility}, which describes a problem with a <em>pair</em> of
+ * schemas. The two are kept as separate types, with separate {@code Rule} enums, because the
+ * questions differ: an {@link Incompatibility} says a change is unsafe, while an
+ * {@link Invalidity} says a schema cannot be used by the consumer at all — whether or not anything
+ * preceded it.
  *
- * <p>Every rule here concerns the <em>change</em> between two schemas. A schema that no consumer
- * can use regardless of what preceded it yields an {@link Invalidity} instead.
- *
- * <p>Path syntax: field names are dot-joined,
- * {@code []} denotes an array element, and <code>{}</code> denotes a map value. For example
- * {@code order.items[].price}.
+ * <p>Path syntax matches {@link Incompatibility}: field names are dot-joined, {@code []} denotes an
+ * array or multiset element, <code>{}</code> denotes a map value, and <code>{key}</code> denotes a
+ * map key. For example {@code order.items[].price}.
  */
-public class Incompatibility {
+public class Invalidity {
 
-  /**
-   * The evolution rule that was violated. Names mirror the exception types raised by the equivalent
-   * Iceberg-schema checker, so findings can be cross-referenced between the two.
-   */
+  /** The validity rule that was violated. */
   public enum Rule {
-    /** A field was added that is neither nullable nor defaulted. */
-    REQUIRED_FIELD_ADDED,
-    /** A field present in the original schema is missing from the update. */
-    FIELD_DELETED,
-    /** Fields common to both schemas no longer appear in the same relative order. */
-    FIELD_REORDERED,
-    /** A nullable field was tightened to non-nullable. */
-    NULLABLE_TO_NON_NULLABLE,
-    /** A map's key type changed. */
-    MAP_KEY_TYPE_MISMATCH,
-    /** The structural kind changed (e.g. STRUCT became a primitive, or ARRAY became MAP). */
-    TYPE_MISMATCH,
-    /** A primitive type changed in a way the target type system does not allow. */
-    UNSUPPORTED_TYPE_CHANGE
+    /** A struct or union has no fields, so it derives to a row type with no columns. */
+    EMPTY_STRUCT,
+    /** A named type refers to itself, directly or through other named types. */
+    CYCLIC_TYPE,
+    /** A named-type reference has no matching entry in the schema's named types. */
+    UNRESOLVED_TYPE_REF,
+    /** A precision falls outside the range the type permits. */
+    PRECISION_OUT_OF_RANGE,
+    /** A decimal scale is negative, or exceeds its own precision. */
+    SCALE_OUT_OF_RANGE,
+    /** A character-string or binary-string length falls outside the range the type permits. */
+    LENGTH_OUT_OF_RANGE,
+    /** The consumer's type system cannot represent the type at all. */
+    UNREPRESENTABLE_TYPE
   }
 
   private final Rule rule;
   private final String path;
   private final String message;
 
-  public Incompatibility(Rule rule, String path, String message) {
+  public Invalidity(Rule rule, String path, String message) {
     this.rule = Objects.requireNonNull(rule, "rule");
     this.path = path == null ? "" : path;
     this.message = Objects.requireNonNull(message, "message");
@@ -82,10 +79,10 @@ public class Incompatibility {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Incompatibility)) {
+    if (!(o instanceof Invalidity)) {
       return false;
     }
-    Incompatibility that = (Incompatibility) o;
+    Invalidity that = (Invalidity) o;
     return rule == that.rule
         && path.equals(that.path)
         && message.equals(that.message);

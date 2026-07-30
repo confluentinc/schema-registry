@@ -208,8 +208,9 @@ class CompatibilityCheckerIcebergV3Test {
 
   @Test
   void dateToTheNanosecondTimestampBecomesAValidPromotion() {
-    // At v2 the objection is that timestamp_ns cannot be stored; at v3 it is a listed promotion.
-    assertEquals(EnumSet.of(Rule.UNREPRESENTABLE_TYPE),
+    // v2 has no date-to-timestamp_ns row in its promotion table; v3 adds one. That v2 additionally
+    // cannot store timestamp_ns is ValidityChecker's finding, not this one's.
+    assertEquals(EnumSet.of(Rule.UNSUPPORTED_TYPE_CHANGE),
         rulesOf(Mode.ICEBERG_V2, col(type(Schema.Type.DATE)), col(Schema.createTimestamp(9))));
     assertEquals(EnumSet.noneOf(Rule.class),
         rulesOf(Mode.ICEBERG_V3, col(type(Schema.Type.DATE)), col(Schema.createTimestamp(9))));
@@ -231,12 +232,8 @@ class CompatibilityCheckerIcebergV3Test {
   @Test
   void timestampToTheNanosecondTimestampIsNotAPromotionAtEitherVersion() {
     // There is no row for it in the promotion table, in either column.
-    // At v2 the finding is UNREPRESENTABLE_TYPE, since timestamp_ns has no home there; at v3 it is
-    // the type change itself.
-    assertTrue(rulesOf(Mode.ICEBERG_V2, col(Schema.createTimestamp(6)),
-        col(Schema.createTimestamp(9))).contains(Rule.UNREPRESENTABLE_TYPE));
-    assertTrue(rulesOf(Mode.ICEBERG_V3, col(Schema.createTimestamp(6)),
-        col(Schema.createTimestamp(9))).contains(Rule.UNSUPPORTED_TYPE_CHANGE));
+    assertBothReject(col(Schema.createTimestamp(6)), col(Schema.createTimestamp(9)),
+        Rule.UNSUPPORTED_TYPE_CHANGE);
   }
 
   @Test
@@ -255,21 +252,18 @@ class CompatibilityCheckerIcebergV3Test {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void theNanosecondTimestampsAreUnrepresentableAtV2() {
-    assertEquals(EnumSet.of(Rule.UNREPRESENTABLE_TYPE),
-        rulesOf(Mode.ICEBERG_V2, col(Schema.createTimestamp(9)), col(Schema.createTimestamp(9))));
-    assertEquals(EnumSet.of(Rule.UNREPRESENTABLE_TYPE),
-        rulesOf(Mode.ICEBERG_V2,
-            col(Schema.createTimestampLtz(9)), col(Schema.createTimestampLtz(9))));
+  void theNanosecondTimestampsAreInvisibleToTheComparison() {
+    // Unchanged on both sides, so there is no change to object to at either version. Whether v2 can
+    // store the type is asserted in ValidityCheckerTest, which sees it on a first registration too.
+    assertBothAccept(col(Schema.createTimestamp(9)), col(Schema.createTimestamp(9)));
+    assertBothAccept(col(Schema.createTimestampLtz(9)), col(Schema.createTimestampLtz(9)));
     assertBothAccept(col(Schema.createTimestamp(6)), col(Schema.createTimestamp(6)));
   }
 
   @Test
-  void variantIsUnrepresentableAtV2() {
-    assertEquals(EnumSet.of(Rule.UNREPRESENTABLE_TYPE),
-        rulesOf(Mode.ICEBERG_V2, col(type(Schema.Type.VARIANT)), col(type(Schema.Type.VARIANT))));
-    assertEquals(EnumSet.noneOf(Rule.class),
-        rulesOf(Mode.ICEBERG_V3, col(type(Schema.Type.VARIANT)), col(type(Schema.Type.VARIANT))));
+  void variantIsInvisibleToTheComparison() {
+    // Same reasoning as the nanosecond timestamps: representability is a single-schema question.
+    assertBothAccept(col(type(Schema.Type.VARIANT)), col(type(Schema.Type.VARIANT)));
   }
 
   @Test
@@ -279,9 +273,10 @@ class CompatibilityCheckerIcebergV3Test {
   }
 
   @Test
-  void decimalPrecisionRemainsCappedAt38() {
-    assertBothReject(col(Schema.createDecimal(38, 2)), col(Schema.createDecimal(40, 2)),
-        Rule.UNREPRESENTABLE_TYPE);
+  void decimalPrecisionWideningIsAPromotionAtBothVersions() {
+    // The cap of 38 is unchanged in v3, but it bounds the type rather than the change, so it is
+    // ValidityChecker that enforces it.
+    assertBothAccept(col(Schema.createDecimal(38, 2)), col(Schema.createDecimal(40, 2)));
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -43,8 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>the type erasure ({@code icebergClassOf}) — TINYINT/SMALLINT collapse, string and binary
  *       length, time and timestamp precision, the micros/nanos boundary;
  *   <li>SRLT types Iceberg has no equivalent for — UNION, ENUM, MULTISET, {@code NAMED_TYPE_REF};
- *   <li>this checker's own additions — report-all, {@link Rule#UNREPRESENTABLE_TYPE},
- *       {@link Mode#FLINK}.
+ *   <li>this checker's own additions — report-all and {@link Mode#FLINK}.
  * </ul>
  *
  * <p>Cases carried over from that suite live in {@link CompatibilityCheckerIcebergSchemaTest} and are kept
@@ -200,26 +199,28 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void crossingTheMicrosBoundaryIsUnrepresentableAtV2AndATypeChangeAtV3() {
-    // Precision above 6 needs timestamp_ns, which v2 has no way to store -- so at v2 the objection is
-    // that the type cannot exist, not that the change is disallowed. At v3 it can exist, and the
-    // objection becomes the real one: timestamp and timestamp_ns are distinct types and the spec adds
-    // no promotion between them.
+  void crossingTheMicrosBoundaryIsATypeChangeAtBothVersions() {
+    // timestamp and timestamp_ns are distinct types, and the spec adds no promotion between them in
+    // either version -- so the comparison reaches the same verdict at both. Whether v2 can store
+    // timestamp_ns at all is a property of the one schema rather than of the change; see
+    // ValidityCheckerTest.
     LogicalType micros = struct(required("ts", Schema.createTimestamp(6), 0));
     LogicalType nanos = struct(required("ts", Schema.createTimestamp(9), 0));
-    assertSingle(micros, nanos, Rule.UNREPRESENTABLE_TYPE);
+    assertSingle(micros, nanos, Rule.UNSUPPORTED_TYPE_CHANGE);
     assertEquals(Collections.singletonList(Rule.UNSUPPORTED_TYPE_CHANGE),
         rulesOf(CompatibilityChecker.compare(Mode.ICEBERG_V3, micros, nanos)));
   }
 
   @Test
-  void precisionChangeWithinTheNanosecondTypeIsInvisibleAtV3() {
-    // Both erase to timestamp_ns, so at v3 there is nothing to see. At v2 neither type exists.
+  void precisionChangeWithinTheNanosecondTypeIsInvisibleAtBothVersions() {
+    // Both erase to timestamp_ns, so the comparison has nothing to see at either version. That v2
+    // cannot store that type is ValidityCheckerTest's business, and it holds of both schemas here
+    // rather than being caused by the change.
     LogicalType sevenDigits = struct(required("ts", Schema.createTimestamp(7), 0));
     LogicalType nineDigits = struct(required("ts", Schema.createTimestamp(9), 0));
+    assertCompatible(sevenDigits, nineDigits);
     assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V3, sevenDigits, nineDigits)
         .isCompatible());
-    assertSingle(sevenDigits, nineDigits, Rule.UNREPRESENTABLE_TYPE);
   }
 
   @Test
@@ -253,11 +254,13 @@ class CompatibilityCheckerTest {
   }
 
   @Test
-  void decimalBeyondIcebergsMaximumPrecisionIsUnrepresentable() {
-    assertSingle(
+  void decimalBeyondIcebergsMaximumPrecisionIsNotTheComparisonsConcern() {
+    // Widening the precision while holding the scale is a listed promotion, so the change itself is
+    // fine. That 40 exceeds Iceberg's cap is a property of the updated schema alone, and is reported
+    // by ValidityChecker -- which, unlike this check, also catches it on a first registration.
+    assertCompatible(
         struct(required("d", Schema.createDecimal(38, 2), 0)),
-        struct(required("d", Schema.createDecimal(40, 2), 0)),
-        Rule.UNREPRESENTABLE_TYPE);
+        struct(required("d", Schema.createDecimal(40, 2), 0)));
   }
 
   // ---------------------------------------------------------------------------------------------
