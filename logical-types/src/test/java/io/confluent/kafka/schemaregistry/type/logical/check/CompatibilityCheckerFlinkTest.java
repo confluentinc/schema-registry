@@ -282,7 +282,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void insertingAColumnInTheMiddleDoesNotCountAsReordering() {
+  void insertingAnOptionalColumnInTheMiddleIsCompatible() {
     assertCompatible(
         schema(optional("a", type(Schema.Type.INT)), optional("b", type(Schema.Type.INT))),
         schema(
@@ -407,13 +407,19 @@ class CompatibilityCheckerFlinkTest {
 
   @Test
   void enumsDeriveToVarcharSoSymbolChangesAreInvisible() {
+    // No symbol change alters the derived type, so none of these is a finding: adding a symbol,
+    // dropping one, reordering them, or widening the whole enum to a free string. There is no
+    // enum rule in this mode -- an enum derives to an unbounded VARCHAR, and a reader resolving a
+    // dropped symbol to the enum default is a property of the encoding, not of the type.
     Schema oneSymbol = Schema.createEnum(
         Collections.singletonList(new Schema.EnumValue("A")));
     Schema twoSymbols = Schema.createEnum(
         Arrays.asList(new Schema.EnumValue("A"), new Schema.EnumValue("B")));
     assertWidens(oneSymbol, twoSymbols);
+    assertWidens(twoSymbols, oneSymbol);
     assertWidens(oneSymbol, Schema.createString());
     assertWidens(Schema.createString(), oneSymbol);
+    assertCompatible(col(enumOf("A", "B")), col(enumOf("B", "A")));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -522,7 +528,7 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void structToPrimitiveIsATypeMismatch() {
+  void structToPrimitiveIsATypeMismatchForFlink() {
     assertSingle(
         col(Schema.createStruct(Collections.singletonList(required("x", type(Schema.Type.INT))))),
         col(type(Schema.Type.INT)),
@@ -646,7 +652,7 @@ class CompatibilityCheckerFlinkTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void unionBranchesAreComparedAsOptionalStructFields() {
+  void unionBranchesAreComparedAsOptionalStructFieldsForFlink() {
     Schema before = Schema.createUnion(Arrays.asList(
         new UnionBranch("s", Schema.createString()),
         new UnionBranch("i", type(Schema.Type.INT))));
@@ -669,12 +675,12 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void recursiveSchemaTerminates() {
+  void recursiveSchemaTerminatesForFlink() {
     assertCompatible(recursiveTree(false), recursiveTree(false));
   }
 
   @Test
-  void incompatibleChangeInsideARecursiveTypeIsReportedOnceAtTheShallowestPath() {
+  void aChangeInsideARecursiveTypeIsReportedOnceAtTheShallowestPathForFlink() {
     Incompatibility finding =
         assertSingle(recursiveTree(false), recursiveTree(true), Rule.REQUIRED_FIELD_ADDED);
     assertEquals("extra", finding.getPath());
@@ -722,29 +728,6 @@ class CompatibilityCheckerFlinkTest {
   // Flink type. Avro resolving a dropped symbol to the enum's default is Avro's behaviour, and the
   // format checker's to catch.
   // -----------------------------------------------------------------------------------------------
-
-  @Test
-  void droppingAnEnumSymbolIsCompatible() {
-    assertCompatible(col(enumOf("A", "B", "C")), col(enumOf("A", "B")));
-  }
-
-  @Test
-  void addingAnEnumSymbolIsCompatible() {
-    // Every historical value still resolves.
-    assertCompatible(col(enumOf("A", "B")), col(enumOf("A", "B", "C")));
-  }
-
-  @Test
-  void reorderingEnumSymbolsIsCompatible() {
-    // Avro resolves enums by name, not by ordinal, so the stored index is remapped correctly.
-    assertCompatible(col(enumOf("A", "B")), col(enumOf("B", "A")));
-  }
-
-  @Test
-  void wideningAnEnumToAFreeStringIsCompatible() {
-    // No symbol is lost in any meaningful sense -- the column still admits every old value.
-    assertCompatible(col(enumOf("A", "B")), col(Schema.createString()));
-  }
 
   private static Schema enumOf(String... symbols) {
     List<Schema.EnumValue> values = new ArrayList<>(symbols.length);

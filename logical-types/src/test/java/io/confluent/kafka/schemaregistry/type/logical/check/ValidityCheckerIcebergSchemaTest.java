@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>MULTISET is rejected there and accepted here, so its four cases invert. Iceberg's own
- *       {@code FlinkTypeToType} maps a multiset to {@code map<T, int>}, which makes that rejection
+ *       the Iceberg type mapping maps a multiset to {@code map<T, int>}, which makes that rejection
  *       policy rather than a limit of the type system.
  *   <li>Map paths are written <code>{}</code> and <code>{key}</code> rather than {@code [value]} and
  *       {@code [key]}, matching the Iceberg-schema comparison — the two references disagree with each

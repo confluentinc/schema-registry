@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * synced with it.
  *
  * <p>Everything here exercises behaviour that suite structurally cannot reach. Its input is an
- * Iceberg schema that {@code FlinkTypeToType} has *already* erased, so it can test neither the
+ * Iceberg schema that the Iceberg type mapping has *already* erased, so it can test neither the
  * erasure itself nor any SRLT type that does not survive the conversion:
  *
  * <ul>
@@ -126,7 +126,7 @@ class CompatibilityCheckerTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Type erasure -- invisible there, because FlinkTypeToType has already applied it
+  // Type erasure -- invisible there, because the Iceberg type mapping has already applied it
   // ---------------------------------------------------------------------------------------------
 
   @Test
@@ -271,7 +271,7 @@ class CompatibilityCheckerTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void structToPrimitiveIsATypeMismatch() {
+  void structToPrimitiveIsATypeMismatchForIceberg() {
     assertSingle(
         struct(required("inner",
             Schema.createStruct(Collections.singletonList(
@@ -323,7 +323,7 @@ class CompatibilityCheckerTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void unionBranchesAreComparedAsOptionalStructFields() {
+  void unionBranchesAreComparedAsOptionalStructFieldsForIceberg() {
     Schema before = Schema.createUnion(Arrays.asList(
         new UnionBranch("s", Schema.createString()),
         new UnionBranch("i", Schema.create(Schema.Type.INT))));
@@ -379,12 +379,12 @@ class CompatibilityCheckerTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void recursiveSchemaTerminates() {
+  void recursiveSchemaTerminatesForIceberg() {
     assertCompatible(recursiveTree(false), recursiveTree(false));
   }
 
   @Test
-  void incompatibleChangeInsideARecursiveTypeIsReportedOnceAtTheShallowestPath() {
+  void aChangeInsideARecursiveTypeIsReportedOnceAtTheShallowestPathForIceberg() {
     Incompatibility finding =
         assertSingle(recursiveTree(false), recursiveTree(true), Rule.REQUIRED_FIELD_ADDED);
     assertEquals("extra", finding.getPath());

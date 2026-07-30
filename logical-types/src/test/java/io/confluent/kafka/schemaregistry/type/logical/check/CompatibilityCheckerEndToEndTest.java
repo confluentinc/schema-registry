@@ -465,8 +465,8 @@ class CompatibilityCheckerEndToEndTest {
   @Test
   void anAvroEnumSymbolDropIsNotAFindingInEitherMode() {
     // An ENUM derives to VARCHAR for Flink and to string for Iceberg, so the symbol set is not part
-    // of either type. The hazard is real -- Avro resolves a dropped symbol to the enum's default --
-    // but it is the format checker's, not this one's.
+    // of either type. The hazard is real -- a reader resolves a dropped symbol to the enum default --
+    // but it belongs to the encoding, so the format-level checker owns it.
     LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ""));
     LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ""));
 

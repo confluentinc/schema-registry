@@ -26,8 +26,8 @@ import java.util.Set;
 /**
  * Apache Flink's implicit type-widening rules, ported.
  *
- * <p>This is a transcription of {@code implicitCastingRules} in Flink's
- * {@code org.apache.flink.table.types.logical.utils.LogicalTypeCasts}. Depending on
+ * <p>This is a transcription of its implicit-cast table in Flink's
+ * {@code the engine's implicit-cast table}. Depending on
  * {@code flink-table-common} directly is not an option here — it would impose the whole Flink table
  * stack on every consumer of this module — so the table is mirrored instead.
  *
@@ -57,7 +57,7 @@ import java.util.Set;
 final class FlinkLogicalTypeCasts {
 
   /**
-   * Mirrors the subset of Flink's {@code LogicalTypeRoot} that a {@link Schema.Type} can produce.
+   * Mirrors the subset of Flink's type root that a {@link Schema.Type} can produce.
    *
    * <p>{@code TIMESTAMP} and {@code TIMESTAMP_LTZ} correspond to Flink's
    * {@code TIMESTAMP_WITHOUT_TIME_ZONE} and {@code TIMESTAMP_WITH_LOCAL_TIME_ZONE}; the shorter
@@ -84,7 +84,7 @@ final class FlinkLogicalTypeCasts {
   }
 
   /**
-   * Mirrors the subset of Flink's {@code LogicalTypeFamily} the implicit rules refer to.
+   * Mirrors the subset of Flink's type family the implicit rules refer to.
    *
    * <p>{@code NUMERIC} is retained even though no rule below still uses it: Flink declares three of
    * its rules against it, and keeping it here makes those divergences legible as a narrowing from

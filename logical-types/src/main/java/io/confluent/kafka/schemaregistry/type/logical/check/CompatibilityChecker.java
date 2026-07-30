@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  * here rather than kept separate: the container-nullability relaxation (in
  * {@code isEffectivelyOptional}), Iceberg's promotion table from
  * {@code TypeUtil#isPromotionAllowed} (in {@code validatePrimitives}), and the Flink-to-Iceberg
- * type mapping from Iceberg's own {@code FlinkTypeToType} (in {@link #icebergClassOf}).
+ * type mapping from Iceberg's own the Iceberg type mapping (in {@link #icebergClassOf}).
  *
  * <p>Intentional departures, each noted at its site: findings accumulate rather than throwing
  * on the first violation; the nullability relaxation is a predicate rather than a rewrite; and
@@ -85,7 +85,7 @@ import java.util.stream.Collectors;
  * {@code VARCHAR(50) -> VARCHAR(10)} passes because Iceberg has no string length. A Flink-level
  * checker is responsible for the distinctions erased here.
  *
- * <p>The equivalence classes are taken from Iceberg's own {@code FlinkTypeToType}, which is the
+ * <p>The equivalence classes are taken from Iceberg's own the Iceberg type mapping, which is the
  * conversion applied before comparing there, so this checker agrees with it. Keep the two in
  * step. Notably: {@code BINARY(n)} becomes {@code fixed(n)} and so keeps its length, while
  * {@code CHAR} and {@code VARCHAR} lose theirs; {@code MULTISET<T>} becomes {@code map<T, int>};
@@ -97,7 +97,7 @@ final class CompatibilityChecker {
 
   /**
    * Precision above which a Flink timestamp maps to Iceberg's nanosecond timestamp rather than its
-   * microsecond one. Mirrors the threshold in Iceberg's own {@code FlinkTypeToType}.
+   * microsecond one. Mirrors the threshold in Iceberg's own the Iceberg type mapping.
    */
   private static final int MAX_ICEBERG_MICROS_PRECISION = 6;
 
@@ -928,8 +928,8 @@ final class CompatibilityChecker {
    * <p><b>Do not reintroduce a rule that fails this test.</b> Drops, reordering, renames, map-key
    * changes and enum symbol removal were all rejected here once, and each was removed on this
    * argument: a drop and a reorder touch no value, a rename is
-   * {@code TableChange.ModifyColumnName} with the byte-location question belonging to the format, a
-   * map key is an ordinary value, and an ENUM derives to VARCHAR so dropping a symbol changes the
+   * a supported table-evolution operation with the byte-location question belonging to the format,
+   * a map key is an ordinary value, and an ENUM derives to VARCHAR so dropping a symbol changes the
    * Flink type not at all. What made enum removal look like a Flink problem was Avro resolving an
    * unknown symbol to the enum's default — Avro's behaviour, and the Avro checker's to catch.
    */
@@ -1056,17 +1056,17 @@ final class CompatibilityChecker {
      * <ul>
      *   <li>A <b>drop</b> invents nothing and reinterprets nothing — the column stops being read.
      *       {@code ALTER TABLE ... DROP COLUMN} is a supported Flink table change
-     *       ({@code TableChange.DropColumn}), so it is legal here. Iceberg still rejects it,
+     *       (a supported table-evolution operation), so it is legal here. Iceberg still rejects it,
      *       because it cannot drop a column in place without a stable field ID.
      *   <li>A <b>reorder</b> likewise touches no value. Flink SQL identifies columns by name, and
-     *       {@code TableChange.ModifyColumnPosition} is supported.
+     *       a supported table-evolution operation is supported.
      *   <li>An <b>added column</b> does invent: a NOT NULL column with no written value cannot be
      *       satisfied by any storage, so it stays rejected. A nullable or defaulted addition is
      *       fine, because null or the default is a legitimate value for it.
      * </ul>
      *
      * <p>A <b>rename</b> therefore no longer produces a finding here. That is intended: renaming is
-     * {@code TableChange.ModifyColumnName}, and whether old bytes can still be located under the
+     * a supported table-evolution operation, and whether old bytes can still be located under the
      * new name is a question about the encoding — Avro needs an alias, a Protobuf value rides its
      * tag — which the format-level checker owns.
      */

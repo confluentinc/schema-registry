@@ -32,7 +32,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Cases carried over from Apache Flink's own {@code LogicalTypeCastsTest}, to check that
+ * Cases carried over from the engine's own cast-table suite, to check that
  * {@link FlinkLogicalTypeCasts} really is a faithful transcription of the table it mirrors.
  *
  * <p>Flink's suite is a single parameterised provider of
@@ -87,7 +87,7 @@ class FlinkLogicalTypeCastsTest {
     return nullable(Schema.create(Schema.Type.BOOLEAN));
   }
 
-  /** Flink's {@code new VarCharType(Integer.MAX_VALUE)}. */
+  /** Flink's {@code new Varthe engine's fixed-length character type(Integer.MAX_VALUE)}. */
   private static Schema varCharMaxType() {
     return nullable(Schema.createString());
   }
@@ -108,7 +108,7 @@ class FlinkLogicalTypeCastsTest {
     return nullable(Schema.createArray(element));
   }
 
-  /** Flink's {@code new RowType(asList(new RowField(...), ...))}. */
+  /** The engine's row type, built from a list of named fields. */
   private static Schema rowType(Field... fields) {
     return nullable(Schema.createStruct(Arrays.asList(fields)));
   }

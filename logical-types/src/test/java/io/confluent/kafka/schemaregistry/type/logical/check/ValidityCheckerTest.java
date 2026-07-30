@@ -53,7 +53,7 @@ class ValidityCheckerTest {
 
   @Test
   void decimalPrecisionAboveThirtyEightIsRejectedByEveryConsumer() {
-    // The bound Flink's DecimalType and Iceberg's decimal agree on. Avro caps precision only at
+    // The bound Flink's the engine's decimal type and Iceberg's decimal agree on. Avro caps precision only at
     // what the underlying fixed can hold, so 40 really does arrive from registered schemas.
     for (Mode mode : Mode.values()) {
       assertThat(rulesOf(mode, col(Schema.createDecimal(40, 2))))
@@ -165,7 +165,7 @@ class ValidityCheckerTest {
 
   @Test
   void multisetIsAcceptedByEveryConsumer() {
-    // Iceberg's own FlinkTypeToType maps a multiset to map<T, int>, so it is representable. A
+    // Iceberg's own the Iceberg type mapping maps a multiset to map<T, int>, so it is representable. A
     // rejection elsewhere in the stack is policy, not a limit of the type system.
     LogicalType multiset = col(Schema.createMultiset(nonNull(Schema.createString())));
     for (Mode mode : Mode.values()) {
@@ -225,8 +225,8 @@ class ValidityCheckerTest {
   @Test
   void anEmptyStructIsRejectedByTheIcebergModesOnly() {
     // Iceberg only, mirroring the reference validator. Nothing on the Flink side rejects it: a
-    // RowType constructs with zero fields and the CREATE TABLE column list is optional, so an empty
-    // struct neither reinterprets nor invents a value.
+    // a row type constructs with zero fields and the CREATE TABLE column list is optional, so an
+    // empty struct neither reinterprets nor invents a value.
     LogicalType empty = new LogicalType(nonNull(Schema.createStruct(Collections.emptyList())));
     assertThat(rulesOf(Mode.ICEBERG_V2, empty)).containsExactly(Rule.EMPTY_STRUCT);
     assertThat(rulesOf(Mode.ICEBERG_V3, empty)).containsExactly(Rule.EMPTY_STRUCT);

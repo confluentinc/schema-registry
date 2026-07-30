@@ -344,10 +344,11 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void avroEnumValueDropsAreInvisibleToBothModes() {
-    // Invisible to the *type* comparison -- an enum derives to an unbounded VARCHAR on both sides --
-    // so it is caught by the one value-level rule instead. Flink re-resolves historical symbols
-    // against the new set and renders a dropped one as the enum's default; Iceberg stores the string
-    // already committed, so its column is unaffected.
+    // Invisible to both type comparisons: an enum derives to an unbounded VARCHAR for Flink and to a
+    // string for Iceberg, so the symbol set is part of neither type. The hazard is real -- a reader
+    // whose enum lacks a symbol historical records carry resolves it to the enum default -- but it
+    // belongs to the encoding, so the format-level checker owns it. Not implemented there either;
+    // leaving that gap open is a deliberate decision, not pending work.
     LogicalType before =
         rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}"));
     LogicalType after =

@@ -97,7 +97,7 @@ import java.util.Set;
  *   <li>decimal precision and scale, which are entirely unchecked — Avro caps precision only at
  *       what the underlying {@code fixed} can hold, well above {@value #MAX_DECIMAL_PRECISION};
  *   <li>character- and binary-string length, where a zero is accepted by SRLT but rejected by
- *       Flink's {@code CharType} and {@code BinaryType};
+ *       Flink's the engine's fixed-length character type and the engine's fixed-length binary type;
  *   <li>a struct or union with no fields, which SRLT builds happily and which derives to a row type
  *       with no columns;
  *   <li>a named type that refers to itself, or one that resolves to nothing — neither Flink nor
@@ -117,9 +117,9 @@ import java.util.Set;
  *
  * <h2>What is deliberately not a rule</h2>
  *
- * <p>MULTISET is accepted. Iceberg's own {@code FlinkTypeToType} maps it to {@code map<T, int>}, so
- * it is representable; a rejection elsewhere in the stack is policy rather than a limit of the type
- * system.
+ * <p>MULTISET is accepted. Iceberg's own the Iceberg type mapping maps it to {@code map<T, int>},
+ * so it is representable; a rejection elsewhere in the stack is policy rather than a limit of the
+ * type system.
  *
  * <p>A TIME with precision above 3 is accepted. The conversion to a Flink type maps it to BIGINT
  * rather than failing, because Flink carries TIME as an int millis-of-day — a silent retyping, but
@@ -130,7 +130,7 @@ import java.util.Set;
  * schema is legitimate and rejecting it would reject valid DDL.
  *
  * <p>Field names differing only in case are accepted under {@link Mode#FLINK}. Flink's
- * {@code RowType} duplicate check is case-sensitive, so they are two ordinary distinct columns. It
+ * a row type duplicate check is case-sensitive, so they are two ordinary distinct columns. It
  * is only Iceberg's case-insensitive name index that cannot tell them apart.
  *
  * <p>An ENUM with no symbols is accepted: it derives to an unbounded VARCHAR, which no consumer
@@ -140,19 +140,20 @@ import java.util.Set;
 final class ValidityChecker {
 
   /**
-   * Lowest decimal precision Flink's {@code DecimalType} permits.
+   * Lowest decimal precision Flink's the engine's decimal type permits.
    */
   private static final int MIN_DECIMAL_PRECISION = 1;
 
   /**
-   * Highest decimal precision. Flink's {@code DecimalType} and Iceberg's {@code decimal} agree on
-   * this bound, and Iceberg's holds in every format version.
+   * Highest decimal precision. Flink's the engine's decimal type and Iceberg's {@code decimal}
+   * agree on this bound, and Iceberg's holds in every format version.
    */
   private static final int MAX_DECIMAL_PRECISION = 38;
 
   /**
-   * Lowest length Flink's {@code CharType} and {@code BinaryType} permit. The unbounded variants
-   * additionally accept zero; see {@link #validateLength}.
+   * Lowest length Flink's the engine's fixed-length character type and the engine's fixed-length
+   * binary type permit. The unbounded variants additionally accept zero; see {@link
+   * #validateLength}.
    */
   private static final int MIN_FIXED_LENGTH = 1;
 
@@ -362,7 +363,7 @@ final class ValidityChecker {
      * <p>Iceberg indexes a schema's field names case-insensitively — it keeps a lazily built
      * lower-case name-to-id map and exposes {@code caseInsensitiveFindField} and
      * {@code caseInsensitiveSelect} over it — so two names that differ only in case collide in that
-     * index. Flink has no such index: its {@code RowType} duplicate check is case-sensitive, so
+     * index. Flink has no such index: its a row type duplicate check is case-sensitive, so
      * {@code a} and {@code A} are two ordinary distinct columns and nothing is wrong with them.
      * Hence Iceberg modes only.
      *
@@ -409,7 +410,7 @@ final class ValidityChecker {
      * Iceberg modes only, mirroring the reference validator that this rule was ported from.
      *
      * <p>Not applied under {@link Mode#FLINK}, because nothing on the Flink side rejects it: a
-     * {@code RowType} constructs with zero fields, the {@code CREATE TABLE} column list is optional
+     * a row type constructs with zero fields, the {@code CREATE TABLE} column list is optional
      * in the grammar, and no minimum-column check was found on a resolved schema. So an empty
      * struct neither reinterprets nor invents a value, and the criterion in
      * {@code FlinkComparison} admits it. It was applied to every mode for a while purely because
