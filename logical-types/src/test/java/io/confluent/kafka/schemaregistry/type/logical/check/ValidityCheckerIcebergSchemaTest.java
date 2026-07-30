@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  *       other, so one had to be picked.
  * </ul>
  */
-class ValidityCheckerIcebergValidatorTest {
+class ValidityCheckerIcebergSchemaTest {
 
   // -----------------------------------------------------------------------------------------------
   // Divergent -- MULTISET is accepted here

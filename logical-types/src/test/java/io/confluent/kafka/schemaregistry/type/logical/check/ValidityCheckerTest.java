@@ -277,12 +277,69 @@ class ValidityCheckerTest {
   }
 
   @Test
-  void fieldNamesDifferingOnlyInCaseAreAccepted() {
-    // The duplicate check is case-sensitive, so these really are two distinct columns.
+  void fieldNamesDifferingOnlyInCaseAreAcceptedByFlink() {
+    // Flink's duplicate check is case-sensitive, so these really are two distinct columns.
+    assertThat(ValidityChecker.validate(Mode.FLINK, caseColliding()).isValid()).isTrue();
+  }
+
+  @Test
+  void fieldNamesDifferingOnlyInCaseAreRejectedByBothIcebergVersions() {
+    // Iceberg keeps a lower-case name-to-id index and resolves through it, so the two names collide
+    // there. Not a v3 relaxation -- the index is unchanged between versions.
+    for (Mode mode : new Mode[] {Mode.ICEBERG_V2, Mode.ICEBERG_V3}) {
+      assertThat(rulesOf(mode, caseColliding()))
+          .containsExactly(Rule.FIELD_NAME_CASE_COLLISION);
+    }
+  }
+
+  @Test
+  void theCaseCollisionMessageNamesBothFields() {
+    assertThat(ValidityChecker.validate(Mode.ICEBERG_V2, caseColliding()).describe())
+        .contains("'a'", "'A'");
+  }
+
+  @Test
+  void aCaseCollisionInsideANestedStructIsFoundAtItsPath() {
+    LogicalType type = schema(required("outer", nonNull(Schema.createStruct(Arrays.asList(
+        new Field("id", nonNull(type(Schema.Type.INT)), 0),
+        new Field("ID", nonNull(type(Schema.Type.INT)), 1))))));
+    assertThat(pathsOf(Mode.ICEBERG_V2, type)).containsExactly("outer");
+  }
+
+  @Test
+  void aCaseCollisionAmongUnionBranchesIsRejected() {
+    LogicalType type = col(nonNull(Schema.createUnion(Arrays.asList(
+        new UnionBranch("b", nonNull(type(Schema.Type.INT))),
+        new UnionBranch("B", nonNull(type(Schema.Type.BIGINT)))))));
+    assertThat(rulesOf(Mode.ICEBERG_V2, type))
+        .containsExactly(Rule.FIELD_NAME_CASE_COLLISION);
+  }
+
+  @Test
+  void aNameCollidingThreeWaysIsReportedOncePerCollidingPair() {
+    // Report-all, but keyed on the lower-cased name, so one group does not produce a finding per
+    // member beyond the first.
     LogicalType type = schema(
-        required("a", type(Schema.Type.INT)),
+        new Field("a", nonNull(type(Schema.Type.INT)), 0),
+        new Field("A", nonNull(type(Schema.Type.INT)), 1),
+        new Field("aB", nonNull(type(Schema.Type.INT)), 2),
+        new Field("Ab", nonNull(type(Schema.Type.INT)), 3));
+    assertThat(rulesOf(Mode.ICEBERG_V2, type)).containsExactly(
+        Rule.FIELD_NAME_CASE_COLLISION, Rule.FIELD_NAME_CASE_COLLISION);
+  }
+
+  @Test
+  void namesThatDifferBeyondCaseAreAccepted() {
+    LogicalType type = schema(
+        new Field("alpha", nonNull(type(Schema.Type.INT)), 0),
+        new Field("Beta", nonNull(type(Schema.Type.INT)), 1));
+    assertThat(ValidityChecker.validate(Mode.ICEBERG_V2, type).isValid()).isTrue();
+  }
+
+  private static LogicalType caseColliding() {
+    return schema(
+        new Field("a", nonNull(type(Schema.Type.INT)), 0),
         new Field("A", nonNull(type(Schema.Type.INT)), 1));
-    assertThat(ValidityChecker.validate(Mode.FLINK, type).isValid()).isTrue();
   }
 
   // -----------------------------------------------------------------------------------------------

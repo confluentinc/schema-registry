@@ -37,6 +37,8 @@ public class Invalidity {
   public enum Rule {
     /** A struct or union has no fields, so it derives to a row type with no columns. */
     EMPTY_STRUCT,
+    /** Two field names in the same struct or union differ only in case. */
+    FIELD_NAME_CASE_COLLISION,
     /** A named type refers to itself, directly or through other named types. */
     CYCLIC_TYPE,
     /** A named-type reference has no matching entry in the schema's named types. */

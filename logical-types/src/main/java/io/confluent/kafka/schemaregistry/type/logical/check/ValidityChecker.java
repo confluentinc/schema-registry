@@ -24,6 +24,9 @@ import io.confluent.kafka.schemaregistry.type.logical.check.Invalidity.Rule;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -126,6 +129,10 @@ import java.util.Set;
  * scale the author omitted, and {@code DECIMAL(p)} means {@code DECIMAL(p, 0)} in SQL, so the
  * schema is legitimate and rejecting it would reject valid DDL.
  *
+ * <p>Field names differing only in case are accepted under {@link Mode#FLINK}. Flink's
+ * {@code RowType} duplicate check is case-sensitive, so they are two ordinary distinct columns. It
+ * is only Iceberg's case-insensitive name index that cannot tell them apart.
+ *
  * <p>An ENUM with no symbols is accepted: it derives to an unbounded VARCHAR, which no consumer
  * objects to. A non-struct root is accepted: whether a table may have a scalar at its root is a
  * question about tables, not about types.
@@ -212,12 +219,14 @@ final class ValidityChecker {
       switch (schema.getType()) {
         case STRUCT:
           validateNonEmpty(schema.getFields().size(), "struct", path);
+          validateNoCaseCollision(namesOf(schema), path);
           for (Schema.Field field : schema.getFields()) {
             checkInvalidTypeRecursive(field.getSchema(), childPath(path, field.getName()));
           }
           return;
         case UNION:
           validateNonEmpty(schema.getBranches().size(), "union", path);
+          validateNoCaseCollision(namesOf(schema), path);
           for (Schema.UnionBranch branch : schema.getBranches()) {
             checkInvalidTypeRecursive(branch.getSchema(), childPath(path, branch.getName()));
           }
@@ -345,6 +354,55 @@ final class ValidityChecker {
         add(Rule.LENGTH_OUT_OF_RANGE, path,
             schema.getType() + " length " + length + " is below the minimum of " + min);
       }
+    }
+
+    /**
+     * Names that differ only in case, which is an Iceberg problem and not a Flink one.
+     *
+     * <p>Iceberg indexes a schema's field names case-insensitively — it keeps a lazily built
+     * lower-case name-to-id map and exposes {@code caseInsensitiveFindField} and
+     * {@code caseInsensitiveSelect} over it — so two names that differ only in case collide in that
+     * index. Flink has no such index: its {@code RowType} duplicate check is case-sensitive, so
+     * {@code a} and {@code A} are two ordinary distinct columns and nothing is wrong with them.
+     * Hence Iceberg modes only.
+     *
+     * <p>An exact duplicate cannot reach here — {@link Schema} rejects those at construction — so
+     * any collision found is necessarily a case-only one.
+     */
+    private void validateNoCaseCollision(List<String> names, String path) {
+      if (!isIceberg()) {
+        return;
+      }
+      final Map<String, String> byLowerCase = new LinkedHashMap<>();
+      final Set<String> reported = new LinkedHashSet<>();
+      for (String name : names) {
+        final String key = name.toLowerCase(Locale.ROOT);
+        final String first = byLowerCase.putIfAbsent(key, name);
+        if (first != null && reported.add(key)) {
+          add(Rule.FIELD_NAME_CASE_COLLISION, path,
+              "field names '" + first + "' and '" + name + "' differ only in case, which Iceberg's "
+                  + "case-insensitive name index cannot distinguish");
+        }
+      }
+    }
+
+    private boolean isIceberg() {
+      return mode == Mode.ICEBERG_V2 || mode == Mode.ICEBERG_V3;
+    }
+
+    private static List<String> namesOf(Schema schema) {
+      if (schema.getType() == Schema.Type.UNION) {
+        final List<String> names = new ArrayList<>(schema.getBranches().size());
+        for (Schema.UnionBranch branch : schema.getBranches()) {
+          names.add(branch.getName());
+        }
+        return names;
+      }
+      final List<String> names = new ArrayList<>(schema.getFields().size());
+      for (Schema.Field field : schema.getFields()) {
+        names.add(field.getName());
+      }
+      return names;
     }
 
     private void validateNonEmpty(int childCount, String kind, String path) {
