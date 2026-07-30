@@ -66,13 +66,6 @@ public class CombinedSchemaUtils {
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
       }
-      // NOTE: `if`/`then`/`else` (ConditionalSchema) and `not` (NotSchema) subschemas are not
-      // merged here -- they fall through and are discarded, so a property declared only under a
-      // condition gets no column and its values are dropped on read. This is a known gap, pinned
-      // by tests in JsonToLogicalTypeConverterTest. It is a specific case of the general behaviour
-      // that this method drops any subschema it cannot merge (an `anyOf` of object shapes nested
-      // in an allOf loses its properties the same way). Closing it means collecting the branch
-      // properties as nullable columns rather than rejecting the schema.
       collectPropertySchemas(subSchema, properties, required,
           Collections.newSetFromMap(new IdentityHashMap<>()));
     }
