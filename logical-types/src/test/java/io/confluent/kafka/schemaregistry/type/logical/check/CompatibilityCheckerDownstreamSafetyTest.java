@@ -324,13 +324,17 @@ class CompatibilityCheckerDownstreamSafetyTest {
   }
 
   @Test
-  void avroEnumValueDropsAreInvisibleHere() {
-    // Not visible to either mode: an enum derives to an unbounded VARCHAR, so its symbol set is not
-    // part of the type. Dropping a symbol is backward-incompatible in Avro itself, so the composed
-    // gate still blocks it at the format level.
-    assertAllowedByBoth(
-        rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}")),
-        rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\"]}")));
+  void avroEnumValueDropsAreBlockedForFlinkOnly() {
+    // Invisible to the *type* comparison -- an enum derives to an unbounded VARCHAR on both sides --
+    // so it is caught by the one value-level rule instead. Flink re-resolves historical symbols
+    // against the new set and renders a dropped one as the enum's default; Iceberg stores the string
+    // already committed, so its column is unaffected.
+    LogicalType before =
+        rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}"));
+    LogicalType after =
+        rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\"]}"));
+    assertBlocked(Mode.FLINK, before, after, Rule.ENUM_SYMBOL_REMOVED);
+    assertAllowed(Mode.ICEBERG_V2, before, after);
   }
 
   @Test
@@ -348,12 +352,13 @@ class CompatibilityCheckerDownstreamSafetyTest {
   }
 
   @Test
-  void protobufEnumValueRemovalIsInvisibleHere() {
-    // As with Avro enums, the symbol set is not part of the derived type.
-    assertAllowedByBoth(
-        proto("syntax=\"proto3\";package t;message M{E e=1;}"
-            + "enum E{UNSET=0;A=1;B=2;}"),
-        proto("syntax=\"proto3\";package t;message M{E e=1;}"
-            + "enum E{UNSET=0;A=1;}"));
+  void protobufEnumValueRemovalIsBlockedForFlinkOnly() {
+    // Same reasoning as the Avro case; one rule covers both formats because both derive an ENUM.
+    LogicalType before = proto("syntax=\"proto3\";package t;message M{E e=1;}"
+        + "enum E{UNSET=0;A=1;B=2;}");
+    LogicalType after = proto("syntax=\"proto3\";package t;message M{E e=1;}"
+        + "enum E{UNSET=0;A=1;}");
+    assertBlocked(Mode.FLINK, before, after, Rule.ENUM_SYMBOL_REMOVED);
+    assertAllowed(Mode.ICEBERG_V2, before, after);
   }
 }

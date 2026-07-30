@@ -449,4 +449,74 @@ class CompatibilityCheckerEndToEndTest {
     // is accepted. Pinned to document that alphabetical ordering makes middle insertion the norm.
     assertCompatible(Mode.FLINK, before, after);
   }
+
+  // -----------------------------------------------------------------------------------------------
+  // Enum symbol removal, from real schema text
+  // -----------------------------------------------------------------------------------------------
+
+  @Test
+  void anAvroEnumSymbolDropIsCaughtForFlinkAndNotForIceberg() {
+    LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ""));
+    LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ""));
+
+    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible());
+  }
+
+  @Test
+  void anAvroEnumSymbolDropWithADefaultIsStillCaught() {
+    // The case the format layer lets through: with an enum default, Avro calls this compatible and
+    // Flink then silently renders historical C as A. This rule is the only thing that sees it.
+    LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ",\"default\":\"A\""));
+    LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ",\"default\":\"A\""));
+
+    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
+  }
+
+  @Test
+  void aProtoEnumValueRemovalIsCaughtForFlink() {
+    LogicalType before = fromProto("syntax = \"proto3\"; "
+        + "enum E { A = 0; B = 1; C = 2; } message M { E e = 1; }");
+    LogicalType after = fromProto("syntax = \"proto3\"; "
+        + "enum E { A = 0; B = 1; } message M { E e = 1; }");
+
+    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
+  }
+
+  @Test
+  void aBareJsonEnumSymbolDropIsCaughtForFlink() {
+    LogicalType before = fromJson("{\"type\":\"object\",\"properties\":{"
+        + "\"s\":{\"enum\":[\"A\",\"B\",\"C\"]}}}");
+    LogicalType after = fromJson("{\"type\":\"object\",\"properties\":{"
+        + "\"s\":{\"enum\":[\"A\",\"B\"]}}}");
+
+    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
+  }
+
+  @Test
+  void aTypedJsonEnumLosesItsSymbolsAtConversionSoTheDropCannotBeSeen() {
+    // Known limitation, pinned deliberately. {"type":"string","enum":[...]} -- the idiomatic JSON
+    // Schema enum -- derives to a plain VARCHAR, so the symbols are gone before any comparison
+    // happens. Only the bare {"enum":[...]} form becomes an SRLT ENUM. Closing this means teaching
+    // JsonToLogicalTypeConverter to keep the symbols when an explicit type is present; it is not
+    // something the checker can reach.
+    LogicalType before = fromJson("{\"type\":\"object\",\"properties\":{"
+        + "\"s\":{\"type\":\"string\",\"enum\":[\"A\",\"B\",\"C\"]}}}");
+    LogicalType after = fromJson("{\"type\":\"object\",\"properties\":{"
+        + "\"s\":{\"type\":\"string\",\"enum\":[\"A\",\"B\"]}}}");
+
+    assertTrue(CompatibilityChecker.compare(Mode.FLINK, before, after).isCompatible());
+  }
+
+  @Test
+  void addingAnAvroEnumSymbolStaysCompatible() {
+    assertCompatible(Mode.FLINK,
+        fromAvro(enumRecord("[\"A\",\"B\"]", "")),
+        fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", "")));
+  }
+
+  private static String enumRecord(String symbols, String extra) {
+    return "{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"e\",\"type\":"
+        + "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":" + symbols + extra + "}}]}";
+  }
 }

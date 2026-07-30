@@ -902,6 +902,23 @@ final class CompatibilityChecker {
    * as optional, how leaves are compared, and whether a MULTISET is a MAP — and each class must
    * stay independently readable against the specification it implements. Factoring out a common
    * walk would couple them and make neither diffable against its own reference.
+   *
+   * <h3>One documented exception to the governing principle</h3>
+   *
+   * <p>Every rule here is otherwise a function of the <em>derived Flink type</em>: a change is
+   * incompatible precisely when it alters the type the schema derives to, which is what makes this
+   * mode a type checker and lets {@link FlinkLogicalTypeCasts} carry the leaf relation.
+   *
+   * <p>{@link #validateEnumSymbols} deliberately breaks that. Flink has no enum type, so dropping a
+   * symbol leaves the derived type <em>bit-for-bit identical</em> — and yet historical records
+   * carrying the dropped symbol are then read as the enum's default rather than the value written.
+   * The hazard is a value reinterpretation that the type erasure hides, so no rule expressible over
+   * derived types could catch it. It is included here because the symbols survive in SRLT and one
+   * rule then covers Avro, Protobuf and JSON at once; the alternative home is the format layer,
+   * which would need three.
+   *
+   * <p><b>Do not generalise from it.</b> It is the only value-level rule in this class, and it is
+   * here on the strength of a specific argument rather than as licence for others.
    */
   private static final class FlinkComparison {
 
@@ -1164,6 +1181,10 @@ final class CompatibilityChecker {
      * FlinkLogicalTypeCasts}. <b>Do not remove these guards as redundant.</b>
      */
     private void validatePrimitives(Schema original, Schema update, String path) {
+      // Values rather than types, so it runs independently of Parts A and B -- both of which return
+      // early and would otherwise skip it. See validateEnumSymbols.
+      validateEnumSymbols(original, update, path);
+
       FlinkLogicalTypeCasts.Root originalRootType = flinkRootOf(original);
       FlinkLogicalTypeCasts.Root updateRootType = flinkRootOf(update);
 
@@ -1238,6 +1259,48 @@ final class CompatibilityChecker {
     }
 
     /** Exact Flink-type equality, with no widening allowed. Used for map keys, which are frozen. */
+    /**
+     * The one rule in this mode that looks past the derived Flink type.
+     *
+     * <p>Flink has no enum type, so an ENUM derives to an unbounded VARCHAR and both sides of a
+     * symbol drop produce an <em>identical</em> Flink type. Part A therefore cannot see it, and
+     * neither can the Iceberg erasure. But the symbols survive in SRLT, and the consequence is
+     * real: an Avro reader whose enum lacks a symbol that historical records carry resolves it to
+     * the enum's default, so a value written as {@code C} is read as {@code A}. Silent, and
+     * unrecoverable after the fact.
+     *
+     * <p>Removal only. Adding a symbol is safe, since every historical value still resolves, and
+     * reordering is safe because Avro resolves enums by name rather than by ordinal.
+     *
+     * <p>Both sides must be ENUM. An ENUM widening into a plain VARCHAR loses no symbol in any
+     * meaningful sense: the column becomes a free string that still admits every old value.
+     *
+     * <p>Fires unconditionally on removal rather than only when the update's enum carries a
+     * default. Without a default, Avro's own BACKWARD check rejects the change first, so the
+     * narrower rule would rarely be the one to fire -- and a JSON Schema enum has no Avro
+     * resolution behind it at all.
+     *
+     * <p>Not applied under the Iceberg modes: Iceberg stores an enum as a string, so rows already
+     * committed keep the value written and dropping a symbol changes nothing about the column.
+     */
+    private void validateEnumSymbols(Schema original, Schema update, String path) {
+      if (original.getType() != Schema.Type.ENUM || update.getType() != Schema.Type.ENUM) {
+        return;
+      }
+      final Set<String> retained = update.getEnumValues().stream()
+          .map(Schema.EnumValue::getSymbol)
+          .collect(Collectors.toSet());
+      final List<String> removed = original.getEnumValues().stream()
+          .map(Schema.EnumValue::getSymbol)
+          .filter(symbol -> !retained.contains(symbol))
+          .collect(Collectors.toList());
+      if (!removed.isEmpty()) {
+        add(Rule.ENUM_SYMBOL_REMOVED, path,
+            "enum symbols " + removed + " were removed; historical records carrying them read as "
+                + "the enum's default rather than the value written");
+      }
+    }
+
     private boolean flinkTypesEqual(Schema original, Schema update) {
       Schema left = resolve(original, originalNamedTypes);
       Schema right = resolve(update, updateNamedTypes);

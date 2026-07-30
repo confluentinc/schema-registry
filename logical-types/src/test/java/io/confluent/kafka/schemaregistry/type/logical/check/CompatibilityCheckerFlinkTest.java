@@ -607,4 +607,79 @@ class CompatibilityCheckerFlinkTest {
     assertTrue(rules.contains(Rule.REQUIRED_FIELD_ADDED), result.describe());
     assertTrue(rules.contains(Rule.FIELD_DELETED), result.describe());
   }
+
+  // -----------------------------------------------------------------------------------------------
+  // ENUM_SYMBOL_REMOVED -- the one value-level rule; see CompatibilityChecker's FlinkComparison
+  // -----------------------------------------------------------------------------------------------
+
+  @Test
+  void droppingAnEnumSymbolIsRejectedEvenThoughTheFlinkTypeIsUnchanged() {
+    // Both sides derive to VARCHAR(MAX). The rule exists precisely because the type comparison
+    // cannot see this.
+    assertEquals(Collections.singletonList(Rule.ENUM_SYMBOL_REMOVED),
+        rulesOf(compare(col(enumOf("A", "B", "C")), col(enumOf("A", "B")))));
+  }
+
+  @Test
+  void theMessageNamesTheSymbolsThatWereRemoved() {
+    CompatibilityResult result = compare(col(enumOf("A", "B", "C")), col(enumOf("A")));
+    assertTrue(result.describe().contains("B"), result.describe());
+    assertTrue(result.describe().contains("C"), result.describe());
+  }
+
+  @Test
+  void addingAnEnumSymbolIsCompatible() {
+    // Every historical value still resolves.
+    assertCompatible(col(enumOf("A", "B")), col(enumOf("A", "B", "C")));
+  }
+
+  @Test
+  void reorderingEnumSymbolsIsCompatible() {
+    // Avro resolves enums by name, not by ordinal, so the stored index is remapped correctly.
+    assertCompatible(col(enumOf("A", "B")), col(enumOf("B", "A")));
+  }
+
+  @Test
+  void wideningAnEnumToAFreeStringIsCompatible() {
+    // No symbol is lost in any meaningful sense -- the column still admits every old value.
+    assertCompatible(col(enumOf("A", "B")), col(Schema.createString()));
+  }
+
+  @Test
+  void aDroppedSymbolInsideANestedStructIsFoundAtItsPath() {
+    LogicalType original = schema(required("outer",
+        nonNull(Schema.createStruct(Collections.singletonList(
+            required("status", enumOf("NEW", "DONE")))))));
+    LogicalType update = schema(required("outer",
+        nonNull(Schema.createStruct(Collections.singletonList(
+            required("status", enumOf("NEW")))))));
+
+    CompatibilityResult result = compare(original, update);
+    assertEquals(1, result.getIncompatibilities().size(), result.describe());
+    assertEquals("outer.status", result.getIncompatibilities().get(0).getPath());
+  }
+
+  @Test
+  void aDroppedSymbolIsInvisibleToTheIcebergModes() {
+    // Iceberg stores an enum as a string, so committed rows keep the value written and the column
+    // is unchanged. The rule is Flink-only by design.
+    LogicalType original = col(enumOf("A", "B", "C"));
+    LogicalType update = col(enumOf("A", "B"));
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V2, original, update).isCompatible());
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V3, original, update).isCompatible());
+  }
+
+  private static Schema enumOf(String... symbols) {
+    List<Schema.EnumValue> values = new ArrayList<>(symbols.length);
+    for (String symbol : symbols) {
+      values.add(new Schema.EnumValue(symbol));
+    }
+    return nonNull(Schema.createEnum(values));
+  }
+
+  private static List<Rule> rulesOf(CompatibilityResult result) {
+    return result.getIncompatibilities().stream()
+        .map(Incompatibility::getRule)
+        .collect(Collectors.toList());
+  }
 }

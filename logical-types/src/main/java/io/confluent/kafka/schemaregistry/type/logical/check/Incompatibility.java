@@ -51,7 +51,9 @@ public class Incompatibility {
     /** The structural kind changed (e.g. STRUCT became a primitive, or ARRAY became MAP). */
     TYPE_MISMATCH,
     /** A primitive type changed in a way the target type system does not allow. */
-    UNSUPPORTED_TYPE_CHANGE
+    UNSUPPORTED_TYPE_CHANGE,
+    /** An enum symbol present in the original schema is absent from the update. */
+    ENUM_SYMBOL_REMOVED
   }
 
   private final Rule rule;
