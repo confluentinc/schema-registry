@@ -46,14 +46,14 @@ public class Incompatibility {
     FIELD_REORDERED,
     /** A nullable field was tightened to non-nullable. */
     NULLABLE_TO_NON_NULLABLE,
+    /** A non-nullable field lost the default that made its absence readable. */
+    NON_NULLABLE_DEFAULT_REMOVED,
     /** A map's key type changed. */
     MAP_KEY_TYPE_MISMATCH,
     /** The structural kind changed (e.g. STRUCT became a primitive, or ARRAY became MAP). */
     TYPE_MISMATCH,
     /** A primitive type changed in a way the target type system does not allow. */
-    UNSUPPORTED_TYPE_CHANGE,
-    /** An enum symbol present in the original schema is absent from the update. */
-    ENUM_SYMBOL_REMOVED
+    UNSUPPORTED_TYPE_CHANGE
   }
 
   private final Rule rule;

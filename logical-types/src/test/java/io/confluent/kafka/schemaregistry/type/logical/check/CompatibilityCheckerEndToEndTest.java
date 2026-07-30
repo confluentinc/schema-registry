@@ -210,14 +210,15 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
-  void reorderingProtoFieldDeclarationsIsRejectedEvenThoughTagsAreUnchanged() {
-    // Tag numbers are untouched, so the format layer is indifferent. The derived column order is not.
+  void reorderingProtoFieldDeclarationsIsRejectedByIcebergOnly() {
+    // Tag numbers are untouched, so the format layer is indifferent, and Flink identifies columns by
+    // name -- so only Iceberg, which needs a field ID to reposition a column, objects.
     LogicalType before = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { string a = 1; string b = 2; }\n");
     LogicalType after = fromProto(
         "syntax = \"proto3\";\npackage t;\nmessage M { string b = 2; string a = 1; }\n");
 
-    assertSingle(Mode.FLINK, before, after, Rule.FIELD_REORDERED);
+    assertCompatible(Mode.FLINK, before, after);
     assertSingle(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED);
   }
 
@@ -400,10 +401,17 @@ class CompatibilityCheckerEndToEndTest {
     //
     // The lesson is a precondition rather than a bug: both sides of a comparison must be derived
     // under the same edition. Nothing in the signature enforces that today.
-    Set<Rule> rules = rulesOf(Mode.FLINK,
+    // Under ICEBERG_V2, where drops and reorders are still findings. Mode.FLINK no longer reports
+    // either, so the edition mismatch is invisible there -- which does not make it safe, only
+    // silent: a renamed union column still means the data lands somewhere else.
+    Set<Rule> rules = rulesOf(Mode.ICEBERG_V2,
         fromJson(TITLED_UNION, LogicalTypeVersion.V1),
         fromJson(TITLED_UNION, LogicalTypeVersion.V2));
     assertTrue(rules.contains(Rule.FIELD_DELETED), "expected spurious drops, got " + rules);
+
+    assertCompatible(Mode.FLINK,
+        fromJson(TITLED_UNION, LogicalTypeVersion.V1),
+        fromJson(TITLED_UNION, LogicalTypeVersion.V2));
   }
 
   @Test
@@ -451,68 +459,19 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   // -----------------------------------------------------------------------------------------------
-  // Enum symbol removal, from real schema text
+  // Enum symbol removal, from real schema text -- no longer a finding in either mode
   // -----------------------------------------------------------------------------------------------
 
   @Test
-  void anAvroEnumSymbolDropIsCaughtForFlinkAndNotForIceberg() {
+  void anAvroEnumSymbolDropIsNotAFindingInEitherMode() {
+    // An ENUM derives to VARCHAR for Flink and to string for Iceberg, so the symbol set is not part
+    // of either type. The hazard is real -- Avro resolves a dropped symbol to the enum's default --
+    // but it is the format checker's, not this one's.
     LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ""));
     LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ""));
 
-    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
-    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible());
-  }
-
-  @Test
-  void anAvroEnumSymbolDropWithADefaultIsStillCaught() {
-    // The case the format layer lets through: with an enum default, Avro calls this compatible and
-    // Flink then silently renders historical C as A. This rule is the only thing that sees it.
-    LogicalType before = fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", ",\"default\":\"A\""));
-    LogicalType after = fromAvro(enumRecord("[\"A\",\"B\"]", ",\"default\":\"A\""));
-
-    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
-  }
-
-  @Test
-  void aProtoEnumValueRemovalIsCaughtForFlink() {
-    LogicalType before = fromProto("syntax = \"proto3\"; "
-        + "enum E { A = 0; B = 1; C = 2; } message M { E e = 1; }");
-    LogicalType after = fromProto("syntax = \"proto3\"; "
-        + "enum E { A = 0; B = 1; } message M { E e = 1; }");
-
-    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
-  }
-
-  @Test
-  void aBareJsonEnumSymbolDropIsCaughtForFlink() {
-    LogicalType before = fromJson("{\"type\":\"object\",\"properties\":{"
-        + "\"s\":{\"enum\":[\"A\",\"B\",\"C\"]}}}");
-    LogicalType after = fromJson("{\"type\":\"object\",\"properties\":{"
-        + "\"s\":{\"enum\":[\"A\",\"B\"]}}}");
-
-    assertEquals(EnumSet.of(Rule.ENUM_SYMBOL_REMOVED), rulesOf(Mode.FLINK, before, after));
-  }
-
-  @Test
-  void aTypedJsonEnumLosesItsSymbolsAtConversionSoTheDropCannotBeSeen() {
-    // Known limitation, pinned deliberately. {"type":"string","enum":[...]} -- the idiomatic JSON
-    // Schema enum -- derives to a plain VARCHAR, so the symbols are gone before any comparison
-    // happens. Only the bare {"enum":[...]} form becomes an SRLT ENUM. Closing this means teaching
-    // JsonToLogicalTypeConverter to keep the symbols when an explicit type is present; it is not
-    // something the checker can reach.
-    LogicalType before = fromJson("{\"type\":\"object\",\"properties\":{"
-        + "\"s\":{\"type\":\"string\",\"enum\":[\"A\",\"B\",\"C\"]}}}");
-    LogicalType after = fromJson("{\"type\":\"object\",\"properties\":{"
-        + "\"s\":{\"type\":\"string\",\"enum\":[\"A\",\"B\"]}}}");
-
-    assertTrue(CompatibilityChecker.compare(Mode.FLINK, before, after).isCompatible());
-  }
-
-  @Test
-  void addingAnAvroEnumSymbolStaysCompatible() {
-    assertCompatible(Mode.FLINK,
-        fromAvro(enumRecord("[\"A\",\"B\"]", "")),
-        fromAvro(enumRecord("[\"A\",\"B\",\"C\"]", "")));
+    assertCompatible(Mode.FLINK, before, after);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
   }
 
   private static String enumRecord(String symbols, String extra) {

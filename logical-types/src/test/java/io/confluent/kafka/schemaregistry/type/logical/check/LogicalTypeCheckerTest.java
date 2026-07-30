@@ -41,14 +41,15 @@ class LogicalTypeCheckerTest {
 
   @Test
   void compareReachesTheCompatibilityRules() {
+    LogicalType one = struct(required("a", type(Schema.Type.INT)));
     LogicalType two = struct(
         required("a", type(Schema.Type.INT)),
         new Field("b", nonNull(type(Schema.Type.INT)), 1));
-    LogicalType one = struct(required("a", type(Schema.Type.INT)));
 
-    assertThat(LogicalTypeChecker.compare(Mode.FLINK, two, one).getIncompatibilities())
+    assertThat(LogicalTypeChecker.compare(Mode.FLINK, one, two).getIncompatibilities())
         .singleElement()
-        .satisfies(i -> assertThat(i.getRule()).isEqualTo(Incompatibility.Rule.FIELD_DELETED));
+        .satisfies(i ->
+            assertThat(i.getRule()).isEqualTo(Incompatibility.Rule.REQUIRED_FIELD_ADDED));
   }
 
   @Test

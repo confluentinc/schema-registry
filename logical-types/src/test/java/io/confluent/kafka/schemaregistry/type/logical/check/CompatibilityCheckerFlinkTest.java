@@ -68,6 +68,10 @@ class CompatibilityCheckerFlinkTest {
     return new Field(name, type.setNullable(true), 0);
   }
 
+  private static Field optionalWithDefault(String name, Schema type, Object dflt) {
+    return new Field(name, type.setNullable(true), 0, dflt, true, null, null, null);
+  }
+
   private static Field requiredWithDefault(String name, Schema type, Object dflt) {
     return new Field(name, nonNull(type), 0, dflt, true, null, null, null);
   }
@@ -147,6 +151,81 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
+  void removingTheDefaultFromANotNullColumnIsIncompatible() {
+    // The other half of tightening an optional column. A NOT NULL column with a non-null default
+    // means "may be absent, read the default"; take the default away and rows that omitted it have
+    // no value, so the runtime must invent one.
+    Incompatibility finding = assertSingle(
+        schema(requiredWithDefault("a", Schema.createString(), "x")),
+        schema(required("a", Schema.createString())),
+        Rule.NON_NULLABLE_DEFAULT_REMOVED);
+    assertEquals("a", finding.getPath());
+  }
+
+  @Test
+  void tighteningANullableDefaultedColumnReportsOnlyTheNullabilityRule() {
+    // The scope boundary between the two tightening rules. A nullable defaulted column going to NOT
+    // NULL without a default breaks for two populations of rows -- those holding null and those that
+    // omitted the field -- but it is one fix: make the column nullable again, and the absent-field
+    // case resolves with it. So only NULLABLE_TO_NON_NULLABLE fires, not both.
+    CompatibilityResult result = compare(
+        schema(optionalWithDefault("a", Schema.createString(), "x")),
+        schema(required("a", Schema.createString())));
+    assertEquals(Collections.singletonList(Rule.NULLABLE_TO_NON_NULLABLE),
+        result.getIncompatibilities().stream()
+            .map(Incompatibility::getRule)
+            .collect(Collectors.toList()),
+        result.describe());
+  }
+
+  @Test
+  void removingTheDefaultFromANullableColumnIsCompatible() {
+    // An absent field falls back to null, which a nullable column accepts.
+    assertCompatible(
+        schema(optionalWithDefault("a", Schema.createString(), "x")),
+        schema(optional("a", Schema.createString())));
+  }
+
+  @Test
+  void addingADefaultToANotNullColumnIsCompatible() {
+    assertCompatible(
+        schema(required("a", Schema.createString())),
+        schema(requiredWithDefault("a", Schema.createString(), "x")));
+  }
+
+  @Test
+  void changingADefaultBetweenTwoNonNullValuesIsNotReported() {
+    // Pinned to make the boundary visible rather than to endorse it: this does change what an absent
+    // field reads as, but no stored value is reinterpreted. Whether it deserves a rule is open.
+    assertCompatible(
+        schema(requiredWithDefault("a", Schema.createString(), "x")),
+        schema(requiredWithDefault("a", Schema.createString(), "y")));
+  }
+
+  @Test
+  void aDefaultRemovalIsInvisibleToTheIcebergModes() {
+    // Iceberg-side rules are a faithful 1:1 port and the reference has no such rule; adding one
+    // there would be the first pairwise divergence and is a separate decision.
+    LogicalType before = schema(requiredWithDefault("a", Schema.createString(), "x"));
+    LogicalType after = schema(required("a", Schema.createString()));
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible());
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V3, before, after).isCompatible());
+  }
+
+  @Test
+  void addingARequiredColumnWhoseDefaultIsNullIsIncompatible() {
+    // Presence of a default is not enough: a NOT NULL column with a null default supplies null to
+    // every row written before it existed, which is exactly the value that column cannot hold. Same
+    // requirement Iceberg v3 imposes, and for the same reason.
+    Incompatibility finding = assertSingle(
+        schema(required("id", type(Schema.Type.INT))),
+        schema(required("id", type(Schema.Type.INT)),
+            requiredWithDefault("added", Schema.createString(), null)),
+        Rule.REQUIRED_FIELD_ADDED);
+    assertEquals("added", finding.getPath());
+  }
+
+  @Test
   void addingARequiredContainerWithADefaultIsCompatible() {
     assertCompatible(
         schema(required("id", type(Schema.Type.INT))),
@@ -161,26 +240,29 @@ class CompatibilityCheckerFlinkTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void droppingAColumnIsIncompatible() {
-    Incompatibility finding = assertSingle(
+  void droppingAColumnIsCompatible() {
+    // ALTER TABLE ... DROP COLUMN is a supported Flink table change, and the drop reinterprets no
+    // stored value -- the column simply stops being read. Iceberg still rejects it, needing a stable
+    // field ID to apply it in place; see CompatibilityCheckerDownstreamSafetyTest.fieldRemoval.
+    assertCompatible(
         schema(required("id", type(Schema.Type.INT)), optional("name", Schema.createString())),
-        schema(required("id", type(Schema.Type.INT))),
-        Rule.FIELD_DELETED);
-    assertEquals("name", finding.getPath());
+        schema(required("id", type(Schema.Type.INT))));
   }
 
   @Test
-  void renamingAColumnReportsBothADropAndAnAddition() {
-    // A rename is not separately detectable without field IDs: it reads as a drop plus an add.
-    CompatibilityResult result = compare(
+  void renamingARequiredColumnIsCaughtOnlyByTheAddedHalf() {
+    // A rename reads as a drop plus an add. The drop half is legal now, so what remains is the added
+    // column -- and it is caught only because the new column is required. Renaming to a *nullable*
+    // column produces no finding here at all; whether old bytes can be located under the new name is
+    // the format checker's question (Avro needs an alias, a Protobuf value rides its tag).
+    assertSingle(
         schema(required("id", type(Schema.Type.INT)), required("name", Schema.createString())),
-        schema(required("id", type(Schema.Type.INT)), required("banana", Schema.createString())));
-    List<Rule> rules = result.getIncompatibilities().stream()
-        .map(Incompatibility::getRule)
-        .collect(Collectors.toList());
-    assertEquals(2, rules.size(), result.describe());
-    assertTrue(rules.contains(Rule.FIELD_DELETED), result.describe());
-    assertTrue(rules.contains(Rule.REQUIRED_FIELD_ADDED), result.describe());
+        schema(required("id", type(Schema.Type.INT)), required("banana", Schema.createString())),
+        Rule.REQUIRED_FIELD_ADDED);
+
+    assertCompatible(
+        schema(required("id", type(Schema.Type.INT)), optional("name", Schema.createString())),
+        schema(required("id", type(Schema.Type.INT)), optional("banana", Schema.createString())));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -188,20 +270,15 @@ class CompatibilityCheckerFlinkTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void reorderingColumnsIsIncompatible() {
-    Incompatibility finding = assertSingle(
+  void reorderingColumnsIsCompatible() {
+    // Flink SQL identifies columns by name and supports ModifyColumnPosition, so a reorder touches
+    // no value. Iceberg still rejects it.
+    assertCompatible(
         schema(optional("a", type(Schema.Type.INT)), optional("b", type(Schema.Type.INT))),
-        schema(optional("b", type(Schema.Type.INT)), optional("a", type(Schema.Type.INT))),
-        Rule.FIELD_REORDERED);
-    assertEquals("a", finding.getPath());
-  }
-
-  @Test
-  void reorderingColumnsOfTheSameTypeIsStillDetected() {
-    assertSingle(
+        schema(optional("b", type(Schema.Type.INT)), optional("a", type(Schema.Type.INT))));
+    assertCompatible(
         schema(optional("email", Schema.createString()), optional("name", Schema.createString())),
-        schema(optional("name", Schema.createString()), optional("email", Schema.createString())),
-        Rule.FIELD_REORDERED);
+        schema(optional("name", Schema.createString()), optional("email", Schema.createString())));
   }
 
   @Test
@@ -476,24 +553,55 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void mapValuesWidenButKeysAreFrozen() {
+  void bothMapValuesAndMapKeysMayWiden() {
+    // The value, as always.
     assertCompatible(
         col(Schema.createMap(nonNull(Schema.createString()), nonNull(type(Schema.Type.INT)))),
         col(Schema.createMap(nonNull(Schema.createString()), nonNull(type(Schema.Type.BIGINT)))));
 
-    Incompatibility finding = assertSingle(
+    // And the key, which used to be frozen. Iceberg freezes it because a map key carries its own
+    // field ID there; Flink's MAP has no such identity, so a key is just another value that must
+    // stay readable, and INT -> BIGINT is as safe here as on an ordinary column.
+    assertCompatible(
         col(Schema.createMap(nonNull(type(Schema.Type.INT)), nonNull(Schema.createString()))),
-        col(Schema.createMap(nonNull(type(Schema.Type.BIGINT)), nonNull(Schema.createString()))),
-        Rule.MAP_KEY_TYPE_MISMATCH);
-    assertEquals("c", finding.getPath());
+        col(Schema.createMap(nonNull(type(Schema.Type.BIGINT)), nonNull(Schema.createString()))));
   }
 
   @Test
-  void mapKeysAreFrozenDownToTheirParameters() {
-    assertSingle(
+  void aMapKeyMayGrowItsLengthBound() {
+    assertCompatible(
         col(Schema.createMap(nonNull(Schema.createVarchar(10)), nonNull(Schema.createString()))),
+        col(Schema.createMap(nonNull(Schema.createVarchar(50)), nonNull(Schema.createString()))));
+  }
+
+  @Test
+  void anUnsafeMapKeyChangeIsStillRejectedAtTheKeyPath() {
+    // Narrowing, so still rejected -- but as the leaf rule that actually applies, reported against
+    // the key rather than as a single map-level finding.
+    Incompatibility finding = assertSingle(
+        col(Schema.createMap(nonNull(type(Schema.Type.BIGINT)), nonNull(Schema.createString()))),
+        col(Schema.createMap(nonNull(type(Schema.Type.INT)), nonNull(Schema.createString()))),
+        Rule.UNSUPPORTED_TYPE_CHANGE);
+    assertEquals("c{key}", finding.getPath());
+  }
+
+  @Test
+  void aMapKeyLengthMayNotShrink() {
+    Incompatibility finding = assertSingle(
         col(Schema.createMap(nonNull(Schema.createVarchar(50)), nonNull(Schema.createString()))),
-        Rule.MAP_KEY_TYPE_MISMATCH);
+        col(Schema.createMap(nonNull(Schema.createVarchar(10)), nonNull(Schema.createString()))),
+        Rule.UNSUPPORTED_TYPE_CHANGE);
+    assertEquals("c{key}", finding.getPath());
+  }
+
+  @Test
+  void aMapKeyKindChangeIsStillRejected() {
+    assertSingle(
+        col(Schema.createMap(nonNull(Schema.createString()), nonNull(type(Schema.Type.INT)))),
+        col(Schema.createMap(
+            nonNull(Schema.createArray(nonNull(type(Schema.Type.INT)))),
+            nonNull(type(Schema.Type.INT)))),
+        Rule.TYPE_MISMATCH);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -549,14 +657,15 @@ class CompatibilityCheckerFlinkTest {
   }
 
   @Test
-  void removingAUnionBranchIsIncompatible() {
+  void removingAUnionBranchIsCompatible() {
     Schema before = Schema.createUnion(Arrays.asList(
         new UnionBranch("s", Schema.createString()),
         new UnionBranch("i", type(Schema.Type.INT))));
     Schema after = Schema.createUnion(Collections.singletonList(
         new UnionBranch("s", Schema.createString())));
-    assertSingle(schema(new Field("u", before, 0)), schema(new Field("u", after, 0)),
-        Rule.FIELD_DELETED);
+    // Union branches are struct fields, so removing one is a drop -- compatible here for the same
+    // reason, and still rejected by Iceberg.
+    assertCompatible(schema(new Field("u", before, 0)), schema(new Field("u", after, 0)));
   }
 
   @Test
@@ -601,30 +710,22 @@ class CompatibilityCheckerFlinkTest {
     List<Rule> rules = result.getIncompatibilities().stream()
         .map(Incompatibility::getRule)
         .collect(Collectors.toList());
-    assertEquals(4, rules.size(), result.describe());
+    // Three, not four: the dropped column is no longer a finding.
+    assertEquals(3, rules.size(), result.describe());
     assertTrue(rules.contains(Rule.UNSUPPORTED_TYPE_CHANGE), result.describe());
     assertTrue(rules.contains(Rule.NULLABLE_TO_NON_NULLABLE), result.describe());
     assertTrue(rules.contains(Rule.REQUIRED_FIELD_ADDED), result.describe());
-    assertTrue(rules.contains(Rule.FIELD_DELETED), result.describe());
   }
 
   // -----------------------------------------------------------------------------------------------
-  // ENUM_SYMBOL_REMOVED -- the one value-level rule; see CompatibilityChecker's FlinkComparison
+  // Enum symbol changes are invisible here -- an ENUM derives to VARCHAR, so none of them alters the
+  // Flink type. Avro resolving a dropped symbol to the enum's default is Avro's behaviour, and the
+  // format checker's to catch.
   // -----------------------------------------------------------------------------------------------
 
   @Test
-  void droppingAnEnumSymbolIsRejectedEvenThoughTheFlinkTypeIsUnchanged() {
-    // Both sides derive to VARCHAR(MAX). The rule exists precisely because the type comparison
-    // cannot see this.
-    assertEquals(Collections.singletonList(Rule.ENUM_SYMBOL_REMOVED),
-        rulesOf(compare(col(enumOf("A", "B", "C")), col(enumOf("A", "B")))));
-  }
-
-  @Test
-  void theMessageNamesTheSymbolsThatWereRemoved() {
-    CompatibilityResult result = compare(col(enumOf("A", "B", "C")), col(enumOf("A")));
-    assertTrue(result.describe().contains("B"), result.describe());
-    assertTrue(result.describe().contains("C"), result.describe());
+  void droppingAnEnumSymbolIsCompatible() {
+    assertCompatible(col(enumOf("A", "B", "C")), col(enumOf("A", "B")));
   }
 
   @Test
@@ -643,30 +744,6 @@ class CompatibilityCheckerFlinkTest {
   void wideningAnEnumToAFreeStringIsCompatible() {
     // No symbol is lost in any meaningful sense -- the column still admits every old value.
     assertCompatible(col(enumOf("A", "B")), col(Schema.createString()));
-  }
-
-  @Test
-  void aDroppedSymbolInsideANestedStructIsFoundAtItsPath() {
-    LogicalType original = schema(required("outer",
-        nonNull(Schema.createStruct(Collections.singletonList(
-            required("status", enumOf("NEW", "DONE")))))));
-    LogicalType update = schema(required("outer",
-        nonNull(Schema.createStruct(Collections.singletonList(
-            required("status", enumOf("NEW")))))));
-
-    CompatibilityResult result = compare(original, update);
-    assertEquals(1, result.getIncompatibilities().size(), result.describe());
-    assertEquals("outer.status", result.getIncompatibilities().get(0).getPath());
-  }
-
-  @Test
-  void aDroppedSymbolIsInvisibleToTheIcebergModes() {
-    // Iceberg stores an enum as a string, so committed rows keep the value written and the column
-    // is unchanged. The rule is Flink-only by design.
-    LogicalType original = col(enumOf("A", "B", "C"));
-    LogicalType update = col(enumOf("A", "B"));
-    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V2, original, update).isCompatible());
-    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V3, original, update).isCompatible());
   }
 
   private static Schema enumOf(String... symbols) {

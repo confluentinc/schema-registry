@@ -23,6 +23,7 @@ import org.everit.json.schema.CombinedSchema;
 import org.everit.json.schema.ConditionalSchema;
 import org.everit.json.schema.ConstSchema;
 import org.everit.json.schema.EnumSchema;
+import org.everit.json.schema.NotSchema;
 import org.everit.json.schema.NumberSchema;
 import org.everit.json.schema.ObjectSchema;
 import org.everit.json.schema.ObjectSchema.Builder;
@@ -66,7 +67,7 @@ public class CombinedSchemaUtils {
         stringSchema = (StringSchema) subSchema;
       } else if (subSchema instanceof CombinedSchema) {
         combinedSubschema = (CombinedSchema) subSchema;
-      } else if (subSchema instanceof ConditionalSchema) {
+      } else if (subSchema instanceof ConditionalSchema || subSchema instanceof NotSchema) {
         // Rejected rather than dropped. A JSON Schema writing `if`/`then`/`else` alongside its
         // properties is parsed by everit as an allOf of [ObjectSchema, ConditionalSchema], and the
         // branches of the conditional declare properties that the ObjectSchema does not. Falling
@@ -74,12 +75,24 @@ public class CombinedSchemaUtils {
         // ObjectSchema alone -- so a conditionally-required property gets no column at all, and
         // every record carrying it silently loses that value.
         //
-        // Deliberately scoped to the conditional. NotSchema and property dependencies are also
-        // dropped here, but neither costs a column: they weaken a constraint rather than destroying
-        // data, and rejecting them would break schemas that work today.
+        // `not` is in scope for a reason that reverses an earlier decision. On its own it costs no
+        // column, only a constraint. But JSON Schema has no implication operator -- `if S then T
+        // else E` is written `(not S or T) and (S or E)` -- so every encoding of conditional
+        // semantics needs a negation, and rejecting only ConditionalSchema blocks just the sugar.
+        //
+        // COVERAGE IS PARTIAL, deliberately. This chain inspects only the *immediate* subschemas of
+        // the allOf, so nesting the negation one level deeper still converts and still loses the
+        // column. Naming more subschema types will not fix that: the root cause is that this method
+        // discards any subschema it cannot merge, which is also why an `anyOf` of object shapes
+        // nested in an allOf loses its properties. Closing it means refusing to drop a subschema,
+        // which reaches ordinary allOf composition and carries far more blast radius.
+        //
+        // Also note this rejects schemas that previously converted -- unlike the ConstSchema and
+        // tuple rejections, which turned away input that was never convertible.
         throw new ValidationException(
-            "JSON Schema if/then/else is not supported: a property required only by a conditional "
-                + "branch has no column to be read into, so its values would be silently dropped");
+            "JSON Schema if/then/else and `not` are not supported: a property declared only under "
+                + "a condition has no column to be read into, so its values would be silently "
+                + "dropped");
       }
       collectPropertySchemas(subSchema, properties, required,
           Collections.newSetFromMap(new IdentityHashMap<>()));

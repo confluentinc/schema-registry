@@ -95,6 +95,16 @@ class CompatibilityCheckerDownstreamSafetyTest {
     assertTrue(rules.contains(rule), mode + " expected " + rule + " but got " + rules);
   }
 
+  /**
+   * Rejected by Iceberg, accepted by Flink. The shape of every identity-level change now: Iceberg
+   * needs a stable field ID to apply it, whereas Flink SQL supports the operation and no stored
+   * value is reinterpreted or invented. See the criterion on {@code FlinkComparison}.
+   */
+  private static void assertIcebergOnly(LogicalType original, LogicalType update, Rule rule) {
+    assertBlocked(Mode.ICEBERG_V2, original, update, rule);
+    assertAllowed(Mode.FLINK, original, update);
+  }
+
   private static void assertBlockedByBoth(LogicalType original, LogicalType update, Rule rule) {
     assertBlocked(Mode.FLINK, original, update, rule);
     assertBlocked(Mode.ICEBERG_V2, original, update, rule);
@@ -148,7 +158,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void fieldRenamesWithoutAliases() {
-    assertBlockedByBoth(rec(fld("name", "\"string\"")), rec(fld("banana", "\"string\"")),
+    assertBlocked(Mode.ICEBERG_V2, rec(fld("name", "\"string\"")), rec(fld("banana", "\"string\"")),
         Rule.FIELD_DELETED);
   }
 
@@ -160,34 +170,32 @@ class CompatibilityCheckerDownstreamSafetyTest {
     // drop plus an add. A known gap rather than a considered verdict.
     LogicalType before = rec(fld("name", "\"string\""));
     LogicalType after = rec("{\"name\":\"banana\",\"type\":\"string\",\"aliases\":[\"name\"]}");
-    assertBlockedByBoth(before, after, Rule.FIELD_DELETED);
+    assertBlocked(Mode.ICEBERG_V2, before, after, Rule.FIELD_DELETED);
   }
 
   @Test
   void fieldRemoval() {
-    assertBlockedByBoth(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
+    assertIcebergOnly(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
         rec(fld("a", "\"string\"")), Rule.FIELD_DELETED);
   }
 
   @Test
   void fieldReordering() {
-    assertBlockedByBoth(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
+    assertIcebergOnly(rec(fld("a", "\"string\"") + "," + fld("b", "\"string\"")),
         rec(fld("b", "\"string\"") + "," + fld("a", "\"string\"")), Rule.FIELD_REORDERED);
   }
 
   @Test
   void jsonConstraintAdditions() {
-    // No longer reaches either checker: the converter now rejects if/then/else outright, because a
-    // property required only by a conditional branch gets no column and its values would be
-    // silently dropped. Caught one layer earlier than a comparison, and so caught on a first
-    // registration too.
+    // A conditional no longer reaches either checker: the converter rejects it, because a property
+    // declared only by a branch gets no column. Caught a layer earlier than a comparison, and so on
+    // a first registration too. Value-level constraints carry no such cost and are still ignored.
     assertThatThrownBy(() -> json("{\"type\":\"object\",\"properties\":{"
         + "\"a\":{\"type\":\"string\"}},"
         + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}"))
         .isInstanceOf(ValidationException.class)
         .hasMessageContaining("if/then/else");
 
-    // Value-level constraints carry no such cost and are still ignored, as intended.
     assertAllowedByBoth(
         json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}"),
         json("{\"type\":\"object\",\"properties\":{"
@@ -196,7 +204,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void protobufSameTagRenames() {
-    assertBlockedByBoth(
+    assertBlocked(Mode.ICEBERG_V2, 
         proto("syntax=\"proto3\";package t;message M{string name=1;}"),
         proto("syntax=\"proto3\";package t;message M{string banana=1;}"),
         Rule.FIELD_DELETED);
@@ -280,7 +288,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
   @Test
   void avroUnionBranchReordering() {
     // Reordering two or more non-null branches reads as a struct-field reorder.
-    assertBlockedByBoth(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
+    assertIcebergOnly(rec(fld("u", "[\"null\",\"string\",\"int\"]")),
         rec(fld("u", "[\"null\",\"int\",\"string\"]")), Rule.FIELD_REORDERED);
     // Flipping only the null branch is a no-op: a two-member union containing a null collapses to a
     // nullable type regardless of branch order.
@@ -290,7 +298,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void protobufReservedTagAdditions() {
-    assertBlockedByBoth(
+    assertIcebergOnly(
         proto("syntax=\"proto3\";package t;message M{string a=1;string b=2;}"),
         proto("syntax=\"proto3\";package t;message M{string a=1;reserved 2;}"),
         Rule.FIELD_DELETED);
@@ -336,7 +344,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
   }
 
   @Test
-  void avroEnumValueDropsAreBlockedForFlinkOnly() {
+  void avroEnumValueDropsAreInvisibleToBothModes() {
     // Invisible to the *type* comparison -- an enum derives to an unbounded VARCHAR on both sides --
     // so it is caught by the one value-level rule instead. Flink re-resolves historical symbols
     // against the new set and renders a dropped one as the enum's default; Iceberg stores the string
@@ -345,8 +353,7 @@ class CompatibilityCheckerDownstreamSafetyTest {
         rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}"));
     LogicalType after =
         rec(fld("e", "{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\"]}"));
-    assertBlocked(Mode.FLINK, before, after, Rule.ENUM_SYMBOL_REMOVED);
-    assertAllowed(Mode.ICEBERG_V2, before, after);
+    assertAllowedByBoth(before, after);
   }
 
   @Test
@@ -364,13 +371,12 @@ class CompatibilityCheckerDownstreamSafetyTest {
   }
 
   @Test
-  void protobufEnumValueRemovalIsBlockedForFlinkOnly() {
+  void protobufEnumValueRemovalIsInvisibleToBothModes() {
     // Same reasoning as the Avro case; one rule covers both formats because both derive an ENUM.
     LogicalType before = proto("syntax=\"proto3\";package t;message M{E e=1;}"
         + "enum E{UNSET=0;A=1;B=2;}");
     LogicalType after = proto("syntax=\"proto3\";package t;message M{E e=1;}"
         + "enum E{UNSET=0;A=1;}");
-    assertBlocked(Mode.FLINK, before, after, Rule.ENUM_SYMBOL_REMOVED);
-    assertAllowed(Mode.ICEBERG_V2, before, after);
+    assertAllowedByBoth(before, after);
   }
 }

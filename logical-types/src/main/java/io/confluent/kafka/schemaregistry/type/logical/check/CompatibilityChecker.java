@@ -903,22 +903,35 @@ final class CompatibilityChecker {
    * stay independently readable against the specification it implements. Factoring out a common
    * walk would couple them and make neither diffable against its own reference.
    *
-   * <h3>One documented exception to the governing principle</h3>
+   * <h3>The governing criterion</h3>
    *
-   * <p>Every rule here is otherwise a function of the <em>derived Flink type</em>: a change is
-   * incompatible precisely when it alters the type the schema derives to, which is what makes this
-   * mode a type checker and lets {@link FlinkLogicalTypeCasts} carry the leaf relation.
+   * <p>A change is rejected here when it is not a <b>legal Flink SQL table evolution</b> — legal
+   * meaning semantically valid at both DDL and DML time, <em>whatever the underlying storage</em>.
+   * That reduces to one test:
    *
-   * <p>{@link #validateEnumSymbols} deliberately breaks that. Flink has no enum type, so dropping a
-   * symbol leaves the derived type <em>bit-for-bit identical</em> — and yet historical records
-   * carrying the dropped symbol are then read as the enum's default rather than the value written.
-   * The hazard is a value reinterpretation that the type erasure hides, so no rule expressible over
-   * derived types could catch it. It is included here because the symbols survive in SRLT and one
-   * rule then covers Avro, Protobuf and JSON at once; the alternative home is the format layer,
-   * which would need three.
+   * <blockquote>Does the change require a stored value to be <b>reinterpreted</b>, or to be
+   * <b>invented</b>?</blockquote>
    *
-   * <p><b>Do not generalise from it.</b> It is the only value-level rule in this class, and it is
-   * here on the strength of a specific argument rather than as licence for others.
+   * <p>If neither, it is legal. Flink accepts almost any {@code ALTER TABLE}, so DDL legality alone
+   * decides nothing; and how a particular encoding locates or resolves a value is the format-level
+   * checker's business, not this one's. What is left is whether every value that was legitimately
+   * written can still be read as itself.
+   *
+   * <p>The retained rules are exactly the ones that fail that test.
+   * {@link Rule#REQUIRED_FIELD_ADDED} invents — a NOT NULL column with no written value cannot be
+   * satisfied by any storage. {@link Rule#NULLABLE_TO_NON_NULLABLE} reinterprets — a legitimately
+   * written null has no non-null reading. {@link Rule#TYPE_MISMATCH} and
+   * {@link Rule#UNSUPPORTED_TYPE_CHANGE} reinterpret, at the
+   * kind and leaf level respectively; the parameter guards belong to the latter because a decimal
+   * scale, a temporal precision and a CHAR length each select how stored bytes are read.
+   *
+   * <p><b>Do not reintroduce a rule that fails this test.</b> Drops, reordering, renames, map-key
+   * changes and enum symbol removal were all rejected here once, and each was removed on this
+   * argument: a drop and a reorder touch no value, a rename is
+   * {@code TableChange.ModifyColumnName} with the byte-location question belonging to the format, a
+   * map key is an ordinary value, and an ENUM derives to VARCHAR so dropping a symbol changes the
+   * Flink type not at all. What made enum removal look like a Flink problem was Avro resolving an
+   * unknown symbol to the enum's default — Avro's behaviour, and the Avro checker's to catch.
    */
   private static final class FlinkComparison {
 
@@ -1033,10 +1046,29 @@ final class CompatibilityChecker {
     // -- structs ---------------------------------------------------------------------------------
 
     /**
-     * Field-level rules: additions, drops, order, and nullability. Deliberately the same shape as
-     * {@link IcebergComparison#validateStructs(List, List, String)}, differing only in the
-     * added-field predicate: Flink can represent a NOT NULL column that carries a default, so there
-     * is no container-only relaxation here — a default is enough on its own.
+     * Field-level rules: added columns and nullability. Columns are matched by name, and a column
+     * present only in the original is simply not read.
+     *
+     * <p><b>Deliberately narrower than {@code IcebergComparison#validateStructs}, which also
+     * rejects drops and reordering.</b> Applying the reinterpret-or-invent test from the class
+     * javadoc:
+     *
+     * <ul>
+     *   <li>A <b>drop</b> invents nothing and reinterprets nothing — the column stops being read.
+     *       {@code ALTER TABLE ... DROP COLUMN} is a supported Flink table change
+     *       ({@code TableChange.DropColumn}), so it is legal here. Iceberg still rejects it,
+     *       because it cannot drop a column in place without a stable field ID.
+     *   <li>A <b>reorder</b> likewise touches no value. Flink SQL identifies columns by name, and
+     *       {@code TableChange.ModifyColumnPosition} is supported.
+     *   <li>An <b>added column</b> does invent: a NOT NULL column with no written value cannot be
+     *       satisfied by any storage, so it stays rejected. A nullable or defaulted addition is
+     *       fine, because null or the default is a legitimate value for it.
+     * </ul>
+     *
+     * <p>A <b>rename</b> therefore no longer produces a finding here. That is intended: renaming is
+     * {@code TableChange.ModifyColumnName}, and whether old bytes can still be located under the
+     * new name is a question about the encoding — Avro needs an alias, a Protobuf value rides its
+     * tag — which the format-level checker owns.
      */
     private void validateStructs(
         List<FieldView> originalFields, List<FieldView> updateFields, String path,
@@ -1045,15 +1077,7 @@ final class CompatibilityChecker {
       final Map<String, FieldView> originalFieldMap = originalFields.stream()
           .collect(Collectors.toMap(field -> field.name, field -> field));
 
-      int lastSeenOriginalIndex = -1;
       int updatePosition = -1;
-      final List<String> originalFieldOrder = originalFields.stream()
-          .map(field -> field.name)
-          .collect(Collectors.toList());
-
-      final Set<String> updateFieldNames = updateFields.stream()
-          .map(field -> field.name)
-          .collect(Collectors.toSet());
       for (FieldView updateField : updateFields) {
         updatePosition++;
         final String fieldPath = childPath(path, updateField.name);
@@ -1072,42 +1096,98 @@ final class CompatibilityChecker {
           continue;
         }
 
-        // Flink columns are positional, so existing columns may not be resequenced.
-        final int originalIndex = originalFieldOrder.indexOf(updateField.name);
-        if (originalIndex < lastSeenOriginalIndex) {
-          add(Rule.FIELD_REORDERED, fieldPath,
-              "column moved ahead of a column that preceded it in the original schema");
-        }
-        lastSeenOriginalIndex = originalIndex;
-
-        // Tightening nullability would reject rows that already hold nulls.
+        // Tightening nullability would reject rows that already hold nulls. Deliberately blind to
+        // defaults: a default rescues an *absent* field, and says nothing about a field that is
+        // present and holds null, which is exactly what a nullable column permits.
         if (isEffectivelyNullable(originalField) && !isEffectivelyNullable(updateField)) {
           add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
               "column was nullable and is now NOT NULL; pre-existing rows may hold nulls");
         }
 
-        compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
-      }
+        validateDefaultNotRemoved(originalField, updateField, fieldPath, fieldIndexPath);
 
-      // Drops. A rename falls out of this too, being indistinguishable from a drop plus an add.
-      for (FieldView originalField : originalFields) {
-        if (!updateFieldNames.contains(originalField.name)) {
-          add(Rule.FIELD_DELETED, childPath(path, originalField.name),
-              "column present in the original schema is missing from the update");
-        }
+        compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
       }
     }
 
     /**
      * The added-column predicate. Unlike Iceberg mode there is no container restriction and no
-     * scalar
-     * exclusion: a Flink column may be NOT NULL and still carry a default, so any default suffices.
+     * scalar exclusion: a Flink column may be NOT NULL and still carry a default, so a default on
+     * any type suffices.
      *
-     * <p>As in Iceberg mode the schema is the authoritative source of defaults — read from the
-     * field, never from a caller-supplied side table.
+     * <p>The default must be <b>non-null</b>, though — mere presence is not enough, for the same
+     * reason it is not enough under Iceberg v3. A NOT NULL column whose default is null supplies
+     * null to every row written before the column existed, which is precisely the value that column
+     * cannot hold.
+     *
+     * <p>Defaults are read from <em>either</em> channel; see {@link #hasNonNullDefault}.
      */
     private boolean isNullableOrDefaulted(FieldView field, List<Integer> fieldIndexPath) {
-      return isEffectivelyNullable(field) || hasDefault(field, fieldIndexPath);
+      return isEffectivelyNullable(field) || hasNonNullDefault(field, fieldIndexPath);
+    }
+
+    /**
+     * The other half of tightening an optional column, and the counterpart to
+     * {@link Rule#NULLABLE_TO_NON_NULLABLE}.
+     *
+     * <p>A NOT NULL column carrying a non-null default means precisely "may be absent, read the
+     * default". Rows may therefore legitimately lack it. Take the default away and those rows have
+     * no value at all, and the runtime has to <b>invent</b> one — the same failure as adding a
+     * required column, arrived at from the other direction.
+     *
+     * <p>Only when the column is <b>not nullable</b> in the update. A nullable column that loses
+     * its default is fine: an absent field falls back to null, which it accepts.
+     *
+     * <p>Changing a default from one non-null value to another is <em>not</em> reported. It does
+     * change what an absent field reads as, but no stored value is reinterpreted; whether that
+     * deserves a rule of its own is open.
+     *
+     * <p><b>Iceberg modes deliberately excluded.</b> The reference checker has no such rule, and
+     * the pairwise Iceberg rules are a faithful 1:1 port; adding one there would be the first
+     * divergence on that side and is a separate decision.
+     *
+     * <p>The original side reads only the field's own default, not the path-keyed map, because the
+     * update-side index path is not valid for the original once reordering is permitted. That is
+     * sound rather than a shortcut: the path-keyed channel carries defaults the converter
+     * <em>derived</em> from format semantics — an absent {@code repeated} field is an empty list —
+     * and those cannot be removed by editing a schema without also changing the type, which the
+     * type rules already catch. The update side consults both channels, so a field that still has a
+     * derived default does not trip this.
+     */
+    private void validateDefaultNotRemoved(
+        FieldView originalField, FieldView updateField, String fieldPath,
+        List<Integer> fieldIndexPath) {
+      if (isEffectivelyNullable(originalField) || isEffectivelyNullable(updateField)) {
+        return;
+      }
+      final boolean originalHadDefault =
+          originalField.hasDefault && originalField.defaultValue != null;
+      if (originalHadDefault && !hasNonNullDefault(updateField, fieldIndexPath)) {
+        add(Rule.NON_NULLABLE_DEFAULT_REMOVED, fieldPath,
+            "NOT NULL column lost its default; rows that omitted the column have no value to read");
+      }
+    }
+
+    /**
+     * Whether the default is present <em>and</em> non-null, from either channel. Mirrors
+     * {@code IcebergComparison#hasNonNullDefault}; the two are kept separate so each class stays
+     * diffable against its own reference.
+     *
+     * <p><b>Two channels exist and both count.</b> A user-declared default lands on the
+     * {@link Schema.Field}. A default the converter derived from format semantics — an absent
+     * {@code repeated} field is an empty list, an absent proto map is an empty map — lands only in
+     * the schema's path-keyed map. Reading just the field would miss every derived default, which
+     * is the majority of them.
+     *
+     * <p>A {@code null} path means the walk crossed an array, where the two converters disagree on
+     * the index convention. There the lookup is skipped rather than guessed, so an undecidable case
+     * reads as "no default" and fails closed.
+     */
+    private boolean hasNonNullDefault(FieldView field, List<Integer> fieldIndexPath) {
+      if (field.hasDefault && field.defaultValue != null) {
+        return true;
+      }
+      return fieldIndexPath != null && updateDefaults.get(fieldIndexPath) != null;
     }
 
     /** Container recursion for ARRAY. */
@@ -1127,14 +1207,27 @@ final class CompatibilityChecker {
       compareTypes(elementOf(original), elementOf(update), path + "[]", null);
     }
 
-    /** Container recursion for MAP. The key type is frozen; only the value may widen. */
+    /**
+     * Container recursion for MAP. Both the key and the value are compared through the ordinary
+     * type comparison, so each may widen exactly as far as a leaf elsewhere may.
+     *
+     * <p><b>Deliberately unlike {@link IcebergComparison#validateMaps}</b>, which freezes the key
+     * outright and reports {@link Rule#MAP_KEY_TYPE_MISMATCH} for any change at all. That is right
+     * there and was mirrored here for a while, but the reason does not carry over: Iceberg gives
+     * a map key its own field ID and identifies it by that, so re-typing the key redefines the
+     * field.
+     * Flink's MAP has no such identity, and a key is just another value that has to remain readable
+     * — so {@code MAP<INT, V> -> MAP<BIGINT, V>} is as safe as the same widening on an ordinary
+     * column, and freezing it rejected a change nothing objects to.
+     *
+     * <p>An unsafe key change is still rejected; it simply surfaces as the leaf rule that actually
+     * applies, at the {@code {key}} path, rather than as a single map-level finding.
+     */
     private void validateMaps(
         Schema original, Schema update, String path, List<Integer> indexPath) {
-      if (!flinkTypesEqual(original.getKeyType(), update.getKeyType())) {
-        add(Rule.MAP_KEY_TYPE_MISMATCH, path,
-            "map key type changed from " + render(original.getKeyType())
-                + " to " + render(update.getKeyType()));
-      }
+      // No index appended for the key: neither converter records a default under one, and a map key
+      // cannot be null or defaulted anyway.
+      compareTypes(original.getKeyType(), update.getKeyType(), path + "{key}", null);
       // Both converters agree on the map value index, unlike the array element.
       compareTypes(original.getValueType(), update.getValueType(), path + "{}",
           appendIndex(indexPath, 1));
@@ -1143,27 +1236,6 @@ final class CompatibilityChecker {
     private static boolean isEffectivelyNullable(FieldView field) {
       return field.forcedNullable || field.schema.isNullable();
     }
-
-    /**
-     * Whether {@code field} carries a default, from either channel.
-     *
-     * <p>Two channels exist and both count. A user-declared default lands on the
-     * {@link Schema.Field}. A default the converter derived from format semantics — an absent
-     * {@code repeated} field is an empty list, an absent proto map is an empty map — lands only in
-     * the schema's path-keyed map. Reading just the field would miss every derived default, which
-     * is the majority of them and the whole reason the container relaxation exists.
-     *
-     * <p>A {@code null} path means the walk crossed an array, where the two converters disagree on
-     * the index convention. There the lookup is skipped rather than guessed, so an undecidable case
-     * reads as "no default" and fails closed.
-     */
-    private boolean hasDefault(FieldView field, List<Integer> fieldIndexPath) {
-      if (field.hasDefault) {
-        return true;
-      }
-      return fieldIndexPath != null && updateDefaults.containsKey(fieldIndexPath);
-    }
-
 
     // -- primitives ------------------------------------------------------------------------------
 
@@ -1181,10 +1253,6 @@ final class CompatibilityChecker {
      * FlinkLogicalTypeCasts}. <b>Do not remove these guards as redundant.</b>
      */
     private void validatePrimitives(Schema original, Schema update, String path) {
-      // Values rather than types, so it runs independently of Parts A and B -- both of which return
-      // early and would otherwise skip it. See validateEnumSymbols.
-      validateEnumSymbols(original, update, path);
-
       FlinkLogicalTypeCasts.Root originalRootType = flinkRootOf(original);
       FlinkLogicalTypeCasts.Root updateRootType = flinkRootOf(update);
 
@@ -1259,48 +1327,6 @@ final class CompatibilityChecker {
     }
 
     /** Exact Flink-type equality, with no widening allowed. Used for map keys, which are frozen. */
-    /**
-     * The one rule in this mode that looks past the derived Flink type.
-     *
-     * <p>Flink has no enum type, so an ENUM derives to an unbounded VARCHAR and both sides of a
-     * symbol drop produce an <em>identical</em> Flink type. Part A therefore cannot see it, and
-     * neither can the Iceberg erasure. But the symbols survive in SRLT, and the consequence is
-     * real: an Avro reader whose enum lacks a symbol that historical records carry resolves it to
-     * the enum's default, so a value written as {@code C} is read as {@code A}. Silent, and
-     * unrecoverable after the fact.
-     *
-     * <p>Removal only. Adding a symbol is safe, since every historical value still resolves, and
-     * reordering is safe because Avro resolves enums by name rather than by ordinal.
-     *
-     * <p>Both sides must be ENUM. An ENUM widening into a plain VARCHAR loses no symbol in any
-     * meaningful sense: the column becomes a free string that still admits every old value.
-     *
-     * <p>Fires unconditionally on removal rather than only when the update's enum carries a
-     * default. Without a default, Avro's own BACKWARD check rejects the change first, so the
-     * narrower rule would rarely be the one to fire -- and a JSON Schema enum has no Avro
-     * resolution behind it at all.
-     *
-     * <p>Not applied under the Iceberg modes: Iceberg stores an enum as a string, so rows already
-     * committed keep the value written and dropping a symbol changes nothing about the column.
-     */
-    private void validateEnumSymbols(Schema original, Schema update, String path) {
-      if (original.getType() != Schema.Type.ENUM || update.getType() != Schema.Type.ENUM) {
-        return;
-      }
-      final Set<String> retained = update.getEnumValues().stream()
-          .map(Schema.EnumValue::getSymbol)
-          .collect(Collectors.toSet());
-      final List<String> removed = original.getEnumValues().stream()
-          .map(Schema.EnumValue::getSymbol)
-          .filter(symbol -> !retained.contains(symbol))
-          .collect(Collectors.toList());
-      if (!removed.isEmpty()) {
-        add(Rule.ENUM_SYMBOL_REMOVED, path,
-            "enum symbols " + removed + " were removed; historical records carrying them read as "
-                + "the enum's default rather than the value written");
-      }
-    }
-
     private boolean flinkTypesEqual(Schema original, Schema update) {
       Schema left = resolve(original, originalNamedTypes);
       Schema right = resolve(update, updateNamedTypes);
