@@ -24,6 +24,7 @@ import io.confluent.kafka.schemaregistry.storage.LeaderElector;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistryIdentity;
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
@@ -154,6 +155,8 @@ public class KafkaGroupLeaderElector implements LeaderElector, SchemaRegistryReb
           new ApiVersions(),
           logContext,
           MetadataRecoveryStrategy.NONE,
+          // bootstrap addresses are resolved eagerly above via metadata.bootstrap()
+          BootstrapConfiguration.DISABLED,
           false);
 
       this.client = new ConsumerNetworkClient(
