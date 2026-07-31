@@ -556,4 +556,70 @@ class CompatibilityCheckerTest {
         nonNull(Schema.createStruct(Collections.singletonList(
             new Field("m", nonNull(container), 0)))), named);
   }
+
+  // -----------------------------------------------------------------------------------------------
+  // Second-pass review: the path-keyed default channel below a named-type reference
+  // -----------------------------------------------------------------------------------------------
+
+  @Test
+  void aSharedNamedTypeIsNotExcusedByADefaultRecordedAtAnotherReferenceSite() {
+    // The false negative. The memo compares a shared definition once, which is only sound if the
+    // verdict cannot vary by the site it is reached from. It could: the added-field rule reads
+    // updateDefaults BY INDEX PATH, so a default recorded for the 'a' position used to excuse the
+    // 'b' position too, and the finding vanished entirely.
+    LogicalType before = sharedRefRoot(false, Collections.emptyMap());
+    LogicalType after = sharedRefRoot(true, Collections.singletonMap(Arrays.asList(0, 1), "z"));
+
+    for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V3}) {
+      assertTrue(
+          rulesOf(CompatibilityChecker.compare(mode, before, after))
+              .contains(Rule.REQUIRED_FIELD_ADDED),
+          mode + " should report the added required field inside the shared type");
+    }
+  }
+
+  @Test
+  void aDefaultOnTheRootBodySurvivesEvenWhenTheRootIsAReference() {
+    // The carve-out in indexPathAcrossRef. Every converter walks the ROOT body at [], so a root
+    // emitted as a NAMED_TYPE_REF must keep its path -- otherwise its own defaults become
+    // unreadable. Not a regression test -- it passed before the fix too -- but it does fail if the
+    // isEmpty() carve-out is removed, which is exactly what it is here to prevent.
+    Map<String, Schema> beforeTypes = new LinkedHashMap<>();
+    beforeTypes.put("ns.R", nonNull(Schema.createStruct(Collections.singletonList(
+        required("keep", Schema.create(Schema.Type.INT), 0)))));
+    Map<String, Schema> afterTypes = new LinkedHashMap<>();
+    afterTypes.put("ns.R", nonNull(Schema.createStruct(Arrays.asList(
+        required("keep", Schema.create(Schema.Type.INT), 0),
+        required("added", Schema.createMap(
+            nonNull(Schema.createString()), nonNull(Schema.create(Schema.Type.INT))), 1)))));
+
+    LogicalType before = refRoot("ns.R", beforeTypes, Collections.emptyMap());
+    LogicalType after = refRoot("ns.R", afterTypes,
+        Collections.singletonMap(Collections.singletonList(1), Collections.emptyMap()));
+
+    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible(),
+        "a default recorded on the root body at [1] must still be found");
+  }
+
+  /** {@code struct { a: ref(ns.X), b: ref(ns.X) }}, where {@code ns.X} optionally gains a field. */
+  private static LogicalType sharedRefRoot(boolean withAddedField, Map<List<Integer>, Object> defs) {
+    Map<String, Schema> named = new LinkedHashMap<>();
+    List<Field> fields = new ArrayList<>();
+    fields.add(required("v", Schema.create(Schema.Type.INT), 0));
+    if (withAddedField) {
+      fields.add(required("extra", Schema.createString(), 1));
+    }
+    named.put("ns.X", nonNull(Schema.createStruct(fields)));
+    return new LogicalType(null,
+        nonNull(Schema.createStruct(Arrays.asList(
+            new Field("a", nonNull(Schema.createNamedTypeRef("ns.X")), 0),
+            new Field("b", nonNull(Schema.createNamedTypeRef("ns.X")), 1)))),
+        named, Collections.emptyList(), Collections.emptyMap(), defs);
+  }
+
+  private static LogicalType refRoot(
+      String name, Map<String, Schema> named, Map<List<Integer>, Object> defs) {
+    return new LogicalType(null, nonNull(Schema.createNamedTypeRef(name)), named,
+        Collections.emptyList(), Collections.emptyMap(), defs);
+  }
 }

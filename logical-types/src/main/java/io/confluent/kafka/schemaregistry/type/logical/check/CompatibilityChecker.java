@@ -184,8 +184,14 @@ final class CompatibilityChecker {
      *
      * <ul>
      *   <li>A named type reached from several places is compared once, so one problem inside it
-     *       yields one finding rather than one per reference site. The definition is shared, so the
-     *       verdict cannot differ by path.
+     *       yields one finding rather than one per reference site. This is sound only because
+     *       {@link #indexPathAcrossRef} makes the index path unresolvable below a reference: the
+     *       rules that read {@code updateDefaults} then fall back to {@link Schema.Field}, which is
+     *       a property of the definition, so the verdict genuinely cannot differ by the site the
+     *       definition is reached from. <b>Do not read {@code updateDefaults} at a reference-site
+     *       path</b> — that is what once made this memo unsound, silently dropping a
+     *       {@link Rule#REQUIRED_FIELD_ADDED} whenever a shared type was reached from two
+     *       positions and only the first carried a path-keyed default.
      *   <li>It bounds the walk. Path-scoped bookkeeping would revisit a shared type once per path,
      *       which is exponential for a chain of types that each reference the next twice.
      * </ul>
@@ -206,6 +212,12 @@ final class CompatibilityChecker {
      *
      * <p>Identity rather than equality: {@link Schema} equality is structural, and a recursive
      * definition cannot be compared structurally without recursing forever.
+     *
+     * <p>The precondition this rests on: two positions share a {@link Schema} instance only through
+     * {@code namedTypes}, so a shared instance is always reached across a reference and its index
+     * path is already unresolvable. A hand-built {@link LogicalType} sharing one <em>inline</em>
+     * struct instance across two positions <em>and</em> carrying path-keyed defaults would still
+     * be path-sensitive; no converter emits that shape.
      */
     private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
 
@@ -265,7 +277,7 @@ final class CompatibilityChecker {
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
             resolve(update, updateNamedTypes),
-            path, indexPath);
+            path, indexPathAcrossRef(update, indexPath));
         return;
       }
       checkCompatibilityRecursive(original, update, path, indexPath);
@@ -451,8 +463,8 @@ final class CompatibilityChecker {
      * <p>The main walk's cycle guards do not cover this path, so it carries its own. Without one, a
      * recursive named type reached through a map key — or a MULTISET element, since Iceberg lowers
      * {@code MULTISET<T>} to {@code map<T, int>} — resolves to the same struct forever and
-     * reported to the user as an incompatibility at all.
-     * reported to the user as an incompatibility at all.
+     * overflows the stack. An {@code Error} escaping here is worse than any finding, because it
+     * cannot be reported to the user as an incompatibility at all.
      *
      * <p>The guard is an in-progress stack rather than a memo: entries are removed on the way out,
      * so a second, unrelated occurrence of the same pair is still compared properly. Re-entering a
@@ -646,9 +658,10 @@ final class CompatibilityChecker {
      * the schema's path-keyed map. Reading just the field would miss every derived default, which
      * is the majority of them and the whole reason the container relaxation exists.
      *
-     * <p>A {@code null} path means the walk crossed an array, where the two converters disagree on
-     * the index convention. There the lookup is skipped rather than guessed, so an undecidable case
-     * reads as "no default" and fails closed.
+     * <p>A {@code null} path means the walk crossed an array — where the converters disagree on
+     * the index convention — or a named-type reference, below which the path belongs to a
+     * different key space entirely (see {@link #indexPathAcrossRef}). Either way the lookup is
+     * skipped rather than guessed, so an undecidable case reads as "no default" and fails closed.
      */
     private boolean hasDefault(FieldView field, List<Integer> fieldIndexPath) {
       if (field.hasDefault) {
@@ -902,6 +915,35 @@ final class CompatibilityChecker {
     return child;
   }
 
+  /**
+   * The index path to carry across a named-type reference on the update side, or {@code null} when
+   * it can no longer be resolved.
+   *
+   * <p>{@link LogicalType#getDefaultValues()} is keyed by paths from the walk that produced it, and
+   * every converter walks a named type's body once, at its <em>definition</em> site — not again at
+   * each reference site. Below a reference, therefore, the path this walk has built names nothing
+   * inside that body: it belongs to a different key space, where a lookup either misses or, worse,
+   * aliases onto an unrelated field's recorded default and accepts a change spuriously.
+   *
+   * <p>Making the path unresolvable there is what lets {@link IcebergComparison#comparedRefPairs}
+   * stay global. With no resolvable path below a reference, the added-field verdict for a shared
+   * definition cannot vary by the site it is reached from, so comparing it once is sound — and the
+   * walk stays linear rather than fanning out over paths.
+   *
+   * <p>The empty path survives: all three converters walk the <em>root</em> body at {@code []}, and
+   * an empty index path arises only at the top of the walk, so this carve-out is exactly "the root"
+   * and keeps a root emitted as a reference working.
+   *
+   * <p>Keyed on the update side alone, because {@code updateDefaults} is the only map consulted.
+   * An original-side-only reference — an inline struct that became a {@code $ref} — keeps its path.
+   */
+  private static List<Integer> indexPathAcrossRef(Schema update, List<Integer> indexPath) {
+    if (!isRef(update)) {
+      return indexPath;
+    }
+    return indexPath != null && indexPath.isEmpty() ? indexPath : null;
+  }
+
   private static String childPath(String parentPath, String fieldName) {
     return parentPath.isEmpty() ? fieldName : parentPath + '.' + fieldName;
   }
@@ -1059,7 +1101,7 @@ final class CompatibilityChecker {
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
             resolve(update, updateNamedTypes),
-            path, indexPath);
+            path, indexPathAcrossRef(update, indexPath));
         return;
       }
       checkCompatibilityRecursive(original, update, path, indexPath);
@@ -1092,7 +1134,7 @@ final class CompatibilityChecker {
           validateLists(original, update, path);
           break;
         case MULTISET:
-          validateMultisets(original, update, path);
+          validateMultisets(original, update, path, indexPath);
           break;
         case MAP:
           validateMaps(original, update, path, indexPath);
@@ -1241,9 +1283,10 @@ final class CompatibilityChecker {
      * the schema's path-keyed map. Reading just the field would miss every derived default, which
      * is the majority of them.
      *
-     * <p>A {@code null} path means the walk crossed an array, where the two converters disagree on
-     * the index convention. There the lookup is skipped rather than guessed, so an undecidable case
-     * reads as "no default" and fails closed.
+     * <p>A {@code null} path means the walk crossed an array — where the converters disagree on
+     * the index convention — or a named-type reference, below which the path belongs to a
+     * different key space entirely (see {@link #indexPathAcrossRef}). Either way the lookup is
+     * skipped rather than guessed, so an undecidable case reads as "no default" and fails closed.
      */
     private boolean hasNonNullDefault(FieldView field, List<Integer> fieldIndexPath) {
       if (field.hasDefault && field.defaultValue != null) {
@@ -1252,21 +1295,51 @@ final class CompatibilityChecker {
       return fieldIndexPath != null && updateDefaults.get(fieldIndexPath) != null;
     }
 
+    /**
+     * Compares a container's child — an array or multiset element, a map key or value — checking
+     * nullability on the way in.
+     *
+     * <p>{@link #validatePrimitives} deliberately leaves nullability alone, on the grounds that the
+     * field-level rule in {@link #validateStructs} already covers it. That holds for a struct field
+     * and not for a container child, which reaches the leaf comparison without passing through a
+     * field at all — so without this, tightening
+     * {@code ARRAY<INT>} to {@code ARRAY<INT NOT NULL>} was accepted while the identical tightening
+     * on a column was rejected. A collection that holds nulls today would then have a type saying
+     * it cannot, which is the same failure the field rule exists to prevent.
+     *
+     * <p><b>Not mirrored in {@link IcebergComparison}</b>, which has the same gap. That is faithful
+     * to the checker it was ported from: there, element and value optionality lives on the
+     * container rather than on the child type, and the reference never reads it. Closing it on the
+     * Iceberg side would be a divergence from the port, and is a separate decision.
+     */
+    private void compareChild(
+        Schema original, Schema update, String path, List<Integer> indexPath) {
+      if (original.isNullable() && !update.isNullable()) {
+        add(Rule.NULLABLE_TO_NON_NULLABLE, path,
+            "container child was nullable and is now NOT NULL; existing collections may hold "
+                + "nulls");
+      }
+      compareTypes(original, update, path, indexPath);
+    }
+
     /** Container recursion for ARRAY. */
     private void validateLists(
         Schema original, Schema update, String path) {
       // The element index path is not portable: the Avro converter appends 0 for an array element
       // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
       // down, which makes a default lookup below an array fail closed rather than guess.
-      compareTypes(elementOf(original), elementOf(update), path + "[]", null);
+      compareChild(elementOf(original), elementOf(update), path + "[]", null);
     }
 
     /**
      * Container recursion for MULTISET, which Flink models as its own type rather than a MAP.
      */
     private void validateMultisets(
-        Schema original, Schema update, String path) {
-      compareTypes(elementOf(original), elementOf(update), path + "[]", null);
+        Schema original, Schema update, String path, List<Integer> indexPath) {
+      // Unlike an array, MULTISET's default-path convention is documented without a format split --
+      // "MULTISET: 0 for the element type" -- so the path is resolvable and must not be discarded.
+      compareChild(elementOf(original), elementOf(update), path + "[]",
+          appendIndex(indexPath, 0));
     }
 
     /**
@@ -1287,11 +1360,12 @@ final class CompatibilityChecker {
      */
     private void validateMaps(
         Schema original, Schema update, String path, List<Integer> indexPath) {
-      // No index appended for the key: neither converter records a default under one, and a map key
-      // cannot be null or defaulted anyway.
-      compareTypes(original.getKeyType(), update.getKeyType(), path + "{key}", null);
+      // No index appended for the key: no converter records a default under one -- the Protobuf
+      // reader guards map-entry sub-fields explicitly so they cannot surface there. Nullability is
+      // still checked, because SRLT can express a nullable key even though no converter emits one.
+      compareChild(original.getKeyType(), update.getKeyType(), path + "{key}", null);
       // Both converters agree on the map value index, unlike the array element.
-      compareTypes(original.getValueType(), update.getValueType(), path + "{}",
+      compareChild(original.getValueType(), update.getValueType(), path + "{}",
           appendIndex(indexPath, 1));
     }
 
@@ -1306,8 +1380,11 @@ final class CompatibilityChecker {
      *
      * <p>Part A delegates the root relation to {@link FlinkLogicalTypeCasts}, so this checker's
      * notion of a safe type change is Flink's own rather than a hand-picked one. Nullability is
-     * excluded because the field-level nullability rule already covers it, and reporting it twice
-     * would be noise.
+     * excluded here because it is checked on the way in to every leaf instead — by
+     * {@link #validateStructs} for a struct field and by {@link #compareChild} for a container
+     * child — and reporting it twice would be noise. <b>Both are needed:</b> a container child
+     * reaches this method without passing through a field, so for a while the exclusion left it
+     * unchecked entirely.
      *
      * <p>Part B applies the parameter guards that Part A structurally cannot: Flink's table is
      * keyed by type root and never reads a length, precision, or scale, so on its own it would

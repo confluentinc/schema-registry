@@ -93,9 +93,8 @@ final class ValidityChecker {
   private static final int MAX_DECIMAL_PRECISION = 38;
 
   /**
-   * Lowest length the engine's fixed-length character and binary types
-   * binary type permit. The unbounded variants additionally accept zero; see {@link
-   * #validateLength}.
+   * Lowest length the engine's fixed-length character and binary types permit. The unbounded
+   * variants additionally accept zero; see {@link #validateLength}.
    */
   private static final int MIN_FIXED_LENGTH = 1;
 

@@ -742,4 +742,64 @@ class CompatibilityCheckerFlinkTest {
         .map(Incompatibility::getRule)
         .collect(Collectors.toList());
   }
+
+  // -----------------------------------------------------------------------------------------------
+  // Container children are subject to the nullability rule too
+  // -----------------------------------------------------------------------------------------------
+
+  @Test
+  void tighteningAnArrayElementToNotNullIsIncompatible() {
+    // validatePrimitives skips nullability because validateStructs covers it -- true for a field,
+    // false for a container child, which never passes through a field. A collection holding nulls
+    // today would otherwise get a type saying it cannot.
+    Incompatibility finding = assertSingle(
+        col(nonNull(Schema.createArray(Schema.create(Schema.Type.INT).setNullable(true)))),
+        col(nonNull(Schema.createArray(nonNull(Schema.create(Schema.Type.INT))))),
+        Rule.NULLABLE_TO_NON_NULLABLE);
+    assertEquals("c[]", finding.getPath());
+  }
+
+  @Test
+  void tighteningAMapValueOrKeyToNotNullIsIncompatible() {
+    assertEquals("c{}", assertSingle(
+        col(nonNull(Schema.createMap(nonNull(Schema.createString()),
+            Schema.create(Schema.Type.INT).setNullable(true)))),
+        col(nonNull(Schema.createMap(nonNull(Schema.createString()),
+            nonNull(Schema.create(Schema.Type.INT))))),
+        Rule.NULLABLE_TO_NON_NULLABLE).getPath());
+
+    assertEquals("c{key}", assertSingle(
+        col(nonNull(Schema.createMap(Schema.createString().setNullable(true),
+            nonNull(Schema.create(Schema.Type.INT))))),
+        col(nonNull(Schema.createMap(nonNull(Schema.createString()),
+            nonNull(Schema.create(Schema.Type.INT))))),
+        Rule.NULLABLE_TO_NON_NULLABLE).getPath());
+  }
+
+  @Test
+  void tighteningAMultisetElementToNotNullIsIncompatible() {
+    assertSingle(
+        col(nonNull(Schema.createMultiset(Schema.create(Schema.Type.INT).setNullable(true)))),
+        col(nonNull(Schema.createMultiset(nonNull(Schema.create(Schema.Type.INT))))),
+        Rule.NULLABLE_TO_NON_NULLABLE);
+  }
+
+  @Test
+  void relaxingAContainerChildToNullableIsCompatible() {
+    assertCompatible(
+        col(nonNull(Schema.createArray(nonNull(Schema.create(Schema.Type.INT))))),
+        col(nonNull(Schema.createArray(Schema.create(Schema.Type.INT).setNullable(true)))));
+  }
+
+  @Test
+  void theIcebergModesDoNotCheckContainerChildNullability() {
+    // Faithful to the port: there, element and value optionality lives on the container rather than
+    // on the child type, and the reference never reads it. Closing that is a separate decision.
+    LogicalType before =
+        col(nonNull(Schema.createArray(Schema.create(Schema.Type.INT).setNullable(true))));
+    LogicalType after =
+        col(nonNull(Schema.createArray(nonNull(Schema.create(Schema.Type.INT)))));
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible());
+    assertTrue(LogicalTypeChecker.compare(Mode.ICEBERG_V3, before, after).isCompatible());
+  }
 }
