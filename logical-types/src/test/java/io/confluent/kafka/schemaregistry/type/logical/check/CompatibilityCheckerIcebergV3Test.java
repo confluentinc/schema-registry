@@ -204,19 +204,18 @@ class CompatibilityCheckerIcebergV3Test {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void dateToTimestampBecomesAValidPromotion() {
-    assertV2RejectsAndV3Accepts(col(type(Schema.Type.DATE)), col(Schema.createTimestamp(6)),
+  void dateToTimestampStaysRejectedAtV3EvenThoughTheSpecPermitsIt() {
+    // The spec's v3 promotion row allows date -> timestamp and date -> timestamp_ns, and this
+    // checker deliberately does not, because no Iceberg implementation has that row:
+    // TypeUtil#isPromotionAllowed switches on INTEGER, FLOAT and DECIMAL only, and
+    // SchemaUpdate#updateColumn gates every type change on that same function. Accepting it would
+    // pass a schema at registration that then throws when the table is evolved.
+    //
+    // Restore these as v2-rejects-v3-accepts when upstream implements the row.
+    assertBothReject(col(type(Schema.Type.DATE)), col(Schema.createTimestamp(6)),
         Rule.UNSUPPORTED_TYPE_CHANGE);
-  }
-
-  @Test
-  void dateToTheNanosecondTimestampBecomesAValidPromotion() {
-    // v2 has no date-to-timestamp_ns row in its promotion table; v3 adds one. That v2 additionally
-    // cannot store timestamp_ns is ValidityChecker's finding, not this one's.
-    assertEquals(EnumSet.of(Rule.UNSUPPORTED_TYPE_CHANGE),
-        rulesOf(Mode.ICEBERG_V2, col(type(Schema.Type.DATE)), col(Schema.createTimestamp(9))));
-    assertEquals(EnumSet.noneOf(Rule.class),
-        rulesOf(Mode.ICEBERG_V3, col(type(Schema.Type.DATE)), col(Schema.createTimestamp(9))));
+    assertBothReject(col(type(Schema.Type.DATE)), col(Schema.createTimestamp(9)),
+        Rule.UNSUPPORTED_TYPE_CHANGE);
   }
 
   @Test

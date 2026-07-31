@@ -80,6 +80,14 @@ import java.util.stream.Collectors;
  * value for pre-existing rows. Adding a field to a nested struct is allowed by the spec and is
  * allowed here too (subject to the same optional-or-defaulted requirement at every level).
  *
+ * <p><b>One rule exists in the reference and not here, and the divergence is conditional.</b> That
+ * implementation carries a nested-field-added rule that rejects <em>any</em> field added below the
+ * root, optional or not. It is unreachable: its entry point calls only the recursive compatibility
+ * walk, and the nested-field cluster is entered from nowhere but itself. So matching its
+ * <em>behaviour</em>, as above, means contradicting a rule still written down there — and two
+ * callers downstream of it still catch and format that exception. Re-wiring one line there would
+ * split the two checkers silently, which is worth knowing for anyone diffing them.
+ *
  * <p>Type comparison erases the distinctions Iceberg does not model — see
  * {@link #icebergClassOf}. Rather than materialising a converted schema, types are compared through
  * equivalence classes, so {@code SMALLINT -> BIGINT} passes as {@code int -> long} and
@@ -106,13 +114,6 @@ final class IcebergComparison {
    * Format version that added {@code initial-default} and {@code write-default}.
    */
   private static final int FORMAT_VERSION_WITH_COLUMN_DEFAULTS = 3;
-
-  /**
-   * Format version that widened the promotion table. v3 adds {@code date} to the without-timezone
-   * timestamps, and {@code unknown} to any type — the latter unreachable here, since no
-   * {@link Schema.Type} maps onto {@code unknown}.
-   */
-  private static final int FORMAT_VERSION_WITH_V3_PROMOTIONS = 3;
 
   private final Schema originalRoot;
   private final Schema updateRoot;
@@ -536,31 +537,29 @@ final class IcebergComparison {
     return formatVersion >= FORMAT_VERSION_WITH_COLUMN_DEFAULTS;
   }
 
-  private boolean supportsV3Promotions() {
-    return formatVersion >= FORMAT_VERSION_WITH_V3_PROMOTIONS;
-  }
-
-  /** Iceberg's promotion table for the targeted format version. */
-  private boolean isPromotionAllowed(IcebergClass from, IcebergClass to) {
+  /**
+   * Iceberg's promotion table, mirroring {@code TypeUtil#isPromotionAllowed}: {@code int -> long},
+   * {@code float -> double}, and decimal precision widening at unchanged scale (handled by the
+   * caller, which has the parameters). Identical for every format version.
+   *
+   * <p><b>{@code date -> timestamp} is deliberately absent, though spec v3 permits it.</b> The
+   * spec's v3 row allows promoting {@code date} to {@code timestamp} and {@code timestamp_ns}
+   * (never to a {@code timestamptz}, since a date carries no zone). No Iceberg implementation has
+   * that row: {@code TypeUtil#isPromotionAllowed} switches on {@code INTEGER}, {@code FLOAT} and
+   * {@code DECIMAL} only, and {@code SchemaUpdate#updateColumn} gates every type change on that
+   * same function, so the evolution throws regardless of format version. Accepting it here would
+   * pass a schema at registration that then fails when the table is evolved — the failure this
+   * checker exists to prevent, reached from the other side. It would also be the one type rule
+   * where this port is more permissive than the checker it mirrors, which rejects it for the same
+   * reason.
+   *
+   * <p>Restore the edge when upstream implements it, gated on format version.
+   */
+  private static boolean isPromotionAllowed(IcebergClass from, IcebergClass to) {
     if (from == IcebergClass.INT && to == IcebergClass.LONG) {
       return true;
     }
-    if (from == IcebergClass.FLOAT && to == IcebergClass.DOUBLE) {
-      return true;
-    }
-    return supportsV3Promotions() && isDateToTimestampPromotion(from, to);
-  }
-
-  /**
-   * v3 adds {@code date} to the without-timezone timestamps only. Promotion to
-   * {@code timestamptz} or {@code timestamptz_ns} is explicitly forbidden: a date carries no
-   * zone, and assigning one would invent information.
-   */
-  private static boolean isDateToTimestampPromotion(IcebergClass from, IcebergClass to) {
-    if (from != IcebergClass.DATE) {
-      return false;
-    }
-    return to == IcebergClass.TIMESTAMP || to == IcebergClass.TIMESTAMP_NANO;
+    return from == IcebergClass.FLOAT && to == IcebergClass.DOUBLE;
   }
 
   /**
