@@ -184,14 +184,12 @@ final class CompatibilityChecker {
      *
      * <ul>
      *   <li>A named type reached from several places is compared once, so one problem inside it
-     *       yields one finding rather than one per reference site. This is sound only because
-     *       {@link #indexPathAcrossRef} makes the index path unresolvable below a reference: the
-     *       rules that read {@code updateDefaults} then fall back to {@link Schema.Field}, which is
-     *       a property of the definition, so the verdict genuinely cannot differ by the site the
-     *       definition is reached from. <b>Do not read {@code updateDefaults} at a reference-site
-     *       path</b> — that is what once made this memo unsound, silently dropping a
-     *       {@link Rule#REQUIRED_FIELD_ADDED} whenever a shared type was reached from two
-     *       positions and only the first carried a path-keyed default.
+     *       yields one finding rather than one per reference site. Comparing once is not merely a
+     *       tidiness measure: all three converters walk a named type's body at its <em>first
+     *       reference site</em> and key {@link LogicalType#getDefaultValues()} under that site's
+     *       path, so the body's defaults exist under exactly one prefix and no other. The first
+     *       comparison is the one that can read them; every later site inheriting its verdict is
+     *       what makes a default belong to the definition rather than to a position.
      *   <li>It bounds the walk. Path-scoped bookkeeping would revisit a shared type once per path,
      *       which is exponential for a chain of types that each reference the next twice.
      * </ul>
@@ -277,7 +275,7 @@ final class CompatibilityChecker {
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
             resolve(update, updateNamedTypes),
-            path, indexPathAcrossRef(update, indexPath));
+            path, indexPath);
         return;
       }
       checkCompatibilityRecursive(original, update, path, indexPath);
@@ -658,10 +656,10 @@ final class CompatibilityChecker {
      * the schema's path-keyed map. Reading just the field would miss every derived default, which
      * is the majority of them and the whole reason the container relaxation exists.
      *
-     * <p>A {@code null} path means the walk crossed an array — where the converters disagree on
-     * the index convention — or a named-type reference, below which the path belongs to a
-     * different key space entirely (see {@link #indexPathAcrossRef}). Either way the lookup is
-     * skipped rather than guessed, so an undecidable case reads as "no default" and fails closed.
+     * <p>A {@code null} path means the walk crossed an array, where the converters disagree on the
+     * index convention: Avro and JSON append an element index, Protobuf appends nothing. Rather
+     * than guess which map a hit came from, the lookup is skipped, so the case reads as "no
+     * default" and fails closed.
      */
     private boolean hasDefault(FieldView field, List<Integer> fieldIndexPath) {
       if (field.hasDefault) {
@@ -915,35 +913,6 @@ final class CompatibilityChecker {
     return child;
   }
 
-  /**
-   * The index path to carry across a named-type reference on the update side, or {@code null} when
-   * it can no longer be resolved.
-   *
-   * <p>{@link LogicalType#getDefaultValues()} is keyed by paths from the walk that produced it, and
-   * every converter walks a named type's body once, at its <em>definition</em> site — not again at
-   * each reference site. Below a reference, therefore, the path this walk has built names nothing
-   * inside that body: it belongs to a different key space, where a lookup either misses or, worse,
-   * aliases onto an unrelated field's recorded default and accepts a change spuriously.
-   *
-   * <p>Making the path unresolvable there is what lets {@link IcebergComparison#comparedRefPairs}
-   * stay global. With no resolvable path below a reference, the added-field verdict for a shared
-   * definition cannot vary by the site it is reached from, so comparing it once is sound — and the
-   * walk stays linear rather than fanning out over paths.
-   *
-   * <p>The empty path survives: all three converters walk the <em>root</em> body at {@code []}, and
-   * an empty index path arises only at the top of the walk, so this carve-out is exactly "the root"
-   * and keeps a root emitted as a reference working.
-   *
-   * <p>Keyed on the update side alone, because {@code updateDefaults} is the only map consulted.
-   * An original-side-only reference — an inline struct that became a {@code $ref} — keeps its path.
-   */
-  private static List<Integer> indexPathAcrossRef(Schema update, List<Integer> indexPath) {
-    if (!isRef(update)) {
-      return indexPath;
-    }
-    return indexPath != null && indexPath.isEmpty() ? indexPath : null;
-  }
-
   private static String childPath(String parentPath, String fieldName) {
     return parentPath.isEmpty() ? fieldName : parentPath + '.' + fieldName;
   }
@@ -1101,7 +1070,7 @@ final class CompatibilityChecker {
         checkCompatibilityRecursive(
             resolve(original, originalNamedTypes),
             resolve(update, updateNamedTypes),
-            path, indexPathAcrossRef(update, indexPath));
+            path, indexPath);
         return;
       }
       checkCompatibilityRecursive(original, update, path, indexPath);
@@ -1283,10 +1252,10 @@ final class CompatibilityChecker {
      * the schema's path-keyed map. Reading just the field would miss every derived default, which
      * is the majority of them.
      *
-     * <p>A {@code null} path means the walk crossed an array — where the converters disagree on
-     * the index convention — or a named-type reference, below which the path belongs to a
-     * different key space entirely (see {@link #indexPathAcrossRef}). Either way the lookup is
-     * skipped rather than guessed, so an undecidable case reads as "no default" and fails closed.
+     * <p>A {@code null} path means the walk crossed an array, where the converters disagree on the
+     * index convention: Avro and JSON append an element index, Protobuf appends nothing. Rather
+     * than guess which map a hit came from, the lookup is skipped, so the case reads as "no
+     * default" and fails closed.
      */
     private boolean hasNonNullDefault(FieldView field, List<Integer> fieldIndexPath) {
       if (field.hasDefault && field.defaultValue != null) {
