@@ -163,6 +163,28 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
+  void addingAContainerInsideAnArrayElementIsAccepted() {
+    // Previously rejected, and deliberately so: the walk passed a null index path below an ARRAY
+    // because Avro and Protobuf disagree on whether to append an element index, which made every
+    // derived default below an array unreachable. Reading the default off Schema.Field removes the
+    // question -- there is no path to get wrong.
+    LogicalType before = fromProto(
+        "syntax = \"proto3\";\n"
+            + "package t;\n"
+            + "message M { repeated Inner items = 1;\n"
+            + "  message Inner { string a = 1; } }\n");
+    LogicalType after = fromProto(
+        "syntax = \"proto3\";\n"
+            + "package t;\n"
+            + "message M { repeated Inner items = 1;\n"
+            + "  message Inner { string a = 1; repeated string tags = 2; } }\n");
+
+    for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V2, Mode.ICEBERG_V3}) {
+      assertCompatible(mode, before, after);
+    }
+  }
+
+  @Test
   void addingARepeatedFieldIsAcceptedRegardlessOfTopLevelMessageLayout() {
     // This was a known limitation, and it is the regression test for its fix.
     //
