@@ -557,37 +557,4 @@ class CompatibilityCheckerTest {
             new Field("m", nonNull(container), 0)))), named);
   }
 
-  // -----------------------------------------------------------------------------------------------
-  // The path-keyed default channel below a named-type reference
-  // -----------------------------------------------------------------------------------------------
-
-  @Test
-  void aDefaultRecordedInsideANamedTypeIsStillFoundThroughTheReference() {
-    // getDefaultValues() is keyed by the path of the walk that produced it, and the converters
-    // walk a named type's body at its FIRST REFERENCE SITE, carrying that site's path. So the
-    // index path has to survive the crossing into a reference; blanking it there makes every
-    // default inside a named type unreadable, and the most ordinary evolution there is -- adding
-    // a defaulted field to a nested record -- starts reading as REQUIRED_FIELD_ADDED.
-    Map<String, Schema> beforeTypes = new LinkedHashMap<>();
-    beforeTypes.put("ns.R", nonNull(Schema.createStruct(Collections.singletonList(
-        required("keep", Schema.create(Schema.Type.INT), 0)))));
-    Map<String, Schema> afterTypes = new LinkedHashMap<>();
-    afterTypes.put("ns.R", nonNull(Schema.createStruct(Arrays.asList(
-        required("keep", Schema.create(Schema.Type.INT), 0),
-        required("added", Schema.createMap(
-            nonNull(Schema.createString()), nonNull(Schema.create(Schema.Type.INT))), 1)))));
-
-    LogicalType before = refRoot("ns.R", beforeTypes, Collections.emptyMap());
-    LogicalType after = refRoot("ns.R", afterTypes,
-        Collections.singletonMap(Collections.singletonList(1), Collections.emptyMap()));
-
-    assertTrue(CompatibilityChecker.compare(Mode.ICEBERG_V2, before, after).isCompatible(),
-        "a default recorded on the root body at [1] must still be found");
-  }
-
-  private static LogicalType refRoot(
-      String name, Map<String, Schema> named, Map<List<Integer>, Object> defs) {
-    return new LogicalType(null, nonNull(Schema.createNamedTypeRef(name)), named,
-        Collections.emptyList(), Collections.emptyMap(), defs);
-  }
 }

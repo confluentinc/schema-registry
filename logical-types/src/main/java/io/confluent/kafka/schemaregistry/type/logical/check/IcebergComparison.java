@@ -23,7 +23,6 @@ import io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker
 import io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.Kind;
 import io.confluent.kafka.schemaregistry.type.logical.check.Incompatibility.Rule;
 
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.appendIndex;
 import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.childPath;
 import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.describeChange;
 import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.elementOf;
@@ -120,15 +119,6 @@ final class IcebergComparison {
   private final Map<String, Schema> originalNamedTypes;
   private final Map<String, Schema> updateNamedTypes;
 
-  /**
-   * Derived defaults for the update schema, keyed by index path.
-   *
-   * <p>Read in preference to nothing at all: the converters record a container's implicit default
-   * ({@code repeated} is an empty list, a proto map is an empty map) <em>only</em> here, never on
-   * the {@link Schema.Field}. The field's own default is reserved for user-declared values so
-   * that a DDL round-trip stays clean. Both are consulted; see {@code hasDefault}.
-   */
-  private final Map<List<Integer>, Object> updateDefaults;
 
   private final List<Incompatibility> findings = new ArrayList<>();
 
@@ -142,18 +132,14 @@ final class IcebergComparison {
    *
    * <ul>
    *   <li>A named type reached from several places is compared once, so one problem inside it
-   *       yields one finding rather than one per reference site. Comparing once is not merely a
-   *       tidiness measure: all three converters walk a named type's body at its <em>first
-   *       reference site</em> and key {@link LogicalType#getDefaultValues()} under that site's
-   *       path, so the body's defaults exist under exactly one prefix and no other. The first
-   *       comparison is the one that can read them; every later site inheriting its verdict is
-   *       what makes a default belong to the definition rather than to a position.
+   *       yields one finding rather than one per reference site.
    *   <li>It bounds the walk. Path-scoped bookkeeping would revisit a shared type once per path,
    *       which is exponential for a chain of types that each reference the next twice.
    * </ul>
    *
    * <p>The cost is that a finding is reported at the first path that reaches the type rather than
    * at every such path.
+   *
    */
   private final Set<String> comparedRefPairs = new HashSet<>();
 
@@ -169,11 +155,8 @@ final class IcebergComparison {
    * <p>Identity rather than equality: {@link Schema} equality is structural, and a recursive
    * definition cannot be compared structurally without recursing forever.
    *
-   * <p>The precondition this rests on: two positions share a {@link Schema} instance only through
-   * {@code namedTypes}, so a shared instance is always reached across a reference and its index
-   * path is already unresolvable. A hand-built {@link LogicalType} sharing one <em>inline</em>
-   * struct instance across two positions <em>and</em> carrying path-keyed defaults would still
-   * be path-sensitive; no converter emits that shape.
+   * <p>Now that no rule is position-sensitive, this guard is purely about where a finding is
+   * reported and how often, not about whether the verdict is right.
    */
   private final Map<Schema, Set<Schema>> comparedStructPairs = new IdentityHashMap<>();
 
@@ -191,11 +174,10 @@ final class IcebergComparison {
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
     this.updateNamedTypes = update.getNamedTypes();
-    this.updateDefaults = update.getDefaultValues();
   }
 
   CompatibilityResult run() {
-    compareTypes(originalRoot, updateRoot, "", Collections.emptyList());
+    compareTypes(originalRoot, updateRoot, "");
     return CompatibilityResult.of(findings);
   }
 
@@ -218,7 +200,7 @@ final class IcebergComparison {
   // -- dispatch --------------------------------------------------------------------------------
 
   private void compareTypes(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     if (isRef(original) || isRef(update)) {
       // Dedup only when BOTH sides are refs. refKey returns "" for a non-ref, so keying on a
       // one-sided ref collapses every inline counterpart onto the same key: the first
@@ -233,14 +215,14 @@ final class IcebergComparison {
       checkCompatibilityRecursive(
           resolve(original, originalNamedTypes),
           resolve(update, updateNamedTypes),
-          path, indexPath);
+          path);
       return;
     }
-    checkCompatibilityRecursive(original, update, path, indexPath);
+    checkCompatibilityRecursive(original, update, path);
   }
 
   private void checkCompatibilityRecursive(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     // An unresolvable reference (e.g. an external type) can only be compared by name.
     if (isRef(original) || isRef(update)) {
       if (!isRef(original) || !isRef(update)
@@ -260,14 +242,14 @@ final class IcebergComparison {
     switch (originalKind) {
       case STRUCT:
         if (claimStructPair(original, update)) {
-          validateStructs(fieldViews(original), fieldViews(update), path, indexPath);
+          validateStructs(fieldViews(original), fieldViews(update), path);
         }
         break;
       case LIST:
         validateLists(original, update, path);
         break;
       case MAP:
-        validateMaps(original, update, path, indexPath);
+        validateMaps(original, update, path);
         break;
       case PRIMITIVE:
         validatePrimitives(original, update, path);
@@ -285,8 +267,7 @@ final class IcebergComparison {
    * in via {@link #isEffectivelyOptional} rather than applied as a pre-pass.
    */
   private void validateStructs(
-      List<FieldView> originalFields, List<FieldView> updateFields, String path,
-      List<Integer> indexPath) {
+      List<FieldView> originalFields, List<FieldView> updateFields, String path) {
 
     final Map<String, FieldView> originalFieldMap = originalFields.stream()
         .collect(Collectors.toMap(field -> field.name, field -> field));
@@ -305,11 +286,10 @@ final class IcebergComparison {
       final String fieldPath = childPath(path, updateField.name);
       // Struct fields are the one place both converters agree on the index convention: the
       // field's position within its struct, appended to the parent's path.
-      final List<Integer> fieldIndexPath = appendIndex(indexPath, updatePosition);
       final FieldView originalField = originalFieldMap.get(updateField.name);
 
       if (originalField == null) {
-        if (!isEffectivelyOptional(updateField, fieldIndexPath, null)) {
+        if (!isEffectivelyOptional(updateField, null)) {
           add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
               "added field is neither nullable nor defaulted, so pre-existing rows have no "
                   + "value for it"
@@ -331,12 +311,12 @@ final class IcebergComparison {
       lastSeenOriginalIndex = originalIndex;
 
       if (isEffectivelyNullable(originalField)
-          && !isEffectivelyOptional(updateField, fieldIndexPath, originalField)) {
+          && !isEffectivelyOptional(updateField, originalField)) {
         add(Rule.NULLABLE_TO_NON_NULLABLE, fieldPath,
             "field was nullable and is now non-nullable; pre-existing rows may hold nulls");
       }
 
-      compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
+      compareTypes(originalField.schema, updateField.schema, fieldPath);
     }
 
     for (FieldView originalField : originalFields) {
@@ -352,24 +332,21 @@ final class IcebergComparison {
    */
   private void validateLists(
       Schema original, Schema update, String path) {
-    // The element index path is not portable: the Avro converter appends 0 for an array element
-    // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
-    // down, which makes a default lookup below an array fail closed rather than guess.
-    compareTypes(elementOf(original), elementOf(update), path + "[]", null);
+    compareTypes(elementOf(original), elementOf(update), path + "[]");
   }
 
   /**
    * Mirrors the Iceberg-schema implementation's {@code validateMaps}.
    */
   private void validateMaps(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     if (!erasedEquals(keyOf(original), keyOf(update))) {
       add(Rule.MAP_KEY_TYPE_MISMATCH, path,
           "map key type changed from " + render(keyOf(original))
               + " to " + render(keyOf(update)));
     }
     // Both converters agree on the map value index, unlike the array element.
-    compareTypes(valueOf(original), valueOf(update), path + "{}", appendIndex(indexPath, 1));
+    compareTypes(valueOf(original), valueOf(update), path + "{}");
   }
 
   // -- primitives ------------------------------------------------------------------------------
@@ -517,17 +494,15 @@ final class IcebergComparison {
    * must not be modified, and since the relaxation is only ever needed to answer a question, a
    * predicate suffices.
    *
-   * <p><b>Defaults are read from either of two channels, and either suffices</b> — see
-   * {@link #hasDefault}. A user-declared default lands on the field itself; one the converter
-   * derived from format semantics lands only in the schema's path-keyed map. Consulting just the
-   * field would miss the derived majority, which is precisely the population this relaxation
-   * exists for.
+   * <p>Defaults are read from {@link Schema.Field} alone. Both channels are represented there: a
+   * user-declared default, and one a converter derived from format semantics and marked
+   * {@code derived} so no writer emits it.
    *
    * @param originalField the matching field in the original schema, or {@code null} if the field
    *                      is newly added
    */
   private boolean isEffectivelyOptional(
-      FieldView field, List<Integer> fieldIndexPath, FieldView originalField) {
+      FieldView field, FieldView originalField) {
     if (isEffectivelyNullable(field)) {
       return true;
     }
@@ -540,14 +515,14 @@ final class IcebergComparison {
     if (supportsColumnDefaults()
         && originalField == null
         && typeAllowsNonNullDefault(field.schema)
-        && hasNonNullDefault(field, fieldIndexPath)) {
+        && hasNonNullDefault(field)) {
       return true;
     }
 
     // The container relaxation, in both versions. It addresses a derivation quirk rather than an
     // Iceberg capability -- proto and Avro containers are marked NOT NULL because those formats
     // cannot encode a null container -- so v3 does not retire it.
-    if (!hasDefault(field, fieldIndexPath)) {
+    if (!field.hasDefault) {
       return false;
     }
     Schema resolved = resolve(field.schema, updateNamedTypes);
@@ -594,37 +569,14 @@ final class IcebergComparison {
    * <p>v3 requires both defaults to be non-null when a required field is added, so mere presence
    * is not enough. A null default leaves pre-existing rows with nothing to read.
    */
-  private boolean hasNonNullDefault(FieldView field, List<Integer> fieldIndexPath) {
-    if (field.hasDefault && field.defaultValue != null) {
-      return true;
-    }
-    return fieldIndexPath != null && updateDefaults.get(fieldIndexPath) != null;
+  private static boolean hasNonNullDefault(FieldView field) {
+    return field.hasDefault && field.defaultValue != null;
   }
 
   private static boolean isEffectivelyNullable(FieldView field) {
     return field.forcedNullable || field.schema.isNullable();
   }
 
-  /**
-   * Whether {@code field} carries a default, from either channel.
-   *
-   * <p>Two channels exist and both count. A user-declared default lands on the
-   * {@link Schema.Field}. A default the converter derived from format semantics — an absent
-   * {@code repeated} field is an empty list, an absent proto map is an empty map — lands only in
-   * the schema's path-keyed map. Reading just the field would miss every derived default, which
-   * is the majority of them and the whole reason the container relaxation exists.
-   *
-   * <p>A {@code null} path means the walk crossed an array, where the converters disagree on the
-   * index convention: Avro and JSON append an element index, Protobuf appends nothing. Rather
-   * than guess which map a hit came from, the lookup is skipped, so the case reads as "no
-   * default" and fails closed.
-   */
-  private boolean hasDefault(FieldView field, List<Integer> fieldIndexPath) {
-    if (field.hasDefault) {
-      return true;
-    }
-    return fieldIndexPath != null && updateDefaults.containsKey(fieldIndexPath);
-  }
 
   /**
    * Iceberg's primitive type set. Members of the same class are indistinguishable to Iceberg, so

@@ -134,6 +134,16 @@ final class CompatibilityChecker {
     }
   }
 
+  /**
+   * The members of a struct or union, <b>in list order</b>.
+   *
+   * <p>List order, deliberately — not {@link Schema.Field#getPosition()}. Position is a
+   * format-level artefact and is not reliable: a Protobuf message containing a {@code oneof}
+   * reports duplicated and out-of-order positions, because the {@code oneof} is hoisted to the end
+   * of the field list while positions are left as they were. Field order is what
+   * {@code IcebergComparison} compares to detect a reorder, so switching to {@code getPosition()}
+   * would report a spurious one on any message containing a {@code oneof}.
+   */
   static List<FieldView> fieldViews(Schema schema) {
     List<FieldView> views = new ArrayList<>();
     if (schema.getType() == Schema.Type.UNION) {
@@ -203,19 +213,6 @@ final class CompatibilityChecker {
   // Rendering
   // ---------------------------------------------------------------------------------------------
 
-  /**
-   * Appends a child index, or returns {@code null} if the parent path was already unresolvable.
-   * See {@code hasDefault} for what {@code null} means.
-   */
-  static List<Integer> appendIndex(List<Integer> parentPath, int index) {
-    if (parentPath == null) {
-      return null;
-    }
-    final List<Integer> child = new ArrayList<>(parentPath.size() + 1);
-    child.addAll(parentPath);
-    child.add(index);
-    return child;
-  }
 
   static String childPath(String parentPath, String fieldName) {
     return parentPath.isEmpty() ? fieldName : parentPath + '.' + fieldName;

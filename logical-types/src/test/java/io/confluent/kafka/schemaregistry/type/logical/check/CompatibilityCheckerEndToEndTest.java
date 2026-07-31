@@ -163,16 +163,18 @@ class CompatibilityCheckerEndToEndTest {
   }
 
   @Test
-  void nestedContainerDefaultsAreNotFoundWhenTheProtoFileHasSeveralTopLevelMessages() {
-    // Known limitation, pinned so the behaviour is deliberate rather than accidental.
+  void addingARepeatedFieldIsAcceptedRegardlessOfTopLevelMessageLayout() {
+    // This was a known limitation, and it is the regression test for its fix.
     //
-    // With two top-level messages the converter records the default index paths as {[1,0], [1,1]},
-    // while the root schema it returns has "inner" at position 0 -- the first path component is not
-    // a field position in the returned struct. A position-derived lookup therefore misses, and the
-    // relaxation does not fire. That is the safe direction (a spurious rejection, never a spurious
-    // acceptance), but it is a converter inconsistency rather than an intended rule: declaring the
-    // same types with Inner nested inside M yields {[0,0], [0,1]} and works. See
-    // addingARepeatedFieldInsideANestedProtoMessageIsAccepted for the working form.
+    // The derived empty-list default used to be readable only through the path-keyed defaults map,
+    // whose Protobuf keys are prefixed by the referenced message's DECLARATION INDEX in the file
+    // rather than by the referencing field's position. So the identical evolution was accepted or
+    // rejected depending on nothing but where the messages were declared -- here 'inner' sits at
+    // position 0 while Inner's body is keyed under [1], the lookup missed, and the relaxation did
+    // not fire. Declaring Inner nested inside M made the two numbers coincide and it worked.
+    //
+    // The reader now records that default on the Schema.Field as well, where it has no addressing
+    // problem, so the layout of the .proto file cannot change the verdict.
     LogicalType before = fromProto(
         "syntax = \"proto3\";\n"
             + "package t;\n"
@@ -184,14 +186,25 @@ class CompatibilityCheckerEndToEndTest {
             + "message M { Inner inner = 1; }\n"
             + "message Inner { string a = 1; repeated string tags = 2; }\n");
 
-    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
+    assertCompatible(Mode.ICEBERG_V2, before, after);
+    assertCompatible(Mode.ICEBERG_V3, before, after);
+    assertCompatible(Mode.FLINK, before, after);
   }
 
   @Test
-  void addingAProtoScalarIsAcceptedBecauseProto3GivesItAnImplicitDefault() {
-    // A proto3 singular scalar has implicit presence, so it derives as NOT NULL -- but the converter
-    // records the wire-level zero value as its default, which is what makes this readable for rows
-    // written before the field existed.
+  void addingAProtoScalarIsRejectedEvenThoughProto3GivesItAnImplicitZero() {
+    // A deliberate policy choice, not an oversight.
+    //
+    // A proto3 singular scalar has implicit presence, so it derives as NOT NULL, and the converter
+    // does record the wire-level zero in the path-keyed defaults map. The checker does not read
+    // that map -- it reads Schema.Field, and the reader deliberately does not put implicit scalar
+    // zeros there.
+    //
+    // The reason is what the value means at the TARGET rather than at the source. An absent
+    // container and an empty one are query-equivalent, so relaxing a container costs nothing. An
+    // absent scalar is not equivalent to zero: Iceberg v2 cannot store a column default, so an old
+    // data file lacking the column yields null, and a NOT NULL INT column reading null is broken
+    // in a way an ARRAY reading empty is not.
     LogicalType before = fromProto(
         "syntax = \"proto3\";\n"
             + "package t;\n"
@@ -201,9 +214,9 @@ class CompatibilityCheckerEndToEndTest {
             + "package t;\n"
             + "message M { string name = 1; int32 count = 2; }\n");
 
-    assertCompatible(Mode.FLINK, before, after);
-    // Iceberg mode relaxes containers only, so a scalar is still rejected there.
-    assertSingle(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED);
+    for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V2, Mode.ICEBERG_V3}) {
+      assertSingleAt(mode, before, after, Rule.REQUIRED_FIELD_ADDED, "count");
+    }
   }
 
   @Test
@@ -371,6 +384,39 @@ class CompatibilityCheckerEndToEndTest {
   // ---------------------------------------------------------------------------------------------
   // JSON Schema
   // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void anUnrelatedDefsDefaultDoesNotExcuseARequiredPropertyAddedAtTheRoot() {
+    // Regression test for a false ACCEPT -- the dangerous direction.
+    //
+    // The JSON reader walks a $defs body with an empty index path, so that body's defaults land in
+    // the ROOT's key space: Inner.b's default was recorded as [1], indistinguishable from root
+    // property #1. A required, undefaulted property added at that position was then rescued by a
+    // default belonging to an entirely different type, and a breaking change was accepted.
+    //
+    // The checker no longer reads the path-keyed map, so no such collision is possible. The
+    // converter defect itself is still there and is worth fixing on its own account -- it also
+    // reaches Flink, which does read that map.
+    LogicalType before = jsonWithDefs(false);
+    LogicalType after = jsonWithDefs(true);
+
+    assertSingleAt(Mode.FLINK, before, after, Rule.REQUIRED_FIELD_ADDED, "mustHave");
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED, "mustHave");
+  }
+
+  /** Root with a $defs body carrying a default, optionally gaining a required scalar property. */
+  private static LogicalType jsonWithDefs(boolean withRequiredAddition) {
+    return fromJson("{\"type\":\"object\",\"properties\":{"
+        + "\"pad\":{\"type\":\"string\"}"
+        + (withRequiredAddition ? ",\"mustHave\":{\"type\":\"integer\"}" : "")
+        + ",\"inner\":{\"$ref\":\"#/$defs/Inner\"}},"
+        + (withRequiredAddition
+            ? "\"required\":[\"pad\",\"mustHave\"],"
+            : "\"required\":[\"pad\"],")
+        + "\"$defs\":{\"Inner\":{\"type\":\"object\",\"properties\":{"
+        + "\"a\":{\"type\":\"string\"},"
+        + "\"b\":{\"type\":\"integer\",\"default\":7}}}}}");
+  }
 
   @Test
   void addingAnOptionalJsonPropertyIsAccepted() {

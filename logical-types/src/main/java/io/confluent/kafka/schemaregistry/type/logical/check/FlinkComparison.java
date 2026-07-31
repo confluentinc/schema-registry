@@ -23,7 +23,6 @@ import io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker
 import io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.Kind;
 import io.confluent.kafka.schemaregistry.type.logical.check.Incompatibility.Rule;
 
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.appendIndex;
 import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.childPath;
 import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.describeChange;
 import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.elementOf;
@@ -88,15 +87,6 @@ final class FlinkComparison {
   private final Map<String, Schema> originalNamedTypes;
   private final Map<String, Schema> updateNamedTypes;
 
-  /**
-   * Derived defaults for the update schema, keyed by index path.
-   *
-   * <p>Read in preference to nothing at all: the converters record a container's implicit default
-   * ({@code repeated} is an empty list, a proto map is an empty map) <em>only</em> here, never on
-   * the {@link Schema.Field}. The field's own default is reserved for user-declared values so
-   * that a DDL round-trip stays clean. Both are consulted; see {@code hasDefault}.
-   */
-  private final Map<List<Integer>, Object> updateDefaults;
 
   private final List<Incompatibility> findings = new ArrayList<>();
 
@@ -115,11 +105,10 @@ final class FlinkComparison {
     this.updateRoot = update.getRootSchema();
     this.originalNamedTypes = original.getNamedTypes();
     this.updateNamedTypes = update.getNamedTypes();
-    this.updateDefaults = update.getDefaultValues();
   }
 
   CompatibilityResult run() {
-    compareTypes(originalRoot, updateRoot, "", Collections.emptyList());
+    compareTypes(originalRoot, updateRoot, "");
     return CompatibilityResult.of(findings);
   }
 
@@ -136,7 +125,7 @@ final class FlinkComparison {
   // -- dispatch --------------------------------------------------------------------------------
 
   private void compareTypes(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     if (isRef(original) || isRef(update)) {
       // Dedup only when BOTH sides are refs. refKey returns "" for a non-ref, so keying on a
       // one-sided ref collapses every inline counterpart onto the same key: the first
@@ -151,14 +140,14 @@ final class FlinkComparison {
       checkCompatibilityRecursive(
           resolve(original, originalNamedTypes),
           resolve(update, updateNamedTypes),
-          path, indexPath);
+          path);
       return;
     }
-    checkCompatibilityRecursive(original, update, path, indexPath);
+    checkCompatibilityRecursive(original, update, path);
   }
 
   private void checkCompatibilityRecursive(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     if (isRef(original) || isRef(update)) {
       if (!isRef(original) || !isRef(update)
           || !original.getQualifiedName().equals(update.getQualifiedName())) {
@@ -177,17 +166,17 @@ final class FlinkComparison {
     switch (originalKind) {
       case STRUCT:
         if (claimStructPair(original, update)) {
-          validateStructs(fieldViews(original), fieldViews(update), path, indexPath);
+          validateStructs(fieldViews(original), fieldViews(update), path);
         }
         break;
       case LIST:
         validateLists(original, update, path);
         break;
       case MULTISET:
-        validateMultisets(original, update, path, indexPath);
+        validateMultisets(original, update, path);
         break;
       case MAP:
-        validateMaps(original, update, path, indexPath);
+        validateMaps(original, update, path);
         break;
       case PRIMITIVE:
         validatePrimitives(original, update, path);
@@ -225,8 +214,7 @@ final class FlinkComparison {
    * tag — which the format-level checker owns.
    */
   private void validateStructs(
-      List<FieldView> originalFields, List<FieldView> updateFields, String path,
-      List<Integer> indexPath) {
+      List<FieldView> originalFields, List<FieldView> updateFields, String path) {
 
     final Map<String, FieldView> originalFieldMap = originalFields.stream()
         .collect(Collectors.toMap(field -> field.name, field -> field));
@@ -237,12 +225,11 @@ final class FlinkComparison {
       final String fieldPath = childPath(path, updateField.name);
       // Struct fields are the one place both converters agree on the index convention: the
       // field's position within its struct, appended to the parent's path.
-      final List<Integer> fieldIndexPath = appendIndex(indexPath, updatePosition);
       final FieldView originalField = originalFieldMap.get(updateField.name);
 
       // A new column must be readable for rows written before it existed.
       if (originalField == null) {
-        if (!isNullableOrDefaulted(updateField, fieldIndexPath)) {
+        if (!isNullableOrDefaulted(updateField)) {
           add(Rule.REQUIRED_FIELD_ADDED, fieldPath,
               "added column is neither nullable nor defaulted, so rows written before it existed "
                   + "have no value for it");
@@ -258,9 +245,9 @@ final class FlinkComparison {
             "column was nullable and is now NOT NULL; pre-existing rows may hold nulls");
       }
 
-      validateDefaultNotRemoved(originalField, updateField, fieldPath, fieldIndexPath);
+      validateDefaultNotRemoved(originalField, updateField, fieldPath);
 
-      compareTypes(originalField.schema, updateField.schema, fieldPath, fieldIndexPath);
+      compareTypes(originalField.schema, updateField.schema, fieldPath);
     }
   }
 
@@ -276,8 +263,8 @@ final class FlinkComparison {
    *
    * <p>Defaults are read from <em>either</em> channel; see {@link #hasNonNullDefault}.
    */
-  private boolean isNullableOrDefaulted(FieldView field, List<Integer> fieldIndexPath) {
-    return isEffectivelyNullable(field) || hasNonNullDefault(field, fieldIndexPath);
+  private static boolean isNullableOrDefaulted(FieldView field) {
+    return isEffectivelyNullable(field) || hasNonNullDefault(field);
   }
 
   /**
@@ -300,49 +287,39 @@ final class FlinkComparison {
    * the pairwise Iceberg rules are a faithful 1:1 port; adding one there would be the first
    * divergence on that side and is a separate decision.
    *
-   * <p>The original side reads only the field's own default, not the path-keyed map, because the
-   * update-side index path is not valid for the original once reordering is permitted. That is
-   * sound rather than a shortcut: the path-keyed channel carries defaults the converter
-   * <em>derived</em> from format semantics — an absent {@code repeated} field is an empty list —
-   * and those cannot be removed by editing a schema without also changing the type, which the
-   * type rules already catch. The update side consults both channels, so a field that still has a
-   * derived default does not trip this.
+   * <p>Both sides read {@link Schema.Field}, so a field that still carries a derived default does
+   * not trip this. A derived default cannot be removed by editing a schema without also changing
+   * the type, which the type rules already catch.
    */
   private void validateDefaultNotRemoved(
-      FieldView originalField, FieldView updateField, String fieldPath,
-      List<Integer> fieldIndexPath) {
+      FieldView originalField, FieldView updateField, String fieldPath) {
     if (isEffectivelyNullable(originalField) || isEffectivelyNullable(updateField)) {
       return;
     }
     final boolean originalHadDefault =
         originalField.hasDefault && originalField.defaultValue != null;
-    if (originalHadDefault && !hasNonNullDefault(updateField, fieldIndexPath)) {
+    if (originalHadDefault && !hasNonNullDefault(updateField)) {
       add(Rule.NON_NULLABLE_DEFAULT_REMOVED, fieldPath,
           "NOT NULL column lost its default; rows that omitted the column have no value to read");
     }
   }
 
   /**
-   * Whether the default is present <em>and</em> non-null, from either channel. Mirrors
+   * Whether the default is present <em>and</em> non-null. Mirrors
    * {@code IcebergComparison#hasNonNullDefault}; the two are kept separate so each class stays
    * diffable against its own reference.
    *
-   * <p><b>Two channels exist and both count.</b> A user-declared default lands on the
-   * {@link Schema.Field}. A default the converter derived from format semantics — an absent
-   * {@code repeated} field is an empty list, an absent proto map is an empty map — lands only in
-   * the schema's path-keyed map. Reading just the field would miss every derived default, which
-   * is the majority of them.
+   * <p><b>Both kinds of default count.</b> A user-declared one, and one a converter derived from
+   * format semantics — an absent {@code repeated} field is an empty list, an absent proto map is
+   * an empty map. Both live on the {@link Schema.Field}; the derived ones are flagged so writers
+   * do not emit them, but they make a field just as readable.
    *
-   * <p>A {@code null} path means the walk crossed an array, where the converters disagree on the
-   * index convention: Avro and JSON append an element index, Protobuf appends nothing. Rather
-   * than guess which map a hit came from, the lookup is skipped, so the case reads as "no
-   * default" and fails closed.
+   * <p>A non-null path is not a guarantee either, once the walk has crossed a named-type
+   * reference: see {@code IcebergComparison#comparedRefPairs} for why the three converters key a
+   * named type's body three different ways, and why a lookup there can both miss and alias.
    */
-  private boolean hasNonNullDefault(FieldView field, List<Integer> fieldIndexPath) {
-    if (field.hasDefault && field.defaultValue != null) {
-      return true;
-    }
-    return fieldIndexPath != null && updateDefaults.get(fieldIndexPath) != null;
+  private static boolean hasNonNullDefault(FieldView field) {
+    return field.hasDefault && field.defaultValue != null;
   }
 
   /**
@@ -363,33 +340,29 @@ final class FlinkComparison {
    * Iceberg side would be a divergence from the port, and is a separate decision.
    */
   private void compareChild(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     if (original.isNullable() && !update.isNullable()) {
       add(Rule.NULLABLE_TO_NON_NULLABLE, path,
           "container child was nullable and is now NOT NULL; existing collections may hold "
               + "nulls");
     }
-    compareTypes(original, update, path, indexPath);
+    compareTypes(original, update, path);
   }
 
   /** Container recursion for ARRAY. */
   private void validateLists(
       Schema original, Schema update, String path) {
-    // The element index path is not portable: the Avro converter appends 0 for an array element
-    // while the Protobuf one appends nothing. Passing null marks the path unresolvable from here
-    // down, which makes a default lookup below an array fail closed rather than guess.
-    compareChild(elementOf(original), elementOf(update), path + "[]", null);
+    compareChild(elementOf(original), elementOf(update), path + "[]");
   }
 
   /**
    * Container recursion for MULTISET, which Flink models as its own type rather than a MAP.
    */
   private void validateMultisets(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
+      Schema original, Schema update, String path) {
     // Unlike an array, MULTISET's default-path convention is documented without a format split --
     // "MULTISET: 0 for the element type" -- so the path is resolvable and must not be discarded.
-    compareChild(elementOf(original), elementOf(update), path + "[]",
-        appendIndex(indexPath, 0));
+    compareChild(elementOf(original), elementOf(update), path + "[]");
   }
 
   /**
@@ -409,14 +382,11 @@ final class FlinkComparison {
    * applies, at the {@code {key}} path, rather than as a single map-level finding.
    */
   private void validateMaps(
-      Schema original, Schema update, String path, List<Integer> indexPath) {
-    // No index appended for the key: no converter records a default under one -- the Protobuf
-    // reader guards map-entry sub-fields explicitly so they cannot surface there. Nullability is
-    // still checked, because SRLT can express a nullable key even though no converter emits one.
-    compareChild(original.getKeyType(), update.getKeyType(), path + "{key}", null);
-    // Both converters agree on the map value index, unlike the array element.
-    compareChild(original.getValueType(), update.getValueType(), path + "{}",
-        appendIndex(indexPath, 1));
+      Schema original, Schema update, String path) {
+    // Nullability is checked on the key too, because SRLT can express a nullable map key even
+    // though no converter emits one.
+    compareChild(original.getKeyType(), update.getKeyType(), path + "{key}");
+    compareChild(original.getValueType(), update.getValueType(), path + "{}");
   }
 
   private static boolean isEffectivelyNullable(FieldView field) {
