@@ -96,6 +96,16 @@ class CompatibilityCheckerEndToEndTest {
     assertEquals(expected, rules.get(0), mode + ": " + result.describe());
   }
 
+  /** As {@link #assertSingle}, additionally pinning the path the finding is reported at. */
+  private static void assertSingleAt(
+      Mode mode, LogicalType original, LogicalType update, Rule expected, String expectedPath) {
+    CompatibilityResult result = CompatibilityChecker.compare(mode, original, update);
+    List<Incompatibility> found = result.getIncompatibilities();
+    assertEquals(1, found.size(), mode + ": " + result.describe());
+    assertEquals(expected, found.get(0).getRule(), mode + ": " + result.describe());
+    assertEquals(expectedPath, found.get(0).getPath(), mode + ": " + result.describe());
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Protobuf -- derived container defaults, the case that was broken
   // ---------------------------------------------------------------------------------------------
@@ -220,6 +230,50 @@ class CompatibilityCheckerEndToEndTest {
 
     assertCompatible(Mode.FLINK, before, after);
     assertSingle(Mode.ICEBERG_V2, before, after, Rule.FIELD_REORDERED);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Avro -- a declared default inside a nested record, and the Iceberg format-version split
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void addingADefaultedNonNullFieldToANestedRecordSplitsOnIcebergFormatVersion() {
+    // What this pins is the version rule, not the derivation: Avro populates BOTH default channels
+    // for a declared default -- Schema.Field and the path-keyed map -- and hasNonNullDefault
+    // short-circuits on the field, so the index path is never consulted here. The path-keyed
+    // channel reaching through a nested type is covered instead by
+    // addingARepeatedFieldInsideANestedProtoMessageIsAccepted, where the default is derived and the
+    // field carries nothing.
+    //
+    // The rule, from isEffectivelyOptional: a newly added non-null field counts as optional only
+    // when the format version can store an initial-default, which makes the column readable for
+    // rows written before it existed. v3 can, v2 cannot.
+    LogicalType before = nestedRecord("");
+    LogicalType after = nestedRecord(",{\"name\":\"added\",\"type\":\"int\",\"default\":7}");
+
+    assertCompatible(Mode.ICEBERG_V3, before, after);
+    assertSingleAt(Mode.ICEBERG_V2, before, after, Rule.REQUIRED_FIELD_ADDED, "p.added");
+    assertCompatible(Mode.FLINK, before, after);
+  }
+
+  @Test
+  void addingAnUndefaultedNonNullFieldToANestedRecordIsRejectedByEveryMode() {
+    // The control for the case above. Without the default v3 has nothing to store, so its
+    // acceptance there is attributable to the default rather than to v3 simply being laxer about
+    // added fields.
+    LogicalType before = nestedRecord("");
+    LogicalType after = nestedRecord(",{\"name\":\"added\",\"type\":\"int\"}");
+
+    for (Mode mode : new Mode[] {Mode.FLINK, Mode.ICEBERG_V2, Mode.ICEBERG_V3}) {
+      assertSingleAt(mode, before, after, Rule.REQUIRED_FIELD_ADDED, "p.added");
+    }
+  }
+
+  /** {@code Root { p: Inner { x: int<extraInnerFields> } }}, as Avro schema text. */
+  private static LogicalType nestedRecord(String extraInnerFields) {
+    return fromAvro("{\"type\":\"record\",\"name\":\"Root\",\"fields\":["
+        + "{\"name\":\"p\",\"type\":{\"type\":\"record\",\"name\":\"Inner\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":\"int\"}" + extraInnerFields + "]}}]}");
   }
 
   // ---------------------------------------------------------------------------------------------
