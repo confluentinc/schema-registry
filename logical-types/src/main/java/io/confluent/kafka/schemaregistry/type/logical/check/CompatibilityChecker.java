@@ -35,16 +35,15 @@ import java.util.Set;
  * {@code original} schema. All violations are collected; see {@link CompatibilityResult}.
  *
  * <p>{@link LogicalTypeChecker} is the entry point. This class dispatches to one implementation
- * per mode — {@link IcebergComparison} and {@link FlinkComparison} — and holds the walk
- * primitives they share: the {@link Kind} shapes, the {@link FieldView} abstraction over struct
- * fields and union branches, named-type resolution, index-path bookkeeping and rendering.
+ * per mode — {@link IcebergComparison} and {@link FlinkComparison} — and holds the walk primitives
+ * they share: {@link Kind}, the {@link FieldView} abstraction over struct fields and union
+ * branches, named-type resolution and rendering.
  *
  * <p><b>The two implementations deliberately do not share a base class.</b> Each has to stay
- * readable and diffable against the specification it implements, and factoring out a common walk
- * would couple them and make neither. What lives here is only what is common to both and belongs to
- * neither reference: the impedance layer between those references' input and SRLT, which is more
- * expressive than either. That is also where this package's defects have historically been, so it
- * is worth testing directly rather than only through a full comparison.
+ * diffable against the specification it implements, and a common walk would couple them and make
+ * neither. What lives here belongs to neither reference: the impedance layer between their input
+ * and SRLT, which is more expressive than either — and historically where this package's defects
+ * have been, so it is worth testing directly rather than only through a full comparison.
  *
  * <p><b>This check is only half of the question.</b> It takes two schemas, so it says nothing about
  * the first schema registered on a subject, and nothing about whether either schema is usable by
@@ -137,12 +136,11 @@ final class CompatibilityChecker {
   /**
    * The members of a struct or union, <b>in list order</b>.
    *
-   * <p>List order, deliberately — not {@link Schema.Field#getPosition()}. Position is a
-   * format-level artefact and is not reliable: a Protobuf message containing a {@code oneof}
-   * reports duplicated and out-of-order positions, because the {@code oneof} is hoisted to the end
-   * of the field list while positions are left as they were. Field order is what
-   * {@code IcebergComparison} compares to detect a reorder, so switching to {@code getPosition()}
-   * would report a spurious one on any message containing a {@code oneof}.
+   * <p>List order, deliberately — not {@link Schema.Field#getPosition()}, which is unreliable: a
+   * Protobuf message containing a {@code oneof} reports duplicated and out-of-order positions,
+   * because the {@code oneof} is hoisted to the end of the field list while positions stay put.
+   * Field order is what {@code IcebergComparison} compares to detect a reorder, so switching would
+   * report a spurious one on any message with a {@code oneof}.
    */
   static List<FieldView> fieldViews(Schema schema) {
     List<FieldView> views = new ArrayList<>();
@@ -225,13 +223,11 @@ final class CompatibilityChecker {
   /**
    * A DECIMAL's scale, with {@link Schema#NO_PARAM} read as {@code 0}.
    *
-   * <p>SRLT preserves {@code NO_PARAM} so the SQL form {@code DECIMAL(p)} round-trips through DDL,
-   * making the sentinel a legitimate value here rather than bad input — and SQL reads
-   * {@code DECIMAL(p)} as {@code DECIMAL(p, 0)}. Comparing it raw both rejects the no-op
-   * {@code DECIMAL(10) -> DECIMAL(10, 0)} and, worse, makes an integer widening look safe:
-   * {@code precision - (-1)} overstates the available integer digits by one, so
-   * {@code BIGINT -> DECIMAL(18)} passes while {@code BIGINT -> DECIMAL(18, 0)} is correctly
-   * rejected.
+   * <p>SRLT preserves {@code NO_PARAM} so {@code DECIMAL(p)} round-trips through DDL, making the
+   * sentinel legitimate input here, and SQL reads {@code DECIMAL(p)} as {@code DECIMAL(p, 0)}.
+   * Comparing it raw rejects the no-op {@code DECIMAL(10) -> DECIMAL(10, 0)} and, worse, makes an
+   * integer widening look safe: {@code precision - (-1)} overstates the integer digits by one, so
+   * {@code BIGINT -> DECIMAL(18)} passes while {@code BIGINT -> DECIMAL(18, 0)} is rejected.
    */
   static int scaleOf(Schema decimal) {
     final int scale = decimal.getScale();

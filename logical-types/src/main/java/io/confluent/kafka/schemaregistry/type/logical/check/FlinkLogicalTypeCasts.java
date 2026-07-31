@@ -26,32 +26,30 @@ import java.util.Set;
 /**
  * Apache Flink's implicit type-widening rules, ported.
  *
- * <p>A transcription of the implicit-cast table Flink maintains for its own planner. Depending on
- * the Flink table stack directly is not an option here — it would impose that whole dependency on
- * every consumer of this module — so the table is mirrored instead.
+ * <p>A transcription of the implicit-cast table Flink maintains for its planner. Depending on the
+ * Flink table stack directly would impose that whole dependency on every consumer of this module,
+ * so the table is mirrored instead.
  *
- * <p><b>Keep this in sync with the Flink original.</b> The enum names, the builder API, and the
- * order in which rules are declared all deliberately match it, so {@link #IMPLICIT_CASTING_RULES}'s
- * static initialiser can be diffed against Flink's line for line. Two things are intentionally
- * absent: the roots that no {@code Schema.Type} maps onto (structured, raw, symbol, interval, null,
- * timestamp-with-time-zone) and the explicit and injective cast tables, which no rule here
- * consults.
+ * <p><b>Keep this in sync with the Flink original.</b> Enum names, builder API and declaration
+ * order all deliberately match, so {@link #IMPLICIT_CASTING_RULES}'s static initialiser can be
+ * diffed against Flink's line for line. Two things are intentionally absent: the roots no
+ * {@code Schema.Type} maps onto (structured, raw, symbol, interval, null, timestamp-with-time-zone)
+ * and the explicit and injective cast tables, which no rule here consults.
  *
  * <p><b>Seven edges are deliberately narrower than Flink's</b>, each marked
  * {@code DIVERGENCE FROM FLINK} at its declaration. Flink's table serves query planning, where an
- * inserted cast may legitimately truncate, so "implicit" there does not imply lossless. A stored
- * column has no such licence: the rows were written under the old type and nothing rewrites them.
- * The divergences are kept as edits to the table, rather than as a filter layered on top, so that
- * each is expressible as a patch against Flink should the same reasoning apply upstream.
+ * inserted cast may legitimately truncate, so "implicit" there does not imply lossless; a stored
+ * column has no such licence, because the rows were written under the old type and nothing rewrites
+ * them. They are kept as edits to the table rather than a filter on top, so each stays expressible
+ * as a patch against Flink should the reasoning apply upstream.
  *
- * <p>Flink's own {@code supportsImplicitCast} additionally short-circuits on nullability and on
- * structural types before reaching this table. Neither applies here: nullability is a field-level
- * rule and structural recursion is the caller's job, so this class answers the root question only.
+ * <p>Flink's {@code supportsImplicitCast} also short-circuits on nullability and structural types
+ * before reaching the table. Neither applies here — nullability is a field-level rule and
+ * structural recursion is the caller's job — so this class answers the root question only.
  *
- * <p><b>This table is deliberately parameter-blind</b>, exactly as Flink's is: it is keyed by type
- * root and never reads a length, precision, or scale. That is not an oversight to be tidied up —
- * Flink's rules serve query planning, where a cast executor may legitimately truncate. Callers must
- * apply their own parameter guards on top; see {@code CompatibilityChecker}'s Flink mode.
+ * <p><b>Deliberately parameter-blind</b>, exactly as Flink's is: keyed by type root, never reading
+ * a length, precision or scale. Not an oversight to be tidied up. Callers must apply their own
+ * parameter guards on top; see {@code CompatibilityChecker}'s Flink mode.
  */
 final class FlinkLogicalTypeCasts {
 

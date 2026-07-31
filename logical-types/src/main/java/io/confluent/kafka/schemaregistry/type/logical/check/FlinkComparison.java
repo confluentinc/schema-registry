@@ -44,41 +44,37 @@ import java.util.stream.Collectors;
 /**
  * One comparison run in Flink mode.
  *
- * <p>Structured to mirror {@link IcebergComparison} rather than share a base class with it. The
- * traversal skeleton is similar, but the three rules that matter all differ — which fields count
- * as optional, how leaves are compared, and whether a MULTISET is a MAP — and each class must
- * stay independently readable against the specification it implements. Factoring out a common
- * walk would couple them and make neither diffable against its own reference.
+ * <p>Mirrors {@link IcebergComparison} rather than sharing a base class with it. The traversal
+ * skeleton is similar, but the three rules that matter all differ — which fields count as optional,
+ * how leaves are compared, and whether a MULTISET is a MAP — and each class must stay readable
+ * against the specification it implements. A common walk would couple them and make neither
+ * diffable against its own reference.
  *
  * <h3>The governing criterion</h3>
  *
- * <p>A change is rejected here when it is not a <b>legal Flink SQL table evolution</b> — legal
- * meaning semantically valid at both DDL and DML time, <em>whatever the underlying storage</em>.
- * That reduces to one test:
+ * <p>A change is rejected when it is not a <b>legal Flink SQL table evolution</b> — semantically
+ * valid at both DDL and DML time, <em>whatever the underlying storage</em>. That reduces to one
+ * test:
  *
  * <blockquote>Does the change require a stored value to be <b>reinterpreted</b>, or to be
  * <b>invented</b>?</blockquote>
  *
- * <p>If neither, it is legal. Flink accepts almost any {@code ALTER TABLE}, so DDL legality alone
- * decides nothing; and how a particular encoding locates or resolves a value is the format-level
- * checker's business, not this one's. What is left is whether every value that was legitimately
- * written can still be read as itself.
+ * <p>If neither, it is legal. Flink accepts almost any {@code ALTER TABLE}, so DDL legality decides
+ * nothing on its own, and how an encoding locates a value belongs to the format-level checker. What
+ * is left is whether every legitimately written value can still be read as itself.
  *
- * <p>The retained rules are exactly the ones that fail that test.
- * {@link Rule#REQUIRED_FIELD_ADDED} invents — a NOT NULL column with no written value cannot be
- * satisfied by any storage. {@link Rule#NULLABLE_TO_NON_NULLABLE} reinterprets — a legitimately
- * written null has no non-null reading. {@link Rule#TYPE_MISMATCH} and
- * {@link Rule#UNSUPPORTED_TYPE_CHANGE} reinterpret, at the
- * kind and leaf level respectively; the parameter guards belong to the latter because a decimal
+ * <p>The retained rules are exactly those that fail the test.
+ * {@link Rule#REQUIRED_FIELD_ADDED} invents; {@link Rule#NULLABLE_TO_NON_NULLABLE} reinterprets a
+ * written null; {@link Rule#TYPE_MISMATCH} and {@link Rule#UNSUPPORTED_TYPE_CHANGE} reinterpret at
+ * the kind and leaf level. The parameter guards belong to the last of those, because a decimal
  * scale, a temporal precision and a CHAR length each select how stored bytes are read.
  *
  * <p><b>Do not reintroduce a rule that fails this test.</b> Drops, reordering, renames, map-key
- * changes and enum symbol removal were all rejected here once, and each was removed on this
- * argument: a drop and a reorder touch no value, a rename is
- * a supported table-evolution operation with the byte-location question belonging to the format,
- * a map key is an ordinary value, and an ENUM derives to VARCHAR so dropping a symbol changes the
- * Flink type not at all. What made enum removal look like a Flink problem was Avro resolving an
- * unknown symbol to the enum's default — Avro's behaviour, and the Avro checker's to catch.
+ * changes and enum symbol removal were each rejected here once and removed on this argument: a drop
+ * and a reorder touch no value, a rename's byte-location question belongs to the format, a map key
+ * is an ordinary value, and an ENUM derives to VARCHAR so dropping a symbol does not change the
+ * Flink type at all. Enum removal looked like a Flink problem only because Avro resolves an unknown
+ * symbol to the enum's default — Avro's behaviour, and the Avro checker's to catch.
  */
 final class FlinkComparison {
 
@@ -189,29 +185,19 @@ final class FlinkComparison {
   // -- structs ---------------------------------------------------------------------------------
 
   /**
-   * Field-level rules: added columns and nullability. Columns are matched by name, and a column
+   * Field-level rules: added columns and nullability. Columns are matched by name, and one
    * present only in the original is simply not read.
    *
-   * <p><b>Deliberately narrower than {@code IcebergComparison#validateStructs}, which also
-   * rejects drops and reordering.</b> Applying the reinterpret-or-invent test from the class
-   * javadoc:
+   * <p><b>Deliberately narrower than {@code IcebergComparison#validateStructs}</b>, which also
+   * rejects drops and reordering. Under the reinterpret-or-invent test, a drop and a reorder touch
+   * no value and are both supported Flink table changes, so both are legal here; Iceberg rejects
+   * them only because it cannot identify a column without a stable field ID. An added column does
+   * invent — a NOT NULL column with no written value cannot be satisfied by any storage — so it
+   * stays rejected unless nullable or defaulted.
    *
-   * <ul>
-   *   <li>A <b>drop</b> invents nothing and reinterprets nothing — the column stops being read.
-   *       {@code ALTER TABLE ... DROP COLUMN} is a supported Flink table change
-   *       (a supported table-evolution operation), so it is legal here. Iceberg still rejects it,
-   *       because it cannot drop a column in place without a stable field ID.
-   *   <li>A <b>reorder</b> likewise touches no value. Flink SQL identifies columns by name, and
-   *       a supported table-evolution operation is supported.
-   *   <li>An <b>added column</b> does invent: a NOT NULL column with no written value cannot be
-   *       satisfied by any storage, so it stays rejected. A nullable or defaulted addition is
-   *       fine, because null or the default is a legitimate value for it.
-   * </ul>
-   *
-   * <p>A <b>rename</b> therefore no longer produces a finding here. That is intended: renaming is
-   * a supported table-evolution operation, and whether old bytes can still be located under the
-   * new name is a question about the encoding — Avro needs an alias, a Protobuf value rides its
-   * tag — which the format-level checker owns.
+   * <p>A <b>rename</b> therefore produces no finding here, intentionally: whether old bytes can be
+   * located under the new name is a question about the encoding, which the format-level checker
+   * owns.
    */
   private void validateStructs(
       List<FieldView> originalFields, List<FieldView> updateFields, String path) {
@@ -252,16 +238,12 @@ final class FlinkComparison {
   }
 
   /**
-   * The added-column predicate. Unlike Iceberg mode there is no container restriction and no
-   * scalar exclusion: a Flink column may be NOT NULL and still carry a default, so a default on
-   * any type suffices.
+   * The added-column predicate. Unlike Iceberg mode there is no container restriction: a Flink
+   * column may be NOT NULL and carry a default whatever its type.
    *
-   * <p>The default must be <b>non-null</b>, though — mere presence is not enough, for the same
-   * reason it is not enough under Iceberg v3. A NOT NULL column whose default is null supplies
-   * null to every row written before the column existed, which is precisely the value that column
-   * cannot hold.
-   *
-   * <p>Defaults are read from <em>either</em> channel; see {@link #hasNonNullDefault}.
+   * <p>The default must be <b>non-null</b>, for the same reason it must be under Iceberg v3 — a
+   * NOT NULL column whose default is null supplies null to every row written before it existed,
+   * precisely the value that column cannot hold.
    */
   private static boolean isNullableOrDefaulted(FieldView field) {
     return isEffectivelyNullable(field) || hasNonNullDefault(field);
@@ -306,17 +288,12 @@ final class FlinkComparison {
 
   /**
    * Whether the default is present <em>and</em> non-null. Mirrors
-   * {@code IcebergComparison#hasNonNullDefault}; the two are kept separate so each class stays
-   * diffable against its own reference.
+   * {@code IcebergComparison#hasNonNullDefault}; kept separate so each class stays diffable against
+   * its own reference.
    *
-   * <p><b>Both kinds of default count.</b> A user-declared one, and one a converter derived from
-   * format semantics — an absent {@code repeated} field is an empty list, an absent proto map is
-   * an empty map. Both live on the {@link Schema.Field}; the derived ones are flagged so writers
-   * do not emit them, but they make a field just as readable.
-   *
-   * <p>A non-null path is not a guarantee either, once the walk has crossed a named-type
-   * reference: see {@code IcebergComparison#comparedRefPairs} for why the three converters key a
-   * named type's body three different ways, and why a lookup there can both miss and alias.
+   * <p>Both kinds count: a user-declared default, and one a converter derived from format semantics
+   * (an absent {@code repeated} field is an empty list). Both live on {@link Schema.Field}; derived
+   * ones are flagged so writers skip them, but they make a field just as readable.
    */
   private static boolean hasNonNullDefault(FieldView field) {
     return field.hasDefault && field.defaultValue != null;
@@ -326,18 +303,14 @@ final class FlinkComparison {
    * Compares a container's child — an array or multiset element, a map key or value — checking
    * nullability on the way in.
    *
-   * <p>{@link #validatePrimitives} deliberately leaves nullability alone, on the grounds that the
-   * field-level rule in {@link #validateStructs} already covers it. That holds for a struct field
-   * and not for a container child, which reaches the leaf comparison without passing through a
-   * field at all — so without this, tightening
-   * {@code ARRAY<INT>} to {@code ARRAY<INT NOT NULL>} was accepted while the identical tightening
-   * on a column was rejected. A collection that holds nulls today would then have a type saying
-   * it cannot, which is the same failure the field rule exists to prevent.
+   * <p>{@link #validatePrimitives} leaves nullability alone because {@link #validateStructs}
+   * covers it, which holds for a struct field but not for a container child: that reaches the leaf
+   * without passing through a field, so without this, {@code ARRAY<INT>} tightening to
+   * {@code ARRAY<INT NOT NULL>} was accepted while the identical change on a column was rejected.
    *
-   * <p><b>Not mirrored in {@link IcebergComparison}</b>, which has the same gap. That is faithful
-   * to the checker it was ported from: there, element and value optionality lives on the
-   * container rather than on the child type, and the reference never reads it. Closing it on the
-   * Iceberg side would be a divergence from the port, and is a separate decision.
+   * <p><b>Not mirrored in {@link IcebergComparison}</b>, which has the same gap faithfully: there
+   * element and value optionality lives on the container rather than the child type, and the
+   * reference never reads it. Closing it would be a divergence from the port.
    */
   private void compareChild(
       Schema original, Schema update, String path) {
@@ -360,26 +333,18 @@ final class FlinkComparison {
    */
   private void validateMultisets(
       Schema original, Schema update, String path) {
-    // Unlike an array, MULTISET's default-path convention is documented without a format split --
-    // "MULTISET: 0 for the element type" -- so the path is resolvable and must not be discarded.
     compareChild(elementOf(original), elementOf(update), path + "[]");
   }
 
   /**
-   * Container recursion for MAP. Both the key and the value are compared through the ordinary
-   * type comparison, so each may widen exactly as far as a leaf elsewhere may.
+   * Container recursion for MAP. Key and value both go through the ordinary type comparison, so
+   * each may widen as far as a leaf elsewhere may.
    *
-   * <p><b>Deliberately unlike {@code IcebergComparison#validateMaps}</b>, which freezes the key
-   * outright and reports {@link Rule#MAP_KEY_TYPE_MISMATCH} for any change at all. That is right
-   * there and was mirrored here for a while, but the reason does not carry over: Iceberg gives
-   * a map key its own field ID and identifies it by that, so re-typing the key redefines the
-   * field.
-   * Flink's MAP has no such identity, and a key is just another value that has to remain readable
-   * — so {@code MAP<INT, V> -> MAP<BIGINT, V>} is as safe as the same widening on an ordinary
-   * column, and freezing it rejected a change nothing objects to.
-   *
-   * <p>An unsafe key change is still rejected; it simply surfaces as the leaf rule that actually
-   * applies, at the {@code {key}} path, rather than as a single map-level finding.
+   * <p><b>Deliberately unlike {@code IcebergComparison#validateMaps}</b>, which freezes the key and
+   * reports {@link Rule#MAP_KEY_TYPE_MISMATCH} for any change. The reason does not carry over:
+   * Iceberg gives a map key its own field ID and identifies it by that, so re-typing redefines the
+   * field, whereas Flink's MAP has no such identity and a key is just another value. An unsafe key
+   * change is still rejected — as the leaf rule that applies, at the {@code {key}} path.
    */
   private void validateMaps(
       Schema original, Schema update, String path) {
@@ -398,18 +363,16 @@ final class FlinkComparison {
   /**
    * Leaf type changes. Two independent parts, both required.
    *
-   * <p>Part A delegates the root relation to {@link FlinkLogicalTypeCasts}, so this checker's
-   * notion of a safe type change is Flink's own rather than a hand-picked one. Nullability is
-   * excluded here because it is checked on the way in to every leaf instead — by
-   * {@link #validateStructs} for a struct field and by {@link #compareChild} for a container
-   * child — and reporting it twice would be noise. <b>Both are needed:</b> a container child
-   * reaches this method without passing through a field, so for a while the exclusion left it
-   * unchecked entirely.
+   * <p>Part A takes the root relation from {@link FlinkLogicalTypeCasts}, so a safe type change is
+   * Flink's own notion rather than a hand-picked one. Nullability is excluded, being checked on the
+   * way in to every leaf instead — {@link #validateStructs} for a field, {@link #compareChild} for
+   * a container child. <b>Both of those are needed</b>: a container child reaches here without
+   * passing through a field.
    *
-   * <p>Part B applies the parameter guards that Part A structurally cannot: Flink's table is
-   * keyed by type root and never reads a length, precision, or scale, so on its own it would
-   * admit {@code VARCHAR(50) -> VARCHAR(10)}. That is a hole rather than a policy — see {@link
-   * FlinkLogicalTypeCasts}. <b>Do not remove these guards as redundant.</b>
+   * <p>Part B applies the parameter guards Part A structurally cannot: Flink's table is keyed by
+   * type root and never reads a length, precision or scale, so alone it would admit
+   * {@code VARCHAR(50) -> VARCHAR(10)}. A hole rather than a policy — see
+   * {@link FlinkLogicalTypeCasts}. <b>Do not remove these as redundant.</b>
    */
   private void validatePrimitives(Schema original, Schema update, String path) {
     FlinkLogicalTypeCasts.Root originalRootType = flinkRootOf(original);
