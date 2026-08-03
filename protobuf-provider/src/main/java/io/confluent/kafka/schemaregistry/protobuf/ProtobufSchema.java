@@ -794,6 +794,7 @@ public class ProtobufSchema implements ParsedSchema {
         syntax,
         imports.build(),
         publicImports.build(),
+        Collections.emptyList(),
         types.build(),
         services.build(),
         extendElements.build(),
@@ -1138,7 +1139,7 @@ public class ProtobufSchema implements ParsedSchema {
     int end = range.getEnd();
     // inclusive, exclusive
     values.add(start == end - 1 ? start : new IntRange(start, end - 1));
-    return new ExtensionsElement(DEFAULT_LOCATION, "", values);
+    return new ExtensionsElement(DEFAULT_LOCATION, "", values, Collections.emptyList());
   }
 
   private static ServiceElement toService(ServiceDescriptorProto sd) {
