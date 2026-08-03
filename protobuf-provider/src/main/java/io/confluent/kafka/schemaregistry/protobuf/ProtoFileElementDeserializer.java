@@ -100,6 +100,7 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
       Syntax.valueOf(node.get("syntax").asText()),
       Arrays.asList(mapper.convertValue(node.get("imports"), String[].class)),
       Arrays.asList(mapper.convertValue(node.get("publicImports"), String[].class)),
+      Collections.emptyList(),
       typeElementBuilder.build(),
       serviceElementBuilder.build(),
       extendElementBuilder.build(),
@@ -203,7 +204,8 @@ public class ProtoFileElementDeserializer extends StdDeserializer<ProtoFileEleme
     return new ExtensionsElement(
       toLocation(node.get("location")),
       node.get("documentation").asText(),
-      valueBuilder.build()
+      valueBuilder.build(),
+      Collections.emptyList()
     );
   }
 
