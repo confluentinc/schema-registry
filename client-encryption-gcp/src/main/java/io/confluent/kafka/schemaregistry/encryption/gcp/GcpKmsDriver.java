@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption.gcp;
 
+import com.google.api.client.http.HttpResponseException;
 import com.google.api.services.cloudkms.v1.CloudKMS;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.crypto.tink.KmsClient;
@@ -42,6 +43,14 @@ public class GcpKmsDriver implements KmsDriver {
   @Override
   public String getKeyUrlPrefix() {
     return GcpKmsClient.PREFIX;
+  }
+
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    if (!(t instanceof HttpResponseException)) {
+      return false;
+    }
+    return isAccessDeniedStatus(((HttpResponseException) t).getStatusCode());
   }
 
   private GoogleCredentials getCredentials(Map<String, ?> configs)

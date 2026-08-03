@@ -124,6 +124,17 @@ public class DataEncryptionKey extends EncryptionKey {
   }
 
   @Override
+  public String toString() {
+    return "DEK{kekName=" + kekName
+        + ", subject=" + subject
+        + ", algorithm=" + algorithm
+        + ", version=" + version
+        + ", deleted=" + deleted
+        + ", offset=" + offset
+        + ", ts=" + timestamp + '}';
+  }
+
+  @Override
   public DataEncryptionKeyId toKey(String tenant) {
     return new DataEncryptionKeyId(tenant, kekName, subject, algorithm, version);
   }

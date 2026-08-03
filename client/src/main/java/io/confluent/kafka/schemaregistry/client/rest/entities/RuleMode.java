@@ -28,7 +28,7 @@ public enum RuleMode {
     return this == UPGRADE || this == DOWNGRADE || this == UPDOWN;
   }
 
-  public boolean isDomainRule() {
+  public boolean isDomainOrEncodingRule() {
     return this == WRITE || this == READ || this == WRITEREAD;
   }
 }

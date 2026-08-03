@@ -16,8 +16,8 @@
 
 package io.confluent.kafka.serializers;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.IOException;
 import java.util.Map;
@@ -26,7 +26,8 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 
-public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements Serializer<Object> {
+public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer
+    implements SerializerWithSchema<Object> {
 
   /**
    * Constructor used by Kafka producer.
@@ -66,7 +67,18 @@ public class KafkaAvroSerializer extends AbstractKafkaAvroSerializer implements 
         AvroSchemaUtils.getSchema(record, useSchemaReflection,
             avroReflectionAllowNull, avroUseLogicalTypeConverters, removeJavaProperties, true));
     return serializeImpl(
-        getSubjectName(topic, isKey, record, schema), topic, headers, record, schema);
+        getSubjectName(topic, isKey, record, schema), topic, isKey, headers, record, schema);
+  }
+
+  @Override
+  public byte[] serialize(
+      String topic, Headers headers, Object record, ParsedSchema schema) {
+    if (record == null) {
+      return null;
+    }
+    return serializeImpl(
+        getSubjectName(topic, isKey, record, schema), topic, isKey, headers, record,
+        (AvroSchema) schema);
   }
 
   @Override

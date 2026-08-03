@@ -182,7 +182,6 @@ public class RestServiceTest {
 
     restServiceSpy.getAllSubjects();
 
-
     // Make sure that the Authorization header is set with the correct token
     verify(httpURLConnection).setRequestProperty("Authorization", "Bearer auth-token");
     verify(httpURLConnection).setRequestProperty("target-sr-cluster", "lsrc-dummy");

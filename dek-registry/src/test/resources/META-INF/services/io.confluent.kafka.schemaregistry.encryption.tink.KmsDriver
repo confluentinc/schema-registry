@@ -1,1 +1,2 @@
 io.confluent.dekregistry.testutil.TestKmsDriver
+io.confluent.dekregistry.testutil.FailingDecryptKmsDriver

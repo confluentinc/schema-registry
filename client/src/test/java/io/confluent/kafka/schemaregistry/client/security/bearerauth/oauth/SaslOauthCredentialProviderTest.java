@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.client.security.bearerauth.oauth;
 
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
@@ -50,6 +51,8 @@ public class SaslOauthCredentialProviderTest {
 
   @Before
   public void InitialiaseSaslConfig() {
+    System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG,
+        "https://dev-531534.okta.com/oauth2/default/v1/token");
     clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
         new Password(
             "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required "
