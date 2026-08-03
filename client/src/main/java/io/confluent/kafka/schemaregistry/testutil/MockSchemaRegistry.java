@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import org.apache.kafka.common.config.ConfigException;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -93,6 +94,29 @@ public final class MockSchemaRegistry {
   }
 
   /**
+   * Get a client for a mocked Schema Registry. The {@code scope} represents a particular registry,
+   * so operations on one scope will never affect another.
+   *
+   * @param scopes Identifies a logically independent Schema Registry instance. It's similar to a
+   *              List of schema registry URLs, in that two different Schema Registry deployments
+   *              have two different URLs, except that these registries are only mocked, so they
+   *              have no actual URL.
+   * @param providers A list of schema providers.
+   * @return A client for the specified scope.
+   */
+  public static SchemaRegistryClient getClientForScope(final List<String> scopes,
+                                                       List<SchemaProvider> providers) {
+    synchronized (SCOPED_CLIENTS) {
+      for (String scope : scopes) {
+        if (!SCOPED_CLIENTS.containsKey(scope)) {
+          SCOPED_CLIENTS.put(scope, new MockSchemaRegistryClient(providers));
+        }
+      }
+    }
+    return SCOPED_CLIENTS.get(scopes.get(0));
+  }
+
+  /**
    * Destroy the mocked registry corresponding to the scope. Subsequent clients for the same scope
    * will have a completely blank slate.
    * @param scope Identifies a logically independent Schema Registry instance. It's similar to a
@@ -133,5 +157,33 @@ public final class MockSchemaRegistry {
     } else {
       return mockScopes.get(0);
     }
+  }
+
+  public static List<String> validateAndMaybeGetMockScope(final String baseUrls) {
+    final List<String> mockScopes = new LinkedList<>();
+    List<String> urls = parseBaseUrl(baseUrls);
+    for (final String url : urls) {
+      if (url.startsWith(MOCK_URL_PREFIX)) {
+        mockScopes.add(url.substring(MOCK_URL_PREFIX.length()));
+      }
+    }
+
+    if (mockScopes.isEmpty()) {
+      return null;
+    } else if (urls.size() > mockScopes.size()) {
+      throw new ConfigException(
+              "Cannot mix mock and real urls for 'schema.registry.url'. Got: " + urls
+      );
+    } else {
+      return mockScopes;
+    }
+  }
+
+  private static List<String> parseBaseUrl(String baseUrls) {
+    List<String> urls = Arrays.asList(baseUrls.split("\\s*,\\s*"));
+    if (urls.isEmpty()) {
+      throw new IllegalArgumentException("Missing required schema registry url list");
+    }
+    return urls;
   }
 }

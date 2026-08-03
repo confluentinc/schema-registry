@@ -56,6 +56,8 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final String RESOURCE_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "type";
   public static final String RESOURCE_LABEL_VERSION = RESOURCE_LABEL_PREFIX + "version";
   public static final String RESOURCE_LABEL_COMMIT_ID = RESOURCE_LABEL_PREFIX + "commit.id";
+  public static final String RESOURCE_CERT_LABEL_TYPE = RESOURCE_LABEL_PREFIX + "cert.type";
+  public static final String RESOURCE_CERT_LABEL_NAME = RESOURCE_LABEL_PREFIX + "cert.name";
 
   private static final Logger log = LoggerFactory.getLogger(SchemaRegistryConfig.class);
   public static final String LISTENER_NAME_PREFIX = "listener.name.";
