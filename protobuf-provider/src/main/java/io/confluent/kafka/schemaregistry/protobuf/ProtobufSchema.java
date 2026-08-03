@@ -837,6 +837,7 @@ public class ProtobufSchema implements ParsedSchema {
         syntax,
         imports.build(),
         publicImports.build(),
+        Collections.emptyList(),
         types.build(),
         services.build(),
         extendElements.build(),
