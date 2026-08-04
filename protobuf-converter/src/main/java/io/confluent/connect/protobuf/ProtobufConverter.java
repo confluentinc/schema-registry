@@ -19,6 +19,7 @@ import com.google.protobuf.Message;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
@@ -200,11 +201,9 @@ public class ProtobufConverter implements Converter {
       }
       throw new DataException("Unsupported type during restore: "
           + (v != null ? v.getClass().getName() : "null"));
-    } catch (DataException e) {
-      throw e;
     } catch (Exception e) {
-      throw new DataException(
-          String.format("Failed to restore Protobuf data for topic %s", topic), e);
+      throw BackupExceptionMapper.classify(
+          "restore Protobuf backup for topic " + topic, e);
     }
   }
 
@@ -275,8 +274,8 @@ public class ProtobufConverter implements Converter {
           SchemaBackupConfig.TYPE_PROTOBUF, isKey,
           PROTOBUF_SCHEMA_FACTORY, serializer::computeSubjectName);
     } catch (Exception e) {
-      throw new DataException(
-          String.format("Failed to wrap backup metadata for topic %s", topic), e);
+      throw BackupExceptionMapper.classify(
+          "wrap Protobuf backup for topic " + topic, e);
     }
   }
 

@@ -19,6 +19,7 @@ package io.confluent.connect.avro;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
@@ -197,11 +198,9 @@ public class AvroConverter implements Converter {
       }
 
       return serializer.serialize(topic, isKey, headers, avroValue, serializeSchema);
-    } catch (DataException e) {
-      throw e;
     } catch (Exception e) {
-      throw new DataException(
-          String.format("Failed to restore Avro data for topic %s", topic), e);
+      throw BackupExceptionMapper.classify(
+          "restore Avro backup for topic " + topic, e);
     }
   }
 
@@ -273,8 +272,8 @@ public class AvroConverter implements Converter {
           SchemaBackupConfig.TYPE_AVRO, isKey,
           AVRO_SCHEMA_FACTORY, serializer::computeSubjectName);
     } catch (Exception e) {
-      throw new DataException(
-          String.format("Failed to wrap backup metadata for topic %s", topic), e);
+      throw BackupExceptionMapper.classify(
+          "wrap Avro backup for topic " + topic, e);
     }
   }
 

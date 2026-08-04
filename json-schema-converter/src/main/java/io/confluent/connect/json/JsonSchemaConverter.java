@@ -20,6 +20,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
+import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
@@ -189,11 +190,9 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       }
       JsonNode jsonValue = jsonSchemaData.fromConnectData(actualConnectSchema, actualData);
       return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
-    } catch (DataException e) {
-      throw e;
     } catch (Exception e) {
-      throw new DataException(
-          String.format("Failed to restore JSON Schema data for topic %s", topic), e);
+      throw BackupExceptionMapper.classify(
+          "restore JSON Schema backup for topic " + topic, e);
     }
   }
 
@@ -262,8 +261,8 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           SchemaBackupConfig.TYPE_JSON_SCHEMA, isKey,
           JSON_SCHEMA_FACTORY, serializer::computeSubjectName);
     } catch (Exception e) {
-      throw new DataException(
-          String.format("Failed to wrap backup metadata for topic %s", topic), e);
+      throw BackupExceptionMapper.classify(
+          "wrap JSON Schema backup for topic " + topic, e);
     }
   }
 
