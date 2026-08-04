@@ -177,6 +177,11 @@ public class AvroConverter implements Converter {
       Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
+      if (rawSchema == null) {
+        throw new DataException(
+            "Malformed backup wrapper: missing '" + BackupWrapper.FIELD_RAW_SCHEMA
+            + "' for topic " + topic + ". Cannot guarantee pristine restore.");
+      }
 
       BackupReferenceResolver.ResolutionResult resolved =
           backupHelper.getReferenceResolver().resolveFromWrapper(
@@ -187,15 +192,10 @@ public class AvroConverter implements Converter {
       Object avroValue = restoreAvroData.fromConnectData(
           actualConnectSchema, avroSchema, actualData);
 
-      AvroSchema serializeSchema;
-      if (rawSchema != null) {
-        serializeSchema = resolved.hasReferences()
-            ? new AvroSchema(rawSchema, resolved.getTargetRefs(),
-                resolved.getResolvedSchemas(), null)
-            : new AvroSchema(rawSchema);
-      } else {
-        serializeSchema = new AvroSchema(avroSchema);
-      }
+      AvroSchema serializeSchema = resolved.hasReferences()
+          ? new AvroSchema(rawSchema, resolved.getTargetRefs(),
+              resolved.getResolvedSchemas(), null)
+          : new AvroSchema(rawSchema);
 
       return serializer.serialize(topic, isKey, headers, avroValue, serializeSchema);
     } catch (Exception e) {

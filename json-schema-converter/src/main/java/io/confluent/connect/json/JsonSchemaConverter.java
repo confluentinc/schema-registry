@@ -174,20 +174,20 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
       Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
+      if (rawSchema == null) {
+        throw new DataException(
+            "Malformed backup wrapper: missing '" + BackupWrapper.FIELD_RAW_SCHEMA
+            + "' for topic " + topic + ". Cannot guarantee pristine restore.");
+      }
 
       BackupReferenceResolver.ResolutionResult resolved =
           backupHelper.getReferenceResolver().resolveFromWrapper(
               wrapperSchema, wrapper, JSON_SCHEMA_FACTORY);
 
-      JsonSchema jsonSchema;
-      if (rawSchema != null) {
-        jsonSchema = resolved.hasReferences()
-            ? new JsonSchema(rawSchema, resolved.getTargetRefs(),
-                resolved.getResolvedSchemas(), null)
-            : new JsonSchema(rawSchema);
-      } else {
-        jsonSchema = jsonSchemaData.fromConnectSchema(actualConnectSchema);
-      }
+      JsonSchema jsonSchema = resolved.hasReferences()
+          ? new JsonSchema(rawSchema, resolved.getTargetRefs(),
+              resolved.getResolvedSchemas(), null)
+          : new JsonSchema(rawSchema);
       JsonNode jsonValue = jsonSchemaData.fromConnectData(actualConnectSchema, actualData);
       return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
     } catch (Exception e) {

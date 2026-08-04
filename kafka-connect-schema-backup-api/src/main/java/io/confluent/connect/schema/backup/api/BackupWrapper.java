@@ -22,6 +22,10 @@ import org.apache.kafka.connect.data.Struct;
 
 /**
  * Backup Wrapper struct for carrying schema metadata between converters and the envelope layer.
+ * Only SR-aware converters (AvroConverter, ProtobufConverter, JsonSchemaConverter) emit this
+ * wrapper when {@code schema.backup.enabled=true}. Non-SR converters such as ByteArrayConverter,
+ * JsonConverter, and StringConverter bypass this path because they carry no Schema Registry
+ * metadata to preserve.
  */
 public final class BackupWrapper {
 

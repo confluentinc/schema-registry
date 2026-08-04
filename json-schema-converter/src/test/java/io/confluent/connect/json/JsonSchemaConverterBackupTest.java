@@ -272,7 +272,7 @@ public class JsonSchemaConverterBackupTest {
   }
 
   @Test
-  public void testBackupRestoreNullRawSchemaFallback() {
+  public void testBackupRestoreNullRawSchemaThrows() {
     Schema schema = SchemaBuilder.struct()
         .field("fallback", Schema.STRING_SCHEMA)
         .build();
@@ -292,8 +292,14 @@ public class JsonSchemaConverterBackupTest {
     Struct modifiedWrapper = BackupWrapper.buildWrapper(
         wrapperSchema, original.get(BackupWrapper.FIELD_DATA), fields);
 
-    byte[] restored = converter.fromConnectData(TOPIC, wrapperSchema, modifiedWrapper);
-    assertNotNull(restored);
-    assertEquals(0x00, restored[0]);
+    try {
+      converter.fromConnectData(TOPIC, wrapperSchema, modifiedWrapper);
+      fail("Expected DataException for null rawSchema");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(),
+          e.getMessage().contains(BackupWrapper.FIELD_RAW_SCHEMA));
+      assertTrue(e.getMessage(),
+          e.getMessage().contains("pristine restore"));
+    }
   }
 }

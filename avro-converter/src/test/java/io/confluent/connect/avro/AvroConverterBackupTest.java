@@ -272,7 +272,7 @@ public class AvroConverterBackupTest {
   }
 
   @Test
-  public void testBackupRestoreNullRawSchemaFallback() {
+  public void testBackupRestoreNullRawSchemaThrows() {
     Schema schema = SchemaBuilder.struct()
         .field(FIELD_NAME, Schema.STRING_SCHEMA)
         .build();
@@ -281,7 +281,6 @@ public class AvroConverterBackupTest {
     byte[] originalBytes = plainConverter.fromConnectData(TOPIC, schema, value);
     SchemaAndValue wrapped = converter.toConnectData(TOPIC, originalBytes);
 
-    // Rebuild wrapper with null rawSchema to exercise fallback branch
     Struct original = (Struct) wrapped.value();
     Schema wrapperSchema = wrapped.schema();
     BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
@@ -293,8 +292,14 @@ public class AvroConverterBackupTest {
     Struct modifiedWrapper = BackupWrapper.buildWrapper(
         wrapperSchema, original.get(BackupWrapper.FIELD_DATA), fields);
 
-    byte[] restored = converter.fromConnectData(TOPIC, wrapperSchema, modifiedWrapper);
-    assertNotNull(restored);
-    assertEquals(0x00, restored[0]);
+    try {
+      converter.fromConnectData(TOPIC, wrapperSchema, modifiedWrapper);
+      fail("Expected DataException for null rawSchema");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(),
+          e.getMessage().contains(BackupWrapper.FIELD_RAW_SCHEMA));
+      assertTrue(e.getMessage(),
+          e.getMessage().contains("pristine restore"));
+    }
   }
 }

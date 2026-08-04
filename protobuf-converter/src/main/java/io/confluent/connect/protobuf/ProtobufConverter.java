@@ -176,6 +176,11 @@ public class ProtobufConverter implements Converter {
       Object actualData = wrapper.get(BackupWrapper.FIELD_DATA);
       Schema actualConnectSchema = wrapperSchema.field(BackupWrapper.FIELD_DATA).schema();
       String rawSchema = wrapper.getString(BackupWrapper.FIELD_RAW_SCHEMA);
+      if (rawSchema == null) {
+        throw new DataException(
+            "Malformed backup wrapper: missing '" + BackupWrapper.FIELD_RAW_SCHEMA
+            + "' for topic " + topic + ". Cannot guarantee pristine restore.");
+      }
 
       BackupReferenceResolver.ResolutionResult resolved =
           backupHelper.getReferenceResolver().resolveFromWrapper(
@@ -185,15 +190,10 @@ public class ProtobufConverter implements Converter {
           protobufData.fromConnectData(actualConnectSchema, actualData);
       Object v = schemaAndValue.getValue();
 
-      ProtobufSchema serializeSchema;
-      if (rawSchema != null) {
-        serializeSchema = resolved.hasReferences()
-            ? new ProtobufSchema(rawSchema, resolved.getTargetRefs(),
-                resolved.getResolvedSchemas(), null, null)
-            : new ProtobufSchema(rawSchema);
-      } else {
-        serializeSchema = schemaAndValue.getSchema();
-      }
+      ProtobufSchema serializeSchema = resolved.hasReferences()
+          ? new ProtobufSchema(rawSchema, resolved.getTargetRefs(),
+              resolved.getResolvedSchemas(), null, null)
+          : new ProtobufSchema(rawSchema);
 
       if (v instanceof Message) {
         return serializer.serialize(topic, isKey, headers,
