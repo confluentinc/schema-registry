@@ -457,6 +457,19 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
             context + ": Key GUID header should equal the GUID the producer wrote");
     }
 
+    /**
+     * Asserts the record carries a well-formed 17-byte {@code MAGIC_BYTE_V1} schema-id GUID in both
+     * the {@code __key_schema_id} and {@code __value_schema_id} headers, without checking the GUID
+     * value. Use this for a record whose producing GUID this test does not hold -- an IQv2/IQv1
+     * query result, or an output/changelog record in a test that produces inline rather than through
+     * {@link #produce}/{@link #produceAll}. When the producing GUID is available, prefer the
+     * stricter {@link #assertSchemaIdHeaders(Headers, CapturedSchemaIds, String)}.
+     */
+    protected void assertWellFormedSchemaIdHeaders(Headers headers, String context) {
+        assertGuidHeader(headers, SchemaId.KEY_SCHEMA_ID_HEADER, "Key", context);
+        assertGuidHeader(headers, SchemaId.VALUE_SCHEMA_ID_HEADER, "Value", context);
+    }
+
     private static byte[] assertGuidHeader(Headers headers, String headerName, String which,
         String context) {
         Header header = headers.lastHeader(headerName);
