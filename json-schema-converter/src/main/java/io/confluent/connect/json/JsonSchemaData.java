@@ -106,6 +106,8 @@ public class JsonSchemaData {
   public static final String CONNECT_TYPE_BYTES = "bytes";
   public static final String CONNECT_TYPE_MAP = "map";
 
+  public static final String ADDITIONAL_PROPERTIES_FIELD = "__connect_additional_properties__";
+
   public static final String DEFAULT_ID_PREFIX = "#id";
   public static final String JSON_ID_PROP = NAMESPACE + ".Id";
   public static final String JSON_TYPE_ENUM = NAMESPACE + ".Enum";
@@ -232,11 +234,34 @@ public class JsonSchemaData {
         }
 
         Struct result = new Struct(schema.schema());
+        Field extrasField = schema.field(ADDITIONAL_PROPERTIES_FIELD);
+        Set<String> declaredFieldNames = extrasField == null
+            ? Collections.emptySet() : new HashSet<>();
         for (Field field : schema.fields()) {
+          if (field == extrasField) {
+            continue;
+          }
+          if (extrasField != null) {
+            declaredFieldNames.add(field.name());
+          }
           Object fieldValue = data.toConnectData(field.schema(), value.get(field.name()));
           if (fieldValue != null) {
             result.put(field, fieldValue);
           }
+        }
+        if (extrasField != null) {
+          Schema variantSchema = extrasField.schema().valueSchema();
+          Map<String, Struct> extras = new LinkedHashMap<>();
+          Iterator<Entry<String, JsonNode>> it = value.fields();
+          while (it.hasNext()) {
+            Entry<String, JsonNode> entry = it.next();
+            String key = entry.getKey();
+            if (declaredFieldNames.contains(key) || ADDITIONAL_PROPERTIES_FIELD.equals(key)) {
+              continue;
+            }
+            extras.put(key, ConnectVariant.toLogical(variantSchema, entry.getValue()));
+          }
+          result.put(extrasField, extras);
         }
 
         return result;
@@ -576,15 +601,30 @@ public class JsonSchemaData {
             return fromConnectData(schema, null);
           } else {
             ObjectNode obj = JSON_NODE_FACTORY.objectNode();
+            Field extrasField = schema.field(ADDITIONAL_PROPERTIES_FIELD);
             List<Field> fields = schema.fields();
             int numFields = fields.size();
             for (int i = 0; i < numFields; i++) {
               Field field = fields.get(i);
+              if (field == extrasField) {
+                continue;
+              }
               Object fieldValue = config.ignoreDefaultForNullables()
                   ? struct.getWithoutDefault(field.name()) : struct.get(field);
               JsonNode jsonNode = fromConnectData(field.schema(), fieldValue);
               if (jsonNode != null) {
                 obj.set(field.name(), jsonNode);
+              }
+            }
+            if (extrasField != null) {
+              @SuppressWarnings("unchecked")
+              Map<String, Struct> extras = (Map<String, Struct>) struct.get(extrasField);
+              if (extras != null) {
+                Schema variantSchema = extrasField.schema().valueSchema();
+                for (Entry<String, Struct> entry : extras.entrySet()) {
+                  obj.set(entry.getKey(),
+                      ConnectVariant.fromLogical(variantSchema, entry.getValue()));
+                }
               }
             }
             return obj;
@@ -1149,6 +1189,20 @@ public class JsonSchemaData {
           boolean isFieldOptional = config.useOptionalForNonRequiredProperties()
               && !objectSchema.getRequiredProperties().contains(subFieldName);
           builder.field(subFieldName, toConnectSchema(ctx, subSchema, null, isFieldOptional));
+        }
+        if (config.preserveAdditionalProperties()
+            && objectSchema.permitsAdditionalProperties()) {
+          if (builder.field(ADDITIONAL_PROPERTIES_FIELD) != null) {
+            throw new DataException("JSON Schema property name '"
+                + ADDITIONAL_PROPERTIES_FIELD
+                + "' collides with the reserved field name for "
+                + "preserve.additional.properties=true. "
+                + "Rename the property or disable the config.");
+          }
+          builder.field(ADDITIONAL_PROPERTIES_FIELD,
+              SchemaBuilder.map(Schema.STRING_SCHEMA, ConnectVariant.builder().build())
+                  .optional()
+                  .build());
         }
       }
     } else if (jsonSchema instanceof ReferenceSchema) {
