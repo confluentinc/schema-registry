@@ -18,30 +18,40 @@ package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import io.confluent.kafka.streams.serdes.avro.GenericAvroSerde;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
@@ -91,19 +101,29 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             + "\"name\":\"WordValue\","
             + "\"namespace\":\"io.confluent.kafka.streams.integration\","
             + "\"fields\":["
-            + "  {\"name\":\"count\",\"type\":\"long\"},"
-            + "  {\"name\":\"operation\",\"type\":\"string\",\"default\":\"PUT\"}"
+            + "  {\"name\":\"count\",\"type\":\"long\"}"
             + "]"
             + "}";
 
     private final Schema keySchema = new Schema.Parser().parse(KEY_SCHEMA_JSON);
     private final Schema valueSchema = new Schema.Parser().parse(VALUE_SCHEMA_JSON);
 
-    // Every record in each test shares this one key/value schema, so every value-bearing record
-    // carries the same schema-id GUIDs. Capture them once when producing and assert that IQv2
-    // results come back byte-equal to what was produced (see
-    // HeadersIQv2IntegrationTestBase#assertSchemaIdHeaders).
-    private CapturedSchemaIds producedSchemaIds;
+    /**
+     * A distinct user header attached to every produced record, carrying that record's own key
+     * ({@code seq=<word>}). Because it differs per record -- unlike the schema-id GUIDs, which are
+     * byte-identical for every record since they all share one schema -- asserting it on each IQv2
+     * result proves the store returned <em>this</em> record's headers, not another record's.
+     */
+    private static final String SEQ_HEADER = "seq";
+
+    // Per-record captures, keyed by word, so each IQv2 result is asserted against its own record's
+    // produced schema-id GUIDs (see HeadersIQv2IntegrationTestBase#assertSchemaIdHeaders) and its
+    // own produced timestamp -- not a single shared value that every record would trivially match.
+    private final Map<String, CapturedSchemaIds> capturedByWord = new HashMap<>();
+    private final Map<String, Long> timestampByWord = new HashMap<>();
+
+    // A fixed, explicit base timestamp so each record's timestamp is known and assertable.
+    private static final long BASE_TIMESTAMP = 1_600_000_000_000L;
 
     // ---------------------------------------------------------------------------------------------
     // TimestampedKeyWithHeadersQuery (point)
@@ -173,10 +193,36 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             // entry so the point query stops returning it.
             produceTombstone(input, "word-1");
             consumeRecords(output, appId + "-post", 2);
-            assertPointReturnsNull(streams, storeName, "word-1", "tombstoned key");
+            assertPointReturnsNull(streams, storeName, "word-1", "tombstoned key", false);
 
             // A key that was never written is likewise absent.
-            assertPointReturnsNull(streams, storeName, "no-such-word", "never-written key");
+            assertPointReturnsNull(streams, storeName, "no-such-word", "never-written key", false);
+
+            // Re-put word-1 after the tombstone with a NEW record carrying a distinguishing header
+            // (phase=after). The pre-tombstone record had no such header, so a store that lingered
+            // the old headers instead of taking the re-put's would fail the phase assertion below --
+            // this pins that a re-put comes back with its own headers, not the pre-tombstone ones.
+            long reputTs = BASE_TIMESTAMP + 100;
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                ProducerRecord<GenericRecord, GenericRecord> reput = new ProducerRecord<>(
+                    input, null, reputTs, createKey("word-1"), createValue(99L));
+                reput.headers().add(SEQ_HEADER, "word-1".getBytes(StandardCharsets.UTF_8));
+                reput.headers().add("phase", "after".getBytes(StandardCharsets.UTF_8));
+                capturedByWord.put("word-1", sendAndCapture(producer, reput));
+                timestampByWord.put("word-1", reputTs);
+                producer.flush();
+            }
+            consumeRecords(output, appId + "-reput", 3);
+
+            ReadOnlyRecord<GenericRecord, GenericRecord> afterReput =
+                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
+            assertEquals(99L, afterReput.value().get("count"), "re-put word-1 value");
+            assertRecordHeaders(afterReput, "word-1", "re-put word-1");
+            Header phase = afterReput.headers().lastHeader("phase");
+            assertNotNull(phase, "re-put word-1: should carry the new record's phase header");
+            assertEquals("after", new String(phase.value(), StandardCharsets.UTF_8),
+                "re-put word-1: query should return the re-put's headers, not the pre-tombstone ones");
         } finally {
             closeStreams(streams);
         }
@@ -202,10 +248,41 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             // Read-your-writes: the not-yet-flushed record is served from the cache, with headers.
             assertPointQuery(streams, storeName, "word-1", 10L, false);
 
-            // skipCache bypasses the cache and reads the persistent store, which is still empty; a null
-            // result positively proves the read above was genuinely cache-served (and covers skipCache).
-            assertNull(queryPointOnce(streams, storeName, createKey("word-1"), true),
-                "skipCache should read the empty store and return null before any flush");
+            // skipCache bypasses the cache and reads the persistent store, which is still empty; a
+            // successful null result positively proves the read above was genuinely cache-served (and
+            // covers skipCache). Asserting success first stops a failed skipCache query passing as null.
+            assertPointReturnsNull(streams, storeName, "word-1",
+                "skipCache before flush (empty store)", true);
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    @Test
+    public void shouldReturnReadOnlyHeaders() throws Exception {
+        String input = "iqv2-readonly-input";
+        String output = "iqv2-readonly-output";
+        String storeName = "iqv2-readonly-store";
+        String appId = "iqv2-readonly-test";
+
+        // Caching disabled so the range query (which bypasses the cache) sees the store-served record.
+        KafkaStreams streams = startAndPopulate(
+            storeName, input, output, appId,
+            Collections.singletonList("word-1"), Collections.singletonList(10L), false, null);
+        try {
+            // The query marks the returned headers read-only on both the point and range paths, so
+            // an attempt to mutate them must throw.
+            ReadOnlyRecord<GenericRecord, GenericRecord> point =
+                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
+            assertThrows(IllegalStateException.class,
+                () -> point.headers().add("x", new byte[]{1}),
+                "point query should return read-only headers");
+
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> range = queryRange(
+                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
+            assertThrows(IllegalStateException.class,
+                () -> range.get(0).headers().add("x", new byte[]{1}),
+                "range query should return read-only headers");
         } finally {
             closeStreams(streams);
         }
@@ -232,7 +309,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         try {
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
                 streams, storeName,
-                TimestampedRangeWithHeadersQuery.withRange(createKey("word-2"), createKey("word-4")),
+                TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withRange(createKey("word-2"), createKey("word-4"))
+                    .withAscendingKeys(),
                 3);
             List<String> words = wordsOf(records);
             assertEquals(Arrays.asList("word-2", "word-3", "word-4"), words, "range [word-2, word-4]");
@@ -331,7 +410,10 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         try {
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
                 streams, storeName,
-                TimestampedRangeWithHeadersQuery.withLowerBound(createKey("word-3")), 2);
+                TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withLowerBound(createKey("word-3"))
+                    .withAscendingKeys(),
+                2);
             assertEquals(Arrays.asList("word-3", "word-4"), wordsOf(records), "lower bound word-3");
             assertHeadersOnEach(records, "IQv2 lower bound");
         } finally {
@@ -355,7 +437,10 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         try {
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
                 streams, storeName,
-                TimestampedRangeWithHeadersQuery.withUpperBound(createKey("word-2")), 2);
+                TimestampedRangeWithHeadersQuery
+                    .<GenericRecord, GenericRecord>withUpperBound(createKey("word-2"))
+                    .withAscendingKeys(),
+                2);
             assertEquals(Arrays.asList("word-1", "word-2"), wordsOf(records), "upper bound word-2");
             assertHeadersOnEach(records, "IQv2 upper bound");
         } finally {
@@ -388,6 +473,57 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         }
     }
 
+    @Test
+    public void shouldNotServeRangeFromCacheBeforeFlush() throws Exception {
+        String input = "iqv2-rangecache-input";
+        String output = "iqv2-rangecache-output";
+        String storeName = "iqv2-rangecache-store";
+        String appId = "iqv2-rangecache-test";
+
+        createTopics(input, output);
+        // Caching enabled + a very large commit interval so nothing flushes during the test: the
+        // records live only in the record cache; the persistent store stays empty.
+        int tenMinutes = (int) Duration.ofMinutes(10).toMillis();
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildTopology(input, output, storeName, true), appId, 30, tenMinutes);
+        try {
+            produceRecords(input, Arrays.asList("word-1", "word-2", "word-3"),
+                Arrays.asList(10L, 20L, 30L));
+            consumeRecords(output, appId + "-barrier", 3);
+
+            // Positive control: a point query serves the not-yet-flushed records from the cache, so
+            // they are genuinely present -- just unflushed.
+            assertPointQuery(streams, storeName, "word-1", 10L, false);
+
+            // The range path bypasses the cache and reads the still-empty persistent store, so it
+            // must return nothing. This turns the "range never consults the cache" comment on the
+            // range tests into an asserted guarantee, catching a future change that starts consulting
+            // the cache. Emptiness is asserted from a single successful query -- there is nothing to
+            // wait for.
+            StateQueryResult<ReadOnlyRecordIterator<GenericRecord, GenericRecord>> result =
+                streams.query(StateQueryRequest.inStore(storeName)
+                    .withQuery(TimestampedRangeWithHeadersQuery.withNoBounds()));
+            QueryResult<ReadOnlyRecordIterator<GenericRecord, GenericRecord>> pr =
+                result.getOnlyPartitionResult();
+            assertNotNull(pr, "range query should return a partition result");
+            assertTrue(pr.isSuccess(), "range query should succeed but failed: "
+                + (pr.isFailure() ? pr.getFailureReason() + ": " + pr.getFailureMessage() : ""));
+            List<String> served = new ArrayList<>();
+            ReadOnlyRecordIterator<GenericRecord, GenericRecord> iter = pr.getResult();
+            if (iter != null) {
+                try (ReadOnlyRecordIterator<GenericRecord, GenericRecord> it = iter) {
+                    while (it.hasNext()) {
+                        served.add(it.next().key().get("word").toString());
+                    }
+                }
+            }
+            assertTrue(served.isEmpty(),
+                "range query must not serve unflushed cached entries but returned: " + served);
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Restore-from-changelog and multi-partition
     // ---------------------------------------------------------------------------------------------
@@ -411,21 +547,59 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             closeStreams(streams);
         }
 
-        // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store
-        // must be rebuilt from the changelog. The restored entries must still carry their headers.
-        KafkaStreams restored = startStreamsAndAwaitRunning(
-            buildTopology(input, output, storeName, true), appId, 90, null);
+        // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store must
+        // be rebuilt from the changelog. Attach a StateRestoreListener BEFORE start() to prove the
+        // rebuild actually happened: cleanUp() clears local state but not committed offsets, so
+        // without this the restart could silently reprocess the input and pass with no restore at all.
+        // (The base start helper can't set a restore listener, so this instance is started inline.)
+        AtomicLong restoredCount = new AtomicLong(0);
+        StateRestoreListener restoreListener = new StateRestoreListener() {
+            @Override
+            public void onRestoreStart(TopicPartition tp, String store, long start, long end) {
+            }
+
+            @Override
+            public void onBatchRestored(TopicPartition tp, String store, long end, long batch) {
+            }
+
+            @Override
+            public void onRestoreEnd(TopicPartition tp, String store, long totalRestored) {
+                if (store.equals(storeName)) {
+                    restoredCount.addAndGet(totalRestored);
+                }
+            }
+        };
+        KafkaStreams restored = new KafkaStreams(
+            buildTopology(input, output, storeName, true), createStreamsProps(appId, null));
+        restored.cleanUp();
+        restored.setGlobalStateRestoreListener(restoreListener);
+        CountDownLatch restoredRunning = new CountDownLatch(1);
+        restored.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING) {
+                restoredRunning.countDown();
+            }
+        });
+        restored.start();
         try {
+            assertTrue(restoredRunning.await(90, TimeUnit.SECONDS),
+                "restored KafkaStreams should reach RUNNING");
+
             ReadOnlyRecord<GenericRecord, GenericRecord> word1 =
                 queryPointExpectPresent(restored, storeName, createKey("word-1"), false);
             assertEquals(10L, word1.value().get("count"), "restored word-1 value");
-            assertSchemaIdHeaders(word1.headers(), producedSchemaIds, "restored word-1");
+            assertRecordHeaders(word1, "word-1", "restored word-1");
 
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> all = queryRange(
                 restored, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 3);
             assertEquals(new HashSet<>(Arrays.asList("word-1", "word-2", "word-3")),
                 new HashSet<>(wordsOf(all)), "restored scan keys");
             assertHeadersOnEach(all, "restored scan");
+
+            // Pin that the store was genuinely rebuilt from the changelog, not repopulated by a
+            // silent reprocess of the input topic.
+            assertTrue(restoredCount.get() > 0,
+                "store should have been restored from the changelog (restored "
+                    + restoredCount.get() + " records)");
         } finally {
             closeStreams(restored);
         }
@@ -527,11 +701,11 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         long expectedCount, boolean skipCache) {
         ReadOnlyRecord<GenericRecord, GenericRecord> record =
             queryPointExpectPresent(streams, storeName, createKey(word), skipCache);
+        String context = "IQv2 point " + word + (skipCache ? " (skipCache)" : "");
         assertEquals(word, record.key().get("word").toString(), "IQv2 point key " + word);
         assertEquals(expectedCount, record.value().get("count"), "IQv2 point value " + word);
-        assertTrue(record.timestamp() >= 0, "IQv2 point timestamp should be non-negative: " + word);
-        assertSchemaIdHeaders(record.headers(), producedSchemaIds,
-            "IQv2 point " + word + (skipCache ? " (skipCache)" : ""));
+        assertEquals(timestampByWord.get(word), record.timestamp(), "IQv2 point timestamp " + word);
+        assertRecordHeaders(record, word, context);
     }
 
     /**
@@ -540,31 +714,24 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
      * inspects the per-partition result directly to distinguish "succeeded, absent" from a failure.
      */
     private void assertPointReturnsNull(KafkaStreams streams, String storeName, String word,
-        String context) {
-        StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> result =
-            streams.query(StateQueryRequest.inStore(storeName)
-                .withQuery(TimestampedKeyWithHeadersQuery.withKey(createKey(word))));
-        Map<Integer, QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>>> partitionResults =
-            result.getPartitionResults();
-        assertFalse(partitionResults.isEmpty(), context + " query should return a partition result");
-        QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> pr =
-            partitionResults.values().iterator().next();
-        assertTrue(pr.isSuccess(), context + " query should succeed");
-        assertNull(pr.getResult(), context + " should yield a null result");
-    }
-
-    /** Single point query, no retry. Returns null for an absent/tombstoned key (or empty store). */
-    private ReadOnlyRecord<GenericRecord, GenericRecord> queryPointOnce(
-        KafkaStreams streams, String storeName, GenericRecord key, boolean skipCache) {
+        String context, boolean skipCache) {
         TimestampedKeyWithHeadersQuery<GenericRecord, GenericRecord> query =
-            TimestampedKeyWithHeadersQuery.withKey(key);
+            TimestampedKeyWithHeadersQuery.withKey(createKey(word));
         if (skipCache) {
             query = query.skipCache();
         }
         StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> result =
             streams.query(StateQueryRequest.inStore(storeName).withQuery(query));
-        QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> pr = result.getOnlyPartitionResult();
-        return pr == null ? null : pr.getResult();
+        Map<Integer, QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>>> partitionResults =
+            result.getPartitionResults();
+        assertFalse(partitionResults.isEmpty(), context + " query should return a partition result");
+        QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> pr =
+            partitionResults.values().iterator().next();
+        // Assert success first: getOnlyPartitionResult() filters out FAILED results too, so a query
+        // that failed outright would otherwise masquerade as a legitimate "absent key" null.
+        assertTrue(pr.isSuccess(), context + " query should succeed but failed: "
+            + (pr.isFailure() ? pr.getFailureReason() + ": " + pr.getFailureMessage() : ""));
+        assertNull(pr.getResult(), context + " should yield a null result");
     }
 
     private List<ReadOnlyRecord<GenericRecord, GenericRecord>> queryRange(
@@ -607,8 +774,28 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     private void assertHeadersOnEach(
         List<ReadOnlyRecord<GenericRecord, GenericRecord>> records, String context) {
         for (int i = 0; i < records.size(); i++) {
-            assertSchemaIdHeaders(records.get(i).headers(), producedSchemaIds, context + " entry " + i);
+            ReadOnlyRecord<GenericRecord, GenericRecord> record = records.get(i);
+            String word = record.key().get("word").toString();
+            assertRecordHeaders(record, word, context + " entry " + i);
         }
+    }
+
+    /**
+     * Asserts the record carries the exact headers produced for {@code word}: the schema-id GUIDs
+     * byte-equal to what that record's serializer wrote, and the distinct {@code seq} header equal to
+     * the word itself. The {@code seq} check is what makes this a per-record fidelity assertion -- a
+     * store that returned another record's headers, or one shared {@code Headers} instance for every
+     * entry, would carry the wrong {@code seq} and fail here.
+     */
+    private void assertRecordHeaders(ReadOnlyRecord<GenericRecord, GenericRecord> record,
+        String word, String context) {
+        CapturedSchemaIds expected = capturedByWord.get(word);
+        assertNotNull(expected, context + ": no captured schema-id GUIDs for " + word);
+        assertSchemaIdHeaders(record.headers(), expected, context);
+        Header seq = record.headers().lastHeader(SEQ_HEADER);
+        assertNotNull(seq, context + ": missing " + SEQ_HEADER + " header");
+        assertEquals(word, new String(seq.value(), StandardCharsets.UTF_8),
+            context + ": " + SEQ_HEADER + " header should carry this record's own key");
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -658,8 +845,15 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         try (KafkaProducer<GenericRecord, GenericRecord> producer =
                  new KafkaProducer<>(createProducerProps())) {
             for (int i = 0; i < words.size(); i++) {
-                producedSchemaIds = sendAndCapture(producer, new ProducerRecord<>(
-                    topic, createKey(words.get(i)), createValue(counts.get(i), "PUT")));
+                String word = words.get(i);
+                long timestamp = BASE_TIMESTAMP + i;
+                ProducerRecord<GenericRecord, GenericRecord> record = new ProducerRecord<>(
+                    topic, null, timestamp, createKey(word), createValue(counts.get(i)));
+                // Distinct per-record user header so each IQv2 result can be checked against its own
+                // record -- see SEQ_HEADER. The serde adds the schema-id headers during send().
+                record.headers().add(SEQ_HEADER, word.getBytes(StandardCharsets.UTF_8));
+                capturedByWord.put(word, sendAndCapture(producer, record));
+                timestampByWord.put(word, timestamp);
             }
             producer.flush();
         }
@@ -724,10 +918,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         return key;
     }
 
-    private GenericRecord createValue(long count, String operation) {
+    private GenericRecord createValue(long count) {
         GenericRecord value = new GenericData.Record(valueSchema);
         value.put("count", count);
-        value.put("operation", operation);
         return value;
     }
 }
