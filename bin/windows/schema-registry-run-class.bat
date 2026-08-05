@@ -25,7 +25,7 @@ for %%i in (%BASE_DIR%/package-schema-registry/target/kafka-schema-registry-pack
 	call :concat %%i/share/java/schema-registry/*
 )
 
-for %%i in (confluent-common, rest-utils, schema-registry) do (
+for %%i in (schema-registry-plugins, confluent-common, confluent-telemetry, rest-utils, schema-registry, confluent-security/schema-registry) do (
 	call :concat %BASE_DIR%/share/java/%%i/*
 )
 
