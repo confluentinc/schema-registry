@@ -23,18 +23,24 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.confluent.connect.schema.backup.api.BackupWrapper;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import java.io.IOException;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -450,7 +456,7 @@ public class BackupReferenceResolverTest {
   }
 
   @Test
-  public void testResolveFromWrapperTreeWithoutDirectRefs() {
+  public void testResolveFromWrapperTreeWithoutDirectRefsThrows() {
     String treeJson = "{\"" + ADDRESS_FQCN + "\":{"
         + "\"subject\":\"" + ADDRESS_VALUE_SUBJECT + "\","
         + "\"version\":1,"
@@ -462,15 +468,41 @@ public class BackupReferenceResolverTest {
     Schema dataSchema = Schema.STRING_SCHEMA;
     Schema wrapperSchema = BackupWrapper.buildSchema(dataSchema);
     BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
-        1, 1, SCHEMA_TYPE_AVRO,USER_VALUE_SUBJECT, ADDRESS_SCHEMA,
+        1, 1, SCHEMA_TYPE_AVRO, USER_VALUE_SUBJECT, ADDRESS_SCHEMA,
         treeJson, null);
     Struct wrapper = BackupWrapper.buildWrapper(
         wrapperSchema, TEST_DATA, fields);
 
-    BackupReferenceResolver.ResolutionResult result =
-        resolver.resolveFromWrapper(wrapperSchema, wrapper, avroFactory);
+    try {
+      resolver.resolveFromWrapper(wrapperSchema, wrapper, avroFactory);
+      fail(EXPECTED_DATA_EXCEPTION);
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("Corrupt backup wrapper"));
+      assertTrue(e.getMessage(), e.getMessage().contains("directRefsEmpty=true"));
+    }
+  }
 
-    assertFalse(result.hasReferences());
+  @Test
+  public void testResolveFromWrapperDirectRefsWithoutTreeThrows() {
+    String directRefsJson = "[{\"name\":\"" + ADDRESS_FQCN + "\","
+        + "\"subject\":\"" + ADDRESS_VALUE_SUBJECT + "\","
+        + "\"version\":1}]";
+
+    Schema dataSchema = Schema.STRING_SCHEMA;
+    Schema wrapperSchema = BackupWrapper.buildSchema(dataSchema);
+    BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
+        1, 1, SCHEMA_TYPE_AVRO, USER_VALUE_SUBJECT, ADDRESS_SCHEMA,
+        null, directRefsJson);
+    Struct wrapper = BackupWrapper.buildWrapper(
+        wrapperSchema, TEST_DATA, fields);
+
+    try {
+      resolver.resolveFromWrapper(wrapperSchema, wrapper, avroFactory);
+      fail(EXPECTED_DATA_EXCEPTION);
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("Corrupt backup wrapper"));
+      assertTrue(e.getMessage(), e.getMessage().contains("treeEmpty=true"));
+    }
   }
 
   @Test
@@ -580,5 +612,71 @@ public class BackupReferenceResolverTest {
 
   private static String quote(String s) {
     return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+  }
+
+  @Test
+  public void testRegisterSingleRefPlainIoExceptionMapsToDataException() {
+    assertRegisterFails(new MockSchemaRegistryClient() {
+      @Override
+      public int register(String subject, ParsedSchema schema)
+          throws IOException {
+        throw new IOException("SR unreachable");
+      }
+    }, DataException.class);
+  }
+
+  @Test
+  public void testRegisterSingleRefNetworkIoExceptionMapsToNetworkException() {
+    assertRegisterFails(new MockSchemaRegistryClient() {
+      @Override
+      public int register(String subject, ParsedSchema schema)
+          throws IOException {
+        throw new SocketException("connection refused");
+      }
+    }, NetworkException.class);
+  }
+
+  @Test
+  public void testRegisterSingleRefRetriableStatusMapsToRetriable() {
+    assertRegisterFails(new MockSchemaRegistryClient() {
+      @Override
+      public int register(String subject, ParsedSchema schema)
+          throws RestClientException {
+        throw new RestClientException("SR unavailable", 503, 50301);
+      }
+    }, RetriableException.class);
+  }
+
+  @Test
+  public void testRegisterSingleRefNonRetriableStatusMapsToDataException() {
+    assertRegisterFails(new MockSchemaRegistryClient() {
+      @Override
+      public int register(String subject, ParsedSchema schema)
+          throws RestClientException {
+        throw new RestClientException("conflict", 409, 40901);
+      }
+    }, DataException.class);
+  }
+
+  private void assertRegisterFails(
+      SchemaRegistryClient failingMock,
+      Class<? extends RuntimeException> expected) {
+    BackupReferenceResolver failingResolver =
+        new BackupReferenceResolver(failingMock);
+    try {
+      failingResolver.registerRefsRecursive(
+          Collections.singletonList(new SchemaReference(
+              ADDRESS_FQCN, ADDRESS_VALUE_SUBJECT, 1)),
+          Collections.singletonMap(ADDRESS_FQCN,
+              new BackupSchemaFetcher.RefTreeEntry(
+                  ADDRESS_VALUE_SUBJECT, 1, ADDRESS_SCHEMA,
+                  Collections.emptyList(), 42, SCHEMA_TYPE_AVRO)),
+          avroFactory, new ArrayList<>(), new HashMap<>());
+      fail("Expected " + expected.getSimpleName());
+    } catch (RuntimeException e) {
+      assertTrue("Expected " + expected.getSimpleName() + " but got " + e.getClass(),
+          expected.isInstance(e));
+      assertTrue(e.getMessage(), e.getMessage().contains("register reference"));
+    }
   }
 }
