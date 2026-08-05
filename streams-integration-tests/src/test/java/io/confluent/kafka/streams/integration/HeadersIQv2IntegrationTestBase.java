@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -41,6 +42,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -101,12 +103,26 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
      */
     private final List<GenericAvroSerde> createdSerdes = new ArrayList<>();
 
+    /**
+     * Every {@link KafkaStreams} instance handed out by {@link #startStreamsAndAwaitRunning}. A test
+     * that fails before its own {@link #closeStreams} would otherwise leak the instance's state-dir
+     * lock and StreamThreads for the rest of the fork JVM, so teardown closes any that are still open.
+     */
+    private final List<KafkaStreams> startedStreams = new ArrayList<>();
+
     protected HeadersIQv2IntegrationTestBase() {
         super(1, true);
     }
 
     @AfterEach
-    public void closeSerdes() {
+    public void closeStreamsAndSerdes() {
+        // Close streams before serdes: a StreamThread still shutting down can lazily rebuild a
+        // serde's Schema Registry HTTP pool on its next serialize, re-leaking a pool we just closed.
+        for (KafkaStreams streams : startedStreams) {
+            closeStreamsQuietly(streams);
+        }
+        startedStreams.clear();
+
         RuntimeException firstError = null;
         for (GenericAvroSerde serde : createdSerdes) {
             try {
@@ -156,8 +172,10 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
         config.put(AbstractKafkaSchemaSerDeConfig.KEY_SCHEMA_ID_SERIALIZER,
             HeaderSchemaIdSerializer.class.getName());
-        serde.configure(config, true);
+        // Track before configure: GenericAvroSerde.configure builds the serializer's client first,
+        // so if the deserializer's configure throws, the serde must already be tracked to be closed.
         createdSerdes.add(serde);
+        serde.configure(config, true);
         return serde;
     }
 
@@ -167,8 +185,9 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         config.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
         config.put(AbstractKafkaSchemaSerDeConfig.VALUE_SCHEMA_ID_SERIALIZER,
             HeaderSchemaIdSerializer.class.getName());
-        serde.configure(config, false);
+        // Track before configure: see createKeySerde.
         createdSerdes.add(serde);
+        serde.configure(config, false);
         return serde;
     }
 
@@ -220,6 +239,7 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         // otherwise flip lastState away from RUNNING and spuriously fail the start assertion.
         AtomicBoolean reachedRunning = new AtomicBoolean(false);
         KafkaStreams streams = new KafkaStreams(topology, createStreamsProps(appId, commitIntervalMs));
+        startedStreams.add(streams);
         boolean running = false;
         try {
             streams.cleanUp();
@@ -245,8 +265,11 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
             running = true;
             return streams;
         } finally {
+            // Close quietly on the failure path: the start assertion above is the error worth
+            // reporting, and close() on an instance that never reached RUNNING will usually time out
+            // too -- asserting on that here would throw from finally and mask the real cause.
             if (!running) {
-                closeStreams(streams);
+                closeStreamsQuietly(streams);
             }
         }
     }
@@ -255,6 +278,21 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
         if (streams != null) {
             assertTrue(streams.close(Duration.ofSeconds(10)),
                 "KafkaStreams.close() timed out before shutting down cleanly");
+        }
+    }
+
+    /**
+     * Closes {@code streams} best-effort without asserting on a clean shutdown -- for teardown and
+     * the start-failure path, where a close timeout must not replace the error that actually failed
+     * the test. Success-path callers should use {@link #closeStreams} to assert a clean shutdown.
+     */
+    private static void closeStreamsQuietly(KafkaStreams streams) {
+        if (streams != null) {
+            try {
+                streams.close(Duration.ofSeconds(10));
+            } catch (RuntimeException e) {
+                // Best-effort cleanup; nothing actionable if a wedged StreamThread refuses to stop.
+            }
         }
     }
 
@@ -290,7 +328,10 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     /** Produces one record per key/value pair and returns the captured GUIDs in produce order. */
     protected List<CapturedSchemaIds> produceAll(String topic, List<GenericRecord> keys,
         List<GenericRecord> values, long timestamp) throws Exception {
-        assertEquals(keys.size(), values.size(), "produceAll requires one value per key");
+        if (keys.size() != values.size()) {
+            throw new IllegalArgumentException("produceAll requires one value per key, but got "
+                + keys.size() + " keys and " + values.size() + " values");
+        }
         List<CapturedSchemaIds> captured = new ArrayList<>();
         try (KafkaProducer<GenericRecord, GenericRecord> producer =
                  new KafkaProducer<>(createProducerProps())) {
@@ -306,33 +347,65 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     // Consuming (output-topic completion barrier)
     // ---------------------------------------------------------------------------------------------
 
+    /** Reads {@code expectedCount} records off {@code topic} as Avro {@link GenericRecord} values. */
     protected List<ConsumerRecord<GenericRecord, GenericRecord>> consumeRecords(
         String topic, String groupId, int expectedCount) {
+        return consumeRecords(topic, groupId, expectedCount, KafkaAvroDeserializer.class);
+    }
+
+    /**
+     * Reads {@code expectedCount} records off {@code topic}, deserializing values with
+     * {@code valueDeserializerClass}. Keys are always Avro {@link GenericRecord}; pass
+     * {@code ByteArrayDeserializer.class} to read a raw topic (e.g. a changelog) whose value bytes
+     * carry the schema-id header being asserted. Safe to call more than once with the same
+     * {@code groupId}: auto-commit is off, so a second call re-reads from {@code earliest}.
+     */
+    protected <V> List<ConsumerRecord<GenericRecord, V>> consumeRecords(
+        String topic, String groupId, int expectedCount, Class<?> valueDeserializerClass) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // Do not commit on close: a second call with the same groupId must re-read from earliest
+        // rather than resume past a committed offset and read nothing.
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass.getName());
         props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, restApp.restConnect);
         props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, false);
 
-        List<ConsumerRecord<GenericRecord, GenericRecord>> results = new ArrayList<>();
-        try (KafkaConsumer<GenericRecord, GenericRecord> consumer = new KafkaConsumer<>(props)) {
+        List<ConsumerRecord<GenericRecord, V>> results = new ArrayList<>();
+        try (KafkaConsumer<GenericRecord, V> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
             long deadline = System.currentTimeMillis() + 30_000;
             while (results.size() < expectedCount && System.currentTimeMillis() < deadline) {
-                ConsumerRecords<GenericRecord, GenericRecord> records =
+                ConsumerRecords<GenericRecord, V> records =
                     consumer.poll(Duration.ofMillis(500));
-                for (ConsumerRecord<GenericRecord, GenericRecord> record : records) {
+                for (ConsumerRecord<GenericRecord, V> record : records) {
                     results.add(record);
                 }
             }
         }
         assertTrue(results.size() >= expectedCount,
             "Expected at least " + expectedCount + " records from " + topic
-                + " but got " + results.size() + " within 30s");
+                + " but got " + results.size() + " within 30s" + describeStreamsStates());
         return results;
+    }
+
+    /**
+     * Renders the current state of every {@link KafkaStreams} this base started, for appending to a
+     * barrier-timeout message: a StreamThread that died mid-test shuts the client down silently
+     * (default {@code SHUTDOWN_CLIENT}), which otherwise surfaces only as "got 0 records".
+     */
+    private String describeStreamsStates() {
+        if (startedStreams.isEmpty()) {
+            return "";
+        }
+        List<KafkaStreams.State> states = new ArrayList<>();
+        for (KafkaStreams streams : startedStreams) {
+            states.add(streams.state());
+        }
+        return " (KafkaStreams states: " + states + ")";
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -367,6 +440,23 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
             context + ": Value GUID header should equal the GUID the producer wrote");
     }
 
+    /**
+     * Asserts the record carries a well-formed key schema-id GUID header equal to the key GUID
+     * {@code expected} captured when this record was produced. Unlike {@link #assertSchemaIdHeaders}
+     * this checks only the key header, so it applies to a tombstone (null-value record), which
+     * carries a key GUID but no value header.
+     */
+    protected void assertKeySchemaIdHeader(Headers headers, CapturedSchemaIds expected,
+        String context) {
+        assertNotNull(expected,
+            context + ": no captured schema-id GUIDs -- produce the record via produce/produceAll");
+        byte[] keyBytes = assertGuidHeader(headers, SchemaId.KEY_SCHEMA_ID_HEADER, "Key", context);
+        assertNotNull(expected.keyGuid,
+            context + ": no produced key GUID captured -- produce a record before asserting");
+        assertArrayEquals(expected.keyGuid, keyBytes,
+            context + ": Key GUID header should equal the GUID the producer wrote");
+    }
+
     private static byte[] assertGuidHeader(Headers headers, String headerName, String which,
         String context) {
         Header header = headers.lastHeader(headerName);
@@ -381,6 +471,22 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     // ---------------------------------------------------------------------------------------------
     // Misc
     // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Polls {@code condition} until it holds, failing if {@code timeoutMs} elapses first. Prefer this
+     * to a fixed {@code Thread.sleep} for waiting on an observable outcome (e.g. a changelog record
+     * having landed): it returns as soon as the condition holds and names what it was waiting for.
+     */
+    protected static void awaitCondition(BooleanSupplier condition, long timeoutMs,
+        String description) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (!condition.getAsBoolean()) {
+            if (System.currentTimeMillis() >= deadline) {
+                fail(description + " not satisfied within " + timeoutMs + "ms");
+            }
+            sleepQuietly(50);
+        }
+    }
 
     protected static void sleepQuietly(long millis) {
         try {
