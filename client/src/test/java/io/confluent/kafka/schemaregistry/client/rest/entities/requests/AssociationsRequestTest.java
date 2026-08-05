@@ -89,7 +89,7 @@ public class AssociationsRequestTest {
   @Test
   public void testOpRequestValidAssociationsDoesNotThrow() {
     AssociationCreateOp op = new AssociationCreateOp(
-        "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
+        "test-subject", null, LifecyclePolicy.WEAK, null, null, null);
     AssociationOpRequest request = new AssociationOpRequest(
         "test-resource", "test-ns", "test-id", null, Collections.singletonList(op));
     request.validate(false);
@@ -253,7 +253,7 @@ public class AssociationsRequestTest {
         "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
     info.applyDefaults(false);
     assertEquals(LifecyclePolicy.STRONG, info.getLifecycle());
-    assertEquals(Boolean.FALSE, info.getFrozen());
+    assertEquals(Boolean.TRUE, info.getFrozen());
   }
 
   @Test
@@ -309,7 +309,7 @@ public class AssociationsRequestTest {
         "test-subject", null, LifecyclePolicy.STRONG, null, null, null);
     op.applyDefaults(false);
     assertEquals(LifecyclePolicy.STRONG, op.getLifecycle());
-    assertEquals(Boolean.FALSE, op.getFrozen());
+    assertEquals(Boolean.TRUE, op.getFrozen());
   }
 
   // Requirement #3: Default subject + subject required
@@ -473,7 +473,7 @@ public class AssociationsRequestTest {
     AssociationCreateOp frozenOp = new AssociationCreateOp(
         null, "key", null, null, schema, null);
     AssociationCreateOp nonFrozenOp = new AssociationCreateOp(
-        "test-subject", "value", LifecyclePolicy.STRONG, false, null, null);
+        "test-subject", "value", null, false, null, null);
     AssociationOpRequest request = new AssociationOpRequest(
         "test-resource", "test-ns", "test-id", null,
         java.util.Arrays.asList(frozenOp, nonFrozenOp));
@@ -499,9 +499,9 @@ public class AssociationsRequestTest {
   @Test
   public void testCreateOpAllNonFrozenSucceeds() {
     AssociationCreateOp op1 = new AssociationCreateOp(
-        "subject1", "key", LifecyclePolicy.STRONG, false, null, null);
+        "subject1", "key", LifecyclePolicy.WEAK, false, null, null);
     AssociationCreateOp op2 = new AssociationCreateOp(
-        "subject2", "value", LifecyclePolicy.STRONG, false, null, null);
+        "subject2", "value", null, false, null, null);
     AssociationOpRequest request = new AssociationOpRequest(
         "test-resource", "test-ns", "test-id", null,
         java.util.Arrays.asList(op1, op2));
@@ -515,7 +515,7 @@ public class AssociationsRequestTest {
     AssociationCreateOrUpdateInfo frozenInfo = new AssociationCreateOrUpdateInfo(
         null, "key", null, null, schema, null);
     AssociationCreateOrUpdateInfo nonFrozenInfo = new AssociationCreateOrUpdateInfo(
-        "test-subject", "value", LifecyclePolicy.STRONG, false, null, null);
+        "test-subject", "value", null, null, null, null);
     AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
         "test-resource", "test-ns", "test-id", null,
         java.util.Arrays.asList(frozenInfo, nonFrozenInfo));

@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Association;
 import io.confluent.kafka.schemaregistry.client.rest.entities.LifecyclePolicy;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
@@ -591,17 +592,30 @@ public class MockSchemaRegistryClientTest {
       testCreateMultipleAssociationsHelper(client::createOrUpdateAssociation);
     }
 
-    private void testCreateStrongAndWeakAssociationsForTheSameSubjectHelper(AssociationCreator associationCreator) {
+    /**
+     * A STRONG association is frozen, and a frozen association must use its own resource's
+     * canonical subject -- so two resources can never hold a STRONG association on the same
+     * subject. That combination is now unrepresentable rather than merely rejected, so the
+     * conflicts that remain testable are the ones where at least one side is WEAK.
+     */
+    private String canonicalValueSubject(Resource resource) {
+      return QualifiedSubject.CONTEXT_PREFIX + resource.resourceNamespace
+              + QualifiedSubject.CONTEXT_DELIMITER + resource.resourceName + "-value";
+    }
+
+    private void testStrongAndWeakAssociationConflictsAcrossResourcesHelper(AssociationCreator associationCreator) {
       Resource resourceFoo = new Resource("foo", defaultResourceNamespace, "id-foo", TOPIC);
       Resource resourceBar = new Resource("bar", defaultResourceNamespace, "id-bar", TOPIC);
       String fooValueSubject = "fooValue";
+      String fooCanonicalSubject = canonicalValueSubject(resourceFoo);
+      String barCanonicalSubject = canonicalValueSubject(resourceBar);
 
-      registerTestAvroSchemaInSchemaRegistry(client, fooValueSubject, SIMPLE_AVRO_SCHEMA, true);
-
-      // Scenario 1: Same subject, Foo=STRONG, Bar=STRONG -> Bar should fail
+      // Scenario 1: Foo=STRONG on its canonical subject, Bar=WEAK on it -> Bar should fail.
+      // A STRONG association is frozen, and a frozen association must carry its schema inline.
       AssociationCreateOrUpdateRequest fooRequest = new AssociationRequestBuilder()
               .resource(resourceFoo.resourceName, resourceFoo.resourceNamespace, resourceFoo.resourceId, resourceFoo.resourceType)
-              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
+              .valueSubject(fooCanonicalSubject).valueLifecycle(LifecyclePolicy.STRONG)
+              .valueSchema(SIMPLE_AVRO_SCHEMA).build();
       try {
         associationCreator.create(fooRequest);
       } catch (Exception e) {
@@ -613,27 +627,17 @@ public class MockSchemaRegistryClientTest {
         result = client.getAssociationsByResourceId(
                 resourceFoo.resourceId, null, null, null, 0, -1);
       } catch (Exception e) {
-        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+        assertNull("getAssociationsByResourceId should succeed.", e);
       }
       assertEquals(1, result.size());
       assertNotNull(result.get(0).getGuid());
       assertFalse(result.get(0).getGuid().isEmpty());
 
+      // Bar's own canonical subject differs, so this passes the subject-format rules and is
+      // rejected by conflict detection: the subject already carries a STRONG association.
       AssociationCreateOrUpdateRequest barRequest = new AssociationRequestBuilder()
               .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
-              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
-
-      try {
-        client.createOrUpdateAssociation(barRequest);
-        fail("Expected exception - cannot create strong association when subject already has strong");
-      } catch (Exception e) {
-        assertNotNull(e);
-      }
-
-      // Scenario 2: Foo=STRONG, Bar=WEAK -> Bar should fail
-      barRequest = new AssociationRequestBuilder()
-              .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
-              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
+              .valueSubject(fooCanonicalSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
       try {
         client.createOrUpdateAssociation(barRequest);
         fail("Expected exception - cannot create weak when subject has strong");
@@ -641,13 +645,12 @@ public class MockSchemaRegistryClientTest {
         assertNotNull(e);
       }
 
-      // Scenario 3: Foo=WEAK, Bar=STRONG -> Bar should fail
-      // Reset
+      // Scenario 2: Foo=WEAK on Bar's canonical subject, Bar=STRONG on it -> Bar should fail
       client.reset();
-      registerTestAvroSchemaInSchemaRegistry(client, fooValueSubject, SIMPLE_AVRO_SCHEMA, true);
+      registerTestAvroSchemaInSchemaRegistry(client, barCanonicalSubject, SIMPLE_AVRO_SCHEMA, true);
       fooRequest = new AssociationRequestBuilder()
               .resource(resourceFoo.resourceName, resourceFoo.resourceNamespace, resourceFoo.resourceId, resourceFoo.resourceType)
-              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
+              .valueSubject(barCanonicalSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
 
       try {
         associationCreator.create(fooRequest);
@@ -659,7 +662,7 @@ public class MockSchemaRegistryClientTest {
         result = client.getAssociationsByResourceId(
                 resourceFoo.resourceId, null, null, null, 0, -1);
       } catch (Exception e) {
-        assertNull("getAssociationsByResourceId succeed.", e);
+        assertNull("getAssociationsByResourceId should succeed.", e);
       }
       assertEquals(1, result.size());
       assertNotNull(result.get(0).getGuid());
@@ -668,7 +671,8 @@ public class MockSchemaRegistryClientTest {
       // Try to create Bar strong - should fail
       barRequest = new AssociationRequestBuilder()
               .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
-              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
+              .valueSubject(barCanonicalSubject).valueLifecycle(LifecyclePolicy.STRONG)
+              .valueSchema(SIMPLE_AVRO_SCHEMA).build();
 
       try {
         associationCreator.create(barRequest);
@@ -677,7 +681,18 @@ public class MockSchemaRegistryClientTest {
         assertNotNull(e);
       }
 
-      // Scenario 4: Foo=WEAK, Bar=WEAK -> Bar should succeed
+      // Scenario 3: Foo=WEAK, Bar=WEAK on a shared non-canonical subject -> both should succeed
+      client.reset();
+      registerTestAvroSchemaInSchemaRegistry(client, fooValueSubject, SIMPLE_AVRO_SCHEMA, true);
+      fooRequest = new AssociationRequestBuilder()
+              .resource(resourceFoo.resourceName, resourceFoo.resourceNamespace, resourceFoo.resourceId, resourceFoo.resourceType)
+              .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
+      try {
+        associationCreator.create(fooRequest);
+      } catch (Exception e) {
+        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+      }
+
       barRequest = new AssociationRequestBuilder()
               .resource(resourceBar.resourceName, resourceBar.resourceNamespace, resourceBar.resourceId, resourceBar.resourceType)
               .valueSubject(fooValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
@@ -709,10 +724,10 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
-    public void testCreateStrongAndWeakAssociationsForTheSameSubject() {
-      testCreateStrongAndWeakAssociationsForTheSameSubjectHelper(client::createAssociation);
+    public void testStrongAndWeakAssociationConflictsAcrossResources() {
+      testStrongAndWeakAssociationConflictsAcrossResourcesHelper(client::createAssociation);
       setUp();
-      testCreateStrongAndWeakAssociationsForTheSameSubjectHelper(client::createOrUpdateAssociation);
+      testStrongAndWeakAssociationConflictsAcrossResourcesHelper(client::createOrUpdateAssociation);
     }
 
     @Test

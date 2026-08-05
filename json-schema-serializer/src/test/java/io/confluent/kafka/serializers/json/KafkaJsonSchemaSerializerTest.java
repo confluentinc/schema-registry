@@ -606,7 +606,7 @@ public class KafkaJsonSchemaSerializerTest {
             new AssociationCreateOrUpdateInfo(
                 "mysubject",
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
