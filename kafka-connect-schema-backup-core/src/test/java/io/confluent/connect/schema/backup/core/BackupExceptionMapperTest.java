@@ -196,18 +196,28 @@ public class BackupExceptionMapperTest {
   }
 
   @Test
-  public void passesThroughThrottlingQuotaExceededException() {
-    ThrottlingQuotaExceededException original =
+  public void mapsThrottlingQuotaExceededExceptionToRetriable() {
+    ThrottlingQuotaExceededException cause =
         new ThrottlingQuotaExceededException("too many requests");
-    KafkaException result = BackupExceptionMapper.classify(OP, original);
-    assertSame(original, result);
+    KafkaException result = BackupExceptionMapper.classify(OP, cause);
+    assertTrue(result instanceof RetriableException);
+    assertSame(cause, result.getCause());
   }
 
   @Test
-  public void passesThroughDisconnectException() {
-    DisconnectException original = new DisconnectException("bad gateway");
-    KafkaException result = BackupExceptionMapper.classify(OP, original);
-    assertSame(original, result);
+  public void mapsDisconnectExceptionToRetriable() {
+    DisconnectException cause = new DisconnectException("bad gateway");
+    KafkaException result = BackupExceptionMapper.classify(OP, cause);
+    assertTrue(result instanceof RetriableException);
+    assertSame(cause, result.getCause());
+  }
+
+  @Test
+  public void mapsCommonNetworkExceptionToRetriable() {
+    NetworkException cause = new NetworkException("connection reset");
+    KafkaException result = BackupExceptionMapper.classify(OP, cause);
+    assertTrue(result instanceof RetriableException);
+    assertSame(cause, result.getCause());
   }
 
   @Test

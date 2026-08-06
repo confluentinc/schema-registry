@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -39,7 +38,7 @@ public final class BackupExceptionMapper {
   public static KafkaException classify(String op, Throwable cause) {
     String msg = String.format("Failed to %s", op);
 
-    if (cause instanceof TimeoutException) {
+    if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
       return new RetriableException(msg, cause);
     }
 
