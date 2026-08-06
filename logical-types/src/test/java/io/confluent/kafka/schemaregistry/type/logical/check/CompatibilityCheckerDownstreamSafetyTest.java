@@ -17,6 +17,9 @@
 package io.confluent.kafka.schemaregistry.type.logical.check;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
@@ -184,7 +187,14 @@ class CompatibilityCheckerDownstreamSafetyTest {
 
   @Test
   void jsonConstraintAdditions() {
-    // Value-level constraints carry no column cost and are ignored by both checkers.
+    // A conditional no longer reaches either checker: the converter rejects it, because a property
+    // declared only by a branch gets no column. Caught a layer earlier than a comparison, and so on
+    // a first registration too. Value-level constraints carry no such cost and are still ignored.
+    assertThatThrownBy(() -> json("{\"type\":\"object\",\"properties\":{"
+        + "\"a\":{\"type\":\"string\"}},"
+        + "\"if\":{\"required\":[\"a\"]},\"then\":{\"required\":[\"a\"]}}"))
+        .isInstanceOf(ValidationException.class);
+
     assertAllowedByBoth(
         json("{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}}}"),
         json("{\"type\":\"object\",\"properties\":{"
