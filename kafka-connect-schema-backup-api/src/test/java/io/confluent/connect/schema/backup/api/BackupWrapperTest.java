@@ -19,6 +19,7 @@ package io.confluent.connect.schema.backup.api;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -26,6 +27,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class BackupWrapperTest {
 
@@ -144,6 +146,32 @@ public class BackupWrapperTest {
     Struct wrapper = BackupWrapper.buildWrapper(wrapperSchema, "hello", fields);
     assertEquals(Integer.valueOf(7), wrapper.getInt32(BackupWrapper.FIELD_SCHEMA_ID));
     assertNull(wrapper.getString(BackupWrapper.FIELD_SCHEMA_GUID));
+  }
+
+  @Test
+  public void testRequireFieldsPassesWhenAllPresent() {
+    Schema wrapperSchema = BackupWrapper.buildSchema(Schema.STRING_SCHEMA);
+    BackupWrapper.requireFields(wrapperSchema,
+        BackupWrapper.FIELD_DATA,
+        BackupWrapper.FIELD_SCHEMA_TYPE,
+        BackupWrapper.FIELD_RAW_SCHEMA);
+  }
+
+  @Test
+  public void testRequireFieldsThrowsWithNameWhenFieldMissing() {
+    Schema stripped = SchemaBuilder.struct()
+        .name(BackupWrapper.NAME)
+        .field(BackupWrapper.FIELD_DATA, Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    try {
+      BackupWrapper.requireFields(stripped,
+          BackupWrapper.FIELD_DATA,
+          BackupWrapper.FIELD_SCHEMA_TYPE);
+      fail("Expected DataException naming the missing field");
+    } catch (DataException e) {
+      assertEquals("Malformed backup wrapper: missing '"
+          + BackupWrapper.FIELD_SCHEMA_TYPE + "' field", e.getMessage());
+    }
   }
 
   @Test
