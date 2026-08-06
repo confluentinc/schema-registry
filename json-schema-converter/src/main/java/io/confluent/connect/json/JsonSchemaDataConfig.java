@@ -56,6 +56,14 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
   public static final boolean FLATTEN_SINGLETON_UNIONS_DEFAULT = true;
   public static final String FLATTEN_SINGLETON_UNIONS_DOC = "Whether to flatten singleton unions";
 
+  public static final String PRESERVE_ADDITIONAL_PROPERTIES_CONFIG =
+      "preserve.additional.properties";
+  public static final boolean PRESERVE_ADDITIONAL_PROPERTIES_DEFAULT = false;
+  public static final String PRESERVE_ADDITIONAL_PROPERTIES_DOC =
+      "When true, JSON properties not declared in the schema but allowed by additionalProperties "
+          + "are preserved through this converter with their original values and data types "
+          + "intact. Default false drops such properties (existing behavior).";
+
   public static ConfigDef baseConfigDef() {
     return AbstractDataConfig.baseConfigDef().define(
         OBJECT_ADDITIONAL_PROPERTIES_CONFIG,
@@ -89,7 +97,13 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
         ConfigDef.Type.BOOLEAN,
         FLATTEN_SINGLETON_UNIONS_DEFAULT,
         ConfigDef.Importance.LOW,
-        FLATTEN_SINGLETON_UNIONS_DOC);
+        FLATTEN_SINGLETON_UNIONS_DOC
+    ).define(
+        PRESERVE_ADDITIONAL_PROPERTIES_CONFIG,
+        ConfigDef.Type.BOOLEAN,
+        PRESERVE_ADDITIONAL_PROPERTIES_DEFAULT,
+        ConfigDef.Importance.MEDIUM,
+        PRESERVE_ADDITIONAL_PROPERTIES_DOC);
   }
 
   public JsonSchemaDataConfig(Map<?, ?> props) {
@@ -119,6 +133,10 @@ public class JsonSchemaDataConfig extends AbstractDataConfig {
 
   public boolean isFlattenSingletonUnions() {
     return this.getBoolean(FLATTEN_SINGLETON_UNIONS_CONFIG);
+  }
+
+  public boolean preserveAdditionalProperties() {
+    return getBoolean(PRESERVE_ADDITIONAL_PROPERTIES_CONFIG);
   }
 
   public static class Builder {

@@ -87,6 +87,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class JsonSchemaDataTest {
 
@@ -2604,5 +2605,282 @@ public class JsonSchemaDataTest {
     byte[] bytes = new byte[buffer.remaining()];
     buffer.duplicate().get(bytes);
     return bytes;
+  }
+
+  private JsonSchemaData preserveExtrasData() {
+    return new JsonSchemaData(new JsonSchemaDataConfig(
+        Collections.singletonMap(
+            JsonSchemaDataConfig.PRESERVE_ADDITIONAL_PROPERTIES_CONFIG, "true")));
+  }
+
+  private static ObjectNode obj(String json) {
+    try {
+      return (ObjectNode) Jackson.newObjectMapper().readTree(json);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesShapeATypedMapRoundTrip() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .schemaOfAdditionalProperties(NumberSchema.builder().requiresInteger(true).build())
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    assertNotNull("extras field must be present when config is on",
+        connectSchema.field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+
+    ObjectNode payload = obj("{\"a\":1,\"b\":2}");
+    Object connectValue = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, connectValue);
+    assertEquals(payload, restored);
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesShapeBLooseBagRoundTrip() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder().build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+
+    ObjectNode payload = obj(
+        "{\"n\":42,\"s\":\"hi\",\"b\":true,\"nested\":{\"a\":1},\"arr\":[1,2,3]}");
+    Object connectValue = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, connectValue);
+    assertEquals(payload, restored);
+    assertTrue("number stays number", restored.get("n").isIntegralNumber());
+    assertTrue("string stays string", restored.get("s").isTextual());
+    assertTrue("boolean stays boolean", restored.get("b").isBoolean());
+    assertTrue("nested stays object", restored.get("nested").isObject());
+    assertTrue("array stays array", restored.get("arr").isArray());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesShapeDHybridTypedRoundTrip() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .addPropertySchema("name", StringSchema.builder().build())
+        .schemaOfAdditionalProperties(NumberSchema.builder().requiresInteger(true).build())
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    assertNotNull(connectSchema.field("name"));
+    assertNotNull(connectSchema.field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+
+    ObjectNode payload = obj("{\"name\":\"Alice\",\"score\":42,\"rank\":7}");
+    Object connectValue = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, connectValue);
+    assertEquals("Alice", restored.get("name").textValue());
+    assertEquals(42, restored.get("score").intValue());
+    assertEquals(7, restored.get("rank").intValue());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesShapeEHybridLooseRoundTrip() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .addPropertySchema("name", StringSchema.builder().build())
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+
+    ObjectNode payload = obj(
+        "{\"name\":\"Alice\",\"nickname\":\"Ali\",\"score\":42,\"nested\":{\"a\":1}}");
+    Object connectValue = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, connectValue);
+    assertEquals("Alice", restored.get("name").textValue());
+    assertEquals("Ali", restored.get("nickname").textValue());
+    assertEquals(42, restored.get("score").intValue());
+    assertEquals(1, restored.get("nested").get("a").intValue());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesNestedRoundTrip() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema addressSchema = ObjectSchema.builder()
+        .addPropertySchema("street", StringSchema.builder().build())
+        .build();
+    ObjectSchema personSchema = ObjectSchema.builder()
+        .addPropertySchema("name", StringSchema.builder().build())
+        .addPropertySchema("address", addressSchema)
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(personSchema.toString()));
+    Schema addressConnect = connectSchema.field("address").schema();
+    assertNotNull("nested address must also carry extras field",
+        addressConnect.field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+
+    ObjectNode payload = obj(
+        "{\"name\":\"Alice\",\"address\":{\"street\":\"Main St\",\"city\":\"Seattle\"}}");
+    Object connectValue = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, connectValue);
+    assertEquals("Main St", restored.get("address").get("street").textValue());
+    assertEquals("Seattle", restored.get("address").get("city").textValue());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesDefaultOffPreservesLossyBehavior() {
+    JsonSchemaData data = new JsonSchemaData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .schemaOfAdditionalProperties(NumberSchema.builder().requiresInteger(true).build())
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    assertNull("extras field must NOT be present when config is off (default)",
+        connectSchema.field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+
+    ObjectNode payload = obj("{\"a\":1,\"b\":2}");
+    Object connectValue = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, connectValue);
+    assertEquals("existing lossy behavior: entries dropped", 0, restored.size());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesReservedNameCollisionFailsFast() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .addPropertySchema(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD,
+            StringSchema.builder().build())
+        .build();
+    try {
+      data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+      fail("expected DataException on reserved-name collision");
+    } catch (DataException e) {
+      assertTrue("error must name the reserved field",
+          e.getMessage().contains(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+      assertTrue("error must mention the config",
+          e.getMessage().contains("preserve.additional.properties"));
+    }
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesReverseSchemaDoesNotIncludeReservedField() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .addPropertySchema("name", StringSchema.builder().build())
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    assertNotNull(connectSchema.field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+    JsonSchema derived = data.fromConnectSchema(connectSchema);
+    assertFalse("reserved field must not leak into derived JSON Schema",
+        derived.rawSchema().toString().contains(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesFullRoundTripSurvivesRereadWithFlagOn() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .addPropertySchema("name", StringSchema.builder().build())
+        .build();
+    Schema connectSchema1 = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    JsonSchema derived = data.fromConnectSchema(connectSchema1);
+    Schema connectSchema2 = data.toConnectSchema(derived);
+    assertNotNull("extras field must be present on re-parse",
+        connectSchema2.field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+    assertNotNull(connectSchema2.field("name"));
+
+    ObjectNode payload = obj("{\"name\":\"Alice\",\"extra\":42}");
+    Object value = data.toConnectData(connectSchema2, payload);
+    JsonNode restored = data.fromConnectData(connectSchema2, value);
+    assertEquals("Alice", restored.get("name").textValue());
+    assertEquals(42, restored.get("extra").intValue());
+  }
+
+  @Test
+  public void testDefaultOffLegitimateReservedNameStringFieldRoundTripsNormally() {
+    JsonSchemaData data = new JsonSchemaData();
+    Schema schema = SchemaBuilder.struct()
+        .field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD, Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema)
+        .put(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD, "hello");
+    JsonNode restored = data.fromConnectData(schema, value);
+    assertEquals("hello",
+        restored.get(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD).textValue());
+    ObjectNode payload = obj(
+        "{\"__connect_additional_properties__\":\"hello\"}");
+    Object result = data.toConnectData(schema, payload);
+    assertEquals("hello", ((Struct) result)
+        .getString(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+  }
+
+  @Test
+  public void testDefaultOffLegitimateReservedNameIntFieldRoundTripsNormally() {
+    JsonSchemaData data = new JsonSchemaData();
+    Schema schema = SchemaBuilder.struct()
+        .field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD, Schema.INT32_SCHEMA)
+        .build();
+    Struct value = new Struct(schema)
+        .put(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD, 7);
+    JsonNode restored = data.fromConnectData(schema, value);
+    assertEquals(7,
+        restored.get(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD).intValue());
+  }
+
+  @Test
+  public void testFlagOnReservedNameWrongShapeIsInertDefensive() {
+    JsonSchemaData data = preserveExtrasData();
+    Schema schema = SchemaBuilder.struct()
+        .field(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD, Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema)
+        .put(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD, "hello");
+    JsonNode restored = data.fromConnectData(schema, value);
+    assertEquals("hello",
+        restored.get(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD).textValue());
+    ObjectNode payload = obj(
+        "{\"__connect_additional_properties__\":\"hello\"}");
+    Object result = data.toConnectData(schema, payload);
+    assertEquals("hello", ((Struct) result)
+        .getString(JsonSchemaData.ADDITIONAL_PROPERTIES_FIELD));
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesNullValueInExtras() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder().build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    ObjectNode payload = obj("{\"nullable\":null,\"real\":\"present\"}");
+    Object value = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, value);
+    assertTrue("null preserved as JSON null", restored.has("nullable"));
+    assertTrue("null value is a null node", restored.get("nullable").isNull());
+    assertEquals("present", restored.get("real").textValue());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesEmptyExtrasStillRoundTrips() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder()
+        .addPropertySchema("name", StringSchema.builder().build())
+        .build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    ObjectNode payload = obj("{\"name\":\"only-named\"}");
+    Object value = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, value);
+    assertEquals("only-named", restored.get("name").textValue());
+    assertEquals("payload has only the named field, no leaked extras",
+        1, restored.size());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesLongNumberPrecision() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder().build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    long bigLong = 9_000_000_000L;
+    ObjectNode payload = obj("{\"big\":" + bigLong + "}");
+    Object value = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, value);
+    assertEquals(bigLong, restored.get("big").longValue());
+    assertTrue("value stays integral, not widened to float",
+        restored.get("big").isIntegralNumber());
+  }
+
+  @Test
+  public void testPreserveAdditionalPropertiesDecimalNumberPrecision() {
+    JsonSchemaData data = preserveExtrasData();
+    ObjectSchema jsonSchema = ObjectSchema.builder().build();
+    Schema connectSchema = data.toConnectSchema(new JsonSchema(jsonSchema.toString()));
+    ObjectNode payload = obj("{\"pi\":3.14}");
+    Object value = data.toConnectData(connectSchema, payload);
+    JsonNode restored = data.fromConnectData(connectSchema, value);
+    assertEquals(3.14, restored.get("pi").doubleValue(), 0.0000001);
   }
 }
