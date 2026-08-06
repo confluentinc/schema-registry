@@ -36,7 +36,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
@@ -615,25 +614,25 @@ public class BackupReferenceResolverTest {
   }
 
   @Test
-  public void testRegisterSingleRefPlainIoExceptionMapsToDataException() {
+  public void testRegisterSingleRefPlainIoExceptionMapsToRetriable() {
     assertRegisterFails(new MockSchemaRegistryClient() {
       @Override
       public int register(String subject, ParsedSchema schema)
           throws IOException {
         throw new IOException("SR unreachable");
       }
-    }, DataException.class);
+    }, RetriableException.class);
   }
 
   @Test
-  public void testRegisterSingleRefNetworkIoExceptionMapsToNetworkException() {
+  public void testRegisterSingleRefNetworkIoExceptionMapsToRetriable() {
     assertRegisterFails(new MockSchemaRegistryClient() {
       @Override
       public int register(String subject, ParsedSchema schema)
           throws IOException {
         throw new SocketException("connection refused");
       }
-    }, NetworkException.class);
+    }, RetriableException.class);
   }
 
   @Test

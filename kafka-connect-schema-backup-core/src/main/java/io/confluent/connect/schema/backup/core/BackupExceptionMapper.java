@@ -31,10 +31,6 @@ import org.apache.kafka.connect.errors.RetriableException;
 
 import java.io.IOException;
 
-/**
- * Classifies backup and restore exceptions into the correct Connect type
- * so transient failures are retried and permanent ones fail fast.
- */
 public final class BackupExceptionMapper {
 
   private BackupExceptionMapper() {
@@ -43,39 +39,32 @@ public final class BackupExceptionMapper {
   public static KafkaException classify(String op, Throwable cause) {
     String msg = String.format("Failed to %s", op);
 
-    if (cause instanceof RetriableException) {
-      return (RetriableException) cause;
-    }
-    if (cause instanceof DataException) {
-      return (DataException) cause;
-    }
-
     if (cause instanceof TimeoutException) {
       return new RetriableException(msg, cause);
     }
+
     if (cause instanceof SerializationException) {
       if (ExceptionUtils.isNetworkConnectionException(cause.getCause())) {
-        return new NetworkException(networkMsg(op, cause.getCause()), cause);
+        return new NetworkException(String.format(
+            "Network connection error during %s: %s",
+            op, cause.getCause().getMessage()), cause);
       }
       return new DataException(msg, cause);
     }
+
     if (cause instanceof InvalidConfigurationException) {
       return new ConfigException(String.format("%s: %s", msg, cause.getMessage()));
     }
 
     if (cause instanceof IOException) {
-      if (ExceptionUtils.isNetworkConnectionException(cause)) {
-        return new NetworkException(networkMsg(op, cause), cause);
-      }
-      return new DataException(msg, cause);
+      return new RetriableException(msg, cause);
     }
 
     if (cause instanceof RestClientException) {
       RestClientException rce = (RestClientException) cause;
       int status = rce.getStatus();
       if (status == 401 || status == 403) {
-        return new ConnectException(String.format(
-            "%s: Schema Registry authentication error (status %d)", msg, status), cause);
+        return new ConfigException(String.format("%s: SR status %d", msg, status));
       }
       if (RestService.isRestClientExceptionRetriable(rce)) {
         return new RetriableException(msg, cause);
@@ -83,12 +72,14 @@ public final class BackupExceptionMapper {
       return new DataException(msg, cause);
     }
 
-    return new ConnectException(
-        String.format("%s: unclassified %s", msg, cause.getClass().getName()), cause);
-  }
+    if (cause instanceof KafkaException) {
+      return (KafkaException) cause;
+    }
 
-  private static String networkMsg(String op, Throwable networkCause) {
-    return String.format("Network connection error during %s: %s",
-        op, networkCause.getMessage());
+    if (cause instanceof RuntimeException) {
+      throw (RuntimeException) cause;
+    }
+
+    return new ConnectException(msg, cause);
   }
 }

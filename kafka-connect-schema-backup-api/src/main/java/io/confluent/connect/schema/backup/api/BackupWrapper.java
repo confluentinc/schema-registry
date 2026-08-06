@@ -19,6 +19,7 @@ package io.confluent.connect.schema.backup.api;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 
 /**
  * Backup Wrapper struct for carrying schema metadata between converters and the envelope layer.
@@ -145,6 +146,14 @@ public final class BackupWrapper {
 
   public static boolean isWrapper(Schema schema) {
     return schema != null && NAME.equals(schema.name());
+  }
+
+  public static void requireFields(Schema wrapperSchema, String... fields) {
+    for (String field : fields) {
+      if (wrapperSchema.field(field) == null) {
+        throw new DataException("Malformed backup wrapper: missing '" + field + "' field");
+      }
+    }
   }
 
 }

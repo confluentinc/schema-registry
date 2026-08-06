@@ -164,10 +164,10 @@ public class AvroConverter implements Converter {
   private byte[] restoreFromWrapper(
       String topic, Headers headers, Schema wrapperSchema, Struct wrapper) {
     try {
-      if (wrapperSchema.field(BackupWrapper.FIELD_DATA) == null) {
-        throw new DataException("Malformed backup wrapper: missing '"
-            + BackupWrapper.FIELD_DATA + "' field");
-      }
+      BackupWrapper.requireFields(wrapperSchema,
+          BackupWrapper.FIELD_DATA,
+          BackupWrapper.FIELD_SCHEMA_TYPE,
+          BackupWrapper.FIELD_RAW_SCHEMA);
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_AVRO.equals(schemaType)) {
         throw new DataException(

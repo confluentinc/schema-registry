@@ -17,6 +17,7 @@
 package io.confluent.connect.schema.backup.core;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -28,9 +29,13 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -42,21 +47,7 @@ public class BackupExceptionMapperTest {
   private static final String OP = "wrap Avro backup metadata for topic orders";
 
   @Test
-  public void passesThroughRetriableException() {
-    RetriableException original = new RetriableException("already classified");
-    KafkaException result = BackupExceptionMapper.classify(OP, original);
-    assertSame(original, result);
-  }
-
-  @Test
-  public void passesThroughDataException() {
-    DataException original = new DataException("already classified");
-    KafkaException result = BackupExceptionMapper.classify(OP, original);
-    assertSame(original, result);
-  }
-
-  @Test
-  public void mapsKafkaTimeoutExceptionToRetriable() {
+  public void mapsTimeoutExceptionToConnectRetriable() {
     TimeoutException cause = new TimeoutException("SR timed out");
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
     assertTrue(result instanceof RetriableException);
@@ -66,8 +57,8 @@ public class BackupExceptionMapperTest {
 
   @Test
   public void mapsSerializationExceptionWithNetworkCauseToNetworkException() {
-    SerializationException cause =
-        new SerializationException("SR unreachable", new SocketTimeoutException("connect timed out"));
+    SocketTimeoutException networkCause = new SocketTimeoutException("connect timed out");
+    SerializationException cause = new SerializationException("SR unreachable", networkCause);
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
     assertTrue(result instanceof NetworkException);
     assertSame(cause, result.getCause());
@@ -89,69 +80,78 @@ public class BackupExceptionMapperTest {
     InvalidConfigurationException cause = new InvalidConfigurationException("bad url");
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
     assertTrue(result instanceof ConfigException);
-    assertTrue(result.getMessage().contains("bad url"));
+    assertTrue(result.getMessage(), result.getMessage().contains("bad url"));
   }
 
   @Test
-  public void mapsPlainIoExceptionToDataException() {
+  public void mapsAuthenticationExceptionToConfigException() {
+    AuthenticationException cause = new AuthenticationException("bad token");
+    KafkaException result = BackupExceptionMapper.classify(OP, cause);
+    assertTrue(result instanceof ConfigException);
+    assertFalse("auth errors must not be retriable", result instanceof RetriableException);
+    assertTrue(result.getMessage(), result.getMessage().contains("bad token"));
+  }
+
+  @Test
+  public void mapsAuthorizationExceptionToConfigException() {
+    AuthorizationException cause = new AuthorizationException("no access");
+    KafkaException result = BackupExceptionMapper.classify(OP, cause);
+    assertTrue(result instanceof ConfigException);
+    assertFalse(result instanceof RetriableException);
+    assertTrue(result.getMessage(), result.getMessage().contains("no access"));
+  }
+
+  @Test
+  public void mapsPlainIoExceptionToRetriable() {
     IOException cause = new IOException("connection reset");
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof DataException);
+    assertTrue("SR transport IOException must retry", result instanceof RetriableException);
     assertSame(cause, result.getCause());
   }
 
   @Test
-  public void mapsInterruptedIoExceptionToDataException() {
-    InterruptedIOException cause = new InterruptedIOException("read interrupted");
-    KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof DataException);
-    assertSame(cause, result.getCause());
+  public void mapsInterruptedIoExceptionToRetriable() {
+    KafkaException result = BackupExceptionMapper.classify(OP,
+        new InterruptedIOException("read interrupted"));
+    assertTrue(result instanceof RetriableException);
   }
 
   @Test
-  public void mapsEofExceptionToDataException() {
-    EOFException cause = new EOFException("stream closed");
-    KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof DataException);
-    assertSame(cause, result.getCause());
+  public void mapsEofExceptionToRetriable() {
+    KafkaException result = BackupExceptionMapper.classify(OP, new EOFException("stream closed"));
+    assertTrue(result instanceof RetriableException);
   }
 
   @Test
-  public void mapsSocketExceptionToNetworkException() {
-    SocketException cause = new SocketException("connection refused");
-    KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof NetworkException);
-    assertSame(cause, result.getCause());
-    assertTrue(result.getMessage(), result.getMessage().contains("Network connection error"));
-    assertTrue(result.getMessage(), result.getMessage().contains("connection refused"));
+  public void mapsSocketExceptionToRetriable() {
+    KafkaException result = BackupExceptionMapper.classify(OP,
+        new SocketException("connection refused"));
+    assertTrue(result instanceof RetriableException);
   }
 
   @Test
-  public void mapsSocketTimeoutExceptionToNetworkException() {
-    SocketTimeoutException cause = new SocketTimeoutException("read timed out");
-    KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof NetworkException);
-    assertSame(cause, result.getCause());
-    assertTrue(result.getMessage(), result.getMessage().contains("Network connection error"));
-    assertTrue(result.getMessage(), result.getMessage().contains("read timed out"));
+  public void mapsSocketTimeoutExceptionToRetriable() {
+    KafkaException result = BackupExceptionMapper.classify(OP,
+        new SocketTimeoutException("read timed out"));
+    assertTrue(result instanceof RetriableException);
   }
 
   @Test
-  public void mapsRestClientException401ToConnectException() {
+  public void mapsRestClientException401ToConfigException() {
     RestClientException cause = new RestClientException("unauthorized", 401, 40101);
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof ConnectException);
-    assertTrue(result.getMessage().contains("authentication"));
-    assertTrue(result.getMessage().contains("401"));
-    assertSame(cause, result.getCause());
+    assertTrue(result instanceof ConfigException);
+    assertFalse(result instanceof RetriableException);
+    assertTrue(result.getMessage(), result.getMessage().contains("401"));
   }
 
   @Test
-  public void mapsRestClientException403ToConnectException() {
+  public void mapsRestClientException403ToConfigException() {
     RestClientException cause = new RestClientException("forbidden", 403, 40301);
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
-    assertTrue(result instanceof ConnectException);
-    assertTrue(result.getMessage().contains("403"));
+    assertTrue(result instanceof ConfigException);
+    assertFalse(result instanceof RetriableException);
+    assertTrue(result.getMessage(), result.getMessage().contains("403"));
   }
 
   @Test
@@ -175,12 +175,72 @@ public class BackupExceptionMapperTest {
   }
 
   @Test
-  public void mapsUnknownExceptionToConnectException() {
-    IllegalStateException cause = new IllegalStateException("unexpected");
+  public void passesThroughConnectRetriableException() {
+    RetriableException original = new RetriableException("already classified");
+    KafkaException result = BackupExceptionMapper.classify(OP, original);
+    assertSame(original, result);
+  }
+
+  @Test
+  public void passesThroughDataException() {
+    DataException original = new DataException("already classified");
+    KafkaException result = BackupExceptionMapper.classify(OP, original);
+    assertSame(original, result);
+  }
+
+  @Test
+  public void passesThroughConfigException() {
+    ConfigException original = new ConfigException("bad url");
+    KafkaException result = BackupExceptionMapper.classify(OP, original);
+    assertSame(original, result);
+  }
+
+  @Test
+  public void passesThroughThrottlingQuotaExceededException() {
+    ThrottlingQuotaExceededException original =
+        new ThrottlingQuotaExceededException("too many requests");
+    KafkaException result = BackupExceptionMapper.classify(OP, original);
+    assertSame(original, result);
+  }
+
+  @Test
+  public void passesThroughDisconnectException() {
+    DisconnectException original = new DisconnectException("bad gateway");
+    KafkaException result = BackupExceptionMapper.classify(OP, original);
+    assertSame(original, result);
+  }
+
+  @Test
+  public void passesThroughUnknownKafkaException() {
+    KafkaException original = new KafkaException("something bespoke");
+    KafkaException result = BackupExceptionMapper.classify(OP, original);
+    assertSame(original, result);
+  }
+
+  @Test
+  public void idempotentOnDoubleClassifyOfTimeoutException() {
+    TimeoutException cause = new TimeoutException("SR timed out");
+    KafkaException first = BackupExceptionMapper.classify(OP, cause);
+    KafkaException second = BackupExceptionMapper.classify(OP, first);
+    assertSame(first, second);
+    assertTrue(second instanceof RetriableException);
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void rethrowsUnknownRuntimeExceptionAsIs() {
+    BackupExceptionMapper.classify(OP, new IllegalStateException("unexpected"));
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void rethrowsUnknownNullPointerExceptionAsIs() {
+    BackupExceptionMapper.classify(OP, new NullPointerException("nope"));
+  }
+
+  @Test
+  public void wrapsCheckedThrowableInConnectException() {
+    Exception cause = new Exception("some checked");
     KafkaException result = BackupExceptionMapper.classify(OP, cause);
     assertTrue(result instanceof ConnectException);
-    assertTrue(result.getMessage().contains("unclassified"));
-    assertTrue(result.getMessage().contains("IllegalStateException"));
     assertSame(cause, result.getCause());
   }
 
