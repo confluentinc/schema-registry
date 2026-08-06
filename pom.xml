@@ -70,6 +70,7 @@
         <module>protobuf-serializer</module>
         <module>protobuf-serde</module>
         <module>json-schema-converter</module>
+        <module>kafka-connect-backup-aware-byte-array-converter</module>
         <module>json-schema-provider</module>
         <module>json-schema-serializer</module>
         <module>json-schema-serde</module>
