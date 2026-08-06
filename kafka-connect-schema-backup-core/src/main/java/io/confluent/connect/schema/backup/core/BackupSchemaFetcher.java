@@ -23,8 +23,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.connect.errors.DataException;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -39,7 +38,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class BackupSchemaFetcher {
 
-  private static final Logger log = LoggerFactory.getLogger(BackupSchemaFetcher.class);
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
@@ -70,13 +68,8 @@ public class BackupSchemaFetcher {
         ? JSON.writeValueAsString(directRefs) : null;
 
     Map<String, Integer> versionsBySubject = new HashMap<>();
-    try {
-      for (SubjectVersion sv : schemaRegistry.getAllVersionsById(schemaId)) {
-        versionsBySubject.put(sv.getSubject(), sv.getVersion());
-      }
-    } catch (IOException | RestClientException e) {
-      log.warn("Could not fetch versions for schemaId={}: {}",
-          schemaId, e.getMessage());
+    for (SubjectVersion sv : schemaRegistry.getAllVersionsById(schemaId)) {
+      versionsBySubject.put(sv.getSubject(), sv.getVersion());
     }
 
     BackupSchemaInfo info = new BackupSchemaInfo(rawText, directRefs, tree,
@@ -117,7 +110,7 @@ public class BackupSchemaFetcher {
       return;
     }
     if (depth >= MAX_DEPTH) {
-      throw new IOException(
+      throw new DataException(
           "Reference tree depth limit (" + MAX_DEPTH + ") exceeded. "
           + "Possible circular reference chain.");
     }
