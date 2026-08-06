@@ -73,7 +73,7 @@ public class BackupSchemaFetcher {
     }
 
     BackupSchemaInfo info = new BackupSchemaInfo(rawText, directRefs, tree,
-        treeJson, directRefsJson, versionsBySubject);
+        treeJson, directRefsJson, versionsBySubject, fullSchema.schemaType());
     cache.put(schemaId, info);
     return info;
   }
@@ -98,7 +98,7 @@ public class BackupSchemaFetcher {
     String directRefsJson = directRefs != null && !directRefs.isEmpty()
         ? JSON.writeValueAsString(directRefs) : null;
     BackupSchemaInfo info = new BackupSchemaInfo(rawText, directRefs, tree,
-        treeJson, directRefsJson, Collections.emptyMap());
+        treeJson, directRefsJson, Collections.emptyMap(), fullSchema.schemaType());
     guidCache.put(guid, info);
     return info;
   }
@@ -139,6 +139,7 @@ public class BackupSchemaFetcher {
     private final String referenceTreeJson;
     private final String directRefsJson;
     private final Map<String, Integer> versionsBySubject;
+    private final String schemaType;
 
     public BackupSchemaInfo(
         String rawSchema,
@@ -146,7 +147,8 @@ public class BackupSchemaFetcher {
         Map<String, RefTreeEntry> referenceTree,
         String referenceTreeJson,
         String directRefsJson,
-        Map<String, Integer> versionsBySubject) {
+        Map<String, Integer> versionsBySubject,
+        String schemaType) {
       this.rawSchema = rawSchema;
       this.directReferences = directReferences != null
           ? directReferences : Collections.emptyList();
@@ -156,6 +158,7 @@ public class BackupSchemaFetcher {
       this.directRefsJson = directRefsJson;
       this.versionsBySubject = versionsBySubject != null
           ? versionsBySubject : Collections.emptyMap();
+      this.schemaType = schemaType;
     }
 
     public String getRawSchema() {
@@ -180,6 +183,10 @@ public class BackupSchemaFetcher {
 
     public Integer getVersionForSubject(String subject) {
       return versionsBySubject.get(subject);
+    }
+
+    public String getSchemaType() {
+      return schemaType;
     }
   }
 
