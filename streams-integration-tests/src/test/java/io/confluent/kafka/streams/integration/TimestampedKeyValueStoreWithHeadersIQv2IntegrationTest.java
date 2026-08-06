@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +40,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -46,6 +48,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
@@ -67,6 +71,9 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * KIP-1356 IQv2 integration test for the timestamped key-value store with headers.
@@ -124,6 +131,11 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
 
     // A fixed, explicit base timestamp so each record's timestamp is known and assertable.
     private static final long BASE_TIMESTAMP = 1_600_000_000_000L;
+
+    // Memoized, header-mode key serializer used only to compute a key's partition for IQv2 routing
+    // (see assertPointReturnsNull). It matches the producer's serializer, so it yields the same key
+    // bytes and therefore the same partition the record was written to.
+    private Serializer<GenericRecord> keyPartitionSerializer;
 
     // ---------------------------------------------------------------------------------------------
     // TimestampedKeyWithHeadersQuery (point)
@@ -288,16 +300,67 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         }
     }
 
+    @Test
+    public void shouldPreserveFullHeaderSetIncludingDuplicatesAndEmpty() throws Exception {
+        String input = "iqv2-headerset-input";
+        String output = "iqv2-headerset-output";
+        String storeName = "iqv2-headerset-store";
+        String appId = "iqv2-headerset-test";
+
+        createTopics(input, output);
+        // Caching disabled so both query paths read the store-served record directly.
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildTopology(input, output, storeName, false), appId, 30, null);
+        try {
+            // A header set no serde would produce on its own: an arbitrary user header, a duplicate
+            // key ("trace" twice, distinct values), and a zero-length value. The serde adds the
+            // schema-id headers during send(); snapshot the full produced set (in order) afterward so
+            // the round-trip below is asserted against exactly what was written -- count, order,
+            // duplicate key and empty value included, and nothing spurious added. An implementation
+            // that special-cased the __*_schema_id keys, collapsed the duplicate to lastHeader,
+            // dropped the empty value, or reordered would fail here.
+            List<String> producedHeaders;
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                ProducerRecord<GenericRecord, GenericRecord> record = new ProducerRecord<>(
+                    input, null, BASE_TIMESTAMP, createKey("word-1"), createValue(10L));
+                record.headers().add(SEQ_HEADER, "word-1".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "A".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "B".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("empty", new byte[0]);
+                producer.send(record).get();
+                producer.flush();
+                producedHeaders = headerEntries(record.headers());
+            }
+            consumeRecords(output, appId + "-barrier", 1);
+
+            ReadOnlyRecord<GenericRecord, GenericRecord> point =
+                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
+            assertEquals(producedHeaders, headerEntries(point.headers()),
+                "point query should return the full produced header set -- order, the duplicate "
+                    + "'trace' key, the empty value and the schema-id headers -- and nothing else");
+
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> range = queryRange(
+                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
+            assertEquals(producedHeaders, headerEntries(range.get(0).headers()),
+                "range query should return the full produced header set");
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // TimestampedRangeWithHeadersQuery (range / scan)
     // ---------------------------------------------------------------------------------------------
 
-    @Test
-    public void shouldQueryRangeWithBounds() throws Exception {
-        String input = "iqv2-range-input";
-        String output = "iqv2-range-output";
-        String storeName = "iqv2-range-store";
-        String appId = "iqv2-range-test";
+    @ParameterizedTest(name = "range {0}")
+    @MethodSource("rangeCases")
+    public void shouldQueryRange(String label, String lowerWord, String upperWord,
+        List<String> expectedWords) throws Exception {
+        String input = "iqv2-range-" + label + "-input";
+        String output = "iqv2-range-" + label + "-output";
+        String storeName = "iqv2-range-" + label + "-store";
+        String appId = "iqv2-range-" + label + "-test";
 
         // Caching disabled: a range header-query reads the store directly (it never consults the
         // cache), so writes must be store-served -- this makes them visible immediately.
@@ -307,18 +370,45 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             Arrays.asList(10L, 20L, 30L, 40L, 50L),
             false, null);
         try {
-            List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
-                streams, storeName,
-                TimestampedRangeWithHeadersQuery
-                    .<GenericRecord, GenericRecord>withRange(createKey("word-2"), createKey("word-4"))
-                    .withAscendingKeys(),
-                3);
-            List<String> words = wordsOf(records);
-            assertEquals(Arrays.asList("word-2", "word-3", "word-4"), words, "range [word-2, word-4]");
-            assertHeadersOnEach(records, "IQv2 range");
+            TimestampedRangeWithHeadersQuery<GenericRecord, GenericRecord> query;
+            if (lowerWord == null && upperWord == null) {
+                query = TimestampedRangeWithHeadersQuery.withNoBounds();
+            } else if (lowerWord != null && upperWord != null) {
+                query = TimestampedRangeWithHeadersQuery.withRange(
+                    createKey(lowerWord), createKey(upperWord));
+            } else if (lowerWord != null) {
+                query = TimestampedRangeWithHeadersQuery.withLowerBound(createKey(lowerWord));
+            } else {
+                query = TimestampedRangeWithHeadersQuery.withUpperBound(createKey(upperWord));
+            }
+            // Pin the order so the assertion checks the contract, not the store's incidental
+            // iteration order (a bare bound is ResultOrder.ANY).
+            query = query.withAscendingKeys();
+
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> records =
+                queryRange(streams, storeName, query, expectedWords.size());
+            assertEquals(expectedWords, wordsOf(records), "range " + label);
+            assertHeadersOnEach(records, "IQv2 range " + label);
         } finally {
             closeStreams(streams);
         }
+    }
+
+    /**
+     * Cases for {@link #shouldQueryRange}: {@code (label, lower-bound word or null, upper-bound word
+     * or null, expected words)}, all against the same populated set {@code word-1..word-5}. Replaces
+     * the four near-identical bounds/scan/lower/upper range tests.
+     */
+    private static Stream<Arguments> rangeCases() {
+        return Stream.of(
+            Arguments.of("bounds", "word-2", "word-4",
+                Arrays.asList("word-2", "word-3", "word-4")),
+            Arguments.of("scan-all", null, null,
+                Arrays.asList("word-1", "word-2", "word-3", "word-4", "word-5")),
+            Arguments.of("lower-only", "word-3", null,
+                Arrays.asList("word-3", "word-4", "word-5")),
+            Arguments.of("upper-only", null, "word-2",
+                Arrays.asList("word-1", "word-2")));
     }
 
     @Test
@@ -363,86 +453,6 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             assertEquals(Arrays.asList("word-2", "word-1"), wordsOf(boundedDesc),
                 "bounded descending [word-1, word-2]");
             assertHeadersOnEach(boundedDesc, "IQv2 bounded descending");
-        } finally {
-            closeStreams(streams);
-        }
-    }
-
-    @Test
-    public void shouldScanAllWithNoBounds() throws Exception {
-        String input = "iqv2-scan-input";
-        String output = "iqv2-scan-output";
-        String storeName = "iqv2-scan-store";
-        String appId = "iqv2-scan-test";
-
-        // Caching disabled: range header-queries bypass the cache and read the store directly.
-        KafkaStreams streams = startAndPopulate(
-            storeName, input, output, appId,
-            Arrays.asList("word-1", "word-2", "word-3"), Arrays.asList(10L, 20L, 30L),
-            false, null);
-        try {
-            List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
-                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 3);
-            // Compare as a sorted List (not a Set) so a scan that emitted a duplicate key would fail.
-            List<String> words = wordsOf(records);
-            Collections.sort(words);
-            assertEquals(Arrays.asList("word-1", "word-2", "word-3"), words,
-                "scan should return exactly the three keys, each once");
-            assertHeadersOnEach(records, "IQv2 scan");
-        } finally {
-            closeStreams(streams);
-        }
-    }
-
-    @Test
-    public void shouldQueryLowerBoundOnly() throws Exception {
-        String input = "iqv2-lower-input";
-        String output = "iqv2-lower-output";
-        String storeName = "iqv2-lower-store";
-        String appId = "iqv2-lower-test";
-
-        // Caching disabled: range header-queries bypass the cache and read the store directly.
-        KafkaStreams streams = startAndPopulate(
-            storeName, input, output, appId,
-            Arrays.asList("word-1", "word-2", "word-3", "word-4"),
-            Arrays.asList(10L, 20L, 30L, 40L),
-            false, null);
-        try {
-            List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
-                streams, storeName,
-                TimestampedRangeWithHeadersQuery
-                    .<GenericRecord, GenericRecord>withLowerBound(createKey("word-3"))
-                    .withAscendingKeys(),
-                2);
-            assertEquals(Arrays.asList("word-3", "word-4"), wordsOf(records), "lower bound word-3");
-            assertHeadersOnEach(records, "IQv2 lower bound");
-        } finally {
-            closeStreams(streams);
-        }
-    }
-
-    @Test
-    public void shouldQueryUpperBoundOnly() throws Exception {
-        String input = "iqv2-upper-input";
-        String output = "iqv2-upper-output";
-        String storeName = "iqv2-upper-store";
-        String appId = "iqv2-upper-test";
-
-        // Caching disabled: range header-queries bypass the cache and read the store directly.
-        KafkaStreams streams = startAndPopulate(
-            storeName, input, output, appId,
-            Arrays.asList("word-1", "word-2", "word-3", "word-4"),
-            Arrays.asList(10L, 20L, 30L, 40L),
-            false, null);
-        try {
-            List<ReadOnlyRecord<GenericRecord, GenericRecord>> records = queryRange(
-                streams, storeName,
-                TimestampedRangeWithHeadersQuery
-                    .<GenericRecord, GenericRecord>withUpperBound(createKey("word-2"))
-                    .withAscendingKeys(),
-                2);
-            assertEquals(Arrays.asList("word-1", "word-2"), wordsOf(records), "upper bound word-2");
-            assertHeadersOnEach(records, "IQv2 upper bound");
         } finally {
             closeStreams(streams);
         }
@@ -725,13 +735,29 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         Map<Integer, QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>>> partitionResults =
             result.getPartitionResults();
         assertFalse(partitionResults.isEmpty(), context + " query should return a partition result");
-        QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> pr =
-            partitionResults.values().iterator().next();
-        // Assert success first: getOnlyPartitionResult() filters out FAILED results too, so a query
+        // Inspect the key's own partition, not an arbitrary one: the key resides in exactly one
+        // partition, and a different partition's (also-absent) result would pass this vacuously.
+        int keyPartition = streams.queryMetadataForKey(
+            storeName, createKey(word), keyPartitionSerializer()).partition();
+        QueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> pr = partitionResults.get(keyPartition);
+        assertNotNull(pr, context + " should have a result for the key's partition (" + keyPartition + ")");
+        // Assert success next: getOnlyPartitionResult() filters out FAILED results too, so a query
         // that failed outright would otherwise masquerade as a legitimate "absent key" null.
         assertTrue(pr.isSuccess(), context + " query should succeed but failed: "
             + (pr.isFailure() ? pr.getFailureReason() + ": " + pr.getFailureMessage() : ""));
         assertNull(pr.getResult(), context + " should yield a null result");
+    }
+
+    /**
+     * A configured, header-mode key serializer (matching the producer's) for computing a key's
+     * partition via {@link KafkaStreams#queryMetadataForKey}. Memoized because each
+     * {@link #createKeySerde()} builds its own Schema Registry client.
+     */
+    private Serializer<GenericRecord> keyPartitionSerializer() {
+        if (keyPartitionSerializer == null) {
+            keyPartitionSerializer = createKeySerde().serializer();
+        }
+        return keyPartitionSerializer;
     }
 
     private List<ReadOnlyRecord<GenericRecord, GenericRecord>> queryRange(
@@ -798,6 +824,20 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             context + ": " + SEQ_HEADER + " header should carry this record's own key");
     }
 
+    /**
+     * Renders headers as an ordered {@code key=base64(value)} list, preserving insertion order and
+     * duplicate keys, so two header sets can be compared for exact equality -- count, order,
+     * duplicates and byte-exact values (including a zero-length value, which base64s to {@code ""}).
+     */
+    private static List<String> headerEntries(Headers headers) {
+        List<String> entries = new ArrayList<>();
+        for (Header h : headers) {
+            entries.add(h.key() + "=" + (h.value() == null
+                ? "<null>" : Base64.getEncoder().encodeToString(h.value())));
+        }
+        return entries;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Topology + populate helpers
     // ---------------------------------------------------------------------------------------------
@@ -861,11 +901,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
 
     /** Produces a tombstone (null value) for {@code word}, deleting it from the header-aware store. */
     private void produceTombstone(String topic, String word) throws Exception {
-        try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                 new KafkaProducer<>(createProducerProps())) {
-            sendAndCapture(producer, new ProducerRecord<>(topic, createKey(word), (GenericRecord) null));
-            producer.flush();
-        }
+        produce(topic, createKey(word), null, BASE_TIMESTAMP);
     }
 
     /**
