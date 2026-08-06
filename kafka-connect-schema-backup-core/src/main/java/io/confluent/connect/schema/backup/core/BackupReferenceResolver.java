@@ -27,7 +27,6 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,8 +101,16 @@ public class BackupReferenceResolver {
     List<SchemaReference> directRefs =
         parseDirectRefs(directRefsJson);
 
-    if (refTree.isEmpty() || directRefs.isEmpty()) {
+    boolean treeEmpty = refTree.isEmpty();
+    boolean directRefsEmpty = directRefs.isEmpty();
+    if (treeEmpty && directRefsEmpty) {
       return ResolutionResult.empty();
+    }
+    if (treeEmpty || directRefsEmpty) {
+      throw new DataException(
+          "Corrupt backup wrapper: partial reference metadata "
+          + "(treeEmpty=" + treeEmpty
+          + ", directRefsEmpty=" + directRefsEmpty + ")");
     }
 
     List<SchemaReference> targetRefs = new ArrayList<>();
@@ -255,12 +262,9 @@ public class BackupReferenceResolver {
       log.debug("Registered reference: subject={}, "
           + "srcVersion={}, targetVersion={}",
           ref.getSubject(), ref.getVersion(), targetVersion);
-    } catch (IOException e) {
-      throw new RetriableException(
-          "Network error registering reference '" + ref.getSubject() + "'", e);
-    } catch (RestClientException e) {
-      throw new DataException(
-          "Failed to register reference '" + ref.getSubject() + "'", e);
+    } catch (IOException | RestClientException e) {
+      throw BackupExceptionMapper.classify(
+          "register reference " + ref.getSubject(), e);
     }
     targetRefsOut.add(new SchemaReference(
         ref.getName(), ref.getSubject(), targetVersion));
