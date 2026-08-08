@@ -131,6 +131,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     // A fixed, explicit base timestamp so each record's timestamp is known and assertable.
     private static final long BASE_TIMESTAMP = 1_600_000_000_000L;
 
+    // How long the IQv2 query helpers poll for a result to become locally available before failing.
+    private static final long QUERY_DEADLINE_MS = 30_000;
+
     // ---------------------------------------------------------------------------------------------
     // TimestampedKeyWithHeadersQuery (point)
     // ---------------------------------------------------------------------------------------------
@@ -259,85 +262,6 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             // covers skipCache). Asserting success first stops a failed skipCache query passing as null.
             assertPointReturnsNull(streams, storeName, "word-1",
                 "skipCache before flush (empty store)", true);
-        } finally {
-            closeStreams(streams);
-        }
-    }
-
-    @Test
-    public void shouldReturnReadOnlyHeaders() throws Exception {
-        String input = "iqv2-readonly-input";
-        String output = "iqv2-readonly-output";
-        String storeName = "iqv2-readonly-store";
-        String appId = "iqv2-readonly-test";
-
-        // Caching disabled so the range query (which bypasses the cache) sees the store-served record.
-        KafkaStreams streams = startAndPopulate(
-            storeName, input, output, appId,
-            Collections.singletonList("word-1"), Collections.singletonList(10L), false, null);
-        try {
-            // The query marks the returned headers read-only on both the point and range paths, so
-            // an attempt to mutate them must throw.
-            ReadOnlyRecord<GenericRecord, GenericRecord> point =
-                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
-            assertThrows(IllegalStateException.class,
-                () -> point.headers().add("x", new byte[]{1}),
-                "point query should return read-only headers");
-
-            List<ReadOnlyRecord<GenericRecord, GenericRecord>> range = queryRange(
-                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
-            assertThrows(IllegalStateException.class,
-                () -> range.get(0).headers().add("x", new byte[]{1}),
-                "range query should return read-only headers");
-        } finally {
-            closeStreams(streams);
-        }
-    }
-
-    @Test
-    public void shouldPreserveFullHeaderSetIncludingDuplicatesAndEmpty() throws Exception {
-        String input = "iqv2-headerset-input";
-        String output = "iqv2-headerset-output";
-        String storeName = "iqv2-headerset-store";
-        String appId = "iqv2-headerset-test";
-
-        createTopics(input, output);
-        // Caching disabled so both query paths read the store-served record directly.
-        KafkaStreams streams = startStreamsAndAwaitRunning(
-            buildTopology(input, output, storeName, false), appId, 30, null);
-        try {
-            // A header set no serde would produce on its own: an arbitrary user header, a duplicate
-            // key ("trace" twice, distinct values), and a zero-length value. The serde adds the
-            // schema-id headers during send(); snapshot the full produced set (in order) afterward so
-            // the round-trip below is asserted against exactly what was written -- count, order,
-            // duplicate key and empty value included, and nothing spurious added. An implementation
-            // that special-cased the __*_schema_id keys, collapsed the duplicate to lastHeader,
-            // dropped the empty value, or reordered would fail here.
-            List<String> producedHeaders;
-            try (KafkaProducer<GenericRecord, GenericRecord> producer =
-                     new KafkaProducer<>(createProducerProps())) {
-                ProducerRecord<GenericRecord, GenericRecord> record = new ProducerRecord<>(
-                    input, null, BASE_TIMESTAMP, createKey("word-1"), createValue(10L));
-                record.headers().add(SEQ_HEADER, "word-1".getBytes(StandardCharsets.UTF_8));
-                record.headers().add("trace", "A".getBytes(StandardCharsets.UTF_8));
-                record.headers().add("trace", "B".getBytes(StandardCharsets.UTF_8));
-                record.headers().add("empty", new byte[0]);
-                producer.send(record).get();
-                producer.flush();
-                producedHeaders = headerEntries(record.headers());
-            }
-            consumeRecords(output, appId + "-barrier", 1);
-
-            ReadOnlyRecord<GenericRecord, GenericRecord> point =
-                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
-            assertEquals(producedHeaders, headerEntries(point.headers()),
-                "point query should return the full produced header set -- order, the duplicate "
-                    + "'trace' key, the empty value and the schema-id headers -- and nothing else");
-
-            List<ReadOnlyRecord<GenericRecord, GenericRecord>> range = queryRange(
-                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
-            assertEquals(producedHeaders, headerEntries(range.get(0).headers()),
-                "range query should return the full produced header set");
         } finally {
             closeStreams(streams);
         }
@@ -529,6 +453,89 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Header contract (point + range)
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldReturnReadOnlyHeaders() throws Exception {
+        String input = "iqv2-readonly-input";
+        String output = "iqv2-readonly-output";
+        String storeName = "iqv2-readonly-store";
+        String appId = "iqv2-readonly-test";
+
+        // Caching disabled so the range query (which bypasses the cache) sees the store-served record.
+        KafkaStreams streams = startAndPopulate(
+            storeName, input, output, appId,
+            Collections.singletonList("word-1"), Collections.singletonList(10L), false, null);
+        try {
+            // The query marks the returned headers read-only on both the point and range paths, so
+            // an attempt to mutate them must throw.
+            ReadOnlyRecord<GenericRecord, GenericRecord> point =
+                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
+            assertThrows(IllegalStateException.class,
+                () -> point.headers().add("x", new byte[]{1}),
+                "point query should return read-only headers");
+
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> range = queryRange(
+                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
+            assertThrows(IllegalStateException.class,
+                () -> range.get(0).headers().add("x", new byte[]{1}),
+                "range query should return read-only headers");
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    @Test
+    public void shouldPreserveFullHeaderSetIncludingDuplicatesAndEmpty() throws Exception {
+        String input = "iqv2-headerset-input";
+        String output = "iqv2-headerset-output";
+        String storeName = "iqv2-headerset-store";
+        String appId = "iqv2-headerset-test";
+
+        createTopics(input, output);
+        // Caching disabled so both query paths read the store-served record directly.
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildTopology(input, output, storeName, false), appId, 30, null);
+        try {
+            // A header set no serde would produce on its own: an arbitrary user header, a duplicate
+            // key ("trace" twice, distinct values), and a zero-length value. The serde adds the
+            // schema-id headers during send(); snapshot the full produced set (in order) afterward so
+            // the round-trip below is asserted against exactly what was written -- count, order,
+            // duplicate key and empty value included, and nothing spurious added. An implementation
+            // that special-cased the __*_schema_id keys, collapsed the duplicate to lastHeader,
+            // dropped the empty value, or reordered would fail here.
+            List<String> producedHeaders;
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                ProducerRecord<GenericRecord, GenericRecord> record = new ProducerRecord<>(
+                    input, null, BASE_TIMESTAMP, createKey("word-1"), createValue(10L));
+                record.headers().add(SEQ_HEADER, "word-1".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "A".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "B".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("empty", new byte[0]);
+                producer.send(record).get();
+                producer.flush();
+                producedHeaders = headerEntries(record.headers());
+            }
+            consumeRecords(output, appId + "-barrier", 1);
+
+            ReadOnlyRecord<GenericRecord, GenericRecord> point =
+                queryPointExpectPresent(streams, storeName, createKey("word-1"), false);
+            assertEquals(producedHeaders, headerEntries(point.headers()),
+                "point query should return the full produced header set -- order, the duplicate "
+                    + "'trace' key, the empty value and the schema-id headers -- and nothing else");
+
+            List<ReadOnlyRecord<GenericRecord, GenericRecord>> range = queryRange(
+                streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
+            assertEquals(producedHeaders, headerEntries(range.get(0).headers()),
+                "range query should return the full produced header set");
+        } finally {
+            closeStreams(streams);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // Restore-from-changelog and multi-partition
     // ---------------------------------------------------------------------------------------------
 
@@ -638,7 +645,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             // Scan every locally-available partition; collect and assert headers on every record.
             List<ReadOnlyRecord<GenericRecord, GenericRecord>> all = new ArrayList<>();
             Set<Integer> partitionsSeen = new HashSet<>();
-            long deadline = System.currentTimeMillis() + 30_000;
+            long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
             while (System.currentTimeMillis() < deadline) {
                 all.clear();
                 partitionsSeen.clear();
@@ -683,7 +690,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         if (skipCache) {
             query = query.skipCache();
         }
-        long deadline = System.currentTimeMillis() + 30_000;
+        long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
         String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
             StateQueryResult<ReadOnlyRecord<GenericRecord, GenericRecord>> result =
@@ -750,7 +757,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
     private List<ReadOnlyRecord<GenericRecord, GenericRecord>> queryRange(
         KafkaStreams streams, String storeName,
         TimestampedRangeWithHeadersQuery<GenericRecord, GenericRecord> query, int expected) {
-        long deadline = System.currentTimeMillis() + 30_000;
+        long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
         List<ReadOnlyRecord<GenericRecord, GenericRecord>> out = new ArrayList<>();
         String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
