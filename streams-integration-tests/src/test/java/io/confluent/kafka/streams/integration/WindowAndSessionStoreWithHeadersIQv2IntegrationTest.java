@@ -30,15 +30,18 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -50,6 +53,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -69,12 +73,16 @@ import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -102,6 +110,9 @@ import org.junit.jupiter.api.Test;
  */
 public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     extends HeadersIQv2IntegrationTestBase {
+
+    // How long an IQv2 query helper keeps retrying before failing (matches the sibling KV IQv2 test).
+    private static final long QUERY_DEADLINE_MS = 30_000;
 
     private static final Duration WINDOW_SIZE = Duration.ofMinutes(10);
     private static final Duration RETENTION_PERIOD = Duration.ofHours(1);
@@ -511,7 +522,8 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             // withWindowStartRange fans across partitions; aggregate every partition's result.
             List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> all = new ArrayList<>();
             Set<Integer> partitionsSeen = new HashSet<>();
-            long deadline = System.currentTimeMillis() + 30_000;
+            String lastFailure = null;
+            long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
             while (System.currentTimeMillis() < deadline) {
                 all.clear();
                 partitionsSeen.clear();
@@ -519,22 +531,22 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                     streams.query(StateQueryRequest.inStore(storeName)
                         .withQuery(TimestampedWindowRangeWithHeadersQuery.withWindowStartRange(
                             Instant.ofEpochMilli(base), Instant.ofEpochMilli(base))));
-                result.getPartitionResults().forEach((partition, pr) -> {
-                    if (pr.isSuccess() && pr.getResult() != null) {
-                        try (ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord> it =
-                                 pr.getResult()) {
-                            while (it.hasNext()) {
-                                all.add(it.next());
-                                partitionsSeen.add(partition);
-                            }
-                        }
-                    }
+                String failure = drainPartitions(result, (partition, record) -> {
+                    all.add(record);
+                    partitionsSeen.add(partition);
                 });
+                if (failure != null) {
+                    lastFailure = failure;
+                }
                 if (all.size() >= numKeys) {
                     break;
                 }
                 sleepQuietly(200);
             }
+            // Append the IQ failure reason to the assertions below: a query that failed on every
+            // partition would otherwise read as a bare "expected: <9> but was: <0>".
+            String failureSuffix =
+                lastFailure != null ? " (last partition failure: " + lastFailure + ")" : "";
 
             // Assert the distinct key set, not just the count: returning one key twice and dropping
             // another would keep the size at numKeys but change the set.
@@ -545,11 +557,11 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             Set<String> actualKeys = all.stream()
                 .map(r -> r.key().key().get("sensorId").toString())
                 .collect(Collectors.toSet());
-            assertEquals(numKeys, all.size(), "should read every key across partitions");
+            assertEquals(numKeys, all.size(), "should read every key across partitions" + failureSuffix);
             assertEquals(expectedKeys, actualKeys,
-                "should read every distinct key across partitions (none dropped or duplicated)");
+                "should read every distinct key across partitions (none dropped or duplicated)" + failureSuffix);
             assertTrue(partitionsSeen.size() > 1,
-                "window records should span more than one partition but saw: " + partitionsSeen);
+                "window records should span more than one partition but saw: " + partitionsSeen + failureSuffix);
             for (ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> r : all) {
                 String sensorId = r.key().key().get("sensorId").toString();
                 long reading = Long.parseLong(sensorId.substring("sensor-".length()));
@@ -610,8 +622,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Cache visibility, legacy-supplier controls, retain-duplicates, null-value, header-set,
-    // read-only
+    // Cache visibility, retain-duplicates (incl. the null-value no-op), header-set, read-only
     // ---------------------------------------------------------------------------------------------
 
     @Test
@@ -625,14 +636,21 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         long base = baseTimestamp();
         // Caching enabled + a very large commit interval so nothing flushes during the test: the record
         // lives only in the record cache. The headers-aware CachingWindowStore does not override IQv2
-        // query(), so the query reads the still-empty persistent store and must return nothing. The
-        // barrier proves the processor genuinely put the record -- it is present, just unflushed.
+        // query(), so the query reads the still-empty persistent store and must return nothing.
         int tenMinutes = (int) Duration.ofMinutes(10).toMillis();
         KafkaStreams streams = startStreamsAndAwaitRunning(
             buildWindowTopology(input, output, storeName, true, false), appId, 30, tenMinutes);
         try {
             produceOne(input, base, "sensor-1", createValue(1), "s1-cache");
             consumeRecords(output, appId + "-barrier", 1);
+
+            // Positive control first: IQv1 fetch merges the record cache, so it serves the entry with
+            // its headers intact. Without it this test would assert only an absence -- a write the
+            // caching store silently dropped and a write that is merely unflushed both leave the IQv2
+            // query empty. The barrier alone cannot tell them apart: the processor forwards
+            // unconditionally after the put.
+            assertWindowServedFromCache(streams, storeName, "sensor-1", base, 1L, "s1-cache",
+                "wincache IQv1 control");
 
             assertTrue(queryWindowed(streams, storeName,
                     TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
@@ -663,6 +681,11 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         try {
             produceOne(input, base, "sensor-1", createValue(1), "s1-cache");
             consumeRecords(output, appId + "-barrier", 1);
+
+            // Positive control (see shouldNotServeWindowFromCacheBeforeFlush): IQv1 fetch merges the
+            // record cache, proving the session is genuinely there with its headers -- just unflushed.
+            assertSessionServedFromCache(streams, storeName, "sensor-1", base,
+                base + SESSION_DURATION_MS, 1L, "s1-cache", "sesscache IQv1 control");
 
             assertTrue(queryWindowed(streams, storeName,
                     TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")), 0).isEmpty(),
@@ -820,7 +843,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     private List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> queryWindowed(
         KafkaStreams streams, String storeName,
         Query<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> query, int expected) {
-        long deadline = System.currentTimeMillis() + 30_000;
+        long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
         List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> out = new ArrayList<>();
         boolean sawSuccess = false;
         String lastFailure = null;
@@ -847,7 +870,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         }
         // Require at least one successful query: otherwise an expected==0 caller would pass on a query
         // that failed on every attempt (e.g. an unsupported query type), reading as assertEquals(0, 0).
-        assertTrue(sawSuccess, "IQv2 windowed query never succeeded within 30s"
+        assertTrue(sawSuccess, "IQv2 windowed query never succeeded within " + QUERY_DEADLINE_MS + "ms"
             + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
         assertEquals(expected, out.size(), "IQv2 windowed query returned an unexpected count");
         return out;
@@ -855,40 +878,31 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
 
     /**
      * Runs a session {@code withKey} query (which routes to the key's partition) and returns the
-     * partition id that served it together with the single session record. {@code streams.query}
-     * opens an iterator for every local partition result eagerly, so this drains and closes every
-     * partition's iterator each attempt -- returning early from inside the loop would leak the
-     * iterators of the partitions not yet visited.
+     * partition id that served it together with the single session record, retrying until a result
+     * appears. Every partition's iterator is drained and closed on each attempt -- see
+     * {@link #drainPartitions}.
      */
     private Map.Entry<Integer, ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>>
         querySessionByKeyWithPartition(KafkaStreams streams, String storeName, GenericRecord key) {
-        long deadline = System.currentTimeMillis() + 30_000;
+        long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
         String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
             StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result =
                 streams.query(StateQueryRequest.inStore(storeName)
                     .withQuery(TimestampedWindowRangeWithHeadersQuery.withKey(key)));
-            Map.Entry<Integer, ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> found = null;
-            for (Map.Entry<Integer,
-                    QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>>> entry
-                    : result.getPartitionResults().entrySet()) {
-                QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> pr =
-                    entry.getValue();
-                if (pr.isSuccess() && pr.getResult() != null) {
-                    try (ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord> it =
-                             pr.getResult()) {
-                        // Take the first match, but keep draining/closing the remaining partitions'
-                        // iterators before returning.
-                        if (found == null && it.hasNext()) {
-                            found = new AbstractMap.SimpleEntry<>(entry.getKey(), it.next());
-                        }
-                    }
-                } else if (pr.isFailure()) {
-                    lastFailure = pr.getFailureReason() + ": " + pr.getFailureMessage();
-                }
+            List<Map.Entry<Integer, ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>>> served =
+                new ArrayList<>();
+            String failure = drainPartitions(result,
+                (partition, record) -> served.add(new AbstractMap.SimpleEntry<>(partition, record)));
+            if (failure != null) {
+                lastFailure = failure;
             }
-            if (found != null) {
-                return found;
+            if (!served.isEmpty()) {
+                // Draining every partition rather than stopping at the first hit also pins that the
+                // key resolves to exactly one session on exactly one partition.
+                assertEquals(1, served.size(),
+                    "session withKey query should return exactly one session for " + key);
+                return served.get(0);
             }
             sleepQuietly(200);
         }
@@ -898,13 +912,77 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
     }
 
+    /**
+     * Drains every successful partition result into {@code sink} (partition id, record) and closes
+     * every partition's iterator, even when one of them throws mid-iteration.
+     *
+     * <p>{@code streams.query} opens an iterator for every local partition eagerly, so a per-partition
+     * try-with-resources is not enough on its own: an exception escaping it -- or an early return --
+     * leaves the iterators of the partitions not yet visited open, leaking their store iterators and
+     * pinning the {@code num-open-iterators} metric for the rest of the fork JVM. Iterating a
+     * headers-aware result can genuinely throw: the query contract documents a
+     * {@link org.apache.kafka.streams.errors.StreamsException} for an entry that carries no
+     * event-time, and {@code next()} also deserializes through the Schema Registry client.
+     *
+     * @return the last partition failure rendered as {@code reason: message}, or {@code null} if no
+     *     partition failed
+     */
+    private static String drainPartitions(
+        StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result,
+        BiConsumer<Integer, ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> sink) {
+        Map<Integer, ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> iterators =
+            new LinkedHashMap<>();
+        String lastFailure = null;
+        for (Map.Entry<Integer,
+                QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>>> entry
+                : result.getPartitionResults().entrySet()) {
+            QueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> pr =
+                entry.getValue();
+            if (pr.isSuccess() && pr.getResult() != null) {
+                iterators.put(entry.getKey(), pr.getResult());
+            } else if (pr.isFailure()) {
+                lastFailure = pr.getFailureReason() + ": " + pr.getFailureMessage();
+            }
+        }
+        try {
+            iterators.forEach((partition, it) -> {
+                while (it.hasNext()) {
+                    sink.accept(partition, it.next());
+                }
+            });
+        } finally {
+            closeAllQuietly(iterators.values());
+        }
+        return lastFailure;
+    }
+
+    /**
+     * Closes every iterator best-effort. Close failures are swallowed: this runs from a
+     * {@code finally}, where throwing would replace the error that actually failed the test, and
+     * nothing is actionable if a store iterator refuses to close (mirrors {@code closeStreamsQuietly}).
+     */
+    private static void closeAllQuietly(
+        Collection<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> iterators) {
+        for (ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord> it : iterators) {
+            try {
+                it.close();
+            } catch (RuntimeException e) {
+                // Best-effort cleanup; the caller's own failure is the one worth reporting.
+            }
+        }
+    }
+
     private void assertWindowedRecord(ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> record,
         String sensorId, long windowStart, long reading, String seq, String context) {
         assertEquals(sensorId, record.key().key().get("sensorId").toString(), context + " key");
         assertEquals(windowStart, record.key().window().start(), context + " window start");
+        // The query derives the window from the store's configured size; pin it so a wrong duration
+        // (retention instead of window size, say) cannot pass unnoticed.
+        assertEquals(windowStart + WINDOW_SIZE.toMillis(), record.key().window().end(),
+            context + " window end");
         assertEquals(windowStart + EVENT_TIME_OFFSET_MS, record.timestamp(), context + " event-time");
         assertEquals(reading, record.value().get("reading"), context + " value");
-        assertRecordHeaders(record, seq, context);
+        assertRecordHeaders(record.headers(), seq, context);
     }
 
     private void assertSessionRecord(ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> record,
@@ -915,25 +993,75 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
         // A session carries no per-record event-time; timestamp() is the session window's end.
         assertEquals(end, record.timestamp(), context + " timestamp == session end");
         assertEquals(reading, record.value().get("reading"), context + " value");
-        assertRecordHeaders(record, seq, context);
+        assertRecordHeaders(record.headers(), seq, context);
     }
 
     /**
-     * Asserts the record carries the exact headers produced for {@code seq}: the schema-id GUIDs
+     * Asserts {@code headers} are the exact headers produced for {@code seq}: the schema-id GUIDs
      * byte-equal to what that record's serializer wrote, and the distinct {@code seq} header equal to
      * the id passed here. The {@code seq} check is what makes this a per-record fidelity assertion --
      * every record shares one Avro schema, so the schema-id GUIDs alone are byte-identical across
      * records and could not distinguish one record's headers from another's.
      */
-    private void assertRecordHeaders(ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> record,
-        String seq, String context) {
+    private void assertRecordHeaders(Headers headers, String seq, String context) {
         CapturedSchemaIds expected = capturedBySeq.get(seq);
         assertNotNull(expected, context + ": no captured schema-id GUIDs for seq " + seq);
-        assertSchemaIdHeaders(record.headers(), expected, context);
-        Header seqHeader = record.headers().lastHeader(SEQ_HEADER);
+        assertSchemaIdHeaders(headers, expected, context);
+        Header seqHeader = headers.lastHeader(SEQ_HEADER);
         assertNotNull(seqHeader, context + ": missing " + SEQ_HEADER + " header");
         assertEquals(seq, new String(seqHeader.value(), StandardCharsets.UTF_8),
             context + ": " + SEQ_HEADER + " header should carry this record's own id");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // IQv1 cache-hit controls (the cache tests' positive half -- IQv1 merges the record cache)
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Positive control for {@link #shouldNotServeWindowFromCacheBeforeFlush}: reads the entry back
+     * through IQv1 {@link ReadOnlyWindowStore#fetch}, which merges the record cache with the
+     * persistent store, so a cached-but-unflushed write is visible here even though the IQv2 query
+     * (which reads straight past the cache) sees nothing.
+     */
+    private void assertWindowServedFromCache(KafkaStreams streams, String storeName, String sensorId,
+        long windowStart, long reading, String seq, String context) {
+        ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
+            streams.store(StoreQueryParameters.fromNameAndType(
+                storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
+        List<ValueTimestampHeaders<GenericRecord>> served = new ArrayList<>();
+        try (WindowStoreIterator<ValueTimestampHeaders<GenericRecord>> it = store.fetch(
+                 createKey(sensorId), Instant.ofEpochMilli(windowStart),
+                 Instant.ofEpochMilli(windowStart))) {
+            while (it.hasNext()) {
+                served.add(it.next().value);
+            }
+        }
+        assertEquals(1, served.size(), context + ": IQv1 fetch should serve the cached window entry");
+        assertEquals(reading, served.get(0).value().get("reading"), context + " value");
+        assertEquals(windowStart + EVENT_TIME_OFFSET_MS, served.get(0).timestamp(),
+            context + " event-time");
+        assertRecordHeaders(served.get(0).headers(), seq, context);
+    }
+
+    /** Session counterpart of {@link #assertWindowServedFromCache}. */
+    private void assertSessionServedFromCache(KafkaStreams streams, String storeName, String sensorId,
+        long start, long end, long reading, String seq, String context) {
+        ReadOnlySessionStore<GenericRecord, AggregationWithHeaders<GenericRecord>> store =
+            streams.store(StoreQueryParameters.fromNameAndType(
+                storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
+        List<KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>>> served =
+            new ArrayList<>();
+        try (KeyValueIterator<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>> it =
+                 store.fetch(createKey(sensorId))) {
+            while (it.hasNext()) {
+                served.add(it.next());
+            }
+        }
+        assertEquals(1, served.size(), context + ": IQv1 fetch should serve the cached session");
+        assertEquals(start, served.get(0).key.window().start(), context + " session start");
+        assertEquals(end, served.get(0).key.window().end(), context + " session end");
+        assertEquals(reading, served.get(0).value.aggregation().get("reading"), context + " value");
+        assertRecordHeaders(served.get(0).value.headers(), seq, context);
     }
 
     private List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> recordsForSensor(
