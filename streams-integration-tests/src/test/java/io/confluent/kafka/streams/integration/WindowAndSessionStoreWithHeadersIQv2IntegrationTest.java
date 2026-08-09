@@ -18,6 +18,7 @@ package io.confluent.kafka.streams.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +47,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -607,6 +610,210 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Cache visibility, legacy-supplier controls, retain-duplicates, null-value, header-set,
+    // read-only
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void shouldNotServeWindowFromCacheBeforeFlush() throws Exception {
+        String input = "iqv2-wincache-input";
+        String output = "iqv2-wincache-output";
+        String storeName = "iqv2-wincache-store";
+        String appId = "iqv2-wincache-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        // Caching enabled + a very large commit interval so nothing flushes during the test: the record
+        // lives only in the record cache. The headers-aware CachingWindowStore does not override IQv2
+        // query(), so the query reads the still-empty persistent store and must return nothing. The
+        // barrier proves the processor genuinely put the record -- it is present, just unflushed.
+        int tenMinutes = (int) Duration.ofMinutes(10).toMillis();
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildWindowTopology(input, output, storeName, true, false), appId, 30, tenMinutes);
+        try {
+            produceOne(input, base, "sensor-1", createValue(1), "s1-cache");
+            consumeRecords(output, appId + "-barrier", 1);
+
+            assertTrue(queryWindowed(streams, storeName,
+                    TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                        createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)), 0)
+                    .isEmpty(),
+                "cached-but-unflushed window write must be invisible to the IQv2 query");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    @Test
+    public void shouldNotServeSessionFromCacheBeforeFlush() throws Exception {
+        String input = "iqv2-sesscache-input";
+        String output = "iqv2-sesscache-output";
+        String storeName = "iqv2-sesscache-store";
+        String appId = "iqv2-sesscache-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        // Same as the window case: CachingSessionStore does not override IQv2 query(), so a
+        // cached-but-unflushed session write is invisible to the session query.
+        int tenMinutes = (int) Duration.ofMinutes(10).toMillis();
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildSessionTopology(input, output, storeName, true), appId, 30, tenMinutes);
+        try {
+            produceOne(input, base, "sensor-1", createValue(1), "s1-cache");
+            consumeRecords(output, appId + "-barrier", 1);
+
+            assertTrue(queryWindowed(streams, storeName,
+                    TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")), 0).isEmpty(),
+                "cached-but-unflushed session write must be invisible to the IQv2 query");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    @Test
+    public void shouldRetainDuplicateWindowsWithHeaders() throws Exception {
+        String input = "iqv2-windup-input";
+        String output = "iqv2-windup-output";
+        String storeName = "iqv2-windup-store";
+        String appId = "iqv2-windup-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        // retainDuplicates=true: two puts to the same key+window coexist (seqnum-suffixed) instead of
+        // overwriting, and a null-value put is a no-op rather than a tombstone. (The builder also
+        // disables caching under retained duplicates.)
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildWindowTopology(input, output, storeName, false, true), appId);
+        try {
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                send(producer, input, base, "sensor-1", createValue(1), "s1-dup-1");
+                send(producer, input, base, "sensor-1", createValue(2), "s1-dup-2");
+                // A null value would tombstone a normal store, but is a no-op under retained duplicates.
+                send(producer, input, base, "sensor-1", null, "s1-dup-tomb");
+                producer.flush();
+            }
+            consumeRecords(output, appId + "-barrier", 3);
+
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> records = queryWindowed(
+                streams, storeName,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)), 2);
+            assertEquals(2, records.size(), "both duplicate windows are retained (null put was a no-op)");
+            // Sort by reading so the assertion is independent of duplicate iteration order.
+            records.sort(Comparator.comparingLong(
+                (ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> r) ->
+                    (Long) r.value().get("reading")));
+            assertWindowedRecord(records.get(0), "sensor-1", base, 1L, "s1-dup-1", "windup first");
+            assertWindowedRecord(records.get(1), "sensor-1", base, 2L, "s1-dup-2", "windup second");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    @Test
+    public void shouldReturnReadOnlyHeaders() throws Exception {
+        long base = baseTimestamp();
+
+        // Window path.
+        String winInput = "iqv2-rowin-input";
+        String winOutput = "iqv2-rowin-output";
+        String winStore = "iqv2-rowin-store";
+        String winAppId = "iqv2-rowin-test";
+        createTopics(winInput, winOutput);
+        KafkaStreams winStreams = startStreamsAndAwaitRunning(
+            buildWindowTopology(winInput, winOutput, winStore), winAppId);
+        try {
+            produceOne(winInput, base, "sensor-1", createValue(1), "s1-ro-win");
+            consumeRecords(winOutput, winAppId + "-barrier", 1);
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> winRecords = queryWindowed(
+                winStreams, winStore,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)), 1);
+            Headers winHeaders = winRecords.get(0).headers();
+            assertThrows(IllegalStateException.class, () -> winHeaders.add("x", new byte[]{1}),
+                "window query should return read-only headers");
+            closeStreams(winStreams);
+        } finally {
+            closeStreamsQuietly(winStreams);
+        }
+
+        // Session path.
+        String sessInput = "iqv2-rosess-input";
+        String sessOutput = "iqv2-rosess-output";
+        String sessStore = "iqv2-rosess-store";
+        String sessAppId = "iqv2-rosess-test";
+        createTopics(sessInput, sessOutput);
+        KafkaStreams sessStreams = startStreamsAndAwaitRunning(
+            buildSessionTopology(sessInput, sessOutput, sessStore), sessAppId);
+        try {
+            produceOne(sessInput, base, "sensor-1", createValue(1), "s1-ro-sess");
+            consumeRecords(sessOutput, sessAppId + "-barrier", 1);
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> sessRecords = queryWindowed(
+                sessStreams, sessStore,
+                TimestampedWindowRangeWithHeadersQuery.withKey(createKey("sensor-1")), 1);
+            Headers sessHeaders = sessRecords.get(0).headers();
+            assertThrows(IllegalStateException.class, () -> sessHeaders.add("x", new byte[]{1}),
+                "session query should return read-only headers");
+            closeStreams(sessStreams);
+        } finally {
+            closeStreamsQuietly(sessStreams);
+        }
+    }
+
+    @Test
+    public void shouldPreserveFullHeaderSetIncludingDuplicatesAndEmpty() throws Exception {
+        String input = "iqv2-winheaderset-input";
+        String output = "iqv2-winheaderset-output";
+        String storeName = "iqv2-winheaderset-store";
+        String appId = "iqv2-winheaderset-test";
+
+        createTopics(input, output);
+        long base = baseTimestamp();
+        KafkaStreams streams = startStreamsAndAwaitRunning(
+            buildWindowTopology(input, output, storeName), appId);
+        try {
+            // A header set no serde would produce on its own: an arbitrary user header, a duplicate key
+            // ("trace" twice, distinct values) and a zero-length value. The serde adds the schema-id
+            // headers during send(); snapshot the full produced set (in order) afterward so the
+            // round-trip is asserted against exactly what was written -- count, order, duplicate key
+            // and empty value included, and nothing spurious added or dropped.
+            List<String> producedHeaders;
+            try (KafkaProducer<GenericRecord, GenericRecord> producer =
+                     new KafkaProducer<>(createProducerProps())) {
+                ProducerRecord<GenericRecord, GenericRecord> record = new ProducerRecord<>(
+                    input, null, base, createKey("sensor-1"), createValue(1));
+                record.headers().add(SEQ_HEADER, "s1-full".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "A".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("trace", "B".getBytes(StandardCharsets.UTF_8));
+                record.headers().add("empty", new byte[0]);
+                producer.send(record).get();
+                producer.flush();
+                producedHeaders = headerEntries(record.headers());
+            }
+            consumeRecords(output, appId + "-barrier", 1);
+
+            List<ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>> records = queryWindowed(
+                streams, storeName,
+                TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+                    createKey("sensor-1"), Instant.ofEpochMilli(base), Instant.ofEpochMilli(base)), 1);
+            assertEquals(producedHeaders, headerEntries(records.get(0).headers()),
+                "window query should return the full produced header set -- order, the duplicate "
+                    + "'trace' key, the empty value and the schema-id headers -- and nothing else");
+
+            closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // IQv2 query helpers
     // ---------------------------------------------------------------------------------------------
 
@@ -656,6 +863,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     private Map.Entry<Integer, ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>>
         querySessionByKeyWithPartition(KafkaStreams streams, String storeName, GenericRecord key) {
         long deadline = System.currentTimeMillis() + 30_000;
+        String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
             StateQueryResult<ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord>> result =
                 streams.query(StateQueryRequest.inStore(storeName)
@@ -675,6 +883,8 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                             found = new AbstractMap.SimpleEntry<>(entry.getKey(), it.next());
                         }
                     }
+                } else if (pr.isFailure()) {
+                    lastFailure = pr.getFailureReason() + ": " + pr.getFailureMessage();
                 }
             }
             if (found != null) {
@@ -682,7 +892,10 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             }
             sleepQuietly(200);
         }
-        throw new AssertionError("session withKey query never returned a result for " + key);
+        // Surface the IQ failure reason rather than dropping it, so a query that failed on every
+        // attempt reports why instead of a bare "never returned a result".
+        throw new AssertionError("session withKey query never returned a result for " + key
+            + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
     }
 
     private void assertWindowedRecord(ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> record,
@@ -730,6 +943,20 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             .sorted(Comparator.comparingLong(
                 (ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord> r) -> r.key().window().start()))
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Renders headers as an ordered {@code key=base64(value)} list, preserving insertion order and
+     * duplicate keys, so two header sets can be compared for exact equality -- count, order,
+     * duplicates and byte-exact values (a zero-length value base64s to {@code ""}).
+     */
+    private static List<String> headerEntries(Headers headers) {
+        List<String> entries = new ArrayList<>();
+        for (Header h : headers) {
+            entries.add(h.key() + "=" + (h.value() == null
+                ? "<null>" : Base64.getEncoder().encodeToString(h.value())));
+        }
+        return entries;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -817,14 +1044,21 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     // ---------------------------------------------------------------------------------------------
 
     private Topology buildWindowTopology(String input, String output, String storeName) {
+        return buildWindowTopology(input, output, storeName, false, false);
+    }
+
+    private Topology buildWindowTopology(String input, String output, String storeName,
+        boolean cachingEnabled, boolean retainDuplicates) {
         GenericAvroSerde keySerde = createKeySerde();
         GenericAvroSerde valueSerde = createValueSerde();
         StoreBuilder<TimestampedWindowStoreWithHeaders<GenericRecord, GenericRecord>> storeBuilder =
             Stores.timestampedWindowStoreWithHeadersBuilder(
                 Stores.persistentTimestampedWindowStoreWithHeaders(
-                    storeName, RETENTION_PERIOD, WINDOW_SIZE, false),
-                keySerde, valueSerde)
-                .withCachingDisabled();
+                    storeName, RETENTION_PERIOD, WINDOW_SIZE, retainDuplicates),
+                keySerde, valueSerde);
+        storeBuilder = cachingEnabled
+            ? storeBuilder.withCachingEnabled()
+            : storeBuilder.withCachingDisabled();
 
         StreamsBuilder builder = new StreamsBuilder();
         builder
@@ -836,13 +1070,20 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     }
 
     private Topology buildSessionTopology(String input, String output, String storeName) {
+        return buildSessionTopology(input, output, storeName, false);
+    }
+
+    private Topology buildSessionTopology(String input, String output, String storeName,
+        boolean cachingEnabled) {
         GenericAvroSerde keySerde = createKeySerde();
         GenericAvroSerde valueSerde = createValueSerde();
         StoreBuilder<SessionStoreWithHeaders<GenericRecord, GenericRecord>> storeBuilder =
             Stores.sessionStoreWithHeadersBuilder(
                 Stores.persistentSessionStoreWithHeaders(storeName, SESSION_RETENTION),
-                keySerde, valueSerde)
-                .withCachingDisabled();
+                keySerde, valueSerde);
+        storeBuilder = cachingEnabled
+            ? storeBuilder.withCachingEnabled()
+            : storeBuilder.withCachingDisabled();
 
         StreamsBuilder builder = new StreamsBuilder();
         builder
