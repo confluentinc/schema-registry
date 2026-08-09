@@ -153,8 +153,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             assertPointQuery(streams, storeName, "word-1", 10L, false);
             assertPointQuery(streams, storeName, "word-2", 20L, false);
             assertPointQuery(streams, storeName, "word-3", 30L, false);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -174,8 +175,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         try {
             assertPointQuery(streams, storeName, "word-1", 10L, true);
             assertPointQuery(streams, storeName, "word-2", 20L, true);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -232,8 +234,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             assertNotNull(phase, "re-put word-1: should carry the new record's phase header");
             assertEquals("after", new String(phase.value(), StandardCharsets.UTF_8),
                 "re-put word-1: query should return the re-put's headers, not the pre-tombstone ones");
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -262,8 +265,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             // covers skipCache). Asserting success first stops a failed skipCache query passing as null.
             assertPointReturnsNull(streams, storeName, "word-1",
                 "skipCache before flush (empty store)", true);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -307,8 +311,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 queryRange(streams, storeName, query, expectedWords.size());
             assertEquals(expectedWords, wordsOf(records), "range " + label);
             assertHeadersOnEach(records, "IQv2 range " + label);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -371,8 +376,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             assertEquals(Arrays.asList("word-2", "word-1"), wordsOf(boundedDesc),
                 "bounded descending [word-1, word-2]");
             assertHeadersOnEach(boundedDesc, "IQv2 bounded descending");
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -396,8 +402,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 TimestampedRangeWithHeadersQuery.withLowerBound(createKey("word-9")), 0);
             assertTrue(none.isEmpty(),
                 "range with a lower bound past the last key should return no records");
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -447,8 +454,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             }
             assertTrue(served.isEmpty(),
                 "range query must not serve unflushed cached entries but returned: " + served);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -481,8 +489,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             assertThrows(IllegalStateException.class,
                 () -> range.get(0).headers().add("x", new byte[]{1}),
                 "range query should return read-only headers");
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -530,8 +539,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 streams, storeName, TimestampedRangeWithHeadersQuery.withNoBounds(), 1);
             assertEquals(producedHeaders, headerEntries(range.get(0).headers()),
                 "range query should return the full produced header set");
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -554,8 +564,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             produceRecords(input, Arrays.asList("word-1", "word-2", "word-3"),
                 Arrays.asList(10L, 20L, 30L));
             consumeRecords(output, "iqv2-restore-pre", 3);
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
 
         // Restart with the same APPLICATION_ID; cleanUp() wipes the local state dir so the store must
@@ -611,8 +622,9 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             assertTrue(restoredCount.get() > 0,
                 "store should have been restored from the changelog (restored "
                     + restoredCount.get() + " records)");
-        } finally {
             closeStreams(restored);
+        } finally {
+            closeStreamsQuietly(restored);
         }
     }
 
@@ -670,12 +682,24 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
                 sleepQuietly(200);
             }
 
+            // Assert the distinct key set, not just the count: returning one key twice and dropping
+            // another would keep the size at numKeys but change the set.
+            Set<String> expectedKeys = new HashSet<>();
+            for (int i = 1; i <= numKeys; i++) {
+                expectedKeys.add("word-" + i);
+            }
+            Set<String> actualKeys = all.stream()
+                .map(r -> r.key().get("word").toString())
+                .collect(Collectors.toSet());
             assertEquals(numKeys, all.size(), "should read every key across partitions");
+            assertEquals(expectedKeys, actualKeys,
+                "should read every distinct key across partitions (none dropped or duplicated)");
             assertTrue(partitionsSeen.size() > 1,
                 "records should span more than one partition but saw: " + partitionsSeen);
             assertHeadersOnEach(all, "IQv2 multi-partition scan");
-        } finally {
             closeStreams(streams);
+        } finally {
+            closeStreamsQuietly(streams);
         }
     }
 
@@ -759,6 +783,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
         TimestampedRangeWithHeadersQuery<GenericRecord, GenericRecord> query, int expected) {
         long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
         List<ReadOnlyRecord<GenericRecord, GenericRecord>> out = new ArrayList<>();
+        boolean sawSuccess = false;
         String lastFailure = null;
         while (System.currentTimeMillis() < deadline) {
             out.clear();
@@ -767,6 +792,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             QueryResult<ReadOnlyRecordIterator<GenericRecord, GenericRecord>> pr =
                 result.getOnlyPartitionResult();
             if (pr != null && pr.isSuccess() && pr.getResult() != null) {
+                sawSuccess = true;
                 try (ReadOnlyRecordIterator<GenericRecord, GenericRecord> it = pr.getResult()) {
                     while (it.hasNext()) {
                         out.add(it.next());
@@ -780,8 +806,11 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             }
             sleepQuietly(200);
         }
-        assertEquals(expected, out.size(), "IQv2 range query returned an unexpected count"
+        // Require at least one successful query: otherwise an expected==0 caller would pass on a query
+        // that failed on every attempt (e.g. an unsupported query type), reading as assertEquals(0, 0).
+        assertTrue(sawSuccess, "IQv2 range query never succeeded within 30s"
             + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
+        assertEquals(expected, out.size(), "IQv2 range query returned an unexpected count");
         return out;
     }
 
@@ -870,7 +899,7 @@ public class TimestampedKeyValueStoreWithHeadersIQv2IntegrationTest
             return streams;
         } finally {
             if (!populated) {
-                closeStreams(streams);
+                closeStreamsQuietly(streams);
             }
         }
     }
