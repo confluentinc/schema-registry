@@ -56,6 +56,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -531,13 +532,14 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                     streams.query(StateQueryRequest.inStore(storeName)
                         .withQuery(TimestampedWindowRangeWithHeadersQuery.withWindowStartRange(
                             Instant.ofEpochMilli(base), Instant.ofEpochMilli(base))));
-                String failure = drainPartitions(result, (partition, record) -> {
+                // Overwrite rather than accumulate: the assertions below read `all` and
+                // `partitionsSeen`, which hold this attempt's result only, so a failure carried over
+                // from an earlier attempt would append a stale reason to an assertion that failed for
+                // an unrelated one.
+                lastFailure = drainPartitions(result, (partition, record) -> {
                     all.add(record);
                     partitionsSeen.add(partition);
                 });
-                if (failure != null) {
-                    lastFailure = failure;
-                }
                 if (all.size() >= numKeys) {
                     break;
                 }
@@ -601,8 +603,9 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             }
             consumeRecords(output, appId + "-barrier", numKeys);
 
-            // A session withKey query routes to the key's partition, so query each key and record the
-            // partition that served it; collectively the keys must resolve across >1 partition.
+            // A session withKey query runs on every local partition; only the partition owning the key
+            // has a session for it, so query each key and record the partition that returned it.
+            // Collectively the keys must resolve across >1 partition.
             Set<Integer> partitionsSeen = new HashSet<>();
             for (int i = 1; i <= numKeys; i++) {
                 String sensorId = "sensor-" + i;
@@ -855,6 +858,9 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
                 result.getOnlyPartitionResult();
             if (pr != null && pr.isSuccess() && pr.getResult() != null) {
                 sawSuccess = true;
+                // Drop any carried-over reason: this attempt succeeded, so it -- not an older failed
+                // attempt -- produced the `out` the assertions below report on.
+                lastFailure = null;
                 try (ReadOnlyRecordIterator<Windowed<GenericRecord>, GenericRecord> it = pr.getResult()) {
                     while (it.hasNext()) {
                         out.add(it.next());
@@ -868,19 +874,25 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
             }
             sleepQuietly(200);
         }
+        String failureSuffix = lastFailure != null ? " (last failure: " + lastFailure + ")" : "";
         // Require at least one successful query: otherwise an expected==0 caller would pass on a query
         // that failed on every attempt (e.g. an unsupported query type), reading as assertEquals(0, 0).
-        assertTrue(sawSuccess, "IQv2 windowed query never succeeded within " + QUERY_DEADLINE_MS + "ms"
-            + (lastFailure != null ? " (last failure: " + lastFailure + ")" : ""));
-        assertEquals(expected, out.size(), "IQv2 windowed query returned an unexpected count");
+        assertTrue(sawSuccess,
+            "IQv2 windowed query never succeeded within " + QUERY_DEADLINE_MS + "ms" + failureSuffix);
+        // `out` holds the last attempt's result, so surface that attempt's failure here too: a run
+        // whose final attempt failed would otherwise read as a bare "expected: <3> but was: <0>".
+        assertEquals(expected, out.size(),
+            "IQv2 windowed query returned an unexpected count" + failureSuffix);
         return out;
     }
 
     /**
-     * Runs a session {@code withKey} query (which routes to the key's partition) and returns the
-     * partition id that served it together with the single session record, retrying until a result
-     * appears. Every partition's iterator is drained and closed on each attempt -- see
-     * {@link #drainPartitions}.
+     * Runs a session {@code withKey} query and returns the partition id that served it together with
+     * the single session record, retrying until a result appears. A {@link StateQueryRequest} without
+     * {@code withPartitions} targets every local partition, so the query runs on all of them and only
+     * the partition owning the key returns a session -- which is what makes the "exactly one result"
+     * assertion below meaningful. Every partition's iterator is drained and closed on each attempt --
+     * see {@link #drainPartitions}.
      */
     private Map.Entry<Integer, ReadOnlyRecord<Windowed<GenericRecord>, GenericRecord>>
         querySessionByKeyWithPartition(KafkaStreams streams, String storeName, GenericRecord key) {
@@ -1018,6 +1030,27 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     // ---------------------------------------------------------------------------------------------
 
     /**
+     * Resolves an IQv1 store handle, retrying until the store is queryable. {@link KafkaStreams#store}
+     * throws {@link InvalidStateStoreException} whenever the store is not currently available (a
+     * rebalance, a thread not yet RUNNING), so a single call can flake even after the output-topic
+     * barrier -- the same reason every IQv2 read in this file retries.
+     */
+    private static <T> T awaitStore(KafkaStreams streams, StoreQueryParameters<T> parameters) {
+        long deadline = System.currentTimeMillis() + QUERY_DEADLINE_MS;
+        InvalidStateStoreException lastFailure = null;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                return streams.store(parameters);
+            } catch (InvalidStateStoreException e) {
+                lastFailure = e;
+                sleepQuietly(200);
+            }
+        }
+        throw new AssertionError("store " + parameters.storeName() + " did not become queryable within "
+            + QUERY_DEADLINE_MS + "ms", lastFailure);
+    }
+
+    /**
      * Positive control for {@link #shouldNotServeWindowFromCacheBeforeFlush}: reads the entry back
      * through IQv1 {@link ReadOnlyWindowStore#fetch}, which merges the record cache with the
      * persistent store, so a cached-but-unflushed write is visible here even though the IQv2 query
@@ -1026,7 +1059,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     private void assertWindowServedFromCache(KafkaStreams streams, String storeName, String sensorId,
         long windowStart, long reading, String seq, String context) {
         ReadOnlyWindowStore<GenericRecord, ValueTimestampHeaders<GenericRecord>> store =
-            streams.store(StoreQueryParameters.fromNameAndType(
+            awaitStore(streams, StoreQueryParameters.fromNameAndType(
                 storeName, QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
         List<ValueTimestampHeaders<GenericRecord>> served = new ArrayList<>();
         try (WindowStoreIterator<ValueTimestampHeaders<GenericRecord>> it = store.fetch(
@@ -1047,7 +1080,7 @@ public class WindowAndSessionStoreWithHeadersIQv2IntegrationTest
     private void assertSessionServedFromCache(KafkaStreams streams, String storeName, String sensorId,
         long start, long end, long reading, String seq, String context) {
         ReadOnlySessionStore<GenericRecord, AggregationWithHeaders<GenericRecord>> store =
-            streams.store(StoreQueryParameters.fromNameAndType(
+            awaitStore(streams, StoreQueryParameters.fromNameAndType(
                 storeName, QueryableStoreTypes.sessionStoreWithHeaders()));
         List<KeyValue<Windowed<GenericRecord>, AggregationWithHeaders<GenericRecord>>> served =
             new ArrayList<>();
