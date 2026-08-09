@@ -282,11 +282,12 @@ public abstract class HeadersIQv2IntegrationTestBase extends ClusterTestHarness 
     }
 
     /**
-     * Closes {@code streams} best-effort without asserting on a clean shutdown -- for teardown and
-     * the start-failure path, where a close timeout must not replace the error that actually failed
-     * the test. Success-path callers should use {@link #closeStreams} to assert a clean shutdown.
+     * Closes {@code streams} best-effort without asserting on a clean shutdown -- for teardown, the
+     * start-failure path, and a subclass test's {@code finally} block, where a close timeout must not
+     * replace the error that actually failed the test. Success-path callers should use
+     * {@link #closeStreams} to assert a clean shutdown.
      */
-    private static void closeStreamsQuietly(KafkaStreams streams) {
+    protected static void closeStreamsQuietly(KafkaStreams streams) {
         if (streams != null) {
             try {
                 streams.close(Duration.ofSeconds(10));
