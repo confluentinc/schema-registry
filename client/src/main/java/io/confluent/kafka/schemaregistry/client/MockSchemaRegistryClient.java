@@ -992,6 +992,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       Association existingAssociation = resourceAndAssocTypeCache.get(key);
 
       if (existingAssociation == null) {
+        // Mirror the server: an upsert that creates a new association rejects an inline schema
+        // and validates lifecycle against frozen (AbstractSchemaRegistry:2073-2075).
+        if (!isCreate) {
+          associationInRequest.applyDefaults(false);
+        }
         // A STRONG association is owned by its topic and can only be created together with the
         // topic, never by an upsert. Mirrors the rule enforced by AbstractSchemaRegistry.
         if (!isCreate && associationInRequest.getLifecycle() == LifecyclePolicy.STRONG) {
