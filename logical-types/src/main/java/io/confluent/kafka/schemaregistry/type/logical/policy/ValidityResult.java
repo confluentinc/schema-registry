@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.check;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import java.util.ArrayList;
 import java.util.Collections;

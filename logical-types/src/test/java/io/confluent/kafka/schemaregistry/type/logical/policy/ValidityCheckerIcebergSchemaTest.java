@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.check;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
-import io.confluent.kafka.schemaregistry.type.logical.check.Invalidity.Rule;
-import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 
 import org.junit.jupiter.api.Test;
 

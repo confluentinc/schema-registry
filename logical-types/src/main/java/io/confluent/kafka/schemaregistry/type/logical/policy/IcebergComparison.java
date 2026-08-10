@@ -14,26 +14,26 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.check;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
-import io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.FieldView;
-import io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.Kind;
-import io.confluent.kafka.schemaregistry.type.logical.check.Incompatibility.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.FieldView;
+import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.Kind;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.childPath;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.describeChange;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.elementOf;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.fieldViews;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.isRef;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.keyOf;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.refKey;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.render;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.resolve;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.scaleOf;
-import static io.confluent.kafka.schemaregistry.type.logical.check.CompatibilityChecker.valueOf;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.childPath;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.describeChange;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.elementOf;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.fieldViews;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.isRef;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.keyOf;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.refKey;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.render;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.resolve;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.scaleOf;
+import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.valueOf;
 
 import java.util.ArrayList;
 import java.util.Collections;

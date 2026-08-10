@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.check;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
-import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
-import io.confluent.kafka.schemaregistry.type.logical.check.Invalidity.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity.Rule;
 
 import java.util.ArrayList;
 import java.util.HashSet;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.check;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,8 +23,8 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
-import io.confluent.kafka.schemaregistry.type.logical.check.Invalidity.Rule;
-import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 

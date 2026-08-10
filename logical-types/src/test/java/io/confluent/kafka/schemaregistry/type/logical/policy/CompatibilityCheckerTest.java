@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.check;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 
-import io.confluent.kafka.schemaregistry.type.logical.check.LogicalTypeChecker.Mode;
-import io.confluent.kafka.schemaregistry.type.logical.check.Incompatibility.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import org.junit.jupiter.api.Test;
@@ -464,7 +464,7 @@ class CompatibilityCheckerTest {
   }
 
   // -----------------------------------------------------------------------------------------------
-  // Regressions from the review of the check package
+  // Regressions from the review of the policy package
   // -----------------------------------------------------------------------------------------------
 
   @Test
