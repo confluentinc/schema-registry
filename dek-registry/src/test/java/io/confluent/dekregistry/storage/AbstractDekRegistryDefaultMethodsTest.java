@@ -15,8 +15,11 @@
 
 package io.confluent.dekregistry.storage;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,7 +30,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
+import io.confluent.dekregistry.storage.exceptions.DekGenerationException;
+import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.rest.exceptions.RestException;
 import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
 import org.junit.jupiter.api.Test;
@@ -98,5 +104,40 @@ public class AbstractDekRegistryDefaultMethodsTest {
         "tenant", "kek", "subject", DekFormat.AES128_GCM, 1);
 
     assertThrows(UnsupportedOperationException.class, () -> registry.getKey(id));
+  }
+
+  // ---- KMS access-denied classification (HTTP 403 vs 500) ----
+
+  @Test
+  public void dekGenerationException_accessDeniedFlagDefaultsFalse() {
+    assertFalse(new DekGenerationException("boom").isAccessDenied());
+    assertFalse(new DekGenerationException("boom", new RuntimeException()).isAccessDenied());
+  }
+
+  @Test
+  public void dekGenerationException_accessDeniedFlagSet() {
+    DekGenerationException denied =
+        new DekGenerationException("denied", new RuntimeException(), true);
+    assertTrue(denied.isAccessDenied());
+
+    DekGenerationException notDenied =
+        new DekGenerationException("other", new RuntimeException(), false);
+    assertFalse(notDenied.isAccessDenied());
+  }
+
+  @Test
+  public void dekRegistryErrors_mapsAccessDeniedTo403() {
+    RestException e = DekRegistryErrors.dekGenerationException(
+        new DekGenerationException("denied", new RuntimeException(), true));
+    assertEquals(403, e.getStatus());
+    assertEquals(DekRegistryErrors.DEK_GENERATION_FORBIDDEN_ERROR_CODE, e.getErrorCode());
+  }
+
+  @Test
+  public void dekRegistryErrors_mapsOtherFailuresTo500() {
+    RestException e = DekRegistryErrors.dekGenerationException(
+        new DekGenerationException("boom"));
+    assertEquals(500, e.getStatus());
+    assertEquals(DekRegistryErrors.DEK_GENERATION_ERROR_CODE, e.getErrorCode());
   }
 }

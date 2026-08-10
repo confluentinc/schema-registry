@@ -55,9 +55,7 @@ public class AeadWrapper implements Aead {
         log.warn("Failed to encrypt with kms key id {}: {}",
             kmsKeyIds.get(i), e.getMessage());
         if (i == kmsKeyIds.size() - 1) {
-          throw e instanceof GeneralSecurityException
-              ? (GeneralSecurityException) e
-              : new GeneralSecurityException("Failed to encrypt with all KEKs", e);
+          throw toGeneralSecurityException(e, kmsKeyIds.get(i), "Failed to encrypt with all KEKs");
         }
       }
     }
@@ -75,13 +73,36 @@ public class AeadWrapper implements Aead {
         log.warn("Failed to decrypt with kms key id {}: {}",
             kmsKeyIds.get(i), e.getMessage());
         if (i == kmsKeyIds.size() - 1) {
-          throw e instanceof GeneralSecurityException
-              ? (GeneralSecurityException) e
-              : new GeneralSecurityException("Failed to decrypt with all KEKs", e);
+          throw toGeneralSecurityException(e, kmsKeyIds.get(i), "Failed to decrypt with all KEKs");
         }
       }
     }
     throw new GeneralSecurityException("No KMS key IDs available for decryption");
+  }
+
+  /**
+   * Converts the exception thrown for a single KMS key id into a {@link GeneralSecurityException},
+   * preserving an access-denied classification (401/403) as a {@link KmsAccessDeniedException} so
+   * that callers can map it to a 4xx response.
+   */
+  private GeneralSecurityException toGeneralSecurityException(
+      Exception e, String kmsKeyId, String fallbackMessage) {
+    if (isAccessDenied(e, kmsKeyId)) {
+      String message = e.getMessage() != null ? e.getMessage() : fallbackMessage;
+      return new KmsAccessDeniedException(message, e);
+    }
+    return e instanceof GeneralSecurityException
+        ? (GeneralSecurityException) e
+        : new GeneralSecurityException(fallbackMessage, e);
+  }
+
+  private boolean isAccessDenied(Throwable t, String kmsKeyId) {
+    try {
+      String kekUrl = kmsType + KmsDriver.KMS_TYPE_SUFFIX + kmsKeyId;
+      return KmsDriverManager.getDriver(kekUrl).isAccessDenied(t);
+    } catch (GeneralSecurityException e) {
+      return false;
+    }
   }
 
   private List<String> getKmsKeyIds() {

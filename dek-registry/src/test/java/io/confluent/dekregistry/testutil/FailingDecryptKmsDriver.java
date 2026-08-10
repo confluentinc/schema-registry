@@ -36,4 +36,10 @@ public class FailingDecryptKmsDriver implements KmsDriver {
       throws GeneralSecurityException {
     return new FailingDecryptKmsClient(TestKmsDriver.SECRET);
   }
+
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    return t != null && t.getMessage() != null
+        && t.getMessage().contains(FailingDecryptKmsClient.ACCESS_DENIED_MARKER);
+  }
 }

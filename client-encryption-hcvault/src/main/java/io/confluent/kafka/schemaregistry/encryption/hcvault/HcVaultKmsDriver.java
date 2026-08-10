@@ -55,6 +55,15 @@ public class HcVaultKmsDriver implements KmsDriver {
     return HcVaultKmsClient.PREFIX;
   }
 
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    if (!(t instanceof VaultException)) {
+      return false;
+    }
+    int status = ((VaultException) t).getHttpStatusCode();
+    return status == 401 || status == 403;
+  }
+
   private SslConfig getSslConfig(Map<String, ?> configs) throws GeneralSecurityException {
     String keystore = (String) configs.get(SSL_KEYSTORE_LOCATION);
     String keystorePassword = (String) configs.get(SSL_KEYSTORE_PASSWORD);

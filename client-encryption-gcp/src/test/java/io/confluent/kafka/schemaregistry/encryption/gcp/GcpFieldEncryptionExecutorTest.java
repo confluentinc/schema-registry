@@ -16,9 +16,16 @@
 
 package io.confluent.kafka.schemaregistry.encryption.gcp;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpResponseException;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutorTest;
 import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
+import java.security.GeneralSecurityException;
 import java.util.List;
+import org.junit.Test;
 
 public class GcpFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest {
 
@@ -30,6 +37,35 @@ public class GcpFieldEncryptionExecutorTest extends FieldEncryptionExecutorTest 
   protected EncryptionProperties getFieldEncryptionProperties(
       List<String> ruleNames, Class<?> ruleExecutor) {
     return new GcpEncryptionProperties(ruleNames, ruleExecutor);
+  }
+
+  private static HttpResponseException httpException(int statusCode) {
+    return new HttpResponseException.Builder(statusCode, "status", new HttpHeaders()).build();
+  }
+
+  @Test
+  public void testIsAccessDeniedForForbiddenAndUnauthorized() {
+    GcpKmsDriver driver = new GcpKmsDriver();
+    assertTrue(driver.isAccessDeniedException(httpException(403)));
+    assertTrue(driver.isAccessDeniedException(httpException(401)));
+  }
+
+  @Test
+  public void testIsNotAccessDeniedForOtherErrors() {
+    GcpKmsDriver driver = new GcpKmsDriver();
+    assertFalse(driver.isAccessDeniedException(httpException(404)));
+    assertFalse(driver.isAccessDeniedException(httpException(500)));
+    assertFalse(driver.isAccessDeniedException(new RuntimeException("not http")));
+  }
+
+  @Test
+  public void testIsAccessDeniedWalksCauseChain() {
+    GcpKmsDriver driver = new GcpKmsDriver();
+    assertTrue(driver.isAccessDenied(
+        new GeneralSecurityException("encryption failed", httpException(403))));
+    assertFalse(driver.isAccessDenied(
+        new GeneralSecurityException("encryption failed", httpException(503))));
+    assertFalse(driver.isAccessDenied(null));
   }
 }
 

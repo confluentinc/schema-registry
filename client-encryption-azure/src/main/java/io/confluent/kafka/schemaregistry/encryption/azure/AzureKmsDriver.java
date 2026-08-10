@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import com.azure.core.credential.TokenCredential;
+import com.azure.core.exception.HttpResponseException;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
@@ -38,6 +39,19 @@ public class AzureKmsDriver implements KmsDriver {
   @Override
   public String getKeyUrlPrefix() {
     return AzureKmsClient.PREFIX;
+  }
+
+  @Override
+  public boolean isAccessDeniedException(Throwable t) {
+    if (!(t instanceof HttpResponseException)) {
+      return false;
+    }
+    HttpResponseException e = (HttpResponseException) t;
+    if (e.getResponse() == null) {
+      return false;
+    }
+    int status = e.getResponse().getStatusCode();
+    return status == 401 || status == 403;
   }
 
   private TokenCredential getCredentials(Map<String, ?> configs) {
