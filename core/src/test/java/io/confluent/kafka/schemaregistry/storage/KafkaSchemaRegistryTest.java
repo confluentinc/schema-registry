@@ -587,21 +587,32 @@ public class KafkaSchemaRegistryTest extends ClusterTestHarness {
       LifecyclePolicy valueLifecycle = LifecyclePolicy.valueOf(r[4]);
       String subjectPrefix = namespace + "-" + resourceName;
 
-      // Pre-register schemas so associations don't need to carry them
-      String keySubject = subjectPrefix + "-key";
-      String valueSubject = subjectPrefix + "-value";
+      // A STRONG association is frozen, so it owns its resource's canonical subject and carries
+      // its schema inline. A WEAK one uses another subject, registered up front.
+      boolean keyStrong = keyLifecycle == LifecyclePolicy.STRONG;
+      boolean valueStrong = valueLifecycle == LifecyclePolicy.STRONG;
+      String keySubject = keyStrong
+          ? ":." + namespace + ":" + resourceName + "-key" : subjectPrefix + "-key";
+      String valueSubject = valueStrong
+          ? ":." + namespace + ":" + resourceName + "-value" : subjectPrefix + "-value";
       RegisterSchemaRequest keyReq = new RegisterSchemaRequest();
       keyReq.setSchema(StoreUtils.avroSchemaString(schemaFieldCount++));
       RegisterSchemaRequest valueReq = new RegisterSchemaRequest();
       valueReq.setSchema(StoreUtils.avroSchemaString(schemaFieldCount++));
-      kafkaSchemaRegistry.register(keySubject, new Schema(keySubject, keyReq));
-      kafkaSchemaRegistry.register(valueSubject, new Schema(valueSubject, valueReq));
+      if (!keyStrong) {
+        kafkaSchemaRegistry.register(keySubject, new Schema(keySubject, keyReq));
+      }
+      if (!valueStrong) {
+        kafkaSchemaRegistry.register(valueSubject, new Schema(valueSubject, valueReq));
+      }
 
       kafkaSchemaRegistry.createAssociation(null, false, new AssociationCreateOrUpdateRequest(
           resourceName, namespace, resourceId, "topic",
           Arrays.asList(
-              new AssociationCreateOrUpdateInfo(keySubject, "key", keyLifecycle, false, null, null),
-              new AssociationCreateOrUpdateInfo(valueSubject, "value", valueLifecycle, false, null, null)
+              new AssociationCreateOrUpdateInfo(keySubject, "key", keyLifecycle,
+                  keyStrong, keyStrong ? keyReq : null, null),
+              new AssociationCreateOrUpdateInfo(valueSubject, "value", valueLifecycle,
+                  valueStrong, valueStrong ? valueReq : null, null)
           )
       ));
     }
