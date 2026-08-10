@@ -1056,7 +1056,8 @@ public class LogicalTypeToProtoConverter {
     // Skip when value is null — Meta.params is Map<String,String> with no
     // unambiguous null sentinel; emitting "" would conflict with valid empty
     // string defaults. Round-trip silently loses the explicit-null distinction.
-    if (field.hasDefaultValue() && field.getDefaultValue() != null) {
+    if (field.hasDefaultValue() && field.getDefaultValue() != null
+        && !field.hasDerivedDefault()) {
       String encoded = ProtoDefaultValueConverter.toProtoValue(
           field.getSchema(), field.getDefaultValue());
       addMetaParam(fieldBuilder, CommonConstants.LOGICAL_DEFAULT_PROP, encoded);
