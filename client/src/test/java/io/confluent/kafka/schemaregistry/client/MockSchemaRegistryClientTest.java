@@ -444,70 +444,49 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
-    public void testUpdateOneAssociationViaUpsertEndpoint() {
-      // The upsert endpoint is createOrUpdateAssociation endpoint.
-      // Pre-create subjects
+    public void testAssociationImmutabilityViaUpsertEndpoint() {
+      // The upsert endpoint is createOrUpdateAssociation endpoint. An association is immutable
+      // once created, so the endpoint can only create new WEAK associations or repeat one it
+      // already stored -- every attempt to change a stored association is rejected.
       registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
 
-      // Create a new value association using an existing subject.
-      // final state: strong, non-frozen
+      // A STRONG association is owned by its topic, so it cannot be created through an upsert.
       AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
               .valueSubject(defaultValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
       try {
         client.createOrUpdateAssociation(createRequest);
+        fail("Expected exception - a STRONG association must be created with the topic");
       } catch (Exception e) {
-        assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
+        assertNotNull("Creating a STRONG association via upsert should fail.", e);
       }
 
-      // Change strong, not frozen lifecycle to weak, non-frozen lifecycle should succeed.
-      // final state: weak, non-frozen
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-                      .valueLifecycle(LifecyclePolicy.WEAK).build();
+      // Create the association as WEAK instead.
+      createRequest = new AssociationRequestBuilder().defaultResource()
+              .valueSubject(defaultValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
       try {
         client.createOrUpdateAssociation(createRequest);
       } catch (Exception e) {
-        assertNull("Create association with a different property should succeed.", e);
+        assertNull("Creating a WEAK association via upsert should succeed.", e);
       }
 
-      // Update schema should succeed (register schema separately since WEAK+schema is not allowed).
-      // final state: weak, non-frozen
-      registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, EVOLVED_AVRO_SCHEMA, true);
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject).build();
+      // Promoting it to STRONG is rejected: STRONG is frozen, and frozen cannot be turned on.
+      createRequest = new AssociationRequestBuilder().defaultResource()
+              .valueSubject(defaultValueSubject).valueLifecycle(LifecyclePolicy.STRONG).build();
       try {
         client.createOrUpdateAssociation(createRequest);
+        fail("Expected exception - a WEAK association cannot be promoted to STRONG");
       } catch (Exception e) {
-        assertNull("Update association with a different schema should succeed.", e);
+        assertNotNull("Promoting a WEAK association should fail.", e);
       }
 
-      // Change weak, non-frozen lifecycle to weak, frozen lifecycle should fail.
-      // final state: weak, non-frozen
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueFrozen(true).build();
+      // Freezing a WEAK association is rejected for the same reason.
+      createRequest = new AssociationRequestBuilder().defaultResource()
+              .valueSubject(defaultValueSubject).valueFrozen(true).build();
       try {
         client.createOrUpdateAssociation(createRequest);
-        fail("Weak frozen is not supported");
+        fail("Expected exception - a WEAK association cannot be frozen");
       } catch (Exception e) {
-        assertNotNull("Update association to weak frozen should fail.", e);
-      }
-
-      // Change to strong, not frozen should succeed.
-      // final state: strong, non-frozen
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueLifecycle(LifecyclePolicy.STRONG).build();
-      try {
-        client.createOrUpdateAssociation(createRequest);
-      } catch (Exception e) {
-        assertNull("Update association back to strong should succeed.", e);
-      }
-
-      // Changing the frozen attribute on an existing association is not allowed.
-      createRequest = new AssociationRequestBuilder().defaultResource().valueSubject(defaultValueSubject)
-              .valueLifecycle(LifecyclePolicy.STRONG).valueFrozen(true).build();
-      try {
-        client.createOrUpdateAssociation(createRequest);
-        fail("Expected exception - changing frozen attribute is not allowed");
-      } catch (Exception e) {
-        assertNotNull("Changing the frozen attribute should fail.", e);
+        assertNotNull("Freezing a WEAK association should fail.", e);
       }
 
       // Creating a frozen association with a schema should succeed (subject defaults).
@@ -522,7 +501,7 @@ public class MockSchemaRegistryClientTest {
                       new RegisterSchemaRequest(new Schema(null, null, null, null, null, SIMPLE_AVRO_SCHEMA)),
                       false)));
       try {
-        client.createOrUpdateAssociation(createRequest);
+        client.createAssociation(createRequest);
       } catch (Exception e) {
         assertNull("Creating a frozen association with schema should succeed.", e);
       }
@@ -617,7 +596,8 @@ public class MockSchemaRegistryClientTest {
               .valueSubject(fooCanonicalSubject).valueLifecycle(LifecyclePolicy.STRONG)
               .valueSchema(SIMPLE_AVRO_SCHEMA).build();
       try {
-        associationCreator.create(fooRequest);
+        // Always the create endpoint: a STRONG association cannot be made by an upsert.
+        client.createAssociation(fooRequest);
       } catch (Exception e) {
         assertNull("AssociationCreateOrUpdateRequest should succeed.", e);
       }
@@ -675,7 +655,9 @@ public class MockSchemaRegistryClientTest {
               .valueSchema(SIMPLE_AVRO_SCHEMA).build();
 
       try {
-        associationCreator.create(barRequest);
+        // Create endpoint, so the failure is the subject conflict rather than the rule that a
+        // STRONG association cannot be made by an upsert.
+        client.createAssociation(barRequest);
         fail("Expected exception - cannot create strong when subject has weak");
       } catch (Exception e) {
         assertNotNull(e);
@@ -734,16 +716,21 @@ public class MockSchemaRegistryClientTest {
     public void testGetAssociationsWithFilters() {
       // Setup
       // Register schemas separately, then create associations: key=STRONG, value=WEAK
-      registerTestAvroSchemaInSchemaRegistry(client, defaulKeySubject, SIMPLE_AVRO_SCHEMA, true);
+      // The STRONG association is frozen, so it owns its resource's canonical subject and
+      // carries its schema inline rather than having one registered beforehand.
+      String keyCanonicalSubject = ":." + defaultResourceNamespace + ":" + defaultResourceName
+              + "-" + KEY;
       registerTestAvroSchemaInSchemaRegistry(client, defaultValueSubject, SIMPLE_AVRO_SCHEMA, true);
       AssociationCreateOrUpdateRequest createRequest = new AssociationRequestBuilder().defaultResource()
-              .keySubject(defaulKeySubject).keyLifecycle(LifecyclePolicy.STRONG)
+              .keySubject(keyCanonicalSubject).keyLifecycle(LifecyclePolicy.STRONG)
+              .keySchema(SIMPLE_AVRO_SCHEMA)
               .valueSubject(defaultValueSubject)
               .valueLifecycle(LifecyclePolicy.WEAK).build();
       try {
-          client.createOrUpdateAssociation(createRequest);
+          // A STRONG association must be created with the topic, not through an upsert.
+          client.createAssociation(createRequest);
       } catch (Exception e) {
-          assertNull("createOrUpdateAssociation should succeed.", e);
+          assertNull("createAssociation should succeed.", e);
       }
 
       List<Association> associations = null;
@@ -759,7 +746,7 @@ public class MockSchemaRegistryClientTest {
       // Query by subject with lifecycle filter "weak" - should return error
       try {
           associations = client.getAssociationsBySubject(
-                  defaulKeySubject, null, Arrays.asList(KEY, VALUE), "weak", 0, -1);
+                  keyCanonicalSubject, null, Arrays.asList(KEY, VALUE), "weak", 0, -1);
           fail("getAssociationsBySubject with lower case lifecycle should fail.");
       } catch (Exception e) {
           assertNotNull("getAssociationsBySubject should return error.", e);
@@ -768,7 +755,7 @@ public class MockSchemaRegistryClientTest {
       // Query by subject with lifecycle filter "WEAK" - should return 0
       try {
           associations = client.getAssociationsBySubject(
-                  defaulKeySubject, null, Arrays.asList(KEY, VALUE), "WEAK", 0, -1);
+                  keyCanonicalSubject, null, Arrays.asList(KEY, VALUE), "WEAK", 0, -1);
       } catch (Exception e) {
           assertNull("getAssociationsBySubject should succeed.", e);
       }
@@ -777,7 +764,7 @@ public class MockSchemaRegistryClientTest {
       // Query by subject with lifecycle filter "STRONG" - should return 1
       try {
           associations = client.getAssociationsBySubject(
-                  defaulKeySubject, null, Arrays.asList(KEY, VALUE), "STRONG", 0, -1);
+                  keyCanonicalSubject, null, Arrays.asList(KEY, VALUE), "STRONG", 0, -1);
       } catch (Exception e) {
           assertNull("getAssociationsBySubject should succeed.", e);
       }
@@ -835,26 +822,27 @@ public class MockSchemaRegistryClientTest {
     }
 
     private void testCascadeDelete(Schema schema) {
-        String keySubject = "test1Key";
+        // The STRONG association is frozen, so it owns its resource's canonical subject.
+        String keySubject = ":.lkc1:test1-key";
         String valueSubject = "test1Value";
         String resourceID = "test1-id";
         String resourceName = "test1";
         String resourceNamespace = "lkc1";
 
         // Register schemas separately, then create associations
-        registerTestAvroSchemaInSchemaRegistry(client, keySubject, schema.getSchema(), true);
         registerTestAvroSchemaInSchemaRegistry(client, valueSubject, schema.getSchema(), true);
         try {
-            client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
+            // A STRONG association must be created with the topic, not through an upsert.
+            client.createAssociation(new AssociationCreateOrUpdateRequest(
                     resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
-                                null, false),
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, true,
+                                new RegisterSchemaRequest(new Schema(null, null, null, null, null, schema.getSchema())), false),
                             new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
                                 null, false)
                     )));
         } catch (Exception e) {
-            assertNull("createOrUpdateAssociation should succeed.", e);
+            assertNull("createAssociation should succeed.", e);
         }
 
         // Delete with cascade=true
@@ -917,7 +905,7 @@ public class MockSchemaRegistryClientTest {
             client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
                     resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
-                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, false,
+                            new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.WEAK, false,
                                 null, false),
                             new AssociationCreateOrUpdateInfo(valueSubject, "value", LifecyclePolicy.WEAK, false,
                                 null, false)
@@ -989,7 +977,8 @@ public class MockSchemaRegistryClientTest {
 
         // Create all-frozen associations with default subjects
         try {
-            client.createOrUpdateAssociation(new AssociationCreateOrUpdateRequest(
+            // A STRONG association must be created with the topic, not through an upsert.
+            client.createAssociation(new AssociationCreateOrUpdateRequest(
                     resourceName, resourceNamespace, resourceID, null,
                     Arrays.asList(
                             new AssociationCreateOrUpdateInfo(keySubject, "key", LifecyclePolicy.STRONG, true,
@@ -998,7 +987,7 @@ public class MockSchemaRegistryClientTest {
                                 new RegisterSchemaRequest(schema), false)
                     )));
         } catch (Exception e) {
-            assertNull("createOrUpdateAssociation should succeed.", e);
+            assertNull("createAssociation should succeed.", e);
         }
 
         // Delete with cascade=false should fail (frozen association)

@@ -993,6 +993,14 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       Association existingAssociation = resourceAndAssocTypeCache.get(key);
 
       if (existingAssociation == null) {
+        // A STRONG association is owned by its topic and can only be created together with the
+        // topic, never by an upsert. Mirrors the rule enforced by AbstractSchemaRegistry.
+        if (!isCreate && associationInRequest.getLifecycle() == LifecyclePolicy.STRONG) {
+          throw new RestClientException(String.format(
+                  "The association specified an invalid value for property: '%s', detail: %s",
+                  "lifecycle", "cannot be STRONG when creating an association; "
+                          + "STRONG associations must be created with the topic"), 422, 42212);
+        }
         // If on create, frozen is set to true, ensure that a schema is being
         // passed in, and that no other schemas exist in the subject
         if (Boolean.TRUE.equals(associationInRequest.getFrozen())) {
@@ -1041,13 +1049,18 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
                   "The association of type '%s' is frozen for subject '%s'",
                   associationType, subject), 409, 40908);
         }
-        // If existing association is weak but request is frozen, return false
-        if (existingAssociation.getLifecycle() == LifecyclePolicy.WEAK
-                && Boolean.TRUE.equals(associationInRequest.getFrozen())) {
+        // STRONG is frozen and WEAK is not; the two always travel together. Mirrors the
+        // invariant enforced by AbstractSchemaRegistry, and is what rejects promoting an
+        // existing WEAK association to a non-frozen STRONG one.
+        LifecyclePolicy resultingLifecycle = associationInRequest.getLifecycle() != null
+                ? associationInRequest.getLifecycle() : existingAssociation.getLifecycle();
+        boolean resultingFrozen = associationInRequest.getFrozen() != null
+                ? associationInRequest.getFrozen() : existingAssociation.isFrozen();
+        if (resultingFrozen != (resultingLifecycle == LifecyclePolicy.STRONG)) {
           throw new RestClientException(String.format(
                   "The association specified an invalid value for property: '%s', detail: %s",
-                  "frozen", "association with lifecycle of WEAK cannot be frozen"),
-                  422, 42212);
+                  "frozen", String.format("association with lifecycle of %s cannot be frozen=%s",
+                          resultingLifecycle, resultingFrozen)), 422, 42212);
         }
       }
     }
