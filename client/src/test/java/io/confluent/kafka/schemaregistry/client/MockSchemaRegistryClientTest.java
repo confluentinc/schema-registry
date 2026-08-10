@@ -460,6 +460,17 @@ public class MockSchemaRegistryClientTest {
         assertNotNull("Creating a STRONG association via upsert should fail.", e);
       }
 
+      // An association carrying a schema must be created with the topic, so an upsert that would
+      // create one is rejected before any lifecycle check.
+      createRequest = new AssociationRequestBuilder().defaultResource()
+              .valueSubject(defaultValueSubject).valueSchema(SIMPLE_AVRO_SCHEMA).build();
+      try {
+        client.createOrUpdateAssociation(createRequest);
+        fail("Expected exception - an association with a schema must be created with the topic");
+      } catch (Exception e) {
+        assertNotNull("Creating an association with a schema via upsert should fail.", e);
+      }
+
       // Create the association as WEAK instead.
       createRequest = new AssociationRequestBuilder().defaultResource()
               .valueSubject(defaultValueSubject).valueLifecycle(LifecyclePolicy.WEAK).build();
