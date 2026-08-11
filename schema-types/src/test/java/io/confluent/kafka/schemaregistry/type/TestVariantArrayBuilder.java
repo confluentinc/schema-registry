@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.type;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.UUID;
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -23,6 +26,35 @@ import org.slf4j.LoggerFactory;
 
 public class TestVariantArrayBuilder {
   private static final Logger LOG = LoggerFactory.getLogger(TestVariantArrayBuilder.class);
+
+  @Test
+  public void testArrayBuilderWithUUIDBytes() {
+    byte[] uuid = new byte[] {
+        0, 17, 34, 51, 68, 85, 102, 119, -120, -103, -86, -69, -52, -35, -18, -1};
+    long msb = ByteBuffer.wrap(uuid, 0, 8).order(ByteOrder.BIG_ENDIAN).getLong();
+    long lsb = ByteBuffer.wrap(uuid, 8, 8).order(ByteOrder.BIG_ENDIAN).getLong();
+    UUID expected = new UUID(msb, lsb);
+
+    VariantBuilder builder = new VariantBuilder();
+    VariantArrayBuilder array = builder.startArray();
+    array.appendInt(1);
+    // appendUUIDBytes must go through onAppend() so that the element offset is recorded and
+    // numValues is incremented. Otherwise the offset list is wrong and the UUID element is lost.
+    array.appendUUIDBytes(ByteBuffer.wrap(uuid));
+    array.appendInt(2);
+    builder.endArray();
+
+    VariantTestUtils.testVariant(builder.build(), v -> {
+      VariantTestUtils.checkType(v, VariantFormat.ARRAY, Variant.Type.ARRAY);
+      Assert.assertEquals(3, v.numArrayElements());
+      VariantTestUtils.checkType(v.getElementAtIndex(0), VariantFormat.PRIMITIVE, Variant.Type.INT);
+      Assert.assertEquals(1, v.getElementAtIndex(0).getInt());
+      VariantTestUtils.checkType(v.getElementAtIndex(1), VariantFormat.PRIMITIVE, Variant.Type.UUID);
+      Assert.assertEquals(expected, v.getElementAtIndex(1).getUUID());
+      VariantTestUtils.checkType(v.getElementAtIndex(2), VariantFormat.PRIMITIVE, Variant.Type.INT);
+      Assert.assertEquals(2, v.getElementAtIndex(2).getInt());
+    });
+  }
 
   @Test
   public void testEmptyArrayBuilder() {
