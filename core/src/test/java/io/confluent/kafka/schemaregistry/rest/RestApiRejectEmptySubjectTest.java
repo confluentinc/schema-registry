@@ -59,4 +59,12 @@ public abstract class RestApiRejectEmptySubjectTest {
     int id = restApp.restClient.registerSchema(SCHEMA_STRING, "normal-subject");
     assertTrue(id > 0, "non-empty subject registration should still succeed");
   }
+
+  @Test
+  public void testWildcardSubjectRejectedWhenFlagEnabled() {
+    RestClientException ex = assertThrows(RestClientException.class,
+        () -> restApp.restClient.registerSchema(SCHEMA_STRING, "*"));
+    assertEquals(Errors.INVALID_SUBJECT_ERROR_CODE, ex.getErrorCode());
+    assertEquals(422, ex.getStatus());
+  }
 }
