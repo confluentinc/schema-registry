@@ -668,7 +668,7 @@ public class KafkaAvroSerializerTest {
             new AssociationCreateOrUpdateInfo(
                 "mysubject",
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
