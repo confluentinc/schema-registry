@@ -2112,6 +2112,15 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
       boolean isFrozen = association != null
           ? association.isFrozen() : Boolean.TRUE.equals(info.getFrozen());
+      // STRONG is frozen and WEAK is not. applyDefaults settles this on create but not on
+      // update, so the invariant is checked here against the state the request asks for.
+      // This is what rejects promoting a WEAK association to a non-frozen STRONG one.
+      boolean requestedFrozen = info.getFrozen() != null ? info.getFrozen() : isFrozen;
+      if (requestedFrozen != (effectiveLifecycle == LifecyclePolicy.STRONG)) {
+        throw new IllegalPropertyException("frozen",
+            String.format("association with lifecycle of %s cannot be frozen=%s",
+                effectiveLifecycle, requestedFrozen));
+      }
       if (isFrozen && unqualifiedSubject != null
           && !unqualifiedSubject.equals(defaultSubject)) {
         throw new IllegalPropertyException(
