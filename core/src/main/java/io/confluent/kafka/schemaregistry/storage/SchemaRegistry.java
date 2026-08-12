@@ -184,7 +184,8 @@ public interface SchemaRegistry extends SchemaVersionFetcher {
   }
 
   /**
-   * Whether the current registration context allows an empty-string subject name
+   * Whether the current registration context allows an empty-string or pure-wildcard
+   * ({@code *}) subject name
    */
   default boolean allowEmptySubject() {
     return true;
