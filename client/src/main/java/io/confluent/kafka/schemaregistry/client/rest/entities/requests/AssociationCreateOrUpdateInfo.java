@@ -169,32 +169,31 @@ public class AssociationCreateOrUpdateInfo {
   public void applyDefaults(boolean isCreate) {
     if (!isCreate && getSchema() != null) {
       throw new IllegalPropertyException(
-          "schema", "cannot be provided when adding an association to an existing topic; "
+              "schema", "cannot be provided when adding an association to an existing topic; "
               + "an association with a schema must be created with the topic");
     }
     if (getSchema() != null) {
       if (getLifecycle() == LifecyclePolicy.WEAK) {
         throw new IllegalPropertyException(
-            "lifecycle", "cannot be WEAK when schema is provided");
+                "lifecycle", "cannot be WEAK when schema is provided");
       }
       if (Boolean.FALSE.equals(getFrozen())) {
         throw new IllegalPropertyException(
-            "frozen", "cannot be false when a schema is provided");
+                "frozen", "cannot be false when a schema is provided");
       }
       setLifecycle(LifecyclePolicy.STRONG);
-      setFrozen(true);
     } else {
-      if (getFrozen() == null) {
-        setFrozen(false);
+      if (getLifecycle() == null) {
+        setLifecycle(LifecyclePolicy.WEAK);
       }
     }
-    if (getLifecycle() == null) {
-      setLifecycle(LifecyclePolicy.WEAK);
+    boolean desiredFrozen = getLifecycle() == LifecyclePolicy.STRONG;
+    if (getFrozen() != null && getFrozen() != desiredFrozen) {
+      throw new IllegalPropertyException("frozen",
+              String.format("association with lifecycle of %s cannot be frozen=%s",
+                      getLifecycle(), getFrozen()));
     }
-    if (getLifecycle() == LifecyclePolicy.WEAK && Boolean.TRUE.equals(getFrozen())) {
-      throw new IllegalPropertyException(
-          "frozen", "association with lifecycle of WEAK cannot be frozen");
-    }
+    setFrozen(desiredFrozen);
   }
 
   public void validate(boolean isCreate, boolean dryRun) {
