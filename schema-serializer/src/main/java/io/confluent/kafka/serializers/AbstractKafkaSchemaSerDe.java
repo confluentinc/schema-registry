@@ -1075,7 +1075,7 @@ public abstract class AbstractKafkaSchemaSerDe
       errorMessage = ex.getMessage() != null ? ex.getMessage() : ex.toString();
     }
     appendRuleResult(ruleResults, rule, result, errorMessage, ctx);
-    String actionName = getRuleActionName(rule, ruleMode, action);
+    String actionName = ctx.getRuleActionName(action);
     if (actionName == null) {
       actionName = defaultAction;
     }
@@ -1093,26 +1093,6 @@ public abstract class AbstractKafkaSchemaSerDe
       } catch (RuleException e) {
         log.error("Could not run post-rule action {}", action, e);
       }
-    }
-  }
-
-  private String getRuleActionName(Rule rule, RuleMode ruleMode, String actionName) {
-    if ((rule.getMode() == RuleMode.WRITEREAD || rule.getMode() == RuleMode.UPDOWN)
-        && actionName != null
-        && actionName.contains(",")) {
-      String[] parts = actionName.split(",");
-      switch (ruleMode) {
-        case WRITE:
-        case UPGRADE:
-          return parts[0];
-        case READ:
-        case DOWNGRADE:
-          return parts[1];
-        default:
-          throw new IllegalArgumentException("Unsupported rule mode " + ruleMode);
-      }
-    } else {
-      return actionName;
     }
   }
 

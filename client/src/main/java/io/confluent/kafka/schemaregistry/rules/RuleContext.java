@@ -281,13 +281,13 @@ public class RuleContext {
   }
 
   /**
-   * Mirrors AbstractKafkaSchemaSerDe#getRuleActionName: for a {@code WRITEREAD} or
-   * {@code UPDOWN} rule, {@code action} may be a comma-separated "write-side,read-side"
-   * pair (e.g. {@code "ERROR,NONE"}); this picks the half matching this context's
-   * {@link #ruleMode()} so callers that read an onSuccess/onFailure value themselves
-   * stay consistent with the action that will actually run for this invocation.
+   * For a {@code WRITEREAD} or {@code UPDOWN} rule, {@code action} may be a
+   * comma-separated "write-side,read-side" pair (e.g. {@code "ERROR,NONE"}); this picks
+   * the half matching this context's {@link #ruleMode()} so callers that read an
+   * onSuccess/onFailure value themselves stay consistent with the action that will
+   * actually run for this invocation.
    */
-  public String resolveActionForMode(String action) {
+  public String getRuleActionName(String action) {
     if ((rule.getMode() == RuleMode.WRITEREAD || rule.getMode() == RuleMode.UPDOWN)
         && action != null
         && action.indexOf(',') >= 0) {

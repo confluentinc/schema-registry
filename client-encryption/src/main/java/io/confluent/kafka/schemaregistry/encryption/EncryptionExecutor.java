@@ -398,7 +398,7 @@ public class EncryptionExecutor implements RuleExecutor {
     }
 
     private boolean isOnFailureNone(RuleContext ctx) {
-      return NoneAction.TYPE.equals(ctx.resolveActionForMode(ctx.getOnFailure()));
+      return NoneAction.TYPE.equals(ctx.getRuleActionName(ctx.getOnFailure()));
     }
 
     private int getDekExpiryDays(RuleContext ctx) throws RuleException {
