@@ -649,12 +649,12 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       // concurrent registration of the same subject. Only registrations arriving through the
       // REST API reach here; associations register their own schemas internally.
       if (associationsEnabled
-          && isNewlyCreatedTopicOwnedSubject(subject)
+          && isTopicOwnedSubjectNonexistent(subject)
           && getModeInScope(subject) != Mode.IMPORT) {
-        log.debug("Rejecting registration of {}: reserved for the topic of that name", subject);
-        throw new OperationNotPermittedException("Subject " + subject
-            + " is reserved for the topic of that name; create it through the topic,"
-            + " or use IMPORT mode");
+        log.debug("Rejecting registration of reserved subject {}", subject);
+        throw new OperationNotPermittedException("Subject " + subject + " is reserved for "
+            + describeOwningTopic(subject)
+            + "; create it through topic creation, or use IMPORT mode");
       }
       if (isLeader()) {
         return register(subject, request, normalize);

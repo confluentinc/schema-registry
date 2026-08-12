@@ -1202,7 +1202,11 @@ public class MockSchemaRegistryClientTest {
         AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
 
         // Mirrors the server: the name belongs to the topic, so it cannot be created here.
-        assertThrows(RestClientException.class, () -> client.register(canonical, schema));
+        RestClientException e = assertThrows(RestClientException.class,
+            () -> client.register(canonical, schema));
+        // The error names the topic to create, rather than leaving the caller to decode it.
+        assertTrue(e.getMessage(),
+            e.getMessage().contains("reserved for topic topic1 in kafka cluster lkc-abc123"));
 
         // Same name shape in a user context is ordinary usage.
         client.register(":.staging:topic1-key", schema);

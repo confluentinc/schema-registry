@@ -104,7 +104,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, Map<String, List<Association>>> resourceNameToAssocCache;
   private final Map<String, String> modes;
   // Subjects soft-deleted here. The server keeps soft-deleted versions in the store, so the
-  // name stays claimed; this map has no deleted state of its own, so track it explicitly.
+  // name stays taken; these caches have no deleted state of their own, so track it explicitly.
   private final Set<String> softDeletedSubjects;
   private final Map<String, AtomicInteger> ids;
   private final Cache<Schema, ParsedSchema> parsedSchemaCache;
@@ -353,14 +353,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
       String subject, ParsedSchema schema, int version, int id,
       boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
-    checkNotNewTopicOwnedSubject(subject);
+    if (isTopicOwnedSubjectNonexistent(subject)
+        && !"IMPORT".equals(modeInScope(subject))) {
+      throw new RestClientException("Subject " + subject + " is reserved for "
+          + describeOwningTopic(subject)
+          + "; create it through topic creation, or use IMPORT mode", 422, 42205);
+    }
     return registerInternal(subject, schema, version, id, normalize, propagateSchemaTags);
   }
 
   /**
-   * Registration that skips the reserved-name check. Associations register their own schemas
-   * under the very names the check protects, mirroring how the server registers internally
-   * rather than through the REST entry point.
+   * Registers without the reserved-name check, for the one caller allowed to create a subject a
+   * topic owns: the association path, which is what brings those subjects into existence. The
+   * subject does not exist yet at that point, so checking there would reject every one.
    */
   private RegisterSchemaResponse registerInternal(
       String subject, ParsedSchema schema, int version, int id,
@@ -660,10 +665,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   /**
-   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value. Duplicated from
-   * {@code AbstractSchemaRegistry} because that check is server-side; the two must agree.
+   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value, the canonical name a topic's
+   * strong association uses. Only lkc-* contexts are reserved: a user context such as ".staging"
+   * holding "orders-value" is ordinary TopicNameStrategy usage and must keep working.
+   *
+   * <p>{@code AbstractSchemaRegistry} carries the same check and the two must agree.
    */
-  private boolean isTopicOwnedSubjectName(String subject) {
+  private boolean matchesTopicOwnedSubjectName(String subject) {
     QualifiedSubject qs = QualifiedSubject.create(DEFAULT_TENANT, subject);
     if (qs == null || !qs.getContext().startsWith(LKC_CONTEXT_PREFIX)) {
       return false;
@@ -674,19 +682,28 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   /**
-   * Mirrors the server rule: a name a topic's strong association owns cannot be created here.
-   * An existing subject is evolution, and IMPORT mode is how replication recreates them.
+   * True if the subject is the canonical form above and no schema has ever been registered
+   * under it. Soft-deleted subjects still count as existing — they remain readable and the
+   * name stays taken — so a delete does not re-expose it.
    */
-  private void checkNotNewTopicOwnedSubject(String subject) throws RestClientException {
-    if (!isTopicOwnedSubjectName(subject)
-        || !allVersions(subject).isEmpty()
-        || softDeletedSubjects.contains(subject)
-        || "IMPORT".equals(modeInScope(subject))) {
-      return;
-    }
-    throw new RestClientException("Subject " + subject
-        + " is reserved for the topic of that name; create it through the topic,"
-        + " or use IMPORT mode", 422, 42205);
+  private boolean isTopicOwnedSubjectNonexistent(String subject) {
+    return matchesTopicOwnedSubjectName(subject)
+        && allVersions(subject).isEmpty()
+        && !softDeletedSubjects.contains(subject);
+  }
+
+  /**
+   * Names the topic and cluster a canonical subject belongs to, so a rejection tells the caller
+   * which topic to create rather than leaving them to decode the subject name.
+   */
+  private String describeOwningTopic(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(DEFAULT_TENANT, subject);
+    String context = qs.getContext();
+    String cluster = context.startsWith(QualifiedSubject.CONTEXT_SEPARATOR)
+        ? context.substring(QualifiedSubject.CONTEXT_SEPARATOR.length()) : context;
+    String unqualified = qs.getSubject();
+    String topic = unqualified.substring(0, unqualified.lastIndexOf('-'));
+    return "topic " + topic + " in kafka cluster " + cluster;
   }
 
   private String modeInScope(String subject) {

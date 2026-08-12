@@ -3749,8 +3749,12 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
 
     // A canonical name in an lkc context belongs to its topic, so a direct POST is rejected.
-    assertThrows(Exception.class, () ->
+    Exception e = assertThrows(Exception.class, () ->
         restApp.restClient.registerSchema(schemas.get(0), ":." + namespace + ":topic1-key"));
+    // The error names the topic to create, rather than leaving the caller to decode it.
+    assertTrue(
+        e.getMessage().contains("reserved for topic topic1 in kafka cluster " + namespace),
+        e.getMessage());
     assertThrows(Exception.class, () ->
         restApp.restClient.registerSchema(schemas.get(0), ":." + namespace + ":topic1-value"));
 

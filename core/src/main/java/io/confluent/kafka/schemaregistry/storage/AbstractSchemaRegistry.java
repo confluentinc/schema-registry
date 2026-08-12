@@ -418,7 +418,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    *
    * <p>{@code MockSchemaRegistryClient} carries the same check and the two must agree.
    */
-  private boolean isTopicOwnedSubjectName(String subject) {
+  private boolean matchesTopicOwnedSubjectName(String subject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
     if (qs == null || !qs.getContext().startsWith(LKC_CONTEXT_PREFIX)) {
       return false;
@@ -429,18 +429,32 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
-   * True if this subject would newly claim a name belonging to a topic: the canonical form
-   * above, with no schema ever registered under it. Soft-deleted versions still count as
-   * claimed, so a delete does not re-expose the name.
+   * True if the subject is the canonical form above and no schema has ever been registered
+   * under it. Soft-deleted versions still count as existing — they remain readable and the
+   * name stays taken — so a delete does not re-expose it.
    */
-  protected boolean isNewlyCreatedTopicOwnedSubject(String subject)
+  protected boolean isTopicOwnedSubjectNonexistent(String subject)
       throws SchemaRegistryException {
-    if (!isTopicOwnedSubjectName(subject)) {
+    if (!matchesTopicOwnedSubjectName(subject)) {
       return false;
     }
     // Ranged over this subject's keys only. hasSubjects() would answer the same question by
     // streaming the whole store, and the miss case here is exactly its worst case.
     return !getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext();
+  }
+
+  /**
+   * Names the topic and cluster a canonical subject belongs to, so a rejection tells the caller
+   * which topic to create rather than leaving them to decode the subject name.
+   */
+  protected String describeOwningTopic(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    String context = qs.getContext();
+    String cluster = context.startsWith(QualifiedSubject.CONTEXT_SEPARATOR)
+        ? context.substring(QualifiedSubject.CONTEXT_SEPARATOR.length()) : context;
+    String unqualified = qs.getSubject();
+    String topic = unqualified.substring(0, unqualified.lastIndexOf('-'));
+    return "topic " + topic + " in kafka cluster " + cluster;
   }
 
   protected void checkRegisterMode(
