@@ -488,6 +488,8 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
    * must not be "__GLOBAL" or "__EMPTY", and must not be in the global context
    * unless isConfigOrMode is true.
    *
+   * <p>Note: the pure-wildcard subject {@code *} is always permitted by this overload.
+   *
    * @param tenant the tenant
    * @param qualifiedSubject the subject with a tenant prefix
    * @param isConfigOrMode true if the subject is for config or mode settings

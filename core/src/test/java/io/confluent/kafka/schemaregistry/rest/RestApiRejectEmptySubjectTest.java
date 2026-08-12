@@ -66,5 +66,6 @@ public abstract class RestApiRejectEmptySubjectTest {
         () -> restApp.restClient.registerSchema(SCHEMA_STRING, "*"));
     assertEquals(Errors.INVALID_SUBJECT_ERROR_CODE, ex.getErrorCode());
     assertEquals(422, ex.getStatus());
+    assertTrue(ex.getMessage().contains("*"), "error message should reference the rejected subject");
   }
 }

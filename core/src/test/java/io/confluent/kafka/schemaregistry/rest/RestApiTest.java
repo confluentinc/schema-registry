@@ -1086,6 +1086,8 @@ public abstract class RestApiTest {
   public void testRegisterSchemaWithWildcardSubjectAllowedByDefault() throws Exception {
     // schema.reject.empty.subject defaults to false, so the pure-wildcard subject "*"
     // is still accepted, mirroring the empty-subject default behavior.
+    // Note: this only covers registration; downstream operations against a literal "*"
+    // subject (listSubjects, getSchemaBySubject, deleteSubject) are not exercised here.
     String schema = TestUtils.getRandomCanonicalAvroString(1).get(0);
     TestUtils.registerAndVerifySchema(restApp.restClient, schema, expectedSchemaId(1), "*");
   }
