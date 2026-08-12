@@ -181,6 +181,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   };
 
+  private static final String LKC_CONTEXT_PREFIX =
+      QualifiedSubject.CONTEXT_SEPARATOR + "lkc-";
+  private static final String KEY_ASSOCIATION_SUFFIX = "-key";
+  private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
+
   protected Store<SchemaRegistryKey, SchemaRegistryValue> store;
 
   protected final SchemaRegistryConfig config;
@@ -206,6 +211,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final int contextSearchDefaultLimit;
   protected final int subjectSearchMaxLimit;
   protected final boolean allowModeChanges;
+  protected final boolean associationsEnabled;
   protected final AtomicBoolean initialized;
   protected final Time time;
 
@@ -269,6 +275,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     this.subjectSearchMaxLimit =
         config.getInt(SchemaRegistryConfig.SUBJECT_SEARCH_MAX_LIMIT_CONFIG);
     this.allowModeChanges = config.getBoolean(SchemaRegistryConfig.MODE_MUTABILITY);
+    this.associationsEnabled = config.getBoolean(SchemaRegistryConfig.ASSOCIATIONS_ENABLE);
     this.initialized = new AtomicBoolean(false);
     this.time = config.getTime();
   }
@@ -402,6 +409,38 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  /**
+   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value, the canonical name a topic's
+   * strong association uses. Only lkc-* contexts are reserved: a user context such as ".staging"
+   * holding "orders-value" is ordinary TopicNameStrategy usage and must keep working.
+   *
+   * <p>{@code MockSchemaRegistryClient} carries the same check and the two must agree.
+   */
+  private boolean isTopicOwnedSubjectName(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (qs == null || !qs.getContext().startsWith(LKC_CONTEXT_PREFIX)) {
+      return false;
+    }
+    String unqualified = qs.getSubject();
+    return unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        || unqualified.endsWith(VALUE_ASSOCIATION_SUFFIX);
+  }
+
+  /**
+   * True if this subject would newly claim a name belonging to a topic: the canonical form
+   * above, with no schema ever registered under it. Soft-deleted versions still count as
+   * claimed, so a delete does not re-expose the name.
+   */
+  protected boolean isNewlyCreatedTopicOwnedSubject(String subject)
+      throws SchemaRegistryException {
+    if (!isTopicOwnedSubjectName(subject)) {
+      return false;
+    }
+    // Ranged over this subject's keys only. hasSubjects() would answer the same question by
+    // streaming the whole store, and the miss case here is exactly its worst case.
+    return !getAllVersions(subject, LookupFilter.INCLUDE_DELETED).hasNext();
   }
 
   protected void checkRegisterMode(

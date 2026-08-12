@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.storage.Mode;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.InputStream;
@@ -3740,6 +3741,69 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     } finally {
       conn.disconnect();
     }
+  }
+
+  @Test
+  public void testTopicOwnedSubjectCannotBeCreatedDirectly() throws Exception {
+    String namespace = "lkc-abc123";
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(3);
+
+    // A canonical name in an lkc context belongs to its topic, so a direct POST is rejected.
+    assertThrows(Exception.class, () ->
+        restApp.restClient.registerSchema(schemas.get(0), ":." + namespace + ":topic1-key"));
+    assertThrows(Exception.class, () ->
+        restApp.restClient.registerSchema(schemas.get(0), ":." + namespace + ":topic1-value"));
+
+    // Same shape in a user context is ordinary TopicNameStrategy usage.
+    restApp.restClient.registerSchema(schemas.get(1), ":.staging:topic1-key");
+    assertEquals(1, restApp.restClient.getAllVersions(":.staging:topic1-key").size());
+
+    // An lkc context with a name that is not a canonical association subject is unaffected.
+    restApp.restClient.registerSchema(schemas.get(2), ":." + namespace + ":topic1-other");
+    assertEquals(1,
+        restApp.restClient.getAllVersions(":." + namespace + ":topic1-other").size());
+  }
+
+  @Test
+  public void testTopicOwnedSubjectCanBeEvolvedThroughSchemaApi() throws Exception {
+    String namespace = "lkc-abc123";
+    String resourceName = "topic1";
+    String canonicalSubject = ":." + namespace + ":" + resourceName + "-key";
+    String schemaV1 =
+        "{\"type\":\"record\",\"name\":\"R\","
+            + "\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}";
+    String schemaV2 =
+        "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+            + "{\"name\":\"f\",\"type\":\"string\"},"
+            + "{\"name\":\"g\",\"type\":\"int\",\"default\":0}]}";
+
+    RegisterSchemaRequest keyRequest = new RegisterSchemaRequest();
+    keyRequest.setSchema(schemaV1);
+
+    // Kafka creates the strong association, which registers v1 under the canonical subject.
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, namespace, "res-evolve", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "key", LifecyclePolicy.STRONG, true, keyRequest, null)));
+    AssociationResponse response = restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request);
+    assertEquals(canonicalSubject, response.getAssociations().get(0).getSubject());
+
+    // The topic owns the name now, so evolving it through the schema API is allowed.
+    restApp.restClient.registerSchema(schemaV2, canonicalSubject);
+    assertEquals(2, restApp.restClient.getAllVersions(canonicalSubject).size());
+  }
+
+  @Test
+  public void testImportModeAllowsTopicOwnedSubjectCreation() throws Exception {
+    String canonicalSubject = ":.lkc-abc123:topic2-key";
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(1);
+
+    // IMPORT mode is how replication recreates these subjects, so the reservation must not
+    // apply. Registration there carries an explicit version and id.
+    restApp.restClient.setMode(Mode.IMPORT.name(), canonicalSubject, true);
+    restApp.restClient.registerSchema(schemas.get(0), canonicalSubject, 1, 1);
+    assertEquals(1, restApp.restClient.getAllVersions(canonicalSubject).size());
   }
 
 }
