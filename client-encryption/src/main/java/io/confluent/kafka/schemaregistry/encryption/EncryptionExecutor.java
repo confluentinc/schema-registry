@@ -311,7 +311,8 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         kek = getOrCreateKek(ctx);
       } catch (RuleException e) {
-        if (ctx.ruleMode() == RuleMode.READ && isOnFailureNone(ctx)) {
+        if (ctx.ruleMode() == RuleMode.READ
+            && NoneAction.TYPE.equals(ctx.getRuleActionName(ctx.getOnFailure()))) {
           // Rule is configured to tolerate failures (onFailure=NONE), so don't abort
           // before any field is visited. Defer to per-field transform() so each affected
           // field gets its own FAILED status recorded in fieldMetadata, instead of a
@@ -395,10 +396,6 @@ public class EncryptionExecutor implements RuleExecutor {
             + kek.getKmsKeyId() + "' which differs from rule kms key id '" + kmsKeyId + "'");
       }
       return kek;
-    }
-
-    private boolean isOnFailureNone(RuleContext ctx) {
-      return NoneAction.TYPE.equals(ctx.getRuleActionName(ctx.getOnFailure()));
     }
 
     private int getDekExpiryDays(RuleContext ctx) throws RuleException {
