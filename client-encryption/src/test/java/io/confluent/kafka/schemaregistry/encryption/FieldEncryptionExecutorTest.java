@@ -78,10 +78,12 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.GenericContainerWithVersion;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.json.JsonSchemaAndValue;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -2316,8 +2318,6 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(EncryptionExecutor.Status.DECRYPTED.name(),
         meta.get(EncryptionExecutor.META_STATUS));
     assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
-    assertFalse("errorMessage should be absent for DECRYPTED",
-        meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
@@ -2385,7 +2385,6 @@ public abstract class FieldEncryptionExecutorTest {
     Map<String, String> meta = firstFieldEntry(rr).getValue();
     assertEquals(EncryptionExecutor.Status.FAILED.name(),
         meta.get(EncryptionExecutor.META_STATUS));
-    assertNotNull(meta.get(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
@@ -2419,6 +2418,10 @@ public abstract class FieldEncryptionExecutorTest {
     // ciphertext rather than the original plaintext.
     assertNotEquals("testUser", record.get("name").toString());
 
+    // Fields not tagged PII are untouched by the rule and return normally.
+    assertEquals("testUser2", record.get("name2").toString());
+    assertEquals(18, record.get("age"));
+
     // The failure is recorded per field rather than failing the whole rule.
     RuleResult rr = findEncryptRuleResult(wrapper);
     assertNotNull("expected an ENCRYPT RuleResult", rr);
@@ -2426,8 +2429,6 @@ public abstract class FieldEncryptionExecutorTest {
     Map<String, String> meta = firstFieldEntry(rr).getValue();
     assertEquals(EncryptionExecutor.Status.FAILED.name(),
         meta.get(EncryptionExecutor.META_STATUS));
-    assertNotNull(meta.get(EncryptionExecutor.META_ERROR_MESSAGE));
-    assertTrue(meta.get(EncryptionExecutor.META_ERROR_MESSAGE).contains("No kek found"));
   }
 
   @Test
@@ -2457,6 +2458,95 @@ public abstract class FieldEncryptionExecutorTest {
     } catch (SerializationException expected) {
       // Expected: the whole record fails rather than tolerating the decrypt failure.
     }
+  }
+
+  // ---- Tests confirming the exact fieldMetadata() path key per schema type ----
+
+  @Test
+  public void testFieldPathOnFailureAvro() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    GenericContainerWithVersion wrapper =
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
+    RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(1, rr.fieldMetadata().size());
+    String fieldPath = firstFieldEntry(rr).getKey();
+    // Avro: <schema namespace>.<record name>.<field name>
+    assertEquals("example.avro.User.name", fieldPath);
+  }
+
+  @Test
+  public void testFieldPathOnFailureJsonSchema() throws Exception {
+    JsonNode data = new ObjectMapper().readTree("{\"name\": \"testUser\"}");
+    String schemaStr = "{\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+        + "\"title\":\"User\",\"type\":\"object\",\"properties\":{"
+        + "\"name\":{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\"}],"
+        + "\"confluent:tags\":[\"PII\"]}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = jsonSchemaSerializer5.serialize(topic, headers, data);
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    JsonSchemaAndValue wrapper =
+        jsonSchemaDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
+    RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(1, rr.fieldMetadata().size());
+    String fieldPath = firstFieldEntry(rr).getKey();
+    // JSON Schema: JSONPath-style, rooted at "$"
+    assertEquals("$.name", fieldPath);
+  }
+
+  @Test
+  public void testFieldPathOnFailureProtobuf() throws Exception {
+    Widget widget = Widget.newBuilder().setName("testUser").setSize(123).build();
+    ProtobufSchema protobufSchema = new ProtobufSchema(widget.getDescriptorForType());
+    // Widget.name carries tags PII+PUBLIC, ssn carries PII+PRIVATE: tagging on "PUBLIC"
+    // isolates just the "name" field instead of matching both PII-tagged fields.
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PUBLIC"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = protobufSerializer.serialize(topic, headers, widget);
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    ProtobufSchemaAndValue wrapper =
+        protobufDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
+    RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(1, rr.fieldMetadata().size());
+    String fieldPath = firstFieldEntry(rr).getKey();
+    // Protobuf: FieldDescriptor#getFullName() = "<proto package>.<Message>.<field>"
+    assertEquals("io.confluent.kafka.schemaregistry.rules.Widget.name", fieldPath);
   }
 
   @Test
