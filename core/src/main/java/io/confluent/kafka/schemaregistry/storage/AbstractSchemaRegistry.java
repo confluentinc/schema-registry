@@ -395,18 +395,25 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    */
   protected Schema toSchemaWithTags(String subject, RegisterSchemaRequest request)
           throws SchemaRegistryException {
-    Schema schema = new Schema(subject, request);
-    if (!request.hasSchemaTagsToAddOrRemove()) {
-      return schema;
+    // Applying tags throws an unchecked exception when an entity path does not resolve against
+    // the schema, so convert it here rather than at each caller, otherwise a bad tag path
+    // surfaces as a server error instead of an invalid schema.
+    try {
+      Schema schema = new Schema(subject, request);
+      if (!request.hasSchemaTagsToAddOrRemove()) {
+        return schema;
+      }
+      ParsedSchema parsedSchema = parseSchema(schema);
+      ParsedSchema newSchema = parsedSchema
+              .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
+                      TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
+      // If a version was not specified, then use the latest version
+      // to ensure that the confluent:version metadata is added
+      int version = request.getVersion() != null ? request.getVersion() : -1;
+      return new Schema(subject, version, schema.getId(), newSchema);
+    } catch (IllegalArgumentException e) {
+      throw new InvalidSchemaException(e);
     }
-    ParsedSchema parsedSchema = parseSchema(schema);
-    ParsedSchema newSchema = parsedSchema
-            .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
-                    TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
-    // If a version was not specified, then use the latest version
-    // to ensure that the confluent:version metadata is added
-    int version = request.getVersion() != null ? request.getVersion() : -1;
-    return new Schema(subject, version, schema.getId(), newSchema);
   }
 
   protected boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {

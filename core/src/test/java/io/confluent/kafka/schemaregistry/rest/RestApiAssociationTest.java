@@ -48,6 +48,8 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.Associati
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationResult;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.AssociationUpsertOp;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.utils.TestUtils;
 import java.io.InputStream;
@@ -3953,6 +3955,36 @@ public class RestApiAssociationTest extends ClusterTestHarness {
         RestService.DEFAULT_REQUEST_PROPERTIES, subject, Collections.singleton("*"));
     assertEquals(TAGGED_SCHEMA_STRING, latest.getSchema());
     assertEquals(schemaTags, latest.getSchemaTags());
+  }
+
+  @Test
+  public void testCreateAssociationWithUnresolvableSchemaTagPath() throws Exception {
+    String resourceName = "topic1";
+    String resourceNamespace = "default";
+    String resourceId = "schema-tags-bad-path-123";
+
+    RegisterSchemaRequest schemaRequest = new RegisterSchemaRequest();
+    schemaRequest.setSchema(SCHEMA_STRING);
+    schemaRequest.setSchemaTagsToAdd(ImmutableList.of(
+        new SchemaTags(new SchemaEntity("nosuchrecord", EntityType.SR_RECORD),
+            ImmutableList.of("TAG1"))));
+
+    AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceId, "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            null, "value", null, null, schemaRequest, null)));
+
+    // A tag path that does not resolve is an invalid schema, not a server error,
+    // for a dry run as well as a real create
+    RestClientException dryRunException = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, true, request));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, dryRunException.getErrorCode());
+
+    RestClientException exception = assertThrows(RestClientException.class, () ->
+        restApp.restClient.createAssociation(
+            RestService.DEFAULT_REQUEST_PROPERTIES, null, false, request));
+    assertEquals(Errors.INVALID_SCHEMA_ERROR_CODE, exception.getErrorCode());
   }
 
   @Test
