@@ -611,16 +611,6 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                                   boolean normalize,
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
-    // Only registrations that arrive through the REST API reach here; associations register
-    // their own schemas internally, so they are unaffected.
-    if (associationsEnabled
-        && isNewlyCreatedTopicOwnedSubject(subject)
-        && getModeInScope(subject) != Mode.IMPORT) {
-      log.debug("Rejecting registration of {}: reserved for the topic of that name", subject);
-      throw new OperationNotPermittedException("Subject " + subject
-          + " is reserved for the topic of that name; create it through the topic,"
-          + " or use IMPORT mode");
-    }
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
     boolean isLatestVersion = schema.getVersion() == -1;
@@ -655,6 +645,17 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     kafkaStore.lockFor(subject).lock();
     try {
+      // Inside the lock so the existence check and the write cannot interleave with a
+      // concurrent registration of the same subject. Only registrations arriving through the
+      // REST API reach here; associations register their own schemas internally.
+      if (associationsEnabled
+          && isNewlyCreatedTopicOwnedSubject(subject)
+          && getModeInScope(subject) != Mode.IMPORT) {
+        log.debug("Rejecting registration of {}: reserved for the topic of that name", subject);
+        throw new OperationNotPermittedException("Subject " + subject
+            + " is reserved for the topic of that name; create it through the topic,"
+            + " or use IMPORT mode");
+      }
       if (isLeader()) {
         return register(subject, request, normalize);
       } else {

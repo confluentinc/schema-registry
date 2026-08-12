@@ -1232,6 +1232,25 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testSoftDeleteKeepsTopicOwnedNameClaimed() throws Exception {
+        String canonical = ":.lkc-abc123:topic4-key";
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        client.setMode("IMPORT", canonical);
+        client.register(canonical, schema);
+        client.setMode("READWRITE", canonical);
+
+        // Soft delete leaves the name claimed, matching the server, where soft-deleted
+        // versions remain in the store.
+        client.deleteSubject(canonical, false);
+        client.register(canonical, schema);
+
+        // A permanent delete releases it, so the name is reserved again.
+        client.deleteSubject(canonical, true);
+        assertThrows(RestClientException.class, () -> client.register(canonical, schema));
+    }
+
+    @Test
     public void testTopicOwnedSubjectCanBeEvolvedOnceItExists() throws Exception {
         String canonical = ":.lkc-abc123:topic2-value";
 

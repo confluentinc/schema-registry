@@ -40,6 +40,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -102,6 +103,9 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, List<Association>> resourceIdToAssocCache;
   private final Map<String, Map<String, List<Association>>> resourceNameToAssocCache;
   private final Map<String, String> modes;
+  // Subjects soft-deleted here. The server keeps soft-deleted versions in the store, so the
+  // name stays claimed; this map has no deleted state of its own, so track it explicitly.
+  private final Set<String> softDeletedSubjects;
   private final Map<String, AtomicInteger> ids;
   private final Cache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers = new HashMap<>();
@@ -162,6 +166,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     resourceIdToAssocCache = new ConcurrentHashMap<>();
     resourceNameToAssocCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
+    softDeletedSubjects = ConcurrentHashMap.newKeySet();
     ids = new ConcurrentHashMap<>();
     if (providers == null || providers.isEmpty()) {
       providers = Collections.singletonList(new AvroSchemaProvider());
@@ -675,6 +680,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private void checkNotNewTopicOwnedSubject(String subject) throws RestClientException {
     if (!isTopicOwnedSubjectName(subject)
         || !allVersions(subject).isEmpty()
+        || softDeletedSubjects.contains(subject)
         || "IMPORT".equals(modeInScope(subject))) {
       return;
     }
@@ -816,6 +822,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idToSchemaCache.remove(subject);
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.remove(subject);
     configCache.remove(subject);
+    // A soft delete leaves the name claimed, as it does on the server; a permanent delete
+    // releases it.
+    if (isPermanent) {
+      softDeletedSubjects.remove(subject);
+    } else if (versions != null) {
+      softDeletedSubjects.add(subject);
+    }
     return versions != null
             ? versions.values().stream().sorted().collect(Collectors.toList())
             : Collections.emptyList();
@@ -979,6 +992,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     resourceNameToAssocCache.clear();
     configCache.clear();
     modes.clear();
+    softDeletedSubjects.clear();
     ids.clear();
   }
 
