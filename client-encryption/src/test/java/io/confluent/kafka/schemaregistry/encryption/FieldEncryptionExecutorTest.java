@@ -2391,6 +2391,25 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testRuleResultsEmptyWhenNoRules() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // No rule set, no metadata.
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    GenericContainerWithVersion wrapper =
+            avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
+    assertNotNull(wrapper);
+    assertTrue("rule results should be empty when no rules ran",
+            wrapper.getRuleResults().isEmpty());
+    // Writer info still populated.
+    assertNotNull(wrapper.getWriterSchemaInfo());
+    assertEquals(topic + "-value", wrapper.getWriterSchemaInfo().subject());
+  }
+
+  @Test
   public void testRuleResultsFailedWithMissingKekAndNoneAction() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
