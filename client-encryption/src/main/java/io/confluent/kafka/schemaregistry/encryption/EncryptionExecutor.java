@@ -640,7 +640,8 @@ public class EncryptionExecutor implements RuleExecutor {
         }
       } catch (Exception e) {
         if (ctx.ruleMode() == RuleMode.READ) {
-          recordResult(ctx, Status.FAILED, null, null);
+          String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+          recordResult(ctx, Status.FAILED, null, msg);
         }
         if (e instanceof RuleException) {
           RuleException re = (RuleException) e;

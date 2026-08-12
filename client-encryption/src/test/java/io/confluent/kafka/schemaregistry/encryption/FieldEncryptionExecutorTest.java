@@ -2318,6 +2318,8 @@ public abstract class FieldEncryptionExecutorTest {
     assertEquals(EncryptionExecutor.Status.DECRYPTED.name(),
         meta.get(EncryptionExecutor.META_STATUS));
     assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
+    assertFalse("errorMessage should be absent for DECRYPTED",
+            meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
@@ -2385,6 +2387,7 @@ public abstract class FieldEncryptionExecutorTest {
     Map<String, String> meta = firstFieldEntry(rr).getValue();
     assertEquals(EncryptionExecutor.Status.FAILED.name(),
         meta.get(EncryptionExecutor.META_STATUS));
+    assertNotNull(meta.get(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
