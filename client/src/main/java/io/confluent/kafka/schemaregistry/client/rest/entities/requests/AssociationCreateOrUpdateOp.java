@@ -173,19 +173,18 @@ public abstract class AssociationCreateOrUpdateOp extends AssociationOp {
             "frozen", "cannot be false when a schema is provided");
       }
       setLifecycle(LifecyclePolicy.STRONG);
-      setFrozen(true);
     } else {
-      if (getFrozen() == null) {
-        setFrozen(false);
+      if (getLifecycle() == null) {
+        setLifecycle(LifecyclePolicy.WEAK);
       }
     }
-    if (getLifecycle() == null) {
-      setLifecycle(LifecyclePolicy.WEAK);
+    boolean desiredFrozen = getLifecycle() == LifecyclePolicy.STRONG;
+    if (getFrozen() != null && getFrozen() != desiredFrozen) {
+      throw new IllegalPropertyException("frozen",
+              String.format("association with lifecycle of %s cannot be frozen=%s",
+                      getLifecycle(), getFrozen()));
     }
-    if (getLifecycle() == LifecyclePolicy.WEAK && Boolean.TRUE.equals(getFrozen())) {
-      throw new IllegalPropertyException(
-          "frozen", "association with lifecycle of WEAK cannot be frozen");
-    }
+    setFrozen(desiredFrozen);
   }
 
   // Base validation for the batch path (shared by CREATE and UPSERT ops).

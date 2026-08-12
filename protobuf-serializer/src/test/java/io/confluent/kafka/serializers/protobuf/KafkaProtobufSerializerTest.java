@@ -880,7 +880,7 @@ public class KafkaProtobufSerializerTest {
             new AssociationCreateOrUpdateInfo(
                 "mysubject",
                 "value",
-                LifecyclePolicy.STRONG,
+                LifecyclePolicy.WEAK,
                 false,
                 null,
                 null
