@@ -78,10 +78,12 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.GenericContainerWithVersion;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.json.JsonSchemaAndValue;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import io.confluent.kafka.serializers.protobuf.ProtobufSchemaAndValue;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -2317,7 +2319,7 @@ public abstract class FieldEncryptionExecutorTest {
         meta.get(EncryptionExecutor.META_STATUS));
     assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
     assertFalse("errorMessage should be absent for DECRYPTED",
-        meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
+            meta.containsKey(EncryptionExecutor.META_ERROR_MESSAGE));
   }
 
   @Test
@@ -2389,22 +2391,76 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
-  public void testRuleResultsEmptyWhenNoRules() throws Exception {
+  public void testRuleResultsFailedWithMissingKekAndNoneAction() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
-    // No rule set, no metadata.
+    // NONE on the read side: a kek that disappears before consume should not fail the
+    // whole record, only the field(s) that needed it.
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
     schemaRegistry.register(topic + "-value", avroSchema);
 
     RecordHeaders headers = new RecordHeaders();
     byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    // Simulate the kek being deleted before the consumer can look it up (soft-delete,
+    // then permanently remove it, matching how MockDekRegistryClient models deletion).
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
     GenericContainerWithVersion wrapper =
         avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
     assertNotNull(wrapper);
-    assertTrue("rule results should be empty when no rules ran",
-        wrapper.getRuleResults().isEmpty());
-    // Writer info still populated.
-    assertNotNull(wrapper.getWriterSchemaInfo());
-    assertEquals(topic + "-value", wrapper.getWriterSchemaInfo().subject());
+    GenericRecord record = (GenericRecord) wrapper.getValue();
+
+    // The record still deserializes as a whole, with the affected field left as
+    // ciphertext rather than the original plaintext.
+    assertNotEquals("testUser", record.get("name").toString());
+
+    // Fields not tagged PII are untouched by the rule and return normally.
+    assertEquals("testUser2", record.get("name2").toString());
+    assertEquals(18, record.get("age"));
+
+    // The failure is recorded per field rather than failing the whole rule.
+    RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(1, rr.fieldMetadata().size());
+    Map<String, String> meta = firstFieldEntry(rr).getValue();
+    assertEquals(EncryptionExecutor.Status.FAILED.name(),
+        meta.get(EncryptionExecutor.META_STATUS));
+  }
+
+  @Test
+  public void testMissingKekWithErrorActionFailsWholeRecord() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // ERROR on the read side: a missing kek fails the whole record. Any other
+    // non-NONE action (unset/default, DLQ, etc.) behaves the same way, since
+    // isOnFailureNone only special-cases a resolved action of "NONE".
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, "ERROR,ERROR", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    try {
+      avroDeserializer.deserialize(topic, headers, bytes);
+      fail("Expected deserialization to fail when the kek is missing and onFailure=ERROR");
+    } catch (SerializationException expected) {
+      // Expected: the whole record fails rather than tolerating the decrypt failure.
+    }
   }
 
   @Test
