@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.rules.NoneAction;
 import io.confluent.kafka.schemaregistry.rules.RuleClientException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
@@ -82,8 +83,6 @@ public class EncryptionExecutor implements RuleExecutor {
   public static final String META_KEK_NAME = "kekName";
   /** Per-field metadata key for the DEK version that decrypted the field. */
   public static final String META_DEK_VERSION = "dekVersion";
-  /** Per-field metadata key for the failure message when status is FAILED. */
-  public static final String META_ERROR_MESSAGE = "errorMessage";
 
   /**
    * Field-level decryption outcome recorded under {@link #META_STATUS}
@@ -95,8 +94,7 @@ public class EncryptionExecutor implements RuleExecutor {
     /** Field was left as ciphertext because the executor was configured
      *  for passthrough (non-shared KEK). */
     PASSTHROUGH,
-    /** Decryption was attempted but threw. The exception message is under
-     *  {@link #META_ERROR_MESSAGE}. */
+    /** Decryption was attempted but threw. */
     FAILED
   }
 
@@ -302,11 +300,24 @@ public class EncryptionExecutor implements RuleExecutor {
     private Kek kek;
     private int dekExpiryDays;
     private boolean passthroughOnRead;
+    private RuleException kekUnavailable;
 
     public void init(RuleContext ctx) throws RuleException {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
-      kek = getOrCreateKek(ctx);
+      try {
+        kek = getOrCreateKek(ctx);
+      } catch (RuleException e) {
+        if (ctx.ruleMode() == RuleMode.READ && isOnFailureNone(ctx)) {
+          // Rule is configured to tolerate failures (onFailure=NONE), so don't abort
+          // before any field is visited. Defer to per-field transform() so each affected
+          // field gets its own FAILED status recorded in fieldMetadata, instead of a
+          // rule-level failure with no field detail at all.
+          kekUnavailable = e;
+          return;
+        }
+        throw e;
+      }
       dekExpiryDays = getDekExpiryDays(ctx);
       passthroughOnRead = nonsharedKekPassthrough
           && !kek.isShared()
@@ -381,6 +392,10 @@ public class EncryptionExecutor implements RuleExecutor {
             + kek.getKmsKeyId() + "' which differs from rule kms key id '" + kmsKeyId + "'");
       }
       return kek;
+    }
+
+    private boolean isOnFailureNone(RuleContext ctx) {
+      return NoneAction.TYPE.equals(ctx.resolveActionForMode(ctx.getOnFailure()));
     }
 
     private int getDekExpiryDays(RuleContext ctx) throws RuleException {
@@ -568,8 +583,12 @@ public class EncryptionExecutor implements RuleExecutor {
         if (value == null) {
           return null;
         }
+        if (kekUnavailable != null) {
+          recordResult(ctx, Status.FAILED, null);
+          return value;
+        }
         if (passthroughOnRead) {
-          recordResult(ctx, Status.PASSTHROUGH, null, null);
+          recordResult(ctx, Status.PASSTHROUGH, null);
           return value;
         }
         Dek dek;
@@ -614,15 +633,14 @@ public class EncryptionExecutor implements RuleExecutor {
             // we fall through to the catch and record FAILED with no leftover
             // DEK metadata from a partial-success state.
             Object decoded = toObject(type, plaintext);
-            recordResult(ctx, Status.DECRYPTED, dek.getVersion(), null);
+            recordResult(ctx, Status.DECRYPTED, dek.getVersion());
             return decoded;
           default:
             throw new IllegalArgumentException("Unsupported rule mode " + ctx.ruleMode());
         }
       } catch (Exception e) {
         if (ctx.ruleMode() == RuleMode.READ) {
-          String msg = e.getMessage() != null ? e.getMessage() : e.toString();
-          recordResult(ctx, Status.FAILED, null, msg);
+          recordResult(ctx, Status.FAILED, null);
         }
         if (e instanceof RuleException) {
           RuleException re = (RuleException) e;
@@ -639,8 +657,7 @@ public class EncryptionExecutor implements RuleExecutor {
     private void recordResult(
         RuleContext ctx,
         Status status,
-        Integer dekVersion,
-        String errorMessage) {
+        Integer dekVersion) {
       RuleContext.FieldContext field = ctx.currentField();
       if (field == null) {
         // Payload-level transforms (no field) are out of scope.
@@ -652,7 +669,6 @@ public class EncryptionExecutor implements RuleExecutor {
       if (dekVersion != null) {
         ctx.putFieldMetadata(path, META_DEK_VERSION, String.valueOf(dekVersion));
       }
-      ctx.putFieldMetadata(path, META_ERROR_MESSAGE, errorMessage);
     }
 
     private byte[] prefixVersion(int version, byte[] ciphertext) {

@@ -40,6 +40,10 @@ import org.apache.kafka.common.header.Headers;
  */
 public class RuleContext {
 
+  // Mirrors AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS. Duplicated here (rather than
+  // referenced) since this module is not allowed to depend on schema-serializer.
+  private static final String RULE_EXECUTORS_PREFIX = "rule.executors";
+
   private final Map<String, ?> configs;
   private final ExecutionEnvironment enabledEnv;
   private final ParsedSchema source;
@@ -202,6 +206,104 @@ public class RuleContext {
       return tags;
     }
     return Collections.emptySet();
+  }
+
+  /**
+   * Ported verbatim from AbstractKafkaSchemaSerDe#getOnFailure (minus its
+   * onFailureActions cache, which stays with that caller): checks a per-rule-name
+   * config override, then a per-rule-type override, then a default override, then
+   * finally falls back to the onFailure declared on the rule itself.
+   */
+  public String getOnFailure() {
+    Object propertyValue = getRuleConfig(rule.getName(), "onFailure");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", "onFailure");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onFailure");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    return rule.getOnFailure();
+  }
+
+  /**
+   * Ported verbatim from AbstractKafkaSchemaSerDe#getOnSuccess (minus its
+   * onSuccessActions cache, which stays with that caller): checks a per-rule-name
+   * config override, then a per-rule-type override, then a default override, then
+   * finally falls back to the onSuccess declared on the rule itself.
+   */
+  public String getOnSuccess() {
+    Object propertyValue = getRuleConfig(rule.getName(), "onSuccess");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", "onSuccess");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onSuccess");
+    if (propertyValue != null) {
+      return propertyValue.toString();
+    }
+    return rule.getOnSuccess();
+  }
+
+  /**
+   * Ported from step 1 of AbstractKafkaSchemaSerDe#isDisabled (the config-override
+   * check): checks a per-rule-name override, then a per-rule-type override, then a
+   * default override. Returns {@code null} if none is set, since steps 2 (ruleSet
+   * enabled-environment check) and 3 (the rule's own {@code disabled} flag) depend on
+   * this serde instance's own execution environment, which is not part of RuleContext.
+   */
+  public Boolean getDisabledOverride() {
+    Object propertyValue = getRuleConfig(rule.getName(), "disabled");
+    if (propertyValue != null) {
+      return Boolean.parseBoolean(propertyValue.toString());
+    }
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", "disabled");
+    if (propertyValue != null) {
+      return Boolean.parseBoolean(propertyValue.toString());
+    }
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "disabled");
+    if (propertyValue != null) {
+      return Boolean.parseBoolean(propertyValue.toString());
+    }
+    return null;
+  }
+
+  private Object getRuleConfig(String name, String suffix) {
+    String propertyName = RULE_EXECUTORS_PREFIX + "." + name + "." + suffix;
+    return configs.get(propertyName);
+  }
+
+  /**
+   * Mirrors AbstractKafkaSchemaSerDe#getRuleActionName: for a {@code WRITEREAD} or
+   * {@code UPDOWN} rule, {@code action} may be a comma-separated "write-side,read-side"
+   * pair (e.g. {@code "ERROR,NONE"}); this picks the half matching this context's
+   * {@link #ruleMode()} so callers that read an onSuccess/onFailure value themselves
+   * stay consistent with the action that will actually run for this invocation.
+   */
+  public String resolveActionForMode(String action) {
+    if ((rule.getMode() == RuleMode.WRITEREAD || rule.getMode() == RuleMode.UPDOWN)
+        && action != null
+        && action.indexOf(',') >= 0) {
+      String[] parts = action.split(",");
+      switch (ruleMode) {
+        case WRITE:
+        case UPGRADE:
+          return parts[0];
+        case READ:
+        case DOWNGRADE:
+          return parts[1];
+        default:
+          return action;
+      }
+    }
+    return action;
   }
 
   public String getParameter(String name) {
