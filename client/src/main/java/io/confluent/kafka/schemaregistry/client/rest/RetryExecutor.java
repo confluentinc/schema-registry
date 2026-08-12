@@ -21,8 +21,13 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.function.Predicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RetryExecutor {
+  private static final Logger log = LoggerFactory.getLogger(RetryExecutor.class);
+
   /*
    * Max permitted retry times. To prevent exponentialDelay from overflow, there must be
    * 2 ^ retriesAttempted &lt;= 2 ^ 31 - 1, which means retriesAttempted &lt;= 30, so that
@@ -35,16 +40,29 @@ public class RetryExecutor {
   private final Duration initialWaitMs;
   private final Duration maxWaitMs;
   private final Random random;
+  private final Predicate<RestClientException> isRetriablePredicate;
 
   public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs) {
-    this(maxRetries, initialWaitMs, maxWaitMs, new Random());
+    this(maxRetries, initialWaitMs, maxWaitMs, new Random(),
+        RestService::isRestClientExceptionRetriable);
   }
 
   public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs, Random random) {
+    this(maxRetries, initialWaitMs, maxWaitMs, random, RestService::isRestClientExceptionRetriable);
+  }
+
+  public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs,
+      Predicate<RestClientException> isRetriablePredicate) {
+    this(maxRetries, initialWaitMs, maxWaitMs, new Random(), isRetriablePredicate);
+  }
+
+  public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs, Random random,
+      Predicate<RestClientException> isRetriablePredicate) {
     this.maxRetries = maxRetries;
     this.initialWaitMs = Duration.ofMillis(initialWaitMs);
     this.maxWaitMs = Duration.ofMillis(maxWaitMs);
     this.random = random;
+    this.isRetriablePredicate = isRetriablePredicate;
   }
 
   public <T> T retry(Callable<T> callable) throws RestClientException, IOException {
@@ -52,9 +70,11 @@ public class RetryExecutor {
       try {
         return callable.call();
       } catch (RestClientException e) {
-        if (i >= maxRetries || !RestService.isRestClientExceptionRetriable(e)) {
+        if (i >= maxRetries || !isRetriablePredicate.test(e)) {
           throw e;
         }
+        log.warn("Retriable error on attempt {}/{}, status {}: {}. Retrying...",
+            i + 1, maxRetries + 1, e.getStatus(), e.getMessage());
       } catch (IOException e) {
         if (i >= maxRetries) {
           throw e;
