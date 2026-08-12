@@ -380,23 +380,33 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Schema register(String subject, RegisterSchemaRequest request, boolean normalize)
           throws SchemaRegistryException {
     try {
-      Schema schema = new Schema(subject, request);
-
-      if (request.hasSchemaTagsToAddOrRemove()) {
-        ParsedSchema parsedSchema = parseSchema(schema);
-        ParsedSchema newSchema = parsedSchema
-                .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
-                        TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
-        // If a version was not specified, then use the latest version
-        // to ensure that the confluent:version metadata is added
-        int version = request.getVersion() != null ? request.getVersion() : -1;
-        schema = new Schema(subject, version, schema.getId(), newSchema);
-      }
-
+      Schema schema = toSchemaWithTags(subject, request);
       return register(subject, schema, normalize, request.doPropagateSchemaTags());
     } catch (IllegalArgumentException e) {
       throw new InvalidSchemaException(e);
     }
+  }
+
+  /**
+   * Converts a request to the schema it asks to be registered, applying any schema tags that the
+   * request adds or removes.  Callers that inspect a requested schema (compatibility checks,
+   * lookups) need to see the same schema that registration would store, otherwise the tags are
+   * silently dropped.
+   */
+  protected Schema toSchemaWithTags(String subject, RegisterSchemaRequest request)
+          throws SchemaRegistryException {
+    Schema schema = new Schema(subject, request);
+    if (!request.hasSchemaTagsToAddOrRemove()) {
+      return schema;
+    }
+    ParsedSchema parsedSchema = parseSchema(schema);
+    ParsedSchema newSchema = parsedSchema
+            .copy(TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToAdd()),
+                    TagSchemaRequest.schemaTagsListToMap(request.getSchemaTagsToRemove()));
+    // If a version was not specified, then use the latest version
+    // to ensure that the confluent:version metadata is added
+    int version = request.getVersion() != null ? request.getVersion() : -1;
+    return new Schema(subject, version, schema.getId(), newSchema);
   }
 
   protected boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
@@ -2140,7 +2150,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
             if (info.getSchema() == null
                 || latestSchema.getVersion() != 1
                 || lookUpSchemaUnderSubject(qualifiedSubject,
-                    new Schema(qualifiedSubject, info.getSchema()),
+                    toSchemaWithTags(qualifiedSubject, info.getSchema()),
                     normalize, false) == null) {
               throw new IllegalPropertyException(
                   "frozen", "cannot create a frozen association when schemas already exist "
@@ -2154,7 +2164,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         if (isCreate && info.getSchema() != null) {
           boolean normalize = Boolean.TRUE.equals(info.getNormalize());
           Schema oldSchema = lookUpSchemaUnderSubject(
-              qualifiedSubject, new Schema(qualifiedSubject, info.getSchema()), normalize, false);
+              qualifiedSubject, toSchemaWithTags(qualifiedSubject, info.getSchema()),
+              normalize, false);
           if (oldSchema == null) {
             throw new AssociationForResourceExistsException(
                 association.getAssociationType(), association.getResourceName());
@@ -2264,7 +2275,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       getAllVersions(qualifiedSubject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
 
       List<String> errorLogs = isCompatible(qualifiedSubject,
-          new Schema(qualifiedSubject, schema), previousSchemas, normalize);
+          toSchemaWithTags(qualifiedSubject, schema), previousSchemas, normalize);
       if (!errorLogs.isEmpty()) {
         throw new IncompatibleSchemaException(errorLogs.toString());
       }
@@ -2295,8 +2306,9 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         continue;
       }
       boolean normalize = Boolean.TRUE.equals(info.getNormalize());
-      Schema registeredSchema = register(qualifiedSubject,
-          new Schema(qualifiedSubject, schema), normalize, false);
+      // Register through the request overload so that schemaTagsToAdd/schemaTagsToRemove and
+      // propagateSchemaTags on the request are honored, as they are for a plain registration.
+      Schema registeredSchema = register(qualifiedSubject, schema, normalize);
       registeredSchemas.put(associationType, registeredSchema);
     }
 
