@@ -43,6 +43,9 @@ public class RuleContext {
   // Mirrors AbstractKafkaSchemaSerDeConfig.RULE_EXECUTORS. Duplicated here (rather than
   // referenced) since this module is not allowed to depend on schema-serializer.
   private static final String RULE_EXECUTORS_PREFIX = "rule.executors";
+  private static final String ON_SUCCESS = "onSuccess";
+  private static final String ON_FAILURE = "onFailure";
+  private static final String DISABLED = "disabled";
 
   private final Map<String, ?> configs;
   private final ExecutionEnvironment enabledEnv;
@@ -215,15 +218,15 @@ public class RuleContext {
    * finally falls back to the onFailure declared on the rule itself.
    */
   public String getOnFailure() {
-    Object propertyValue = getRuleConfig(rule.getName(), "onFailure");
+    Object propertyValue = getRuleConfig(rule.getName(), ON_FAILURE);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
-    propertyValue = getRuleConfig("_" + rule.getType() + "_", "onFailure");
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_FAILURE);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onFailure");
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_FAILURE);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
@@ -237,15 +240,15 @@ public class RuleContext {
    * finally falls back to the onSuccess declared on the rule itself.
    */
   public String getOnSuccess() {
-    Object propertyValue = getRuleConfig(rule.getName(), "onSuccess");
+    Object propertyValue = getRuleConfig(rule.getName(), ON_SUCCESS);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
-    propertyValue = getRuleConfig("_" + rule.getType() + "_", "onSuccess");
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_SUCCESS);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "onSuccess");
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_SUCCESS);
     if (propertyValue != null) {
       return propertyValue.toString();
     }
@@ -260,15 +263,15 @@ public class RuleContext {
    * this serde instance's own execution environment, which is not part of RuleContext.
    */
   public Boolean getDisabledOverride() {
-    Object propertyValue = getRuleConfig(rule.getName(), "disabled");
+    Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
     if (propertyValue != null) {
       return Boolean.parseBoolean(propertyValue.toString());
     }
-    propertyValue = getRuleConfig("_" + rule.getType() + "_", "disabled");
+    propertyValue = getRuleConfig("_" + rule.getType() + "_", DISABLED);
     if (propertyValue != null) {
       return Boolean.parseBoolean(propertyValue.toString());
     }
-    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, "disabled");
+    propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
     if (propertyValue != null) {
       return Boolean.parseBoolean(propertyValue.toString());
     }
