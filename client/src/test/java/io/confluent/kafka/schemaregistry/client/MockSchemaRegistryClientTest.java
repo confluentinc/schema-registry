@@ -1196,4 +1196,52 @@ public class MockSchemaRegistryClientTest {
         }
     }
 
+    @Test
+    public void testTopicOwnedSubjectCannotBeCreatedDirectly() throws Exception {
+        String canonical = ":.lkc-abc123:topic1-key";
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        // Mirrors the server: the name belongs to the topic, so it cannot be created here.
+        assertThrows(RestClientException.class, () -> client.register(canonical, schema));
+
+        // Same name shape in a user context is ordinary usage.
+        client.register(":.staging:topic1-key", schema);
+        assertEquals(1, client.getAllVersions(":.staging:topic1-key").size());
+
+        // IMPORT mode is how replication recreates these subjects.
+        client.setMode("IMPORT", canonical);
+        client.register(canonical, schema);
+        assertEquals(1, client.getAllVersions(canonical).size());
+    }
+
+    @Test
+    public void testStrongAssociationCanStillCreateItsOwnSubject() throws Exception {
+        String namespace = "lkc-abc123";
+        String resourceName = "topic3";
+        String canonical = ":." + namespace + ":" + resourceName + "-key";
+
+        // The association registers this subject itself, so the reservation must not block it.
+        AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+            resourceName, namespace, "res-mock", "topic",
+            Collections.singletonList(new AssociationCreateOrUpdateInfo(
+                canonical, KEY, LifecyclePolicy.STRONG, true,
+                new RegisterSchemaRequest(new AvroSchema(SIMPLE_AVRO_SCHEMA)), null)));
+        client.createAssociation(request);
+
+        assertEquals(1, client.getAllVersions(canonical).size());
+    }
+
+    @Test
+    public void testTopicOwnedSubjectCanBeEvolvedOnceItExists() throws Exception {
+        String canonical = ":.lkc-abc123:topic2-value";
+
+        // Seed it the way replication would, then evolution through the ordinary path works.
+        client.setMode("IMPORT", canonical);
+        client.register(canonical, new AvroSchema(SIMPLE_AVRO_SCHEMA));
+        client.setMode("READWRITE", canonical);
+
+        client.register(canonical, new AvroSchema(EVOLVED_AVRO_SCHEMA));
+        assertEquals(2, client.getAllVersions(canonical).size());
+    }
+
 }

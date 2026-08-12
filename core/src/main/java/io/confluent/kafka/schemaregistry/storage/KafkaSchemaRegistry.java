@@ -611,6 +611,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                                   boolean normalize,
                                   Map<String, String> headerProperties)
       throws SchemaRegistryException {
+    // Only registrations that arrive through the REST API reach here; associations register
+    // their own schemas internally, so they are unaffected.
+    if (associationsEnabled
+        && isNewlyCreatedTopicOwnedSubject(subject)
+        && getModeInScope(subject) != Mode.IMPORT) {
+      log.debug("Rejecting registration of {}: reserved for the topic of that name", subject);
+      throw new OperationNotPermittedException("Subject " + subject
+          + " is reserved for the topic of that name; create it through the topic,"
+          + " or use IMPORT mode");
+    }
     Schema schema = new Schema(subject, request);
     Config config = getConfigInScope(subject);
     boolean isLatestVersion = schema.getVersion() == -1;

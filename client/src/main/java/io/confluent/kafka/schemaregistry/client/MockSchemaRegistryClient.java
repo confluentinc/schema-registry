@@ -108,6 +108,11 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final String NO_SUBJECT = "";
 
+  private static final String LKC_CONTEXT_PREFIX =
+      QualifiedSubject.CONTEXT_SEPARATOR + "lkc-";
+  private static final String KEY_ASSOCIATION_SUFFIX = "-key";
+  private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
+
   private static class ResourceAndAssocType {
     String resourceId;
     String resourceType;
@@ -340,6 +345,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, int version, int id,
+      boolean normalize, boolean propagateSchemaTags)
+      throws IOException, RestClientException {
+    checkNotNewTopicOwnedSubject(subject);
+    return registerInternal(subject, schema, version, id, normalize, propagateSchemaTags);
+  }
+
+  /**
+   * Registration that skips the reserved-name check. Associations register their own schemas
+   * under the very names the check protects, mirroring how the server registers internally
+   * rather than through the REST entry point.
+   */
+  private RegisterSchemaResponse registerInternal(
       String subject, ParsedSchema schema, int version, int id,
       boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
@@ -634,6 +652,40 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     } else {
       throw new RestClientException("Subject Not Found", 404, 40401);
     }
+  }
+
+  /**
+   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value. Duplicated from
+   * {@code AbstractSchemaRegistry} because that check is server-side; the two must agree.
+   */
+  private boolean isTopicOwnedSubjectName(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(DEFAULT_TENANT, subject);
+    if (qs == null || !qs.getContext().startsWith(LKC_CONTEXT_PREFIX)) {
+      return false;
+    }
+    String unqualified = qs.getSubject();
+    return unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        || unqualified.endsWith(VALUE_ASSOCIATION_SUFFIX);
+  }
+
+  /**
+   * Mirrors the server rule: a name a topic's strong association owns cannot be created here.
+   * An existing subject is evolution, and IMPORT mode is how replication recreates them.
+   */
+  private void checkNotNewTopicOwnedSubject(String subject) throws RestClientException {
+    if (!isTopicOwnedSubjectName(subject)
+        || !allVersions(subject).isEmpty()
+        || "IMPORT".equals(modeInScope(subject))) {
+      return;
+    }
+    throw new RestClientException("Subject " + subject
+        + " is reserved for the topic of that name; create it through the topic,"
+        + " or use IMPORT mode", 422, 42205);
+  }
+
+  private String modeInScope(String subject) {
+    String mode = modes.get(subject);
+    return mode != null ? mode : modes.getOrDefault(WILDCARD, "READWRITE");
   }
 
   private List<Integer> allVersions(String subject) {
@@ -1204,11 +1256,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           throws RestClientException, IOException {
     for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       if (associationInRequest.getSchema() != null) {
-        register(associationInRequest.getSubject(),
+        registerInternal(associationInRequest.getSubject(),
                 parseSchema(new Schema(
                         associationInRequest.getSubject(),
                         associationInRequest.getSchema())).get(),
-                Boolean.TRUE.equals(associationInRequest.getNormalize()));
+                0, -1,
+                Boolean.TRUE.equals(associationInRequest.getNormalize()), false);
       }
     }
   }
