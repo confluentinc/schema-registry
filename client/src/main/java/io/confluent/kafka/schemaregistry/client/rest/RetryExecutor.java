@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.client.rest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.function.Predicate;
@@ -51,18 +52,29 @@ public class RetryExecutor {
     this(maxRetries, initialWaitMs, maxWaitMs, random, RestService::isRestClientExceptionRetriable);
   }
 
-  public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs,
-      Predicate<RestClientException> isRetriablePredicate) {
-    this(maxRetries, initialWaitMs, maxWaitMs, new Random(), isRetriablePredicate);
-  }
-
+  /**
+   * Deliberately the only constructor accepting a predicate: a four-arg overload taking just a
+   * predicate would be ambiguous with the {@link Random} one for a {@code null} literal, which
+   * fails to compile rather than reporting a bad argument. Requiring the caller to supply the
+   * {@link Random} keeps every four-arg call unambiguous.
+   */
   public RetryExecutor(int maxRetries, int initialWaitMs, int maxWaitMs, Random random,
       Predicate<RestClientException> isRetriablePredicate) {
     this.maxRetries = maxRetries;
     this.initialWaitMs = Duration.ofMillis(initialWaitMs);
     this.maxWaitMs = Duration.ofMillis(maxWaitMs);
-    this.random = random;
-    this.isRetriablePredicate = isRetriablePredicate;
+    this.random = Objects.requireNonNull(random, "random cannot be null");
+    this.isRetriablePredicate =
+        Objects.requireNonNull(isRetriablePredicate, "isRetriablePredicate cannot be null");
+  }
+
+  /**
+   * Whether this executor treats the given exception as retriable. Exposed so that callers
+   * sharing this executor's retry policy -- notably {@code RestService}'s URL failover -- make
+   * the same decision as {@link #retry(Callable)} rather than re-deriving it from the default.
+   */
+  public boolean isRetriable(RestClientException e) {
+    return isRetriablePredicate.test(e);
   }
 
   public <T> T retry(Callable<T> callable) throws RestClientException, IOException {
@@ -70,10 +82,18 @@ public class RetryExecutor {
       try {
         return callable.call();
       } catch (RestClientException e) {
-        if (i >= maxRetries || !isRetriablePredicate.test(e)) {
+        if (!isRetriablePredicate.test(e)) {
           throw e;
         }
-        log.warn("Retriable error on attempt {}/{}, status {}: {}. Retrying...",
+        if (i >= maxRetries) {
+          // Only meaningful when retries are enabled; with maxRetries == 0 nothing was retried.
+          if (maxRetries > 0) {
+            log.warn("Retries exhausted after {} attempts, status {}: {}",
+                maxRetries + 1, e.getStatus(), e.getMessage());
+          }
+          throw e;
+        }
+        log.debug("Retriable error on attempt {}/{}, status {}: {}. Retrying...",
             i + 1, maxRetries + 1, e.getStatus(), e.getMessage());
       } catch (IOException e) {
         if (i >= maxRetries) {
