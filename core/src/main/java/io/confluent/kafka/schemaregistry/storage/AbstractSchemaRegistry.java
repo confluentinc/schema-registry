@@ -689,6 +689,44 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   }
 
+  /**
+   * If this schema's own subject is topic-owned, its schema references -- the whole transitive
+   * closure, not just the direct ones -- must all resolve to subjects in the same context.
+   * Otherwise a topic-owned subject's dependency graph could leak outside the topic's own
+   * context through an indirect reference even when every direct reference is in-context.
+   */
+  protected void checkTopicOwnedSubjectReferencesSameContext(Schema schema)
+      throws SchemaRegistryException {
+    if (!matchesTopicOwnedSubjectName(schema.getSubject())) {
+      return;
+    }
+    QualifiedSubject owner = QualifiedSubject.create(tenant(), schema.getSubject());
+    checkReferencesInContext(schema, owner.getContext(), new HashSet<>());
+  }
+
+  private void checkReferencesInContext(
+      Schema schema, String requiredContext, Set<String> visited)
+      throws SchemaRegistryException {
+    for (SchemaReference reference : schema.getReferences()) {
+      QualifiedSubject qualified = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schema.getSubject(), reference.getSubject());
+      String refSubject = qualified != null
+          ? qualified.toQualifiedSubject() : reference.getSubject();
+      if (qualified == null || !requiredContext.equals(qualified.getContext())) {
+        throw new TopicOwnedSubjectReferenceException(
+            "Topic-owned subject '" + schema.getSubject()
+                + "' cannot reference subject directly or indirectly '" + refSubject
+                + "' in a different context");
+      }
+      if (visited.add(refSubject + "#" + reference.getVersion())) {
+        Schema refSchema = get(refSubject, reference.getVersion(), false);
+        if (refSchema != null) {
+          checkReferencesInContext(refSchema, requiredContext, visited);
+        }
+      }
+    }
+  }
+
   protected boolean isSubjectVersionDeleted(String subject, int version)
           throws SchemaRegistryException {
     try {

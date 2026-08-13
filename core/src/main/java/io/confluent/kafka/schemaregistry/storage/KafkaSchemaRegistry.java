@@ -479,6 +479,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       ParsedSchema parsedSchema = canonicalizeSchema(schema, config, doValidation, normalize);
       if (parsedSchema != null && mode != Mode.IMPORT) {
         checkNoReferencesToTopicOwnedSubjects(schema);
+        checkTopicOwnedSubjectReferencesSameContext(schema);
       }
 
       if (parsedSchema != null) {

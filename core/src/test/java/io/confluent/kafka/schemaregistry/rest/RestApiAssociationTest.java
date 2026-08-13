@@ -3840,6 +3840,114 @@ public class RestApiAssociationTest extends ClusterTestHarness {
     }
   }
 
+  @Test
+  public void testTopicOwnedSubjectAllowsReferenceInSameContext() throws Exception {
+    String resourceNamespace = "lkc-samectx";
+    String ownedSubject = ":." + resourceNamespace + ":owned-topic-samectx-value";
+    String targetSubject = ":." + resourceNamespace + ":target-subject";
+
+    createTopicOwnedSubject(resourceNamespace, "owned-topic-samectx", ownedSubject);
+    restApp.restClient.registerSchema(
+        "{\"type\":\"record\",\"name\":\"LeafRecord\",\"namespace\":\"chainns\","
+            + "\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}",
+        targetSubject);
+
+    RegisterSchemaRequest v2 = new RegisterSchemaRequest();
+    v2.setSchema("{\"type\":\"record\",\"name\":\"TopRecord\",\"namespace\":\"chainns\","
+        + "\"fields\":[{\"name\":\"leaf\",\"type\":\"chainns.LeafRecord\"}]}");
+    v2.setReferences(Collections.singletonList(
+        new SchemaReference("chainns.LeafRecord", targetSubject, 1)));
+
+    int registeredId = restApp.restClient.registerSchema(v2, ownedSubject, false).getId();
+    assertTrue(registeredId >= 0);
+    assertEquals(2, restApp.restClient.getAllVersions(ownedSubject).size());
+  }
+
+  @Test
+  public void testTopicOwnedSubjectRejectsDirectReferenceInDifferentContext() throws Exception {
+    String resourceNamespace = "lkc-diffctx";
+    String ownedSubject = ":." + resourceNamespace + ":owned-topic-diffctx-value";
+    String targetSubject = ":.other-ctx:target-subject-diffctx";
+
+    createTopicOwnedSubject(resourceNamespace, "owned-topic-diffctx", ownedSubject);
+    restApp.restClient.registerSchema(
+        "{\"type\":\"record\",\"name\":\"LeafRecord\",\"namespace\":\"chainns\","
+            + "\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}",
+        targetSubject);
+
+    RegisterSchemaRequest v2 = new RegisterSchemaRequest();
+    v2.setSchema("{\"type\":\"record\",\"name\":\"TopRecord\",\"namespace\":\"chainns\","
+        + "\"fields\":[{\"name\":\"leaf\",\"type\":\"chainns.LeafRecord\"}]}");
+    v2.setReferences(Collections.singletonList(
+        new SchemaReference("chainns.LeafRecord", targetSubject, 1)));
+
+    try {
+      restApp.restClient.registerSchema(v2, ownedSubject, false);
+      fail("A topic-owned subject referencing a different context should be rejected with "
+          + Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
+          rce.getErrorCode(),
+          "Topic-owned subject's reference to a different context should be rejected");
+    }
+  }
+
+  @Test
+  public void testTopicOwnedSubjectRejectsTransitiveReferenceInDifferentContext()
+      throws Exception {
+    String resourceNamespace = "lkc-chainctx";
+    String ownedSubject = ":." + resourceNamespace + ":owned-topic-chainctx-value";
+    // Same context as the owned subject -- the direct reference is fine on its own.
+    String middleSubject = ":." + resourceNamespace + ":middle-subject-chainctx";
+    // A different context, reached only by following middleSubject's own reference.
+    String leafSubject = ":.other-ctx:leaf-subject-chainctx";
+
+    createTopicOwnedSubject(resourceNamespace, "owned-topic-chainctx", ownedSubject);
+    restApp.restClient.registerSchema(
+        "{\"type\":\"record\",\"name\":\"LeafRecord\",\"namespace\":\"chainns\","
+            + "\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}",
+        leafSubject);
+
+    RegisterSchemaRequest middle = new RegisterSchemaRequest();
+    middle.setSchema("{\"type\":\"record\",\"name\":\"MiddleRecord\",\"namespace\":\"chainns\","
+        + "\"fields\":[{\"name\":\"leaf\",\"type\":\"chainns.LeafRecord\"}]}");
+    middle.setReferences(Collections.singletonList(
+        new SchemaReference("chainns.LeafRecord", leafSubject, 1)));
+    restApp.restClient.registerSchema(middle, middleSubject, false);
+
+    RegisterSchemaRequest v2 = new RegisterSchemaRequest();
+    v2.setSchema("{\"type\":\"record\",\"name\":\"TopRecord\",\"namespace\":\"chainns\","
+        + "\"fields\":[{\"name\":\"mid\",\"type\":\"chainns.MiddleRecord\"}]}");
+    v2.setReferences(Collections.singletonList(
+        new SchemaReference("chainns.MiddleRecord", middleSubject, 1)));
+
+    try {
+      restApp.restClient.registerSchema(v2, ownedSubject, false);
+      fail("A topic-owned subject's transitive reference to a different context should be "
+          + "rejected with " + Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE);
+    } catch (RestClientException rce) {
+      assertEquals(
+          Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
+          rce.getErrorCode(),
+          "Topic-owned subject's transitive reference to a different context should be "
+              + "rejected even though its direct reference is in-context");
+    }
+  }
+
+  private void createTopicOwnedSubject(
+      String resourceNamespace, String resourceName, String expectedSubject) throws Exception {
+    List<String> schemas = TestUtils.getRandomCanonicalAvroString(1);
+    RegisterSchemaRequest v1 = new RegisterSchemaRequest();
+    v1.setSchema(schemas.get(0));
+    AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
+        resourceName, resourceNamespace, resourceName + "-id", "topic",
+        ImmutableList.of(new AssociationCreateOrUpdateInfo(
+            expectedSubject, "value", LifecyclePolicy.STRONG, true, v1, null)));
+    restApp.restClient.createAssociation(
+        RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
+  }
+
   private String rawGet(String path) throws Exception {
     URL url = new URL(restApp.restConnect + path);
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
