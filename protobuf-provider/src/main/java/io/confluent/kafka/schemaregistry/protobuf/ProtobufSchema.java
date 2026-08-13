@@ -2713,6 +2713,14 @@ public class ProtobufSchema implements ParsedSchema {
     }
   }
 
+  /**
+   * Whether a field is the key of a map entry. Proto3 maps are repeated messages of a
+   * synthesized entry type whose field 1 is the key.
+   */
+  private static boolean isMapKeyField(FieldDescriptor fd) {
+    return fd.getContainingType().getOptions().getMapEntry() && fd.getNumber() == 1;
+  }
+
   private Object toTransformedMessage(
       RuleContext ctx, Descriptor desc, Object message, FieldTransform transform) {
     FieldContext fieldCtx = ctx.currentField();
@@ -2728,13 +2736,31 @@ public class ProtobufSchema implements ParsedSchema {
     } else if (message instanceof Message) {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
-        FieldDescriptor schemaFd = desc.findFieldByName(fd.getName());
+        if (isMapKeyField(fd)) {
+          // A map field arrives as a list of entry messages, so the walk reaches the
+          // entry's key as well as its value. A key is part of the map's identity rather
+          // than a value to transform - rewriting it would move the entry - and the
+          // validation walk never evaluates anything on it either.
+          continue;
+        }
+        // Resolve by number, not by name: protobuf identifies a field by its number, and
+        // renaming a field at the same number is a compatible change
+        FieldDescriptor schemaFd = desc.findFieldByNumber(fd.getNumber());
+        if (schemaFd == null) {
+          // The schema does not declare this field, so it carries no tags and no
+          // transform applies to it. Reading options off it would throw.
+          continue;
+        }
         try (FieldContext fc = ctx.enterField(
-            message, fd.getFullName(), fd.getName(), getType(fd),
-            getInlineTags(schemaFd)) // use schema-based fd which has the tags
+            message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
+            getInlineTags(schemaFd))
         ) {
-          // skip oneof fields that are not set
-          if (fd.getContainingOneof() != null && !copy.hasField(fd)) {
+          // Skip-on-null, as in the validation walk: a field with explicit presence that
+          // is unset has no value to transform, and writing one back would materialize
+          // it - an absent message would become present, carrying a transformed default.
+          // hasPresence() covers oneof members, including the synthetic oneof of a proto3
+          // optional field.
+          if (fd.hasPresence() && !copy.hasField(fd)) {
             continue;
           }
           Object value = copy.getField(fd); // we can't use the schema-based fd
