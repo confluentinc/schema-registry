@@ -65,6 +65,7 @@ public class RuleContext {
   private final Map<String, Map<String, String>> fieldMetadata = new LinkedHashMap<>();
   private final Deque<FieldContext> fieldContexts;
   private final boolean includeRuleResults;
+  private boolean fieldFailure;
 
   public RuleContext(
       Map<String, ?> configs,
@@ -194,6 +195,23 @@ public class RuleContext {
   /** Live view of per-field metadata collected so far, keyed by field path. */
   public Map<String, Map<String, String>> fieldMetadata() {
     return fieldMetadata;
+  }
+
+  /**
+   * Marks that at least one field failed during this rule's execution, even though the
+   * executor chose to return a non-null message instead of throwing (e.g. a pass-through
+   * on failure). Callers that compute overall rule success from the returned message alone
+   * should also consult {@link #hasFieldFailure()}.
+   */
+  public void setFieldFailure() {
+    fieldFailure = true;
+  }
+
+  /**
+   * Whether {@link #setFieldFailure()} was called during this rule's execution.
+   */
+  public boolean hasFieldFailure() {
+    return fieldFailure;
   }
 
   public Set<String> getTags(String fullName) {
