@@ -34,7 +34,7 @@ import org.junit.Test;
  * return {@code false} so every walker invocation surfaces as a {@link ValidationRuleError};
  * the test asserts on (rule name, path) pairs to verify the walker's dispatch (recursion
  * into nested objects, array iteration, CombinedSchema/oneOf semantics, ReferenceSchema
- * resolution, skip-on-null).
+ * resolution, skip-on-null) and that each rule is evaluated once per location reached.
  */
 public class JsonSchemaValidateMessageTest {
 
@@ -152,6 +152,71 @@ public class JsonSchemaValidateMessageTest {
 
     List<ValidationRuleError> errors = schema.validateMessage(ALWAYS_FAIL, outer);
     assertEquals(Collections.singletonList("r@$.inner.x"), firedRules(errors));
+  }
+
+  @Test
+  public void objectValuedProperty_firesItsRuleOnce() throws Exception {
+    // A property's schema and the schema the walk recurses into for that property are the
+    // same everit Schema. Reading confluent:rules in the property loop as well as at the
+    // object being walked charged an object-valued property's rules twice, at one path.
+    String schemaStr = "{"
+        + "\"type\":\"object\","
+        + "\"confluent:rules\":[{\"name\":\"root\",\"expr\":\"true\"}],"
+        + "\"properties\":{"
+        + "  \"inner\":{\"type\":\"object\","
+        + "    \"confluent:rules\":[{\"name\":\"obj\",\"expr\":\"true\"}],"
+        + "    \"properties\":{\"x\":{\"type\":\"integer\","
+        + "      \"confluent:rules\":[{\"name\":\"leaf\",\"expr\":\"true\"}]}}}"
+        + "}}";
+    JsonSchema schema = new JsonSchema(schemaStr);
+    ObjectNode inner = MAPPER.createObjectNode().put("x", 5);
+    ObjectNode outer = MAPPER.createObjectNode().set("inner", inner);
+
+    List<ValidationRuleError> errors = schema.validateMessage(ALWAYS_FAIL, outer);
+    assertEquals(Arrays.asList("root@$", "obj@$.inner", "leaf@$.inner.x"), firedRules(errors));
+  }
+
+  @Test
+  public void arrayItems_firesTheItemSchemaRuleOnEachElement() throws Exception {
+    // Items are not properties, so a rule on a scalar items subschema has no parent
+    // property loop to evaluate it: it is only reached by the walk landing on the element.
+    String schemaStr = "{"
+        + "\"type\":\"object\","
+        + "\"properties\":{"
+        + "  \"tags\":{\"type\":\"array\","
+        + "    \"confluent:rules\":[{\"name\":\"arr\",\"expr\":\"true\"}],"
+        + "    \"items\":{\"type\":\"string\","
+        + "      \"confluent:rules\":[{\"name\":\"item\",\"expr\":\"true\"}]}}"
+        + "}}";
+    JsonSchema schema = new JsonSchema(schemaStr);
+    ArrayNode tags = MAPPER.createArrayNode();
+    tags.add("a");
+    tags.add("b");
+    ObjectNode outer = MAPPER.createObjectNode().set("tags", tags);
+
+    List<ValidationRuleError> errors = schema.validateMessage(ALWAYS_FAIL, outer);
+    assertEquals(Arrays.asList("arr@$.tags", "item@$.tags[0]", "item@$.tags[1]"),
+        firedRules(errors));
+  }
+
+  @Test
+  public void nullableObjectProperty_firesItsRuleOnce() throws Exception {
+    // A "type" array makes the loader synthesize an anyOf whose members do not carry the
+    // keyword, so the rule is declared on the enclosing CombinedSchema alone. The walk
+    // descends into the matching member, which must not re-read it.
+    String schemaStr = "{"
+        + "\"type\":\"object\","
+        + "\"properties\":{"
+        + "  \"inner\":{\"type\":[\"object\",\"null\"],"
+        + "    \"confluent:rules\":[{\"name\":\"obj\",\"expr\":\"true\"}],"
+        + "    \"properties\":{\"x\":{\"type\":\"integer\"}}}"
+        + "}}";
+    JsonSchema schema = new JsonSchema(schemaStr);
+    ObjectNode inner = MAPPER.createObjectNode().put("x", 5);
+    ObjectNode outer = MAPPER.createObjectNode().set("inner", inner);
+
+    List<ValidationRuleError> errors = schema.validateMessage(ALWAYS_FAIL, outer);
+    assertEquals(Collections.singletonList("obj@$.inner"), firedRules(errors));
   }
 
   @Test
