@@ -35,6 +35,7 @@ import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientExcept
 import io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.rules.NoneAction;
 import io.confluent.kafka.schemaregistry.rules.RuleClientException;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
@@ -302,11 +303,25 @@ public class EncryptionExecutor implements RuleExecutor {
     private Kek kek;
     private int dekExpiryDays;
     private boolean passthroughOnRead;
+    private boolean kekUnavailable;
 
     public void init(RuleContext ctx) throws RuleException {
       cryptor = getCryptor(ctx);
       kekName = getKekName(ctx);
-      kek = getOrCreateKek(ctx);
+      try {
+        kek = getOrCreateKek(ctx);
+      } catch (RuleException e) {
+        if (ctx.ruleMode() == RuleMode.READ
+            && NoneAction.TYPE.equals(ctx.getRuleActionName(ctx.getOnFailure()))) {
+          // Rule is configured to tolerate failures (onFailure=NONE), so don't abort
+          // before any field is visited. Defer to per-field transform() so each affected
+          // field gets its own FAILED status recorded in fieldMetadata, instead of a
+          // rule-level failure with no field detail at all.
+          kekUnavailable = true;
+          return;
+        }
+        throw e;
+      }
       dekExpiryDays = getDekExpiryDays(ctx);
       passthroughOnRead = nonsharedKekPassthrough
           && !kek.isShared()
@@ -567,6 +582,10 @@ public class EncryptionExecutor implements RuleExecutor {
       try {
         if (value == null) {
           return null;
+        }
+        if (kekUnavailable) {
+          recordResult(ctx, Status.FAILED, null, "fail to get kek");
+          return value;
         }
         if (passthroughOnRead) {
           recordResult(ctx, Status.PASSTHROUGH, null, null);

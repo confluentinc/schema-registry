@@ -163,8 +163,6 @@ public abstract class AbstractKafkaSchemaSerDe
   private static final ErrorAction ERROR_ACTION = new ErrorAction();
   private static final NoneAction NONE_ACTION = new NoneAction();
 
-  private static final String ON_SUCCESS = "onSuccess";
-  private static final String ON_FAILURE = "onFailure";
   private static final String DISABLED = "disabled";
 
   private static final String PARAM = ".param.";
@@ -885,15 +883,15 @@ public abstract class AbstractKafkaSchemaSerDe
           }
           boolean ruleSucceeded = message != null;
           runAction(ctx, ruleMode, rule,
-              ruleSucceeded ? getOnSuccess(rule) : getOnFailure(rule),
+              ruleSucceeded ? getOnSuccess(ctx) : getOnFailure(ctx),
               message, null, ruleSucceeded ? null : ErrorAction.TYPE,
               ruleSucceeded, ruleResults);
         } catch (RuleException e) {
-          runAction(ctx, ruleMode, rule, getOnFailure(rule), message, e,
+          runAction(ctx, ruleMode, rule, getOnFailure(ctx), message, e,
               ErrorAction.TYPE, false, ruleResults);
         }
       } else {
-        runAction(ctx, ruleMode, rule, getOnFailure(rule), message,
+        runAction(ctx, ruleMode, rule, getOnFailure(ctx), message,
             new RuleException(rule,
                 "Could not find rule executor of type " + rule.getType()),
             ErrorAction.TYPE, false, ruleResults);
@@ -1007,54 +1005,26 @@ public abstract class AbstractKafkaSchemaSerDe
     }
   }
 
-  private String getOnSuccess(Rule rule) {
-    return onSuccessActions.computeIfAbsent(rule, r -> {
-      Object propertyValue = getRuleConfig(rule.getName(), ON_SUCCESS);
-      if (propertyValue != null) {
-        return propertyValue.toString();
-      }
-      propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_SUCCESS);
-      if (propertyValue != null) {
-        return propertyValue.toString();
-      }
-      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_SUCCESS);
-      if (propertyValue != null) {
-        return propertyValue.toString();
-      }
-      return rule.getOnSuccess();
-    });
+  private String getOnSuccess(RuleContext ctx) {
+    return onSuccessActions.computeIfAbsent(ctx.rule(), r -> ctx.getOnSuccess());
   }
 
-  private String getOnFailure(Rule rule) {
-    return onFailureActions.computeIfAbsent(rule, r -> {
-      Object propertyValue = getRuleConfig(rule.getName(), ON_FAILURE);
-      if (propertyValue != null) {
-        return propertyValue.toString();
-      }
-      propertyValue = getRuleConfig("_" + rule.getType() + "_", ON_FAILURE);
-      if (propertyValue != null) {
-        return propertyValue.toString();
-      }
-      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, ON_FAILURE);
-      if (propertyValue != null) {
-        return propertyValue.toString();
-      }
-      return rule.getOnFailure();
-    });
+  private String getOnFailure(RuleContext ctx) {
+    return onFailureActions.computeIfAbsent(ctx.rule(), r -> ctx.getOnFailure());
   }
 
   private boolean isDisabled(RuleContext ctx, Rule rule) {
     return disabledFlags.computeIfAbsent(rule, r -> {
       // 1. Check config overrides
-      Object propertyValue = getRuleConfig(rule.getName(), DISABLED);
+      Object propertyValue = ctx.getRuleConfig(rule.getName(), DISABLED);
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
       }
-      propertyValue = getRuleConfig("_" + rule.getType() + "_", DISABLED);
+      propertyValue = ctx.getRuleConfig("_" + rule.getType() + "_", DISABLED);
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
       }
-      propertyValue = getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
+      propertyValue = ctx.getRuleConfig(RuleBase.DEFAULT_NAME, DISABLED);
       if (propertyValue != null) {
         return Boolean.parseBoolean(propertyValue.toString());
       }
@@ -1074,11 +1044,6 @@ public abstract class AbstractKafkaSchemaSerDe
       // 3. Check rule setting
       return rule.isDisabled();
     });
-  }
-
-  private Object getRuleConfig(String name, String suffix) {
-    String propertyName = RULE_EXECUTORS + "." + name + "." + suffix;
-    return configOriginals.get(propertyName);
   }
 
   private boolean skipRule(RuleContext ctx, Rule rule, Headers headers) {
@@ -1120,7 +1085,7 @@ public abstract class AbstractKafkaSchemaSerDe
       errorMessage = ex.getMessage() != null ? ex.getMessage() : ex.toString();
     }
     appendRuleResult(ruleResults, rule, result, errorMessage, ctx);
-    String actionName = getRuleActionName(rule, ruleMode, action);
+    String actionName = ctx.getRuleActionName(action);
     if (actionName == null) {
       actionName = defaultAction;
     }
@@ -1138,26 +1103,6 @@ public abstract class AbstractKafkaSchemaSerDe
       } catch (RuleException e) {
         log.error("Could not run post-rule action {}", action, e);
       }
-    }
-  }
-
-  private String getRuleActionName(Rule rule, RuleMode ruleMode, String actionName) {
-    if ((rule.getMode() == RuleMode.WRITEREAD || rule.getMode() == RuleMode.UPDOWN)
-        && actionName != null
-        && actionName.contains(",")) {
-      String[] parts = actionName.split(",");
-      switch (ruleMode) {
-        case WRITE:
-        case UPGRADE:
-          return parts[0];
-        case READ:
-        case DOWNGRADE:
-          return parts[1];
-        default:
-          throw new IllegalArgumentException("Unsupported rule mode " + ruleMode);
-      }
-    } else {
-      return actionName;
     }
   }
 
