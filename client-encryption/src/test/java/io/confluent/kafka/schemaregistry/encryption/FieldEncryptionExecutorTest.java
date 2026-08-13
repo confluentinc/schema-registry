@@ -2389,6 +2389,114 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testRuleResultsFailedForEveryFieldWhenKekMissing() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // Tag both string fields so we can check that a missing kek is reported for every
+    // field the rule targets, not just the first one visited. NONE,NONE on the read
+    // side so the record still deserializes.
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII", "PII2"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    // Simulate the kek being removed between produce and consume.
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    GenericContainerWithVersion wrapper =
+        avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
+    assertNotNull(wrapper);
+    GenericRecord record = (GenericRecord) wrapper.getValue();
+
+    // Nothing could be decrypted, so both tagged fields stay as ciphertext while the
+    // untagged field is returned untouched.
+    assertNotEquals("testUser", record.get("name").toString());
+    assertNotEquals("testUser2", record.get("name2").toString());
+    assertEquals(18, record.get("age"));
+
+    // The rule itself still fails - the per-field metadata is additional detail, not a
+    // replacement for the rule-level failure.
+    RuleResult rr = findEncryptRuleResult(wrapper);
+    assertNotNull("expected an ENCRYPT RuleResult", rr);
+    assertEquals(RuleResult.Result.FAILURE, rr.result());
+    assertNotNull("expected a rule-level error message", rr.errorMessage());
+
+    // Both targeted fields are reported, neither of which is the untagged one.
+    assertEquals(2, rr.fieldMetadata().size());
+    for (Map.Entry<String, Map<String, String>> entry : rr.fieldMetadata().entrySet()) {
+      assertNotEquals("example.avro.User.age", entry.getKey());
+      Map<String, String> meta = entry.getValue();
+      assertEquals(EncryptionExecutor.Status.FAILED.name(),
+          meta.get(EncryptionExecutor.META_STATUS));
+      assertEquals("kek1", meta.get(EncryptionExecutor.META_KEK_NAME));
+      assertNotNull("expected the kek lookup failure to be reported",
+          meta.get(EncryptionExecutor.META_ERROR_MESSAGE));
+    }
+  }
+
+  @Test
+  public void testMissingKekWithErrorActionFailsWholeRecord() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    // Deferring the kek failure to the field walk must not make the failure any more
+    // tolerable: with the default (ERROR) action the whole record still fails.
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    try {
+      avroDeserializer.deserializeWithSchema(topic, headers, bytes, null, true);
+      fail("Expected deserialization to fail when the kek is missing");
+    } catch (SerializationException expected) {
+      // Expected: the missing kek fails the record rather than being tolerated.
+    }
+  }
+
+  @Test
+  public void testMissingKekWithoutRuleResultsStillFails() throws Exception {
+    IndexedRecord avroRecord = createUserRecord();
+    AvroSchema avroSchema = new AvroSchema(createUserSchema());
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"),
+        null, null, null, "NONE,NONE", false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+
+    dekRegistry.deleteKek("kek1", false);
+    dekRegistry.deleteKek("kek1", true);
+
+    // Without rule-result collection there is no metadata to gather, so the kek failure
+    // is raised up front. The outcome is the same as when it is deferred: NONE swallows
+    // it and the record comes back with the tagged field left as ciphertext.
+    Object value = avroDeserializer.deserialize(topic, headers, bytes);
+    GenericRecord record = (GenericRecord) value;
+    assertNotEquals("testUser", record.get("name").toString());
+    assertEquals("testUser2", record.get("name2").toString());
+  }
+
+  @Test
   public void testRuleResultsEmptyWhenNoRules() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
