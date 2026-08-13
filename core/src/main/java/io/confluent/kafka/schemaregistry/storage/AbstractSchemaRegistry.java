@@ -115,6 +115,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -181,8 +182,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
   };
 
-  private static final String LKC_CONTEXT_PREFIX =
-      QualifiedSubject.CONTEXT_SEPARATOR + "lkc-";
+  // A Kafka cluster context. CC: lkc-*. CP: 22 characters.
+  // Allowed characters: A-Z, a-z, 0-9, -, _
+  private static final Pattern KAFKA_CLUSTER_CONTEXT = Pattern.compile(
+      Pattern.quote(QualifiedSubject.CONTEXT_SEPARATOR) + "(lkc-.+|[A-Za-z0-9_-]{22})");
   private static final String KEY_ASSOCIATION_SUFFIX = "-key";
   private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
 
@@ -420,7 +423,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
    */
   private boolean matchesTopicOwnedSubjectName(String subject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
-    if (qs == null || !qs.getContext().startsWith(LKC_CONTEXT_PREFIX)) {
+    if (qs == null || !KAFKA_CLUSTER_CONTEXT.matcher(qs.getContext()).matches()) {
       return false;
     }
     String unqualified = qs.getSubject();

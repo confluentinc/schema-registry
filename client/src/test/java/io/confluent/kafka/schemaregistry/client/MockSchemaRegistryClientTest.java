@@ -1236,6 +1236,22 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testCpStyleClusterContextIsAlsoReserved() throws Exception {
+        // CP and self-managed use the 22-character Kafka cluster id as the context, not lkc-*.
+        String cpCanonical = ":._dE3bGkvRAmHF2HXGBqPfg:orders-key";
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        RestClientException e = assertThrows(RestClientException.class,
+            () -> client.register(cpCanonical, schema));
+        assertTrue(e.getMessage(), e.getMessage().contains(
+            "reserved for topic orders in kafka cluster _dE3bGkvRAmHF2HXGBqPfg"));
+
+        // A shorter context is not a cluster id, so the same name shape is unaffected.
+        client.register(":.staging:orders-key", schema);
+        assertEquals(1, client.getAllVersions(":.staging:orders-key").size());
+    }
+
+    @Test
     public void testSoftDeleteKeepsTopicOwnedNameClaimed() throws Exception {
         String canonical = ":.lkc-abc123:topic4-key";
         AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);

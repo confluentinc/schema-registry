@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.regex.Pattern;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -112,8 +113,10 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private static final String NO_SUBJECT = "";
 
-  private static final String LKC_CONTEXT_PREFIX =
-      QualifiedSubject.CONTEXT_SEPARATOR + "lkc-";
+  // A Kafka cluster context. CC: lkc-*. CP: 22 characters.
+  // Allowed characters: A-Z, a-z, 0-9, -, _
+  private static final Pattern KAFKA_CLUSTER_CONTEXT = Pattern.compile(
+      Pattern.quote(QualifiedSubject.CONTEXT_SEPARATOR) + "(lkc-.+|[A-Za-z0-9_-]{22})");
   private static final String KEY_ASSOCIATION_SUFFIX = "-key";
   private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
 
@@ -673,7 +676,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
    */
   private boolean matchesTopicOwnedSubjectName(String subject) {
     QualifiedSubject qs = QualifiedSubject.create(DEFAULT_TENANT, subject);
-    if (qs == null || !qs.getContext().startsWith(LKC_CONTEXT_PREFIX)) {
+    if (qs == null || !KAFKA_CLUSTER_CONTEXT.matcher(qs.getContext()).matches()) {
       return false;
     }
     String unqualified = qs.getSubject();
