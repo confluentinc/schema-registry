@@ -1196,4 +1196,91 @@ public class MockSchemaRegistryClientTest {
         }
     }
 
+    @Test
+    public void testTopicOwnedSubjectCannotBeCreatedDirectly() throws Exception {
+        String canonical = ":.lkc-abc123:topic1-key";
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        // Mirrors the server: the name belongs to the topic, so it cannot be created here.
+        RestClientException e = assertThrows(RestClientException.class,
+            () -> client.register(canonical, schema));
+        // The error names the topic to create, rather than leaving the caller to decode it.
+        assertTrue(e.getMessage(),
+            e.getMessage().contains("reserved for topic topic1 in kafka cluster lkc-abc123"));
+
+        // Same name shape in a user context is ordinary usage.
+        client.register(":.staging:topic1-key", schema);
+        assertEquals(1, client.getAllVersions(":.staging:topic1-key").size());
+
+        // IMPORT mode is how replication recreates these subjects.
+        client.setMode("IMPORT", canonical);
+        client.register(canonical, schema);
+        assertEquals(1, client.getAllVersions(canonical).size());
+    }
+
+    @Test
+    public void testStrongAssociationCanStillCreateItsOwnSubject() throws Exception {
+        String namespace = "lkc-abc123";
+        String resourceName = "topic3";
+        String canonical = ":." + namespace + ":" + resourceName + "-key";
+
+        // The association registers this subject itself, so the reservation must not block it.
+        AssociationCreateOrUpdateRequest request = new AssociationCreateOrUpdateRequest(
+            resourceName, namespace, "res-mock", "topic",
+            Collections.singletonList(new AssociationCreateOrUpdateInfo(
+                canonical, KEY, LifecyclePolicy.STRONG, true,
+                new RegisterSchemaRequest(new AvroSchema(SIMPLE_AVRO_SCHEMA)), null)));
+        client.createAssociation(request);
+
+        assertEquals(1, client.getAllVersions(canonical).size());
+    }
+
+    @Test
+    public void testCpStyleClusterContextIsAlsoReserved() throws Exception {
+        // CP and self-managed use the 22-character Kafka cluster id as the context, not lkc-*.
+        String cpCanonical = ":._dE3bGkvRAmHF2HXGBqPfg:orders-key";
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        RestClientException e = assertThrows(RestClientException.class,
+            () -> client.register(cpCanonical, schema));
+        assertTrue(e.getMessage(), e.getMessage().contains(
+            "reserved for topic orders in kafka cluster _dE3bGkvRAmHF2HXGBqPfg"));
+
+        // A shorter context is not a cluster id, so the same name shape is unaffected.
+        client.register(":.staging:orders-key", schema);
+        assertEquals(1, client.getAllVersions(":.staging:orders-key").size());
+    }
+
+    @Test
+    public void testSoftDeleteKeepsTopicOwnedNameClaimed() throws Exception {
+        String canonical = ":.lkc-abc123:topic4-key";
+        AvroSchema schema = new AvroSchema(SIMPLE_AVRO_SCHEMA);
+
+        client.setMode("IMPORT", canonical);
+        client.register(canonical, schema);
+        client.setMode("READWRITE", canonical);
+
+        // Soft delete leaves the name claimed, matching the server, where soft-deleted
+        // versions remain in the store.
+        client.deleteSubject(canonical, false);
+        client.register(canonical, schema);
+
+        // A permanent delete releases it, so the name is reserved again.
+        client.deleteSubject(canonical, true);
+        assertThrows(RestClientException.class, () -> client.register(canonical, schema));
+    }
+
+    @Test
+    public void testTopicOwnedSubjectCanBeEvolvedOnceItExists() throws Exception {
+        String canonical = ":.lkc-abc123:topic2-value";
+
+        // Seed it the way replication would, then evolution through the ordinary path works.
+        client.setMode("IMPORT", canonical);
+        client.register(canonical, new AvroSchema(SIMPLE_AVRO_SCHEMA));
+        client.setMode("READWRITE", canonical);
+
+        client.register(canonical, new AvroSchema(EVOLVED_AVRO_SCHEMA));
+        assertEquals(2, client.getAllVersions(canonical).size());
+    }
+
 }

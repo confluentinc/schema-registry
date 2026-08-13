@@ -645,6 +645,17 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
     kafkaStore.lockFor(subject).lock();
     try {
+      // Inside the lock so the existence check and the write cannot interleave with a
+      // concurrent registration of the same subject. Only registrations arriving through the
+      // REST API reach here; associations register their own schemas internally.
+      if (associationsEnabled
+          && isTopicOwnedSubjectNonexistent(subject)
+          && getModeInScope(subject) != Mode.IMPORT) {
+        log.debug("Rejecting registration of reserved subject {}", subject);
+        throw new OperationNotPermittedException("Subject " + subject + " is reserved for "
+            + describeOwningTopic(subject)
+            + "; create it through topic creation, or use IMPORT mode");
+      }
       if (isLeader()) {
         return register(subject, request, normalize);
       } else {

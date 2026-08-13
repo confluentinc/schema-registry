@@ -40,7 +40,9 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 
 import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.SortedMap;
+import java.util.regex.Pattern;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,11 +104,21 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   private final Map<String, List<Association>> resourceIdToAssocCache;
   private final Map<String, Map<String, List<Association>>> resourceNameToAssocCache;
   private final Map<String, String> modes;
+  // Subjects soft-deleted here. The server keeps soft-deleted versions in the store, so the
+  // name stays taken; these caches have no deleted state of their own, so track it explicitly.
+  private final Set<String> softDeletedSubjects;
   private final Map<String, AtomicInteger> ids;
   private final Cache<Schema, ParsedSchema> parsedSchemaCache;
   private final Map<String, SchemaProvider> providers = new HashMap<>();
 
   private static final String NO_SUBJECT = "";
+
+  // A Kafka cluster context. CC: lkc-*. CP: 22 characters.
+  // Allowed characters: A-Z, a-z, 0-9, -, _
+  private static final Pattern KAFKA_CLUSTER_CONTEXT = Pattern.compile(
+      Pattern.quote(QualifiedSubject.CONTEXT_SEPARATOR) + "(lkc-.+|[A-Za-z0-9_-]{22})");
+  private static final String KEY_ASSOCIATION_SUFFIX = "-key";
+  private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
 
   private static class ResourceAndAssocType {
     String resourceId;
@@ -157,6 +169,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     resourceIdToAssocCache = new ConcurrentHashMap<>();
     resourceNameToAssocCache = new ConcurrentHashMap<>();
     modes = new ConcurrentHashMap<>();
+    softDeletedSubjects = ConcurrentHashMap.newKeySet();
     ids = new ConcurrentHashMap<>();
     if (providers == null || providers.isEmpty()) {
       providers = Collections.singletonList(new AvroSchemaProvider());
@@ -340,6 +353,24 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   private RegisterSchemaResponse registerWithResponse(
+      String subject, ParsedSchema schema, int version, int id,
+      boolean normalize, boolean propagateSchemaTags)
+      throws IOException, RestClientException {
+    if (isTopicOwnedSubjectNonexistent(subject)
+        && !"IMPORT".equals(modeInScope(subject))) {
+      throw new RestClientException("Subject " + subject + " is reserved for "
+          + describeOwningTopic(subject)
+          + "; create it through topic creation, or use IMPORT mode", 422, 42205);
+    }
+    return registerInternal(subject, schema, version, id, normalize, propagateSchemaTags);
+  }
+
+  /**
+   * Registers without the reserved-name check, for the one caller allowed to create a subject a
+   * topic owns: the association path, which is what brings those subjects into existence. The
+   * subject does not exist yet at that point, so checking there would reject every one.
+   */
+  private RegisterSchemaResponse registerInternal(
       String subject, ParsedSchema schema, int version, int id,
       boolean normalize, boolean propagateSchemaTags)
       throws IOException, RestClientException {
@@ -636,6 +667,53 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     }
   }
 
+  /**
+   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value, the canonical name a topic's
+   * strong association uses. Only lkc-* contexts are reserved: a user context such as ".staging"
+   * holding "orders-value" is ordinary TopicNameStrategy usage and must keep working.
+   *
+   * <p>{@code AbstractSchemaRegistry} carries the same check and the two must agree.
+   */
+  private boolean matchesTopicOwnedSubjectName(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(DEFAULT_TENANT, subject);
+    if (qs == null || !KAFKA_CLUSTER_CONTEXT.matcher(qs.getContext()).matches()) {
+      return false;
+    }
+    String unqualified = qs.getSubject();
+    return unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        || unqualified.endsWith(VALUE_ASSOCIATION_SUFFIX);
+  }
+
+  /**
+   * True if the subject is the canonical form above and no schema has ever been registered
+   * under it. Soft-deleted subjects still count as existing — they remain readable and the
+   * name stays taken — so a delete does not re-expose it.
+   */
+  private boolean isTopicOwnedSubjectNonexistent(String subject) {
+    return matchesTopicOwnedSubjectName(subject)
+        && allVersions(subject).isEmpty()
+        && !softDeletedSubjects.contains(subject);
+  }
+
+  /**
+   * Names the topic and cluster a canonical subject belongs to, so a rejection tells the caller
+   * which topic to create rather than leaving them to decode the subject name.
+   */
+  private String describeOwningTopic(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(DEFAULT_TENANT, subject);
+    String context = qs.getContext();
+    String cluster = context.startsWith(QualifiedSubject.CONTEXT_SEPARATOR)
+        ? context.substring(QualifiedSubject.CONTEXT_SEPARATOR.length()) : context;
+    String unqualified = qs.getSubject();
+    String topic = unqualified.substring(0, unqualified.lastIndexOf('-'));
+    return "topic " + topic + " in kafka cluster " + cluster;
+  }
+
+  private String modeInScope(String subject) {
+    String mode = modes.get(subject);
+    return mode != null ? mode : modes.getOrDefault(WILDCARD, "READWRITE");
+  }
+
   private List<Integer> allVersions(String subject) {
     ArrayList<Integer> allVersions = new ArrayList<>();
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.get(subject);
@@ -764,6 +842,13 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     idToSchemaCache.remove(subject);
     Map<ParsedSchema, Integer> versions = schemaToVersionCache.remove(subject);
     configCache.remove(subject);
+    // A soft delete leaves the name claimed, as it does on the server; a permanent delete
+    // releases it.
+    if (isPermanent) {
+      softDeletedSubjects.remove(subject);
+    } else if (versions != null) {
+      softDeletedSubjects.add(subject);
+    }
     return versions != null
             ? versions.values().stream().sorted().collect(Collectors.toList())
             : Collections.emptyList();
@@ -927,6 +1012,7 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     resourceNameToAssocCache.clear();
     configCache.clear();
     modes.clear();
+    softDeletedSubjects.clear();
     ids.clear();
   }
 
@@ -1204,11 +1290,12 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
           throws RestClientException, IOException {
     for (AssociationCreateOrUpdateInfo associationInRequest : request.getAssociations()) {
       if (associationInRequest.getSchema() != null) {
-        register(associationInRequest.getSubject(),
+        registerInternal(associationInRequest.getSubject(),
                 parseSchema(new Schema(
                         associationInRequest.getSubject(),
                         associationInRequest.getSchema())).get(),
-                Boolean.TRUE.equals(associationInRequest.getNormalize()));
+                0, -1,
+                Boolean.TRUE.equals(associationInRequest.getNormalize()), false);
       }
     }
   }
