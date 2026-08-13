@@ -37,6 +37,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaTags;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SubjectVersion;
@@ -67,6 +68,7 @@ import io.confluent.kafka.schemaregistry.exceptions.SchemaRegistryStoreException
 import io.confluent.kafka.schemaregistry.exceptions.SchemaTooLargeException;
 import io.confluent.kafka.schemaregistry.exceptions.StrongAssociationForSubjectExistsException;
 import io.confluent.kafka.schemaregistry.exceptions.TooManyAssociationsException;
+import io.confluent.kafka.schemaregistry.exceptions.TopicOwnedSubjectReferenceException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
@@ -115,6 +117,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -131,6 +134,7 @@ import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.NO_ACTIVE
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.SCHEMA_TOO_LARGE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.STRONG_ASSOCIATION_FOR_SUBJECT_EXISTS_MESSAGE_FORMAT;
+import static io.confluent.kafka.schemaregistry.rest.exceptions.Errors.TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE;
 import static io.confluent.kafka.schemaregistry.rest.exceptions.RestInvalidAssociationException.INVALID_ASSOCIATION_MESSAGE_FORMAT;
 
 import static io.confluent.kafka.schemaregistry.client.rest.entities.Metadata.mergeMetadata;
@@ -180,6 +184,13 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       throw new UnsupportedOperationException();
     }
   };
+
+  // A Kafka cluster context. CC: lkc-*. CP: 22 characters.
+  // Allowed characters: A-Z, a-z, 0-9, -, _
+  private static final Pattern KAFKA_CLUSTER_CONTEXT = Pattern.compile(
+      Pattern.quote(QualifiedSubject.CONTEXT_SEPARATOR) + "(lkc-.+|[A-Za-z0-9_-]{22})");
+  private static final String KEY_ASSOCIATION_SUFFIX = "-key";
+  private static final String VALUE_ASSOCIATION_SUFFIX = "-value";
 
   protected Store<SchemaRegistryKey, SchemaRegistryValue> store;
 
@@ -402,6 +413,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected boolean isReadOnlyMode(String subject) throws SchemaRegistryStoreException {
     Mode subjectMode = getModeInScope(subject);
     return subjectMode == Mode.READONLY || subjectMode == Mode.READONLY_OVERRIDE;
+  }
+
+  /**
+   * True if the subject is named :.lkc-*:&lt;topic&gt;-key or -value, the canonical name a topic's
+   * strong association uses. Only lkc-* contexts are reserved: a user context such as ".staging"
+   * holding "orders-value" is ordinary TopicNameStrategy usage and must keep working.
+   *
+   * <p>{@code MockSchemaRegistryClient} carries the same check and the two must agree.
+   */
+  private boolean matchesTopicOwnedSubjectName(String subject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (qs == null || !KAFKA_CLUSTER_CONTEXT.matcher(qs.getContext()).matches()) {
+      return false;
+    }
+    String unqualified = qs.getSubject();
+    return unqualified.endsWith(KEY_ASSOCIATION_SUFFIX)
+        || unqualified.endsWith(VALUE_ASSOCIATION_SUFFIX);
   }
 
   protected void checkRegisterMode(
@@ -637,6 +665,78 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
     ParsedSchema parsedSchema = parseSchema(schema, validateAsNew, normalize);
     return maybeValidateAndNormalizeSchema(parsedSchema, schema, config, normalize);
+  }
+
+  /**
+   * Rejects a reference to a topic-owned subject: its lifecycle follows its topic, so the
+   * reference would block it from being deleted when the topic is deleted. Only checks this
+   * schema's own direct references, not the transitive closure of what they in turn reference
+   * -- sufficient because the reciprocal delete-time check ({@link #getReferencedBySubjects})
+   * is itself keyed on each schema's own direct references, so a chain is still guarded at
+   * every hop.
+   */
+  protected void checkNoReferencesToTopicOwnedSubjects(Schema schema)
+      throws SchemaRegistryException {
+    for (SchemaReference reference : schema.getReferences()) {
+      QualifiedSubject qualified = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schema.getSubject(), reference.getSubject());
+      String refSubject = qualified != null
+          ? qualified.toQualifiedSubject() : reference.getSubject();
+      if (matchesTopicOwnedSubjectName(refSubject)) {
+        log.debug("Rejecting registration of {}: references topic-owned subject {}",
+            schema.getSubject(), refSubject);
+        throw new TopicOwnedSubjectReferenceException(
+            "Cannot reference topic-owned subject '" + refSubject + "'");
+      }
+    }
+  }
+
+  /**
+   * If this schema's own subject is topic-owned, its schema references -- the whole transitive
+   * closure, not just the direct ones -- must all resolve to subjects in the same context.
+   * Otherwise a topic-owned subject's dependency graph could leak outside the topic's own
+   * context through an indirect reference even when every direct reference is in-context.
+   */
+  protected void checkTopicOwnedSubjectReferencesSameContext(Schema schema)
+      throws SchemaRegistryException {
+    if (!matchesTopicOwnedSubjectName(schema.getSubject())) {
+      return;
+    }
+    QualifiedSubject owner = QualifiedSubject.create(tenant(), schema.getSubject());
+    checkReferencesInContext(schema.getSubject(), schema, owner.getContext(), new HashSet<>());
+  }
+
+  /**
+   * @param topicOwnedSubject the subject actually being registered, kept separate from {@code
+   *     schema} (which is rebound to each hop as the walk descends) so a violation found several
+   *     hops in still names the subject the caller registered, not the intermediate schema.
+   */
+  private void checkReferencesInContext(
+      String topicOwnedSubject, Schema schema, String requiredContext, Set<String> visited)
+      throws SchemaRegistryException {
+    for (SchemaReference reference : schema.getReferences()) {
+      QualifiedSubject qualified = QualifiedSubject.qualifySubjectWithParent(
+          tenant(), schema.getSubject(), reference.getSubject());
+      String refSubject = qualified != null
+          ? qualified.toQualifiedSubject() : reference.getSubject();
+      if (qualified == null || !requiredContext.equals(qualified.getContext())) {
+        log.debug("Rejecting registration of {}: reference to {} is outside context {}",
+            topicOwnedSubject, refSubject, requiredContext);
+        throw new TopicOwnedSubjectReferenceException(
+            "Topic-owned subject '" + topicOwnedSubject
+                + "' cannot reference subject directly or indirectly '" + refSubject
+                + "' in a different context");
+      }
+      if (visited.add(refSubject + "#" + reference.getVersion())) {
+        // returnDeletedSchema=true: reference resolution itself may have permitted a
+        // soft-deleted target (schema.validate.new.schemas=false), so the walk must be able
+        // to follow it too, or an out-of-context leak behind a soft-deleted hop goes unseen.
+        Schema refSchema = get(refSubject, reference.getVersion(), true);
+        if (refSchema != null) {
+          checkReferencesInContext(topicOwnedSubject, refSchema, requiredContext, visited);
+        }
+      }
+    }
   }
 
   protected boolean isSubjectVersionDeleted(String subject, int version)
@@ -2629,6 +2729,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       } catch (InvalidSchemaException e) {
         ErrorMessage errMsg = new ErrorMessage(
             INVALID_ASSOCIATION_ERROR_CODE,
+            e.getMessage());
+        results.add(new AssociationResult(errMsg, null));
+      } catch (TopicOwnedSubjectReferenceException e) {
+        ErrorMessage errMsg = new ErrorMessage(
+            TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE,
             e.getMessage());
         results.add(new AssociationResult(errMsg, null));
       } catch (SchemaTooLargeException e) {

@@ -83,6 +83,7 @@ public class Errors {
   public static final int INVALID_RULESET_ERROR_CODE = 42210;
   public static final int CONTEXT_NOT_EMPTY_ERROR_CODE = 42211;
   public static final int INVALID_ASSOCIATION_ERROR_CODE = 42212;
+  public static final int TOPIC_OWNED_SUBJECT_REFERENCE_ERROR_CODE = 42213;
 
   // HTTP 500
   public static final int STORE_ERROR_CODE = 50001;
@@ -204,6 +205,11 @@ public class Errors {
 
   public static RestReferenceExistsException referenceExistsException(String message) {
     return new RestReferenceExistsException(message);
+  }
+
+  public static RestTopicOwnedSubjectReferenceException topicOwnedSubjectReferenceException(
+      String message) {
+    return new RestTopicOwnedSubjectReferenceException(message);
   }
 
   public static RestException requestForwardingFailedException(String message, Throwable cause) {
