@@ -3815,18 +3815,20 @@ public class RestApiAssociationTest extends ClusterTestHarness {
 
   @Test
   public void testUpdateAssociationWithSchemaTags() throws Exception {
-    String subject = "subject1";
     String resourceName = "topic1";
     String resourceNamespace = "default";
     String resourceId = "schema-tags-update-123";
+    String subject = ":." + resourceNamespace + ":" + resourceName + "-value";
 
-    // A non-frozen STRONG association requires the subject to already have a version
-    restApp.restClient.registerSchema(SCHEMA_STRING, subject);
+    // A schema can only be carried by a STRONG association, which is always frozen, so the
+    // subject starts out from the schema passed to create
+    RegisterSchemaRequest createSchemaRequest = new RegisterSchemaRequest();
+    createSchemaRequest.setSchema(SCHEMA_STRING);
 
     AssociationCreateOrUpdateRequest createRequest = new AssociationCreateOrUpdateRequest(
         resourceName, resourceNamespace, resourceId, "topic",
         ImmutableList.of(new AssociationCreateOrUpdateInfo(
-            subject, "value", LifecyclePolicy.STRONG, false, null, null)));
+            null, "value", null, null, createSchemaRequest, null)));
     restApp.restClient.createAssociation(
         RestService.DEFAULT_REQUEST_PROPERTIES, null, false, createRequest);
 
