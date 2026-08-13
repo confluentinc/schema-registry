@@ -3320,7 +3320,7 @@ public class ProtobufSchemaTest {
         null, null, null, null, null, false);
     return new RuleContext(Collections.emptyMap(), null, null, schema,
         "topic-value", "topic", null, null, null, false,
-        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
   }
 
   /**
@@ -3521,7 +3521,7 @@ public class ProtobufSchemaTest {
         Collections.singleton("PII"), null, null, null, null, false);
     RuleContext ctx = new RuleContext(Collections.emptyMap(), null, null, schema,
         "topic-value", "topic", null, null, null, false,
-        RuleMode.WRITE, rule, 0, Collections.singletonList(rule));
+        RuleMode.WRITE, rule, 0, Collections.singletonList(rule), false);
     RecordingTransform recorder = new RecordingTransform();
 
     Message result = (Message) schema.transformMessage(ctx, recorder, msg);
