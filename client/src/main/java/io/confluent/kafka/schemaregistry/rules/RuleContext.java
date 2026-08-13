@@ -155,6 +155,15 @@ public class RuleContext {
   }
 
   /**
+   * Whether the enclosing call opted into rule-result collection. When false,
+   * {@link #putMessageMetadata} and {@link #putFieldMetadata} discard their input,
+   * so executors can skip work whose only purpose is to produce that metadata.
+   */
+  public boolean includeRuleResults() {
+    return includeRuleResults;
+  }
+
+  /**
    * Record a message-level metadata key/value for this rule's execution.
    * When the enclosing deserialize call did not opt into rule-result
    * collection, or when {@code value} is null, the key is not stored.
